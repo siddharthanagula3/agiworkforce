@@ -61,10 +61,12 @@ import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 import {
   AppComposer,
   AppSidebar,
+  NewChatGreeting,
   PreviewMarker,
   PreviewRoot,
   ReplyActions,
   TrafficLights,
+  WEB_COMPOSER_PLACEHOLDER,
 } from './AppPreviews';
 
 function BrowserChrome({ url }: { url: string }) {
@@ -290,7 +292,7 @@ export function ArtifactScenePreview({
               <ReplyActions />
             </div>
           </div>
-          <AppComposer />
+          <AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.thread} />
         </div>
         <aside className="agi-scene-artifacts">
           <div className="agi-scene-artifacts-strip">
@@ -371,7 +373,7 @@ export function WebProofPreview({ className }: { className?: string }) {
           </div>
           <ReplyActions markMore={2} />
         </div>
-        <AppComposer markModel={3} />
+        <AppComposer placeholder={WEB_COMPOSER_PLACEHOLDER.thread} markModel={3} />
       </div>
     </PreviewRoot>
   );
@@ -863,7 +865,8 @@ export function ResearchAskPreview({ className }: { className?: string }) {
       label={RESEARCH_STEP_LABELS.ask}
       className={className}
     >
-      <div className="agi-scene-step" data-align="end">
+      <div className="agi-scene-step" data-view="new-chat">
+        <NewChatGreeting />
         <DeepResearchComposer draft={RESEARCH_STEPS_QUESTION} />
       </div>
     </PreviewRoot>

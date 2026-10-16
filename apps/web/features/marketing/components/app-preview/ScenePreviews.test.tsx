@@ -28,6 +28,7 @@ import {
   type ManagedMemoryCreateRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
+import { englishResources } from '@agiworkforce/i18n/en';
 import { hasUnsavedChanges } from '@agiworkforce/ui';
 import { BUILT_IN_SLASH_COMMANDS, MemoryEditor, useMemoryStore } from '@agiworkforce/unified-chat';
 import type { Project } from '@features/projects/stores/project-store';
@@ -44,6 +45,7 @@ import { e2bExecutionToolDefs, WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import { PREVIEW_GEOMETRY } from './AppPreviews';
+import { greetingHeadline } from '@agiworkforce/utils/greeting';
 import {
   APPROVAL_SCENE_REQUEST,
   ApprovalScenePreview,
@@ -2517,6 +2519,40 @@ describe('the /web close-up and research steps are scaled pictures of the produc
     const root = draw(<ResearchAskPreview />);
     expect(text(root, '.agi-app-draft')).toBe(RESEARCH_STEPS_QUESTION);
     expect(text(root, '.agi-scene-modechip')).toBe('Deep Research');
+  });
+
+  it.each([
+    ['hero scene', () => <ArtifactScenePreview example="checklist" />],
+    ['proof close-up', () => <WebProofPreview />],
+  ] as const)('the %s composer shows the placeholder a web conversation shows', (_name, make) => {
+    const root = draw(make());
+    expect(texts(root, '.agi-app-placeholder')).toEqual([englishResources.chat.placeholder]);
+    expect(root.textContent).not.toContain('Ask anything. Type / for commands');
+  });
+
+  it('asks from the empty chat, under the greeting the app draws there', () => {
+    const root = draw(<ResearchAskPreview />);
+    const step = requiredNode(root, '.agi-scene-step[data-view="new-chat"]');
+    expect(Array.from(step.children, (child) => child.className)).toEqual([
+      'agi-app-greeting',
+      'agi-scene-composer agi-scene-composer--chip',
+    ]);
+    expect(text(root, '.agi-app-greeting')).toBe(greetingHeadline('afternoon', 0));
+    expect(root.querySelector('.agi-app-placeholder')).toBeNull();
+  });
+
+  it('the web chat still sets the placeholders and greeting the previews show', () => {
+    expectSource('apps/web/features/chat/pages/WebChatPage.tsx', [
+      "placeholder={t('chat:placeholderEmpty')}",
+      "placeholder={t('chat:placeholder')}",
+      '<GreetingBanner showWorkspace />',
+    ]);
+    expectSource('packages/ui/unified-chat/src/components/BrandedGreeting.tsx', [
+      "fontFamily: 'var(--chat-font-greeting)',",
+    ]);
+    expectSource('apps/web/features/marketing/components/app-preview/app-preview.css', [
+      'font-family: var(--chat-font-greeting);',
+    ]);
   });
 
   it('shows the plan exactly as the native approval step renders it', () => {

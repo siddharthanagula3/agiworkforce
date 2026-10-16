@@ -52,6 +52,7 @@ import {
   UserCircle,
   Wifi,
 } from 'lucide-react';
+import { englishResources } from '@agiworkforce/i18n/en';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { greetingHeadline } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
@@ -61,6 +62,15 @@ import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 export type AppPreviewView = 'thread' | 'new-chat';
 
 const NEW_CHAT_GREETING = greetingHeadline('afternoon', 0);
+
+export const WEB_COMPOSER_PLACEHOLDER = {
+  thread: englishResources.chat.placeholder,
+  empty: englishResources.chat.placeholderEmpty,
+} as const;
+
+export function NewChatGreeting() {
+  return <p className="agi-app-greeting">{NEW_CHAT_GREETING}</p>;
+}
 
 export type PreviewKind =
   'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone' | 'closeup' | 'step';
@@ -386,7 +396,7 @@ function AppShell({
           sessionActive={view === 'thread'}
         />
         <div className="agi-app-main" data-view={view}>
-          {view === 'new-chat' ? <p className="agi-app-greeting">{NEW_CHAT_GREETING}</p> : children}
+          {view === 'new-chat' ? <NewChatGreeting /> : children}
           <AppComposer />
         </div>
       </div>

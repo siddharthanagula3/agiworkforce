@@ -645,8 +645,10 @@
   padding: calc(var(--u) * 28);
 }
 
-[data-design='agi'] .agi-scene-step[data-align='end'] {
-  justify-content: flex-end;
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] {
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 24);
 }
 
 [data-design='agi'] .agi-scene-step[data-align='center'] {
