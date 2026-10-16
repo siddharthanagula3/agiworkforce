@@ -103,6 +103,15 @@ function buildPhrasePattern(phrases: readonly string[], notFollowedBy?: string):
   return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternation})(?![\\p{L}\\p{N}_])${follower}`, 'iu');
 }
 
+/**
+ * "Answer from my notes and link to the source document" asks for the source of
+ * the user's own notes. A request scoped to the user's own notes, files or
+ * chats asks for those as its sources, unless it names the web itself.
+ */
+const OWN_CONTENT_SCOPE_PATTERN =
+  /\b(?:from|in|using|use|through|search|check|read|based\s+on|according\s+to|out\s+of|go(?:ing)?\s+through|look(?:ing)?\s+(?:in|at|through))\s+(?:my|our)\s+(?:own\s+)?(?:(?:private|personal|saved|uploaded|project|past|earlier|previous|prior)\s+)?(?:notes?|notebooks?|files?|documents?|docs|uploads?|attachments?|chats?|conversations?|(?:chat\s+)?history|memor(?:y|ies)|records?|drafts?)\b/iu;
+const WEB_NOUN_PATTERN = /\b(?:web|internet|online|google)\b/iu;
+
 const SEARCH_VERB_PATTERN = buildPhrasePattern(SEARCH_VERB_PHRASES);
 const RECENCY_PATTERN = buildPhrasePattern(RECENCY_PHRASES);
 const CITATION_PATTERN = buildPhrasePattern(CITATION_PHRASES, OWN_SOURCE_FOLLOWER);
@@ -259,8 +268,13 @@ export function detectExplicitWebSearchIntent(text: string): ExplicitSearchInten
   if (hasExplicitWebSearchOptOut(text)) return null;
   if (SEARCH_VERB_PATTERN.test(text)) return 'search_verb';
   if (RECENCY_PATTERN.test(text)) return 'recency';
-  if (CITATION_PATTERN.test(text) || LINK_REQUEST_PATTERN.test(text)) return 'sources';
+  if (asksForWebSources(text)) return 'sources';
   return null;
+}
+
+function asksForWebSources(text: string): boolean {
+  if (!CITATION_PATTERN.test(text) && !LINK_REQUEST_PATTERN.test(text)) return false;
+  return !OWN_CONTENT_SCOPE_PATTERN.test(text) || WEB_NOUN_PATTERN.test(text);
 }
 
 export function hasExplicitWebSearchOptOut(text: string): boolean {

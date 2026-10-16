@@ -66,6 +66,26 @@ describe('detectExplicitWebSearchIntent', () => {
   });
 
   it.each([
+    ['notes the user answers from', 'Answer from my notes and link to the source document.'],
+    ['uploaded files', 'Using my uploaded files, summarise the plan and cite sources.'],
+    ['a link to a file in the notes', 'Check my notes and give me the link to the source file.'],
+    ['a project document', 'Based on our project documents, cite sources for each claim.'],
+  ])('reads a sources request scoped to %s as no request for web sources', (_shape, text) => {
+    expect(detectExplicitWebSearchIntent(text)).toBeNull();
+  });
+
+  it.each([
+    ['own notes that name the web', 'Answer from my notes and cite sources from the web.'],
+    [
+      'own notes compared with a public report',
+      'Compare my notes with the official report and link to the source.',
+    ],
+    ['own notes beside a search verb', 'Check my notes, then search the web and cite sources.'],
+  ])('keeps the web signal for %s', (_shape, text) => {
+    expect(detectExplicitWebSearchIntent(text)).not.toBeNull();
+  });
+
+  it.each([
     [
       'a source document for a public study',
       'Link to the source document for the study you mentioned',
@@ -88,6 +108,8 @@ describe('detectExplicitWebSearchIntent', () => {
     ],
     ['many link requests naming a chat', `${'give me the link to the chat, '.repeat(20_000)}end`],
     ['a long word after a link request', `send me the link to ${'a'.repeat(150_000)} chat`],
+    ['many own-content scopes', `cite sources ${'from my own saved '.repeat(20_000)}end`],
+    ['a long gap inside an own-content scope', `cite sources from my${' '.repeat(150_000)}x`],
   ])('reads a pasted message with %s in linear time', (_shape, text) => {
     const startedAt = performance.now();
     detectExplicitWebSearchIntent(text);
