@@ -7,7 +7,8 @@ const preferences = vi.hoisted(() => ({
   savePreferenceNamespace: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchStoredPreferenceNamespace: preferences.fetchStoredPreferenceNamespace,
   savePreferenceNamespace: preferences.savePreferenceNamespace,
 }));

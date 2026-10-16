@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: vi.fn(),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { countUserDownloadAllowanceGibSince } from '../cogs-ledger-service';

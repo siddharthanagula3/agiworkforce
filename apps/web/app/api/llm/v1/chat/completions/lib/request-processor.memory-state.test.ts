@@ -27,7 +27,8 @@ vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) 
   };
 });
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: vi.fn(async () => {
     const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
     return { db: createDatabaseAdapterFake(), userId: 'user-free' };

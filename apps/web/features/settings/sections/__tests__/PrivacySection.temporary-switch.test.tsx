@@ -7,7 +7,8 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
-vi.mock('../../components/UsOnlyRoutingPanel', () => ({
+vi.mock('../../components/UsOnlyRoutingPanel', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/UsOnlyRoutingPanel')>()),
   UsOnlyRoutingPanel: () => null,
 }));
 
@@ -20,11 +21,13 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
 }));
 
-vi.mock('@shared/stores/web-auth-store', () => ({
+vi.mock('@shared/stores/web-auth-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/stores/web-auth-store')>()),
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
+vi.mock('@shared/stores/web-chat-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@shared/stores/web-chat-store')>()),
   useChatStore: (selector: (s: unknown) => unknown) =>
     selector({
       conversations: [],
@@ -39,12 +42,14 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
 
-vi.mock('../../services/conversation-data-service', () => ({
+vi.mock('../../services/conversation-data-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/conversation-data-service')>()),
   applyBulkConversationAction: vi.fn(async () => ({ ok: true })),
   fetchConversationHistoryStats: vi.fn(async () => ({ conversationCount: 0, messageCount: 0 })),
 }));
