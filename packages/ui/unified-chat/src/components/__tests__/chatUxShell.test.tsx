@@ -60,9 +60,10 @@ describe('BrandedGreeting', () => {
     expect(html).toContain('my-custom-class');
   });
 
-  it('draws the brand mark and the display serif from tokens, never a hardcoded palette', () => {
+  it('draws the brand mark and the greeting sans from tokens, never a hardcoded palette', () => {
     const html = renderToStaticMarkup(<BrandedGreeting headline="Good evening" />);
-    expect(html).toContain('var(--chat-font-display)');
+    expect(html).toContain('var(--chat-font-greeting)');
+    expect(html).not.toContain('--chat-font-display');
     expect(html).toContain('var(--chat-text-primary)');
     expect(html).not.toContain('violet');
   });

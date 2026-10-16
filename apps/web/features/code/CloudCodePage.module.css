@@ -490,7 +490,7 @@ svg + .menuRowLabel {
   justify-content: center;
   gap: 12px;
   margin: 0;
-  font-family: var(--chat-font-display), var(--chat-font-sans);
+  font-family: var(--chat-font-greeting);
   font-size: 28px;
   font-weight: 400;
   letter-spacing: -0.02em;

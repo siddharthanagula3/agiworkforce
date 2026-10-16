@@ -1073,6 +1073,7 @@ describe('the two emitters of the --chat-* contract agree', () => {
     '--chat-font-sans': agiChatCssVars.light['--chat-font-sans'],
     '--chat-font-serif': agiChatCssVars.light['--chat-font-serif'],
     '--chat-font-display': agiChatCssVars.light['--chat-font-display'],
+    '--chat-font-greeting': agiChatCssVars.light['--chat-font-greeting'],
     '--chat-font-mono': agiChatCssVars.light['--chat-font-mono'],
   };
 
@@ -1113,6 +1114,13 @@ describe('the two emitters of the --chat-* contract agree', () => {
       });
     }
   }
+
+  it('the greeting font is the sans stack, not the serif display stack', () => {
+    const greeting = familyStack(token(chatCssLight, '--chat-font-greeting'));
+    expect(greeting).toBe(familyStack(token(chatCssLight, '--chat-font-sans')));
+    expect(greeting).not.toContain('Newsreader');
+    expect(familyStack(token(chatCssLight, '--chat-font-display'))).toContain('Newsreader');
+  });
 
   it('the shadow export derives from the elevation table rather than its own literals', () => {
     expect(agiShadows.sm).toBe(agiElevation.light[1]);

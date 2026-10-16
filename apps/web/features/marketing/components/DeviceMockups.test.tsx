@@ -176,6 +176,17 @@ describe('cloud-only surfaces never show a Local or own-key route', () => {
     expect(root.querySelector('.agi-app-session[data-active]')).toBeNull();
   });
 
+  it('the preview greeting and the Code page greeting draw the sans greeting token', () => {
+    const preview = readSource(
+      'apps/web/features/marketing/components/app-preview/app-preview.css',
+    );
+    const greetingRule = /\.agi-app-greeting\s*\{[^}]*\}/u.exec(preview)?.[0] ?? '';
+    expect(greetingRule).toContain('font-family: var(--chat-font-greeting);');
+    const code = readSource('apps/web/features/code/CloudCodePage.module.css');
+    const codeRule = /\.greeting\s*\{[^}]*\}/u.exec(code)?.[0] ?? '';
+    expect(codeRule).toContain('font-family: var(--chat-font-greeting);');
+  });
+
   it('the Local and Cloud switch is drawn only when a caller asks for it', () => {
     expect(render(<DesktopWindow />).container.querySelector('.agi-app-modeswitch')).toBeNull();
     const withSwitch = render(<DesktopAppPreview modeSwitch />).container;

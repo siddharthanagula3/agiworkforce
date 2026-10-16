@@ -34,7 +34,7 @@ export function BrandedGreeting({
         className="text-display font-normal"
         style={{
           color: 'var(--chat-text-primary)',
-          fontFamily: 'var(--chat-font-display)',
+          fontFamily: 'var(--chat-font-greeting)',
         }}
         aria-label={workspace ? `What should we build in ${workspace}?` : undefined}
       >

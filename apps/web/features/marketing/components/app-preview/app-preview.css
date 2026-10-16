@@ -300,7 +300,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 }
 
 [data-design='agi'] .agi-app-greeting {
-  font-family: var(--chat-font-display);
+  font-family: var(--chat-font-greeting);
   font-size: var(--agi-app-text-display);
   font-weight: 400;
   line-height: 1.2;

@@ -332,6 +332,7 @@ export const agiTypography = {
   sans: `'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, ${EMOJI_FACES}`,
   serif: `'Newsreader', Georgia, 'Times New Roman', serif, ${EMOJI_FACES}`,
   display: `'Newsreader', Georgia, 'Times New Roman', serif, ${EMOJI_FACES}`,
+  greeting: `'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, ${EMOJI_FACES}`,
   mono: `'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace, ${EMOJI_FACES}`,
 } as const;
 
@@ -403,6 +404,7 @@ export const agiChatCssVars = {
     '--chat-font-sans': agiTypography.sans,
     '--chat-font-serif': agiTypography.serif,
     '--chat-font-display': agiTypography.display,
+    '--chat-font-greeting': agiTypography.greeting,
     '--chat-font-mono': agiTypography.mono,
     '--chat-shadow-sm': agiShadows.sm,
     '--chat-shadow-md': agiShadows.md,
@@ -446,6 +448,7 @@ export const agiChatCssVars = {
     '--chat-font-sans': agiTypography.sans,
     '--chat-font-serif': agiTypography.serif,
     '--chat-font-display': agiTypography.display,
+    '--chat-font-greeting': agiTypography.greeting,
     '--chat-font-mono': agiTypography.mono,
     '--chat-shadow-sm': agiElevation.dark[1],
     '--chat-shadow-md': agiElevation.dark[2],
