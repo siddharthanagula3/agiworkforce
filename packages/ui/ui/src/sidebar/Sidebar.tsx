@@ -170,7 +170,7 @@ export function Sidebar(props: SidebarProps) {
   const { t: tCommon } = useUiTranslation('common');
   const codeLabel = t('sidebar.codeAction', 'AGI Code');
 
-  const [showArchived, setShowArchived] = useState(false);
+  const [archivedViewRequested, setArchivedViewRequested] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<SidebarTemporalGroup>>(
     new Set(DEFAULT_EXPANDED),
   );
@@ -211,6 +211,12 @@ export function Sidebar(props: SidebarProps) {
     () => sessions.filter((s) => s.archived === true).length,
     [sessions],
   );
+
+  const showArchived = archivedViewRequested && archivedCount > 0;
+
+  useEffect(() => {
+    if (archivedViewRequested && archivedCount === 0) setArchivedViewRequested(false);
+  }, [archivedViewRequested, archivedCount]);
 
   const filtered = useMemo(() => {
     const base = showArchived
@@ -603,7 +609,7 @@ export function Sidebar(props: SidebarProps) {
             <div className="flex shrink-0 items-center justify-end px-3 py-2">
               <button
                 type="button"
-                onClick={() => setShowArchived((v) => !v)}
+                onClick={() => setArchivedViewRequested((v) => !v)}
                 aria-pressed={showArchived}
                 aria-label={
                   showArchived

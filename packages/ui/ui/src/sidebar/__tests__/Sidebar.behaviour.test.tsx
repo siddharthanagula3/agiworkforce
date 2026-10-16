@@ -214,4 +214,33 @@ describe('sidebar behaviour', () => {
 
     expect(container.querySelector('a[href="/chat/a1"]')).toBeTruthy();
   });
+
+  it('returns to the active list when the last archived conversation is restored', () => {
+    const active: SidebarSession = { id: 'act', title: 'Active thread', updatedAt: now };
+    const archived: SidebarSession = {
+      id: 'arc',
+      title: 'Archived thread',
+      updatedAt: now,
+      archived: true,
+    };
+    const props = {
+      projects,
+      navItems,
+      onNewChat: vi.fn(),
+      onOpenSearch: vi.fn(),
+      onSelect: vi.fn(),
+      onRename: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { container, rerender } = render(<Sidebar sessions={[active, archived]} {...props} />);
+
+    fireEvent.click(container.querySelector('[aria-pressed]') as HTMLButtonElement);
+    expect(screen.queryByText('Active thread')).toBeNull();
+
+    rerender(<Sidebar sessions={[active, { ...archived, archived: false }]} {...props} />);
+
+    expect(screen.queryByText('No archived conversations')).toBeNull();
+    expect(screen.getByText('Active thread')).toBeTruthy();
+    expect(screen.getByText('Archived thread')).toBeTruthy();
+  });
 });
