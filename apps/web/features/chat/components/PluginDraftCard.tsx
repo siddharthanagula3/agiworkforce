@@ -1,15 +1,21 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Blocks, Check } from 'lucide-react';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
-import { readPluginDraftToolResult, type PluginDraft } from '@agiworkforce/cloud-contracts';
+import {
+  PLUGIN_DRAFT_TOOL_NAME,
+  PluginDraftSchema,
+  readPluginDraftToolResult,
+  type PluginDraft,
+} from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 import { hasCanonicalToolActivity } from '@agiworkforce/unified-chat';
 
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { cn } from '@shared/lib/utils';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { buildSettingsBrowseHash } from '@/features/directory/routing';
 import {
   CSRF_HEADER,
@@ -28,6 +34,8 @@ const SAVE_FAILED_COPY = 'This draft could not be saved. Try again.';
 const SAVED_PLUGIN_COPY = 'Saved as a plugin. Its skills are on in your chats.';
 const SAVED_SKILL_COPY = 'Saved as a skill. It is on in your chats.';
 const NOT_SAVED_COPY = 'Not saved yet. Nothing changes until you save it.';
+const LOADING_DRAFT_LABEL = 'Loading the draft';
+const DRAFT_UNAVAILABLE_COPY = 'This draft could not be loaded. Ask for it again to see it.';
 
 type SaveTarget = 'plugin' | 'skill';
 
@@ -196,15 +204,84 @@ function turnToolSteps(
 export function latestTurnPluginDraft(
   activity: Pick<AgentActivityState, 'entries'> | undefined,
   tools: readonly ToolEntry[] | undefined,
-): { id: string; draft: PluginDraft } | null {
+): { id: string; draft: PluginDraft | null } | null {
   const steps = turnToolSteps(activity, tools);
   for (let index = steps.length - 1; index >= 0; index -= 1) {
     const step = steps[index]!;
-    if (!step.completed) continue;
-    const draft = readPluginDraftToolResult(step.name, step.output);
-    if (draft) return { id: step.id, draft };
+    if (!step.completed || step.name !== PLUGIN_DRAFT_TOOL_NAME) continue;
+    return { id: step.id, draft: readPluginDraftToolResult(step.name, step.output) };
   }
   return null;
+}
+
+function storedPluginDraftPath(conversationId: string, toolCallId: string): string {
+  return `/api/chat/conversations/${encodeURIComponent(conversationId)}/plugin-drafts/${encodeURIComponent(toolCallId)}`;
+}
+
+async function fetchStoredPluginDraft(
+  conversationId: string,
+  toolCallId: string,
+): Promise<PluginDraft> {
+  const response = await fetch(storedPluginDraftPath(conversationId, toolCallId));
+  if (!response.ok) throw new Error(DRAFT_UNAVAILABLE_COPY);
+  const body = (await response.json()) as { draft?: unknown };
+  const draft = PluginDraftSchema.safeParse(body.draft);
+  if (!draft.success) throw new Error(DRAFT_UNAVAILABLE_COPY);
+  return draft.data;
+}
+
+type StoredDraftState =
+  { kind: 'loading' } | { kind: 'loaded'; draft: PluginDraft } | { kind: 'unavailable' };
+
+function StoredPluginDraftCard({
+  conversationId,
+  toolCallId,
+  className,
+}: {
+  conversationId: string | null;
+  toolCallId: string;
+  className?: string;
+}) {
+  const [state, setState] = useState<StoredDraftState>(() =>
+    conversationId ? { kind: 'loading' } : { kind: 'unavailable' },
+  );
+
+  useEffect(() => {
+    if (!conversationId) return;
+    let cancelled = false;
+    fetchStoredPluginDraft(conversationId, toolCallId).then(
+      (draft) => {
+        if (!cancelled) setState({ kind: 'loaded', draft });
+      },
+      () => {
+        if (!cancelled) setState({ kind: 'unavailable' });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, toolCallId]);
+
+  if (state.kind === 'loaded') return <PluginDraftCard draft={state.draft} className={className} />;
+  return (
+    <div
+      role="group"
+      aria-label={DRAFT_LABEL}
+      data-testid="plugin-draft-card-pending"
+      className={cn('rounded-lg border border-border bg-muted/30 p-3 text-sm', className)}
+    >
+      <div className="flex items-center gap-2.5">
+        <Blocks className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {state.kind === 'loading' ? (
+          <Spinner size="sm" aria-label={LOADING_DRAFT_LABEL} />
+        ) : (
+          <p role="status" className="text-xs text-muted-foreground">
+            {DRAFT_UNAVAILABLE_COPY}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function TurnPluginDraftCard({
@@ -217,6 +294,17 @@ export function TurnPluginDraftCard({
   className?: string;
 }) {
   const latest = useMemo(() => latestTurnPluginDraft(activity, tools), [activity, tools]);
+  const conversationId = useChatStore((state) => state.activeConversationId);
   if (!latest) return null;
-  return <PluginDraftCard key={latest.id} draft={latest.draft} className={className} />;
+  if (latest.draft) {
+    return <PluginDraftCard key={latest.id} draft={latest.draft} className={className} />;
+  }
+  return (
+    <StoredPluginDraftCard
+      key={`${conversationId ?? ''}:${latest.id}`}
+      conversationId={conversationId}
+      toolCallId={latest.id}
+      className={className}
+    />
+  );
 }

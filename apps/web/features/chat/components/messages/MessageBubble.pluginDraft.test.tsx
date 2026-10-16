@@ -6,6 +6,7 @@ import {
   PLUGIN_DRAFT_TOOL_NAME,
   projectPersistedMessageMetadata,
 } from '@agiworkforce/cloud-contracts';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { MessageBubble } from './MessageBubble';
 
 type CsrfModule = typeof import('@/lib/client/csrf');
@@ -208,5 +209,84 @@ describe('plugin draft card in an assistant turn', () => {
         headers: expect.objectContaining({ 'x-csrf-token': 'csrf-token' }),
       }),
     );
+  });
+});
+
+describe('plugin draft card after a reload cut the stored draft', () => {
+  const conversationId = '11111111-1111-4111-8111-111111111111';
+  const longDraft = {
+    ...draft,
+    skills: [{ ...draft.skills[0]!, body: 'Answer briefly. '.repeat(400) }],
+  };
+  const longOutput = JSON.stringify({ [PLUGIN_DRAFT_RESULT_KEY]: longDraft, shown: 'shown' });
+
+  function reloadedMessage() {
+    const stored = projectPersistedMessageMetadata({
+      agentActivity: activity([draftEntry('completed', longOutput)]),
+      tools: [
+        {
+          id: toolCallId,
+          toolCallId,
+          name: PLUGIN_DRAFT_TOOL_NAME,
+          status: 'completed',
+          result: longOutput,
+        },
+      ],
+    });
+    expect(JSON.stringify(stored)).not.toContain(longDraft.skills[0]!.body);
+    return message(JSON.parse(JSON.stringify(stored)));
+  }
+
+  beforeEach(() => {
+    useChatStore.setState({ activeConversationId: conversationId });
+  });
+  afterEach(() => {
+    useChatStore.setState({ activeConversationId: null });
+  });
+
+  it('loads the full draft from the stored run and shows the card with Save', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ draft: longDraft }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MessageBubble message={reloadedMessage()} />);
+    expect(screen.getByLabelText('Loading the draft')).toBeInTheDocument();
+    const card = await screen.findByRole('group', { name: `Plugin draft: ${longDraft.name}` });
+    expect(within(card).getByRole('button', { name: 'Save as a skill' })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      `/api/chat/conversations/${conversationId}/plugin-drafts/${toolCallId}`,
+    );
+  });
+
+  it('tells the user to ask again when the stored draft is not found', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 404 })),
+    );
+    render(<MessageBubble message={reloadedMessage()} />);
+    expect(
+      await screen.findByText('This draft could not be loaded. Ask for it again to see it.'),
+    ).toHaveAttribute('role', 'status');
+    expect(screen.queryByTestId('plugin-draft-card')).toBeNull();
+  });
+
+  it('tells the user to ask again when the request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    render(<MessageBubble message={reloadedMessage()} />);
+    expect(
+      await screen.findByText('This draft could not be loaded. Ask for it again to see it.'),
+    ).toHaveAttribute('role', 'status');
+  });
+
+  it('makes no request when the stored draft is whole', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <MessageBubble
+        message={message({ agentActivity: activity([draftEntry('completed', draftOutput)]) })}
+      />,
+    );
+    expect(screen.getByRole('group', { name: `Plugin draft: ${draft.name}` })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
