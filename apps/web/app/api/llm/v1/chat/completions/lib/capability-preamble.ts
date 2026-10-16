@@ -26,6 +26,7 @@ import {
   assembleChatSystemPrompt,
   chatSetupBlock,
   CODE_EXECUTION_TOOL_NAMES,
+  formatKnowledgeCutoff,
   servingModelBlocks,
   textOnlySetupBlock,
   TOOL_SECTION_PREFIX,
@@ -172,20 +173,6 @@ export type ModelSelection =
       readonly workspaceDefaultModelId?: string;
     }
   | { readonly kind: 'assigned' };
-
-const KNOWLEDGE_CUTOFF = /^(\d{4})-(\d{2})(?:-\d{2})?$/u;
-
-function formatKnowledgeCutoff(value: string | undefined): string | null {
-  const match = value ? KNOWLEDGE_CUTOFF.exec(value) : null;
-  if (!match) return null;
-  const month = Number(match[2]);
-  if (month < 1 || month > 12) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(Number(match[1]), month - 1, 1)));
-}
 
 function automaticSelectionLabel(
   modelId: string,

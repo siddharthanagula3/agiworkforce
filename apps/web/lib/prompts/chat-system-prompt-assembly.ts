@@ -132,6 +132,20 @@ export type ChatTurnSetup =
 
 export type SectionReader = (key: string, values?: Readonly<Record<string, string>>) => string;
 
+const KNOWLEDGE_CUTOFF = /^(\d{4})-(\d{2})(?:-\d{2})?$/u;
+
+export function formatKnowledgeCutoff(value: string | undefined): string | null {
+  const match = value ? KNOWLEDGE_CUTOFF.exec(value) : null;
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(Number(match[1]), month - 1, 1)));
+}
+
 export function servingModelBlocks(section: SectionReader, model: ServingModel | null): string[] {
   if (!model) return [section('model_unknown')];
   if (model.kind === 'unattributed') {
