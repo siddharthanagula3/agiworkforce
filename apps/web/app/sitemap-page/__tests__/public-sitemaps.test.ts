@@ -102,6 +102,15 @@ const releaseArchiveCanonical = String(RELEASE_NOTES_METADATA.alternates?.canoni
 const canonicalAddress = (route: string) =>
   RELEASE_ARCHIVE_ADDRESSES.includes(route) ? releaseArchiveCanonical : route;
 
+function asksNotToIndex(route: string): boolean {
+  const segments = route.split('/').filter(Boolean);
+  const files = [
+    ...segments.map((_, depth) => join(APP_DIR, ...segments.slice(0, depth + 1), 'layout.tsx')),
+    join(APP_DIR, ...segments, PAGE_FILE),
+  ].filter((file) => existsSync(file));
+  return files.some((file) => /\bindex:\s*false\b/.test(readFileSync(file, 'utf8')));
+}
+
 describe('the HTML sitemap', () => {
   it('finds the public pages to check', () => {
     expect(publicPages.length).toBeGreaterThan(60);
@@ -180,9 +189,16 @@ describe('sitemap.xml', () => {
     ]);
   });
 
-  it('lists every page the HTML sitemap links, under its canonical address', () => {
-    const missing = [...htmlSitemap].filter((route) => !xmlPaths.includes(canonicalAddress(route)));
+  it('lists every indexable page the HTML sitemap links, under its canonical address', () => {
+    const missing = [...htmlSitemap].filter(
+      (route) => !xmlPaths.includes(canonicalAddress(route)) && !asksNotToIndex(route),
+    );
     expect(missing, `sitemap.xml omits: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('never lists a page that asks search engines not to index it', () => {
+    const noindex = xmlPaths.filter(asksNotToIndex);
+    expect(noindex, `sitemap.xml lists noindex pages: ${noindex.join(', ')}`).toEqual([]);
   });
 
   it('gives no last-modified date, because no page records when it last changed', () => {
@@ -190,9 +206,10 @@ describe('sitemap.xml', () => {
     expect(dated.map((entry) => entry.url)).toEqual([]);
   });
 
-  it('marks the blog index as changing monthly while it carries no posts', () => {
-    const blog = xmlEntries.find((entry) => entry.url === `${SITE_URL}${BLOG_INDEX}`);
-    expect(blog?.changeFrequency).toBe('monthly');
-    expect(xmlPaths.filter((path) => path.startsWith(`${BLOG_INDEX}/`))).toEqual([]);
+  it('keeps the blog index out of search while it carries no posts', () => {
+    expect(subdirectories(join(APP_DIR, BLOG_INDEX))).toEqual([]);
+    expect(asksNotToIndex(BLOG_INDEX)).toBe(true);
+    expect(htmlSitemap.has(BLOG_INDEX)).toBe(true);
+    expect(xmlPaths.filter((path) => path.startsWith(BLOG_INDEX))).toEqual([]);
   });
 });
