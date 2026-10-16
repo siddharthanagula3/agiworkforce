@@ -87,13 +87,13 @@ const SOURCE_TABS = [
   {
     label: 'Rust',
     language: 'rust',
-    code: 'pub const SHARED_MODELS_JSON: &str =\n    include_str!("../../../packages/contracts/types/src/models.json");',
+    code: 'pub const SHARED_MODELS_JSON: &str = include_str!(\n    "../../../packages/contracts/types/src/models.json"\n);',
     note: 'The CLI embeds the file at compile time.',
   },
   {
     label: 'TypeScript',
     language: 'typescript',
-    code: "import { modelsCatalog } from '@agiworkforce/types';\n\nconst provider = modelsCatalog.providers[id];\nconst models = Object.values(modelsCatalog.models).filter((m) => m.provider === id);",
+    code: "import { modelsCatalog } from '@agiworkforce/types';\n\nconst provider = modelsCatalog.providers[id];\nconst models = Object.values(modelsCatalog.models)\n  .filter((m) => m.provider === id);",
     note: 'The web app and this page import the same module.',
   },
   {
