@@ -206,6 +206,10 @@ export function DataExportRow() {
             </p>
           ) : null}
         </div>
+      ) : archive?.status === 'ready' && archive.volumes.length === 0 ? (
+        <SaveStatusLine failed style={blockStyle}>
+          Your export finished without any files to download. Request a new export.
+        </SaveStatusLine>
       ) : archive?.status === 'ready' && archive.expiresAt ? (
         <div role="status" style={blockStyle}>
           <p style={{ margin: 0 }}>Your export is ready.</p>

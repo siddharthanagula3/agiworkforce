@@ -125,6 +125,18 @@ describe('DataExportRow states', () => {
     expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled();
   });
 
+  it('treats a ready export with no files as one to request again', async () => {
+    installFetch({ reads: [readyArchive(0)] });
+
+    render(<DataExportRow />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your export finished without any files to download. Request a new export.',
+    );
+    expect(screen.queryByText('Your export is ready.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled();
+  });
+
   it('says an expired export needs a new request', async () => {
     installFetch({ reads: [archive({ status: 'expired' })] });
 
