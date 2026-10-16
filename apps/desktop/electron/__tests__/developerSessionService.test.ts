@@ -188,6 +188,8 @@ function defaultResponder(method: string): unknown {
 
 let agentAllowed: (candidate: WorkspaceRoot) => boolean = () => true;
 let killProcess: ReturnType<typeof vi.spyOn>;
+type DeveloperSessionServiceModule = typeof import('../runtime/developerSessionService');
+const loadedServices: DeveloperSessionServiceModule[] = [];
 
 async function loadService(
   responder: Responder = defaultResponder,
@@ -213,6 +215,7 @@ async function loadService(
   });
 
   const service = await import('../runtime/developerSessionService');
+  loadedServices.push(service);
   service.configureDeveloperSessions({
     emit: (rootId, event) => events.push({ rootId, event }),
     resolveBinary: () => 'agi',
@@ -240,6 +243,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // A stop arms a real grace timer that outlives its test and would kill
+  // through whichever spy, or the real process.kill, is installed when it fires.
+  for (const service of loadedServices.splice(0)) service.killAllDeveloperRuntimes();
   vi.useRealTimers();
   killProcess.mockRestore();
 });
