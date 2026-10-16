@@ -135,7 +135,7 @@ export default function IntegrationsPage() {
             <div className="agi-lp-heading">
               <Eyebrow>What&rsquo;s built, and what is released</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-integrations-wired-title">
-                The honest inventory.
+                What connects today.
               </h2>
             </div>
             <Ledger

@@ -162,7 +162,7 @@ function CliPageContent() {
                 'Session journals live under ~/.agiworkforce/',
                 'No account required',
               ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
+              cta: { href: '/local', label: 'How Local mode works' },
             },
             {
               mode: 'BYOK',
@@ -175,7 +175,7 @@ function CliPageContent() {
                 '/continue-with-byok is an explicit, visible step',
                 'agi auth-status shows every configured provider',
               ],
-              cta: { href: '/byok', label: 'Set Up BYOK' },
+              cta: { href: '/byok', label: 'How provider keys work' },
             },
             {
               mode: 'AGI Cloud',

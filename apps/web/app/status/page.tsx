@@ -365,8 +365,8 @@ export default async function StatusPage() {
                 What this signal proves, and what it does not.
               </h2>
               <Prose>
-                A passing result is worth exactly {COVERED.length} checks. {scopeLine(view)} Reading
-                them as whole-platform coverage would be reading them wrong.
+                A passing result is worth exactly {COVERED.length} checks. {scopeLine(view)} These
+                checks cover the listed dependencies, not the entire platform.
               </Prose>
             </div>
             <Ledger

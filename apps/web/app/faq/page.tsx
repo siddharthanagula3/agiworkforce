@@ -64,7 +64,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Who can read my conversations?',
-    body: 'In Local mode, nobody but you. They never reach us. In managed cloud we store them, so the honest answer is not nobody: access is limited to people who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
+    body: 'In Local mode, nobody but you. They never reach us. In managed cloud we store them, so people at AGI can access them, but only those who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
   },
   {
     title: 'Do you sell my data, or use it for ads?',
@@ -108,8 +108,7 @@ export default function FaqPage() {
         <PageHero
           id="agi-faq-title"
           eyebrow="FAQ"
-          title="Direct answers, no spin."
-          em="no spin."
+          title="Common questions."
           lede={`The questions we get most often, answered the way we'd want them answered. If something below is wrong or out of date, email ${CONTACT_EMAIL} and we'll fix it.`}
           ctas={[]}
         />

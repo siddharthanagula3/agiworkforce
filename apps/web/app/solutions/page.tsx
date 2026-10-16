@@ -83,8 +83,8 @@ export default function SolutionsPage() {
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Solutions</p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">Every page below</span>{' '}
-                <em className="agi-lp-accent">is a different way into the same workspace.</em>
+                <span className="agi-lp-line">Find a workflow</span>{' '}
+                <em className="agi-lp-accent">for your team.</em>
               </h1>
               <ButtonRow>
                 <Button href="/download">See what&rsquo;s live</Button>
@@ -134,12 +134,11 @@ export default function SolutionsPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Cost and privacy are each argued once,{' '}
-                <em className="agi-lp-accent">on the page that owns the claim.</em>
+                Compare pricing <em className="agi-lp-accent">and data handling.</em>
               </h2>
               <p className="agi-lp-lede">
-                The map sorts pages by the person doing the work, and stops there. What a route
-                costs, and what a Local session is allowed to do, are settled in one place each.
+                Pricing covers what each route costs. The Local mode page covers what a Local
+                session can and cannot do.
               </p>
               <ButtonRow>
                 <Button href="/pricing">See what each route costs</Button>

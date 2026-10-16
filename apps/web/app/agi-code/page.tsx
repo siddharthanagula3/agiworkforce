@@ -127,8 +127,8 @@ export default function AgiCodePage() {
           title="Works offline. Routes on your rules."
           body="Point the CLI at a supported local runtime and work entirely offline after setup. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
           ctas={[
-            { href: '/local', label: 'Run AGI Locally' },
-            { href: '/byok', label: 'Set Up BYOK' },
+            { href: '/local', label: 'How Local mode works' },
+            { href: '/byok', label: 'How provider keys work' },
           ]}
         />
 

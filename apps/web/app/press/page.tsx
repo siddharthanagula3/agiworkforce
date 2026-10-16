@@ -124,7 +124,7 @@ const NOT_CLAIMED: string[] = [
   'No security certifications. SOC 2 and ISO 27001 are not held: no report or certificate exists, no auditor or certification body is engaged, and no audit is in progress. HIPAA workflows are not offered. The trust page carries the dated ledger.',
   'No named customers, logos, or testimonials, and no case studies. We publish those only with written permission, and we have none cleared to publish.',
   'No usage, revenue, headcount, or funding figures.',
-  'No uptime or availability record. The SLA page states planned targets, not measured history.',
+  'No published uptime history or incident archive. The status page shows service levels measured over a rolling window, and the SLA page states targets, not guarantees.',
   'No general availability claim for managed cloud.',
 ];
 
@@ -145,9 +145,8 @@ export default function PressPage() {
         <PageHero
           id="agi-press-title"
           eyebrow="Press"
-          title="Facts you can publish without checking."
-          em="without checking."
-          lede={`Everything on this page is verified against the product source, and anything that can change is dated. Where we have nothing to show (customers, certifications, usage numbers), this page says so plainly instead of leaving a gap. Product facts as of ${CATALOG_AS_OF}.`}
+          title="Company facts and press resources."
+          lede={`Product facts as of ${CATALOG_AS_OF}, checked against the product source. Where we have nothing to show (customers, certifications, usage numbers), this page says so.`}
           ctas={[
             { href: contactMailto('Press enquiry'), label: 'Email the press contact' },
             { href: '/trust', label: 'See the trust posture', variant: 'secondary' },

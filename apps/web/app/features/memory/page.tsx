@@ -149,9 +149,9 @@ export default function MemoryFeaturePage() {
                 What the model actually receives.
               </h2>
               <Prose>
-                Only part of the list travels with a request, and it travels as data the model may
-                read but never obey. Recalled facts are wrapped in a block marked as untrusted,
-                under a standing rule that instructions found inside a memory are never followed.
+                Only part of the list travels with a request, and it travels as reference data.
+                Recalled facts are wrapped in a block marked as untrusted, and the model is told
+                they are context, not instructions.
               </Prose>
             </div>
             <Ledger

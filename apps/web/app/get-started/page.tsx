@@ -196,7 +196,7 @@ export default function GetStartedPage() {
                 {
                   meta: 'Managed cloud',
                   title: 'Open by default',
-                  body: 'Sign in to use AGI-hosted compute today, open by default with a small free cap. Local and BYOK stay free acquisition paths.',
+                  body: 'Sign in to use AGI-hosted compute today, open by default with a small free cap. The Local Mode and BYOK plans carry no AGI charge; you pay your own provider or use your own hardware.',
                 },
               ]}
             />

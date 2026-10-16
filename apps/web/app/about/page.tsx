@@ -92,7 +92,7 @@ export default function AboutPage() {
           <Stack gap="loose">
             <div>
               <h2 className="agi-ds-h2" id="agi-about-mission-title">
-                An AI workspace you can actually trust.
+                Model choice and data controls.
               </h2>
               <Prose>
                 An AI application suite across {SURFACE_COUNT} surfaces, with one difference that
@@ -143,8 +143,8 @@ export default function AboutPage() {
                 The colophon: the facts, plainly stated.
               </h2>
               <Prose>
-                The entity, the licence, and how the product is put together. No founding mythology,
-                no team-size or funding theatre, just what can be checked.
+                Company details, ownership and product status: the entity, the licence, and how the
+                product is put together.
               </Prose>
             </div>
             <Ledger

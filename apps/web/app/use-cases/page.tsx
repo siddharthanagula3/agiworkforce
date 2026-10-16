@@ -56,8 +56,8 @@ export default function UseCasesPage() {
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">Use cases</p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">One page per job,</span>{' '}
-                <em className="agi-lp-accent">each shows that job running.</em>
+                <span className="agi-lp-line">Find the workflow</span>{' '}
+                <em className="agi-lp-accent">that fits your work.</em>
               </h1>
               <ButtonRow>
                 <Button href="/download">See what&rsquo;s live</Button>
