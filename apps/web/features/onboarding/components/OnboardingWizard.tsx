@@ -38,7 +38,7 @@ const USE_CASE_DISCLOSURE =
 const EXPLANATION_SUMMARY = 'How this works';
 const EXPLANATION_POINTS: readonly string[] = [
   'Every chat starts with a model you pick, from any provider we support. Change it per message in the composer.',
-  'Chats are saved to your history so you can come back to them. Turn on temporary chat for one that is never saved.',
+  'Chats are saved to your history so you can come back to them. Turn on temporary chat for one that stays out of your history.',
   'Your name and the work you described shape how replies are written. Edit or clear both in Settings whenever you like.',
 ];
 

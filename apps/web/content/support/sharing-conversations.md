@@ -54,5 +54,6 @@ rather than one that would fail after you picked it.
 
 ## Chats you cannot share
 
-A temporary chat cannot be shared while the control is on, because it is never
-saved. Turn temporary chat off first.
+A temporary chat cannot be shared while the control is on, because it does not
+appear in your history. Turn temporary chat off first. Temporary chats explains what is
+kept and for how long.

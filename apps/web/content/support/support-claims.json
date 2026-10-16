@@ -1768,7 +1768,7 @@
       "doc": "sharing-conversations",
       "section": "Chats you cannot share",
       "kind": "prose",
-      "sentence": "A temporary chat cannot be shared while the control is on, because it is never saved.",
+      "sentence": "A temporary chat cannot be shared while the control is on, because it does not appear in your history.",
       "implementation": [
         "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_SHARE_REFUSAL",
         "apps/web/features/chat/components/share/ShareConversationDialog.tsx"

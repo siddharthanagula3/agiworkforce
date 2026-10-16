@@ -2160,7 +2160,7 @@
           "ordinal": 4,
           "heading": "Chats you cannot share",
           "headingPath": "Share a conversation or an artifact › Chats you cannot share",
-          "text": "A temporary chat cannot be shared while the control is on, because it is never\nsaved. Turn temporary chat off first."
+          "text": "A temporary chat cannot be shared while the control is on, because it does not\nappear in your history. Turn temporary chat off first. Temporary chats explains what is\nkept and for how long."
         }
       ]
     },
