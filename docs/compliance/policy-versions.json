@@ -271,6 +271,11 @@
           "date": "2026-10-08",
           "digest": "635dfc8201700a13",
           "note": "Same-day revision before release: the cookie table adds agi_referral, which app/r/[code]/route.ts sets and the page had left out although it says it lists every cookie, and cites lib/anonymous-session.ts instead of lib/csrf.ts as the source of the signed-out session cookie. The date stays because the 2026-10-08 version has not shipped."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "a3ef139dffb5e3bb",
+          "note": "The storage table now says the Free plan notice key keeps a one-way fingerprint of each account that has seen it instead of the account id, and lists the free model promotion notice key, which only the catch-all row covered while sign-out still cleared it. Both keys survive sign-out since the founder's 2026-10-15 decision to keep notice dismissals across sign-out. Nothing new is stored, less identifying data is kept and no choice changed, so the date and the notice version stay."
         }
       ]
     },

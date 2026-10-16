@@ -129,9 +129,17 @@ const STORAGE: StorageRow[] = [
     key: 'agi.notice.free-plan-training',
     store: 'Local storage',
     holds:
-      'The account id that dismissed the Free plan notice about free model providers, so it is shown once per account rather than on every visit. Never sent to us.',
+      'A one-way fingerprint of each account that has seen the Free plan notice about free model providers, not the account id itself, so the notice is shown once per account rather than on every visit. Signing out keeps it. Never sent to us.',
     clearedBy: 'Clearing site data, which shows the notice again.',
     source: 'features/chat/components/FreePlanTrainingNotice.tsx',
+  },
+  {
+    key: 'agi.notice.free-model-promotion.<model>.<end date>',
+    store: 'Local storage',
+    holds:
+      'A one-way fingerprint of each account that has seen the notice that a model is free for a limited time, not the account id itself, so each offer is announced once per account. Signing out keeps it. Never sent to us.',
+    clearedBy: 'Clearing site data, which shows the notice again.',
+    source: 'features/chat/components/FreeModelPromotionNotice.tsx',
   },
   {
     key: 'agi.privacy.shareTelemetry',
