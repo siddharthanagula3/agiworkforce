@@ -20,6 +20,8 @@ const PUBLIC_TOKENS = relative(REPO_ROOT, createRequire(__filename).resolve(PUBL
   .split('\\')
   .join('/');
 const PUBLIC_SYSTEM_DIR = 'apps/web/features/marketing/';
+const FLAGSHIP_SCOPE = "body:has([data-public-palette='flagship'])";
+const LANDING = 'apps/web/features/marketing/components/MarketingLanding.tsx';
 
 const OUTSIDE_PUBLIC_SCOPE_READERS: ReadonlyArray<{ file: string; why: string }> = [
   {
@@ -121,18 +123,63 @@ describe('the public amber accent', () => {
     ).toEqual([GLOBALS, PUBLIC_TOKENS].sort());
   });
 
-  it('carries both themes, so neither inherits the other value', () => {
+  it('carries both themes in the default and the landing palette, so neither inherits the other value', () => {
     const globals = readFileSync(join(REPO_ROOT, GLOBALS), 'utf8');
 
-    expect(blockSelectorsDefining(globals).sort()).toEqual([
-      "[data-design='agi']",
-      "[data-theme='light'][data-design='agi']",
-    ]);
+    expect(blockSelectorsDefining(globals).sort()).toEqual(
+      [
+        "[data-design='agi']",
+        "[data-theme='light'][data-design='agi']",
+        `${FLAGSHIP_SCOPE} [data-design='agi']`,
+        `${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`,
+      ].sort(),
+    );
 
     for (const token of ['--agi-amber', '--agi-amber-soft']) {
       const definitions = globals.split('\n').filter((line) => line.trim().startsWith(`${token}:`));
-      expect(definitions, `${token} needs a dark and a light value`).toHaveLength(2);
+      expect(definitions, `${token} needs a dark and a light value in each palette`).toHaveLength(
+        4,
+      );
     }
+  });
+
+  it('paints every public page but the landing in neutral ink', () => {
+    const sources = {
+      [GLOBALS]: readFileSync(join(REPO_ROOT, GLOBALS), 'utf8'),
+      [PUBLIC_TOKENS]: readFileSync(join(REPO_ROOT, PUBLIC_TOKENS), 'utf8'),
+    };
+    const accents: ReadonlyArray<[file: string, token: string]> = [
+      [GLOBALS, '--agi-amber'],
+      [GLOBALS, '--agi-accent'],
+      [GLOBALS, '--agi-accent-text'],
+      [PUBLIC_TOKENS, '--public-accent-dark'],
+      [PUBLIC_TOKENS, '--public-accent-light'],
+    ];
+    const channelSpread = (hex: string) => {
+      const channels = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+      return Math.max(...channels) - Math.min(...channels);
+    };
+
+    let checked = 0;
+    for (const [file, token] of accents) {
+      for (const definition of tokenDefinitions(sources[file]!, token)) {
+        if (definition.selectors.some((selector) => selector.includes(FLAGSHIP_SCOPE))) continue;
+        const where = `${token} in ${file} under ${definition.selectors.join(', ')}`;
+        expect(definition.value, where).toMatch(/^#[0-9a-f]{6}$/i);
+        expect(channelSpread(definition.value), where).toBeLessThanOrEqual(16);
+        checked += 1;
+      }
+    }
+    expect(checked).toBe(8);
+  });
+
+  it('keeps the flagship palette on the landing alone', () => {
+    const carriers = repoFiles()
+      .filter((file) => file.path.endsWith('.tsx'))
+      .filter((file) => /data-public-palette=["']flagship["']/.test(file.source))
+      .map((file) => file.path);
+
+    expect(carriers).toEqual([LANDING]);
   });
 
   it('loads reference accent values only from the published canonical token owner', () => {

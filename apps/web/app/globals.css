@@ -1400,27 +1400,27 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  --agi-ground: #0b0a08;
-  --agi-ground-2: #13110d;
-  --agi-ground-3: #1c1913;
+  --agi-ground: #000000;
+  --agi-ground-2: #000000;
+  --agi-ground-3: #212121;
   --agi-bg: var(--agi-ground);
   --agi-bg-2: var(--agi-ground-2);
   --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #131109;
-  --agi-ink: #f5f0e6;
-  --agi-ink-2: #c4bcac;
-  --agi-ink-3: #8a8174;
-  --agi-ink-quiet: #948b79;
-  --agi-ink-faint: #948b79;
-  --agi-rule: rgba(245, 240, 230, 0.09);
-  --agi-rule-strong: rgba(245, 240, 230, 0.17);
-  --agi-frame: rgba(241, 235, 225, 0.16);
+  --agi-card: #000000;
+  --agi-ink: #ffffff;
+  --agi-ink-2: #c5c8ce;
+  --agi-ink-3: #9ca1ab;
+  --agi-ink-quiet: #9ca1ab;
+  --agi-ink-faint: #9ca1ab;
+  --agi-rule: rgba(255, 255, 255, 0.09);
+  --agi-rule-strong: rgba(255, 255, 255, 0.17);
+  --agi-frame: rgba(255, 255, 255, 0.16);
 
-  --agi-accent: #f0a84a;
-  --agi-accent-hover: #f4b866;
-  --agi-accent-ink: #1a1300;
-  --agi-accent-text: #f0a84a;
-  --agi-accent-soft: rgba(240, 168, 74, 0.16);
+  --agi-accent: #ffffff;
+  --agi-accent-hover: #edeef0;
+  --agi-accent-ink: #000000;
+  --agi-accent-text: #ffffff;
+  --agi-accent-soft: rgba(255, 255, 255, 0.1);
 
   --agi-lane-local: #3fbd82;
   --agi-lane-local-text: #3fbd82;
@@ -1432,11 +1432,11 @@ html[data-contrast='more'] *:focus-visible {
   --agi-lane-cloud-text: #5fb0f0;
   --agi-lane-cloud-on-primary: #04131f;
 
-  --agi-surface-wash: rgba(245, 240, 230, 0.035);
-  --agi-line-soft: rgba(245, 240, 230, 0.05);
-  --agi-glow-soft: rgba(240, 168, 74, 0.13);
-  --agi-console-tint: rgba(19, 17, 9, 0.62);
-  --agi-console-tint-strong: rgba(19, 17, 9, 0.82);
+  --agi-surface-wash: rgba(255, 255, 255, 0.035);
+  --agi-line-soft: rgba(255, 255, 255, 0.05);
+  --agi-glow-soft: transparent;
+  --agi-console-tint: rgba(13, 13, 13, 0.62);
+  --agi-console-tint-strong: rgba(13, 13, 13, 0.82);
   --agi-button-bg: var(--agi-ink);
   --agi-button-bg-hover: var(--agi-ink-2);
   --agi-button-ink: var(--agi-ground);
@@ -1444,9 +1444,9 @@ html[data-contrast='more'] *:focus-visible {
   --agi-success: #58bd7f;
   --agi-shadow: rgba(0, 0, 0, 0.5);
   --agi-shadow-window: 0 24px 48px -32px rgba(0, 0, 0, 0.6);
-  --agi-header-sheen: rgba(245, 240, 230, 0.02);
-  --agi-code-bg: rgba(245, 240, 230, 0.06);
-  --agi-selection-bg: rgba(240, 168, 74, 0.32);
+  --agi-header-sheen: rgba(255, 255, 255, 0.02);
+  --agi-code-bg: rgba(255, 255, 255, 0.06);
+  --agi-selection-bg: rgba(255, 255, 255, 0.24);
   --agi-selection-text: var(--agi-ink);
   --agi-code-function: #7bb0f5;
   --agi-code-type: #4ec9b0;
@@ -1454,8 +1454,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-jetbrains), var(--font-geist-mono), ui-monospace, monospace;
   --agi-font-display: var(--font-newsreader), 'Iowan Old Style', Georgia, serif;
-  --agi-terminal: #060503;
-  --agi-terminal-ink: #d9d2c5;
+  --agi-terminal: #050505;
+  --agi-terminal-ink: #dddfe3;
   --agi-terminal-dim: #a3a3a3;
   --agi-phone: #000;
   --agi-shadow-lift: 0 40px 100px -50px rgba(0, 0, 0, 0.9);
@@ -1516,8 +1516,8 @@ html[data-contrast='more'] *:focus-visible {
   font-feature-settings:
     'cv11' on,
     'ss01' on;
-  --agi-amber: #f0a84a;
-  --agi-amber-soft: rgba(240, 168, 74, 0.16);
+  --agi-amber: #c5c8ce;
+  --agi-amber-soft: rgba(255, 255, 255, 0.1);
 
   --agi-illo-violet: var(--auth-scene-purple);
   --agi-illo-orange: var(--auth-scene-orange);
@@ -1546,6 +1546,98 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
+  color-scheme: light;
+  --agi-ground: #ffffff;
+  --agi-ground-2: #f7f7f7;
+  --agi-ground-3: #efefef;
+  --agi-bg: var(--agi-ground);
+  --agi-bg-2: var(--agi-ground-2);
+  --agi-bg-3: var(--agi-ground-3);
+  --agi-card: #ffffff;
+  --agi-ink: #101216;
+  --agi-ink-2: #454a54;
+  --agi-ink-3: #5d636f;
+  --agi-ink-quiet: #5d636f;
+  --agi-ink-faint: #5d636f;
+  --agi-rule: rgba(16, 18, 22, 0.1);
+  --agi-rule-strong: rgba(16, 18, 22, 0.17);
+  --agi-frame: rgba(15, 23, 42, 0.14);
+
+  --agi-accent: #101216;
+  --agi-accent-hover: #2d3139;
+  --agi-accent-ink: #ffffff;
+  --agi-accent-text: #101216;
+  --agi-accent-soft: rgba(16, 18, 22, 0.08);
+
+  --agi-lane-local: #0e6f47;
+  --agi-lane-local-text: #0e6f47;
+  --agi-lane-local-on-primary: #ffffff;
+  --agi-lane-byok: #6234c4;
+  --agi-lane-byok-text: #6234c4;
+  --agi-lane-byok-on-primary: #ffffff;
+  --agi-lane-cloud: #12609e;
+  --agi-lane-cloud-text: #12609e;
+  --agi-lane-cloud-on-primary: #ffffff;
+
+  --agi-surface-wash: rgba(16, 18, 22, 0.025);
+  --agi-line-soft: rgba(16, 18, 22, 0.05);
+  --agi-glow-soft: transparent;
+  --agi-console-tint: rgba(247, 247, 247, 0.85);
+  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
+  --agi-error: #c23a2c;
+  --agi-success: #1f6b43;
+  --agi-shadow: rgba(16, 18, 22, 0.14);
+  --agi-shadow-lift: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
+  --agi-shadow-window: none;
+  --agi-header-sheen: rgba(16, 18, 22, 0.03);
+  --agi-code-bg: rgba(16, 18, 22, 0.05);
+  --agi-code-function: #245b96;
+  --agi-code-type: #176555;
+  --agi-selection-bg: rgba(16, 18, 22, 0.14);
+  --agi-selection-text: var(--agi-ink);
+  --agi-terminal: #0e1013;
+  --agi-terminal-ink: #d7dbe2;
+  --agi-terminal-dim: #9aa3b0;
+  --agi-amber: #454a54;
+  --agi-amber-soft: rgba(16, 18, 22, 0.08);
+}
+
+/* The landing keeps the flagship palette. Its light block restates every light value,
+   because the flagship dark block outranks the neutral light block. */
+body:has([data-public-palette='flagship']) [data-design='agi'] {
+  --agi-ground: #0b0a08;
+  --agi-ground-2: #13110d;
+  --agi-ground-3: #1c1913;
+  --agi-card: #131109;
+  --agi-ink: #f5f0e6;
+  --agi-ink-2: #c4bcac;
+  --agi-ink-3: #8a8174;
+  --agi-ink-quiet: #948b79;
+  --agi-ink-faint: #948b79;
+  --agi-rule: rgba(245, 240, 230, 0.09);
+  --agi-rule-strong: rgba(245, 240, 230, 0.17);
+  --agi-frame: rgba(241, 235, 225, 0.16);
+  --agi-accent: #f0a84a;
+  --agi-accent-hover: #f4b866;
+  --agi-accent-ink: #1a1300;
+  --agi-accent-text: #f0a84a;
+  --agi-accent-soft: rgba(240, 168, 74, 0.16);
+  --agi-surface-wash: rgba(245, 240, 230, 0.035);
+  --agi-line-soft: rgba(245, 240, 230, 0.05);
+  --agi-glow-soft: rgba(240, 168, 74, 0.13);
+  --agi-console-tint: rgba(19, 17, 9, 0.62);
+  --agi-console-tint-strong: rgba(19, 17, 9, 0.82);
+  --agi-header-sheen: rgba(245, 240, 230, 0.02);
+  --agi-code-bg: rgba(245, 240, 230, 0.06);
+  --agi-selection-bg: rgba(240, 168, 74, 0.32);
+  --agi-terminal: #060503;
+  --agi-terminal-ink: #d9d2c5;
+  --agi-amber: #f0a84a;
+  --agi-amber-soft: rgba(240, 168, 74, 0.16);
+}
+
+[data-theme='light'] body:has([data-public-palette='flagship']) [data-design='agi'],
+body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi'] {
   color-scheme: light;
   --agi-ground: #ffffff;
   --agi-ground-2: #f7f7f7;

@@ -54,7 +54,7 @@ export function MarketingLanding({
   freeMediaOffer: FreeQuotaMediaOffer | null;
 }) {
   return (
-    <div data-design="agi">
+    <div data-design="agi" data-public-palette="flagship">
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell">
         <LandingHero

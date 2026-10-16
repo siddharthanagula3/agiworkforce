@@ -6225,12 +6225,6 @@
   }
 }
 
-html [data-design='agi'][data-public-reference='web'] {
-  --public-label-ink: var(--public-ink-secondary);
-  --public-caption-ink: var(--public-ink-secondary);
-  --agi-glow-soft: transparent;
-}
-
 [data-design='agi'] .agi-fl-web-bar {
   display: flex;
   flex-wrap: wrap;

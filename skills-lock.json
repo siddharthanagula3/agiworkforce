@@ -42,7 +42,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:40f970f76c6d2d11a652be6fe873dfaf509e035c6563931cf600be1a6369b5ba"
+      "computedHash": "sha256-tree-v1:37991bbf98e7ebefbe6007d68c2eb45a3edba0f3e0165f21b658dc9149b24ba4"
     },
     "ai-seo": {
       "path": ".agents/skills/ai-seo",

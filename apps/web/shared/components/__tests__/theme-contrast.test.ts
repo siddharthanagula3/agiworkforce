@@ -762,6 +762,36 @@ describe('the marketing design-system palette clears AA in both themes', () => {
   const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
   const LANES = ['local', 'byok', 'cloud'] as const;
 
+  const FLAGSHIP_SCOPE = "body:has([data-public-palette='flagship'])";
+  const FLAGSHIP_THEMES = {
+    dark: designBlock(`${FLAGSHIP_SCOPE} [data-design='agi']`, '--agi-ground'),
+    light: designBlock(`${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`, '--agi-ground'),
+  };
+
+  for (const [theme, block] of Object.entries(FLAGSHIP_THEMES)) {
+    for (const name of GROUNDS) {
+      for (const text of TEXTS) {
+        it(`landing ${theme}: ${text} on ${name} >= 4.5:1`, () => {
+          expect(
+            contrastRatio(colorToken(block, text), colorToken(block, name)),
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        });
+      }
+    }
+
+    it(`landing ${theme}: the primary CTA draws --agi-ground on --agi-ink at >= 4.5:1`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--agi-ground'), colorToken(block, '--agi-ink')),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`landing ${theme}: --agi-amber on the --agi-ink fill stays below AA`, () => {
+      expect(
+        contrastRatio(colorToken(block, '--agi-amber'), colorToken(block, '--agi-ink')),
+      ).toBeLessThan(WCAG_AA_NORMAL);
+    });
+  }
+
   for (const [theme, block] of Object.entries(THEMES)) {
     const ground = colorToken(block, '--agi-ground');
     const ink = colorToken(block, '--agi-ink');
