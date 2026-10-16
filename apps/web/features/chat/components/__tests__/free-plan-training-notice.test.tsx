@@ -99,9 +99,9 @@ describe('the free model data notice', () => {
     signedInOn('free');
     const first = render(<FreePlanTrainingNotice />);
     expect(screen.getByTestId('free-plan-training-notice')).toBeTruthy();
-    expect(
-      JSON.parse(window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) ?? '[]'),
-    ).toEqual([ACCOUNT.id]);
+    const stored = window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) ?? '[]';
+    expect(JSON.parse(stored)).toHaveLength(1);
+    expect(stored).not.toContain(ACCOUNT.id);
 
     first.unmount();
     render(<FreePlanTrainingNotice />);
@@ -140,9 +140,41 @@ describe('the free model data notice', () => {
   it('is shown again to a different account on the same browser', () => {
     window.localStorage.setItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, 'user_someone_else');
     signedInOn('free');
-    render(<FreePlanTrainingNotice />);
+    const first = render(<FreePlanTrainingNotice />);
 
     expect(screen.getByTestId('free-plan-training-notice')).toBeTruthy();
+    expect(window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY)).not.toContain(
+      'user_someone_else',
+    );
+    first.unmount();
+    signedInOn('free', 'user_someone_else');
+    render(<FreePlanTrainingNotice />);
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+  });
+
+  it('keeps a dismissal stored as a bare account id and stops keeping the id', () => {
+    window.localStorage.setItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, ACCOUNT.id);
+    signedInOn('free');
+    const first = render(<FreePlanTrainingNotice />);
+
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+    const stored = window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) ?? '[]';
+    expect(JSON.parse(stored)).toHaveLength(1);
+    expect(stored).not.toContain(ACCOUNT.id);
+    first.unmount();
+    render(<FreePlanTrainingNotice />);
+    expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
+  });
+
+  it('keeps no account id in the browser once the notice was shown to several', () => {
+    signedInOn('free', 'user_a');
+    render(<FreePlanTrainingNotice />).unmount();
+    signedInOn('free', 'user_b');
+    render(<FreePlanTrainingNotice />).unmount();
+
+    const stored = window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) ?? '';
+    expect(JSON.parse(stored)).toHaveLength(2);
+    expect(stored).not.toMatch(/user_[ab]/u);
   });
 
   it('still shows when storage cannot be read', () => {
