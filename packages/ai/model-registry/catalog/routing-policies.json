@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 34,
+    "policyVersion": 35,
     "records": [
       {
         "version": 1,
@@ -311,6 +311,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-14",
         "reason": "names the details memory never keeps, which version 1 never did, so the extraction for accounts with Include sensitive topics in memory on no longer leaves the English content screen as the only filter on its output; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 35,
+        "artifact": "prompt",
+        "id": "chat.system@11",
+        "channel": "internal",
+        "effectiveOn": "2026-10-15",
+        "reason": "chat.system@7 with what chat.system@8 to @10 added to chat.system@4, the version they were written on, and the wording of the 2026-10-15 prompt and policy audit. From @8 to @10: the AGI identity and its rules, the statement of the serving model, the chat setup lines, the Settings and account guidance (the account help now says which plan rather than the plan, beside the product overview), disclosure, response language and the tool descriptions. From the audit: reference material named by where it came from, with the no-citations line limited to web results (PC-P02); the sources the web chat links under the answer (R8-NOTE01); memory outcomes the app reports (PC-P03); the instruction order wherever a block sits, the current request narrowing saved preferences, and loaded skills granting no permission (PC-P06); an exact format before presentation wrappers and artifact revisions under the same title (PC-P07, R7-02); email and writing cards only where the client renders them (R13-GAP-01); the artifact app runtime only where the client publishes hosted apps, with the viewer kept apart from this turn (PC-P09); and claims about actions held to the turn's tool calls and results (PC-P10, MEM-7). Built on the owner's 2026-10-15 decision to build the next version on @7 and show it before promotion; enters on internal and takes no traffic. Pinning it pins voice.live_instructions@2 with it, which the prompt release ledger test enforces"
       }
     ]
   },

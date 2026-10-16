@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { surfacePublishesArtifactApps, surfaceRendersWritingCards } from '../chat-surface-rendering';
+import {
+  surfacePublishesArtifactApps,
+  surfaceRendersWritingCards,
+} from '../chat-surface-rendering';
 
 const OTHER_SURFACES = ['mobile', 'chrome', 'vscode', 'cli', 'unknown'] as const;
 

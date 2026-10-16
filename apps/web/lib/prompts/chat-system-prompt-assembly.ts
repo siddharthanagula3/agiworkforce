@@ -413,6 +413,7 @@ export function assembleChatSystemPrompt(
   } else {
     blocks.push(section('no_tools'), section('citations_none'));
   }
+  blocks.push(section('reference_sources'));
 
   blocks.push(
     turnSetupBlock(section, state.setup),
@@ -430,6 +431,7 @@ export function assembleChatSystemPrompt(
   // In a version with a setup block, memory_on and memory_off are lines of that block.
   if (!describesSetup && state.memory === 'on') blocks.push(section('memory_on'));
   if (!describesSetup && state.memory === 'off') blocks.push(section('memory_off'));
+  blocks.push(section('memory_outcomes'), section('action_receipts'));
   blocks.push(section('format_and_length'), section('email_and_writing_blocks'));
   if (state.writingCards) blocks.push(section('email_and_writing_cards'));
   if (state.artifactMarkers) {
