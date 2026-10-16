@@ -978,6 +978,45 @@ describe('chat prompt v11 on the chat route', () => {
     );
   });
 
+  it('gives a desktop app turn, which runs the web chat, the same source links, cards and artifact apps', async () => {
+    const result = await processRequest(
+      chatRequestFor(
+        'chat-system-prompt-v11-desktop',
+        { x_past_chat_links: true },
+        { 'x-agi-surface': 'desktop' },
+      ),
+      { ...auth(), boundSurface: 'web' },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined).toContain(
+      `${v11Text('source_links_heading')}\n${v11Text('source_link.memory')}`,
+    );
+    expect(joined).toContain(v11Text('email_and_writing_cards'));
+    expect(joined).toContain(v11Text('artifact_apps'));
+  });
+
+  it('promises no source links to a client that does not say it draws them', async () => {
+    const result = await processRequest(chatRequestFor('chat-system-prompt-v11-no-links'), {
+      ...auth(),
+      boundSurface: 'web',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined).toContain(v11Text('reference_sources'));
+    expect(joined).not.toContain(v11Text('source_links_heading'));
+  });
+
   it('promises a mobile turn no source links and no cards, which the mobile app does not draw', async () => {
     const result = await processRequest(chatRequestFor('chat-system-prompt-v11-mobile'), {
       ...auth(),

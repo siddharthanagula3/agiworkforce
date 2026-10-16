@@ -111,29 +111,33 @@ the 2026-10-15 prompt and policy audit (patches PC-P02, PC-P03, PC-P06, PC-P07,
 PC-P09 and PC-P10) and of the live findings R7-02, R8-NOTE01, R13-GAP-01 and
 MEM-7. Version 6 stays pinned; version 11 is on the internal channel.
 
-| Section                                         | When it is sent                                            | Where it comes from                                                                                                               |
-| ----------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`, `identity_rules`, the serving model | always; the model as the route resolves it                 | version 8                                                                                                                         |
-| chat setup lines                                | when the route passes the chat setup                       | versions 8 to 10                                                                                                                  |
-| Settings and account guidance                   | per surface                                                | versions 8 and 9; the account help now says the model cannot see which plan the user is on, beside the product overview           |
-| `disclosure`, tool descriptions                 | always, or when the tool is attached                       | version 8; the code sandbox reaches only GitHub, npm and PyPI                                                                     |
-| `no_tools`                                      | turns with no tools                                        | version 7's wording with version 8's "built-in tools"                                                                             |
-| `reference_sources`                             | always                                                     | PC-P02                                                                                                                            |
-| `citations_none`                                | no web search or fetch                                     | PC-P02: no web results exist, rather than no sources                                                                              |
-| source links                                    | the web chat, from the chat setup                          | R8-NOTE01: saved memories, past chats and project files the web chat links under the answer                                       |
-| `memory_outcomes`                               | always                                                     | PC-P03                                                                                                                            |
-| `instruction_precedence`                        | always                                                     | PC-P06: the order holds wherever a block sits, the current request narrows saved preferences, a loaded skill grants no permission |
-| `format_and_length`                             | always                                                     | PC-P07: an exact format comes before every presentation rule                                                                      |
-| `artifacts`                                     | where artifacts render                                     | version 7, plus revisions under the same title (R7-02, PC-P07)                                                                    |
-| `email_and_writing_cards`                       | the web chat and the desktop app                           | R13-GAP-01; replaces `email_and_writing_blocks`                                                                                   |
-| `artifact_apps`, `artifact_apps_connectors`     | the web chat and the mobile app; connectors where released | PC-P09; replaces `artifact_runtime`, and keeps a published artifact's viewer apart from the turn                                  |
-| `action_receipts`                               | always                                                     | PC-P10 and MEM-7                                                                                                                  |
-| `refusal_style` (rewritten)                     | always                                                     | the evals below: a decline offers its alternative in a sentence and drafts no stand-in for the declined content                   |
+| Section                                         | When it is sent                                                             | Where it comes from                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`, `identity_rules`, the serving model | always; the model as the route resolves it                                  | version 8                                                                                                                         |
+| chat setup lines                                | when the route passes the chat setup                                        | versions 8 to 10                                                                                                                  |
+| Settings and account guidance                   | per surface                                                                 | versions 8 and 9; the account help now says the model cannot see which plan the user is on, beside the product overview           |
+| `disclosure`, tool descriptions                 | always, or when the tool is attached                                        | version 8; the code sandbox reaches only GitHub, npm and PyPI                                                                     |
+| `no_tools`                                      | turns with no tools                                                         | version 7's wording with version 8's "built-in tools"                                                                             |
+| `reference_sources`                             | always                                                                      | PC-P02                                                                                                                            |
+| `citations_none`                                | no web search or fetch                                                      | PC-P02: no web results exist, rather than no sources                                                                              |
+| source links                                    | a client that declares it links them, from the chat setup                   | R8-NOTE01: saved memories, past chats and project files the web chat links under the answer                                       |
+| `memory_outcomes`                               | always                                                                      | PC-P03                                                                                                                            |
+| `instruction_precedence`                        | always                                                                      | PC-P06: the order holds wherever a block sits, the current request narrows saved preferences, a loaded skill grants no permission |
+| `format_and_length`                             | always                                                                      | PC-P07: an exact format comes before every presentation rule                                                                      |
+| `artifacts`                                     | where artifacts render                                                      | version 7, plus revisions under the same title (R7-02, PC-P07)                                                                    |
+| `email_and_writing_cards`                       | the web chat and the desktop app                                            | R13-GAP-01; replaces `email_and_writing_blocks`                                                                                   |
+| `artifact_apps`, `artifact_apps_connectors`     | the web chat, the desktop app and the mobile app; connectors where released | PC-P09; replaces `artifact_runtime`, and keeps a published artifact's viewer apart from the turn                                  |
+| `action_receipts`                               | always                                                                      | PC-P10 and MEM-7                                                                                                                  |
+| `refusal_style` (rewritten)                     | always                                                                      | the evals below: a decline offers its alternative in a sentence and drafts no stand-in for the declined content                   |
 
 Version 11 renders through the published assembler, which now also renders the
 setup, serving-model and Settings sections when a version holds them; versions
-8 to 10 keep the setup composer. Which client renders cards, source links and
-hosted artifact apps is owned by `apps/web/lib/chat-surface-rendering.ts`.
+8 to 10 keep the setup composer. Which client renders cards and hosted artifact
+apps is owned by `apps/web/lib/chat-surface-rendering.ts`; the desktop app
+loads the web chat by default, so it gets both. Source links follow the
+client's own declaration: the web chat, in a browser or inside the desktop app,
+sends `x_past_chat_links`, and the chat route passes that flag to the prompt as
+it does to the past-chat excerpts.
 
 Two things versions 8 to 10 added are not in version 11. `artifact_runtime`
 comes back as `artifact_apps`, sent only where the client publishes hosted

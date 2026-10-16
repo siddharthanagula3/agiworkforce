@@ -18,10 +18,11 @@ describe('what each chat client renders of a turn', () => {
 });
 
 describe('where an artifact app can run', () => {
-  it('publishes hosted artifacts from the web chat and the mobile app only', () => {
+  it('publishes hosted artifacts from the web chat, the desktop app and the mobile app only', () => {
     expect(surfacePublishesArtifactApps('web')).toBe(true);
+    expect(surfacePublishesArtifactApps('desktop')).toBe(true);
     expect(surfacePublishesArtifactApps('mobile')).toBe(true);
-    for (const surface of ['desktop', 'chrome', 'vscode', 'cli', 'unknown'] as const) {
+    for (const surface of ['chrome', 'vscode', 'cli', 'unknown'] as const) {
       expect(surfacePublishesArtifactApps(surface), surface).toBe(false);
     }
   });
