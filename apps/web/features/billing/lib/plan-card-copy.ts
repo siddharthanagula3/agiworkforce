@@ -113,6 +113,20 @@ function concurrencyFeature(plan: BillingPlanTier, connectorKey: string, t: Pric
   return typeof chats === 'number' ? t('chatsAtOnce', { chats }) : null;
 }
 
+function projectsWithStorageFeature(plan: BillingPlanTier, t: PricingT) {
+  const limits = getBillingPlanProductLimits(plan);
+  const storage = limits?.knowledgeStorageBytes;
+  if (typeof limits?.projects !== 'number' || typeof storage !== 'number') return null;
+  return t('projectsWithStorage', { count: limits.projects, storage: formatBytes(storage, 0) });
+}
+
+function dailyUploadsFeature(plan: BillingPlanTier, t: PricingT) {
+  const limits = getBillingPlanProductLimits(plan);
+  const uploads = limits?.dailyAttachmentUploads;
+  if (typeof uploads !== 'number' || !limits) return null;
+  return t('dailyUploads', { count: uploads, size: formatBytes(limits.maxAttachmentBytes, 0) });
+}
+
 function projectsAndStorageFeature(plan: BillingPlanTier, connectorKey: string, t: PricingT) {
   const limits = getBillingPlanProductLimits(plan);
   const storage = limits?.knowledgeStorageBytes;
@@ -134,26 +148,26 @@ export function individualPlanFeatures(
       return presentCopy([
         mediaFeature ? t(mediaFeature) : null,
         t('freeFeature1'),
+        projectsWithStorageFeature('free', t),
+        dailyUploadsFeature('free', t),
         t('freeFeature2'),
-        t('freeFeature3'),
         t('freeLocalByok', { surface: SURFACE_NAMES.cli, status: pricingSurfaceStatus('cli', t) }),
       ]);
     }
     case 'basic':
       return presentCopy([
         t('basicFeature2'),
-        t('basicFeature3'),
-        t('basicFeature4'),
+        projectsWithStorageFeature('basic', t),
         concurrencyFeature('basic', 'basicFeature5', t),
         t('basicFeature6'),
+        t('basicFeature3'),
       ]);
     case 'pro':
       return presentCopy([
         ...usageComparisonCopy('pro', t),
-        concurrencyFeature('pro', 'proFeature2', t),
-        t('proFeature3'),
-        t('proFeature4'),
         t('proFeature5'),
+        projectsWithStorageFeature('pro', t),
+        concurrencyFeature('pro', 'proFeature2', t),
         t('proFeature6'),
       ]);
     case 'max':
@@ -275,7 +289,7 @@ export function planCtaLabel(plan: SelfServePaidPlanTier, t: PricingT): string {
     case 'pro':
       return t('proCta');
     case 'max':
-      return t('maxCta');
+      return t('maxCta', { plan: BILLING_PLAN_PRICING.max.label });
     case 'max_15x':
       return t('max15xCta', { plan: BILLING_PLAN_PRICING.max_15x.label });
     case 'team':

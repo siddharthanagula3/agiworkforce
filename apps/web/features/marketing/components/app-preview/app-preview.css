@@ -390,6 +390,51 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   color: var(--chat-text-muted);
 }
 
+[data-design='agi'] .agi-app-marked {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+[data-design='agi'] .agi-app-marked[data-block] {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-design='agi'] .agi-app-actions .agi-app-marked,
+[data-design='agi'] .agi-app-composer-row .agi-app-marked {
+  margin: calc(var(--u) * -6);
+  padding: calc(var(--u) * 6);
+  border-radius: calc(var(--u) * 8);
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+[data-design='agi'] .agi-app-composer-row .agi-app-marked {
+  margin-inline: 0;
+  padding-inline: calc(var(--u) * 10);
+  border-radius: var(--corner-pill);
+}
+
+[data-design='agi'] .agi-app-marker {
+  position: absolute;
+  inset-block-start: calc(var(--u) * -15);
+  inset-inline-end: calc(var(--u) * -15);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: calc(var(--u) * 28);
+  block-size: calc(var(--u) * 28);
+  border-radius: var(--corner-pill);
+  background: var(--chat-text-primary);
+  box-shadow: 0 0 0 calc(var(--u) * 3) var(--chat-bg);
+  font-size: calc(var(--u) * 14);
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--chat-bg);
+}
+
 [data-design='agi'] .agi-app-composer {
   display: flex;
   flex: none;

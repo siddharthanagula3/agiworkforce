@@ -103,6 +103,23 @@ describe('public billing truth', () => {
     }
   });
 
+  it('names both Max plans in their buttons from the catalog label in every pricing locale', () => {
+    const localeRoot = resolve(webRoot, '../../packages/ui/i18n/locales');
+    const locales = readdirSync(localeRoot, { withFileTypes: true }).filter((entry) =>
+      entry.isDirectory(),
+    );
+    expect(locales.length).toBeGreaterThan(1);
+    for (const locale of locales) {
+      const pricing = JSON.parse(
+        readFileSync(resolve(localeRoot, locale.name, 'pricing.json'), 'utf8'),
+      ) as Record<string, string>;
+      for (const key of ['maxCta', 'max15xCta']) {
+        expect(pricing[key], `${locale.name}/pricing.json ${key}`).toContain('{{plan}}');
+        expect(pricing[key], `${locale.name}/pricing.json ${key}`).not.toMatch(/\bMax\b/u);
+      }
+    }
+  });
+
   it('does not publish the retired Hobby plan or waitlist-only paid tiers', () => {
     const publicSources = [
       'app/refund-policy/page.tsx',
@@ -229,7 +246,7 @@ describe('public billing truth', () => {
           `${locale}/pricing.json ${key} states a usage multiple the catalog computes`,
         ).not.toMatch(/five times|cinco veces|pro-level|nivel pro|\d+x/i);
       }
-      expect(pricing['maxVariant20x']).toBe(`${topPlanOverPro?.fiveHour}x`);
+      expect(BILLING_PLAN_PRICING.max_15x.label).toBe(`Max ${topPlanOverPro?.fiveHour}x`);
       expect(pricing['compareSubheading']).toContain('{{topPlan}}');
       expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
       for (const key of [

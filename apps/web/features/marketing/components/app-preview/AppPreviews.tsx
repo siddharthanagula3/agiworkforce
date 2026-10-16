@@ -62,7 +62,8 @@ export type AppPreviewView = 'thread' | 'new-chat';
 
 const NEW_CHAT_GREETING = greetingHeadline('afternoon', 0);
 
-export type PreviewKind = 'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone';
+export type PreviewKind =
+  'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone' | 'closeup' | 'step';
 
 interface PreviewGeometry {
   frame: number;
@@ -78,6 +79,8 @@ export const PREVIEW_GEOMETRY: Record<PreviewKind, PreviewGeometry> = {
   editor: { frame: 720, width: 1120, height: 700 },
   terminal: { frame: 640, width: 880, height: 550 },
   phone: { frame: 270, width: 390, height: 844 },
+  closeup: { frame: 720, width: 720, height: 400 },
+  step: { frame: 520, width: 520, height: 540 },
 };
 
 export function PreviewRoot({
@@ -215,7 +218,28 @@ export function AppSidebar({
   );
 }
 
-export function ReplyActions() {
+export function PreviewMarker({
+  n,
+  block = false,
+  children,
+}: {
+  n: number;
+  block?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <span className="agi-app-marked" data-block={block || undefined}>
+      {children}
+      <i className="agi-app-marker">{n}</i>
+    </span>
+  );
+}
+
+function Marked({ n, children }: { n?: number; children: ReactNode }) {
+  return n === undefined ? <>{children}</> : <PreviewMarker n={n}>{children}</PreviewMarker>;
+}
+
+export function ReplyActions({ markMore }: { markMore?: number }) {
   return (
     <span className="agi-app-actions">
       <Copy className="agi-app-icon" />
@@ -223,7 +247,9 @@ export function ReplyActions() {
       <ThumbsDown className="agi-app-icon" />
       <RefreshCw className="agi-app-icon" />
       <GitFork className="agi-app-icon" />
-      <MoreHorizontal className="agi-app-icon" />
+      <Marked n={markMore}>
+        <MoreHorizontal className="agi-app-icon" />
+      </Marked>
     </span>
   );
 }
@@ -231,10 +257,12 @@ export function ReplyActions() {
 export function AppComposer({
   placeholder = 'Ask anything. Type / for commands',
   draft,
+  markModel,
   children,
 }: {
   placeholder?: string;
   draft?: string;
+  markModel?: number;
   children?: ReactNode;
 }) {
   return (
@@ -255,11 +283,13 @@ export function AppComposer({
           <Palette className="agi-app-icon" />
           Style
         </span>
-        <span className="agi-app-model">
-          <AgiMark className="agi-app-mark agi-app-mark--sm" />
-          Auto
-          <ChevronDown className="agi-app-icon agi-app-icon--sm" />
-        </span>
+        <Marked n={markModel}>
+          <span className="agi-app-model">
+            <AgiMark className="agi-app-mark agi-app-mark--sm" />
+            Auto
+            <ChevronDown className="agi-app-icon agi-app-icon--sm" />
+          </span>
+        </Marked>
         <Mic className="agi-app-icon agi-app-icon--lg" />
         <span className="agi-app-send">
           <AudioLines className="agi-app-icon" />

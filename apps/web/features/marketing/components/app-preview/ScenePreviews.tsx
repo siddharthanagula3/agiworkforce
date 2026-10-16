@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleCheck,
   CircleHelp,
   Code,
   Copy,
@@ -57,7 +58,14 @@ import {
 } from '@agiworkforce/types';
 import { WEB_SETTINGS_NAV_GROUPS } from '@/features/settings/components/web-settings-navigation';
 import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
-import { AppComposer, AppSidebar, PreviewRoot, ReplyActions, TrafficLights } from './AppPreviews';
+import {
+  AppComposer,
+  AppSidebar,
+  PreviewMarker,
+  PreviewRoot,
+  ReplyActions,
+  TrafficLights,
+} from './AppPreviews';
 
 function BrowserChrome({ url }: { url: string }) {
   return (
@@ -126,34 +134,134 @@ function Picker({ value, wide = false }: { value: string; wide?: boolean }) {
   );
 }
 
-const ARTIFACT_PAGES = [
-  { title: 'Project notes', body: 'Keep the next steps together.' },
-  { title: 'Next steps', body: 'Confirm the outline, then draft the first section.' },
-] as const;
-const ARTIFACT_PAGE = ARTIFACT_PAGES[0];
+interface ArtifactSection {
+  heading: string;
+  items: readonly string[];
+}
 
-export const ARTIFACT_SCENE_MESSAGE = ARTIFACT_PAGES.map((page) =>
-  [
-    '```html',
-    '<!-- @artifact -->',
-    '<!doctype html>',
-    '<html lang="en">',
-    `<head><title>${page.title}</title></head>`,
-    '<body>',
-    `  <h1>${page.title}</h1>`,
-    `  <p>${page.body}</p>`,
-    '</body>',
-    '</html>',
-    '```',
-  ].join('\n'),
-).join('\n\n');
+interface ArtifactPage {
+  title: string;
+  body: string;
+  sections?: readonly ArtifactSection[];
+}
+
+interface ArtifactExample {
+  request: string;
+  reply: string;
+  pages: readonly [ArtifactPage, ...ArtifactPage[]];
+}
+
+export type ArtifactSceneExample = 'notes' | 'checklist';
+
+const ARTIFACT_EXAMPLES: Record<ArtifactSceneExample, ArtifactExample> = {
+  notes: {
+    request: 'Make a page for my project notes.',
+    reply: 'Here are two pages: the notes, and the next steps on their own.',
+    pages: [
+      { title: 'Project notes', body: 'Keep the next steps together.' },
+      { title: 'Next steps', body: 'Confirm the outline, then draft the first section.' },
+    ],
+  },
+  checklist: {
+    request: 'Make a launch checklist page I can share with the team.',
+    reply: 'Here is the checklist, grouped by when each step happens.',
+    pages: [
+      {
+        title: 'Launch checklist',
+        body: 'Work from top to bottom. The open questions are listed last.',
+        sections: [
+          {
+            heading: 'Before launch',
+            items: [
+              'Freeze the release branch and tag the build',
+              'Run the full test pass on staging',
+              'Update the help articles that changed',
+            ],
+          },
+          {
+            heading: 'Launch day',
+            items: [
+              'Publish the release notes',
+              'Post the announcement in the team channel',
+              'Watch error rates for the first two hours',
+            ],
+          },
+          {
+            heading: 'Open questions',
+            items: [
+              'Who signs off the pricing copy?',
+              'Do we email existing customers, or post only?',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+};
+
+function artifactSceneMessage(pages: readonly ArtifactPage[]): string {
+  return pages
+    .map((page) =>
+      [
+        '```html',
+        '<!-- @artifact -->',
+        '<!doctype html>',
+        '<html lang="en">',
+        `<head><title>${page.title}</title></head>`,
+        '<body>',
+        `  <h1>${page.title}</h1>`,
+        `  <p>${page.body}</p>`,
+        ...(page.sections ?? []).flatMap((section) => [
+          `  <h2>${section.heading}</h2>`,
+          '  <ul>',
+          ...section.items.map((item) => `    <li>${item}</li>`),
+          '  </ul>',
+        ]),
+        '</body>',
+        '</html>',
+        '```',
+      ].join('\n'),
+    )
+    .join('\n\n');
+}
+
+export const ARTIFACT_SCENE_MESSAGES: Record<ArtifactSceneExample, string> = {
+  notes: artifactSceneMessage(ARTIFACT_EXAMPLES.notes.pages),
+  checklist: artifactSceneMessage(ARTIFACT_EXAMPLES.checklist.pages),
+};
+export const ARTIFACT_SCENE_MESSAGE = ARTIFACT_SCENE_MESSAGES.notes;
 const ARTIFACT_ACTIONS: readonly LucideIcon[] = [Copy, Globe, Maximize2, MoreHorizontal, X];
 
-export function ArtifactScenePreview({ className }: { className?: string }) {
+function SceneArtifactCard({ title, shownInPanel }: { title: string; shownInPanel: boolean }) {
+  return (
+    <span className="agi-scene-card" data-in-panel={shownInPanel ? 'true' : undefined}>
+      <span className="agi-scene-card-icon">
+        <Globe className="agi-scene-icon" />
+      </span>
+      <span className="agi-scene-card-text">
+        <span className="agi-scene-card-title">{title}</span>
+        <span className="agi-scene-card-sub">Artifact</span>
+      </span>
+      <Download className="agi-scene-icon agi-scene-card-download" />
+      <span className="agi-scene-card-open">{shownInPanel ? 'Hide' : 'Open'}</span>
+    </span>
+  );
+}
+
+export function ArtifactScenePreview({
+  className,
+  example = 'notes',
+}: {
+  className?: string;
+  example?: ArtifactSceneExample;
+}) {
+  const { request, reply, pages } = ARTIFACT_EXAMPLES[example];
+  const open = pages[0];
+  const several = pages.length > 1;
   return (
     <PreviewRoot
       kind="web"
-      scene="artifact"
+      scene={example === 'notes' ? 'artifact' : `artifact-${example}`}
       label="Authored example of an artifact open beside a chat"
       className={className}
     >
@@ -161,34 +269,23 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
       <div className="agi-scene-split">
         <div className="agi-app-main agi-scene-narrow">
           <div className="agi-app-thread">
-            <p className="agi-app-user">Make a page for my project notes.</p>
+            <p className="agi-app-user">{request}</p>
             <div className="agi-app-reply">
-              <p>Here are two pages: the notes, and the next steps on their own.</p>
+              <p>{reply}</p>
               <div className="agi-scene-cards">
-                {ARTIFACT_PAGES.map((page) => {
-                  const shownInPanel = page === ARTIFACT_PAGE;
-                  return (
-                    <span
-                      key={page.title}
-                      className="agi-scene-card"
-                      data-in-panel={shownInPanel ? 'true' : undefined}
-                    >
-                      <span className="agi-scene-card-icon">
-                        <Globe className="agi-scene-icon" />
-                      </span>
-                      <span className="agi-scene-card-text">
-                        <span className="agi-scene-card-title">{page.title}</span>
-                        <span className="agi-scene-card-sub">Artifact</span>
-                      </span>
-                      <Download className="agi-scene-icon agi-scene-card-download" />
-                      <span className="agi-scene-card-open">{shownInPanel ? 'Hide' : 'Open'}</span>
-                    </span>
-                  );
-                })}
-                <span className="agi-scene-ghost">
-                  <FolderDown className="agi-scene-icon" />
-                  Download all
-                </span>
+                {pages.map((page) => (
+                  <SceneArtifactCard
+                    key={page.title}
+                    title={page.title}
+                    shownInPanel={page === open}
+                  />
+                ))}
+                {several ? (
+                  <span className="agi-scene-ghost">
+                    <FolderDown className="agi-scene-icon" />
+                    Download all
+                  </span>
+                ) : null}
               </div>
               <ReplyActions />
             </div>
@@ -199,11 +296,13 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
           <div className="agi-scene-artifacts-strip">
             <PanelRightOpen className="agi-app-icon agi-app-quiet" />
             <span className="agi-scene-artifacts-title">Artifacts</span>
-            <span className="agi-scene-count">{ARTIFACT_PAGES.length}</span>
-            <span className="agi-scene-strip-action agi-app-end">
-              <FolderDown className="agi-scene-icon" />
-              Download all
-            </span>
+            <span className="agi-scene-count">{pages.length}</span>
+            {several ? (
+              <span className="agi-scene-strip-action agi-app-end">
+                <FolderDown className="agi-scene-icon" />
+                Download all
+              </span>
+            ) : null}
           </div>
           <div className="agi-scene-artifacts-bar">
             <span className="agi-scene-viewtoggle">
@@ -215,7 +314,7 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
               </span>
             </span>
             <span className="agi-scene-artifact-meta">
-              <span className="agi-scene-artifact-name">{ARTIFACT_PAGE.title}</span>
+              <span className="agi-scene-artifact-name">{open.title}</span>
               <span className="agi-scene-artifact-sub">
                 <Globe className="agi-scene-icon" />
                 <span className="agi-scene-artifact-type">HTML</span>
@@ -235,10 +334,44 @@ export function ArtifactScenePreview({ className }: { className?: string }) {
             </span>
           </div>
           <div className="agi-scene-artifact-page">
-            <span className="agi-scene-artifact-heading">{ARTIFACT_PAGE.title}</span>
-            <span className="agi-scene-artifact-body">{ARTIFACT_PAGE.body}</span>
+            <span className="agi-scene-artifact-heading">{open.title}</span>
+            <span className="agi-scene-artifact-body">{open.body}</span>
+            {open.sections?.map((section) => (
+              <span key={section.heading} className="agi-scene-artifact-section">
+                <span className="agi-scene-artifact-subheading">{section.heading}</span>
+                <span className="agi-scene-artifact-list">
+                  {section.items.map((item) => (
+                    <span key={item} className="agi-scene-artifact-item">
+                      {item}
+                    </span>
+                  ))}
+                </span>
+              </span>
+            ))}
           </div>
         </aside>
+      </div>
+    </PreviewRoot>
+  );
+}
+
+export const WEB_PROOF_LABEL = 'Authored example of a reply with its artifact, actions and model';
+
+export function WebProofPreview({ className }: { className?: string }) {
+  const { reply, pages } = ARTIFACT_EXAMPLES.checklist;
+  return (
+    <PreviewRoot kind="closeup" scene="proof" label={WEB_PROOF_LABEL} className={className}>
+      <div className="agi-scene-closeup">
+        <div className="agi-app-reply">
+          <p>{reply}</p>
+          <div className="agi-scene-cards">
+            <PreviewMarker n={1} block>
+              <SceneArtifactCard title={pages[0].title} shownInPanel={false} />
+            </PreviewMarker>
+          </div>
+          <ReplyActions markMore={2} />
+        </div>
+        <AppComposer markModel={3} />
       </div>
     </PreviewRoot>
   );
@@ -590,6 +723,76 @@ const RESEARCH_DEPTHS: ReadonlyArray<readonly [ResearchDeliverableDepth, string]
   ['full-report', 'Full report'],
 ];
 
+function ResearchPlanBlock({ plan }: { plan: readonly ResearchStep[] }) {
+  return (
+    <div className="agi-scene-research">
+      <div className="agi-scene-research-status">
+        <ListChecks className="agi-scene-icon" />
+        Review the plan to start searching
+      </div>
+      <div className="agi-scene-research-sources">
+        Searching the whole web. Add a source to narrow it.
+      </div>
+      <div className="agi-scene-research-plan">
+        <div>
+          <span className="agi-scene-research-heading">Research plan</span>
+          <span className="agi-scene-help">
+            Edit any step before it runs. What you start here is exactly what gets searched, and it
+            spends your budget.
+          </span>
+        </div>
+        <div className="agi-scene-research-steps">
+          {plan.map((step, index) => (
+            <span key={step.id} className="agi-scene-research-step" data-status={step.status}>
+              <i>{index + 1}</i>
+              <span className="agi-scene-input">{step.description}</span>
+              <X className="agi-scene-icon" />
+            </span>
+          ))}
+        </div>
+        <span className="agi-scene-research-add">
+          <Plus className="agi-app-icon agi-app-icon--sm" />
+          Add a step
+        </span>
+        <div className="agi-scene-fieldset" data-legend="Deliverable">
+          <span className="agi-scene-radios">
+            {RESEARCH_DEPTHS.map(([depth, label]) => (
+              <span key={depth} data-depth={depth}>
+                <Tick round on={depth === RESEARCH_SCENE_DEPTH} />
+                {label}
+              </span>
+            ))}
+          </span>
+          <span className="agi-scene-help">
+            The answer in a page, only what changes a decision.
+          </span>
+        </div>
+        <span className="agi-scene-btnrow">
+          <span className="agi-scene-btn" data-ink="true" data-size="sm">
+            Start research
+          </span>
+          <span className="agi-scene-btn" data-size="sm">
+            Cancel
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DeepResearchComposer({ draft }: { draft?: string }) {
+  return (
+    <div className="agi-scene-composer agi-scene-composer--chip">
+      <AppComposer draft={draft}>
+        <span className="agi-scene-modechip">
+          <Telescope className="agi-app-icon" />
+          Deep Research
+        </span>
+      </AppComposer>
+    </div>
+  );
+}
+
 export function ResearchScenePreview({ className }: { className?: string }) {
   return (
     <SceneShell
@@ -601,69 +804,126 @@ export function ResearchScenePreview({ className }: { className?: string }) {
       <div className="agi-app-main">
         <div className="agi-app-thread agi-scene-thread">
           <p className="agi-app-user">Compare project planning tools for a small team.</p>
-          <div className="agi-scene-research">
-            <div className="agi-scene-research-status">
-              <ListChecks className="agi-scene-icon" />
-              Review the plan to start searching
-            </div>
-            <div className="agi-scene-research-sources">
-              Searching the whole web. Add a source to narrow it.
-            </div>
-            <div className="agi-scene-research-plan">
-              <div>
-                <span className="agi-scene-research-heading">Research plan</span>
-                <span className="agi-scene-help">
-                  Edit any step before it runs. What you start here is exactly what gets searched,
-                  and it spends your budget.
-                </span>
-              </div>
-              <div className="agi-scene-research-steps">
-                {RESEARCH_SCENE_PLAN.map((step, index) => (
-                  <span key={step.id} className="agi-scene-research-step" data-status={step.status}>
-                    <i>{index + 1}</i>
-                    <span className="agi-scene-input">{step.description}</span>
-                    <X className="agi-scene-icon" />
-                  </span>
-                ))}
-              </div>
-              <span className="agi-scene-research-add">
-                <Plus className="agi-app-icon agi-app-icon--sm" />
-                Add a step
-              </span>
-              <div className="agi-scene-fieldset" data-legend="Deliverable">
-                <span className="agi-scene-radios">
-                  {RESEARCH_DEPTHS.map(([depth, label]) => (
-                    <span key={depth} data-depth={depth}>
-                      <Tick round on={depth === RESEARCH_SCENE_DEPTH} />
-                      {label}
-                    </span>
-                  ))}
-                </span>
-                <span className="agi-scene-help">
-                  The answer in a page, only what changes a decision.
-                </span>
-              </div>
-              <span className="agi-scene-btnrow">
-                <span className="agi-scene-btn" data-ink="true" data-size="sm">
-                  Start research
-                </span>
-                <span className="agi-scene-btn" data-size="sm">
-                  Cancel
-                </span>
-              </span>
-            </div>
-          </div>
+          <ResearchPlanBlock plan={RESEARCH_SCENE_PLAN} />
         </div>
-        <div className="agi-scene-composer agi-scene-composer--chip">
-          <AppComposer>
-            <span className="agi-scene-modechip">
-              <Telescope className="agi-app-icon" />
-              Deep Research
-            </span>
-          </AppComposer>
-        </div>
+        <DeepResearchComposer />
       </div>
     </SceneShell>
+  );
+}
+
+export const RESEARCH_STEPS_QUESTION =
+  'What is the current official guidance on password length for staff accounts? Cite the sources.';
+
+export const RESEARCH_STEPS_PLAN = [
+  {
+    id: 'example-nist',
+    type: 'search',
+    description: 'Find the current NIST guidance on password length.',
+    status: 'pending',
+  },
+  {
+    id: 'example-ncsc',
+    type: 'search',
+    description: 'Find the UK NCSC advice on memorable passwords.',
+    status: 'pending',
+  },
+  {
+    id: 'example-multi-factor',
+    type: 'search',
+    description: 'Check the length rules for passwords used with multi-factor sign-in.',
+    status: 'pending',
+  },
+] as const satisfies readonly ResearchStep[];
+
+export const RESEARCH_STEPS_REPORT = {
+  counts: ['3 searches', '2 sources'],
+  title: 'Password length for staff accounts',
+  summary: 'Both sources favour length over forced complexity.',
+  findings: [
+    ['At least 15 characters when a password is the only sign-in factor', 1],
+    ['At least 8 characters when it is used only with multi-factor sign-in', 1],
+    ['Allow at least 64 characters, with no forced character mixes or scheduled changes', 1],
+    ['Three random words make a long password easier to remember', 2],
+  ],
+  sources: 2,
+} as const;
+
+export const RESEARCH_STEP_LABELS = {
+  ask: 'Authored example of a Deep Research question in the composer',
+  plan: 'Authored example of a research plan to review before it starts',
+  report: 'Authored example of a finished research report with numbered citations',
+} as const;
+
+export function ResearchAskPreview({ className }: { className?: string }) {
+  return (
+    <PreviewRoot
+      kind="step"
+      scene="research-ask"
+      label={RESEARCH_STEP_LABELS.ask}
+      className={className}
+    >
+      <div className="agi-scene-step" data-align="end">
+        <DeepResearchComposer draft={RESEARCH_STEPS_QUESTION} />
+      </div>
+    </PreviewRoot>
+  );
+}
+
+export function ResearchPlanStepPreview({ className }: { className?: string }) {
+  return (
+    <PreviewRoot
+      kind="step"
+      scene="research-plan"
+      label={RESEARCH_STEP_LABELS.plan}
+      className={className}
+    >
+      <div className="agi-scene-step" data-align="center">
+        <ResearchPlanBlock plan={RESEARCH_STEPS_PLAN} />
+      </div>
+    </PreviewRoot>
+  );
+}
+
+export function ResearchReportPreview({ className }: { className?: string }) {
+  const report = RESEARCH_STEPS_REPORT;
+  return (
+    <PreviewRoot
+      kind="step"
+      scene="research-report"
+      label={RESEARCH_STEP_LABELS.report}
+      className={className}
+    >
+      <div className="agi-scene-step">
+        <div className="agi-app-reply agi-scene-report">
+          <span className="agi-scene-report-status">
+            <CircleCheck className="agi-scene-icon" />
+            <b>Research complete</b>
+            <span className="agi-app-end">{report.counts.join(' · ')}</span>
+          </span>
+          <p className="agi-app-heading">{report.title}</p>
+          <p>{report.summary}</p>
+          <ul className="agi-app-list">
+            {report.findings.map(([finding, source]) => (
+              <li key={finding}>
+                {finding} <span className="agi-scene-cite">[{source}]</span>
+              </li>
+            ))}
+          </ul>
+          <span className="agi-scene-sources">
+            <span className="agi-scene-sources-icons">
+              {Array.from({ length: report.sources }, (_, index) => (
+                <i key={index}>
+                  <Globe className="agi-scene-icon" />
+                </i>
+              ))}
+            </span>
+            Sources
+          </span>
+          <ReplyActions />
+        </div>
+      </div>
+    </PreviewRoot>
   );
 }
 

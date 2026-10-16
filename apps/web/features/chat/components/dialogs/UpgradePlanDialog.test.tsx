@@ -28,7 +28,9 @@ vi.mock('react-i18next', async (importOriginal) => {
   });
   const fixed = instance.getFixedT('en', 'pricing');
   const t = (key: string, values?: Record<string, unknown>) => {
-    if (!instance.exists(key, { ns: 'pricing' })) throw new Error(`Missing translation: ${key}`);
+    if (!instance.exists(key, { ...values, ns: 'pricing' })) {
+      throw new Error(`Missing translation: ${key}`);
+    }
     return fixed(key, values);
   };
   i18nState.t = t;

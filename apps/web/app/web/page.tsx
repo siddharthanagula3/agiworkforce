@@ -1,17 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  Bento,
-  Eyebrow,
-  Prose,
-  Section,
-  Stack,
-  SurfaceStatus,
-} from '@/features/marketing/components/system';
+import { Bento, Eyebrow, Section, Stack } from '@/features/marketing/components/system';
 import { FinalCta } from '@/features/marketing/components/SurfaceSections';
-import { WebWindow } from '@/features/marketing/components/DeviceMockups';
 import {
   AgentRunWindow,
   ArtifactsWindow,
@@ -19,6 +13,13 @@ import {
   ProjectWindow,
   ResearchWindow,
 } from '@/features/marketing/components/FeatureScenes';
+import {
+  ArtifactScenePreview,
+  ResearchAskPreview,
+  ResearchPlanStepPreview,
+  ResearchReportPreview,
+  WebProofPreview,
+} from '@/features/marketing/components/app-preview/ScenePreviews';
 import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
 import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
@@ -31,32 +32,63 @@ export const metadata = buildMetadata({
 });
 
 const DESKTOP_CTA = surfaceCta('desktop');
+const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
 const FINAL_CTA_BODY = [
-  'Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
+  `Free to try in the browser. AGI Web uses managed cloud (${MANAGED_CLOUD_STATUS}).`,
+  'Desktop adds approved folders, computer use and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
   CLI_AVAILABILITY_NOTE,
 ]
   .filter(Boolean)
   .join(' ');
 
+const PROOF_NOTES = [
+  'What a reply makes opens as an artifact, in a panel beside the chat with its version history.',
+  'Each reply names the model that answered it in its actions menu.',
+  'Leave the model on Auto, or pick one. On Auto a chat keeps the model it started on, and when Auto moves it to another, that reply shows a receipt line.',
+] as const;
+
+const RESEARCH_STEPS: ReadonlyArray<{ title: string; body: string; visual: ReactNode }> = [
+  {
+    title: 'Ask',
+    body: 'Ask in plain words with Deep Research on. Choose Auto or a model with research support.',
+    visual: <ResearchAskPreview />,
+  },
+  {
+    title: 'Approve',
+    body: 'Review the plan. Edit, add or remove a step, then choose Start research. Only the searches on the plan you approved run.',
+    visual: <ResearchPlanStepPreview />,
+  },
+  {
+    title: 'Read',
+    body: 'The model is asked to cite each factual claim with a numbered source. Open Sources to check them.',
+    visual: <ResearchReportPreview />,
+  },
+];
+
 const IDS = {
   hero: 'agi-web-title',
-  status: 'agi-web-status-title',
+  proof: 'agi-web-proof-title',
+  steps: 'agi-web-steps-title',
   inside: 'agi-web-inside-title',
 } as const;
 
 export default function WebSurfacePage() {
   return (
-    <div data-design="agi">
+    <div data-design="agi" data-public-reference="web">
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <section className="agi-fl-hero" aria-labelledby={IDS.hero}>
-          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <div className="agi-fl-eyebrow">AGI Web · {SURFACE_STATUS.web}</div>
-              <h1 id={IDS.hero} className="sr-only">
-                AGI Web
-              </h1>
+              <div className="agi-fl-web-bar">
+                <h1 id={IDS.hero} className="agi-fl-web-title">
+                  AGI Web
+                </h1>
+                <span className="agi-fl-web-status">
+                  <span className="agi-fl-web-status-dot" aria-hidden="true" />
+                  {SURFACE_STATUS.web}
+                </span>
+              </div>
               <div className="agi-fl-cta-row">
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
                   Try AGI Web
@@ -67,36 +99,64 @@ export default function WebSurfacePage() {
               </div>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main">
-              <WebWindow />
+              <ArtifactScenePreview example="checklist" />
             </div>
           </div>
         </section>
 
-        <Section id="status" labelledBy={IDS.status}>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id={IDS.status}>
-              What is live today.
-            </h2>
-            <SurfaceStatus
-              state="live"
-              name="AGI Web"
-              detail={`${SURFACE_STATUS.web}. Hosted chat with projects, artifacts, cited research, memory and account management, in any modern browser.`}
-              action={{ label: 'Open AGI Web', href: WEB_ENTRY_HREF }}
-            />
-            <Prose size="sm">
-              AGI Web uses managed cloud ({MANAGED_CLOUD_STATUS}). Choose a model; each reply names
-              the model that answered it in its actions menu. Auto shows an inline receipt when it
-              changes your pinned model.
-            </Prose>
-          </Stack>
-        </Section>
+        <section className="agi-fl-web-section" aria-labelledby={IDS.proof}>
+          <div className="agi-fl-web-proof">
+            <div className="agi-fl-web-proof-notes">
+              <h2 id={IDS.proof} className="agi-fl-web-h2">
+                From a request to a page you can share
+              </h2>
+              <ol className="agi-fl-web-notes">
+                {PROOF_NOTES.map((note, index) => (
+                  <li key={note}>
+                    <span className="agi-fl-web-num" aria-hidden="true">
+                      {index + 1}
+                    </span>
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="agi-fl-web-proof-visual">
+              <WebProofPreview />
+              <p className="agi-fl-web-caption">Illustrative example</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="agi-fl-web-section" aria-labelledby={IDS.steps}>
+          <h2 id={IDS.steps} className="agi-fl-web-h2">
+            Ask, approve the plan, read the report
+          </h2>
+          <ol className="agi-fl-web-steps">
+            {RESEARCH_STEPS.map((step, index) => (
+              <li key={step.title} className="agi-fl-web-step">
+                <span className="agi-fl-web-step-title">
+                  <span className="agi-fl-web-num" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  {step.title}
+                </span>
+                {step.visual}
+                <p className="agi-fl-web-step-body">{step.body}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="agi-fl-web-caption">
+            Illustrative example. Deep Research is included on {RESEARCH_PLANS} plans.
+          </p>
+        </section>
 
         <Section id="inside" labelledBy={IDS.inside} rule ground="2">
           <Stack gap="loose">
             <div>
               <Eyebrow>Inside</Eyebrow>
               <h2 className="agi-ds-h2" id={IDS.inside}>
-                Everything a chat <em className="agi-ds-accent">opens into.</em>
+                Everything a chat opens into.
               </h2>
             </div>
             <Bento

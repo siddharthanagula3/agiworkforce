@@ -15,10 +15,11 @@ import {
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
-import { SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
+import { COMING_SOON_LABEL, SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
 import {
   connectorFeatureNote,
   planCapabilityLabel,
+  planCapabilityReleased,
 } from '@/features/billing/lib/plan-capability-release';
 
 const testState = vi.hoisted(() => ({
@@ -102,6 +103,7 @@ vi.mock('react-i18next', async (importOriginal) => {
           key === 'compareLocalByokNote' ||
           key === 'compareLimitedPreview' ||
           key === 'compareContextTokens' ||
+          key === 'compareSandboxLimit' ||
           key === 'freeLocalByok' ||
           key === 'unlimitedProjectsWithStorage'
         ) {
@@ -229,27 +231,6 @@ import PricingPage from './page';
 
 type StripePaymentsModule = typeof import('@features/billing/services/stripe-payments');
 
-/**
- * Team and Enterprise moved behind an audience tab on 2026-08-08 so the page
- * shows four cards at a time instead of nine. The panel keeps `hidden` while
- * inactive, which drops it out of the accessibility tree, text queries still
- * match, but every `getByRole` for a Team control needs the tab activated
- * first. This is that click.
- */
-async function showTeamAndEnterprise() {
-  fireEvent.click(await screen.findByRole('button', { name: 'audienceBusiness' }));
-}
-
-/**
- * Max 5x and Max 20x share one card behind a capacity selector, so only the
- * selected variant's price and CTA are mounted at a time. Anything asserting on
- * the 20x price ($200) or its CTA has to pick the variant first.
- */
-async function showMax20x() {
-  const selector = await screen.findByRole('group', { name: 'maxVariantLabel' });
-  fireEvent.click(within(selector).getByRole('button', { name: 'Max 20x' }));
-}
-
 function teamSeatRow(name: 'seatStandardName' | 'seatPremiumName') {
   const card = screen.getByRole('heading', { name: 'Team' }).closest('article')!;
   return within(within(card).getByRole('heading', { name }).closest('li')!);
@@ -343,19 +324,14 @@ function comparisonColumn(plan: string): Record<string, string> {
   return Object.fromEntries(comparisonRows().map((row) => [row.label, row.cells[plan] ?? '']));
 }
 
-function stackedRows(): Array<Omit<ComparisonRowView, 'cells'> & { value: string }> {
-  return [...document.querySelectorAll('.agi-compare-stack .agi-compare-stack-item')].map(
-    (item) => ({
-      label: item.querySelector('dt .agi-compare-row-label')?.textContent ?? '',
-      note: item.querySelector('dt .agi-compare-row-note')?.textContent ?? '',
-      value: comparisonValue(item.querySelector('dd')),
-    }),
-  );
+function planCard(name: string): HTMLElement {
+  const card = screen.getByRole('heading', { name }).closest('article');
+  if (!card) throw new Error(`the ${name} heading is not inside a plan card`);
+  return card;
 }
 
-function maxCardStorageLine(): string | undefined {
-  const card = screen.getByRole('group', { name: 'maxVariantLabel' }).closest('article');
-  if (!card) throw new Error('the Max capacity selector is not inside a plan card');
+function maxCardStorageLine(plan: 'max' | 'max_15x'): string | undefined {
+  const card = planCard(BILLING_PLAN_PRICING[plan].label);
   return [...card.querySelectorAll('.agi-tier-features li')]
     .map((line) => line.textContent ?? '')
     .find((line) => /storage/i.test(line));
@@ -452,30 +428,63 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('Max 20x').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Team').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$7').length).toBeGreaterThan(0);
-    // Max 5x and Max 20x share a card, so only the selected capacity's price is
-    // mounted: assert $100, switch, then assert $200.
-    expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
-    await showMax20x();
-    expect(screen.getAllByText('$200').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
+    expect(within(planCard('Max 5x')).getByText('$100')).toBeVisible();
+    expect(within(planCard('Max 20x')).getByText('$200')).toBeVisible();
+    expect(screen.queryByRole('group', { name: /capacity/i })).toBeNull();
     // Team is a real per-seat plan: its $25 unit price heads the Team column
     // of the comparison with the per-seat qualifier beside it.
-    await showTeamAndEnterprise();
     expect(comparisonPlanHeader('Team')).toHaveTextContent('$25 perSeatPricingSub');
+  });
+
+  it('shows five plan cards then the Team band, with no audience tab, badge or highlighted plan', () => {
+    render(<PricingPage />);
+
+    const cards = [...document.querySelectorAll('.agi-tier-grid--plans > article')];
+    expect(cards.map((card) => card.querySelector('.agi-tier-name')?.textContent)).toEqual([
+      'Free',
+      'Basic',
+      'Pro',
+      'Max 5x',
+      'Max 20x',
+    ]);
+    const grid = document.querySelector('.agi-tier-grid--plans');
+    expect(grid?.contains(planCard('Team'))).toBe(false);
+    expect(grid!.compareDocumentPosition(planCard('Team'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByRole('group', { name: 'audienceLabel' })).toBeNull();
+    expect(document.querySelector('.agi-tier-badge, .agi-tier--featured')).toBeNull();
+    expect(screen.queryByText(/^(popular|bestValue)$/)).toBeNull();
+
+    const planButtons = cards.map((card) =>
+      card.querySelector('.agi-tier-cta-group > .agi-tier-cta'),
+    );
+    expect(planButtons.every(Boolean)).toBe(true);
+    for (const button of [...planButtons, planCard('Team').querySelector('.agi-tier-cta')]) {
+      expect(button?.className).toBe('agi-tier-cta');
+    }
+    expect(within(planCard('Free')).getByRole('link', { name: 'freeCta' })).toHaveClass(
+      'agi-tier-cta',
+    );
+  });
+
+  it('names both Max plans in their buttons and never shows the internal tier id', () => {
+    render(<PricingPage />);
+
+    expect(within(planCard('Max 5x')).getByRole('button', { name: 'maxCta' })).toBeVisible();
+    expect(within(planCard('Max 20x')).getByRole('button', { name: 'max15xCta' })).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/max_15x|Max 15x/i);
   });
 
   it('offers Team as a real per-seat checkout instead of a sales hand-off', async () => {
     render(<PricingPage />);
 
-    // The contact-sales dead end is gone for Team; Enterprise keeps it. Both
-    // cards live on the Team & Enterprise tab, so activate it before looking.
-    await showTeamAndEnterprise();
-
-    const salesLinks = await screen.findAllByRole('link', { name: /Cta$/ });
+    const links = await screen.findAllByRole('link');
+    expect(links.some((link) => link.getAttribute('href') === '/contact-sales?plan=team')).toBe(
+      false,
+    );
     expect(
-      salesLinks.some((link) => link.getAttribute('href') === '/contact-sales?plan=team'),
-    ).toBe(false);
-    expect(salesLinks.some((link) => link.getAttribute('href') === '/contact-sales')).toBe(true);
+      within(planCard('Team')).getByRole('link', { name: 'enterpriseContactLine' }),
+    ).toHaveAttribute('href', '/contact-sales');
+    expect(within(planCard('Team')).getByText('teamMinimumSeats')).toBeVisible();
 
     expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toBeInTheDocument();
@@ -484,20 +493,19 @@ describe('PricingPage', () => {
   it('reveals the Team seat selector when a Team CTA links to its pricing anchor', async () => {
     window.history.replaceState(null, '', '/pricing#pricing-team-title');
 
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+
     render(<PricingPage />);
 
-    expect(await screen.findByRole('button', { name: 'audienceBusiness' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(
+    expect(await screen.findByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(
       MIN_PURCHASABLE_SEATS,
     );
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('pricing-team-title'));
   });
 
   it('prices each seat type in its own row and totals the chosen seats beside the picker', async () => {
     render(<PricingPage />);
-    await showTeamAndEnterprise();
 
     const teamCard = screen.getByRole('heading', { name: 'Team' }).closest('article');
     expect(teamCard).not.toBeNull();
@@ -553,7 +561,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '14' } });
 
@@ -575,7 +582,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
     fireEvent.click(teamCta);
@@ -596,7 +602,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '6' } });
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
@@ -625,7 +630,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
     fireEvent.click(teamCta);
@@ -928,7 +932,6 @@ describe('PricingPage', () => {
   it('preserves the chosen Team seats through signed-out authentication', async () => {
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'teamCta' }));
@@ -944,7 +947,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     expect(within(teamCadence).getByRole('button', { name: /annual/i })).toHaveAttribute(
       'aria-pressed',
@@ -987,7 +989,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     fireEvent.click(within(teamCadence).getByRole('button', { name: 'monthly' }));
 
@@ -1025,7 +1026,6 @@ describe('PricingPage', () => {
 
       render(<PricingPage />);
 
-      await showTeamAndEnterprise();
       const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
       await waitFor(() =>
         expect(within(teamCadence).getByRole('button', { name: /annual/i })).toHaveAttribute(
@@ -1041,7 +1041,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const cadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     expect(comparisonPlanHeader('Team')).toHaveTextContent('$20 perSeatPricingSub');
     expect(comparisonPlanHeader('Team')).toHaveTextContent('billedYearly');
@@ -1081,7 +1080,6 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument(),
     );
@@ -1091,7 +1089,6 @@ describe('PricingPage', () => {
   it('clamps a seat count below the minimum instead of sending it to checkout', async () => {
     render(<PricingPage />);
 
-    await showTeamAndEnterprise();
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     // The floor is 2 since 2026-08-08; a one-person Team belongs on Pro.
     fireEvent.change(seatInput, { target: { value: '0' } });
@@ -1107,6 +1104,9 @@ describe('PricingPage', () => {
   it('shows the enforceable usage, project, storage, MCP, media, and developer-surface plan differences', async () => {
     render(<PricingPage />);
 
+    const connectorsPending = connectorFeatureNote() !== undefined;
+    const developerSurfacesPending = !planCapabilityReleased('developer_surfaces');
+
     const contextFormat = new Intl.NumberFormat('en', {
       notation: 'compact',
       maximumFractionDigits: 2,
@@ -1120,6 +1120,9 @@ describe('PricingPage', () => {
         downloads: string;
         attachment: string;
         customMcp: string;
+        chats: string;
+        scheduledTasks: string;
+        sandboxes: string;
         training?: string;
         proFeatures?: boolean;
         video?: boolean;
@@ -1140,14 +1143,22 @@ describe('PricingPage', () => {
         compareRowKnowledgeStorage: facts.storage,
         compareRowMonthlyDownloads: facts.downloads,
         compareRowAttachmentSize: facts.attachment,
-        compareRowCustomMcp: facts.customMcp,
+        compareRowCustomMcp: connectorsPending
+          ? `${facts.customMcp} · ${COMING_SOON_LABEL}`
+          : facts.customMcp,
+        compareRowConcurrentChats: facts.chats,
+        compareRowScheduledTasks: facts.scheduledTasks,
+        compareRowSandboxes: facts.sandboxes,
         [CAPABILITY.skills_connectors]: INCLUDED,
         [CAPABILITY.agi_work]: included(facts.proFeatures),
         [CAPABILITY.deep_research]: included(facts.proFeatures),
         [CAPABILITY.image_generation]: included(facts.proFeatures),
         [CAPABILITY.video_generation]: included(facts.video),
         [CAPABILITY.managed_api]: included(facts.proFeatures),
-        [CAPABILITY.developer_surfaces]: included(facts.proFeatures),
+        [CAPABILITY.developer_surfaces]:
+          facts.proFeatures && developerSurfacesPending
+            ? COMING_SOON_LABEL
+            : included(facts.proFeatures),
         [CAPABILITY.team_admin]: included(facts.teamAdmin),
         [CAPABILITY.enterprise_controls]: included(facts.enterpriseControls),
         compareRowTrainsOnContent: facts.training ?? 'compareNo',
@@ -1161,6 +1172,9 @@ describe('PricingPage', () => {
       downloads: '775 MB',
       attachment: '25 MB',
       customMcp: '1',
+      chats: '1',
+      scheduledTasks: NOT_INCLUDED,
+      sandboxes: '1 at once, 10 min each',
       training: 'Not by AGI. Free model providers may.',
     });
     column('basic', {
@@ -1170,6 +1184,9 @@ describe('PricingPage', () => {
       downloads: '953.7 MB',
       attachment: '25 MB',
       customMcp: '5',
+      chats: '2',
+      scheduledTasks: '2',
+      sandboxes: '2 at once, 10 min each',
     });
     column('pro', {
       usage: '5x more usage than Basic',
@@ -1178,6 +1195,9 @@ describe('PricingPage', () => {
       downloads: '2.7 GB',
       attachment: '25 MB',
       customMcp: '25',
+      chats: '4',
+      scheduledTasks: '5',
+      sandboxes: '5 at once, 20 min each',
       proFeatures: true,
     });
     column('max', {
@@ -1187,6 +1207,9 @@ describe('PricingPage', () => {
       downloads: '13.3 GB',
       attachment: '25 MB',
       customMcp: 'unlimited',
+      chats: '8',
+      scheduledTasks: '10',
+      sandboxes: '5 at once, 30 min each',
       proFeatures: true,
     });
     column('max_15x', {
@@ -1196,11 +1219,13 @@ describe('PricingPage', () => {
       downloads: '26.6 GB',
       attachment: '25 MB',
       customMcp: 'unlimited',
+      chats: '12',
+      scheduledTasks: '25',
+      sandboxes: '5 at once, 60 min each',
       proFeatures: true,
       video: true,
     });
 
-    await showTeamAndEnterprise();
     column('team', {
       usage: 'Same usage as Pro for every seat',
       projects: '25',
@@ -1208,50 +1233,47 @@ describe('PricingPage', () => {
       downloads: '3.3 GB',
       attachment: '25 MB',
       customMcp: '25',
+      chats: '4',
+      scheduledTasks: '5',
+      sandboxes: '5 at once, 20 min each',
       proFeatures: true,
       teamAdmin: true,
     });
-    column('enterprise', {
-      usage: 'compareEnterpriseUsage',
-      projects: 'custom',
-      storage: 'custom',
-      downloads: 'custom',
-      attachment: '25 MB',
-      customMcp: 'custom',
-      proFeatures: true,
-      video: true,
-      teamAdmin: true,
-      enterpriseControls: true,
-    });
+    expect(comparisonPlans()).toEqual(['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x', 'Team']);
   });
 
-  it('qualifies the developer-surface row with each surface release status in the table and the plan stack', async () => {
+  it('qualifies the developer-surface row with each surface release status and never calls it included before release', () => {
     render(<PricingPage />);
 
     const status = `${SURFACE_NAMES.cli}: ${SURFACE_STATUS.cli}; ${SURFACE_NAMES.vscode}: ${SURFACE_STATUS.vscode}`;
-    const select = screen.getByRole('combobox', { name: 'compareStackPlanLabel' });
-    const check = () => {
-      const row = comparisonRow(CAPABILITY.developer_surfaces);
-      expect(row.note).toBe(status);
-      const plans = Object.entries(row.cells);
-      expect(plans.length).toBeGreaterThan(0);
-      for (const [plan, value] of plans) {
-        const planId = PLAN_ID_BY_LABEL.get(plan);
-        expect(planId, plan).toBeDefined();
-        expect(value, plan).toBe(
-          canUseBillingPlanCapability(planId, 'developer_surfaces') ? INCLUDED : NOT_INCLUDED,
-        );
-        fireEvent.change(select, { target: { value: planId } });
-        const stacked = stackedRows().find(
-          (candidate) => candidate.label === CAPABILITY.developer_surfaces,
-        );
-        expect(stacked, plan).toEqual({ label: row.label, note: status, value });
-      }
-    };
+    const row = comparisonRow(CAPABILITY.developer_surfaces);
+    expect(row.note).toBe(status);
+    const eligible = planCapabilityReleased('developer_surfaces') ? INCLUDED : COMING_SOON_LABEL;
+    const plans = Object.entries(row.cells);
+    expect(plans.length).toBeGreaterThan(0);
+    for (const [plan, value] of plans) {
+      const planId = PLAN_ID_BY_LABEL.get(plan);
+      expect(planId, plan).toBeDefined();
+      expect(value, plan).toBe(
+        canUseBillingPlanCapability(planId, 'developer_surfaces') ? eligible : NOT_INCLUDED,
+      );
+    }
+  });
 
-    check();
-    await showTeamAndEnterprise();
-    check();
+  it('shows no unreleased capability as included anywhere in the comparison', () => {
+    render(<PricingPage />);
+
+    const pending = (Object.keys(BILLING_PLAN_CAPABILITY_LABELS) as BillingPlanCapability[])
+      .filter((capability) => !planCapabilityReleased(capability))
+      .map((capability) => planCapabilityLabel(capability));
+    for (const row of comparisonRows().filter((candidate) => pending.includes(candidate.label))) {
+      expect(Object.values(row.cells), row.label).not.toContain(INCLUDED);
+    }
+    if (connectorFeatureNote() !== undefined) {
+      for (const [plan, value] of Object.entries(comparisonRow('compareRowCustomMcp').cells)) {
+        if (value !== NOT_INCLUDED) expect(value, plan).toContain(COMING_SOON_LABEL);
+      }
+    }
   });
 
   it('labels the chat and connector rows with what has shipped', () => {
@@ -1277,13 +1299,10 @@ describe('PricingPage', () => {
       /\b(basicFeature5|proFeature2|maxFeature4|maxFeature5|max15xFeature4|max15xFeature5|teamFeature3)\b/;
     expect(document.body.textContent).not.toMatch(lockedKeys);
     expect(screen.getAllByText('chatsAtOnce').length).toBeGreaterThanOrEqual(3);
-    expect(maxCardStorageLine()).toBe(storageLineFor('max'));
-    await showMax20x();
-    expect(document.body.textContent).not.toMatch(lockedKeys);
-    expect(maxCardStorageLine()).toBe(storageLineFor('max_15x'));
+    expect(maxCardStorageLine('max')).toBe(storageLineFor('max'));
+    expect(maxCardStorageLine('max_15x')).toBe(storageLineFor('max_15x'));
     expect(storageLineFor('max_15x')).not.toBe(storageLineFor('max'));
     expect(document.body.textContent).not.toMatch(/unlimited projects and storage/i);
-    await showTeamAndEnterprise();
     expect(document.body.textContent).not.toMatch(lockedKeys);
   });
 
@@ -1296,27 +1315,26 @@ describe('PricingPage', () => {
       Pro: INCLUDED,
       'Max 5x': INCLUDED,
       'Max 20x': INCLUDED,
-    });
-    await showTeamAndEnterprise();
-    expect(comparisonRow('Deep Research').cells).toEqual({
       Team: INCLUDED,
-      'Team Premium': INCLUDED,
-      Enterprise: INCLUDED,
     });
   });
 
-  it('puts plans across the top and grouped capabilities down the side, with no disclosure, toggle or scroll region', async () => {
+  it('puts plans across the top and capabilities grouped by task down the side, inside one labelled scroll box', async () => {
     render(<PricingPage />);
 
     const table = screen.getByRole('table', { name: 'compareHeading' });
     expect(table).toBe(comparisonTable());
     expect(document.querySelectorAll('table')).toHaveLength(1);
     expect(document.querySelector('details')).toBeNull();
-    expect(document.querySelector('[role="region"]')).toBeNull();
+    const scrollBoxes = document.querySelectorAll('[role="region"]');
+    expect(scrollBoxes).toHaveLength(1);
+    expect(scrollBoxes[0]).toHaveAccessibleName('compareHeading');
+    expect(scrollBoxes[0]).toHaveAttribute('tabindex', '0');
+    expect(scrollBoxes[0]?.firstElementChild).toBe(table);
     expect(screen.queryByText(/compare(Show|Hide)FullTable|compareScrollCue/)).toBeNull();
     expect(table.querySelectorAll('button, a, select')).toHaveLength(0);
 
-    expect(comparisonPlans()).toEqual(['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x']);
+    expect(comparisonPlans()).toEqual(['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x', 'Team']);
     for (const header of comparisonPlanHeaders()) {
       expect(header).toHaveAttribute('scope', 'col');
       expect(header.querySelector('.agi-compare-plan-price')?.textContent?.trim()).not.toBe('');
@@ -1336,7 +1354,9 @@ describe('PricingPage', () => {
     expect(groups.map((group) => group.heading?.textContent)).toEqual([
       'compareGroupUsage',
       'compareGroupModels',
-      'features',
+      'compareGroupResearch',
+      'compareGroupProjects',
+      'compareGroupTools',
       'compareGroupAdmin',
     ]);
     for (const group of groups) {
@@ -1344,23 +1364,33 @@ describe('PricingPage', () => {
       expect(group.heading).toHaveAttribute('colspan', String(comparisonPlans().length + 1));
       expect(group.rows.length).toBeGreaterThan(0);
     }
-    expect(groups[0]?.rows).toEqual(['compareRowManagedUsage', 'compareRowContextWindow']);
-    expect(groups[2]?.rows).toEqual([
+    expect(groups[0]?.rows).toEqual([
       CAPABILITY.managed_chat,
+      'compareRowManagedUsage',
+      'compareRowContextWindow',
+      'compareRowConcurrentChats',
+    ]);
+    expect(groups[2]?.rows).toEqual([
+      CAPABILITY.deep_research,
+      CAPABILITY.agi_work,
+      CAPABILITY.image_generation,
+      CAPABILITY.video_generation,
+    ]);
+    expect(groups[3]?.rows).toEqual([
       CAPABILITY.projects,
       'compareRowKnowledgeStorage',
       'compareRowMonthlyDownloads',
       'compareRowAttachmentSize',
-      'compareRowCustomMcp',
+    ]);
+    expect(groups[4]?.rows).toEqual([
       CAPABILITY.skills_connectors,
-      CAPABILITY.agi_work,
-      CAPABILITY.deep_research,
-      CAPABILITY.image_generation,
-      CAPABILITY.video_generation,
+      'compareRowCustomMcp',
+      'compareRowScheduledTasks',
+      'compareRowSandboxes',
       CAPABILITY.managed_api,
       CAPABILITY.developer_surfaces,
     ]);
-    expect(groups[3]?.rows).toEqual([
+    expect(groups[5]?.rows).toEqual([
       CAPABILITY.team_admin,
       CAPABILITY.enterprise_controls,
       'compareRowTrainsOnContent',
@@ -1370,11 +1400,6 @@ describe('PricingPage', () => {
       expect(row.firstElementChild).toHaveAttribute('scope', 'row');
     }
     expect(table.textContent).not.toMatch(/BestFor|credit/i);
-
-    await showTeamAndEnterprise();
-    expect(comparisonPlans()).toEqual(['Team', 'Team Premium', 'Enterprise']);
-    expect(comparisonPlanHeader('Enterprise')).toHaveTextContent('custom customPricingSub');
-    expect(comparisonPlanHeader('Enterprise')).toHaveTextContent('annualContract');
   });
 
   it('lists each model tier with its catalog models beneath it and a check for every plan that runs all of them', async () => {
@@ -1426,6 +1451,7 @@ describe('PricingPage', () => {
       Pro: INCLUDED,
       'Max 5x': INCLUDED,
       'Max 20x': INCLUDED,
+      Team: INCLUDED,
     });
     expect(comparisonRow('compareModelsBalanced').cells).toEqual({
       Free: NOT_INCLUDED,
@@ -1433,6 +1459,7 @@ describe('PricingPage', () => {
       Pro: INCLUDED,
       'Max 5x': INCLUDED,
       'Max 20x': INCLUDED,
+      Team: INCLUDED,
     });
     expect(comparisonRow('compareModelsFlagship').cells).toEqual({
       Free: NOT_INCLUDED,
@@ -1440,19 +1467,7 @@ describe('PricingPage', () => {
       Pro: NOT_INCLUDED,
       'Max 5x': INCLUDED,
       'Max 20x': INCLUDED,
-    });
-
-    await showTeamAndEnterprise();
-    matchesCatalog();
-    expect(comparisonRow('compareModelsBalanced').cells).toEqual({
-      Team: INCLUDED,
-      'Team Premium': INCLUDED,
-      Enterprise: INCLUDED,
-    });
-    expect(comparisonRow('compareModelsFlagship').cells).toEqual({
       Team: NOT_INCLUDED,
-      'Team Premium': INCLUDED,
-      Enterprise: INCLUDED,
     });
   });
 
@@ -1471,48 +1486,7 @@ describe('PricingPage', () => {
 
     const localPlans = [BILLING_PLAN_PRICING['local-only'].label, BILLING_PLAN_PRICING.byok.label];
     for (const plan of localPlans) expect(comparisonPlans()).not.toContain(plan);
-    await showTeamAndEnterprise();
-    for (const plan of localPlans) expect(comparisonPlans()).not.toContain(plan);
     expect(note).toBeVisible();
-  });
-
-  it('feeds the one-plan stack from the same plans, groups and rows as the single comparison table', async () => {
-    render(<PricingPage />);
-
-    const select = screen.getByRole('combobox', { name: 'compareStackPlanLabel' });
-    const stack = select.closest('.agi-compare-stack') as HTMLElement;
-    const matchesTable = () => {
-      const plans = comparisonPlans();
-      const options = within(select).getAllByRole('option');
-      expect(options.map((option) => option.textContent)).toEqual(plans);
-      expect(
-        [...stack.querySelectorAll('.agi-compare-stack-heading')].map((h) => h.textContent),
-      ).toEqual(
-        [...comparisonTable().querySelectorAll('tr.agi-compare-group th')].map(
-          (heading) => heading.textContent,
-        ),
-      );
-
-      for (const option of options) {
-        const plan = option.textContent ?? '';
-        fireEvent.change(select, { target: { value: (option as HTMLOptionElement).value } });
-        expect(stackedRows()).toEqual(
-          comparisonRows().map((row) => ({
-            label: row.label,
-            note: row.note,
-            value: row.cells[plan],
-          })),
-        );
-        const price = [...comparisonPlanHeader(plan).querySelectorAll('.agi-compare-plan-price')];
-        expect(
-          [...stack.querySelectorAll('.agi-compare-stack-price span')].map((s) => s.textContent),
-        ).toEqual(price.map((line) => line.textContent));
-      }
-    };
-
-    matchesTable();
-    await showTeamAndEnterprise();
-    matchesTable();
   });
 
   describe('the limited free image and video preview', () => {
@@ -1563,9 +1537,7 @@ describe('PricingPage', () => {
       const freeCard = within(screen.getByRole('heading', { name: 'Free' }).closest('article')!);
       expect(freeCard.getByText('freeMediaFeatureBoth')).toBeVisible();
 
-      await showTeamAndEnterprise();
       expect(mediaCells('Team')).toEqual([INCLUDED, 'Limited preview']);
-      expect(mediaCells('Enterprise')).toEqual([INCLUDED, INCLUDED]);
     });
 
     it('names only the kind that is ready', async () => {
@@ -1599,11 +1571,9 @@ describe('PricingPage', () => {
     );
     expect(cardOf('Pro').getByText('5x more usage than Basic')).toBeVisible();
     expect(screen.getAllByText('5x more usage than Pro').length).toBeGreaterThan(0);
-    await showMax20x();
     expect(screen.getAllByText('20x more usage per session than Pro').length).toBeGreaterThan(0);
     expect(screen.getAllByText('10x more weekly usage than Pro').length).toBeGreaterThan(0);
     expect(screen.getByText('usageWindowsExplainer flagshipShare')).toBeVisible();
-    await showTeamAndEnterprise();
     expect(teamSeatRow('seatStandardName').getByText('Same usage as Pro')).toBeVisible();
     expect(
       teamSeatRow('seatPremiumName').getByText('5x the usage of a Standard seat'),
@@ -1667,7 +1637,6 @@ describe('PricingPage', () => {
     // One Max capacity is mounted at a time, so the 20x rupee price is only
     // assertable after switching the selector.
     expect(screen.getAllByText('₹9,999').length).toBeGreaterThan(0);
-    await showMax20x();
     expect(screen.getAllByText('₹19,999').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/taxIncluded/).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
@@ -1741,7 +1710,6 @@ describe('PricingPage', () => {
     });
 
     render(<PricingPage />);
-    await showTeamAndEnterprise();
     fireEvent.click(screen.getByRole('button', { name: 'teamCta' }));
 
     const confirmBtn = await screen.findByRole('button', { name: /confirm/i });
@@ -1806,11 +1774,9 @@ describe('PricingPage', () => {
     expect(stripeMocks.openBillingPortal).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
     expect(screen.getByRole('button', { name: 'maxCta' })).toBeEnabled();
-    await showMax20x();
     expect(screen.getByRole('button', { name: 'max15xCta' })).toBeEnabled();
     // Team is a different product, not a rung on the individual ladder: a Pro
     // subscriber can still buy it (as a seat-carrying org plan).
-    await showTeamAndEnterprise();
     expect(screen.getByRole('button', { name: 'teamCta' })).toBeInTheDocument();
   });
 
@@ -1844,7 +1810,6 @@ describe('PricingPage', () => {
     await waitFor(() => expect(stripeMocks.openBillingPortal).toHaveBeenCalledTimes(1));
 
     // Not "Current plan": a growing org's actionable change is more seats.
-    await showTeamAndEnterprise();
     expect(screen.getByRole('button', { name: 'changeSeatsCta' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'teamCta' })).toBeNull();
   });
@@ -1919,7 +1884,11 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'basicCta' })).toBeDisabled());
     expect(screen.getByRole('button', { name: 'proCta' })).toBeEnabled();
-    expect(screen.getByText('Basic checkout is not available in your region yet.')).toBeTruthy();
+    const notice = screen.getByText('Basic checkout is not available in your region yet.');
+    expect(planCard('Basic')).toContainElement(notice);
+    expect(notice.closest('.agi-tier-cta-group')).toContainElement(
+      screen.getByRole('button', { name: 'basicCta' }),
+    );
   });
 
   it('keeps checkout disabled when regional pricing verification fails', async () => {
@@ -1970,7 +1939,6 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getAllByText('£17').length).toBeGreaterThan(0));
     expect(comparisonPlanHeader('Pro')).toHaveTextContent('£17perMonth');
-    await showTeamAndEnterprise();
     expect(comparisonPlanHeader('Team')).toHaveTextContent('£18 perSeatPricingSub');
     expect(comparisonPlanHeader('Team')).toHaveTextContent('billedMonthly');
   });
@@ -2012,7 +1980,6 @@ describe('PricingPage', () => {
 
     it('prices both seat types on the Team card from the catalog', async () => {
       render(<PricingPage />);
-      await showTeamAndEnterprise();
 
       const card = teamCard();
       expect(teamSeatRow('seatStandardName').getByText('$25')).toBeVisible();
@@ -2022,26 +1989,22 @@ describe('PricingPage', () => {
       expect(card.queryByText('seatTypePremiumLine')).toBeNull();
     });
 
-    it('gives the Premium seat its own comparison column, priced per seat with the Max 5x limits', async () => {
+    it('prices the Premium seat in the Team band, with its usage against a Standard seat, and keeps one Team column', async () => {
       render(<PricingPage />);
-      await showTeamAndEnterprise();
 
-      expect(comparisonPlanHeader('Team Premium')).toHaveTextContent('$125');
-      expect(comparisonPlanHeader('Team Premium')).toHaveTextContent('perSeatPricingSub');
+      expect(teamSeatRow('seatPremiumName').getByText('$125')).toBeVisible();
+      expect(teamSeatRow('seatPremiumName').getByText('perSeatPricingSub')).toBeVisible();
+      expect(
+        teamSeatRow('seatPremiumName').getByText('5x the usage of a Standard seat'),
+      ).toBeVisible();
       expect(comparisonPlanHeader('Team')).toHaveTextContent('$25');
-      const premium = comparisonColumn('Team Premium');
-      const standard = comparisonColumn('Team');
-      expect(premium['compareRowManagedUsage']).toBe('usageMultiplierAllPerSeat');
-      expect(premium['Team administration']).toBe(INCLUDED);
-      expect(premium['compareModelsFlagship']).toBe(INCLUDED);
-      expect(standard['compareModelsFlagship']).toBe(NOT_INCLUDED);
-      expect(premium['Projects']).not.toBe(standard['Projects']);
+      expect(comparisonPlans()).not.toContain('Team Premium');
+      expect(comparisonPlans()).not.toContain('Enterprise');
     });
 
     it('totals a mixed team from both seat prices and keeps Premium seats inside the seat count', async () => {
       mockSeatTypePrices(TEAM_PRICES, PREMIUM_PRICES);
       render(<PricingPage />);
-      await showTeamAndEnterprise();
 
       const card = teamCard();
       fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
@@ -2063,7 +2026,6 @@ describe('PricingPage', () => {
       testState.auth.user = { id: 'user-1', email: 'user@example.com' };
       mockSeatTypePrices(TEAM_PRICES, PREMIUM_PRICES);
       render(<PricingPage />);
-      await showTeamAndEnterprise();
 
       const card = teamCard();
       fireEvent.change(await card.findByRole('spinbutton', { name: 'seatCountLabel' }), {
@@ -2094,7 +2056,6 @@ describe('PricingPage', () => {
         PREMIUM_PRICES,
       );
       render(<PricingPage />);
-      await showTeamAndEnterprise();
 
       const card = teamCard();
       expect(await card.findByText('premiumSeatsUnavailable')).toBeVisible();

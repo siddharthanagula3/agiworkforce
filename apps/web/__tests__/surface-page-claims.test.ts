@@ -336,9 +336,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /capabilityRow\('developer_surfaces', pricingDeveloperSurfaceNote\(t\)\)/u,
     );
     expect(page).toMatch(/<PlanComparisonTable[^>]*groups=\{comparisonGroups\}/u);
-    expect(page).toMatch(
-      /<PlanComparisonStack plans=\{comparisonPlans\} groups=\{comparisonGroups\} \/>/u,
-    );
+    expect(page).not.toMatch(/PlanComparisonStack/u);
   });
 
   it('keeps every translated pricing file free of the retired SQLite claim', () => {
@@ -1119,10 +1117,23 @@ describe('/web, the served-by label is stated where the code renders it', () => 
     );
   });
 
+  it('marks a move only when the turn asked for Auto and the chat had a model to move off', () => {
+    const processor = collapsed('app/api/llm/v1/chat/completions/lib/request-processor.ts');
+    expect(processor).toMatch(
+      /if \(!isAutoModeModelId\(requestedModel\) \|\| !priorModelKey\) \{ return \{ movedFromModel: null, movedReason: null \}; \}/u,
+    );
+    expect(processor).toMatch(
+      /return \{ movedFromModel: priorModelKey, movedReason: routeDecision\.reason \?\? null \};/u,
+    );
+  });
+
   it('names the actions menu and the condition the inline receipt has', () => {
     const page = collapsed('app/web/page.tsx');
     expect(page).toMatch(/names the model that answered it in its actions menu/u);
-    expect(page).toMatch(/whenever Auto left the model you pinned/u);
+    expect(page).toMatch(
+      /On Auto a chat keeps the model it started on, and when Auto moves it to another, that reply shows a receipt line/u,
+    );
+    expect(page).not.toMatch(/Auto (?:changes|left|leaves|overrides) the model you pinned/iu);
   });
 
   it('never promises a receipt under every reply, on any page that describes the web app', () => {

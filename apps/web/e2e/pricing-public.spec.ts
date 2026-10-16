@@ -152,30 +152,50 @@ const TABLE_VIEWPORTS = [
   { width: 1100, height: 757 },
 ] as const;
 
-const STACK_VIEWPORTS = [
+const SCROLL_BOX_VIEWPORTS = [
   { width: 1099, height: 757 },
+  { width: 768, height: 1024 },
   { width: 390, height: 844 },
-  { width: 360, height: 800 },
+  { width: 320, height: 700 },
 ] as const;
 
-const INDIVIDUAL_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x'];
-const BUSINESS_PLANS = ['Team', 'Team Premium', 'Enterprise'];
-const COMPARISON_GROUPS = ['Usage', 'Models', 'Features', 'Admin and data'];
-const TOUCH_TARGET = 44;
+const CARD_VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 1280, height: 800 },
+  { width: 768, height: 1024 },
+  { width: 390, height: 844 },
+  { width: 320, height: 700 },
+] as const;
 
-async function openPricingComparison(page: Page) {
+const COMPARED_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x', 'Team'];
+const CARD_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x'];
+const COMPARISON_GROUPS = [
+  'Usage',
+  'Models',
+  'Research and creation',
+  'Projects and files',
+  'Tools and automation',
+  'Admin and data',
+];
+const RUNNING_TEXT_MIN = 17;
+
+async function openPricing(page: Page, hash = '') {
   await mockAuthProvider(page);
   await page.route('**/api/pricing/localized', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(LOCALIZED_PRICING) }),
   );
-  const response = await page.goto('/pricing#pricing-compare-title');
+  const response = await page.goto(`/pricing${hash}`);
   expect(response?.status()).toBe(200);
+}
+
+async function openPricingComparison(page: Page) {
+  await openPricing(page, '#pricing-compare-title');
   const section = page.locator('section[aria-labelledby="pricing-compare-title"]');
   await expect(section.getByRole('heading', { name: 'Compare plans' })).toBeVisible();
   return {
     section,
+    box: section.getByRole('region', { name: 'Compare plans' }),
     table: section.getByRole('table', { name: 'Compare plans' }),
-    select: section.getByRole('combobox', { name: 'Plan' }),
   };
 }
 
@@ -185,58 +205,98 @@ function pageOverflow(page: Page) {
   );
 }
 
-function rightmostEdge(items: Locator) {
-  return items.evaluateAll((elements) =>
-    Math.max(...elements.map((element) => element.getBoundingClientRect().right)),
-  );
-}
-
-async function expectNoDisclosureOrToggle(section: Locator) {
+async function expectOnlyTheScrollBox(section: Locator) {
   await expect(section.locator('details')).toHaveCount(0);
   await expect(section.getByRole('button')).toHaveCount(0);
-  await expect(section.locator('[role="region"], [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
+  await expect(section.locator('select')).toHaveCount(0);
+  await expect(section.locator('[role="region"]')).toHaveCount(1);
   await expect(section.getByText(/scroll sideways/i)).toHaveCount(0);
 }
 
-test.describe('/pricing comparison stacks one plan at a time under 1100px', () => {
-  for (const viewport of STACK_VIEWPORTS) {
-    test(`the plan stack is the only comparison at ${viewport.width}x${viewport.height}`, async ({
+test.describe('/pricing shows five plan cards, then Team', () => {
+  for (const viewport of CARD_VIEWPORTS) {
+    test(`cards, band and running text at ${viewport.width}x${viewport.height}`, async ({
       page,
     }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const { section, table, select } = await openPricingComparison(page);
+      await page.setViewportSize(viewport);
+      await openPricing(page);
 
-      await expect(select).toBeVisible();
-      await expect(table).toBeHidden();
-      await expectNoDisclosureOrToggle(section);
+      const cards = page.locator('.agi-tier-grid--plans > article');
+      await expect(cards.locator('.agi-tier-name')).toHaveText(CARD_PLANS);
+      await expect(page.locator('.agi-tier-badge, .agi-tier--featured')).toHaveCount(0);
+      await expect(page.getByRole('group', { name: 'Billing audience' })).toHaveCount(0);
+      await expect(cards.nth(3).getByRole('button', { name: 'Get Max 5x' })).toBeVisible();
+      await expect(cards.nth(4).getByRole('button', { name: 'Get Max 20x' })).toBeVisible();
+      await expect(
+        page.locator('article').filter({ has: page.locator('#pricing-team-title') }),
+      ).toContainText('Everything in Pro, plus:');
+
+      const fills = await cards
+        .locator('.agi-tier-cta-group > .agi-tier-cta')
+        .evaluateAll((buttons) =>
+          buttons.map((button) => getComputedStyle(button).backgroundColor),
+        );
+      expect(fills).toHaveLength(CARD_PLANS.length);
+      expect(new Set(fills).size).toBe(1);
+
+      const smallest = await page
+        .locator('.agi-tier-features li, .agi-tier-body')
+        .evaluateAll((nodes) =>
+          Math.min(...nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize))),
+        );
+      expect(smallest).toBeGreaterThanOrEqual(RUNNING_TEXT_MIN);
       expect(await pageOverflow(page)).toBe(0);
-      expect((await select.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-      await expect(select.locator('option')).toHaveText(INDIVIDUAL_PLANS);
-      await expect(section.locator('.agi-compare-stack-heading')).toHaveText(COMPARISON_GROUPS);
-      const items = section.locator('.agi-compare-stack-item');
-      const terms = items.locator('dt .agi-compare-row-label');
-      await expect(terms.first()).toHaveText('Managed usage');
-      expect(await terms.count()).toBeGreaterThan(15);
-      const firstPlan = await select.inputValue();
-      const firstValues = await items.locator('dd').allTextContents();
-      expect(firstValues).toHaveLength(await terms.count());
-      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
+      if (viewport.width >= 1280) {
+        for (const card of await cards.all()) {
+          await expect(card.locator('.agi-tier-cta-group > .agi-tier-cta')).toBeInViewport();
+        }
+      }
+    });
+  }
+});
 
-      await select.focus();
-      await expect(select).toBeFocused();
-      await page.keyboard.press('p');
-      await expect.poll(() => select.inputValue()).not.toBe(firstPlan);
-      await expect(select.locator('option:checked')).toHaveText('Pro');
-      expect(await items.locator('dd').allTextContents()).not.toEqual(firstValues);
-      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
+test.describe('/pricing comparison scrolls inside one box under 1100px', () => {
+  for (const viewport of SCROLL_BOX_VIEWPORTS) {
+    test(`plan labels and row labels stay in view inside the box at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const { section, box, table } = await openPricingComparison(page);
+
+      await expect(box).toBeVisible();
+      await expect(table).toBeVisible();
+      await expectOnlyTheScrollBox(section);
+      await expect(table.locator('thead th .agi-compare-plan-name')).toHaveText(COMPARED_PLANS);
+      await expect(table.locator('tr.agi-compare-group th')).toHaveText(COMPARISON_GROUPS);
       expect(await pageOverflow(page)).toBe(0);
 
-      await page.getByRole('button', { name: 'Team & Enterprise' }).click();
-      await expect(select.locator('option')).toHaveText(BUSINESS_PLANS);
-      await expect(select.locator('option:checked')).toHaveText('Team');
-      await expect(section.locator('.agi-compare-stack-price')).toContainText('per seat / month');
-      expect(await rightmostEdge(items)).toBeLessThanOrEqual(viewport.width);
+      const geometry = await box.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+        element.scrollLeft = element.scrollWidth;
+        const bounds = element.getBoundingClientRect();
+        const header = element.querySelector('thead th');
+        const rowLabel = element.querySelector('tbody tr:last-child th[scope="row"]');
+        if (!header || !rowLabel) throw new Error('comparison table is missing');
+        const headerBounds = header.getBoundingClientRect();
+        const labelBounds = rowLabel.getBoundingClientRect();
+        return {
+          scrollsSideways: element.scrollWidth > element.clientWidth,
+          boxTop: bounds.top,
+          boxLeft: bounds.left,
+          boxRight: bounds.right,
+          headerTop: headerBounds.top,
+          labelLeft: labelBounds.left,
+          viewport: document.documentElement.clientWidth,
+        };
+      });
+      expect(geometry.boxRight).toBeLessThanOrEqual(geometry.viewport);
+      if (viewport.width < 1000) expect(geometry.scrollsSideways).toBe(true);
+      expect(Math.abs(geometry.headerTop - geometry.boxTop)).toBeLessThanOrEqual(2);
+      expect(Math.abs(geometry.labelLeft - geometry.boxLeft)).toBeLessThanOrEqual(2);
+
+      await box.focus();
+      await expect(box).toBeFocused();
       expect(await pageOverflow(page)).toBe(0);
     });
   }
@@ -248,20 +308,21 @@ test.describe('/pricing comparison is one table from 1100px', () => {
       page,
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const { section, table, select } = await openPricingComparison(page);
+      const { section, table } = await openPricingComparison(page);
 
       await expect(table).toBeVisible();
-      await expect(select).toBeHidden();
       await expect(page.locator('table')).toHaveCount(1);
-      await expectNoDisclosureOrToggle(section);
+      await expectOnlyTheScrollBox(section);
 
       const planNames = table.locator('thead th .agi-compare-plan-name');
-      await expect(planNames).toHaveText(INDIVIDUAL_PLANS);
+      await expect(planNames).toHaveText(COMPARED_PLANS);
       for (const header of await table.locator('thead th').all()) {
-        await expect(header.locator('.agi-compare-plan-price').first()).toContainText('/month');
+        await expect(header.locator('.agi-compare-plan-price').first()).toContainText(/\/\s?month/);
       }
       await expect(table.locator('tr.agi-compare-group th')).toHaveText(COMPARISON_GROUPS);
-      await expect(table.locator('tbody th[scope="row"]').first()).toContainText('Managed usage');
+      await expect(table.locator('tbody th[scope="row"]').first()).toContainText(
+        'Managed Cloud chat',
+      );
 
       const fits = () =>
         table.evaluate((element) => {
@@ -281,25 +342,26 @@ test.describe('/pricing comparison is one table from 1100px', () => {
             scrollers,
           };
         });
-      const individual = await fits();
-      expect(individual.left).toBeGreaterThanOrEqual(0);
-      expect(individual.right).toBeLessThanOrEqual(individual.viewport);
-      expect(individual.scrollers).toEqual([]);
+      const yearly = await fits();
+      expect(yearly.left).toBeGreaterThanOrEqual(0);
+      expect(yearly.right).toBeLessThanOrEqual(yearly.viewport);
+      expect(yearly.scrollers).toEqual([]);
       expect(await pageOverflow(page)).toBe(0);
 
-      await page.getByRole('button', { name: 'Team & Enterprise' }).click();
-      await expect(planNames).toHaveText(BUSINESS_PLANS);
-      const team = table.locator('thead th').first();
+      const team = table.locator('thead th').last();
       await expect(team).toContainText('$20 per seat / month');
       await expect(team).toContainText('billed yearly');
-      await page.getByRole('button', { name: /^Monthly/ }).click();
+      await page
+        .locator('article')
+        .filter({ has: page.locator('#pricing-team-title') })
+        .getByRole('button', { name: /^Monthly/ })
+        .click();
       await expect(team).toContainText('$25 per seat / month');
       await expect(team).toContainText('billed monthly');
-      await expect(table.locator('thead th').last()).toContainText('Custom pricing');
 
-      const business = await fits();
-      expect(business.right).toBeLessThanOrEqual(business.viewport);
-      expect(business.scrollers).toEqual([]);
+      const monthly = await fits();
+      expect(monthly.right).toBeLessThanOrEqual(monthly.viewport);
+      expect(monthly.scrollers).toEqual([]);
       expect(await pageOverflow(page)).toBe(0);
     });
 

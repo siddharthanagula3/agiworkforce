@@ -1,7 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 
-type Device = 'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone';
+type Device =
+  'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone' | 'closeup' | 'step';
 type Fade = 'every-width' | 'above-900' | 'never';
 type Owner = { labelledBy: string } | { group: string } | { link: string };
 type Caller = {
@@ -21,6 +22,8 @@ const DESIGN_SIZE: Record<Device, readonly [number, number]> = {
   terminal: [880, 550],
   panel: [400, 640],
   phone: [390, 844],
+  closeup: [720, 400],
+  step: [520, 540],
 };
 const DISCLOSURE = /^Authored example of /u;
 const HERO_FADE_ABOVE_PX = 900;
@@ -49,6 +52,10 @@ const VIDEO_GENERATING = 'Authored example of a video being generated in a chat'
 const VIDEO_READY = 'Authored example of a finished video in a chat';
 const VOICE_SESSION = 'Authored example of a voice session in AGI Web';
 const VOICE_DICTATION = 'Authored example of dictation recording in the AGI Web composer';
+const WEB_PROOF = 'Authored example of a reply with its artifact, actions and model';
+const RESEARCH_ASK = 'Authored example of a Deep Research question in the composer';
+const RESEARCH_PLAN_STEP = 'Authored example of a research plan to review before it starts';
+const RESEARCH_REPORT = 'Authored example of a finished research report with numbered citations';
 
 const hero = (labelledBy: string, label: string, device: Device = 'web'): Caller => ({
   owner: { labelledBy },
@@ -99,7 +106,11 @@ const PLACEMENTS: Record<string, readonly Caller[]> = {
     section('agi-fl-dev-title-approvals', FILE_EDIT),
   ],
   '/web': [
-    hero('agi-web-title', WEB),
+    hero('agi-web-title', ARTIFACT),
+    section('agi-web-proof-title', WEB_PROOF, 'closeup'),
+    section('agi-web-steps-title', RESEARCH_ASK, 'step'),
+    section('agi-web-steps-title', RESEARCH_PLAN_STEP, 'step'),
+    section('agi-web-steps-title', RESEARCH_REPORT, 'step'),
     card('/features/artifacts', ARTIFACT),
     card('/features/projects', PROJECT),
     card('/features/deep-research', RESEARCH),

@@ -48,7 +48,9 @@ import {
   APPROVAL_SCENE_REQUEST,
   ApprovalScenePreview,
   ARTIFACT_SCENE_MESSAGE,
+  ARTIFACT_SCENE_MESSAGES,
   ArtifactScenePreview,
+  type ArtifactSceneExample,
   ComposerScenePreview,
   ConsoleScenePreview,
   MEMORY_SCENE_REQUESTS,
@@ -57,7 +59,16 @@ import {
   ProjectScenePreview,
   RESEARCH_SCENE_DEPTH,
   RESEARCH_SCENE_PLAN,
+  RESEARCH_STEP_LABELS,
+  RESEARCH_STEPS_PLAN,
+  RESEARCH_STEPS_QUESTION,
+  RESEARCH_STEPS_REPORT,
+  ResearchAskPreview,
+  ResearchPlanStepPreview,
+  ResearchReportPreview,
   ResearchScenePreview,
+  WEB_PROOF_LABEL,
+  WebProofPreview,
 } from './ScenePreviews';
 
 const transport = vi.hoisted(() => {
@@ -141,6 +152,10 @@ const text = (container: HTMLElement, selector: string) =>
 
 const scenes: Array<[string, (className?: string) => React.ReactElement]> = [
   ['artifact', (className) => <ArtifactScenePreview className={className} />],
+  [
+    'artifact-checklist',
+    (className) => <ArtifactScenePreview className={className} example="checklist" />,
+  ],
   ['project', (className) => <ProjectScenePreview className={className} />],
   ['memory-controls', (className) => <MemoryScenePreview className={className} />],
   ['memory-facts', (className) => <MemoryScenePreview className={className} view="facts" />],
@@ -1021,6 +1036,53 @@ describe('artifact example follows the canonical derivation', () => {
     return one(panels, 'artifact panel branch').thenStatement.getText(parsed);
   }
 
+  it('keeps the default scene on the notes example', () => {
+    expect(ARTIFACT_SCENE_MESSAGE).toBe(ARTIFACT_SCENE_MESSAGES.notes);
+  });
+
+  it.each(Object.keys(ARTIFACT_SCENE_MESSAGES) as ArtifactSceneExample[])(
+    'the %s example draws the open page section by section as the message derives it',
+    (example) => {
+      const root = draw(<ArtifactScenePreview example={example} />);
+      const derived = deriveArtifacts(ARTIFACT_SCENE_MESSAGES[example], { include });
+      expect(derived.length).toBeGreaterThan(0);
+      expect(texts(root, '.agi-scene-card-title')).toEqual(
+        derived.map((artifact) => artifact.title),
+      );
+      expect(texts(root, '.agi-scene-card-sub')).toEqual(derived.map(() => 'Artifact'));
+      expect(texts(root, '.agi-scene-card-open')).toEqual(
+        derived.map((_artifact, index) => (index === 0 ? 'Hide' : 'Open')),
+      );
+      expect(text(root, '.agi-scene-count')).toBe(String(derived.length));
+      const several = derived.length > 1;
+      expect(root.querySelector('.agi-scene-ghost') !== null).toBe(several);
+      expect(root.querySelector('.agi-scene-strip-action') !== null).toBe(several);
+      const open = one(derived.slice(0, 1), 'open artifact');
+      expect(open.type).toBe('html');
+      const page = new DOMParser().parseFromString(open.content, 'text/html');
+      expect(text(root, '.agi-scene-artifact-heading')).toBe(page.querySelector('h1')?.textContent);
+      expect(text(root, '.agi-scene-artifact-body')).toBe(page.querySelector('p')?.textContent);
+      expect(texts(root, '.agi-scene-artifact-subheading')).toEqual(
+        Array.from(page.querySelectorAll('h2'), (node) => node.textContent),
+      );
+      expect(texts(root, '.agi-scene-artifact-item')).toEqual(
+        Array.from(page.querySelectorAll('li'), (node) => node.textContent),
+      );
+      expect(
+        Array.from(root.querySelectorAll('.agi-scene-artifact-section'), (section) =>
+          texts(section as HTMLElement, '.agi-scene-artifact-item'),
+        ),
+      ).toEqual(
+        Array.from(page.querySelectorAll('h2'), (heading) =>
+          Array.from(
+            heading.nextElementSibling?.querySelectorAll('li') ?? [],
+            (li) => li.textContent,
+          ),
+        ),
+      );
+    },
+  );
+
   it('shows the cards, open page and first history entry the message derives', () => {
     const root = draw(<ArtifactScenePreview />);
     const derived = deriveArtifacts(ARTIFACT_SCENE_MESSAGE, { include });
@@ -1054,13 +1116,17 @@ describe('artifact example follows the canonical derivation', () => {
     );
   });
 
-  it('requires the explicit marker while every page stays a renderable HTML example', () => {
-    const marked = deriveArtifacts(ARTIFACT_SCENE_MESSAGE, { include });
-    expect(ARTIFACT_SCENE_MESSAGE.split('<!-- @artifact -->')).toHaveLength(marked.length + 1);
-    const unmarked = ARTIFACT_SCENE_MESSAGE.replaceAll('<!-- @artifact -->', '');
-    expect(deriveArtifacts(unmarked, { include: 'renderable' })).toHaveLength(marked.length);
-    expect(deriveArtifacts(unmarked, { include })).toEqual([]);
-  });
+  it.each(Object.keys(ARTIFACT_SCENE_MESSAGES) as ArtifactSceneExample[])(
+    'the %s example requires the explicit marker while every page stays a renderable HTML example',
+    (example) => {
+      const message = ARTIFACT_SCENE_MESSAGES[example];
+      const marked = deriveArtifacts(message, { include });
+      expect(message.split('<!-- @artifact -->')).toHaveLength(marked.length + 1);
+      const unmarked = message.replaceAll('<!-- @artifact -->', '');
+      expect(deriveArtifacts(unmarked, { include: 'renderable' })).toHaveLength(marked.length);
+      expect(deriveArtifacts(unmarked, { include })).toEqual([]);
+    },
+  );
 
   it('draws only controls that the panel branch of the real viewer renders', () => {
     const viewer = panelSource(
@@ -2389,5 +2455,123 @@ describe('research correspondence negative witnesses', () => {
       name: 'AssertionError',
       message: /illustrated actions must match the native approval actions/u,
     });
+  });
+});
+
+describe('the /web close-up and research steps are scaled pictures of the product', () => {
+  const parts: Array<[string, string, string, () => React.ReactElement]> = [
+    ['proof', 'closeup', WEB_PROOF_LABEL, () => <WebProofPreview />],
+    ['research-ask', 'step', RESEARCH_STEP_LABELS.ask, () => <ResearchAskPreview />],
+    ['research-plan', 'step', RESEARCH_STEP_LABELS.plan, () => <ResearchPlanStepPreview />],
+    ['research-report', 'step', RESEARCH_STEP_LABELS.report, () => <ResearchReportPreview />],
+  ];
+
+  it.each(parts)('%s carries its geometry, scene and label', (scene, kind, label, make) => {
+    const root = sceneRoot(draw(make()));
+    const geometry = PREVIEW_GEOMETRY[kind as keyof typeof PREVIEW_GEOMETRY];
+    expect(root).toHaveClass('agi-dev', `agi-app--${kind}`);
+    expect(root).toHaveAttribute('data-device', kind);
+    expect(root).toHaveAttribute('data-scene', scene);
+    expect(root).toHaveAttribute('data-geometry', `${geometry.width}x${geometry.height}`);
+    expect(root.getAttribute('aria-label')).toBe(label);
+    expect(label).toMatch(/^Authored example of /u);
+  });
+
+  it.each(parts)('%s is passive and names no model, route, plan or price', (_s, _k, _l, make) => {
+    const root = draw(make());
+    expect(sceneRoot(root).firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(root.querySelectorAll(LIVE_CONTROLS)).toHaveLength(0);
+    for (const picker of texts(root, '.agi-app-model')) expect(picker).toBe('Auto');
+    expect(root.textContent).not.toMatch(
+      /Served by|GPT|Claude|Gemini|Sonnet|Opus|\$\d|\bPro\b|\bPlus\b|\bLocal\b|BYOK|Your key/u,
+    );
+  });
+
+  it('marks the artifact card, the More action and the model picker in that order', () => {
+    const root = draw(<WebProofPreview />);
+    const marked = Array.from(root.querySelectorAll('.agi-app-marked'));
+    expect(
+      marked.map((node) => node.querySelector(':scope > .agi-app-marker')?.textContent),
+    ).toEqual(['1', '2', '3']);
+    expect(marked[0]?.querySelector('.agi-scene-card-title')?.textContent).toBe('Launch checklist');
+    expect(marked[0]?.querySelector('.agi-scene-card-sub')?.textContent).toBe('Artifact');
+    expect(marked[0]?.querySelector('.agi-scene-card-open')?.textContent).toBe('Open');
+    const actions = requiredNode(root, '.agi-app-actions');
+    expect(actions.lastElementChild).toBe(marked[1]);
+    expect(marked[2]?.querySelector('.agi-app-model')?.textContent).toBe('Auto');
+  });
+
+  it('the product still ships what the close-up marks', () => {
+    expectSource('apps/web/features/chat/components/messages/MessageBubble.tsx', [
+      'aria-label="More message actions"',
+      '<span className="block truncate">{answeredByLabel}</span>',
+      'data-testid="model-escalation-receipt"',
+    ]);
+    expectSource('apps/web/features/chat/components/artifacts/ArtifactPreview.tsx', [
+      'data-testid="artifact-version-chip"',
+      'aria-label="Previous version"',
+    ]);
+  });
+
+  it('asks the question in the composer with Deep Research on', () => {
+    const root = draw(<ResearchAskPreview />);
+    expect(text(root, '.agi-app-draft')).toBe(RESEARCH_STEPS_QUESTION);
+    expect(text(root, '.agi-scene-modechip')).toBe('Deep Research');
+  });
+
+  it('shows the plan exactly as the native approval step renders it', () => {
+    const steps = authoredApprovalPlan(RESEARCH_STEPS_PLAN);
+    const illustration = draw(<ResearchPlanStepPreview />);
+    assertIllustratedSteps(illustration, steps);
+    assertOwnerLabels(illustration, nativeApprovalMarkup(steps));
+    expect(illustration.textContent).not.toMatch(/Allow once|Allow for this chat|Low risk/u);
+  });
+
+  it('reads the finished run with the native completion label and counts', () => {
+    const report = RESEARCH_STEPS_REPORT;
+    const root = draw(<ResearchReportPreview />);
+    const native = draw(
+      <ResearchActivity
+        research={{
+          phase: 'complete',
+          steps: RESEARCH_STEPS_PLAN.map((step) => ({ ...step, status: 'completed' as const })),
+          searches: RESEARCH_STEPS_PLAN.length,
+          sources: report.sources,
+        }}
+        isStreaming={false}
+      />,
+    );
+    expect(text(root, '.agi-scene-report-status b')).toBe(
+      requiredNode(native, '[data-testid="research-activity"] > span').textContent,
+    );
+    expect(native.textContent).toContain(report.counts.join(' · '));
+    expect(report.counts[0]).toBe(`${RESEARCH_STEPS_PLAN.length} searches`);
+    expect(texts(root, '.agi-scene-cite')).toEqual(
+      report.findings.map(([, source]) => `[${source}]`),
+    );
+    for (const [, source] of report.findings) {
+      expect(source).toBeGreaterThan(0);
+      expect(source).toBeLessThanOrEqual(report.sources);
+    }
+    expect(root.querySelectorAll('.agi-scene-sources-icons i')).toHaveLength(report.sources);
+    expect(text(root, '.agi-scene-sources')).toBe('Sources');
+  });
+
+  it('the chat still ships the sources control and the stripped source list the report shows', () => {
+    expectSource('apps/web/features/chat/components/research/ResearchPanel.tsx', [
+      '<span className="font-medium">Sources{total > 3 ? ` · ${total}` : \'\'}</span>',
+      'const preview = (cited.length > 0 ? cited : more).slice(0, 3);',
+    ]);
+    expectSource('apps/web/features/chat/lib/researchReportSources.ts', [
+      'Inline [n] citations stay; only the trailing block goes.',
+    ]);
+    expectSource('apps/web/features/chat/components/research/ResearchActivity.tsx', [
+      "complete: 'Research complete',",
+      "other: '{{count}} searches',",
+      "other: '{{count}} sources',",
+    ]);
+    expectSource('apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts', [
+      'Only the searches approved on the research plan run, exactly as written.',
+    ]);
   });
 });
