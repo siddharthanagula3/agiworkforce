@@ -1484,7 +1484,9 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
   ];
   const THUMB_OFFSET = /translate-x-|translateX\(/;
 
-  function ownSwitchMarkup(file: string, source: string): string[] {
+  const TOGGLE_STATE_ATTRIBUTES = new Set(['aria-checked', 'aria-pressed']);
+
+  function toggleMarkup(file: string, source: string): string[] {
     const parsed = ts.createSourceFile(
       file,
       source,
@@ -1499,10 +1501,11 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
         : ts.isJsxSelfClosingElement(node)
           ? node
           : null;
-      const roleIsSwitch = opening?.attributes.properties.some((attribute) => {
-        if (!ts.isJsxAttribute(attribute) || attribute.name.getText(parsed) !== 'role') {
-          return false;
-        }
+      const togglesState = opening?.attributes.properties.some((attribute) => {
+        if (!ts.isJsxAttribute(attribute)) return false;
+        const name = attribute.name.getText(parsed);
+        if (TOGGLE_STATE_ATTRIBUTES.has(name)) return true;
+        if (name !== 'role') return false;
         const value = attribute.initializer;
         const literal =
           value && ts.isJsxExpression(value) && value.expression ? value.expression : value;
@@ -1510,7 +1513,7 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
           literal !== undefined && ts.isStringLiteralLike(literal) && literal.text === 'switch'
         );
       });
-      if (roleIsSwitch) markup.push(node.getText(parsed));
+      if (togglesState) markup.push(node.getText(parsed));
       ts.forEachChild(node, visit);
     };
     visit(parsed);
@@ -1521,15 +1524,14 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
     it(`${file} draws its on/off tracks with the shared Switch, not a track of its own`, () => {
       const source = readFileSync(resolve(repoRoot, file), 'utf8');
       expect(source).toMatch(/import \{[^}]*\bSwitch\b[^}]*\} from '@agiworkforce\/ui';/);
-      for (const element of ownSwitchMarkup(file, source)) {
-        expect(element, 'a role="switch" element moves a thumb of its own').not.toMatch(
-          THUMB_OFFSET,
-        );
+      expect(source).not.toMatch(/translate-x-\[|translateX\(/);
+      for (const element of toggleMarkup(file, source)) {
+        expect(element, 'an on/off element moves a thumb of its own').not.toMatch(THUMB_OFFSET);
       }
     });
   }
 
-  it('looks for a thumb only inside role="switch" markup', () => {
+  it('reads every switch, checked or pressed element as on/off markup', () => {
     const source = [
       'const Track = () => <span style={{ transform: `translateX(${x}px)` }} />;',
       'const Chip = () => <button role="switch" aria-checked={on}>{label}</button>;',
@@ -1543,13 +1545,21 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
       '    <span style={{ transform: `translateX(${on ? 23 : 3}px)` }} />',
       '  </div>',
       ');',
+      'const Pressed = () => (',
+      '  <button aria-pressed={on}>',
+      '    <span className={on ? "translate-x-5" : "translate-x-0"} />',
+      '  </button>',
+      ');',
+      'const Checked = () => <div role="menuitemcheckbox" aria-checked={on}>{label}</div>;',
     ].join('\n');
 
-    const markup = ownSwitchMarkup('fixture.tsx', source);
-    expect(markup).toHaveLength(3);
+    const markup = toggleMarkup('fixture.tsx', source);
+    expect(markup).toHaveLength(5);
     expect(markup[0]).not.toMatch(THUMB_OFFSET);
     expect(markup[1]).toMatch(THUMB_OFFSET);
     expect(markup[2]).toMatch(THUMB_OFFSET);
+    expect(markup[3]).toMatch(THUMB_OFFSET);
+    expect(markup[4]).not.toMatch(THUMB_OFFSET);
   });
 });
 
