@@ -1281,6 +1281,10 @@ const ChatComposerNewComponent = ({
    */
   const imageModelSupportsEdit =
     !selectedImageIsPromotional && mediaAdmissionFor(imageModelId)?.supports_edit === true;
+  const editCapableImageModel = availableImageModels.find(
+    (model) =>
+      model.source !== 'promotional' && mediaAdmissionFor(model.id)?.supports_edit === true,
+  );
   const imageSourceFile = imageMode ? attachments[0] : undefined;
   const imageMaskFile = imageMode ? attachments[1] : undefined;
   const imageOperationOptions = useMemo(
@@ -1364,10 +1368,15 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (!mediaModelsSettled || !pendingImageSettings) return;
     const { modelId, aspectRatio } = pendingImageSettings;
-    const model =
+    const requested =
       modelId && availableImageModels.some((candidate) => candidate.id === modelId)
         ? modelId
         : imageModelId;
+    const requestedCanEdit =
+      availableImageModels.some(
+        (candidate) => candidate.id === requested && candidate.source !== 'promotional',
+      ) && mediaAdmissionFor(requested)?.supports_edit === true;
+    const model = requestedCanEdit || !editCapableImageModel ? requested : editCapableImageModel.id;
     setImageModelId(model);
     setImageAspectRatio(
       aspectRatio &&
@@ -1378,7 +1387,9 @@ const ChatComposerNewComponent = ({
     setComposerToggles({ pendingImageSettings: null });
   }, [
     availableImageModels,
+    editCapableImageModel,
     imageModelId,
+    mediaAdmissionFor,
     mediaModelsSettled,
     pendingImageSettings,
     setComposerToggles,
@@ -1476,6 +1487,7 @@ const ChatComposerNewComponent = ({
     (imageMode && !imageModelSupportsEdit) ||
     (restrictedFreeChat && !promotionalVisionChat);
   const mediaAttachmentConflict = videoMode && attachments.length > 0;
+  const imageEditConflict = imageMode && attachments.length > 0 && !imageModelSupportsEdit;
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
   const localAttachmentConflict = localSelection !== null && attachments.length > 0;
@@ -4333,7 +4345,12 @@ const ChatComposerNewComponent = ({
     if (trialExhausted) return SEND_REASON.trialExhausted;
     if (disabled) return SEND_REASON.unavailable;
     if (selectedMediaModelUnavailable) return SEND_REASON.modelUnavailable;
-    if (mediaAttachmentConflict || hasAttachmentConflict || localAttachmentConflict) {
+    if (
+      mediaAttachmentConflict ||
+      imageEditConflict ||
+      hasAttachmentConflict ||
+      localAttachmentConflict
+    ) {
       return SEND_REASON.attachmentConflict;
     }
     if (localProjectConflict) return LOCAL_MODEL_PROJECT_REFUSAL;
@@ -4349,6 +4366,7 @@ const ChatComposerNewComponent = ({
     disabled,
     selectedMediaModelUnavailable,
     mediaAttachmentConflict,
+    imageEditConflict,
     hasAttachmentConflict,
     localAttachmentConflict,
     localProjectConflict,
@@ -4721,6 +4739,39 @@ const ChatComposerNewComponent = ({
               className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
             >
               Leave {mediaModeNoun.toLowerCase()} mode
+            </button>
+          </div>
+        </div>
+      )}
+
+      {imageEditConflict && (
+        <div
+          role="alert"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
+          data-testid="image-edit-conflict"
+        >
+          <p className="text-foreground">
+            {`${availableImageModels.find((model) => model.id === imageModelId)?.label ?? 'This model'} cannot edit an attached image.`}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {editCapableImageModel ? (
+              <button
+                type="button"
+                onClick={() => setImageModelId(editCapableImageModel.id)}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+              >
+                {`Use ${editCapableImageModel.label}`}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={clearAttachments}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+            >
+              {plural('counts.removeAttachments', attachments.length, {
+                one: 'Remove attachment',
+                other: 'Remove attachments',
+              })}
             </button>
           </div>
         </div>
@@ -6301,6 +6352,7 @@ const ChatComposerNewComponent = ({
                         Boolean(promotionalToolConflict) ||
                         searchAllowanceBlocksSend ||
                         mediaAttachmentConflict ||
+                        imageEditConflict ||
                         localAttachmentConflict ||
                         localProjectConflict ||
                         selectedMediaModelUnavailable))

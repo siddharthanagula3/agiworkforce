@@ -27,7 +27,7 @@ import {
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
@@ -3196,6 +3196,77 @@ describe('ChatComposerNew', () => {
         expect(screen.getByText(/cannot edit an attached picture/i)).toBeVisible(),
       );
       expect(onGenerateImage).not.toHaveBeenCalled();
+    });
+
+    function admissionEditableOnly(editableId: string) {
+      chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
+        model_id: modelId,
+        name: modelId,
+        kind: 'image',
+        provider: 'fixture',
+        state: 'enabled',
+        supports_edit: modelId === editableId,
+      }));
+    }
+
+    it('offers the model that can edit when the chosen one cannot, and holds the send until then', async () => {
+      const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
+      expect(openAiModel).toBeDefined();
+      expect(googleModel).toBeDefined();
+      admissionEditableOnly(openAiModel!.id);
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      await enterImageMode();
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+      fireEvent.click(screen.getByRole('button', { name: googleModel!.label }));
+      attach(pngFile('portrait.png'));
+
+      const conflict = await screen.findByTestId('image-edit-conflict');
+      expect(conflict).toHaveTextContent(`${googleModel!.label} cannot edit an attached image.`);
+      await userEvent.type(
+        screen.getByRole('textbox', { name: /message input/i }),
+        'put it on a beach',
+      );
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+
+      fireEvent.click(within(conflict).getByRole('button', { name: `Use ${openAiModel!.label}` }));
+
+      await waitFor(() => expect(screen.queryByTestId('image-edit-conflict')).toBeNull());
+      expect(screen.getByRole('button', { name: operationTrigger })).toBeVisible();
+    });
+
+    it('offers only removing the image when no available model can edit', async () => {
+      admissionWith(false);
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+      await enterImageMode();
+      attach(pngFile('portrait.png'));
+
+      const conflict = await screen.findByTestId('image-edit-conflict');
+      expect(within(conflict).queryByRole('button', { name: /^Use / })).toBeNull();
+
+      fireEvent.click(within(conflict).getByRole('button', { name: 'Remove attachment' }));
+
+      await waitFor(() => expect(screen.queryByTestId('image-edit-conflict')).toBeNull());
+    });
+
+    it('starts a remix on a model that can edit when the original one cannot', async () => {
+      const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
+      expect(openAiModel).toBeDefined();
+      expect(googleModel).toBeDefined();
+      admissionEditableOnly(openAiModel!.id);
+      useChatStore.getState().setComposerToggles(
+        {
+          imageMode: true,
+          pendingImageSettings: { modelId: googleModel!.id, aspectRatio: null },
+        },
+        PENDING_CONVERSATION_KEY,
+      );
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /select image model/i })).toHaveTextContent(
+          openAiModel!.label,
+        ),
+      );
     });
   });
 });
