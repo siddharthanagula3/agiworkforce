@@ -228,7 +228,7 @@ describe('the scene stylesheet keeps to the web app palette and to scale', () =>
 
   it('uses only the chat tokens the brief allows', () => {
     const allowed =
-      /^--(?:u|app-w|corner-pill|agi-shadow|font-geist-mono|agi-app-text-(?:meta|body|reading|heading|display)|chat-(?:bg|sidebar-bg|input-bg|surface-hover|border|border-strong|text-primary|text-secondary|text-muted|text-placeholder|user-bubble-bg|success-text|destructive-text|code-[a-z-]+))$/u;
+      /^--(?:u|app-w|corner-pill|agi-shadow|font-geist-mono|agi-scene-text-(?:meta|reading|heading)|chat-(?:bg|sidebar-bg|input-bg|surface-hover|border|border-strong|text-primary|text-secondary|text-muted|text-placeholder|user-bubble-bg|success-text|destructive-text|code-[a-z-]+))$/u;
     const used = new Set(Array.from(css.matchAll(/var\((--[a-z0-9-]+)/gu), (match) => match[1]));
     expect(used.size).toBeGreaterThan(8);
     for (const token of used) expect(token).toMatch(allowed);

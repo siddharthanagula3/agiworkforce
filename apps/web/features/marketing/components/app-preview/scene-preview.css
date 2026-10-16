@@ -1,5 +1,8 @@
 [data-design='agi'] .agi-app-window {
   --u: calc(100cqw / var(--app-w));
+  --agi-scene-text-meta: calc(var(--u) * 13);
+  --agi-scene-text-reading: calc(var(--u) * 16);
+  --agi-scene-text-heading: calc(var(--u) * 22);
 }
 
 [data-design='agi'] .agi-scene-stage {
@@ -601,7 +604,7 @@
 
 [data-design='agi'] .agi-scene-artifact-subheading {
   margin-block-start: calc(var(--u) * 6);
-  font-size: var(--agi-app-text-heading);
+  font-size: var(--agi-scene-text-heading);
   font-weight: 700;
   line-height: 1.25;
 }
@@ -625,7 +628,7 @@
   flex-direction: column;
   min-block-size: 0;
   background: var(--chat-bg);
-  font-size: var(--agi-app-text-reading);
+  font-size: var(--agi-scene-text-reading);
   line-height: 1.625;
   overflow: hidden;
 }
@@ -659,7 +662,7 @@
   display: flex;
   align-items: center;
   gap: calc(var(--u) * 8);
-  font-size: var(--agi-app-text-meta);
+  font-size: var(--agi-scene-text-meta);
   color: var(--chat-text-muted);
 }
 
@@ -683,7 +686,7 @@
   border: 1px solid var(--chat-border);
   border-radius: var(--corner-pill);
   background: var(--chat-surface-hover);
-  font-size: var(--agi-app-text-meta);
+  font-size: var(--agi-scene-text-meta);
   font-weight: 500;
   line-height: 1.3;
   color: var(--chat-text-secondary);

@@ -16,10 +16,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-window {
   --u: calc(100cqw / var(--app-w));
-  --agi-app-text-meta: calc(var(--u) * 13);
   --agi-app-text-body: calc(var(--u) * 14);
-  --agi-app-text-reading: calc(var(--u) * 16);
-  --agi-app-text-heading: calc(var(--u) * 22);
   --agi-app-text-display: calc(var(--u) * 28);
   display: flex;
   flex-direction: column;
