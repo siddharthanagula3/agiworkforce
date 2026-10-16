@@ -133,7 +133,14 @@ tsx tools/evals/scripts/evals.ts compare \
 case through `apps/web/lib/prompts/chat-system-prompt-assembly.ts`, the module
 the chat route uses. The tools a case offers stand in for the tools a turn
 attached, and a case's `memory` field stands in for the memory state the route
-knows. The clock is noon UTC on the run date. A case's own `system` text sits
+knows. Every case is a web chat turn, so a version that has them gets the web
+chat's Settings guidance, its email and writing cards, the artifact app runtime
+and its source links. A version that states the serving model is told the
+measured model, as the user's choice, from the model catalog. A case that
+declares `memory` also gets the setup of a saved web chat (no past chats,
+personalization, connected apps or installed skills), in a project with
+knowledge files when it sets `project: "with_files"`. The clock is noon UTC on
+the run date. A case's own `system` text sits
 between the prompt body and the clock, where the route puts a client's system
 text. Such a run writes only its run report, under `measurements/prompt-evals/`,
 and refuses `--baseline`: family baselines stay bare-model readings. Its answers

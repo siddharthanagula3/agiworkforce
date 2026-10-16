@@ -6,11 +6,17 @@
  * same text and the same per-turn section choice the chat route sends: the
  * tools a case offers stand in for the tools a turn attached, and a case's own
  * `memory` for the memory state the route knows. Every case is a web chat turn:
- * artifacts render, the artifact runtime is sent, the markers come from the
- * artifacts package, and the product capabilities are the handshake's grant
- * for the case's `plan` (free when absent), from a fixture a web test holds to
- * the product. The clock is pinned to noon UTC on the recording date, so one
- * recording renders one request.
+ * artifacts render, the artifact runtime is sent, email and writing blocks show
+ * as cards, the markers come from the artifacts package, and the product
+ * capabilities are the handshake's grant for the case's `plan` (free when
+ * absent), from a fixture a web test holds to the product. A version that
+ * states the serving model is told the measured model, as the user's choice,
+ * from the model catalog. A case that declares its memory also gets the chat
+ * setup a saved web chat has: that memory, no past chats, no personalization,
+ * no connected apps, no installed skills, and its `project` when it names one,
+ * with the web chat's links to the sources the turn supplied. The clock is
+ * pinned to noon UTC on the recording date, so one recording renders one
+ * request.
  *
  * @module evals/chat-prompt
  * @packageDocumentation
@@ -21,7 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 import { loadArtifactsPackage } from './artifacts-package';
-import type { ChatTurnMemory, ChatTurnPlan, EvalCase, EvalDataset } from './types';
+import type { ChatTurnMemory, ChatTurnPlan, ChatTurnProject, EvalCase, EvalDataset } from './types';
 
 export const CHAT_SYSTEM_PROMPT_ID = 'chat.system';
 
@@ -29,12 +35,40 @@ const PROMPTS_DIR = fileURLToPath(new URL('../../../apps/web/lib/prompts/', impo
 const PRODUCT_CAPABILITIES = fileURLToPath(
   new URL('../datasets/fixtures/product-capabilities.json', import.meta.url),
 );
+const MODEL_CATALOG = fileURLToPath(
+  new URL('../../../packages/contracts/types/src/models.json', import.meta.url),
+);
+const TEMPORARY_CHAT_RETENTION_MODULE = fileURLToPath(
+  new URL('../../../apps/web/lib/server/temporary-files/retention.ts', import.meta.url),
+);
+const TEMPORARY_CHAT_RETENTION_DAYS = /export const TEMPORARY_CHAT_RETENTION_DAYS = (\d+);/u;
 const DEFAULT_PLAN: ChatTurnPlan = 'free';
 
 type Sections = Readonly<Record<string, string>>;
 
 interface TemplateModule {
   readonly chatSystemPromptSections: (version: number) => Sections;
+}
+
+interface ServingModelState {
+  readonly kind: 'model';
+  readonly name: string;
+  readonly developer: string;
+  readonly knowledgeCutoff: string | null;
+  readonly choice: { readonly kind: 'selected' };
+}
+
+interface ChatSetupState {
+  readonly savedChat: boolean;
+  readonly temporaryChat: boolean;
+  readonly memory: ChatTurnMemory;
+  readonly pastChats: boolean;
+  readonly project: ChatTurnProject | 'none';
+  readonly projectChats: boolean;
+  readonly personalization: 'none';
+  readonly toolsSupported: boolean;
+  readonly connectors: 'off';
+  readonly skills: 'none';
 }
 
 interface AssemblyModule {
@@ -45,9 +79,30 @@ interface AssemblyModule {
       readonly memory?: ChatTurnMemory;
       readonly artifactMarkers?: Readonly<Record<'html' | 'react' | 'mermaid', string>>;
       readonly productCapabilities?: readonly string[];
+      readonly servingModel?: ServingModelState | null;
+      readonly setup?: {
+        readonly chat: ChatSetupState;
+        readonly tools: { readonly memoryTools: boolean; readonly fileSearchTools: boolean };
+        readonly temporaryChatRetentionDays: number;
+      };
+      readonly settingsGuidance?: 'web';
+      readonly sourceLinks?: boolean;
+      readonly writingCards?: boolean;
+      readonly artifactApps?: boolean;
     },
     clock: { readonly utc: string },
   ) => { readonly body: string; readonly time: string };
+  readonly formatKnowledgeCutoff: (value: string | undefined) => string | null;
+}
+
+interface ModelCatalog {
+  readonly models: Readonly<
+    Record<
+      string,
+      { readonly name: string; readonly developer: string; readonly knowledgeCutoff?: string }
+    >
+  >;
+  readonly developers: Readonly<Record<string, { readonly label: string }>>;
 }
 
 export interface ChatPromptRenderer {
@@ -60,9 +115,61 @@ export function chatPromptStamp(version: number): string {
   return `${CHAT_SYSTEM_PROMPT_ID}@${version}`;
 }
 
+function servingModelFor(
+  modelKey: string | undefined,
+  formatKnowledgeCutoff: AssemblyModule['formatKnowledgeCutoff'],
+): ServingModelState | null {
+  if (modelKey === undefined) return null;
+  const catalog = JSON.parse(readFileSync(MODEL_CATALOG, 'utf8')) as ModelCatalog;
+  const model = catalog.models[modelKey];
+  if (model === undefined) throw new Error(`${modelKey} is not in the model catalog`);
+  return {
+    kind: 'model',
+    name: model.name,
+    developer: catalog.developers[model.developer]?.label ?? model.developer,
+    knowledgeCutoff: formatKnowledgeCutoff(model.knowledgeCutoff),
+    choice: { kind: 'selected' },
+  };
+}
+
+function temporaryChatRetentionDays(): number {
+  const match = TEMPORARY_CHAT_RETENTION_DAYS.exec(
+    readFileSync(TEMPORARY_CHAT_RETENTION_MODULE, 'utf8'),
+  );
+  if (match === null) {
+    throw new Error(
+      `${TEMPORARY_CHAT_RETENTION_MODULE} no longer declares TEMPORARY_CHAT_RETENTION_DAYS as a number`,
+    );
+  }
+  return Number(match[1]);
+}
+
+function webChatSetup(
+  memory: ChatTurnMemory,
+  project: ChatTurnProject | undefined,
+): ChatSetupState {
+  return {
+    savedChat: true,
+    temporaryChat: false,
+    memory,
+    pastChats: false,
+    project: project ?? 'none',
+    projectChats: false,
+    personalization: 'none',
+    toolsSupported: true,
+    connectors: 'off',
+    skills: 'none',
+  };
+}
+
+/**
+ * `modelKey` is the model the run measures, stated to a version that names the
+ * serving model; absent, such a version says the model is not known.
+ */
 export async function loadChatPromptRenderer(
   version: number,
   recordedOn: string,
+  modelKey?: string,
 ): Promise<ChatPromptRenderer> {
   const template = (await import(
     pathToFileURL(`${PROMPTS_DIR}chat-system-prompt.ts`).href
@@ -81,6 +188,8 @@ export async function loadChatPromptRenderer(
     ChatTurnPlan,
     readonly string[]
   >;
+  const servingModel = servingModelFor(modelKey, assembly.formatKnowledgeCutoff);
+  const retentionDays = temporaryChatRetentionDays();
   const utc = `${recordedOn}T12:00:00.000Z`;
   return {
     version,
@@ -93,6 +202,20 @@ export async function loadChatPromptRenderer(
           ...(evalCase.memory === undefined ? {} : { memory: evalCase.memory }),
           artifactMarkers,
           productCapabilities: capabilities[evalCase.plan ?? DEFAULT_PLAN],
+          servingModel,
+          ...(evalCase.memory === undefined
+            ? {}
+            : {
+                setup: {
+                  chat: webChatSetup(evalCase.memory, evalCase.project),
+                  tools: { memoryTools: false, fileSearchTools: false },
+                  temporaryChatRetentionDays: retentionDays,
+                },
+              }),
+          settingsGuidance: 'web',
+          sourceLinks: true,
+          writingCards: true,
+          artifactApps: true,
         },
         { utc },
       );

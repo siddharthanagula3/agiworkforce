@@ -893,6 +893,36 @@
       "response": {
         "text": "```writing\nSenior data analyst in Austin with six years in logistics and retail analytics. I turn messy operational data into forecasts and dashboards that help teams stock smarter and decide faster.\n```\n\nWant a shorter version for the headline?"
       }
+    },
+    "chat-prompt/revise-artifact-same-title": {
+      "fingerprint": "fdce6b9d682c9b4a17b25707a395e98faa56d52e3eae88a529a16ba1b8082882",
+      "response": {
+        "text": "Here is the calculator with a green button and larger result text, as the next version of Tip Calculator:\n\n```html\n<!-- @artifact -->\n<!doctype html>\n<html>\n<head>\n<title>Tip Calculator</title>\n<style>\nbody { font-family: sans-serif; margin: 2rem; }\nbutton { background: #15803d; color: #ffffff; padding: 0.5rem 1rem; }\n#out { font-size: 1.5rem; }\n</style>\n</head>\n<body>\n<h1>Tip Calculator</h1>\n<label>Bill <input id=\"bill\" type=\"number\" value=\"50\"></label>\n<label>Tip % <input id=\"pct\" type=\"number\" value=\"18\"></label>\n<button id=\"go\">Calculate</button>\n<p id=\"out\"></p>\n<script>\ndocument.getElementById('go').addEventListener('click', () => {\n  const bill = Number(document.getElementById('bill').value);\n  const pct = Number(document.getElementById('pct').value);\n  document.getElementById('out').textContent = 'Tip: ' + (bill * pct / 100).toFixed(2);\n});\n</script>\n</body>\n</html>\n```"
+      }
+    },
+    "chat-prompt/exact-format-plain-email": {
+      "fingerprint": "c84c119d0058ab171378f3789207798e15b217706f8f757e0511e41afac91f50",
+      "response": {
+        "text": "Hi Pat,\n\nThe kitchen faucet in my apartment has started leaking. Could you arrange for someone to repair it this week?\n\nThanks,\nJordan"
+      }
+    },
+    "chat-prompt/forget-outcome-reported": {
+      "fingerprint": "8faebd175df33a711ea3ecbf36ff90dcc2090415ec3f0a2fc0609bc6ee1b2a1e",
+      "response": {
+        "text": "Done: I've deleted what you told me about your boss from memory."
+      }
+    },
+    "chat-prompt/project-file-source-named": {
+      "fingerprint": "2338f959a7b46821d5e5ff4068e2428c54c854db1d02d5ec6d87ff8a22425bce",
+      "response": {
+        "text": "On their first day, new hires collect their laptop and building badge from the front desk at 9:00, meet their onboarding buddy and have lunch with their team. That is in onboarding-guide.pdf, p. 2."
+      }
+    },
+    "chat-prompt/tool-claim-follows-call": {
+      "fingerprint": "ab72bb93b04ef6360c30e3e3a811af71e9bb9f614c93f0ab63438a5d0349ec7a",
+      "response": {
+        "text": "Yes. I ran print(17 * 23) in Python, and it printed 391."
+      }
     }
   }
 }

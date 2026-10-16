@@ -125,6 +125,61 @@ describe('rendering version 7 for a web chat turn', () => {
   });
 });
 
+describe('rendering version 11 for a web chat turn', () => {
+  it('states the model the run measures, from the catalog, and says it is not known without one', async () => {
+    const measured = await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5');
+    const unnamed = await loadChatPromptRenderer(11, '2026-10-15');
+    const rendered = measured.render(row('chat-prompt/make-a-calculator'));
+
+    expect(rendered).toContain(
+      'This turn runs on Claude Haiku 5.5, a model made by Anthropic, which the user selected.',
+    );
+    expect(rendered).toContain("Claude Haiku 5.5's training data runs to about");
+    expect(unnamed.render(row('chat-prompt/make-a-calculator'))).toContain(
+      'Which model serves this turn is not stated here.',
+    );
+  });
+
+  it('gives a case that declares its memory the setup of a saved web chat, in its project', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5');
+    const inProject = v11.render(row('chat-prompt/project-file-source-named'));
+
+    expect(inProject).toContain(
+      "What is set up for this chat right now:\n- This chat is saved in the user's chat history.\n- Memory is on.",
+    );
+    expect(inProject).toContain("- This chat is in one of the user's projects.");
+    expect(inProject).toContain(
+      'Under your answer, the app shows the user the sources it gave you:\n- the saved memories, listed under Sources\n- a link to each project file it supplied',
+    );
+    expect(v11.render(row('chat-prompt/make-a-calculator'))).not.toContain(
+      'What is set up for this chat right now:',
+    );
+  });
+
+  it('sends the web chat its cards and artifact apps, and its Settings', async () => {
+    const rendered = (await loadChatPromptRenderer(11, '2026-10-15', 'claude-haiku-5-5')).render(
+      row('chat-prompt/recruiter-follow-up-email'),
+    );
+
+    expect(rendered).toContain('put it in a fenced code block with the language email');
+    expect(rendered).toContain('window.agi.complete(prompt)');
+    expect(rendered).toContain('General under Settings for their name');
+  });
+
+  it('renders versions before 8 the same whether or not the run names its model', async () => {
+    for (const version of [6, 7]) {
+      const plain = await loadChatPromptRenderer(version, '2026-10-15');
+      const named = await loadChatPromptRenderer(version, '2026-10-15', 'claude-haiku-5-5');
+      for (const id of [
+        'chat-prompt/forget-with-memory-off',
+        'chat-prompt/project-file-source-named',
+      ]) {
+        expect(named.render(row(id)), `v${version} ${id}`).toBe(plain.render(row(id)));
+      }
+    }
+  });
+});
+
 describe('a corpus that needs the product chat prompt', () => {
   const answer = async () => ({ text: 'ok' });
 
