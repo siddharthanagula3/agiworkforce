@@ -4,6 +4,7 @@ import { clientHandshakeHeaders } from '@agiworkforce/cloud-contracts';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import { chatCompletionEndpoint } from '@features/chat/lib/free-quota-selection';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { logger } from '@shared/lib/logger';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readChatHostContext } from '@/lib/device-steps/host-headers';
@@ -64,7 +65,10 @@ interface FrameEffect {
   done: boolean;
   text: string;
   finishReason: string | null;
+  skipped?: boolean;
 }
+
+const SKIPPED_FRAME: FrameEffect = { done: false, text: '', finishReason: null, skipped: true };
 
 function readFrame(frame: string): FrameEffect | null {
   const lines = frame.split('\n');
@@ -86,10 +90,14 @@ function readFrame(frame: string): FrameEffect | null {
   try {
     parsed = JSON.parse(data);
   } catch {
-    throw new CompareAnswerError(UNREADABLE_MESSAGE);
+    logger.warn('[ModelCompare] skipped a frame that is not valid JSON');
+    return SKIPPED_FRAME;
   }
   const record = asRecord(parsed);
-  if (!record) throw new CompareAnswerError(UNREADABLE_MESSAGE);
+  if (!record) {
+    logger.warn('[ModelCompare] skipped a frame that is not an object');
+    return SKIPPED_FRAME;
+  }
   if (event === ERROR_EVENT || record['error'] !== undefined) {
     throw new CompareAnswerError(payloadMessage(record) ?? INTERRUPTED_MESSAGE);
   }
@@ -153,6 +161,19 @@ export async function streamCompareAnswer(
   const decoder = new TextDecoder();
   let pending = '';
   let finishReason: string | null = null;
+  let received = false;
+  let skippedFrames = 0;
+  const settle = (reason: string | null): CompareAnswerOutcome => {
+    if (!received && skippedFrames > 0) throw new CompareAnswerError(UNREADABLE_MESSAGE);
+    return { finishReason: reason };
+  };
+  const take = (effect: FrameEffect | null) => {
+    if (effect?.skipped) skippedFrames += 1;
+    if (effect?.text) {
+      received = true;
+      handlers.onText(effect.text);
+    }
+  };
   try {
     for (;;) {
       const { done, value } = await reader.read();
@@ -163,17 +184,17 @@ export async function streamCompareAnswer(
       while (boundary !== -1) {
         const effect = readFrame(pending.slice(0, boundary));
         pending = pending.slice(boundary + FRAME_BOUNDARY.length);
-        if (effect?.done) return { finishReason };
-        if (effect?.text) handlers.onText(effect.text);
+        take(effect);
+        if (effect?.done) return settle(finishReason);
         if (effect?.finishReason) finishReason = effect.finishReason;
         boundary = pending.indexOf(FRAME_BOUNDARY);
       }
       if (done) break;
     }
     const tail = pending.trim() ? readFrame(pending.trim()) : null;
-    if (tail?.text) handlers.onText(tail.text);
+    take(tail);
     const settled = tail?.finishReason ?? finishReason;
-    if (tail?.done || settled) return { finishReason: settled };
+    if (tail?.done || settled) return settle(settled);
     throw new CompareAnswerError(INTERRUPTED_MESSAGE);
   } finally {
     await reader.cancel().catch(() => undefined);
