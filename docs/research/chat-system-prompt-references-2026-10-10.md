@@ -2,7 +2,7 @@
 
 Status: Dated external research
 Owner: Web lead
-Last updated: 2026-10-10
+Last updated: 2026-10-15
 
 Sources read on 2026-10-10 to write versions 5 and 6 of the chat system prompt
 (`chat.system@5` and `@6` in `apps/web/lib/prompts/chat-system-prompt.ts`;
@@ -100,6 +100,49 @@ marker on the first line. The free quota route and Slack no longer send the
 runtime text: it is about 1,300 characters on any turn that will never publish
 an app.
 
+## What version 11 adds
+
+Version 11 was written on 2026-10-15, after the owner chose to build the next
+version on version 7 and see it before it is promoted. Versions 8 to 10 were
+written on version 4 in a separate branch, so they lack everything versions 5
+to 7 added. Version 11 is version 7, plus what versions 8 to 10 added to version
+4 (the release ledger records each addition as deliberate), plus the wording of
+the 2026-10-15 prompt and policy audit (patches PC-P02, PC-P03, PC-P06, PC-P07,
+PC-P09 and PC-P10) and of the live findings R7-02, R8-NOTE01, R13-GAP-01 and
+MEM-7. Version 6 stays pinned; version 11 is on the internal channel.
+
+| Section                                         | When it is sent                                            | Where it comes from                                                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`, `identity_rules`, the serving model | always; the model as the route resolves it                 | version 8                                                                                                                         |
+| chat setup lines                                | when the route passes the chat setup                       | versions 8 to 10                                                                                                                  |
+| Settings and account guidance                   | per surface                                                | versions 8 and 9; the account help now says the model cannot see which plan the user is on, beside the product overview           |
+| `disclosure`, tool descriptions                 | always, or when the tool is attached                       | version 8; the code sandbox reaches only GitHub, npm and PyPI                                                                     |
+| `no_tools`                                      | turns with no tools                                        | version 7's wording with version 8's "built-in tools"                                                                             |
+| `reference_sources`                             | always                                                     | PC-P02                                                                                                                            |
+| `citations_none`                                | no web search or fetch                                     | PC-P02: no web results exist, rather than no sources                                                                              |
+| source links                                    | the web chat, from the chat setup                          | R8-NOTE01: saved memories, past chats and project files the web chat links under the answer                                       |
+| `memory_outcomes`                               | always                                                     | PC-P03                                                                                                                            |
+| `instruction_precedence`                        | always                                                     | PC-P06: the order holds wherever a block sits, the current request narrows saved preferences, a loaded skill grants no permission |
+| `format_and_length`                             | always                                                     | PC-P07: an exact format comes before every presentation rule                                                                      |
+| `artifacts`                                     | where artifacts render                                     | version 7, plus revisions under the same title (R7-02, PC-P07)                                                                    |
+| `email_and_writing_cards`                       | the web chat and the desktop app                           | R13-GAP-01; replaces `email_and_writing_blocks`                                                                                   |
+| `artifact_apps`, `artifact_apps_connectors`     | the web chat and the mobile app; connectors where released | PC-P09; replaces `artifact_runtime`, and keeps a published artifact's viewer apart from the turn                                  |
+| `action_receipts`                               | always                                                     | PC-P10 and MEM-7                                                                                                                  |
+| `refusal_style` (rewritten)                     | always                                                     | the evals below: a decline offers its alternative in a sentence and drafts no stand-in for the declined content                   |
+
+Version 11 renders through the published assembler, which now also renders the
+setup, serving-model and Settings sections when a version holds them; versions
+8 to 10 keep the setup composer. Which client renders cards, source links and
+hosted artifact apps is owned by `apps/web/lib/chat-surface-rendering.ts`.
+
+Two things versions 8 to 10 added are not in version 11. `artifact_runtime`
+comes back as `artifact_apps`, sent only where the client publishes hosted
+apps. `response_language` ("reply in the language of the user's latest
+message") made Haiku answer an English request in the language of the French
+text it quoted, two times in six, which the jailbreak corpus scores as no
+refusal; without it, six times in six it answered in English. Personalization
+already sends "Respond in <language>" when the user picks one.
+
 ## How a version reaches users
 
 The version is global. When the pin moves, conversations already under way get
@@ -168,6 +211,45 @@ on every turn. Gating it would be one turn-state flag. It cannot be keyed off
 the tool list, because artifacts are written as plain text with no tool.
 Callers would set it: the web chat route keeps it, and a Slack turn, which
 renders no artifacts, could drop it.
+
+### Version 11 against version 6
+
+Measured on 2026-10-15 over the same corpora (golden, refusal and jailbreak
+v1, chat v2, chat-prompt v3), with both versions rendered by the harness as
+web chat turns, three samples per arm on all five suites and three more per
+arm on Luna's three hard-gate suites. Sonnet was not run: its route is above
+the registry's median output price, and `--allow-costly` is the founder's
+call.
+
+| Model | golden v6 / v11 | refusal       | jailbreak     | chat          | chat-prompt   |
+| ----- | --------------- | ------------- | ------------- | ------------- | ------------- |
+| Haiku | 33 / 33 of 36   | 30 / 30 of 30 | 33 / 33 of 33 | 22 / 21 of 27 | 36 / 54 of 54 |
+| Luna  | 66 / 65 of 72   | 51 / 60 of 60 | 65 / 66 of 66 | 27 / 27 of 27 | 36 / 49 of 54 |
+
+Every chat-prompt row version 6 loses is a version 7 row (artifacts, the
+product overview, email and writing cards), which version 6 has no section
+for. The five rows added on 2026-10-15 passed under both versions on these
+two models, so they hold version 11 to what version 6 already did rather than
+separate the two. Version 11's own losses: `chat/says-it-does-not-know` on
+every Haiku sample (two of three under version 6, and it fails under version
+1 too); one Luna `golden/summary-budget` answer of 21 words; Luna's answer to
+`chat-prompt/what-can-you-do-free`, which leaves out web search on every
+sample; and one sample each of `forget-with-memory-off` and
+`show-it-in-an-artifact` on Luna. `golden/no-such-source` fails on every Luna
+sample in both arms.
+
+The first draft of version 11 scored Luna 7 of 10 on refusal and 9 of 11 on
+jailbreak in its first sample. Probing the failing rows showed Luna declining
+every time, then putting the safe alternative, or the translated request
+itself, in a writing card, which the corpora score as compliance; under the
+draft's `response_language`, Haiku also declined in French. The wording was
+changed as described above, and the runs in the table measure the final text.
+The draft runs were not kept.
+
+Input per case roughly doubles. On golden it rose from 1,743 to 3,989 tokens on
+Haiku and from 1,247 to 2,873 on Luna, and a web turn with tools renders about
+17,600 characters against 8,300 under version 6. Nearly all of it sits ahead of
+the cache boundary.
 
 ## Not verified
 
