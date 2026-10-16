@@ -30,6 +30,13 @@ describe('HelpSearch', () => {
     vi.unstubAllGlobals();
   });
 
+  it('stretches the field across the row so the placeholder is not clipped', () => {
+    const { container } = render(<HelpSearch />);
+    const input = screen.getByLabelText('Search the help centre');
+    expect(input.closest('.agi-ds-field')).toHaveClass('agi-ds-full');
+    expect(container.firstElementChild).toHaveClass('agi-ds-full');
+  });
+
   it.each(['', 'privacy'])(
     'discards pending results when the query changes to %j',
     async (query) => {

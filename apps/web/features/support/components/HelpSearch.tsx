@@ -81,8 +81,8 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
   const isUnavailable = state.kind === 'unavailable';
 
   return (
-    <Stack gap="loose">
-      <div className="agi-ds-field">
+    <Stack gap="loose" className="agi-ds-full">
+      <div className="agi-ds-field agi-ds-full">
         <label className="agi-ds-field-label" htmlFor={inputId}>
           Search the help centre
         </label>
