@@ -16,6 +16,10 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-window {
   --u: calc(100cqw / var(--app-w));
+  --agi-app-text-meta: calc(var(--u) * 13);
+  --agi-app-text-body: calc(var(--u) * 14);
+  --agi-app-text-reading: calc(var(--u) * 16);
+  --agi-app-text-heading: calc(var(--u) * 22);
   --agi-app-text-display: calc(var(--u) * 28);
   display: flex;
   flex-direction: column;
@@ -24,7 +28,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   border-radius: calc(var(--u) * 14);
   background: var(--chat-bg);
   box-shadow: 0 calc(var(--u) * 24) calc(var(--u) * 64) var(--agi-shadow);
-  font-size: calc(var(--u) * 14);
+  font-size: var(--agi-app-text-body);
   line-height: 1.3;
   overflow: hidden;
 }
@@ -428,7 +432,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   border-radius: var(--corner-pill);
   background: var(--chat-text-primary);
   box-shadow: 0 0 0 calc(var(--u) * 3) var(--chat-bg);
-  font-size: calc(var(--u) * 14);
+  font-size: var(--agi-app-text-body);
   font-style: normal;
   font-weight: 600;
   line-height: 1;

@@ -359,10 +359,10 @@ export function ArtifactScenePreview({
 
 export const WEB_PROOF_LABEL = 'Authored example of a reply with its artifact, actions and model';
 
-export function WebProofPreview({ className }: { className?: string }) {
+export function WebProofPreview() {
   const { reply, pages } = ARTIFACT_EXAMPLES.checklist;
   return (
-    <PreviewRoot kind="closeup" scene="proof" label={WEB_PROOF_LABEL} className={className}>
+    <PreviewRoot kind="closeup" scene="proof" label={WEB_PROOF_LABEL}>
       <div className="agi-scene-closeup">
         <div className="agi-app-reply">
           <p>{reply}</p>
@@ -857,14 +857,9 @@ export const RESEARCH_STEP_LABELS = {
   report: 'Authored example of a finished research report with numbered citations',
 } as const;
 
-export function ResearchAskPreview({ className }: { className?: string }) {
+export function ResearchAskPreview() {
   return (
-    <PreviewRoot
-      kind="step"
-      scene="research-ask"
-      label={RESEARCH_STEP_LABELS.ask}
-      className={className}
-    >
+    <PreviewRoot kind="step" scene="research-ask" label={RESEARCH_STEP_LABELS.ask}>
       <div className="agi-scene-step" data-view="new-chat">
         <NewChatGreeting />
         <DeepResearchComposer draft={RESEARCH_STEPS_QUESTION} />
@@ -873,14 +868,9 @@ export function ResearchAskPreview({ className }: { className?: string }) {
   );
 }
 
-export function ResearchPlanStepPreview({ className }: { className?: string }) {
+export function ResearchPlanStepPreview() {
   return (
-    <PreviewRoot
-      kind="step"
-      scene="research-plan"
-      label={RESEARCH_STEP_LABELS.plan}
-      className={className}
-    >
+    <PreviewRoot kind="step" scene="research-plan" label={RESEARCH_STEP_LABELS.plan}>
       <div className="agi-scene-step" data-align="center">
         <ResearchPlanBlock plan={RESEARCH_STEPS_PLAN} />
       </div>
@@ -888,15 +878,10 @@ export function ResearchPlanStepPreview({ className }: { className?: string }) {
   );
 }
 
-export function ResearchReportPreview({ className }: { className?: string }) {
+export function ResearchReportPreview() {
   const report = RESEARCH_STEPS_REPORT;
   return (
-    <PreviewRoot
-      kind="step"
-      scene="research-report"
-      label={RESEARCH_STEP_LABELS.report}
-      className={className}
-    >
+    <PreviewRoot kind="step" scene="research-report" label={RESEARCH_STEP_LABELS.report}>
       <div className="agi-scene-step">
         <div className="agi-app-reply agi-scene-report">
           <span className="agi-scene-report-status">
