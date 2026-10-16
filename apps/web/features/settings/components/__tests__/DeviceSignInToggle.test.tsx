@@ -8,12 +8,14 @@ const preferences = vi.hoisted(() => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<PreferencesClientModule>()),
   fetchStoredPreferenceNamespace: preferences.fetchStoredPreferenceNamespace,
   savePreferenceNamespace: preferences.savePreferenceNamespace,
 }));
 
 import { DeviceSignInToggle } from '../DeviceSignInToggle';
+
+type PreferencesClientModule = typeof import('@/app/settings/_lib/preferences-client');
 
 const SWITCH_NAME = 'Approve sign-in from a device code';
 

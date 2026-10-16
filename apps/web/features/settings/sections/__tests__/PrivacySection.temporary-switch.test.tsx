@@ -8,7 +8,7 @@ type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
 vi.mock('../../components/UsOnlyRoutingPanel', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../components/UsOnlyRoutingPanel')>()),
+  ...(await importOriginal<UsOnlyRoutingPanelModule>()),
   UsOnlyRoutingPanel: () => null,
 }));
 
@@ -22,12 +22,12 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
 }));
 
 vi.mock('@shared/stores/web-auth-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/stores/web-auth-store')>()),
+  ...(await importOriginal<WebAuthStoreModule>()),
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
 }));
 
 vi.mock('@shared/stores/web-chat-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/stores/web-chat-store')>()),
+  ...(await importOriginal<WebChatStoreModule>()),
   useChatStore: (selector: (s: unknown) => unknown) =>
     selector({
       conversations: [],
@@ -43,18 +43,24 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<PreferencesClientModule>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
 
 vi.mock('../../services/conversation-data-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../services/conversation-data-service')>()),
+  ...(await importOriginal<ConversationDataServiceModule>()),
   applyBulkConversationAction: vi.fn(async () => ({ ok: true })),
   fetchConversationHistoryStats: vi.fn(async () => ({ conversationCount: 0, messageCount: 0 })),
 }));
 
 import { PrivacySection } from '../PrivacySection';
+
+type WebAuthStoreModule = typeof import('@shared/stores/web-auth-store');
+type WebChatStoreModule = typeof import('@shared/stores/web-chat-store');
+type PreferencesClientModule = typeof import('@/app/settings/_lib/preferences-client');
+type ConversationDataServiceModule = typeof import('../../services/conversation-data-service');
+type UsOnlyRoutingPanelModule = typeof import('../../components/UsOnlyRoutingPanel');
 
 beforeEach(() => {
   useSettingsStore.setState({ newChatsTemporary: false });

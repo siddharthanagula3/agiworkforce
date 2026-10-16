@@ -28,7 +28,7 @@ vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) 
 });
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => {
     const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
     return { db: createDatabaseAdapterFake(), userId: 'user-free' };
@@ -42,6 +42,8 @@ vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) 
 
 import { loadManagedMemoryPolicy } from '@/lib/services/managed-memory-context-service';
 import { processRequest } from './request-processor';
+
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const FREE_CHAT_MODEL = (() => {
   const model = getAllowedModelsForTier('economy')
