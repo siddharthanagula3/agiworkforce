@@ -26,6 +26,7 @@ import {
 } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
+import { getStyleInstruction, useStyleStore } from '@features/chat/stores/style-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
@@ -158,7 +159,9 @@ vi.mock('./SendButton', () => ({
 }));
 
 vi.mock('./ComposerFooter', () => ({
-  ComposerFooter: () => <div data-testid="composer-footer" />,
+  ComposerFooter: ({ showStyleSelector = true }: { showStyleSelector?: boolean }) => (
+    <div data-testid="composer-footer" data-show-style-selector={String(showStyleSelector)} />
+  ),
 }));
 
 vi.mock('./VoiceInputButton', () => ({
@@ -1287,6 +1290,26 @@ describe('ChatComposerNew', () => {
     await userEvent.type(textarea, '@back');
     expect(await screen.findByText('backend-engineer')).toBeInTheDocument();
     expect(screen.queryByText(/free web chat accepts plain text/i)).not.toBeInTheDocument();
+  });
+
+  it('offers the response style picker on Free and sends the chosen style', async () => {
+    const onSend = vi.fn();
+    useStyleStore.setState({ style: 'concise' });
+    render(<ChatComposerNew onSend={onSend} freeTrial={{ enabled: true, limitReached: false }} />);
+
+    expect(screen.getByTestId('composer-footer')).toHaveAttribute(
+      'data-show-style-selector',
+      'true',
+    );
+
+    await userEvent.type(screen.getByRole('textbox', { name: /message input/i }), 'hello');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend.mock.calls[0]?.[3]).toMatchObject({
+      styleInstruction: getStyleInstruction('concise', null, useStyleStore.getState().length),
+    });
+    expect(getStyleInstruction('concise', null, useStyleStore.getState().length)).toBeTruthy();
   });
 
   it('keeps Projects on free chat without exposing paid AGI Work mode', async () => {

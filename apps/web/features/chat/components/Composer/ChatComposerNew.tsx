@@ -6120,7 +6120,6 @@ const ChatComposerNewComponent = ({
                   className="min-w-0 shrink"
                   showModelSelector
                   lockModelSelector={false}
-                  showStyleSelector={!isFreeTrial}
                   pendingAttachmentCount={attachments.length}
                   onUpgradeRequest={onUpgradeRequest}
                   onModelChange={onModelChange}
