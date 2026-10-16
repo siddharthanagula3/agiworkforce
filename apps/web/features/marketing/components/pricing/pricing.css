@@ -1,6 +1,6 @@
 [data-design='agi'][data-public-reference='pricing'] {
   --pricing-toggle-button: calc(var(--space-6) + var(--space-2));
-  --pricing-wide: min(100vw - var(--space-5) * 2, 100rem);
+  --pricing-wide-max: 100rem;
 }
 
 @media (pointer: coarse) {
@@ -20,17 +20,27 @@
   margin: 0;
 }
 
-@media (min-width: 1101px) {
-  [data-design='agi'][data-public-reference='pricing'] .agi-tier-grid--plans,
-  [data-design='agi'][data-public-reference='pricing'] .agi-tier--band {
-    inline-size: var(--pricing-wide);
-    margin-inline: calc((100% - var(--pricing-wide)) / 2);
-  }
+html [data-design='agi'][data-public-reference='pricing'] .agi-ds-link {
+  color: var(--public-ink);
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+}
+
+html
+  [data-design='agi'][data-public-reference='pricing']
+  :is(a[href], button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline-color: var(--public-ink);
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-shell {
   max-inline-size: var(--public-container-width);
   padding-inline: var(--space-5);
+}
+
+@media (min-width: 1101px) {
+  [data-design='agi'][data-public-reference='pricing'] .agi-shell {
+    max-inline-size: calc(var(--pricing-wide-max) + var(--space-5) * 2);
+  }
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-fl-section {
@@ -385,7 +395,7 @@
 [data-design='agi'][data-public-reference='pricing'] .agi-compare-scroll:focus-visible,
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-toggle-btn:focus-visible,
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-seats-input:focus-visible {
-  outline: calc(var(--stroke-hairline) * 2) solid var(--public-accent);
+  outline: calc(var(--stroke-hairline) * 2) solid var(--public-ink);
   outline-offset: var(--space-1);
 }
 
@@ -491,6 +501,7 @@
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-compare-scroll {
+  position: relative;
   margin-block-start: var(--space-5);
 }
 

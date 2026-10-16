@@ -210,4 +210,34 @@ describe('the public amber accent', () => {
       expect(AMBER_TOKEN.test(source), `${file} reads a public-page token`).toBe(false);
     }
   });
+
+  it('stays off /pricing, whose links and focus rings draw in neutral ink', () => {
+    const file = 'apps/web/features/marketing/components/pricing/pricing.css';
+    const source = readFileSync(join(REPO_ROOT, file), 'utf8');
+    expect(source, `${file} reads an accent token`).not.toMatch(
+      /--public-accent|--agi-amber|--agi-accent/,
+    );
+
+    const declared = (selector: string, property: string) => {
+      const values: string[] = [];
+      postcss.parse(source).walkRules((rule) => {
+        if (!rule.selectors.some((candidate) => candidate.replace(/\s+/g, ' ') === selector)) {
+          return;
+        }
+        rule.walkDecls(property, (declaration) => {
+          values.push(declaration.value);
+        });
+      });
+      return values;
+    };
+    const scope = "html [data-design='agi'][data-public-reference='pricing']";
+    expect(declared(`${scope} .agi-ds-link`, 'color')).toEqual(['var(--public-ink)']);
+    expect(declared(`${scope} .agi-ds-link`, 'text-decoration-line')).toEqual(['underline']);
+    expect(
+      declared(
+        `${scope} :is(a[href], button, input, select, textarea, summary, [tabindex]):focus-visible`,
+        'outline-color',
+      ),
+    ).toEqual(['var(--public-ink)']);
+  });
 });
