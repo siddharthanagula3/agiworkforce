@@ -1383,7 +1383,7 @@ describe('memory facts correspond to the native editor', () => {
         expect(posts[index]?.csrf).toBe(csrf);
         expect(posts[index]?.contentType).toBe('application/json');
         expect(input.value).toBe(request.content);
-        expect(hasUnsavedChanges()).toBe(true);
+        await waitFor(() => expect(hasUnsavedChanges()).toBe(true));
       }
       expect(csrfCalls).toBeGreaterThan(0);
       fireEvent.change(input, { target: { value: '' } });
