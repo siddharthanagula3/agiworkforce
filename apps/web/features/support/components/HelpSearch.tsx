@@ -81,7 +81,7 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
   const isUnavailable = state.kind === 'unavailable';
 
   return (
-    <Stack gap="loose" className="agi-ds-full">
+    <Stack gap="loose" className="agi-ds-full agi-ds-measure-search">
       <div className="agi-ds-field agi-ds-full">
         <label className="agi-ds-field-label" htmlFor={inputId}>
           Search the help centre
@@ -92,7 +92,7 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
           type="search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Billing, local models, bring your own key"
+          placeholder="Search help articles"
           value={query}
           onChange={(event) => {
             inFlight.current?.abort();

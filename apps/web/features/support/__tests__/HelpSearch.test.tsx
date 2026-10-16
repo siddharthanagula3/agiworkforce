@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,7 +36,17 @@ describe('HelpSearch', () => {
     const { container } = render(<HelpSearch />);
     const input = screen.getByLabelText('Search the help centre');
     expect(input.closest('.agi-ds-field')).toHaveClass('agi-ds-full');
-    expect(container.firstElementChild).toHaveClass('agi-ds-full');
+    expect(container.firstElementChild).toHaveClass('agi-ds-full', 'agi-ds-measure-search');
+    expect(input).toHaveAttribute('placeholder', 'Search help articles');
+  });
+
+  it('caps the search measure at 40rem while staying full width below it', () => {
+    const css = readFileSync(
+      join(process.cwd(), 'features/marketing/components/system/system.css'),
+      'utf8',
+    );
+    expect(css).toMatch(/\.agi-ds-full\s*\{\s*width:\s*100%;\s*\}/);
+    expect(css).toMatch(/\.agi-ds-measure-search\s*\{\s*max-width:\s*40rem;\s*\}/);
   });
 
   it.each(['', 'privacy'])(
