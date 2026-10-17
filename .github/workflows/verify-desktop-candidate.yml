@@ -37,7 +37,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import fs from 'node:fs';
-          const candidate = JSON.parse(fs.readFileSync('audit/evidence/claude-desktop-implementation.json')).releaseContinuation.intelCandidate;
+          const candidate = JSON.parse(fs.readFileSync('audit/ledger/claude-desktop-implementation.json')).releaseContinuation.intelCandidate;
           if (!/^e10-candidate-[a-z0-9-]+$/.test(candidate.releaseTag) || !/^AGI-Cloud-[0-9A-Za-z.-]+-x64\.zip$/.test(candidate.asset) || !/^[a-f0-9]{64}$/.test(candidate.sha256) || !/^[0-9A-Za-z.-]+$/.test(candidate.version)) throw Error('Invalid candidate identity');
           for (const [key, value] of Object.entries({ CANDIDATE_TAG: candidate.releaseTag, CANDIDATE_ASSET: candidate.asset, CANDIDATE_SHA256: candidate.sha256, CANDIDATE_VERSION: candidate.version })) fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
           JS

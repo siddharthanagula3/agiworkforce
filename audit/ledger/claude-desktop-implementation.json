@@ -1267,8 +1267,16 @@
       "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
       "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
       "version": "0.0.3-e10.20261017",
-      "status": "NOT_RUN",
-      "publication": "private draft only; no public update feed"
+      "status": "BLOCKED_CI_STARTUP",
+      "publication": "private draft only; no public update feed",
+      "run": {
+        "id": 39017236080,
+        "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39017236080",
+        "runnerName": "",
+        "executedSteps": 0,
+        "reason": "recent account payments have failed or spending limit needs to be increased",
+        "productResult": "NOT_RUN"
+      }
     },
     "sourceCommit": "264a606571",
     "sourceCommitBoundary": "candidates and hosted snapshot predate this commit; artifact and snapshot hashes identify the exercised bytes",
