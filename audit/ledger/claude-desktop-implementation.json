@@ -497,12 +497,13 @@
     {
       "status": "PASSED",
       "gate": "native Intel macOS packaged smoke",
-      "reason": "Signed 0.0.3 x86_64 package executed successfully in run 39020283675; 0.0.4 is a later unaccepted candidate"
+      "reason": "Signed 0.0.5 x86_64 package executed successfully in run 39033264263, including real native browser sign-in state/cancel calls; earlier 0.0.3 result retained in priorIntelCandidates",
+      "version": "0.0.5-e10.20261017"
     },
     {
       "status": "BLOCKED",
       "gate": "public release readiness",
-      "reason": "Tauri updater credential exposure requires documented replacement, escrow and transition; no rotation performed"
+      "reason": "Installed-user UI/provider acceptance, production rollout and external live gates remain open. Exposed Tauri updater signing domain is separately quarantined pending replacement, offline escrow and transition; Electron uses separate signing."
     }
   ],
   "unsupportedFirstScope": [
@@ -1265,7 +1266,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T12:20:46.746381+00:00",
+    "updatedAt": "2026-10-17T12:47:46.691938+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1413,10 +1414,9 @@
       "actual notification provider delivery",
       "external SSH same-account admission",
       "physical sleep/offline host",
-      "Tauri updater signing credential rotation",
-      "final clean-checkout operability and review",
-      "new login candidate operational acceptance and Web rollout",
-      "patched-dependency CI and newest signed candidate validation"
+      "Tauri updater signing credential rotation and offline escrow",
+      "new login candidate installed-user/provider operational acceptance and Web rollout",
+      "completion of remaining current-head CI jobs"
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
@@ -1426,17 +1426,36 @@
       "version": "0.0.5-e10.20261017",
       "sha256": "d6a2fbea8b14a3e7034fbab59f5748fdc89db9bfb6759f01d581ee63a5d551d5",
       "size": 136458899,
-      "status": "UPLOADED_PRIVATE_DRAFT_PENDING_EXECUTION",
+      "status": "PASSED_NATIVE_INTEL",
       "publication": "private draft; no public installer or update feed",
       "requiresBrowserSignInCancellationContract": true,
       "permissionRepair": {
         "status": "USER_APPROVED_APPLIED",
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
         "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
-      }
+      },
+      "runId": 39033264263,
+      "jobId": 117397928318,
+      "head": "4e1fd71f2af7446eacfdf97a134de3ebece6d2ba",
+      "receiptSha256": "693dfc5bfcf66d83958838eb173e0d09c5ff3bdcb9ae292860da16e3a75e19ab",
+      "artifactId": 12101103958,
+      "artifactDigest": "0db5a4c2f0164474ae9d7ec36943f82d276c46f8bd24cf35bf646834538472ab",
+      "checks": {
+        "signature": "passed",
+        "gatekeeper": "passed",
+        "ticket": "passed",
+        "architecture": "x86_64",
+        "protocol": 8,
+        "hostedBridge": "passed",
+        "browserSignInStateAndCancellation": "passed",
+        "routineOwner": "passed",
+        "sessionApprovalAlerts": "passed",
+        "updaterNoRelease": "passed"
+      },
+      "boundary": "unchanged signed 0.0.5 package on macos-26-intel; controlled hosted renderer; no real identity-provider return-to-app or physical sleep claim"
     },
     "sourceCommit": "264a606571",
-    "sourceCommitBoundary": "candidates and hosted snapshot predate this commit; artifact and snapshot hashes identify the exercised bytes",
+    "sourceCommitBoundary": "initial 0.0.3 candidates and initial hosted snapshot predate this commit; later candidate records use their own artifact hashes and verified source pins",
     "packagedNative": {
       "capturedAt": "2026-10-17T08:12:36.382Z",
       "source": {
@@ -1873,18 +1892,22 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "de19f9c4fd538f841647725746310c4a88fa9c5e",
+      "verifiedCodeCommit": "4e1fd71f2af7446eacfdf97a134de3ebece6d2ba",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "d9421611b6d4f888455fa60590fbe2787644ae8691bd2df79ac7c9e45ebfae9f",
-      "boundary": "all 226 commands and diff checks passed through the actual keepalive push; latest candidate-harness/evidence update receives its own final validation",
+      "logSha256": "ecaddbf36952188e351250fee26b028ba8b446fa35c04a743b2671e4c7bf894a",
+      "boundary": "all 226 declared commands, nested checks and both diff checks passed through the actual normal-hook push; later ledger receipt edits do not alter runtime payloads",
       "latestAttempt": {
         "commit": "a27cecc45337d2594e8ee17e2a331c1e66af8e02",
         "status": "FAILED_DOCUMENTATION_INDEX",
         "guard": "check:security-claims",
         "finding": "quarantine operational statement lacked its historical-record index entry",
         "logSha256": "48852d9f81cb74f06ad0ff45f47dba0bbbbcf99d5be647c9b1e935445336a752",
-        "repair": "matching historical-record entry added; check:security-claims passed including all 13 self-tests; guard unchanged; full push validation pending"
+        "repair": "matching historical-record entry added; all 13 security-claims self-tests and complete final push validation passed; guard unchanged"
+      },
+      "previousVerified": {
+        "commit": "de19f9c4fd538f841647725746310c4a88fa9c5e",
+        "logSha256": "d9421611b6d4f888455fa60590fbe2787644ae8691bd2df79ac7c9e45ebfae9f"
       }
     },
     "normalDesktopStartup": {
@@ -2006,7 +2029,7 @@
         "version": "0.0.5-e10.20261017",
         "status": "BUILT_SIGNED_NOTARIZED_SCANNED",
         "publication": "none",
-        "sourceVerification": "compiled from tested runtime source; final test-adapter/evidence changes do not alter payload; native runtime acceptance pending manual unlock and new Intel run",
+        "sourceVerification": "compiled from tested runtime source; final test-adapter/ledger changes do not alter payload; Intel packaged state/cancel contract passed; installed-user UI/provider acceptance still awaits manual Mac unlock",
         "signatures": {
           "at": "2026-10-17T11:54:17.418699+00:00",
           "version": "0.0.5-e10.20261017",
@@ -2219,7 +2242,7 @@
       }
     },
     "codeqlRepairs": {
-      "status": "SOURCE_FIXED_LOCAL_VALIDATION_PASSED_CI_PENDING",
+      "status": "SOURCE_FIXED_LOCAL_AND_CI_PASSED",
       "reportedAtHead": "65cc10c02badb64a832df9a70b06bb26c10e7616",
       "checkRunId": 117360732787,
       "findings": [
@@ -2259,7 +2282,15 @@
         "bootstrapControls": 4,
         "fixtureCompilation": "passed without launching Desktop"
       },
-      "fixtureCompilationLogSha256": "8ca9f80c73ecefa3f81241140538df4eb4b55f32ac703a3228430540084bc3df"
+      "fixtureCompilationLogSha256": "8ca9f80c73ecefa3f81241140538df4eb4b55f32ac703a3228430540084bc3df",
+      "ci": {
+        "head": "de19f9c4fd538f841647725746310c4a88fa9c5e",
+        "aggregateCheckRunId": 117390762107,
+        "rustCheckRunId": 117390703029,
+        "javascriptCheckRunId": 117390612782,
+        "conclusion": "success",
+        "boundary": "the final candidate-harness/ledger revision has a separate in-progress CI run; no current-head aggregate completion claimed"
+      }
     },
     "priorIntelCandidates": [
       {
@@ -2385,7 +2416,39 @@
       "existingSecretEntries": "retained, not replaced",
       "blockingInput": "offline escrow location and separate passphrase destination; manual Mac unlock",
       "securityOwner": "docs/security/security.md section 4"
-    }
+    },
+    "packagedOfficeRead": {
+      "at": "2026-10-17T12:39:30.668386+00:00",
+      "status": "passed",
+      "version": "0.0.5-e10.20261017",
+      "architecture": "arm64",
+      "cliSha256": "a36adfb227f2bfd9bc1fd0e56ea270aa72a5e632d01a2f9686bcf912b3bffc41",
+      "receiptSha256": "b63cd1ffa7fb861a0f64251553e4159e00a9638e47e9c5cb12e4e7e11df7628e",
+      "checks": [
+        {
+          "input": "word.docx",
+          "inputSha256": "ab6282aab71a7e4736225eec9965fabf5c43f98e921532ef2346d34895ebb75a",
+          "status": "passed"
+        },
+        {
+          "input": "slides.pptx",
+          "inputSha256": "c40f016524ece36278532234fbdb180b0d6680ece2ee80acb7b4abfaeb26cd57",
+          "status": "passed"
+        },
+        {
+          "input": "values.xlsx",
+          "inputSha256": "5f8fe96876cf2d413269c84975922341c051a4d37bd7cb9ff52aaea59c9f6457",
+          "status": "passed"
+        },
+        {
+          "input": "corrupt.xlsx",
+          "inputSha256": "e5160536e6d8ee6723415225d1d5696481c90c564ad6273e209012d573798374",
+          "status": "passed"
+        }
+      ],
+      "boundary": "unchanged signed package reader subprocess, synthetic OOXML; not full UI editing or a model-quality check"
+    },
+    "cleanCandidateVersionBoundary": "initial clean 0.0.3 release after the credential incident; the later 0.0.5 candidate and its own hashes/receipts are in intelCandidate and desktopLoginRecovery.candidate"
   },
   "priorSourceFilesDigest": "96b9b7f597c79a4abffa31de67b5c2faff3367f8e29b00db271500de0a9fad65",
   "removedSourcePaths": [],
