@@ -856,7 +856,7 @@
     },
     {
       "path": "apps/web/lib/services/__tests__/schedule-notification-service.test.ts",
-      "sha256": "80c3de8daddc981f5450db07a8b356e744dee9927c2d285d87d454610cf86cb3"
+      "sha256": "bc8c51abc5accf69e13ac242e79695499376a12af77dcfeb7e675da4ad1cd325"
     },
     {
       "path": "apps/web/lib/services/managed-office-file-service.test.ts",
@@ -880,7 +880,7 @@
     },
     {
       "path": "apps/web/lib/services/schedule-notification-service.ts",
-      "sha256": "d81c951a2826c416ec653b0027abaab21fd4ddf0df9f2b831f4df78a7e007b6b"
+      "sha256": "1dbe8d261c4eeba578224483b517ec7fc77a1a90501df5f32bca2dd9b0813d66"
     },
     {
       "path": "apps/web/lib/services/schedule-service.test.ts",
@@ -1107,7 +1107,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "1ec9f09ef33bcb655ea24cd26bda4d2768db2c443d575ea6b36ec71a297a5aa6",
+  "sourceFilesDigest": "5562dfc2381f2c0d24c07c09c01c00fabad523106737908782b6d2217edadb19",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1692,10 +1692,10 @@
       },
       {
         "suite": "notification/workspace scope",
-        "tests": 48,
-        "passed": 48,
+        "tests": 49,
+        "passed": 49,
         "failed": 0,
-        "reportSha256": "612237c6d2435a5930a1e246fc5826d312e6ea793fcd8a129a0e86a64bc0cfca"
+        "reportSha256": "945a1e7757e3286fa9cc9f9498fa859acc9f5ae5a82c4509a15120bab73467bc"
       }
     ],
     "guardSweep": {
@@ -1717,6 +1717,12 @@
       "finalStatus": "PENDING",
       "cleanCheckoutFinding": "database isolation guard caught missing explicit workspace predicate despite existing scoped transaction; fixed without an allowlist",
       "evidencePlacement": "unique machine acceptance record moved to the existing classified audit/ledger owner"
+    },
+    "missingProfileControl": {
+      "before": "failed: stale notification pushed after profile query returned no row",
+      "beforeLogSha256": "cffb0d65a4be61fd09dd191a76b664acbbe4bd10b5c92fa32bcb26898ba226fe",
+      "repair": "require an existing profile result before reading routine notification defaults",
+      "after": "49 notification/job/claimed-scope tests passed; existing profile without a settings row retains defaults"
     }
   },
   "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",

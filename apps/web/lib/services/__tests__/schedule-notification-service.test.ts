@@ -89,12 +89,23 @@ describe('notifyScheduleCompleted, consent', () => {
   });
 
   it('pushes by default when the account has no settings row, with no address to email', async () => {
-    mocks.query.mockResolvedValue([]);
+    mocks.query.mockResolvedValue([{ notifications: {}, email: null }]);
 
     await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
       pushed: true,
       emailed: false,
     });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing when the account profile disappears before delivery', async () => {
+    mocks.query.mockResolvedValue([]);
+    await expect(notifyScheduleCompleted(callerDb, notice)).resolves.toEqual({
+      pushed: false,
+      emailed: false,
+    });
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.sendPush).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 

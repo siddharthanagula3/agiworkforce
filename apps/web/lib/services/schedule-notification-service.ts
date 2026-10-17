@@ -45,7 +45,8 @@ export async function loadSchedulePreferences(
       row?.schedule_notifications ?? {},
     );
     const enabled =
-      row?.schedule_exists !== false &&
+      row !== undefined &&
+      row.schedule_exists !== false &&
       (!notice ||
         (notice.status === 'success'
           ? schedule.onSuccess
