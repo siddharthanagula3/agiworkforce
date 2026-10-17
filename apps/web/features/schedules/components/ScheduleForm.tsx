@@ -2,7 +2,10 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
-import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS,
+  MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
+} from '@agiworkforce/cloud-contracts';
 import { formatCredits } from '@agiworkforce/types';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
@@ -628,6 +631,43 @@ export function ScheduleForm({
             </div>
           </details>
         )}
+
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium">Routine notifications</legend>
+          <p className="text-sm text-muted-foreground">
+            Choose when to notify you. Mobile push and email also follow your account notification
+            preferences.
+          </p>
+          {(
+            [
+              ['onSuccess', 'When completed'],
+              ['onFailure', 'When failed or timed out'],
+              ['onApproval', 'When approval is needed'],
+              ['push', 'Mobile push'],
+              ['email', 'Email'],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="flex items-center justify-between gap-3">
+              <Label htmlFor={`schedule-notification-${key}`}>{label}</Label>
+              <Switch
+                id={`schedule-notification-${key}`}
+                disabled={saving}
+                checked={
+                  (draft.notificationSettings ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS)[key]
+                }
+                onCheckedChange={(checked) =>
+                  onChange({
+                    notificationSettings: {
+                      ...(draft.notificationSettings ??
+                        MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS),
+                      [key]: checked,
+                    },
+                  })
+                }
+              />
+            </div>
+          ))}
+        </fieldset>
 
         <ScheduleAccessFields
           hasProject={Boolean(draft.projectId)}

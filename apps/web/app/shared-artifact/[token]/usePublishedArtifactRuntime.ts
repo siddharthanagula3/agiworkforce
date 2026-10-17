@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ArtifactRuntimeConnector } from '@agiworkforce/cloud-contracts';
 import type { ArtifactRuntimeHost } from '@/lib/artifact-sandbox';
 import { useSession } from '@/lib/identity/client';
@@ -14,6 +14,12 @@ import { toUserMessage } from '@/lib/user-error-message';
 const CONSENT_DECLINED = 'You chose not to let this app use AI.';
 const CONNECTORS_DECLINED = 'You chose not to let this app use your connected apps.';
 const CONNECTORS_UNREAD = 'Your connected apps could not be listed for this app.';
+const CONTEXT_CHANGED =
+  'This app changed while the request was pending. Review the current app and try again.';
+interface RuntimeContext {
+  owner: object;
+  controller: AbortController;
+}
 
 interface StoredConsent {
   allowed: true;
@@ -82,12 +88,16 @@ export interface PublishedArtifactRuntime {
 }
 
 interface Waiter {
+  context: RuntimeContext;
   key: string;
   connectorIds: string[];
   resolve: (consent: StoredConsent | null) => void;
 }
 
-export function usePublishedArtifactRuntime(token: string | undefined): PublishedArtifactRuntime {
+export function usePublishedArtifactRuntime(
+  token: string | undefined,
+  revision?: string,
+): PublishedArtifactRuntime {
   const { isLoaded, isSignedIn, userId } = useSession();
   const consentScope = token && userId ? `${userId}:${token}` : null;
   const [signInNeeded, setSignInNeeded] = useState(false);
@@ -96,15 +106,37 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
   const answersRef = useRef(new Map<string, StoredConsent | null>());
   const waitingRef = useRef<Waiter[]>([]);
   const askingKeyRef = useRef<string | null>(null);
-  const signedOut = isLoaded && !isSignedIn;
+  const owner = useMemo(
+    () => ({ token, userId, isLoaded, isSignedIn, revision }),
+    [token, userId, isLoaded, isSignedIn, revision],
+  );
+  const contextRef = useRef<RuntimeContext | null>(null);
+  const current = useCallback(() => {
+    const context = contextRef.current;
+    return context?.owner === owner && !context.controller.signal.aborted ? context : null;
+  }, [owner]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const context: RuntimeContext = { owner, controller: new AbortController() };
+    contextRef.current = context;
     answersRef.current.clear();
+    askingKeyRef.current = null;
+    setAskingForAi(null);
+    setSignInNeeded(false);
     setGrantedConnectorSets([]);
-  }, [consentScope]);
+    return () => {
+      if (contextRef.current === context) contextRef.current = null;
+      context.controller.abort();
+      const retired = waitingRef.current.filter((waiter) => waiter.context === context);
+      waitingRef.current = waitingRef.current.filter((waiter) => waiter.context !== context);
+      for (const waiter of retired) waiter.resolve(null);
+    };
+  }, [owner]);
 
   const ask = useCallback(
     (connectorIds: string[]) => {
+      const context = current();
+      if (!context) return;
       const stored = consentScope ? readConsent(consentScope, consentKey(connectorIds)) : null;
       setAskingForAi({
         connectorIds,
@@ -113,22 +145,26 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
         error: null,
       });
       if (!token || connectorIds.length === 0) return;
-      void describeArtifactRuntimeConnectors(token, connectorIds).then(
-        (connectors) =>
+      void describeArtifactRuntimeConnectors(token, connectorIds, context.controller.signal).then(
+        (connectors) => {
+          if (current() !== context) return;
           setAskingForAi((current) =>
             current && consentKey(current.connectorIds) === consentKey(connectorIds)
               ? { ...current, connectors }
               : current,
-          ),
-        (error: unknown) =>
+          );
+        },
+        (error: unknown) => {
+          if (current() !== context) return;
           setAskingForAi((current) =>
             current && consentKey(current.connectorIds) === consentKey(connectorIds)
               ? { ...current, error: toUserMessage(error, CONNECTORS_UNREAD) }
               : current,
-          ),
+          );
+        },
       );
     },
-    [token, consentScope],
+    [token, consentScope, current],
   );
 
   const rememberGranted = useCallback((connectorIds: readonly string[]) => {
@@ -142,13 +178,17 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
 
   const answerAiRequest = useCallback(
     (answer: ArtifactConsentAnswer) => {
+      const context = current();
+      if (!context) return;
       const key = askingKeyRef.current;
       if (key === null) return;
       const consent: StoredConsent | null = answer.allowed
         ? { allowed: true, allowedTools: [...answer.allowedTools] }
         : null;
       answersRef.current.set(key, consent);
-      const settled = waitingRef.current.filter((waiter) => waiter.key === key);
+      const settled = waitingRef.current.filter(
+        (waiter) => waiter.key === key && waiter.context === context,
+      );
       if (consentScope) {
         if (consent) storeConsent(consentScope, key, consent);
         else forgetConsent(consentScope, key);
@@ -161,11 +201,13 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
       else setAskingForAi(null);
       for (const waiter of settled) waiter.resolve(consent);
     },
-    [ask, rememberGranted, consentScope],
+    [ask, rememberGranted, consentScope, current],
   );
 
   const consentFor = useCallback(
     (connectorIds: readonly string[], review: boolean): Promise<StoredConsent | null> => {
+      const context = current();
+      if (!context) return Promise.resolve(null);
       const key = consentKey(connectorIds);
       if (!review) {
         const answered = answersRef.current.get(key);
@@ -182,10 +224,10 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
         ask([...connectorIds]);
       }
       return new Promise((resolve) => {
-        waitingRef.current.push({ key, connectorIds: [...connectorIds], resolve });
+        waitingRef.current.push({ context, key, connectorIds: [...connectorIds], resolve });
       });
     },
-    [ask, rememberGranted, consentScope],
+    [ask, rememberGranted, consentScope, current],
   );
 
   const reviewConnectors = useCallback(
@@ -199,27 +241,38 @@ export function usePublishedArtifactRuntime(token: string | undefined): Publishe
     if (!token) return undefined;
     return {
       handle: async (request) => {
-        if (signedOut) {
+        const context = current();
+        if (!context) throw new Error(CONTEXT_CHANGED);
+        if (!isLoaded) throw new Error('Wait for your sign-in state before using this app.');
+        if (!isSignedIn || !userId) {
           setSignInNeeded(true);
           throw new ArtifactRuntimeSignInRequiredError();
         }
         let allowedTools: string[] = [];
         if (request.op === 'complete') {
           const consent = await consentFor(request.connectors, false);
+          if (current() !== context) throw new Error(CONTEXT_CHANGED);
           if (!consent) {
             throw new Error(request.connectors.length > 0 ? CONNECTORS_DECLINED : CONSENT_DECLINED);
           }
           allowedTools = consent.allowedTools;
         }
         try {
-          return await callArtifactRuntime(token, request, { allowedTools });
+          if (current() !== context) throw new Error(CONTEXT_CHANGED);
+          const value = await callArtifactRuntime(token, request, {
+            allowedTools,
+            signal: context.controller.signal,
+          });
+          if (current() !== context) throw new Error(CONTEXT_CHANGED);
+          return value;
         } catch (error) {
+          if (current() !== context) throw new Error(CONTEXT_CHANGED);
           if (error instanceof ArtifactRuntimeSignInRequiredError) setSignInNeeded(true);
           throw error;
         }
       },
     };
-  }, [consentFor, token, signedOut]);
+  }, [consentFor, token, isLoaded, isSignedIn, userId, current]);
 
   return {
     host,

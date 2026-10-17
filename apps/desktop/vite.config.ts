@@ -136,7 +136,9 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       strictPort: true,
     },
 
-    envPrefix: ['VITE_', 'TAURI_'],
+    // TAURI_* includes updater signing credentials in developer/CI shells.
+    // Only explicitly public VITE_* values may enter renderer assets.
+    envPrefix: ['VITE_'],
 
     build: {
       target: isBrowserBundle ? 'esnext' : buildTarget,
@@ -261,6 +263,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '@agiworkforce/trust-boundaries': path.resolve(
           __dirname,
           '../../packages/contracts/trust-boundaries/src/index.ts',
+        ),
+        '@agiworkforce/utils/scheduling': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/scheduling',
         ),
         '@agiworkforce/utils/uuidv7': path.resolve(
           __dirname,

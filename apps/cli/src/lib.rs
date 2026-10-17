@@ -35,6 +35,7 @@ pub mod doctor;
 pub mod documents;
 pub mod errors;
 pub mod hex;
+mod session_browser;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
 pub use features::hooks::hooks;
@@ -848,6 +849,13 @@ enum Command {
     },
     /// Run app server for IDE integration.
     AppServer {
+        /// Canonical folder explicitly approved by a native host for this stdio process.
+        /// Does not save trust or change tool approval and sandbox policies.
+        #[arg(long, value_name = "DIRECTORY", requires = "workspace_consent_at_ms")]
+        workspace_consent: Option<std::path::PathBuf>,
+        /// Original native folder decision time; restarting the CLI must not renew consent.
+        #[arg(long, requires = "workspace_consent")]
+        workspace_consent_at_ms: Option<i64>,
         /// Transport: `stdio`, `ws`, or a WebSocket bind address such as `127.0.0.1:8788`.
         #[arg(long, default_value = "stdio")]
         listen: String,
@@ -5631,6 +5639,19 @@ async fn run_cli(cli: Cli) -> Result<()> {
     // developer execution must either inherit the trust accepted moments ago,
     // prompt on a real terminal, or fail closed in headless use. This check
     // deliberately precedes project config, memory, hook, and tool discovery.
+    if let Some(Command::AppServer {
+        workspace_consent: Some(root),
+        workspace_consent_at_ms: Some(consent_at),
+        listen,
+        ..
+    }) = &cli.command
+    {
+        anyhow::ensure!(
+            listen == "stdio",
+            "Native workspace consent is supported only by a stdio app-server"
+        );
+        trust::grant_for_process(root, *consent_at)?;
+    }
     let mut project_trusted = trusted_during_first_run;
     if invocation_requires_project_trust(&cli) {
         if !project_trusted {
@@ -6239,6 +6260,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 remote_control::run(host, &workspace_root).await
             }
             Command::AppServer {
+                workspace_consent: _,
+                workspace_consent_at_ms: _,
                 listen,
                 allow_public_listen,
                 auth_token,
@@ -8097,6 +8120,9 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
         return documents::run_extract_command(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some(session_browser::HELPER_COMMAND) {
+        return session_browser::run_helper(&args[1..]);
     }
     broken_pipe::install_panic_hook();
     let result = tokio::runtime::Builder::new_multi_thread()

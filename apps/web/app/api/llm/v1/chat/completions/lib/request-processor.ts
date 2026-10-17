@@ -1020,11 +1020,14 @@ export function applyPluginDraftToolCapability(
   ];
 }
 
-export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
+export function applyManagedOfficeFileCreation(
+  request: ChatCompletionRequest,
+  attachments: readonly TurnAttachment[] = [],
+): void {
   if (!request.office_creation) return;
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
-    createManagedOfficeFileToolDefinition(request.office_format),
+    createManagedOfficeFileToolDefinition(request.office_format, attachments),
   ];
 }
 
@@ -5058,7 +5061,7 @@ async function processAdmittedRequest(
         ),
       };
     }
-    applyManagedOfficeFileCreation(chatRequest);
+    applyManagedOfficeFileCreation(chatRequest, turnAttachments);
   }
 
   const skillRequirement = selectedSkillRequirementFailure(

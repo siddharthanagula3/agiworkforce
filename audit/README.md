@@ -9,6 +9,8 @@ remain.
 Start with [`plan/waves.md`](plan/waves.md). It lists every open item, grouped
 into the order it should be fixed in, with live counts.
 
+The [Claude desktop implementation ledger](ledger/claude-desktop-implementation.md) maps the accepted E01–E10 work to changed owners, executed checks and outstanding acceptance. It supplements the canonical defect and capability owners; local source/test progress does not close deployed capability cells.
+
 The [retained Tauri validation scope](codex-reaudit/open-work.md#retained-tauri-validation) consolidates the October 2 desktop comparison and release proposal into the existing defect owners. It records native checks still needed, without changing the public Electron/internal Tauri roles or claiming a release.
 
 The [expanded ecosystem review of 2026-09-29](flows/competitive-ecosystem-review-2026-09-29.md)

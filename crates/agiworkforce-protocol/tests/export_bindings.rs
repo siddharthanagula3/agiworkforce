@@ -19,6 +19,8 @@ fn export_typescript_bindings() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("agiworkforce-protocol-bindings"));
     let dir = dir.as_path();
+    agiworkforce_protocol::developer_session::DeveloperWorkspaceIdentity::export_all_to(dir)
+        .expect("workspace identity bindings");
 
     // Event envelope, pulls in the bulk of the wire graph (session events,
     // approvals, items, permissions, config views). NOTE: the client->server

@@ -1,5 +1,7 @@
 'use client';
 
+import { SshConnectionControl } from './components/SshConnectionControl';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -74,6 +76,7 @@ import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
 import { deleteDeveloperThread } from '@/features/desktop-host';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_FALLBACK_AGENT_MODE,
   localDiscardArchivesConsequence,
   localFolderChoice,
   localFolderChoices,
@@ -1032,42 +1035,58 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         openSession(id);
       }),
     localSection: local.supported ? (
-      <LocalSessionsSection
-        groups={local.groups}
-        loading={local.loading}
-        adding={local.adding}
-        error={local.error}
-        unavailable={local.unavailable}
-        selectedId={localSession?.id ?? null}
-        activity={local.activity}
-        onSelect={(session) => {
-          if (session.id === localSession?.id) return;
-          leaveLocalEdits(() => {
-            setRailDrawerOpen(false);
-            setLocalPrompt('');
-            openLocalSession(session);
-          });
-        }}
-        onNewSession={(rootId) =>
-          leaveLocalEdits(() => {
-            void local.startSession(rootId).then((session) => {
-              if (session) {
-                setRailDrawerOpen(false);
-                setLocalPrompt('');
-                openLocalSession(session);
-              }
+      <>
+        <SshConnectionControl
+          onConnected={(session) => {
+            local.refresh();
+            leaveLocalEdits(() => {
+              setRailDrawerOpen(false);
+              setLocalPrompt('');
+              openLocalSession(session);
             });
-          })
-        }
-        onAddFolder={() => void local.addFolder('folder')}
-        onAddRepository={() => void local.addFolder('repository')}
-        allowing={local.allowing}
-        allowRefusals={local.allowRefusals}
-        onAllowSessions={(rootId) => void local.allowSessions(rootId)}
-        reviewingMcp={local.reviewingMcp}
-        mcpRefusals={local.mcpRefusals}
-        onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
-      />
+          }}
+          onDisconnected={(rootId) => {
+            local.refresh();
+            if (localSession?.rootId === rootId) closeLocalSession();
+          }}
+        />
+        <LocalSessionsSection
+          groups={local.groups}
+          loading={local.loading}
+          adding={local.adding}
+          error={local.error}
+          unavailable={local.unavailable}
+          selectedId={localSession?.id ?? null}
+          activity={local.activity}
+          onSelect={(session) => {
+            if (session.id === localSession?.id) return;
+            leaveLocalEdits(() => {
+              setRailDrawerOpen(false);
+              setLocalPrompt('');
+              openLocalSession(session);
+            });
+          }}
+          onNewSession={(rootId) =>
+            leaveLocalEdits(() => {
+              void local.startSession(rootId).then((session) => {
+                if (session) {
+                  setRailDrawerOpen(false);
+                  setLocalPrompt('');
+                  openLocalSession(session);
+                }
+              });
+            })
+          }
+          onAddFolder={() => void local.addFolder('folder')}
+          onAddRepository={() => void local.addFolder('repository')}
+          allowing={local.allowing}
+          allowRefusals={local.allowRefusals}
+          onAllowSessions={(rootId) => void local.allowSessions(rootId)}
+          reviewingMcp={local.reviewingMcp}
+          mcpRefusals={local.mcpRefusals}
+          onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
+        />
+      </>
     ) : null,
   };
 
@@ -1076,6 +1095,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const isLocalDraft = draft.environment === 'local';
   const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
   const composerLocal: CodeLocalState = {
+    agentMode: draftRuntime?.defaultAgentMode ?? LOCAL_FALLBACK_AGENT_MODE,
     supported: local.supported,
     worktrees: local.worktrees,
     folders: localFolderChoices(local.groups),

@@ -3457,6 +3457,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
             return tabId;
           },
           listTabs: listDesktopBrowserTabs,
+          openTab: (url) => driver.openTab(url),
           tabUrl: async (tabId) => {
             await assertTabOwnership(tabId);
             return (await chrome.tabs.get(tabId)).url ?? '';

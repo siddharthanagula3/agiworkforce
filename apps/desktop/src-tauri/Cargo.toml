@@ -216,7 +216,7 @@ cap-std = "4.0.2"
 
 
 flate2 = "1.0"
-zip = "1"
+zip = "=9.0.4"
 
 
 pdf-extract = "0.12"
@@ -226,7 +226,7 @@ calamine = { version = "0.36.1", features = ["chrono"] }
 
 
 docx-rs = "0.4"
-rust_xlsxwriter = "0.77"
+rust_xlsxwriter = "0.99.1"
 printpdf = { version = "0.12.5", default-features = false }
 
 

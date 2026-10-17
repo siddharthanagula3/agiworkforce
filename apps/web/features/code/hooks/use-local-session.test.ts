@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DesktopRuntimeError,
+  DEVELOPER_SESSION_MAX_FRAME_BYTES,
   type LocalDeveloperSession,
   type DeveloperSessionEvent,
 } from '@agiworkforce/local-runtime-contract';
@@ -881,4 +882,287 @@ describe('one local session', () => {
 
     expect(result.current.error).toBe('The local runtime stopped.');
   });
+});
+
+describe('cursor-owned reconnect replay', () => {
+  function transcript(partialResponse: string, nextDeltaIndex: number, turnId = 'turn-1') {
+    return {
+      session,
+      messages: [],
+      truncated: false,
+      activeTurn: {
+        turnId,
+        partialResponse,
+        nextDeltaIndex,
+        nextEventSequence: 0,
+        approvals: [],
+        questions: [],
+      },
+    };
+  }
+
+  it('buffers live overlap until the snapshot and renders every indexed delta once', async () => {
+    let resolveRead!: (value: unknown) => void;
+    readDeveloperSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(1));
+    send({ type: 'turn-started', threadId: session.id, turnId: 'turn-1' });
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 0,
+      delta: 'hello',
+    });
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 1,
+      delta: ' world',
+    });
+    await act(async () => resolveRead(transcript('hello', 1)));
+    expect(result.current.turn.reply).toBe('hello world');
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 1,
+      delta: ' world',
+    });
+    expect(result.current.turn.reply).toBe('hello world');
+  });
+
+  it('refreshes a missing delta from a snapshot instead of appending over the gap', async () => {
+    readDeveloperSession.mockResolvedValueOnce(transcript('a', 1));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(result.current.turn.reply).toBe('a'));
+    readDeveloperSession.mockResolvedValueOnce(transcript('abc', 3));
+    send({ type: 'output-delta', threadId: session.id, turnId: 'turn-1', index: 2, delta: 'c' });
+    await waitFor(() => expect(result.current.turn.reply).toBe('abc'));
+    expect(readDeveloperSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores late output and approvals belonging to a replaced turn', async () => {
+    readDeveloperSession.mockResolvedValueOnce(transcript('old', 1));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(result.current.turn.reply).toBe('old'));
+    send({ type: 'turn-started', threadId: session.id, turnId: 'turn-2' });
+    send({ type: 'output-delta', threadId: session.id, turnId: 'turn-2', index: 0, delta: 'new' });
+    send({ ...APPROVAL, turnId: 'turn-1' });
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 1,
+      delta: ' stale',
+    });
+    expect(result.current.turn).toMatchObject({ turnId: 'turn-2', reply: 'new' });
+    expect(result.current.approvals).toEqual([]);
+  });
+
+  it('keeps a new live turn when an older snapshot resolves during replacement', async () => {
+    let resolveRead!: (value: unknown) => void;
+    readDeveloperSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    send({ type: 'turn-started', threadId: session.id, turnId: 'turn-2' });
+    send({ type: 'output-delta', threadId: session.id, turnId: 'turn-2', index: 0, delta: 'new' });
+    await act(async () => resolveRead(transcript('old', 1)));
+    expect(result.current.turn).toMatchObject({ turnId: 'turn-2', reply: 'new' });
+  });
+
+  it('uses reconnect cursors after remount and preserves pending approval ownership', async () => {
+    const snapshot = transcript('hello', 1);
+    const { type: _type, threadId: _threadId, turnId: _turnId, ...approval } = APPROVAL;
+    readDeveloperSession.mockResolvedValue({
+      ...snapshot,
+      activeTurn: { ...snapshot.activeTurn, approvals: [approval] },
+    });
+    const first = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(first.result.current.turn.reply).toBe('hello'));
+    first.unmount();
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(result.current.turn.reply).toBe('hello'));
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 0,
+      delta: 'hello',
+    });
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 1,
+      delta: ' world',
+    });
+    expect(result.current.turn.reply).toBe('hello world');
+    expect(result.current.approvals[0]).toMatchObject({ turnId: 'turn-1', requestId: 'ask-1' });
+  });
+
+  it('uses the authoritative terminal response when a stream ended before all deltas arrived', async () => {
+    readDeveloperSession.mockResolvedValueOnce(transcript('half', 1));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(result.current.turn.reply).toBe('half'));
+    send({
+      type: 'turn-finished',
+      threadId: session.id,
+      turnId: 'turn-1',
+      outcome: 'interrupted',
+      response: 'half plus final',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    expect(result.current.turn.reply).toBe('half plus final');
+    send({ ...APPROVAL, turnId: 'turn-old' });
+    expect(result.current.approvals).toEqual([]);
+  });
+  it('does not append a late delta after a buffered terminal event', async () => {
+    let resolveRead!: (value: unknown) => void;
+    readDeveloperSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    send({ type: 'turn-started', threadId: session.id, turnId: 'turn-1' });
+    send({ type: 'output-delta', threadId: session.id, turnId: 'turn-1', index: 0, delta: 'a' });
+    send({
+      type: 'turn-finished',
+      threadId: session.id,
+      turnId: 'turn-1',
+      outcome: 'interrupted',
+      response: 'ab',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 1,
+      delta: 'stale',
+    });
+    await act(async () => resolveRead(transcript('', 0)));
+    expect(result.current.turn).toMatchObject({ reply: 'ab', outcome: 'interrupted' });
+  });
+
+  it('invalidates an outstanding snapshot when its runtime stops', async () => {
+    let resolveRead!: (value: unknown) => void;
+    readDeveloperSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    send({ type: 'runtime-stopped', message: 'owned host stopped' });
+    await act(async () => resolveRead(transcript('stale partial', 1)));
+    expect(result.current.turn.reply).toBe('');
+    expect(result.current.approvals).toEqual([]);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('keeps completed output and queued input when transcript recovery fails', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    await startRunning(result);
+    act(() => result.current.enqueue({ text: 'keep queued', images: [], contextFiles: [] }));
+    readDeveloperSession.mockRejectedValueOnce(new Error('read failed'));
+    send({
+      type: 'turn-finished',
+      threadId: session.id,
+      turnId: 'turn-1',
+      outcome: 'completed',
+      response: 'complete result',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.turn.reply).toBe('complete result');
+    expect(result.current.queued.map((item) => item.text)).toEqual(['keep queued']);
+  });
+
+  it('bounds buffered event bytes and obtains a fresh snapshot after overflow', async () => {
+    let resolveRead!: (value: unknown) => void;
+    readDeveloperSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    readDeveloperSession.mockResolvedValueOnce(transcript('recovered', 1));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalledTimes(1));
+    send({
+      type: 'output-delta',
+      threadId: session.id,
+      turnId: 'turn-1',
+      index: 0,
+      delta: 'x'.repeat(DEVELOPER_SESSION_MAX_FRAME_BYTES),
+    });
+    expect(readDeveloperSession).toHaveBeenCalledTimes(1);
+    await act(async () => resolveRead(transcript('', 0)));
+    await waitFor(() => expect(result.current.turn.reply).toBe('recovered'));
+    expect(readDeveloperSession).toHaveBeenCalledTimes(2);
+    expect(result.current.notice).toMatch(/read again/);
+  });
+
+  it('reconciles a missed terminal event with the matching stored assistant turn', async () => {
+    readDeveloperSession.mockResolvedValueOnce(transcript('partial', 1));
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(result.current.turn.reply).toBe('partial'));
+    readDeveloperSession.mockResolvedValueOnce({
+      session,
+      truncated: false,
+      activeTurn: null,
+      messages: [{ role: 'assistant', text: 'complete', turnId: 'turn-1' }],
+    });
+    await act(async () => result.current.reload());
+    expect(result.current.messages).toEqual([
+      { role: 'assistant', text: 'complete', turnId: 'turn-1' },
+    ]);
+    expect(result.current.turn.reply).toBe('');
+  });
+});
+
+it('loads persisted child task identity and clears it when switching parent sessions', async () => {
+  const child = {
+    id: 'subagent_owned',
+    title: 'Owned child',
+    parentSessionId: session.id,
+    state: 'paused',
+  };
+  readDeveloperSession.mockResolvedValueOnce({
+    session,
+    messages: [],
+    truncated: false,
+    activeTurn: null,
+    childTasks: [child],
+  });
+  const { result, rerender } = renderHook(({ current }) => useLocalSession(current), {
+    initialProps: { current: session },
+  });
+  await waitFor(() => expect(result.current.childTasks).toEqual([child]));
+  rerender({ current: { ...session, id: 'another-parent' } });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.childTasks).toEqual([]);
 });

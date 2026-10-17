@@ -1894,12 +1894,42 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             Some(vec!["read_file".to_string()]),
             "named agent allowlist must intersect the parent allowlist"
         );
+        assert!(
+            crate::tool_filters::ensure_tool_call_allowed(
+                "read_file",
+                &std::collections::HashMap::new(),
+                session.allowed_tools.as_deref(),
+                &session.disallowed_tools,
+            )
+            .is_ok(),
+            "positive control: the shared tool remains available"
+        );
         assert_eq!(session.max_turns, Some(15), "turn limit cannot be widened");
         assert!(session.disallowed_tools.contains(&"web_fetch".to_string()));
         assert!(session.disallowed_tools.contains(&"write_file".to_string()));
         assert!(session.messages.iter().any(|message| message
             .text_content()
             .contains("Review the requested change.")));
+        let disjoint = AgentDefinition {
+            tools: Some(vec!["write_file".to_string()]),
+            ..agent
+        };
+        disjoint.apply_to_subagent_session(&mut session);
+        assert_eq!(session.allowed_tools, Some(Vec::new()));
+        assert!(
+            session.effective_tool_definitions().is_empty(),
+            "an empty inherited intersection must not advertise unrestricted tools"
+        );
+        assert!(
+            crate::tool_filters::ensure_tool_call_allowed(
+                "read_file",
+                &std::collections::HashMap::new(),
+                session.allowed_tools.as_deref(),
+                &session.disallowed_tools,
+            )
+            .is_err(),
+            "an unadvertised call must not escape an empty inherited intersection"
+        );
     }
 
     #[test]

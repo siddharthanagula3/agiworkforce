@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
 type ScanModule1 = typeof import('../job-service');
+type ScheduleNotificationModule = typeof import('@/lib/services/schedule-notification-service');
+type QuietHoursModule = typeof import('@/lib/services/quiet-hours-service');
 
 const mocks = vi.hoisted(() => ({
   loadSchedulePreferences: vi.fn(),
+  quietHoursEndFor: vi.fn(),
   notifyScheduleCompleted: vi.fn(),
   sendScheduleCompletionEmail: vi.fn(),
   drainAuditDestination: vi.fn(),
@@ -26,9 +29,14 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn((db: DatabaseAdapter) => db),
 }));
-vi.mock('@/lib/services/schedule-notification-service', () => ({
+vi.mock('@/lib/services/schedule-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ScheduleNotificationModule>()),
   loadSchedulePreferences: mocks.loadSchedulePreferences,
   notifyScheduleCompleted: mocks.notifyScheduleCompleted,
+}));
+vi.mock('@/lib/services/quiet-hours-service', async (importOriginal) => ({
+  ...(await importOriginal<QuietHoursModule>()),
+  quietHoursEndFor: mocks.quietHoursEndFor,
 }));
 vi.mock('@/lib/services/notification-email-service', () => ({
   sendScheduleCompletionEmail: mocks.sendScheduleCompletionEmail,
@@ -105,6 +113,7 @@ const notice = { taskId: 'task-1', taskName: 'Daily brief', status: 'success', r
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.quietHoursEndFor.mockResolvedValue(null);
   mocks.loadSchedulePreferences.mockResolvedValue({
     push: true,
     email: false,
@@ -179,6 +188,37 @@ describe('email.schedule-completed', () => {
 
     await expect(handler(context(notice))).resolves.toEqual({ skipped: 'opted_out' });
     expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
+  it('defers again when quiet hours changed after the original email was queued', async () => {
+    const until = new Date('2026-10-17T13:00:00.000Z');
+    mocks.quietHoursEndFor.mockResolvedValue(until);
+    await expect(handler(context(notice))).resolves.toEqual({ deferredUntil: until.toISOString() });
+    expect(mocks.enqueueJob).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        kind: 'email.schedule-completed',
+        runAfter: until,
+        idempotencyKey: `schedule-email:run-1:quiet:${until.toISOString()}`,
+      }),
+    );
+    expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
+  it('keeps provider idempotency tied to the run, not the deferred queue attempt', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: true,
+      providerMessageId: 'owned',
+    });
+    await handler(context(notice));
+    expect(mocks.sendScheduleCompletionEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'schedule-email:run-1' }),
+    );
+    expect(mocks.loadSchedulePreferences).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.objectContaining({ taskId: 'task-1', status: 'success' }),
+    );
   });
 
   it('settles quietly when no email provider is configured', async () => {

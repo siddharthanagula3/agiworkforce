@@ -69,7 +69,7 @@ export function PublishedArtifactView({
   const { t } = useTranslation('chat');
   const sandboxed = isSandboxedPublishedKind(kind);
   const runnable = kind === 'html' || kind === 'react';
-  const runtime = usePublishedArtifactRuntime(runnable ? token : undefined);
+  const runtime = usePublishedArtifactRuntime(runnable ? token : undefined, content);
   const [renderError, setRenderError] = useState<string | null>(null);
   const router = useRouter();
   const [copying, setCopying] = useState(false);

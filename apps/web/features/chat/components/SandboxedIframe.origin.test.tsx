@@ -1,5 +1,7 @@
+import { useLayoutEffect, type ReactNode } from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -125,4 +127,188 @@ describe('the sandbox document allowlist', () => {
     expect(source).toContain('https://chat.agiworkforce.com');
     expect(source).toContain('https://agiworkforce.com');
   });
+});
+
+it('does not deliver a late runtime result into a frame showing replacement content', async () => {
+  let finish!: (value: unknown) => void;
+  const runtime = {
+    handle: vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  };
+  const { container, rerender } = render(
+    <SandboxedIframe
+      title="Owned app"
+      payload={{ type: 'render', kind: 'html', html: '<h1>First</h1>' }}
+      fallbackSrcDoc="<h1>First</h1>"
+      runtime={runtime}
+    />,
+  );
+  const frame = container.querySelector('iframe')!;
+  const sent = vi.spyOn(frame.contentWindow!, 'postMessage');
+  act(() =>
+    post(frame.contentWindow, SANDBOX_ORIGIN, {
+      type: 'runtime-request',
+      id: 'runtime-1',
+      request: { op: 'storage.get', key: 'counter', shared: false },
+    }),
+  );
+  expect(runtime.handle).toHaveBeenCalledOnce();
+  rerender(
+    <SandboxedIframe
+      title="Owned app"
+      payload={{ type: 'render', kind: 'html', html: '<h1>Replacement</h1>' }}
+      fallbackSrcDoc="<h1>Replacement</h1>"
+      runtime={runtime}
+    />,
+  );
+  await act(async () => {
+    finish('private old result');
+    await Promise.resolve();
+  });
+  expect(sent.mock.calls.some(([message]) => message?.type === 'runtime-response')).toBe(false);
+});
+
+it('keeps a working sandbox when onLoad is acknowledged after its early ready event was missed', () => {
+  vi.useFakeTimers();
+  try {
+    const { container } = render(
+      <SandboxedIframe
+        title="Fast sandbox"
+        payload={{ type: 'render', kind: 'html', html: '<p>Live</p>' }}
+        fallbackSrcDoc="<p>Fallback</p>"
+      />,
+    );
+    const frame = container.querySelector('iframe')!;
+    act(() => post(frame.contentWindow, SANDBOX_ORIGIN, { type: 'render-complete', kind: 'html' }));
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not let another frame acknowledge a missed sandbox handshake', () => {
+  vi.useFakeTimers();
+  try {
+    const { container } = render(
+      <SandboxedIframe
+        title="Owned sandbox"
+        payload={{ type: 'render', kind: 'html', html: '<p>Live</p>' }}
+        fallbackSrcDoc="<p>Fallback</p>"
+      />,
+    );
+    fireEvent.load(container.querySelector('iframe')!);
+    act(() =>
+      post({ closed: false } as Window, SANDBOX_ORIGIN, { type: 'render-complete', kind: 'html' }),
+    );
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(container.querySelector('iframe')?.hasAttribute('srcdoc')).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('subscribes before a fast mounted frame announces readiness', () => {
+  vi.useFakeTimers();
+  function ReadyAtCommit({ children }: { children: ReactNode }) {
+    useLayoutEffect(() => {
+      const frame = document.querySelector(
+        'iframe[title="Commit-ready sandbox"]',
+      ) as HTMLIFrameElement;
+      post(frame.contentWindow, SANDBOX_ORIGIN, { type: 'sandbox-ready' });
+    }, []);
+    return children;
+  }
+  try {
+    const { container } = render(
+      <SandboxedIframe
+        title="Commit-ready sandbox"
+        payload={{ type: 'render', kind: 'html', html: '<p>Live</p>' }}
+        fallbackSrcDoc="<p>Fallback</p>"
+      />,
+      { wrapper: ReadyAtCommit },
+    );
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('lets a cold document navigate before starting the short handshake deadline', () => {
+  vi.useFakeTimers();
+  try {
+    const { container } = render(
+      <SandboxedIframe
+        title="Cold sandbox"
+        payload={{ type: 'render', kind: 'html', html: '<p>Live</p>' }}
+        fallbackSrcDoc="<p>Fallback</p>"
+      />,
+    );
+    act(() => vi.advanceTimersByTime(4_000));
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
+    fireEvent.load(frame);
+    act(() => post(frame.contentWindow, SANDBOX_ORIGIN, { type: 'render-complete', kind: 'html' }));
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('still bounds a document that never loads or answers', () => {
+  vi.useFakeTimers();
+  try {
+    const { container } = render(
+      <SandboxedIframe
+        title="Unreachable sandbox"
+        payload={{ type: 'render', kind: 'html', html: '<p>Live</p>' }}
+        fallbackSrcDoc="<p>Fallback</p>"
+      />,
+    );
+    act(() => vi.advanceTimersByTime(16_000));
+    expect(container.querySelector('iframe')?.hasAttribute('srcdoc')).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not start a sandbox document before client hydration owns its handlers', () => {
+  const html = renderToString(
+    <SandboxedIframe
+      title="Server preview"
+      payload={{ type: 'render', kind: 'html', html: '<p>Owned</p>' }}
+      fallbackSrcDoc="<p>Fallback</p>"
+    />,
+  );
+  expect(html).not.toContain('<iframe');
+  expect(html).toContain('Loading preview');
+});
+
+it('retires the previous execution realm before a replacement runtime can receive requests', () => {
+  const first = { handle: vi.fn(async () => 'old') };
+  const second = { handle: vi.fn(async () => 'new') };
+  const payload = { type: 'render', kind: 'html', html: '<p>Owned</p>' } as const;
+  const view = render(
+    <SandboxedIframe title="Owned scope" payload={payload} fallbackSrcDoc="" runtime={first} />,
+  );
+  const oldSource = view.container.querySelector('iframe')!.contentWindow;
+  view.rerender(
+    <SandboxedIframe title="Owned scope" payload={payload} fallbackSrcDoc="" runtime={second} />,
+  );
+  const newSource = view.container.querySelector('iframe')!.contentWindow;
+  expect(newSource).not.toBe(oldSource);
+  act(() =>
+    post(oldSource, SANDBOX_ORIGIN, {
+      type: 'runtime-request',
+      id: 'runtime-1',
+      request: { op: 'storage.get', key: 'counter', shared: false },
+    }),
+  );
+  expect(second.handle).not.toHaveBeenCalled();
 });

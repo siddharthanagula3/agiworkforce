@@ -61,6 +61,13 @@ function isEditorHandoff(parsed: URL): boolean {
   return parsed.protocol === 'vscode:' && parsed.host === VSCODE_CONTEXT_HANDOFF_AUTHORITY;
 }
 
+export async function openBrowserAddress(url: string): Promise<void> {
+  const parsed = new URL(url);
+  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password)
+    throw new Error('Only HTTP addresses without credentials can be opened.');
+  await shell.openExternal(parsed.toString());
+}
+
 export function openExternally(url: string): void {
   try {
     const parsed = new URL(url);

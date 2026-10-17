@@ -322,11 +322,15 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
     });
   };
 
-  const handle = (rootId: string, event: DeveloperSessionEvent): void => {
+  const handle = (
+    rootId: string,
+    event: DeveloperSessionEvent,
+    notificationAllowed = true,
+  ): void => {
     const changed = tracker.apply(rootId, event);
     const label = (): string => deps.sessionLabel(rootId);
 
-    if (event.type === 'approval-requested') {
+    if (event.type === 'approval-requested' && notificationAllowed) {
       const approval: PendingApproval = {
         rootId,
         threadId: event.threadId,
@@ -377,7 +381,7 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
       }
     } else if (event.type === 'approval-answered') {
       withdraw(`approval\u0000${approvalKey(rootId, event.threadId, event.requestId)}`);
-    } else if (event.type === 'user-input-requested') {
+    } else if (event.type === 'user-input-requested' && notificationAllowed) {
       present(
         `question\u0000${approvalKey(rootId, event.threadId, event.requestId)}`,
         'question',
@@ -399,7 +403,7 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
         shown.delete(key);
         notification.close();
       }
-      if (event.outcome === 'completed') {
+      if (event.outcome === 'completed' && notificationAllowed) {
         present(
           `finished\u0000${turnKey(rootId, event.threadId, event.turnId)}`,
           'turn-complete',
@@ -409,7 +413,7 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
           },
           () => deps.openSession(rootId, event.threadId),
         );
-      } else if (event.outcome === 'failed') {
+      } else if (event.outcome === 'failed' && notificationAllowed) {
         present(
           `finished\u0000${turnKey(rootId, event.threadId, event.turnId)}`,
           'turn-failed',

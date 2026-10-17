@@ -149,6 +149,10 @@
     {
       "id": "deploy-signaling-server.yml:relay-verdict:statuses",
       "reason": "It records the relay health verdict on the resolved candidate commit."
+    },
+    {
+      "id": "verify-desktop-candidate.yml:intel-package:contents",
+      "reason": "GitHub returned 403 for an unpublished draft asset under the contents-read integration token. The ephemeral repository token is supplied only to the exact pinned-asset download step, checkout persists no credentials, and the signed-app harness strips token variables. This trusted dedicated-branch/manual job never publishes or changes releases."
     }
   ],
   "knownGaps": {

@@ -96,7 +96,7 @@ function upsertOne(state: Collection, incoming: SharedArtifact, maxArtifacts?: n
       versionsById: {
         ...state.versionsById,
         [incoming.id]: (state.versionsById[incoming.id] ?? [existing]).map((v) =>
-          v === existing ? patched : v,
+          v.version === existing.version ? patched : v,
         ),
       },
     };

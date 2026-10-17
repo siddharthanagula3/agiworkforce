@@ -337,18 +337,19 @@ export function LocalSessionPanel({
   const [model, setModel] = useState(session.model ?? '');
   const [loadsFinished, setLoadsFinished] = useState(0);
   const capabilities = useDeveloperCapabilities(loadsFinished);
-  const canChooseMode = capabilities.has('agent_mode');
+  const remoteSsh = session.environment === 'ssh';
+  const canChooseMode = !remoteSsh && capabilities.has('agent_mode');
   const canChooseEffort = capabilities.has('reasoning_effort');
-  const canAttachFiles = capabilities.has('context_files');
+  const canAttachFiles = !remoteSsh && capabilities.has('context_files');
   const canSteer = capabilities.has('steer');
   const canAnswerQuestions = capabilities.has('user_input');
-  const canChooseDecision = capabilities.has('approval_decisions');
-  const canRewind = capabilities.has('checkpoints');
+  const canChooseDecision = !remoteSsh && capabilities.has('approval_decisions');
+  const canRewind = !remoteSsh && capabilities.has('checkpoints');
   const canReview = canRewind && capabilities.has('review');
-  const canDelete = onDeleted !== undefined && capabilities.has('thread_delete');
+  const canDelete = !remoteSsh && onDeleted !== undefined && capabilities.has('thread_delete');
   const canArchive = onArchived !== undefined && capabilities.has('thread_archive');
   const canTakeOver = capabilities.has('thread_takeover');
-  const canPasteImages = capabilities.has('images');
+  const canPasteImages = !remoteSsh && capabilities.has('images');
   const canFork = onForked !== undefined && !group.worktree && capabilities.has('thread_fork');
   const [forking, setForking] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
@@ -364,7 +365,7 @@ export function LocalSessionPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
   const boundedTurns = runtimeModels?.features?.maxTurns === true;
-  const memoryAvailable = runtimeModels?.features?.memory === true;
+  const memoryAvailable = !remoteSsh && runtimeModels?.features?.memory === true;
   const options = useLocalTurnOptions(session.id, runtimeModels);
   const state = useLocalSession(session, {
     ...(model === '' || model === session.model ? {} : { model }),
@@ -685,33 +686,37 @@ export function LocalSessionPanel({
               <GitBranch size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
-          <button
-            type="button"
-            className={`${styles['headerButton']} ${testsRunning ? styles['headerButtonActive'] : ''}`}
-            aria-label={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
-            title={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
-            onClick={() => (testsRunning ? tests.stop() : void tests.run())}
-          >
-            {testsRunning ? (
-              <Spinner size="sm" aria-hidden="true" />
-            ) : (
-              <ListChecks size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
-            className={styles['headerButton']}
-            aria-label={LOCAL_CODE_COPY.openInEditor}
-            title={LOCAL_CODE_COPY.openInEditor}
-            onClick={() => {
-              setEditorError(null);
-              openWorkspaceInEditor(session.rootId).catch((cause: unknown) =>
-                setEditorError(toUserMessage(cause, LOCAL_CODE_COPY.editorFailed)),
-              );
-            }}
-          >
-            <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-          </button>
+          {!remoteSsh && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${testsRunning ? styles['headerButtonActive'] : ''}`}
+              aria-label={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
+              title={testsRunning ? LOCAL_CODE_COPY.stopTests : LOCAL_CODE_COPY.runTests}
+              onClick={() => (testsRunning ? tests.stop() : void tests.run())}
+            >
+              {testsRunning ? (
+                <Spinner size="sm" aria-hidden="true" />
+              ) : (
+                <ListChecks size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+              )}
+            </button>
+          )}
+          {!remoteSsh && (
+            <button
+              type="button"
+              className={styles['headerButton']}
+              aria-label={LOCAL_CODE_COPY.openInEditor}
+              title={LOCAL_CODE_COPY.openInEditor}
+              onClick={() => {
+                setEditorError(null);
+                openWorkspaceInEditor(session.rootId).catch((cause: unknown) =>
+                  setEditorError(toUserMessage(cause, LOCAL_CODE_COPY.editorFailed)),
+                );
+              }}
+            >
+              <Code2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             className={`${styles['headerButton']} ${handoffOpen ? styles['headerButtonActive'] : ''}`}
@@ -952,6 +957,13 @@ export function LocalSessionPanel({
                 </div>
               )}
 
+              {remoteSsh && (
+                <div className={styles['notice']} role="status">
+                  This session runs over SSH in Ask mode. Review files and run tests through the
+                  agent. The host file editor and interactive terminal are unavailable.
+                </div>
+              )}
+
               {state.error !== null && (
                 <div className={styles['notice']} role="alert">
                   <span>{state.error}</span>
@@ -1036,6 +1048,32 @@ export function LocalSessionPanel({
                     <span>{line}</span>
                   </div>
                 ))}
+
+              {(state.childTasks?.length ?? 0) > 0 && (
+                <details className={styles['notice']}>
+                  <summary>Recent child tasks ({state.childTasks.length})</summary>
+                  <ul className="space-y-2">
+                    {state.childTasks.map((task) => (
+                      <li key={task.id} id={`local-child-${task.id}`}>
+                        <details>
+                          <summary>
+                            {task.title} · {task.state.replaceAll('_', ' ')}
+                          </summary>
+                          <p className="break-all text-xs text-muted-foreground">
+                            Task {task.id} · Parent session {task.parentSessionId}
+                          </p>
+                          {task.state === 'paused' && (
+                            <p className="text-xs text-muted-foreground">
+                              Interrupted work is retained for review and will not restart
+                              automatically.
+                            </p>
+                          )}
+                        </details>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
 
               <LocalQueuedMessages
                 queued={state.queued}

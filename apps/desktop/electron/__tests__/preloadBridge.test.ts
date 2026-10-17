@@ -61,6 +61,7 @@ describe('what the preload puts on the page', () => {
     for (const name of BUNDLED_ONLY) expect(name in bridge, name).toBe(false);
     for (const name of HOSTED_PAGE) expect(typeof bridge[name], name).toBe('function');
     expect(bridge['appVersion']).toBe('1.8.0');
+    expect(bridge['browserSignIn']).toEqual({ cancellation: true });
   });
 
   it('carries the whole bridge for the bundled renderer', async () => {

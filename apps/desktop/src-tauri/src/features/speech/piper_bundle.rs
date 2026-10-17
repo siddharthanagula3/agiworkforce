@@ -157,7 +157,11 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<()> {
         let mut entry = archive
             .by_index(index)
             .context("Failed to read Piper zip entry")?;
-        let relative = normalize_archive_path(Path::new(entry.name()))?;
+        let entry_name = entry
+            .name()
+            .context("Failed to decode Piper zip entry name")?
+            .into_owned();
+        let relative = normalize_archive_path(Path::new(&entry_name))?;
         if !seen.insert(relative.clone()) {
             return Err(anyhow!("Piper archive contains a duplicate path"));
         }

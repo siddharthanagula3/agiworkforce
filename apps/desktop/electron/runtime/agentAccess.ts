@@ -3,7 +3,7 @@ import {
   type DesktopCapability,
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
-import { getPermissionState } from './permissionManager';
+import { getPermissionState, getPermissionDecision } from './permissionManager';
 import { getRoot } from './workspaceStore';
 
 /**
@@ -23,4 +23,12 @@ export function agentScope(rootId: string): PermissionScope | null {
 export function agentAllowedIn(rootId: string): boolean {
   const scope = agentScope(rootId);
   return scope !== null && getPermissionState(AGENT_CAPABILITY, scope) === 'granted';
+}
+
+/** The original decision time, never a fresh timestamp minted by a CLI restart. */
+export function agentConsentAt(rootId: string): number | null {
+  const scope = agentScope(rootId);
+  if (!scope || !agentAllowedIn(rootId)) return null;
+  const decision = getPermissionDecision(AGENT_CAPABILITY, scope);
+  return decision && Number.isSafeInteger(decision.decidedAtMs) ? decision.decidedAtMs : null;
 }

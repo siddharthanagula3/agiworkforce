@@ -7,6 +7,7 @@ import {
   type ManagedCloudScheduleRecurrence,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleSources,
+  type ManagedCloudScheduleNotificationSettings,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import type { ProductRecurrence } from '@/lib/schedules/schedule-time';
@@ -93,6 +94,7 @@ export interface ScheduleDraft {
   retryBackoffMinutes: string;
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicy;
   conditionUrl: string;
+  notificationSettings?: ManagedCloudScheduleNotificationSettings;
   sources: ManagedCloudScheduleSources;
   connectors: string[] | null;
 }
@@ -121,6 +123,7 @@ export interface ScheduleMutation {
   retryBackoffSeconds: number;
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicy;
   condition: ManagedCloudScheduleCondition | null;
+  notificationSettings?: ManagedCloudScheduleNotificationSettings;
   sources: ManagedCloudScheduleSources;
   connectors: string[] | null;
 }

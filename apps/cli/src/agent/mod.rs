@@ -230,6 +230,8 @@ pub struct AgentSession {
     /// Stable, filesystem-safe identifier for this process-local session run.
     /// Memory extraction uses it instead of user-controlled names or paths.
     pub(crate) runtime_session_id: String,
+    pub(crate) host_subagent_withheld: Vec<String>,
+    active_child_ids: HashSet<String>,
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub(crate) allowed_mcp_servers: Option<Vec<String>>,
@@ -749,6 +751,8 @@ impl AgentSession {
             checkpoint_captures: std::collections::HashMap::new(),
             session_name: None,
             runtime_session_id: session_id,
+            host_subagent_withheld: Vec::new(),
+            active_child_ids: HashSet::new(),
             allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
@@ -946,6 +950,9 @@ impl AgentSession {
     }
 
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
+        if self.allowed_tools.as_ref().is_some_and(Vec::is_empty) {
+            return Vec::new();
+        }
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
@@ -979,6 +986,9 @@ impl AgentSession {
                     )
                 })
             });
+        }
+        if !self.can_own_child_tasks() {
+            tool_definitions.retain(|tool| !matches!(tool.name.as_str(), "task" | "agent"));
         }
         if self.team_identity.is_some() {
             tool_definitions.retain(|tool_definition| tool_definition.name != "spawn_teammate");
@@ -1872,6 +1882,7 @@ impl AgentSession {
         self.loaded_fingerprint = crate::runtime::session::session_fingerprint(&path);
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
+        self.interrupt_child_tasks(false);
         Ok(())
     }
 
@@ -2194,6 +2205,107 @@ impl AgentSession {
         self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
         self.checkpoint_captures.clear();
         self.enable_managed_session()
+    }
+
+    pub(crate) fn can_own_child_tasks(&self) -> bool {
+        self.session_persistence
+            && self.managed_session.is_some()
+            && self.managed_session_path.is_some()
+    }
+
+    pub(crate) fn start_child_task(&mut self, id: &str, description: &str) -> Result<()> {
+        use agiworkforce_protocol::code_domain::{CodeTask, CodeTaskState, ExecutionLocation};
+        if !self.can_own_child_tasks() {
+            anyhow::bail!("Child tasks require a persisted parent session before starting");
+        }
+        let managed = self
+            .managed_session
+            .as_mut()
+            .expect("checked persisted owner");
+        let original = managed.code_session();
+        let mut code = original.clone();
+        if code.tasks.iter().any(|task| task.id.as_str() == id) {
+            anyhow::bail!("Child task identity is already owned");
+        }
+        let mut task = CodeTask::new(
+            id,
+            managed.session_id.as_str(),
+            description,
+            ExecutionLocation::Local,
+            chrono::Utc::now(),
+        );
+        task.transition(CodeTaskState::Running, chrono::Utc::now());
+        code.push_task(task);
+        managed.set_code_session(code);
+        if let Err(error) = self.persist_managed_session() {
+            if let Some(managed) = self.managed_session.as_mut() {
+                managed.set_code_session(original);
+            }
+            return Err(error);
+        }
+        self.active_child_ids.insert(id.to_string());
+        Ok(())
+    }
+
+    pub(crate) fn settle_child_task(
+        &mut self,
+        id: &str,
+        status: &crate::subagent::SubagentStatus,
+    ) -> Result<()> {
+        use agiworkforce_protocol::code_domain::CodeTaskState;
+        use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
+        let Some(managed) = self.managed_session.as_mut() else {
+            return Ok(());
+        };
+        let mut code = managed.code_session();
+        let Some(task) = code.tasks.iter_mut().find(|task| task.id.as_str() == id) else {
+            return Ok(());
+        };
+        if task.state.is_terminal() {
+            return Ok(());
+        }
+        let at = chrono::Utc::now();
+        match status {
+            crate::subagent::SubagentStatus::Running => return Ok(()),
+            crate::subagent::SubagentStatus::Completed => {
+                task.transition(CodeTaskState::Completed, at)
+            }
+            crate::subagent::SubagentStatus::Cancelled => {
+                task.transition(CodeTaskState::Cancelled, at)
+            }
+            crate::subagent::SubagentStatus::Failed(error) => {
+                task.fail(TurnFailure::new(TurnFailureCode::Unknown, error), at)
+            }
+        }
+        managed.set_code_session(code);
+        self.persist_managed_session()?;
+        self.active_child_ids.remove(id);
+        Ok(())
+    }
+
+    pub(crate) fn interrupt_child_tasks(&mut self, cancelled: bool) {
+        use agiworkforce_protocol::code_domain::CodeTaskState;
+        let Some(managed) = self.managed_session.as_mut() else {
+            return;
+        };
+        let mut code = managed.code_session();
+        for task in &mut code.tasks {
+            if task.id.as_str().starts_with("subagent_")
+                && !task.state.is_terminal()
+                && (!cancelled || self.active_child_ids.contains(task.id.as_str()))
+            {
+                task.transition(
+                    if cancelled {
+                        CodeTaskState::Cancelled
+                    } else {
+                        CodeTaskState::Paused
+                    },
+                    chrono::Utc::now(),
+                );
+            }
+        }
+        managed.set_code_session(code);
+        self.active_child_ids.clear();
     }
 
     pub fn persist_managed_session(&mut self) -> Result<()> {
@@ -4035,6 +4147,106 @@ mod tests {
         let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
         session.set_session_persistence(enabled);
         session
+    }
+
+    #[test]
+    fn a_turn_future_stays_small_enough_to_compose_on_a_runtime_worker() {
+        let mut session = persistence_test_session(true);
+        let config = CliConfig::default();
+        let future = session.send(&config, "owned fixture", Box::new(|_| {}));
+        assert!(
+            std::mem::size_of_val(&future) < 64 * 1024,
+            "the agent future must not embed the large inner turn on a worker stack"
+        );
+    }
+
+    #[test]
+    fn child_tasks_are_durable_before_execution_and_recover_without_replaying() {
+        use agiworkforce_protocol::code_domain::CodeTaskState;
+        let dir = tempfile::tempdir().expect("store");
+        let mut session = persistence_test_session(true);
+        let mut stored = ManagedSession::new("child-owner", chrono::Utc::now());
+        stored.model = Some(session.model.clone());
+        stored.routing_authority = Some(session.current_routing_authority());
+        let path = dir.path().join("child-owner.json");
+        stored.save_to_path(&path).expect("seed");
+        session
+            .adopt_managed_session(stored, path.clone())
+            .expect("adopt");
+        session
+            .start_child_task("subagent_first", "first child")
+            .expect("persist start");
+        session
+            .start_child_task("subagent_sibling", "sibling")
+            .expect("persist sibling");
+        let disk = ManagedSession::load_from_path(&path).expect("read");
+        assert_eq!(disk.code_session().tasks[0].state, CodeTaskState::Running);
+        assert!(session
+            .start_child_task("subagent_first", "duplicate")
+            .is_err());
+        session
+            .settle_child_task(
+                "subagent_first",
+                &crate::subagent::SubagentStatus::Completed,
+            )
+            .expect("settle");
+        session
+            .settle_child_task(
+                "subagent_first",
+                &crate::subagent::SubagentStatus::Cancelled,
+            )
+            .expect("late result");
+        assert_eq!(
+            session
+                .managed_session
+                .as_ref()
+                .unwrap()
+                .code_session()
+                .tasks[0]
+                .state,
+            CodeTaskState::Completed
+        );
+        let disk = ManagedSession::load_from_path(&path).expect("reload");
+        session.adopt_managed_session(disk, path).expect("restart");
+        let code = session.managed_session.as_ref().unwrap().code_session();
+        assert_eq!(code.tasks[0].state, CodeTaskState::Completed);
+        assert_eq!(code.tasks[1].state, CodeTaskState::Paused);
+        session
+            .start_child_task("subagent_new", "new turn child")
+            .expect("new turn");
+        session.interrupt_child_tasks(true);
+        let code = session.managed_session.as_ref().unwrap().code_session();
+        assert_eq!(code.tasks[0].state, CodeTaskState::Completed);
+        assert_eq!(code.tasks[1].state, CodeTaskState::Paused);
+        assert_eq!(code.tasks[2].state, CodeTaskState::Cancelled);
+    }
+
+    #[test]
+    fn a_child_cannot_start_without_a_writable_lifecycle_owner() {
+        let mut session = persistence_test_session(false);
+        assert!(session
+            .start_child_task("subagent_no_owner", "never launch")
+            .is_err());
+        let dir = tempfile::tempdir().expect("invalid store");
+        session.set_session_persistence(true);
+        session.managed_session = Some(ManagedSession::new("owner", chrono::Utc::now()));
+        let blocker = dir.path().join("not-a-directory");
+        std::fs::write(&blocker, "owned fixture").expect("block parent");
+        session.managed_session_path = Some(blocker.join("session.json"));
+        assert!(session
+            .start_child_task("subagent_failed_write", "never launch")
+            .is_err());
+        assert!(session.active_child_ids.is_empty());
+        assert!(
+            session
+                .managed_session
+                .as_ref()
+                .expect("owner")
+                .code_session()
+                .tasks
+                .is_empty(),
+            "a failed admission must not leave an unlaunched child running in memory"
+        );
     }
 
     #[test]

@@ -136,6 +136,7 @@ export function AuthEmailStep({
     if (filledPassword) setPassword(filledPassword);
   }, []);
   const busy = phase !== 'idle';
+  const waitingInBrowser = phase === 'browser' || phase === 'enterprise_browser';
   const submitPassword = isSignup ? undefined : onSubmitPassword;
   const recoverPassword = submitPassword ? onForgotPassword : undefined;
   const offerPasskey = passkeySignIn && passkeysSupported && onStartPasskey !== undefined;
@@ -308,8 +309,8 @@ export function AuthEmailStep({
 
         <AuthSubmitButton
           label={copy.text('flow.continue', 'Continue')}
-          busy={busy}
-          disabled={!ready}
+          busy={busy && !waitingInBrowser}
+          disabled={!ready || waitingInBrowser}
         />
       </form>
 

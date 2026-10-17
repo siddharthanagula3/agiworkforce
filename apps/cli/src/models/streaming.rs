@@ -1357,6 +1357,34 @@ mod tests {
     }
 
     #[test]
+    fn managed_forbidden_reaches_the_host_as_the_original_access_refusal() {
+        let body = r#"{"error":{"code":"developer_surface_plan_required","message":"Managed coding requires a plan upgrade.","requiredTier":"pro"}}"#;
+        let error = map_llm_error(agiworkforce_llm::classify_error_response(
+            "managed_cloud",
+            "owned-model",
+            403,
+            None,
+            body,
+        ));
+        let cli = error.downcast_ref::<CliError>().expect("CLI error");
+        assert!(!cli.hint().contains("auth-status"));
+        let failure = cli.turn_failure();
+        assert_eq!(
+            failure.code,
+            agiworkforce_protocol::developer_session::TurnFailureCode::InvalidRequest
+        );
+        assert_eq!(
+            failure.action,
+            agiworkforce_protocol::developer_session::TurnFailureAction::OpenSettings
+        );
+        assert!(failure
+            .message
+            .contains("Managed coding requires a plan upgrade."));
+        assert!(!failure.retryable);
+        assert_eq!(failure.provider.as_deref(), Some("managed_cloud"));
+    }
+
+    #[test]
     fn classified_managed_cloud_429_paywall_maps_to_cli_paywall() {
         let paywall_body = r#"{"kind":"paywall","feature":"chat","requiredTier":"pro","reason":"Pro features require upgrade"}"#;
         let llm =

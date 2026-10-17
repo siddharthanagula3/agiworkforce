@@ -2,6 +2,9 @@
 
 import {
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
+  type PendingBrowserSignIn,
   DEVELOPER_COMMAND_NEEDS_UPDATE,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   DISPATCH_TASK_REPORT,
@@ -834,6 +837,14 @@ export function reportDispatchTask(report: DispatchTaskReport): Promise<{ accept
   return invoke<{ accepted: boolean }>(DISPATCH_TASK_REPORT, { ...report });
 }
 
-export function startBrowserSignIn(): Promise<{ started: true }> {
-  return invoke<{ started: true }>(BROWSER_SIGN_IN_START);
+export function startBrowserSignIn(): Promise<{ started: true; expiresAtMs: number }> {
+  return invoke<{ started: true; expiresAtMs: number }>(BROWSER_SIGN_IN_START);
+}
+
+export function cancelBrowserSignIn(): Promise<{ cancelled: true }> {
+  return invoke<{ cancelled: true }>(BROWSER_SIGN_IN_CANCEL);
+}
+
+export function readBrowserSignInState(): Promise<PendingBrowserSignIn> {
+  return invoke<PendingBrowserSignIn>(BROWSER_SIGN_IN_STATE);
 }

@@ -346,7 +346,7 @@ fn humanize_auth_error_body(body: &str) -> String {
 /// Order of precedence (matching the CLI's historical per-dialect flow):
 /// 1. context-overflow sniffing on the body
 /// 2. provider-specific overrides (Anthropic 529, OpenAI 404, Google 400 key)
-/// 3. 401/403 → Auth (humanized body)
+/// 3. 401 and upstream 403 → Auth; managed 403 retains its access refusal
 /// 4. 429 → managed-cloud paywall body, else RateLimited (with `Retry-After`)
 /// 5. everything else → Api with a humanized message
 pub fn classify_error_response(
@@ -400,7 +400,7 @@ pub fn classify_error_response(
     }
 
     match status {
-        401 | 403 => LlmError::Auth {
+        401 | 403 if status == 401 || provider != "managed_cloud" => LlmError::Auth {
             provider: provider.to_string(),
             message: humanize_auth_error_body(body),
         },
@@ -437,6 +437,25 @@ pub fn classify_error_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_forbidden_preserves_access_refusal_without_invalidating_auth() {
+        let body = r#"{"error":{"code":"developer_surface_plan_required","message":"Managed coding requires a plan upgrade.","requiredTier":"pro"}}"#;
+        let error = classify_error_response("managed_cloud", "owned-model", 403, None, body);
+        assert!(
+            matches!(&error, LlmError::Api { status: 403, message, .. } if message == "Managed coding requires a plan upgrade."),
+            "{error}"
+        );
+        assert!(!error.is_retryable());
+        assert!(matches!(
+            classify_error_response("managed_cloud", "owned-model", 401, None, body),
+            LlmError::Auth { .. }
+        ));
+        assert!(matches!(
+            classify_error_response("anthropic", "owned-model", 403, None, body),
+            LlmError::Auth { .. }
+        ));
+    }
 
     // -- Context overflow detection --
 

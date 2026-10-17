@@ -154,3 +154,12 @@ export interface ScheduledAction {
 
   metadata?: Record<string, unknown>;
 }
+
+/** Delivery consent for one routine, intersected with the account/host policy. */
+export interface ScheduleNotificationSettings {
+  onSuccess: boolean;
+  onFailure: boolean;
+  onApproval: boolean;
+  push: boolean;
+  email: boolean;
+}

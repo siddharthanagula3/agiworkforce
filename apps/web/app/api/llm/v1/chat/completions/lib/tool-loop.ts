@@ -161,7 +161,7 @@ import {
   toolDirectoryToolDef,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
-import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
+import { stageTurnAttachments, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
@@ -1177,6 +1177,36 @@ function toolHandoffEvent(calls: readonly PendingToolCall[], responseModel: stri
   });
 }
 
+// Caller-executed tools have one complete handoff. Forwarding the raw
+// provider fragments too duplicates call IDs or concatenates arguments twice.
+function providerLineWithoutCallerToolCalls(line: SseLine): SseLine {
+  if (!line.startsWith('data:')) return line;
+  const data = line.slice('data:'.length).trim();
+  if (data === '[DONE]') return line;
+  let event: {
+    choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null } | null>;
+  } | null;
+  try {
+    event = JSON.parse(data) as typeof event;
+  } catch {
+    return line;
+  }
+  if (!event || !Array.isArray(event.choices)) return line;
+  let changed = false;
+  for (const choice of event.choices) {
+    if (!choice) continue;
+    if (choice.delta && typeof choice.delta === 'object' && 'tool_calls' in choice.delta) {
+      delete choice.delta['tool_calls'];
+      changed = true;
+    }
+    if (choice.finish_reason === 'tool_calls') {
+      choice.finish_reason = null;
+      changed = true;
+    }
+  }
+  return changed ? sseData(event) : line;
+}
+
 function toolInputRequestEvent(
   toolId: string,
   toolName: string,
@@ -2163,6 +2193,7 @@ async function runMcpTool(
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
+    officeAttachments?: readonly TurnAttachment[];
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
     googleUserDataRead?: () => boolean;
@@ -2318,7 +2349,11 @@ async function runMcpTool(
     if (!executionContext?.userId) {
       return { content: 'An authenticated file owner is required.', isError: true };
     }
-    const generated = await generateManagedOfficeFile(toolCall.args);
+    const generated = await generateManagedOfficeFile(toolCall.args, {
+      attachments: executionContext.officeAttachments,
+      executor: async () => (await e2bExecutor()).executor,
+      ...(executionContext.signal ? { signal: executionContext.signal } : {}),
+    });
     if (!generated.ok) {
       return { content: generated.message, isError: true };
     }
@@ -2334,7 +2369,7 @@ async function runMcpTool(
       ...(executionContext.conversationId
         ? { conversationId: executionContext.conversationId }
         : {}),
-      extraMetadata: { format: toolCall.args['format'] },
+      extraMetadata: { format: toolCall.args['format'], verification: generated.verification },
     });
     if (!persisted.ok) {
       return { content: 'The Office file could not be attached.', isError: true };
@@ -2342,6 +2377,7 @@ async function runMcpTool(
     return {
       content: JSON.stringify({
         ok: true,
+        verification: generated.verification,
         file: {
           name: persisted.file.file_name,
           uri: persisted.file.uri,
@@ -4147,7 +4183,9 @@ export async function* runToolLoop(
         -DELIVERED_TEXT_TAIL_CHARS,
       );
     }
-    yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
+    const providerLine =
+      callerOwnedTools.size > 0 ? providerLineWithoutCallerToolCalls(entry.line) : entry.line;
+    yield encoder.encode(await enrichServerSearchResultsLine(providerLine));
     if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
       yield encoder.encode(
@@ -5008,6 +5046,7 @@ export async function* runToolLoop(
               surface: processed.chatSurface,
               temporaryChat: processed.conversationIsTemporary === true,
               conversationId: processed.conversationId ?? null,
+              officeAttachments: processed.turnAttachments,
               latestAttachedImage: () =>
                 latestTurnImage({
                   turnAttachments: processed.turnAttachments,

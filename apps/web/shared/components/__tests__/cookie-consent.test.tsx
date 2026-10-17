@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalyticsConsentGate } from '../AnalyticsConsentGate';
 import { CookieConsent } from '../CookieConsent';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import {
   ALL_ACCEPTED_PREFERENCES,
   ANALYTICS_REQUIRES_CONSENT,
@@ -57,12 +58,14 @@ function setSignedInCookie(signedIn: boolean): void {
 }
 
 beforeEach(() => {
+  delete window.agiHost;
   window.localStorage.clear();
   delete (window as unknown as Record<string, unknown>)[`ga-disable-${TRACKING_ID}`];
   setSignedInCookie(false);
 });
 
 afterEach(() => {
+  delete window.agiHost;
   window.localStorage.clear();
   setSignedInCookie(false);
   document.documentElement.style.removeProperty('--agi-consent-inset');
@@ -132,6 +135,41 @@ describe('AnalyticsConsentGate', () => {
 });
 
 describe('CookieConsent banner drives the gate', () => {
+  it('keeps the website banner out of Desktop without assuming analytics consent', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      window.agiHost = hostBridgeStub();
+      render(
+        <>
+          <CookieConsent />
+          <AnalyticsConsentGate trackingId={TRACKING_ID} />
+        </>,
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+      expect(readCookiePreferences()).toBeNull();
+      expect(gaScripts()).toHaveLength(0);
+      expect(consentInset()).toBe('');
+      await act(async () => {
+        window.dispatchEvent(new StorageEvent('storage', { key: COOKIE_CONSENT_STORAGE_KEY }));
+      });
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
+      });
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByRole('switch', { name: 'Analytics cookies' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      expect(gaScripts()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opting in loads GA without a reload; opting back out unmounts it', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

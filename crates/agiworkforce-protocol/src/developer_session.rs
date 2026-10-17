@@ -67,6 +67,7 @@ pub mod method {
     pub const THREAD_REWIND: &str = "thread/rewind";
     pub const THREAD_PLAN: &str = "thread/plan";
     pub const THREAD_DELETE: &str = "thread/delete";
+    pub const WORKSPACE_IDENTITY: &str = "workspace/identity";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
     pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
     pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
@@ -682,6 +683,9 @@ pub struct DeveloperMessage {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct ThreadReadResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub child_tasks: Option<Vec<DeveloperChildTask>>,
     pub thread: ThreadSummary,
     pub messages: Vec<DeveloperMessage>,
     /// Whether `messages` is a bounded newest-message window rather than the
@@ -698,6 +702,57 @@ pub struct ThreadReadResponse {
     pub plan: Vec<DeveloperPlanStep>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub todos: Vec<DeveloperTodo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperWorkspaceIdentity {
+    pub cwd: String,
+    pub root_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperChildTask {
+    pub id: String,
+    pub parent_session_id: String,
+    pub title: String,
+    pub state: DeveloperChildTaskState,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum DeveloperChildTaskState {
+    Queued,
+    Running,
+    Paused,
+    AwaitingInput,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+impl From<&crate::code_domain::CodeTask> for DeveloperChildTask {
+    fn from(task: &crate::code_domain::CodeTask) -> Self {
+        use crate::code_domain::CodeTaskState;
+        Self {
+            id: task.id.as_str().to_string(),
+            parent_session_id: task.session_id.as_str().to_string(),
+            title: task.title.chars().take(200).collect(),
+            state: match task.state {
+                CodeTaskState::Queued => DeveloperChildTaskState::Queued,
+                CodeTaskState::Running => DeveloperChildTaskState::Running,
+                CodeTaskState::Paused => DeveloperChildTaskState::Paused,
+                CodeTaskState::AwaitingInput => DeveloperChildTaskState::AwaitingInput,
+                CodeTaskState::Completed => DeveloperChildTaskState::Completed,
+                CodeTaskState::Cancelled => DeveloperChildTaskState::Cancelled,
+                CodeTaskState::Failed { .. } => DeveloperChildTaskState::Failed,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

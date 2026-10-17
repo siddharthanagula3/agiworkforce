@@ -1,6 +1,7 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import {
   DEVELOPER_AGENT_MODES,
+  isSshEnvironmentId,
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
@@ -78,6 +79,8 @@ export const LOCAL_CODE_COPY = {
   approve: 'Approve and continue',
   reject: 'Deny',
   runtimeStopped: 'The local runtime stopped.',
+  activityReloaded:
+    'Some live activity could not be kept. The session was read again; check its history for details.',
   startFailed: 'That session could not be started.',
   switchToReadyModel: 'Switch to a ready model',
   modelNeedsSetup: (model: string, provider: string): string =>
@@ -959,14 +962,16 @@ export function localFolderGroups(
 }
 
 export function localFolderChoices(groups: readonly DeveloperSessionGroup[]): LocalFolderChoice[] {
-  return localFolderGroups(groups).map((group) => ({
-    rootId: group.rootId,
-    name: group.name,
-    branch: group.branch,
-    unavailable: group.unavailable
-      ? `${group.unavailable.message} ${group.unavailable.hint}`
-      : null,
-  }));
+  return localFolderGroups(groups)
+    .filter((group) => !isSshEnvironmentId(group.rootId))
+    .map((group) => ({
+      rootId: group.rootId,
+      name: group.name,
+      branch: group.branch,
+      unavailable: group.unavailable
+        ? `${group.unavailable.message} ${group.unavailable.hint}`
+        : null,
+    }));
 }
 
 export function localFolderChoice(
@@ -983,6 +988,7 @@ export function localFolderChoice(
  */
 export function preferredLocalRootId(groups: readonly DeveloperSessionGroup[]): string | null {
   const ranked = localFolderGroups(groups)
+    .filter((group) => !isSshEnvironmentId(group.rootId))
     .filter((group) => group.unavailable === undefined)
     .map((group) => ({
       rootId: group.rootId,

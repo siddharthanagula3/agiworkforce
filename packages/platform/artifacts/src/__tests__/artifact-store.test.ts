@@ -168,3 +168,40 @@ describe('createArtifactStore', () => {
     expect(s.getState().getArtifactVersions('a1')).toHaveLength(2);
   });
 });
+
+it('keeps artifact identity and metadata coherent after reload, edit and version restore', () => {
+  const store = createArtifactStore();
+  store
+    .getState()
+    .upsertArtifact(artifact({ title: 'Counter', content: '<h1>Counter</h1><output>0</output>' }));
+  store
+    .getState()
+    .upsertArtifact(artifact({ title: 'Counter', content: '<h1>Counter</h1><output>1</output>' }));
+  const saved = JSON.parse(
+    JSON.stringify({
+      artifacts: store.getState().artifacts,
+      versionsById: store.getState().versionsById,
+    }),
+  );
+  store.setState(saved);
+  store
+    .getState()
+    .upsertArtifact(
+      artifact({ title: 'Renamed counter', content: '<h1>Counter</h1><output>1</output>' }),
+    );
+  const versions = store.getState().getArtifactVersions('a1');
+  expect(store.getState().getArtifact('a1')).toMatchObject({
+    id: 'a1',
+    version: 2,
+    title: 'Renamed counter',
+  });
+  expect(versions).toHaveLength(2);
+  expect(versions[0]!.title).toBe('Counter');
+  expect(versions[1]!.title).toBe('Renamed counter');
+  expect(store.getState().restoreArtifactVersion('a1', 1)).toBe(true);
+  expect(store.getState().getArtifact('a1')).toMatchObject({
+    id: 'a1',
+    version: 3,
+    content: '<h1>Counter</h1><output>0</output>',
+  });
+});

@@ -231,6 +231,7 @@ pub struct SubagentManager {
     /// its even share of what is left, so a fan-out cannot outspend the parent.
     cost_budget: Option<CostBudget>,
     approval: Option<crate::agent::ToolApprovalSink>,
+    workspace_authority: Option<crate::path_security::WorkspaceFileAuthority>,
 }
 
 struct SubagentRunConfig {
@@ -247,6 +248,7 @@ struct SubagentRunConfig {
     disallowed_tools: Vec<String>,
     named_agent: Option<crate::agents::AgentDefinition>,
     approval: Option<crate::agent::ToolApprovalSink>,
+    workspace_authority: Option<crate::path_security::WorkspaceFileAuthority>,
     label: String,
 }
 
@@ -277,7 +279,15 @@ impl SubagentManager {
             disallowed_tools,
             cost_budget: None,
             approval: None,
+            workspace_authority: None,
         }
+    }
+
+    pub(crate) fn set_workspace_authority(
+        &mut self,
+        authority: Option<crate::path_security::WorkspaceFileAuthority>,
+    ) {
+        self.workspace_authority = authority;
     }
 
     pub fn set_approval(&mut self, approval: Option<crate::agent::ToolApprovalSink>) {
@@ -309,7 +319,7 @@ impl SubagentManager {
 
     /// Spawn a new subagent task. Returns the subagent ID.
     pub async fn spawn(&self, description: &str, prompt: &str) -> Result<String> {
-        self.spawn_inner(description, prompt, None).await
+        self.spawn_inner(description, prompt, None, None).await
     }
 
     /// Spawn an installed named agent through the same bounded foreground
@@ -320,7 +330,18 @@ impl SubagentManager {
         prompt: &str,
     ) -> Result<String> {
         let description = format!("agent {}", definition.name);
-        self.spawn_inner(&description, prompt, Some(definition))
+        self.spawn_inner(&description, prompt, Some(definition), None)
+            .await
+    }
+
+    pub(crate) async fn spawn_owned(
+        &self,
+        id: &str,
+        description: &str,
+        prompt: &str,
+        definition: Option<crate::agents::AgentDefinition>,
+    ) -> Result<String> {
+        self.spawn_inner(description, prompt, definition, Some(id))
             .await
     }
 
@@ -329,6 +350,7 @@ impl SubagentManager {
         description: &str,
         prompt: &str,
         named_agent: Option<crate::agents::AgentDefinition>,
+        owned_id: Option<&str>,
     ) -> Result<String> {
         // Enforce recursion-depth limit before doing any work. The child would
         // run at `self.depth + 1`; refuse once that would exceed the cap so a
@@ -375,7 +397,12 @@ impl SubagentManager {
         }
 
         // Generate ID
-        let id = {
+        let id = if let Some(id) = owned_id {
+            if self.entries.read().await.contains_key(id) {
+                bail!("Child task identity is already running");
+            }
+            id.to_string()
+        } else {
             let mut counter = self.next_id.write().await;
             let id = format!("subagent_{}", *counter);
             *counter += 1;
@@ -407,7 +434,8 @@ impl SubagentManager {
             disallowed_tools: self.disallowed_tools.clone(),
             named_agent,
             approval: self.approval.clone(),
-            label: description.to_string(),
+            workspace_authority: self.workspace_authority.clone(),
+            label: format!("{id}: {description}"),
         };
         let task_status = Arc::clone(&status);
         let task_result = Arc::clone(&result);
@@ -642,6 +670,10 @@ impl SubagentManager {
             };
             for (id, handle) in finished {
                 if handle.join().is_err() {
+                    if let Some(entry) = self.entries.read().await.get(&id) {
+                        *entry.status.write().await =
+                            SubagentStatus::Failed("Child runtime panicked".to_string());
+                    }
                     eprintln!(
                         "  {} Subagent {} thread panicked",
                         ts::danger_header("[task]"),
@@ -735,8 +767,18 @@ async fn run_subagent(
             None,
         ),
     )?;
+    if let Some(authority) = run_config.workspace_authority.clone() {
+        session.install_workspace_file_authority(authority);
+    }
     session.skip_permissions = run_config.skip_permissions;
     session.permission_mode = run_config.permission_mode;
+    if !run_config.skip_permissions {
+        session.pinned_permission_mode = Some(
+            run_config
+                .permission_mode
+                .within(session.pinned_permission_mode),
+        );
+    }
     session.subagent_depth = run_config.depth;
     session.max_budget_usd = run_config.max_budget_usd;
     session.allowed_tools = run_config.allowed_tools.clone();
@@ -1052,6 +1094,56 @@ mod tests {
     }
 
     #[test]
+    fn inherited_workspace_authority_never_rebinds_to_a_replacement_directory() {
+        let parent = tempfile::tempdir().expect("parent");
+        let parent_root = parent.path().canonicalize().expect("canonical parent");
+        let granted = parent_root.join("granted");
+        let moved = parent_root.join("moved");
+        std::fs::create_dir(&granted).expect("granted root");
+        std::fs::write(granted.join("marker"), b"owned").expect("owned marker");
+        let authority =
+            crate::path_security::WorkspaceFileAuthority::new(&granted).expect("authority");
+        let mut manager = SubagentManager::new(
+            CliConfig::default(),
+            "fixture-local-model:latest".into(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+            0,
+        );
+        manager.set_workspace_authority(Some(authority));
+        let inherited = manager
+            .workspace_authority
+            .as_ref()
+            .expect("inherited handles");
+        let (directory, relative) = inherited
+            .resolve(&granted.join("marker"))
+            .expect("resolve granted file");
+        let before = directory
+            .read_file(&relative, 100)
+            .expect("read before replacement")
+            .expect("owned file");
+        assert_eq!(before.bytes, b"owned");
+        std::fs::rename(&granted, &moved).expect("move original root");
+        std::fs::create_dir(&granted).expect("replacement root");
+        std::fs::write(granted.join("marker"), b"replacement").expect("replacement marker");
+        let inherited = manager
+            .workspace_authority
+            .as_ref()
+            .expect("inherited handles");
+        if let Ok((directory, relative)) = inherited.resolve(&granted.join("marker")) {
+            if let Ok(Some(file)) = directory.read_file(&relative, 100) {
+                assert_eq!(
+                    file.bytes, b"owned",
+                    "inherited authority followed a replacement path"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn manager_refreshes_parent_authority_before_spawn() {
         let mut manager = SubagentManager::new(
             CliConfig::default(),
@@ -1137,6 +1229,28 @@ mod tests {
                 cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         );
+    }
+
+    #[tokio::test]
+    async fn a_panicked_child_settles_failed_without_changing_its_sibling() {
+        let manager = root_manager();
+        seed_entry(&manager, "panicked", SubagentStatus::Running).await;
+        seed_entry(&manager, "sibling", SubagentStatus::Completed).await;
+        manager
+            .entries
+            .write()
+            .await
+            .get_mut("panicked")
+            .unwrap()
+            .handle = Some(std::thread::spawn(|| panic!("owned child failure")));
+        let statuses = manager.wait_all().await;
+        assert!(statuses
+            .iter()
+            .any(|(id, status)| id == "panicked" && matches!(status, SubagentStatus::Failed(_))));
+        assert!(matches!(
+            manager.get_status("sibling").await,
+            Some(SubagentStatus::Completed)
+        ));
     }
 
     #[tokio::test]

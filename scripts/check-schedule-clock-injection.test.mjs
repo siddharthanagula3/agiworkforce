@@ -109,3 +109,11 @@ test('the repository itself satisfies the guard', () => {
   assert.deepEqual(errors, []);
   assert.ok(report.modules >= 3);
 });
+
+test('the shipped guard reaches the canonical shared implementation rather than web reexports', () => {
+  const modules = importClosure(REPO_ROOT, ROOT_MODULES).map((file) =>
+    path.relative(REPO_ROOT, file),
+  );
+  assert.ok(modules.includes('packages/platform/utils/src/scheduling/schedule-time.ts'));
+  assert.ok(modules.includes('packages/platform/utils/src/scheduling/zoned-time.ts'));
+});

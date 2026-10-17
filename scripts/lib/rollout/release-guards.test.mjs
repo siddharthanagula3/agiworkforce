@@ -58,6 +58,23 @@ test('every secret pattern is exercised by a fixture that fails it', () => {
   }
 });
 
+test('embedded updater and Apple signing credentials block release and are redacted', () => {
+  for (const name of [
+    'TAURI_SIGNING_PRIVATE_KEY',
+    'TAURI_SIGNING_PRIVATE_KEY_PASSWORD',
+    'APPLE_APP_SPECIFIC_PASSWORD',
+    'APPLE_API_PRIVATE_KEY',
+    'CSC_KEY_PASSWORD',
+  ]) {
+    const fixture = `${name}:"synthetic-signing-secret"`;
+    const findings = scanText(fixture, 'app.asar', [fixture]);
+    assert.equal(findings.length, 1, `${name} cannot be allowlisted`);
+    assert.equal(findings[0].rule, 'embedded-signing-credential');
+    assert.ok(!findings[0].detail.includes('synthetic-signing-secret'));
+    assert.deepEqual(scanText(`process.env["${name}"]`, 'build.js'), []);
+  }
+});
+
 test('a dev endpoint fails, and a loopback bind the desktop bridge needs does not', () => {
   assert.equal(scanText('https://abc123.ngrok-free.app/api', 'a.js')[0]?.rule, 'tunnel-host');
   assert.equal(scanText('http://localhost:3100/api/chat', 'a.js')[0]?.rule, 'dev-server-origin');

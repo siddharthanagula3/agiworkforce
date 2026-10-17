@@ -848,6 +848,73 @@ pub const FORWARDED_DELTA_EXTENSIONS: [&str; 4] = [
     "x_tool_result",
 ];
 
+fn invalid_managed_tool_handoff() -> LlmError {
+    LlmError::StreamError {
+        provider: "managed_cloud".to_string(),
+        message: "Managed Cloud returned an invalid local tool handoff. Retry the request."
+            .to_string(),
+        retryable: false,
+        detail: StreamFailureDetail {
+            code: Some("invalid_tool_handoff".to_string()),
+            ..StreamFailureDetail::default()
+        },
+    }
+}
+
+fn managed_tool_handoff_calls(delta: &Value) -> Result<Vec<crate::wire::ToolCall>, LlmError> {
+    let ids = delta
+        .pointer("/x_tool_handoff/tool_call_ids")
+        .and_then(Value::as_array)
+        .ok_or_else(invalid_managed_tool_handoff)?;
+    let calls = delta
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .ok_or_else(invalid_managed_tool_handoff)?;
+    if ids.is_empty() || ids.len() != calls.len() {
+        return Err(invalid_managed_tool_handoff());
+    }
+    let mut declared = HashSet::new();
+    for id in ids {
+        let id = id
+            .as_str()
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(invalid_managed_tool_handoff)?;
+        if !declared.insert(id) {
+            return Err(invalid_managed_tool_handoff());
+        }
+    }
+    let mut seen = HashSet::new();
+    calls
+        .iter()
+        .map(|call| {
+            let id = call
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(invalid_managed_tool_handoff)?;
+            let name = call
+                .pointer("/function/name")
+                .and_then(Value::as_str)
+                .filter(|name| !name.trim().is_empty())
+                .ok_or_else(invalid_managed_tool_handoff)?;
+            if !declared.contains(id)
+                || !seen.insert(id)
+                || call.get("type").and_then(Value::as_str) != Some("function")
+            {
+                return Err(invalid_managed_tool_handoff());
+            }
+            let arguments = call
+                .pointer("/function/arguments")
+                .filter(|value| value.is_string())
+                .ok_or_else(invalid_managed_tool_handoff)?;
+            Ok(crate::wire::ToolCall {
+                id: id.to_string(),
+                name: name.to_string(),
+                arguments: normalize_tool_arguments_value(name, Some(arguments)),
+            })
+        })
+        .collect()
+}
+
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(
     mut stream: S,
@@ -870,6 +937,8 @@ where
     // finalized (sorted by index) at end-of-stream.
     let mut assembler = ToolCallAssembler::new();
     let mut stop_reason: Option<String> = None;
+    let mut started_tool_ids = HashSet::new();
+    let mut managed_handoff_received = false;
 
     loop {
         let chunk = match watchdog.next_item(&mut stream).await? {
@@ -951,12 +1020,37 @@ where
                             }
                         }
 
-                        // Tool call deltas
-                        if let Some(tc_array) = choice
+                        // A gateway handoff is a complete snapshot, not another argument
+                        // fragment. Provider content-block indices may differ from its
+                        // final indices, so appending both can execute the same call twice.
+                        if provider == "managed_cloud"
+                            && choice.pointer("/delta/x_tool_handoff").is_some()
+                        {
+                            let calls = managed_tool_handoff_calls(&choice["delta"])?;
+                            assembler = ToolCallAssembler::new();
+                            for (index, call) in calls.into_iter().enumerate() {
+                                if started_tool_ids.insert(call.id.clone()) {
+                                    on_event(StreamEvent::ToolCallStart {
+                                        index,
+                                        id: call.id.clone(),
+                                        name: call.name.clone(),
+                                    });
+                                    on_event(StreamEvent::ToolCallArgsDelta {
+                                        index,
+                                        fragment: call.arguments.to_string(),
+                                    });
+                                }
+                                assembler.push_completed(call);
+                            }
+                            managed_handoff_received = true;
+                        } else if let Some(tc_array) = choice
                             .get("delta")
                             .and_then(|d| d.get("tool_calls"))
                             .and_then(|t| t.as_array())
                         {
+                            if managed_handoff_received {
+                                return Err(invalid_managed_tool_handoff());
+                            }
                             for tc in tc_array {
                                 let index =
                                     tc.get("index")
@@ -970,6 +1064,9 @@ where
                                     ),
                                     None => (None, None),
                                 };
+                                if let Some(id) = id {
+                                    started_tool_ids.insert(id.to_string());
+                                }
                                 let newly_seen = assembler.update(index, id, name, args);
                                 if newly_seen {
                                     on_event(StreamEvent::ToolCallStart {
@@ -2547,6 +2644,99 @@ mod credential_transport_tests {
 #[cfg(test)]
 mod openai_compat_stream_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn managed_handoff_snapshot_replaces_streamed_fragments() {
+        for provider_index in [0, 2] {
+            let call = serde_json::json!({
+                "index": provider_index, "id": "toolu_read", "type": "function",
+                "function": { "name": "read_file", "arguments": "{\"path\":" }
+            });
+            let snapshot = serde_json::json!({
+                "index": 0, "id": "toolu_read", "type": "function",
+                "function": { "name": "read_file", "arguments": "{\"path\":\"README.md\"}" }
+            });
+            let frames = [
+                serde_json::json!({ "choices": [{ "delta": { "content": "Reading.", "tool_calls": [call] } }] }),
+                serde_json::json!({ "choices": [{ "delta": { "tool_calls": [{ "index": provider_index, "function": { "arguments": "\"README.md\"}" } }] } }] }),
+                serde_json::json!({ "choices": [{ "delta": {}, "finish_reason": "tool_calls" }] }),
+                serde_json::json!({ "choices": [{ "delta": { "tool_calls": [snapshot], "x_tool_handoff": { "tool_call_ids": ["toolu_read"] } }, "finish_reason": "tool_calls" }] }),
+            ].iter().map(|frame| format!("data: {frame}\n\n")).collect::<String>();
+            let stream =
+                futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+            let mut starts = 0;
+            let outcome = run_openai_compat_stream(
+                stream,
+                Duration::from_secs(5),
+                "managed_cloud",
+                &mut |event| {
+                    if matches!(event, StreamEvent::ToolCallStart { .. }) {
+                        starts += 1;
+                    }
+                },
+            )
+            .await
+            .expect("the complete handoff decodes");
+            assert_eq!(outcome.text, "Reading.");
+            assert_eq!(
+                outcome.tool_calls.len(),
+                1,
+                "the caller must execute a call once"
+            );
+            assert_eq!(outcome.tool_calls[0].id, "toolu_read");
+            assert_eq!(outcome.tool_calls[0].name, "read_file");
+            assert_eq!(
+                outcome.tool_calls[0].arguments,
+                serde_json::json!({ "path": "README.md" })
+            );
+            assert_eq!(starts, 1, "the final snapshot does not start another tool");
+        }
+    }
+
+    #[tokio::test]
+    async fn managed_snapshot_only_and_duplicate_snapshot_execute_once() {
+        let frame = serde_json::json!({ "choices": [{ "delta": {
+            "tool_calls": [{ "index": 0, "id": "toolu_read", "type": "function", "function": { "name": "read_file", "arguments": "{\"path\":\"README.md\"}" } }],
+            "x_tool_handoff": { "tool_call_ids": ["toolu_read"] }
+        }, "finish_reason": "tool_calls" }] });
+        let frames = format!("data: {frame}\n\ndata: {frame}\n\ndata: [DONE]\n\n");
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let mut starts = 0;
+        let outcome = run_openai_compat_stream(
+            stream,
+            Duration::from_secs(5),
+            "managed_cloud",
+            &mut |event| {
+                if matches!(event, StreamEvent::ToolCallStart { .. }) {
+                    starts += 1;
+                }
+            },
+        )
+        .await
+        .expect("a replayed final snapshot is idempotent");
+        assert_eq!(outcome.tool_calls.len(), 1);
+        assert_eq!(
+            outcome.tool_calls[0].arguments,
+            serde_json::json!({ "path": "README.md" })
+        );
+        assert_eq!(starts, 1);
+    }
+
+    #[tokio::test]
+    async fn managed_handoff_with_mismatched_ids_never_returns_executable_calls() {
+        let frame = serde_json::json!({ "choices": [{ "delta": {
+            "tool_calls": [{ "index": 0, "id": "toolu_other", "type": "function", "function": { "name": "write_file", "arguments": "{}" } }],
+            "x_tool_handoff": { "tool_call_ids": ["toolu_read"] }
+        }, "finish_reason": "tool_calls" }] });
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(format!(
+            "data: {frame}\n\n"
+        )))]);
+        assert!(
+            run_openai_compat_stream(stream, Duration::from_secs(5), "managed_cloud", &mut |_| {})
+                .await
+                .is_err()
+        );
+    }
 
     /// The managed gateway reports usage in its own frame after the finish
     /// reason, with an empty `choices` array, which is also how OpenAI sends

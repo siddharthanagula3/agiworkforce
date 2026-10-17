@@ -435,6 +435,9 @@ fn pptx_text(bytes: &[u8], budget: &Budget) -> Result<String> {
         ZipArchive::new(Cursor::new(bytes)).context("the presentation is not valid")?;
     let mut slides: Vec<(usize, String)> = archive
         .file_names()
+        .collect::<zip::result::ZipResult<Vec<_>>>()
+        .context("the presentation contains invalid entry names")?
+        .into_iter()
         .filter(|name| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
         .map(|name| {
             let number = name
@@ -483,7 +486,7 @@ fn unpacked_copy(bytes: &[u8], budget: &Budget) -> Result<Vec<u8>> {
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let name = entry.name()?.into_owned();
         let mut contents = Vec::new();
         bounded(&mut entry, budget).read_to_end(&mut contents)?;
         copy.start_file(name, stored)?;
@@ -504,9 +507,9 @@ fn spreadsheet_text(bytes: &[u8], budget: &Budget) -> Result<String> {
         .map_err(|error| anyhow!("the spreadsheet could not be opened: {error}"))?;
     let mut output = String::new();
     for sheet in workbook.sheet_names().to_owned() {
-        let Ok(range) = workbook.worksheet_range(&sheet) else {
-            continue;
-        };
+        let range = workbook
+            .worksheet_range(&sheet)
+            .map_err(|error| anyhow!("the spreadsheet sheet {sheet} could not be read: {error}"))?;
         output.push_str(&format!("Sheet: {sheet}\n"));
         for row in range.rows() {
             let line = row
@@ -651,5 +654,97 @@ mod tests {
         assert!(parse_page_range("1-20").is_ok());
         assert!(parse_page_range("1-21").is_err());
         assert!(parse_page_range("0").is_err());
+    }
+    fn office_package(entries: &[(&str, &str)]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, contents) in entries {
+            writer.start_file(*name, options).expect("fixture entry");
+            writer
+                .write_all(contents.as_bytes())
+                .expect("fixture bytes");
+        }
+        writer.finish().expect("fixture archive").into_inner()
+    }
+
+    #[test]
+    fn word_text_survives_the_archive_reader_upgrade() {
+        let bytes = office_package(&[(
+            "word/document.xml",
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Document text</w:t></w:r></w:p></w:body></w:document>"#,
+        )]);
+        let result = extract_bytes(&bytes, DocumentKind::Word, None).expect("read word");
+        assert_eq!(result.text, "Document text");
+    }
+
+    #[test]
+    fn slides_are_read_once_in_numeric_order() {
+        let first = r#"<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:p><a:r><a:t>First slide</a:t></a:r></a:p></p:sld>"#;
+        let second = first.replace("First slide", "Second slide");
+        let bytes = office_package(&[
+            ("ppt/slides/slide2.xml", &second),
+            ("ppt/slides/slide1.xml", first),
+        ]);
+        let result = extract_bytes(&bytes, DocumentKind::Slides, None).expect("read slides");
+        assert!(
+            result.text.find("First slide").expect("first")
+                < result.text.find("Second slide").expect("second")
+        );
+        assert_eq!(result.text.matches("First slide").count(), 1);
+        assert_eq!(result.text.matches("Second slide").count(), 1);
+    }
+
+    fn spreadsheet_package(worksheet: &str) -> Vec<u8> {
+        office_package(&[
+            (
+                "[Content_Types].xml",
+                r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#,
+            ),
+            (
+                "_rels/.rels",
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+            ),
+            (
+                "xl/workbook.xml",
+                r#"<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>"#,
+            ),
+            (
+                "xl/_rels/workbook.xml.rels",
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#,
+            ),
+            ("xl/worksheets/sheet1.xml", worksheet),
+        ])
+    }
+
+    #[test]
+    fn spreadsheet_values_and_formula_caches_survive_the_archive_upgrade() {
+        let bytes = spreadsheet_package(
+            r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C1"/><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Item</t></is></c><c r="B1"><v>3</v></c><c r="C1"><f>B1*2</f><v>6</v></c></row></sheetData></worksheet>"#,
+        );
+        let result = extract_bytes(&bytes, DocumentKind::Spreadsheet, None).expect("read workbook");
+        assert!(result.text.contains("Item\t3\t6"), "{}", result.text);
+    }
+
+    #[test]
+    fn legacy_archive_names_do_not_hide_or_duplicate_slide_text() {
+        let slide = r#"<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:p><a:r><a:t>Legacy archive slide</a:t></a:r></a:p></p:sld>"#;
+        let mut bytes = office_package(&[
+            ("legacy-!.xml", "metadata"),
+            ("ppt/slides/slide1.xml", slide),
+        ]);
+        for byte in &mut bytes {
+            if *byte == b'!' {
+                *byte = 0x82;
+            }
+        }
+        let result = extract_bytes(&bytes, DocumentKind::Slides, None).expect("read CP437 archive");
+        assert_eq!(result.text.matches("Legacy archive slide").count(), 1);
+    }
+
+    #[test]
+    fn a_corrupt_sheet_returns_an_error_instead_of_empty_success() {
+        let bytes = spreadsheet_package("<worksheet><broken");
+        assert!(extract_bytes(&bytes, DocumentKind::Spreadsheet, None).is_err());
     }
 }

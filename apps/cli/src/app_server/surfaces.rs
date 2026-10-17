@@ -1387,13 +1387,30 @@ pub fn list_trusted_folders() -> Result<TrustListResponse, DeveloperSessionHostE
             trusted_by: entry.trusted_by.clone(),
         })
         .collect();
+    let active = crate::trust::current_status();
+    if active.grant_source == Some(crate::trust::TrustGrantSource::NativeHostProcess)
+        && active.state.is_trusted()
+        && !folders
+            .iter()
+            .any(|folder| std::path::Path::new(&folder.path) == active.root)
+    {
+        folders.push(TrustedFolder {
+            path: active.root.to_string_lossy().into_owned(),
+            trusted_at: active.granted_at,
+            trusted_by: active.granted_by,
+        });
+    }
     folders.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(TrustListResponse { folders })
 }
 
 pub fn revoke_trusted_folder(path: &str) -> Result<TrustListResponse, DeveloperSessionHostError> {
     let listed = list_trusted_folders()?;
-    if !listed.folders.iter().any(|folder| folder.path == path) {
+    let active = crate::trust::current_status();
+    let owns_process_consent = active.grant_source
+        == Some(crate::trust::TrustGrantSource::NativeHostProcess)
+        && std::path::Path::new(path).canonicalize().ok().as_ref() == Some(&active.root);
+    if !owns_process_consent && !listed.folders.iter().any(|folder| folder.path == path) {
         return Err(DeveloperSessionHostError::not_found(
             "That folder is not trusted; list them again",
         ));

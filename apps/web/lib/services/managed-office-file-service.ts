@@ -22,6 +22,20 @@ import {
 import { jsPDF } from 'jspdf';
 import PptxGenJS from 'pptxgenjs';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { MAX_GENERATED_FILE_BYTES } from '@/lib/server/generated-file-persist';
+import type { E2BExecutor } from '@/lib/e2b/types';
+import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
+import {
+  ManagedOfficeProcessingError,
+  editManagedDocx,
+  editManagedWorkbook,
+  workbookPreservationReceipt,
+  recalculateManagedWorkbook,
+  renderManagedOfficeFile,
+  verifyManagedOfficePackage,
+  type ManagedOfficeVerification,
+} from './managed-office-preservation';
 
 import { buildWorkbook, type WorkbookSheet } from './managed-workbook-builder';
 
@@ -91,37 +105,97 @@ const SheetSchema = z.object({
   chart: ChartSchema.optional(),
 });
 
+const ManagedOfficeSourceSchema = z
+  .object({
+    filename: FileNameSchema,
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    replacements: z
+      .array(
+        z
+          .object({
+            find: z.string().min(1).max(2_000),
+            replace: z.string().max(2_000),
+            expectedMatches: z.number().int().min(1).max(1_000),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict();
+
 const ManagedOfficeFileInputSchema = z.discriminatedUnion('format', [
-  z.object({
-    format: z.literal('docx'),
-    filename: FileNameSchema,
-    title: z.string().trim().min(1).max(200),
-    content: z.string().min(1).max(100_000),
-  }),
-  z.object({
-    format: z.literal('pptx'),
-    filename: FileNameSchema,
-    title: z.string().trim().min(1).max(200),
-    slides: z.array(SlideSchema).min(1).max(40),
-  }),
-  z.object({
-    format: z.literal('xlsx'),
-    filename: FileNameSchema,
-    title: z.string().trim().min(1).max(200),
-    sheets: z.array(SheetSchema).min(1).max(20),
-  }),
-  z.object({
-    format: z.literal('pdf'),
-    filename: FileNameSchema,
-    title: z.string().trim().min(1).max(200),
-    content: z.string().min(1).max(100_000),
-  }),
-  z.object({
-    format: z.literal('csv'),
-    filename: FileNameSchema,
-    title: z.string().trim().min(1).max(200),
-    rows: z.array(z.array(CellSchema).max(200)).min(1).max(20_000),
-  }),
+  z
+    .object({
+      format: z.literal('docx'),
+      verify_render: z.boolean().optional(),
+      filename: FileNameSchema,
+      title: z.string().trim().min(1).max(200),
+      content: z.string().min(1).max(100_000).optional(),
+      source: ManagedOfficeSourceSchema.optional(),
+    })
+    .strict()
+    .refine((input) => Boolean(input.source) !== Boolean(input.content), {
+      message: 'Provide content or one existing document source.',
+    }),
+  z
+    .object({
+      format: z.literal('pptx'),
+      verify_render: z.boolean().optional(),
+      filename: FileNameSchema,
+      title: z.string().trim().min(1).max(200),
+      slides: z.array(SlideSchema).min(1).max(40),
+    })
+    .strict(),
+  z
+    .object({
+      format: z.literal('xlsx'),
+      verify_render: z.boolean().optional(),
+      filename: FileNameSchema,
+      title: z.string().trim().min(1).max(200),
+      sheets: z.array(SheetSchema).min(1).max(20).optional(),
+      source: z
+        .object({
+          filename: FileNameSchema,
+          sha256: z.string().regex(/^[a-f0-9]{64}$/),
+          edits: z
+            .array(
+              z
+                .object({
+                  sheet: z.string().min(1).max(31),
+                  cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/),
+                  expected: CellSchema,
+                  value: CellSchema,
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(1000),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict()
+    .refine((input) => Boolean(input.source) !== Boolean(input.sheets), {
+      message: 'Provide sheets or one existing workbook source.',
+    }),
+  z
+    .object({
+      format: z.literal('pdf'),
+      verify_render: z.boolean().optional(),
+      filename: FileNameSchema,
+      title: z.string().trim().min(1).max(200),
+      content: z.string().min(1).max(100_000),
+    })
+    .strict(),
+  z
+    .object({
+      format: z.literal('csv'),
+      filename: FileNameSchema,
+      title: z.string().trim().min(1).max(200),
+      rows: z.array(z.array(CellSchema).max(200)).min(1).max(20_000),
+    })
+    .strict(),
 ]);
 
 type ManagedOfficeFileInput = z.infer<typeof ManagedOfficeFileInputSchema>;
@@ -129,6 +203,7 @@ type ManagedOfficeFileInput = z.infer<typeof ManagedOfficeFileInputSchema>;
 export type GeneratedManagedOfficeFile = {
   ok: true;
   data: Buffer;
+  verification?: ManagedOfficeVerification;
   filename: string;
   mimeType:
     | typeof DOCX_MIME_TYPE
@@ -147,7 +222,21 @@ export type ManagedOfficeFileGenerationFailure = {
 export type ManagedOfficeFileGenerationResult =
   GeneratedManagedOfficeFile | ManagedOfficeFileGenerationFailure;
 
-export function createManagedOfficeFileToolDefinition(format?: ChatOutputFormat) {
+export function createManagedOfficeFileToolDefinition(
+  format?: ChatOutputFormat,
+  attachments: readonly TurnAttachment[] = [],
+) {
+  const sources = attachments
+    .filter(
+      (attachment) =>
+        [DOCX_MIME_TYPE, XLSX_MIME_TYPE].includes(attachment.mimeType) &&
+        FileNameSchema.safeParse(attachment.filename).success &&
+        attachment.base64.length <= Math.ceil(MAX_GENERATED_FILE_BYTES / 3) * 4,
+    )
+    .map((attachment) => ({
+      filename: attachment.filename,
+      sha256: createHash('sha256').update(Buffer.from(attachment.base64, 'base64')).digest('hex'),
+    }));
   return {
     type: 'function' as const,
     function: {
@@ -177,6 +266,54 @@ export function createManagedOfficeFileToolDefinition(format?: ChatOutputFormat)
             maxLength: 100_000,
             description:
               'DOCX and PDF only: document content with optional # headings, - bullet lines, and | pipe | tables |.',
+          },
+          verify_render: {
+            type: 'boolean',
+            description:
+              'DOCX/PPTX/XLSX/PDF: require a real PDF and per-page preview render receipt. Requires configured Office execution; fails explicitly when unavailable.',
+          },
+          source: {
+            type: 'object',
+            description:
+              'DOCX: replacements within formatting runs; tracked revisions unsupported. XLSX: edits with sheet, cell, expected and value for existing explicit cells. Supply either replacements (DOCX) or edits (XLSX). Untouched package parts are preserved. Attached sources (names are data): ' +
+              JSON.stringify(sources),
+            properties: {
+              filename: { type: 'string' },
+              sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+              edits: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 1000,
+                items: {
+                  type: 'object',
+                  properties: {
+                    sheet: { type: 'string' },
+                    cell: { type: 'string', pattern: '^[A-Z]{1,3}[1-9][0-9]{0,6}$' },
+                    expected: { type: ['string', 'number'] },
+                    value: { type: ['string', 'number'] },
+                  },
+                  required: ['sheet', 'cell', 'expected', 'value'],
+                  additionalProperties: false,
+                },
+              },
+              replacements: {
+                type: 'array',
+                minItems: 1,
+                maxItems: 100,
+                items: {
+                  type: 'object',
+                  properties: {
+                    find: { type: 'string' },
+                    replace: { type: 'string' },
+                    expectedMatches: { type: 'integer', minimum: 1, maximum: 1000 },
+                  },
+                  required: ['find', 'replace', 'expectedMatches'],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['filename', 'sha256'],
+            additionalProperties: false,
           },
           slides: {
             type: 'array',
@@ -503,7 +640,7 @@ async function generateDocx(input: Extract<ManagedOfficeFileInput, { format: 'do
             ],
           }),
         },
-        children: documentParagraphs(input.title, input.content),
+        children: documentParagraphs(input.title, input.content ?? ''),
       },
     ],
   });
@@ -617,7 +754,11 @@ function generateCsv(rows: (string | number)[][]): Buffer {
   return Buffer.from(`${rows.map((row) => row.map(csvField).join(',')).join('\r\n')}\r\n`, 'utf8');
 }
 
-function generateXlsx(input: Extract<ManagedOfficeFileInput, { format: 'xlsx' }>): Promise<Buffer> {
+function generateXlsx(
+  input: Extract<ManagedOfficeFileInput, { format: 'xlsx' }> & {
+    sheets: z.infer<typeof SheetSchema>[];
+  },
+): Promise<Buffer> {
   const sheets: WorkbookSheet[] = input.sheets.map((sheet) => ({
     name: sheet.name,
     rows: sheet.rows,
@@ -662,7 +803,7 @@ function generatePdf(input: Extract<ManagedOfficeFileInput, { format: 'pdf' }>):
   write(input.title, 20, true);
   cursor += 2;
 
-  for (const rawLine of input.content.split(/\r?\n/)) {
+  for (const rawLine of (input.content ?? '').split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) {
       cursor += PDF_LINE_MM / 2;
@@ -692,6 +833,11 @@ function generatePdf(input: Extract<ManagedOfficeFileInput, { format: 'pdf' }>):
 
 export async function generateManagedOfficeFile(
   value: unknown,
+  options: {
+    attachments?: readonly TurnAttachment[];
+    executor?: () => Promise<E2BExecutor | null>;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<ManagedOfficeFileGenerationResult> {
   const parsed = ManagedOfficeFileInputSchema.safeParse(value);
   if (!parsed.success) {
@@ -713,34 +859,111 @@ export async function generateManagedOfficeFile(
 
   try {
     switch (parsed.data.format) {
-      case 'docx':
+      case 'docx': {
+        const edited = parsed.data.source
+          ? await editManagedDocx(parsed.data.source, options.attachments ?? [])
+          : null;
+        const data = edited?.data ?? (await generateDocx(parsed.data));
+        const verification =
+          edited?.verification ?? (await verifyManagedOfficePackage(data, 'docx'));
+        if (parsed.data.verify_render) {
+          const executor = await options.executor?.();
+          if (!executor)
+            throw new ManagedOfficeProcessingError(
+              'Rendering verification requires an available Office execution environment.',
+            );
+          verification.render = await renderManagedOfficeFile(
+            data,
+            'docx',
+            executor,
+            options.signal,
+          );
+        }
+        options.signal?.throwIfAborted();
+        return { ok: true, data, verification, filename, mimeType: DOCX_MIME_TYPE };
+      }
+      case 'pptx': {
+        const data = await generatePptx(parsed.data);
+        const verification = await verifyManagedOfficePackage(data, 'pptx');
+        if (parsed.data.verify_render) {
+          const executor = await options.executor?.();
+          if (!executor)
+            throw new ManagedOfficeProcessingError(
+              'Rendering verification requires an available Office execution environment.',
+            );
+          verification.render = await renderManagedOfficeFile(
+            data,
+            'pptx',
+            executor,
+            options.signal,
+          );
+        }
+        return { ok: true, data, verification, filename, mimeType: PPTX_MIME_TYPE };
+      }
+      case 'xlsx': {
+        const edited = parsed.data.source
+          ? await editManagedWorkbook(parsed.data.source, options.attachments ?? [])
+          : null;
+        let data =
+          edited?.data ?? (await generateXlsx({ ...parsed.data, sheets: parsed.data.sheets! }));
+        const archive = await import('jszip').then(({ default: JSZip }) => JSZip.loadAsync(data));
+        const worksheets = Object.values(archive.files).filter((entry) =>
+          /^xl\/worksheets\/[^/]+\.xml$/.test(entry.name),
+        );
+        const formulas = (await Promise.all(worksheets.map((entry) => entry.async('string')))).some(
+          (xml) => /<f\b/.test(xml),
+        );
+        if (formulas) {
+          const executor = await options.executor?.();
+          if (!executor)
+            throw new ManagedOfficeProcessingError(
+              'Workbook formulas require an available recalculation environment. Use values instead, or enable Office execution.',
+            );
+          data = await recalculateManagedWorkbook(data, executor, options.signal);
+        }
+        const verification = await verifyManagedOfficePackage(data, 'xlsx');
+        if (edited)
+          Object.assign(verification, await workbookPreservationReceipt(edited.original, data));
+        if (parsed.data.verify_render) {
+          const executor = await options.executor?.();
+          if (!executor)
+            throw new ManagedOfficeProcessingError(
+              'Rendering verification requires an available Office execution environment.',
+            );
+          verification.render = await renderManagedOfficeFile(
+            data,
+            'xlsx',
+            executor,
+            options.signal,
+          );
+        }
+        options.signal?.throwIfAborted();
+        return { ok: true, data, verification, filename, mimeType: XLSX_MIME_TYPE };
+      }
+      case 'pdf': {
+        const data = generatePdf(parsed.data);
+        let verification: ManagedOfficeVerification | undefined;
+        if (parsed.data.verify_render) {
+          const executor = await options.executor?.();
+          if (!executor)
+            throw new ManagedOfficeProcessingError(
+              'Rendering verification requires an available Office execution environment.',
+            );
+          verification = {
+            outputSha256: createHash('sha256').update(data).digest('hex'),
+            structural: 'pdf_parsed',
+            recalculation: 'not_required',
+            render: await renderManagedOfficeFile(data, 'pdf', executor, options.signal),
+          };
+        }
         return {
           ok: true,
-          data: await generateDocx(parsed.data),
-          filename,
-          mimeType: DOCX_MIME_TYPE,
-        };
-      case 'pptx':
-        return {
-          ok: true,
-          data: await generatePptx(parsed.data),
-          filename,
-          mimeType: PPTX_MIME_TYPE,
-        };
-      case 'xlsx':
-        return {
-          ok: true,
-          data: await generateXlsx(parsed.data),
-          filename,
-          mimeType: XLSX_MIME_TYPE,
-        };
-      case 'pdf':
-        return {
-          ok: true,
-          data: generatePdf(parsed.data),
+          data,
+          ...(verification ? { verification } : {}),
           filename,
           mimeType: PDF_MIME_TYPE,
         };
+      }
       case 'csv':
         return {
           ok: true,
@@ -749,11 +972,14 @@ export async function generateManagedOfficeFile(
           mimeType: CSV_MIME_TYPE,
         };
     }
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       code: 'office_file_generation_failed',
-      message: 'The file could not be created.',
+      message:
+        error instanceof ManagedOfficeProcessingError
+          ? error.message
+          : 'The file could not be created.',
     };
   }
 }
