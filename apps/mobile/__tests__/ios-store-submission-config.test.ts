@@ -6,7 +6,28 @@ import { getAgeThreshold } from '../src/features/auth/services/ageGate';
 jest.mock('@/lib/mmkv', () => ({ storage: {} }));
 
 const appConfig = require('../app.config.js') as {
-  expo: { ios?: { infoPlist?: Record<string, unknown> } };
+  expo: {
+    ios?: {
+      bundleIdentifier?: string;
+      infoPlist?: Record<string, unknown>;
+      entitlements?: Record<string, unknown>;
+    };
+    extra?: {
+      eas?: {
+        build?: {
+          experimental?: {
+            ios?: {
+              appExtensions?: Array<{
+                targetName: string;
+                bundleIdentifier: string;
+                entitlements: Record<string, unknown>;
+              }>;
+            };
+          };
+        };
+      };
+    };
+  };
 };
 
 const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
@@ -165,6 +186,39 @@ describe('store listing regulatory copy', () => {
 });
 
 describe('iOS submission config', () => {
+  it('declares every native extension and its app group before EAS generates signing credentials', () => {
+    const extensions = appConfig.expo.extra?.eas?.build?.experimental?.ios?.appExtensions;
+    const bundleIdentifier = appConfig.expo.ios?.bundleIdentifier;
+    const appGroups = appConfig.expo.ios?.entitlements?.['com.apple.security.application-groups'];
+    const { parse } = require('plist') as {
+      parse: (source: string) => Record<string, unknown>;
+    };
+
+    expect(
+      extensions?.map(({ targetName, bundleIdentifier }) => ({ targetName, bundleIdentifier })),
+    ).toEqual([
+      { targetName: 'AGIShareExtension', bundleIdentifier: `${bundleIdentifier}.share-extension` },
+      { targetName: 'AGIWidgets', bundleIdentifier: `${bundleIdentifier}.widgets` },
+    ]);
+
+    for (const extension of extensions ?? []) {
+      const nativeEntitlements = parse(
+        readFileSync(
+          join(
+            mobileRoot,
+            'native',
+            'ios',
+            extension.targetName,
+            `${extension.targetName}.entitlements`,
+          ),
+          'utf8',
+        ),
+      );
+      expect(extension.entitlements).toEqual(nativeEntitlements);
+      expect(extension.entitlements['com.apple.security.application-groups']).toEqual(appGroups);
+    }
+  });
+
   it('answers export compliance in Info.plist', () => {
     expect(appConfig.expo.ios?.infoPlist?.ITSAppUsesNonExemptEncryption).toBe(false);
   });

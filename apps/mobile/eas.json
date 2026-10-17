@@ -117,6 +117,7 @@
   "submit": {
     "production": {
       "ios": {
+        "ascAppId": "6787526447",
         "language": "en-US",
         "appleTeamId": "D2PR62RLT4",
         "bundleIdentifier": "com.agiworkforce.app",

@@ -3,6 +3,7 @@ const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'develo
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
 const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
+const appBundleIdentifier = 'com.agiworkforce.app';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
 
 if (
@@ -38,6 +39,8 @@ const shouldUseProductionEntitlements =
 const iosEntitlements = shouldUseProductionEntitlements
   ? {
       'com.apple.developer.siri': true,
+      'com.apple.developer.kernel.extended-virtual-addressing': true,
+      'com.apple.developer.kernel.increased-memory-limit': true,
     }
   : {};
 
@@ -73,7 +76,7 @@ const config = {
   ios: {
     supportsTablet: true,
     requireFullScreen: false,
-    bundleIdentifier: 'com.agiworkforce.app',
+    bundleIdentifier: appBundleIdentifier,
     buildNumber: '2',
     associatedDomains,
     infoPlist: {
@@ -183,7 +186,7 @@ const config = {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#0f0f0f',
     },
-    package: 'com.agiworkforce.app',
+    package: appBundleIdentifier,
     versionCode: 1,
     allowBackup: false,
     permissions: ['RECORD_AUDIO'],
@@ -331,7 +334,8 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
-    'llama.rn',
+    // App config owns entitlements so fingerprints do not depend on NODE_ENV.
+    ['llama.rn', { enableEntitlements: false }],
     './native/android/withAGITranslate.cjs',
     './native/android/withAGIVisionOCR.cjs',
     './native/ios/withAGINativeModulesIOS.cjs',
@@ -366,6 +370,28 @@ const config = {
   extra: {
     eas: {
       projectId: easProjectId,
+      build: {
+        experimental: {
+          ios: {
+            appExtensions: [
+              {
+                targetName: 'AGIShareExtension',
+                bundleIdentifier: `${appBundleIdentifier}.share-extension`,
+                entitlements: {
+                  'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
+                },
+              },
+              {
+                targetName: 'AGIWidgets',
+                bundleIdentifier: `${appBundleIdentifier}.widgets`,
+                entitlements: {
+                  'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
+                },
+              },
+            ],
+          },
+        },
+      },
     },
   },
 };

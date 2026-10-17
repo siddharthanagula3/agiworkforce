@@ -26,6 +26,8 @@ function productionConfig(overrides = {}) {
       associatedDomains: ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com'],
       entitlements: {
         'com.apple.developer.siri': true,
+        'com.apple.developer.kernel.extended-virtual-addressing': true,
+        'com.apple.developer.kernel.increased-memory-limit': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
       },
       ...overrides.ios,
@@ -79,6 +81,37 @@ function extensionInputs(overrides = {}) {
   };
 }
 
+function resolvedExpoConfig(environment) {
+  const output = execFileSync(
+    process.execPath,
+    [
+      '-e',
+      `const { createRequire } = require('node:module');
+       const { join } = require('node:path');
+       const root = process.argv[1];
+       const requireFromProject = createRequire(join(root, 'package.json'));
+       const config = requireFromProject('expo/config').getConfig(root).exp;
+       console.log(JSON.stringify({
+         entitlements: config.ios?.entitlements,
+         runtimeVersion: config.runtimeVersion,
+       }));`,
+      fileURLToPath(new URL('../../', import.meta.url)),
+    ],
+    {
+      encoding: 'utf8',
+      cwd: fileURLToPath(new URL('../../', import.meta.url)),
+      env: {
+        EXPO_NO_DOTENV: '1',
+        EXPO_NO_TELEMETRY: '1',
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_release_contract_test',
+        EXPO_PUBLIC_API_URL: 'https://agiworkforce.com',
+        ...environment,
+      },
+    },
+  );
+  return JSON.parse(output.trim().split('\n').at(-1));
+}
+
 test('a production configuration passes every identity check', () => {
   assertStableIdentifiers(productionConfig());
   assertProductionHardening(productionConfig(), productionEas());
@@ -109,6 +142,43 @@ test('the actual production app config passes the release guard', () => {
 
   assertStableIdentifiers(config);
   assertProductionHardening(config, eas);
+});
+
+test('local and EAS resolve the same production entitlements for fingerprinting', () => {
+  const local = resolvedExpoConfig({
+    APP_ENV: 'production',
+    EXPO_PUBLIC_APP_ENV: 'production',
+    NODE_ENV: 'development',
+  });
+  const eas = resolvedExpoConfig({
+    APP_ENV: 'production',
+    EXPO_PUBLIC_APP_ENV: 'production',
+    NODE_ENV: 'production',
+    EAS_BUILD_PROFILE: 'production',
+  });
+
+  assert.deepEqual(local, eas);
+  assert.deepEqual(local.runtimeVersion, { policy: 'fingerprint' });
+  assert.equal(local.entitlements['com.apple.developer.kernel.extended-virtual-addressing'], true);
+  assert.equal(local.entitlements['com.apple.developer.kernel.increased-memory-limit'], true);
+});
+
+test('a production Node environment does not grant memory entitlements to a development app', () => {
+  const development = resolvedExpoConfig({
+    APP_ENV: 'development',
+    EXPO_PUBLIC_APP_ENV: 'development',
+    NODE_ENV: 'production',
+    EAS_BUILD_PROFILE: 'development',
+  });
+
+  assert.equal(
+    development.entitlements['com.apple.developer.kernel.extended-virtual-addressing'],
+    undefined,
+  );
+  assert.equal(
+    development.entitlements['com.apple.developer.kernel.increased-memory-limit'],
+    undefined,
+  );
 });
 
 test('a changed bundle identifier fails', () => {
