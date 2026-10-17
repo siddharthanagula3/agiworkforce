@@ -2435,6 +2435,11 @@ async function sendTurn(
 ): Promise<{ turnId: string }> {
   const root = await resolveRoot(input.rootId);
   const server = await readyServer(root);
+  await queueAccountSync(server);
+  if (!hasSshEnvironment(root.id) && !mayRunIn(root))
+    throw new DeveloperAgentNotAllowedError(
+      `Coding sessions are not allowed in ${root.name} right now. Start a session in that folder to allow them.`,
+    );
   const agentMode = agentModeFor(server);
   if (stillAuthorized && !stillAuthorized())
     throw new Error('The routine grant changed before its turn could start.');

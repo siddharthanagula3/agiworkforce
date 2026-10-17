@@ -261,6 +261,7 @@ async function loadService(
 
 beforeEach(() => {
   packagedHost = false;
+  agentAllowed = () => true;
   vi.clearAllMocks();
   ssh.active = false;
   ssh.launch.mockReset().mockResolvedValue({
@@ -392,6 +393,65 @@ describe('developer session runtime', () => {
       for (const name of lifted) delete process.env[name];
     }
   });
+
+  it.each([false, true])(
+    'waits for account reconciliation and rechecks command consent before the first turn (revoked: %s)',
+    async (revoke) => {
+      let release!: () => void;
+      const approval = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const approveDeviceCode = vi.fn(() => approval);
+      let signedIn = false;
+      const asked: string[] = [];
+      const { service } = await loadService(
+        (method) => {
+          asked.push(method);
+          if (method === 'account/status')
+            return { signedIn, email: signedIn ? 'qa@agiworkforce.com' : null };
+          if (method === 'account/login') return { loginId: 'login-1', userCode: 'QRST-9876' };
+          if (method === 'account/login/wait') {
+            signedIn = true;
+            return { outcome: 'completed', account: { signedIn: true } };
+          }
+          return defaultResponder(method);
+        },
+        {
+          readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+          approveDeviceCode,
+        },
+      );
+      await service.listDeveloperSessions();
+      await vi.waitFor(() => expect(approveDeviceCode).toHaveBeenCalledOnce());
+      const starting = service.startDeveloperTurn({
+        rootId: root.id,
+        threadId: thread.id,
+        text: 'Read the owned README.',
+        agentMode: 'ask',
+      });
+      const outcome = starting.then(
+        (value) => ({ value, error: null }),
+        (error: unknown) => ({ value: null, error }),
+      );
+      try {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(asked).not.toContain('turn/start');
+        if (revoke) agentAllowed = () => false;
+      } finally {
+        release();
+        await outcome;
+      }
+      const result = await outcome;
+      if (revoke) {
+        expect(result.error).toBeInstanceOf(Error);
+        expect(asked).not.toContain('turn/start');
+      } else {
+        expect(result.error).toBeNull();
+        expect(signedIn).toBe(true);
+        expect(asked.indexOf('account/login/wait')).toBeLessThan(asked.indexOf('turn/start'));
+      }
+    },
+  );
 
   it('signs a new app-server in as the shell account and refreshes its models', async () => {
     let signedIn = false;
