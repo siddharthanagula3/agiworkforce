@@ -17,6 +17,11 @@ concurrency:
 
 jobs:
   intel-package:
+    # GitHub rejects unpublished draft assets for contents-read integration tokens.
+    # This ephemeral repository token reaches only the download step below.
+    # Checkout never persists it and the app harness strips token variables.
+    permissions:
+      contents: write
     runs-on: macos-26-intel
     timeout-minutes: 25
     env:

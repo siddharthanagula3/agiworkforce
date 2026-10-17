@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Cookie, X } from 'lucide-react';
 import { Button } from '@agiworkforce/ui/button';
+import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import {
   Dialog,
   DialogContent,
@@ -66,7 +67,7 @@ export const CookieConsent = () => {
           adoptAccountCookieConsent(accountDecision);
           return;
         }
-        if (promptWhenAbsent) setShowBanner(true);
+        if (promptWhenAbsent && !getHostBridge()) setShowBanner(true);
       });
     };
     const timer = setTimeout(() => {
@@ -87,7 +88,7 @@ export const CookieConsent = () => {
     const syncPreferences = () => {
       const stored = readCookiePreferences();
       setPreferences(stored ?? NECESSARY_ONLY_PREFERENCES);
-      setShowBanner(stored === null);
+      setShowBanner(stored === null && !getHostBridge());
     };
     const handleStorage = (event: StorageEvent) => {
       if (event.key === COOKIE_CONSENT_STORAGE_KEY || event.key === null) syncPreferences();

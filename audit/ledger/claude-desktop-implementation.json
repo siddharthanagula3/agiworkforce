@@ -520,7 +520,7 @@
     },
     {
       "path": ".github/workflows/verify-desktop-candidate.yml",
-      "sha256": "84b58131e5a9a917a027d53d3a4c67cd791aec67f5d5825aa933fd2f5b30272c"
+      "sha256": "27f32e7f0c92594c972446fe40c53fa419b5317f25f97f2889823de747deb17f"
     },
     {
       "path": "apps/cli/src/agent/chat.rs",
@@ -899,6 +899,14 @@
       "sha256": "5d2031fb1fce8e47d787d49bda504e204f396f4e016bc953f68ec7e78ba9fc19"
     },
     {
+      "path": "apps/web/shared/components/CookieConsent.tsx",
+      "sha256": "977faa54d456ebfb9293fb97e623020b09c06a8d6d1db9ce1048bacae2ea9e35"
+    },
+    {
+      "path": "apps/web/shared/components/__tests__/cookie-consent.test.tsx",
+      "sha256": "5e6623ca8b4900ac71a04d56fe33cfa276823a270081263dfaa903c9de2637f1"
+    },
+    {
       "path": "audit/README.md",
       "sha256": "363c5e51a2529fd6df37d486f5539cd59ccfaf436b50d622a0ca3c523df8ac42"
     },
@@ -1099,6 +1107,10 @@
       "sha256": "9b5516bc7d245477ca66dac5eccf5c05bcdac760205095d70f6ecfdf60d3712c"
     },
     {
+      "path": "scripts/config/workflow-hardening.json",
+      "sha256": "fe334aae98f8400229ca890d17e234f4e1a4f85493e1f5a1e61189393e85662e"
+    },
+    {
       "path": "scripts/lib/rollout/artifact-scan.mjs",
       "sha256": "d883ff341e5a8e23aea5bb40a4ddfe7a6f89555c63be45f34f672aa9d3d27625"
     },
@@ -1107,7 +1119,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "5562dfc2381f2c0d24c07c09c01c00fabad523106737908782b6d2217edadb19",
+  "sourceFilesDigest": "a0e11dc28e389bf7def82a75079ae06b3118300787ef2abc2dd79689b4aab557",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1252,7 +1264,14 @@
       "rendererBoundaryFixed": true,
       "preUploadGuardAdded": true,
       "rotationStatus": "REQUIRED_NOT_PERFORMED",
-      "credentialValuesRecorded": false
+      "credentialValuesRecorded": false,
+      "workingCopyVerification": {
+        "matchesCommittedPin": true,
+        "publicKeyId": "30AA2B90F9DB6B65",
+        "escrowDrill": false,
+        "privateKeyExported": false,
+        "publicReleasesObserved": 0
+      }
     },
     "outstanding": [
       "native Intel execution CI",
@@ -1286,6 +1305,12 @@
         "reason": "release not found through tag lookup",
         "productResult": "NOT_RUN",
         "repair": "use the pinned immutable asset-ID API with the existing contents-read token; no public release or personal credential export"
+      },
+      "permissionRepair": {
+        "status": "USER_APPROVED_APPLIED",
+        "scope": "verify-desktop-candidate.yml:intel-package:contents write",
+        "reason": "read-only integration token returned HTTP 403 for the unpublished asset-ID endpoint",
+        "limits": "dedicated trusted job; token passed only to download step; no checkout persistence; app harness strips token variables; no publication code"
       }
     },
     "sourceCommit": "264a606571",
@@ -1723,6 +1748,47 @@
       "beforeLogSha256": "cffb0d65a4be61fd09dd191a76b664acbbe4bd10b5c92fa32bcb26898ba226fe",
       "repair": "require an existing profile result before reading routine notification defaults",
       "after": "49 notification/job/claimed-scope tests passed; existing profile without a settings row retains defaults"
+    },
+    "cleanChecks": {
+      "status": "passed",
+      "verifiedCodeCommit": "094f6b201ff57193b2da346b029938b1cd5675ee",
+      "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
+      "declaredChainCommands": 226,
+      "logSha256": "3137b85875c71e1a79f8b076324a66afc657d8c860e57008e52ac74e81da722f",
+      "boundary": "later missing-profile and Desktop-cookie repairs have focused passing checks and will receive final combined validation"
+    },
+    "normalDesktopStartup": {
+      "mode": "unchanged signed app, no fixture origin and no bundled-renderer override",
+      "observedUrl": "https://agiworkforce.com/login?redirectTo=%2Fchat",
+      "observedTitle": "Sign In | AGI",
+      "currentSharedWebLoginRendered": true,
+      "authenticationCompleted": false,
+      "cookieBannerObserved": true,
+      "boundary": "normal production startup and visible login, not complete web/Desktop workflow parity"
+    },
+    "desktopCookieRepair": {
+      "source": "apps/web/shared/components/CookieConsent.tsx",
+      "nativeDetection": "existing getHostBridge contract",
+      "webBannerPreserved": true,
+      "noAutomaticConsentWrite": true,
+      "analyticsDefaultUnchanged": true,
+      "explicitPrivacyControlsRetained": true,
+      "tests": 30,
+      "failed": 0,
+      "beforeLogSha256": "54bbf93d3d754cf13bee6dbd771d3844b2771fe23d0a819d6b725efc15a886c6",
+      "afterReportSha256": "94313e931c97c5909fe7d9182d0bab5d1491760e3703e6638dcb4d63197c9e6e",
+      "protectedPreview": {
+        "id": "dpl_9LuQMiHU2wJ6car6C3kY63t7iqLm",
+        "url": "https://agiworkforce-xhj1wmlkk-siddharthanagula4.vercel.app",
+        "snapshot": {
+          "sourceRoot": "/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-e10-preview-source-4_a_nbml",
+          "baseline": "84447761aac6f42a8da42e2bb12a23220ca16e33",
+          "sourceFiles": 12696,
+          "sourceDigest": "b8d576e97661d9c0b2042ddfd3601374097fea578f23e7c785569efac8d1f921"
+        },
+        "status": "BUILDING"
+      },
+      "productionRollout": "NOT_PERFORMED"
     }
   },
   "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
