@@ -3,7 +3,4 @@
 /**
  * A `.worktreeinclude` match that was not copied, and why.
  */
-export type WorktreeRefusedFile = {
-  path: string;
-  reason: string;
-};
+export type WorktreeRefusedFile = { path: string; reason: string };

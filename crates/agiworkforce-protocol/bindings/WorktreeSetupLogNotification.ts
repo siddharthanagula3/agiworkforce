@@ -2,7 +2,7 @@
 import type { WorktreeSetupStream } from './WorktreeSetupStream';
 
 /**
- * Params of `worktree/setup/log`, streamed while a setup script runs.
+ * Params of `worktree/managed/setup/log`, streamed while a setup script runs.
  */
 export type WorktreeSetupLogNotification = {
   worktreeId: string;

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T05:22:07.775496+00:00",
+  "capturedAt": "2026-10-17T08:21:21.805514+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
-  "status": "selected development implementation and local acceptance; external release acceptance not certified",
+  "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
     "platform": "Darwin",
     "architecture": "arm64",
@@ -465,32 +465,44 @@
   },
   "externalReleaseGates": [
     {
-      "status": "NOT_RUN",
-      "gate": "signed installation, notarization and updater rollout"
+      "status": "PASSED",
+      "gate": "signed macOS application and DMG notarization; arm64 installation, updater, preference restart and manual rollback",
+      "boundary": "owned candidates only; native Intel execution pending, no public rollout"
+    },
+    {
+      "status": "PASSED",
+      "gate": "authenticated hosted publish/share/storage/reload/version/restore/revoke",
+      "boundary": "protected isolated Preview"
+    },
+    {
+      "status": "PASSED",
+      "gate": "configured E2B Office execution image",
+      "boundary": "pinned test image and real sandbox; no production template selection"
     },
     {
       "status": "NOT_RUN",
-      "gate": "authenticated hosted database/storage/publish/share/revoke journeys"
+      "gate": "actual notification delivery providers and retries",
+      "reason": "no test provider/recipient setup"
     },
     {
       "status": "NOT_RUN",
-      "gate": "actual notification delivery providers and retries"
+      "gate": "same-account admission on external SSH host",
+      "reason": "no accessible external host supplied or configured"
     },
     {
       "status": "NOT_RUN",
-      "gate": "configured E2B Office execution image"
+      "gate": "physical computer sleep/offline lifecycle",
+      "reason": "no spare host for disruptive test"
     },
     {
-      "status": "NOT_RUN",
-      "gate": "same-account admission on an external SSH host"
+      "status": "PENDING",
+      "gate": "native Intel macOS packaged smoke",
+      "reason": "candidate uploaded privately; CI execution pending"
     },
     {
-      "status": "NOT_RUN",
-      "gate": "physical computer sleep/offline lifecycle drill"
-    },
-    {
-      "status": "NOT_RUN",
-      "gate": "other-platform packaged smoke tests"
+      "status": "BLOCKED",
+      "gate": "public release readiness",
+      "reason": "Tauri updater credential exposure requires documented replacement, escrow and transition; no rotation performed"
     }
   ],
   "unsupportedFirstScope": [
@@ -502,6 +514,14 @@
     "Windows session BROWSER relay"
   ],
   "sourceFiles": [
+    {
+      "path": ".github/workflows/release-desktop-cloud.yml",
+      "sha256": "045a1abf7eb8db53d80f1832d3bcce9b864d5da211f88f620a0ad616ee3c37fa"
+    },
+    {
+      "path": ".github/workflows/verify-desktop-candidate.yml",
+      "sha256": "2ef789ae0c57891761106f8dd67e5899b0190ee6f3a074c5ed0ccf1af03f6a22"
+    },
     {
       "path": "apps/cli/src/agent/chat.rs",
       "sha256": "75b73ee88b8ec2094b4a3f58d0658d890cb5037872c9b9b047a662e18884cd99"
@@ -555,6 +575,14 @@
       "sha256": "c0199893caa88d51ccc77ce09cb9fb50d4876bcfdd629419ed3964e247d43287"
     },
     {
+      "path": "apps/desktop/.env.example",
+      "sha256": "d32c0204cc0021180f737f14c615e2037d038cd8d4f38f53cdefdb700d207794"
+    },
+    {
+      "path": "apps/desktop/electron-builder.yml",
+      "sha256": "5f7e30470374cd88d34be5eab471a41903abf25486823db45b843149902fcd9f"
+    },
+    {
       "path": "apps/desktop/electron/__tests__/agentNotifications.test.ts",
       "sha256": "e371a806b03157f073e3795429817be20faea352b44a4bff2c34f72a644b5e31"
     },
@@ -592,15 +620,23 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/localRoutineService.test.ts",
-      "sha256": "8cc5774f34ad01c339e7223084905adf4f439a3fea2f3e7b1d5c2e332628a93d"
+      "sha256": "d0f7a137a6ac424c7f40cb75ea26c2d274264626144d06c3b9b540eabb053126"
     },
     {
       "path": "apps/desktop/electron/__tests__/native-acceptance.mjs",
-      "sha256": "914298e90fa0582c2f12029cfce1c04e9d12d7302412861360dc7ca4b4c27441"
+      "sha256": "284f7d561df81f164c2d15bf7d6beffc720f7fdb034486d8c3270b00f40545e9"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/packaged-acceptance.mjs",
+      "sha256": "3b6d3b0465349d71549fd3e26e4d56c6f48799148636d5bd76a37d768d05e5c0"
     },
     {
       "path": "apps/desktop/electron/__tests__/permissionManager.test.ts",
       "sha256": "576256aa5a797ff9ff05b20de9677d1bcf9df7ff1f73e41ac84c54cff83a61b9"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/releaseArtifact.node-check.mjs",
+      "sha256": "9971231eab169a2e3038427b04391dda7e4a23df8ffa551865517375b3643268"
     },
     {
       "path": "apps/desktop/electron/__tests__/sshEnvironments.test.ts",
@@ -623,6 +659,10 @@
       "sha256": "a8665e551661d97f8f1eaefcf3c13f2f6f93bf5c69953a8dd85a6694c4eedb68"
     },
     {
+      "path": "apps/desktop/electron/notarizeInstallers.mjs",
+      "sha256": "9252986b84b1df400fbd1a5692bab2cca6dd335ce479944ef2787831b063330f"
+    },
+    {
       "path": "apps/desktop/electron/runtime/codeSessionActivity.ts",
       "sha256": "f8f440bfcdf6cf0b911233859958399c39ac1e9d89d4137b6522e6cbe7e858b4"
     },
@@ -640,7 +680,7 @@
     },
     {
       "path": "apps/desktop/electron/runtime/localRoutineService.ts",
-      "sha256": "852ab48e109a163afda116ae5054e23dcde10544b36a92148245a0ed095aa9d1"
+      "sha256": "9c9f06c2026034fe3709baf00ea11c8c8c0e9916ecc7eadbbcd761a3e3afd753"
     },
     {
       "path": "apps/desktop/electron/runtime/permissionManager.ts",
@@ -655,12 +695,20 @@
       "sha256": "b0cce63c09d4631e250c4780cf96048d78e7357f93d13252269c65a34c0786a7"
     },
     {
+      "path": "apps/desktop/electron/verifyReleaseArtifact.mjs",
+      "sha256": "567e0add68240609ed401196e79ba1f773475b687584dd9c5b89cf43b1a54b6b"
+    },
+    {
       "path": "apps/desktop/electron/windowPolicy.ts",
       "sha256": "fefeaef10bd71d9357060735bf87134008fdb16302a56c85544687148f0b8708"
     },
     {
+      "path": "apps/desktop/src/features/cloud/CloudStoragePanel.tsx",
+      "sha256": "0397c7a6d9a597690945ce78930c373f393430b4edc1a310c4ee704f87e5e66e"
+    },
+    {
       "path": "apps/desktop/vite.config.ts",
-      "sha256": "a3b4005255dc44a122170fcd3cbc86522fad1d3d7b042370b29f390b62bb8169"
+      "sha256": "17bfc741f9f3badd1c9e960942fb803874556f954ee004173261135db0e8dfa2"
     },
     {
       "path": "apps/extension/__tests__/desktop-browser-commands.test.ts",
@@ -699,12 +747,20 @@
       "sha256": "c12b1fe1725c6f7a17377d58c1b0de22e33e4a5847fd86c331bfa8f631b1e653"
     },
     {
+      "path": "apps/web/e2e/e10-release.spec.ts",
+      "sha256": "aabaec6189b89e3792d930155441c6019820022a64de961eca2f052a8765412e"
+    },
+    {
       "path": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
-      "sha256": "caf2773e32a05b618f0a5fc903dbd897ab74c5af4e7da2265cf652f8f96d8614"
+      "sha256": "e7c5410b6dab23a2bd1b1020cbfbb21c02285e21a83285ca06e8641c058e9ece"
     },
     {
       "path": "apps/web/features/chat/components/SandboxedIframe.tsx",
-      "sha256": "a8c09bb32bf25889a55bd9cbf727125d8223df26c8b587a76441b1692f903b5d"
+      "sha256": "c190413cd44c02c7ee22b98301a1ef6b0c00c4831c5949be6603868363ba9bf2"
+    },
+    {
+      "path": "apps/web/features/chat/components/__tests__/sandboxed-iframe-repost.test.tsx",
+      "sha256": "ab150130275d6661374ceb3eda065ee342b82fdacccd694ffd362d1e07be9f9f"
     },
     {
       "path": "apps/web/features/chat/components/artifacts/artifactRuntimeClient.ts",
@@ -795,10 +851,6 @@
       "sha256": "4291dc2eb8d32eb0a70aaefb49273a0644a9de3b4808dfcc5be88a4977b64a40"
     },
     {
-      "path": "apps/web/lib/schedules/zoned-time.ts",
-      "sha256": "9ca1978a24c50034d4ad6c01b465e192bf64d79fc4e827eca157041c9f7b14fe"
-    },
-    {
       "path": "apps/web/lib/services/__tests__/schedule-notification-service.test.ts",
       "sha256": "80c3de8daddc981f5450db07a8b356e744dee9927c2d285d87d454610cf86cb3"
     },
@@ -816,7 +868,7 @@
     },
     {
       "path": "apps/web/lib/services/managed-office-render.integration.test.ts",
-      "sha256": "0334c9b69256bd224228b8f61090e118d2b9312cec3bfb8f71f38d45a3ac3890"
+      "sha256": "558f4de8f0a33436a6049c1fee23918c29ac14f0494638313f6b01a632bda435"
     },
     {
       "path": "apps/web/lib/services/notification-email-service.ts",
@@ -839,12 +891,88 @@
       "sha256": "1cf1d039f04c29d502b7c12ac74f52f5ab5fcb2d9dc4a4b2ba990d37f4d6b634"
     },
     {
+      "path": "apps/web/scripts/build-e2b-office-template.mjs",
+      "sha256": "5d2031fb1fce8e47d787d49bda504e204f396f4e016bc953f68ec7e78ba9fc19"
+    },
+    {
+      "path": "audit/README.md",
+      "sha256": "363c5e51a2529fd6df37d486f5539cd59ccfaf436b50d622a0ca3c523df8ac42"
+    },
+    {
       "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
       "sha256": "f3fff9601c259b22a00625d6f37e645baf8982fa3669581cb3d9cb11896ba6d2"
     },
     {
       "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
       "sha256": "3a40447f57c39c1fa31b014864b85e840d0bf6be1f4af7c884eff64be1f69b37"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/CheckpointFile.ts",
+      "sha256": "2699dd97b9cab422886b172c2356e6bc82f115712ab5b1c034cf22c5d0efb1fd"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/CheckpointSection.ts",
+      "sha256": "3aaa2d3dc6effe6806311935a560ec3be04740170dedfe9c701993f1b1bbad8b"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/CheckpointSectionConflict.ts",
+      "sha256": "a7d4444b9d109c0a4cbbcb761232cfac21c2095d6b40900743bf460b943f00f1"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/CheckpointTurnParams.ts",
+      "sha256": "af11aff180a93f430dc26473b317dd6527b9b15535402ae72bfc91b4dfb13dc5"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/DeveloperChildTask.ts",
+      "sha256": "71d5dfaad2e1d0bfa13b12f48e4191f785386619a6c8b6579c86a160beae35a1"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/DeveloperChildTaskState.ts",
+      "sha256": "f50fbfa33c5e9ffdb6639e5109868a1adda7b27988e30d29dc06208666cbe8d2"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/DeveloperWorkspaceIdentity.ts",
+      "sha256": "d1221d5c05250106af6a837f82b83c540bf56e183c0223ff01aff0bbdf0256af"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/ThreadDeleteParams.ts",
+      "sha256": "7f760736a02febfcd2352843b6d5cbc771d88dba5becef888e09ea2164a34450"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/ThreadReadResponse.ts",
+      "sha256": "e7076a2252300345f65627d6beeba16b9ba0c3edc579a9cf3d1a4caca66b02db"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeApplyParams.ts",
+      "sha256": "3780e37b42a937b03463d20f7d88247b608a6baaca63bf787dec58a812c829d6"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeIdParams.ts",
+      "sha256": "e57a7c1f9899f85a329f4b07040b6c2c0eb28623ce610799f1bbc1913d113d36"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeKeepParams.ts",
+      "sha256": "028c4dc039d6407da64c26b5106d943a32455505574b0137ad489820076b2154"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreePinParams.ts",
+      "sha256": "2dd1c74085acc0fa6f2486795dd3c4969c47103b79902e7b728d104925ba2195"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeRefusedFile.ts",
+      "sha256": "5042ebf5f1a265cd8fb9b17f4ec2e3be5fec44e566c27cdcb3ecba0119c44cfe"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeSetupFinishedNotification.ts",
+      "sha256": "b8f4268b8fb074df21d0865703170f8348d033517ce943d0bf4c992c92915477"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeSetupLogNotification.ts",
+      "sha256": "d370650d23659b6960212696e1b8f85cdcd2126207ba48441df99ae9d429275d"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/bindings/WorktreeSetupRunParams.ts",
+      "sha256": "97fedb5838e838e2d3462d8b7868a5f3200fd9ccf007ae535bbd1ca58898a533"
     },
     {
       "path": "crates/agiworkforce-protocol/src/developer_session.rs",
@@ -865,6 +993,10 @@
     {
       "path": "crates/agiworkforce-sandbox-policy/src/relay.rs",
       "sha256": "ec04688ca094077f3167f015e62e6692c3116a8a38811f70d2101e3b402bf2a0"
+    },
+    {
+      "path": "docs/agent-context/generated/contract-registry.json",
+      "sha256": "6b2d87add1e77b6e1c992cad566488b479269936bdf635deab8b8dc7d40add8b"
     },
     {
       "path": "packages/contracts/cloud-contracts/src/schedules.ts",
@@ -949,19 +1081,32 @@
     {
       "path": "scripts/check-schedule-clock-injection.test.mjs",
       "sha256": "e1fe39f8e18e2cd556103b2ad17493ce6fe5a75797fd5c17b7c5f033a01fef20"
+    },
+    {
+      "path": "scripts/config/package-runtimes.json",
+      "sha256": "9b5516bc7d245477ca66dac5eccf5c05bcdac760205095d70f6ecfdf60d3712c"
+    },
+    {
+      "path": "scripts/lib/rollout/artifact-scan.mjs",
+      "sha256": "d883ff341e5a8e23aea5bb40a4ddfe7a6f89555c63be45f34f672aa9d3d27625"
+    },
+    {
+      "path": "scripts/lib/rollout/release-guards.test.mjs",
+      "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
+  "sourceFilesDigest": "b6effa62b219e39d966b957c18982bfb1fdcaa6d3a22cb27e96e9a268561da42",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
-    "Native fixture model replies and native-dialog choices are scripted; OS fallback is captured rather than opened.",
-    "Passing source/mocked checks is not production acceptance.",
-    "Runtime artifact hashes identify the development build, not a signed installer."
+    "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
+    "Source/mocked checks do not establish production acceptance.",
+    "Exact signed ASAR, bundled CLI, DMG and hosted snapshot hashes identify exercised bytes; no claim that later documentation/formatting commits were rebuilt into the candidates.",
+    "Intel, external SSH, provider delivery and physical sleep acceptance remain open."
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T06:20:18.912719+00:00",
-    "cleanCandidateVersion": "0.0.1-e10.20261017",
+    "updatedAt": "2026-10-17T08:21:21.805514+00:00",
+    "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
         "provider": "E2B",
@@ -1032,14 +1177,14 @@
     },
     "installerNotarization": [
       {
-        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-arm64.dmg",
+        "file": "/tmp/agi-e10-final-release/AGI-Cloud-0.0.3-e10.20261017-arm64.dmg",
         "notarizedAndStapled": true,
-        "sha256": "c054aeab3152f1a3e558f17772a04d0d402de355cdd1aa2f33f10c8af6b039f8"
+        "sha256": "89524d88437334a6a248370f4dfa47ed5636cad2359d90a22b44e80c8d0b11b5"
       },
       {
-        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-x64.dmg",
+        "file": "/tmp/agi-e10-final-release/AGI-Cloud-0.0.3-e10.20261017-x64.dmg",
         "notarizedAndStapled": true,
-        "sha256": "f4cf19640e5963fdc789588b35e8466d3f84bf12cc575420da5de6b20f5ea380"
+        "sha256": "073f7a970123b38a1e33cce5c4092e7a2ee40083e807a16f45967face4330174"
       }
     ],
     "installedArm64": {
@@ -1098,13 +1243,12 @@
       "credentialValuesRecorded": false
     },
     "outstanding": [
-      "complete hosted reload/version/revoke journey",
-      "positive updater application/restart",
-      "native Intel execution",
-      "notification provider access",
-      "external SSH same-account journey",
+      "native Intel execution CI",
+      "actual notification provider delivery",
+      "external SSH same-account admission",
       "physical sleep/offline host",
-      "Tauri updater signing credential rotation"
+      "Tauri updater signing credential rotation",
+      "final clean-checkout operability and review"
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
@@ -1113,6 +1257,398 @@
       "version": "0.0.3-e10.20261017",
       "status": "NOT_RUN",
       "publication": "private draft only; no public update feed"
-    }
-  }
+    },
+    "sourceCommit": "264a606571",
+    "sourceCommitBoundary": "candidates and hosted snapshot predate this commit; artifact and snapshot hashes identify the exercised bytes",
+    "packagedNative": {
+      "capturedAt": "2026-10-17T08:12:36.382Z",
+      "source": {
+        "mainSha256": "cbf464c1908c90456ec75768d260e89f3aa02e51497d66f4365e965937380653",
+        "preloadSha256": "fe7eb4a901181e533a38c36a746fead95baf38e3bfa49b4d1fe57afb6bbdae5d",
+        "cliSha256": "9adcb0ac73cf9c67edba3adfcede57c3860177b919714e458b2e7c7b79a0ddd8"
+      },
+      "packaged": "/private/tmp/agi-e10-final-release/mac-arm64/AGI Cloud.app",
+      "asarSha256": "4881ef342ade5cc5113fd17fa39443b53f9c2ff6dc2d6c7caa57767644c9a1c6",
+      "owned": "/Users/siddhartha/Desktop/agi-electron-owned-sPsmMm",
+      "project": "/Users/siddhartha/Desktop/agi-electron-owned-sPsmMm/project",
+      "boundary": "unchanged signed Electron package and bundled CLI; actual hosted hook; scripted loopback model; native dialogs answered by the operator",
+      "approvalBeforeReload": [
+        {
+          "requestId": "4ffc1ac6-b7c0-4b1d-b3cb-230032910955",
+          "turnId": "a8623cbf-417b-4438-a5dc-96826f2145a9",
+          "summary": "subagent_c02f32f5-09d5-428e-baa2-223ab46439aa: Owned normal child: Allow this file write?"
+        }
+      ],
+      "approvalAfterReload": [
+        {
+          "requestId": "4ffc1ac6-b7c0-4b1d-b3cb-230032910955",
+          "turnId": "a8623cbf-417b-4438-a5dc-96826f2145a9",
+          "summary": "subagent_c02f32f5-09d5-428e-baa2-223ab46439aa: Owned normal child: Allow this file write?"
+        }
+      ],
+      "finalState": {
+        "messages": [
+          {
+            "index": 0,
+            "role": "user",
+            "text": "PARENT_NORMAL_CHILD"
+          },
+          {
+            "index": 1,
+            "role": "assistant",
+            "text": ""
+          },
+          {
+            "index": 2,
+            "role": "user",
+            "text": ""
+          },
+          {
+            "index": 3,
+            "role": "assistant",
+            "text": "Parent completed with owned child."
+          }
+        ],
+        "children": [
+          {
+            "id": "subagent_c02f32f5-09d5-428e-baa2-223ab46439aa",
+            "title": "Owned normal child",
+            "parentSessionId": "2ab32ca4-e0fa-4343-a750-fb62fdc1c5a8",
+            "state": "completed"
+          }
+        ],
+        "error": null,
+        "turn": {
+          "turnId": null,
+          "prompt": "",
+          "steered": [],
+          "reply": "",
+          "tools": [],
+          "diff": null,
+          "outcome": null,
+          "failure": null
+        }
+      },
+      "routine": {
+        "deviceId": "a637ef11-6f1a-42c8-8bce-dd915177a2af",
+        "suspended": false,
+        "error": null,
+        "routines": [
+          {
+            "name": "Owned one-shot",
+            "rootId": "f8d68ac7-bf18-4c02-8ecc-cc0aa0522bf3",
+            "model": "owned-fixture-model",
+            "prompt": "OWNED_ROUTINE_ONLY",
+            "schedule": {
+              "type": "once",
+              "enabled": false,
+              "executeAt": "2026-10-17T08:14:31.429Z",
+              "timezone": "America/Chicago"
+            },
+            "missedExecutionPolicy": "run_once",
+            "keepAwake": true,
+            "notificationSettings": {
+              "onSuccess": false,
+              "onFailure": true,
+              "onApproval": true,
+              "push": false,
+              "email": false
+            },
+            "rootIdentity": "f8d68ac7-bf18-4c02-8ecc-cc0aa0522bf3:1792224806823:16777231:297262088",
+            "grantRevision": "1",
+            "id": "7cd45b89-1494-49e2-b04b-4dc44e435bb7",
+            "creationDigest": "74fecee75afd3ea499ab6e68500d00a07d6452ad1118186a88a28e7721152ff7",
+            "deviceId": "a637ef11-6f1a-42c8-8bce-dd915177a2af",
+            "nextExecutionAt": null,
+            "executionCount": 1,
+            "pausedReason": null,
+            "runs": [
+              {
+                "id": "41cd18ff-c6a9-4618-bceb-b9b29a2beadd",
+                "dueAt": "2026-10-17T08:14:31.429Z",
+                "startedAt": "2026-10-17T08:14:31.945Z",
+                "state": "completed",
+                "threadId": "546da631-6715-43d5-991a-577adad9ac8e",
+                "turnId": "4c56ca2f-aede-4d0e-9526-0d8126cb773b",
+                "finishedAt": "2026-10-17T08:14:32.176Z"
+              }
+            ],
+            "createdAt": "2026-10-17T08:13:47.891Z",
+            "updatedAt": "2026-10-17T08:13:47.891Z"
+          }
+        ]
+      },
+      "routineModelCalls": 1,
+      "noReplayAfterRestart": true,
+      "errors": [],
+      "modelCalls": [
+        {
+          "child": false,
+          "routine": false,
+          "hasResult": false
+        },
+        {
+          "child": true,
+          "routine": false,
+          "hasResult": false
+        },
+        {
+          "child": true,
+          "routine": false,
+          "hasResult": true
+        },
+        {
+          "child": false,
+          "routine": false,
+          "hasResult": true
+        },
+        {
+          "child": false,
+          "routine": true,
+          "hasResult": false
+        }
+      ]
+    },
+    "updater": {
+      "at": "2026-10-17T06:36:59.059Z",
+      "app": "/private/tmp/agi-e10-update-verified/AGI Cloud.app",
+      "checks": {
+        "strictSignature": "passed",
+        "gatekeeper": "passed",
+        "notarizationTicket": "Processing: /private/tmp/agi-e10-update-verified/AGI Cloud.app\nThe validate action worked!",
+        "bundleId": "com.agiworkforce.desktop.cloud",
+        "version": "0.0.1-e10.20261017",
+        "architecture": "arm64",
+        "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+        "packagedHostedBridge": {
+          "platform": "electron-darwin",
+          "version": "0.0.1-e10.20261017",
+          "node": "undefined",
+          "status": {
+            "ok": true,
+            "value": {
+              "available": true,
+              "name": "agi",
+              "version": "0.0.1",
+              "path": "/private/tmp/agi-e10-update-verified/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+              "hint": null,
+              "source": "bundled",
+              "accountSyncError": null,
+              "capabilities": []
+            }
+          },
+          "routines": {
+            "ok": true,
+            "value": {
+              "deviceId": "18af3b51-779c-41f5-a40e-43124c33bd97",
+              "suspended": false,
+              "error": null,
+              "routines": []
+            }
+          }
+        },
+        "sessionApprovalAlerts": true,
+        "updateFeedRequested": true,
+        "preferenceMarker": {
+          "key": "sessionApprovalAlerts",
+          "value": false
+        },
+        "signedUpdateDownloaded": {
+          "available": true,
+          "currentVersion": "0.0.1-e10.20261017",
+          "version": "0.0.2-e10.20261017",
+          "downloadUrl": "http://127.0.0.1:53866/api/download?platform=mac&app=cloud&arch=arm64",
+          "installsAutomatically": true,
+          "readyToInstall": true,
+          "zipSha256": "be75b2cfd532db6ccd02feae0917f3fc1df65a5d62c632010e4c0064d758e700"
+        },
+        "appliedOnNormalQuit": {
+          "version": "0.0.2-e10.20261017",
+          "asar": "2f0666ac8a6d5dd004465949782a3474de2157d22ba6856f7e42c2f839888af0",
+          "profile": "/tmp/agi-e10-preserved-profile"
+        },
+        "updatedGatekeeper": "passed",
+        "updatedTicket": "Processing: /private/tmp/agi-e10-update-verified/AGI Cloud.app\nThe validate action worked!"
+      },
+      "requests": [
+        "/api/releases/desktop-cloud/update/arm64/0.0.1-e10.20261017",
+        "/chat",
+        "/owned-update.zip",
+        "/api/releases/desktop-cloud/latest",
+        "/api/releases/desktop-cloud/latest",
+        "/quick-ask"
+      ],
+      "artifacts": {
+        "asar": "9e3a82be23f1e074c473e6948211c585ae4773e20217b4aae489c2ecb61af990",
+        "cli": "4c3fd6778bc7153e5439a7d5ba77b79f702c21116d6db3269e28e107e7484330",
+        "input": "29cdaf8b667c98215d97d43c1239189f9007dcaa25fc7e1fab8672237893dd31"
+      },
+      "status": "passed"
+    },
+    "updatedPreferenceRestart": {
+      "at": "2026-10-17T06:39:57.758Z",
+      "app": "/private/tmp/agi-e10-update-verified/AGI Cloud.app",
+      "checks": {
+        "strictSignature": "passed",
+        "gatekeeper": "passed",
+        "notarizationTicket": "Processing: /private/tmp/agi-e10-update-verified/AGI Cloud.app\nThe validate action worked!",
+        "bundleId": "com.agiworkforce.desktop.cloud",
+        "version": "0.0.2-e10.20261017",
+        "architecture": "arm64",
+        "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+        "packagedHostedBridge": {
+          "platform": "electron-darwin",
+          "version": "0.0.2-e10.20261017",
+          "node": "undefined",
+          "status": {
+            "ok": true,
+            "value": {
+              "available": true,
+              "name": "agi",
+              "version": "0.0.1",
+              "path": "/private/tmp/agi-e10-update-verified/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+              "hint": null,
+              "source": "bundled",
+              "accountSyncError": null,
+              "capabilities": []
+            }
+          },
+          "routines": {
+            "ok": true,
+            "value": {
+              "deviceId": "18af3b51-779c-41f5-a40e-43124c33bd97",
+              "suspended": false,
+              "error": null,
+              "routines": []
+            }
+          }
+        },
+        "sessionApprovalAlerts": false,
+        "updateFeedRequested": true,
+        "updaterNoRelease": true
+      },
+      "requests": ["/api/releases/desktop-cloud/update/arm64/0.0.2-e10.20261017", "/chat"],
+      "artifacts": {
+        "asar": "2f0666ac8a6d5dd004465949782a3474de2157d22ba6856f7e42c2f839888af0",
+        "cli": "8f1226198b0e47607719a8be71a323ee90ed769ef19dbf83640f2a30c2b54cea",
+        "input": "58c0bba9c444ed9345194bcb3eff6a0e9810250736d71232fa169c17260e765c"
+      },
+      "status": "passed"
+    },
+    "manualRollback": {
+      "at": "2026-10-17T08:18:22.154Z",
+      "status": "passed",
+      "mode": "manual reinstall from prior signed notarized DMG in owned fixture",
+      "fromVersion": "0.0.2-e10.20261017",
+      "toVersion": "0.0.1-e10.20261017",
+      "fromAsar": "2f0666ac8a6d5dd004465949782a3474de2157d22ba6856f7e42c2f839888af0",
+      "toAsar": "9e3a82be23f1e074c473e6948211c585ae4773e20217b4aae489c2ecb61af990",
+      "preferencesPreserved": true,
+      "deviceIdentityPreserved": true,
+      "publicFeedChanged": false,
+      "boundary": "supported preference and device identity; no cross-schema or production rollback claim"
+    },
+    "priorInstallerNotarization": [
+      {
+        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-arm64.dmg",
+        "notarizedAndStapled": true,
+        "sha256": "c054aeab3152f1a3e558f17772a04d0d402de355cdd1aa2f33f10c8af6b039f8"
+      },
+      {
+        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-x64.dmg",
+        "notarizedAndStapled": true,
+        "sha256": "f4cf19640e5963fdc789588b35e8466d3f84bf12cc575420da5de6b20f5ea380"
+      }
+    ],
+    "fuses": {
+      "RunAsNode": 49,
+      "EnableCookieEncryption": 49,
+      "EnableNodeOptionsEnvironmentVariable": 48,
+      "EnableNodeCliInspectArguments": 48,
+      "EnableEmbeddedAsarIntegrityValidation": 49,
+      "OnlyLoadAppFromAsar": 49,
+      "LoadBrowserProcessSpecificV8Snapshot": 48,
+      "GrantFileProtocolExtraPrivileges": 48
+    },
+    "hosted": {
+      "status": "passed",
+      "deploymentId": "dpl_HPzVYs46hsa84dAmjzaQ3tTLPxSU",
+      "deployment": "https://agiworkforce-5m1n0rdp7-siddharthanagula4.vercel.app",
+      "ownedAlias": "https://agiworkforce-e10-20261017.vercel.app",
+      "sandbox": "https://agiworkforce-sandbox-47zsfm6ro-siddharthanagula4.vercel.app",
+      "snapshot": {
+        "sourceRoot": "/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-e10-preview-source-lcz_6xfj",
+        "baseline": "0a33ec585aafe398ed39c22fead37d80a3488d51",
+        "sourceFiles": 12697,
+        "sourceDigest": "82f377081fa064569aa479c5f21fb86ecf15b99f459606c3fd51942cecad6741"
+      },
+      "sourceSafety": {
+        "root": "/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-e10-preview-source-lcz_6xfj",
+        "checkedFiles": 12698,
+        "checkedBytes": 117823644,
+        "credentialValueChecks": 47,
+        "credentialFiles": [],
+        "exactCredentialValueMatches": [],
+        "projectId": "prj_vDA7A5nZakjYscIsc47JyGqek3Ea",
+        "teamId": "team_QAqU2q6NTV4xxn971rfTy1F4",
+        "destination": "existing AGI Workforce Preview project",
+        "publicSourceExposure": false
+      },
+      "stats": {
+        "startTime": "2026-10-17T08:06:14.638Z",
+        "duration": 26131.538,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "reportSha256": "89a645fcdee5530bba84810f26e547b73867017f2e44c493d645eb39dd6e10c2",
+      "journeys": [
+        "QA authentication",
+        "publish",
+        "anonymous viewing",
+        "storage write and reload persistence",
+        "title update",
+        "version 2 publication under same token",
+        "version 1 read",
+        "restore appends version 3",
+        "revocation and storage refusal"
+      ],
+      "cleanup": "unique owned artifact deleted and created test session revoked",
+      "boundary": "protected isolated Preview, exact owned sandbox origin, test identity and existing Preview database; no production alias or public updater change"
+    },
+    "regressions": [
+      {
+        "suite": "affected web",
+        "tests": 627,
+        "passed": 627,
+        "failed": 0,
+        "reportSha256": "b6cec9936cdbae785028888db993ae641340e29ab21d2eb5532ec21b30b10624"
+      },
+      {
+        "suite": "complete Electron",
+        "tests": 1438,
+        "passed": 1438,
+        "failed": 0,
+        "reportSha256": "dfde567ffe3aff121526bce2f2b671a13899bdd3f351c1f7485de30f8ccc19db"
+      },
+      {
+        "suite": "Office local",
+        "tests": 31,
+        "passed": 31,
+        "failed": 0,
+        "reportSha256": "5dcf1773c6591b4e30e91bf6f79b1e55dbfdc4d367e36cd183a3998e170d4108"
+      },
+      {
+        "suite": "Office E2B",
+        "tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "reportSha256": "532193fed3d6fafe8c788caa35c0455e1f17349ecda9f755bbab9ffc789fb80e"
+      }
+    ]
+  },
+  "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
+  "removedSourcePaths": [],
+  "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

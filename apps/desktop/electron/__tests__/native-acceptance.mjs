@@ -19,7 +19,11 @@ if (packaged && browserOnly)
   throw new Error('Packaged browser opening needs its own OS destination fixture.');
 const { _electron: electron, chromium } = req('@playwright/test');
 const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-electron-harness-'))),
-  owned = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-electron-owned-'))),
+  owned = fs.realpathSync(
+    fs.mkdtempSync(
+      path.join(packaged ? path.join(os.homedir(), 'Desktop') : os.tmpdir(), 'agi-electron-owned-'),
+    ),
+  ),
   project = path.join(owned, 'project'),
   home = path.join(owned, 'cli'),
   profile = path.join(owned, 'profile');
@@ -365,6 +369,16 @@ async function launch(origin) {
         },
         { command, args },
       );
+    if (packaged && process.argv.includes('--operator-ready')) {
+      console.log('PACKAGED_NATIVE_OPERATOR_READY: focus the owned app, then send a newline.');
+      await new Promise((resolve) => {
+        process.stdin.resume();
+        process.stdin.once('data', () => {
+          process.stdin.pause();
+          resolve();
+        });
+      });
+    }
     if (packaged) console.log(JSON.stringify({ phase: 'PICK_OWNED_FOLDER', project, packaged }));
     const root = await invoke('workspace_pick_root');
     if (packaged)
@@ -505,7 +519,7 @@ async function launch(origin) {
         schedule: {
           type: 'once',
           enabled: true,
-          executeAt: new Date(Date.now() + 4000).toISOString(),
+          executeAt: new Date(Date.now() + (packaged ? 60_000 : 4000)).toISOString(),
           timezone: 'America/Chicago',
         },
         missedExecutionPolicy: 'run_once',
@@ -522,7 +536,7 @@ async function launch(origin) {
       routine.model = models.models.find((m) => m.provider === 'lmstudio').id;
       if (packaged) console.log('PACKAGED_NATIVE_ROUTINE_CONSENT: review the owned one-shot only.');
       await invoke('local_routine_create', routine);
-      const deadline = Date.now() + 30000;
+      const deadline = Date.now() + (packaged ? 120_000 : 30000);
       while (true) {
         const state = await invoke('local_routine_list');
         if (state.routines.find((x) => x.id === id)?.runs[0]?.state === 'completed') break;
