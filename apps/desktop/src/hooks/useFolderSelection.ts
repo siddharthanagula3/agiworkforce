@@ -122,16 +122,19 @@ export function useFolderSelection(mode: FolderSelectionMode = 'local'): UseFold
   }, [mode, setCurrentFolder]);
 
   const clearFolder = useCallback(() => {
+    const generation = ++pickerGeneration.current;
     if (mode === 'cloud') {
       setCurrentFolder(null);
       return;
     }
     void invoke('project_context_set_folder', { path: null })
+      .then(() => {
+        if (generation !== pickerGeneration.current) return;
+        setCurrentFolder(null);
+      })
       .catch((error) => {
         console.error('[useFolderSelection] Failed to clear folder context:', error);
-      })
-      .finally(() => {
-        setCurrentFolder(null);
+        toast.error(getSimpleErrorMessage(error));
       });
   }, [mode, setCurrentFolder]);
 

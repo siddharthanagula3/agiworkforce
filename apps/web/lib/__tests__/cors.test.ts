@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { clientHandshakeHeaders } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 vi.mock('../logger', () => ({
@@ -70,6 +71,35 @@ describe('isOriginAllowed', () => {
 
     expect(response.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  });
+
+  it('allows every header sent by the versioned desktop account client', async () => {
+    const { handleCorsPreflightRequest } = await import('../cors');
+    const clientHeaders = {
+      authorization: 'Bearer test',
+      'content-type': 'application/json',
+      ...clientHandshakeHeaders({ surface: 'desktop', version: '0.0.1' }),
+    };
+    const response = handleCorsPreflightRequest(
+      new NextRequest('https://agiworkforce.com/api/me?surface=desktop', {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'tauri://localhost',
+          'access-control-request-method': 'GET',
+          'access-control-request-headers': Object.keys(clientHeaders).join(', '),
+        },
+      }),
+    );
+
+    expect(response?.status).toBe(204);
+    const allowed = response!.headers
+      .get('Access-Control-Allow-Headers')!
+      .toLowerCase()
+      .split(',')
+      .map((header) => header.trim());
+    for (const header of Object.keys(clientHeaders))
+      expect(allowed).toContain(header.toLowerCase());
+    expect(response!.headers.get('Access-Control-Allow-Origin')).toBe('tauri://localhost');
   });
 
   it('rejects arbitrary origins without ALLOWED_ORIGINS', async () => {
