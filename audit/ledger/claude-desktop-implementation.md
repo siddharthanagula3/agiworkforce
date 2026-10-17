@@ -109,3 +109,5 @@ AGI_ACCEPTANCE_OUTPUT_DIR=/tmp/agi-acceptance node apps/desktop/electron/__tests
 ```
 
 Focus the owned fixture app before sending a newline to the controller. Choose only its printed empty project and review the actual native prompts. Quit normally at each printed Quit marker. The fixture removes its owned project/profile on success. The machine record retains exact candidate/snapshot hashes and normalized receipts; raw credentials, auth state and environment files are excluded.
+
+Final guard integration: the 206-command sweep initially passed 199 checks. New integration failures were repaired by declaring scheduler export runtimes, documenting release-only environment inputs, deleting an unused reexport, routing the time contract and its negative tests to the canonical shared owner, declaring browser opening as external egress and naming mock import types. Focused guards and affected tests passed. Two local-state failures involve owner-excluded audit material/configuration; clean-checkout verification is pending. The original dependency tree was left untouched; the clean checkout installed the frozen lockfile offline in 19.6 seconds.

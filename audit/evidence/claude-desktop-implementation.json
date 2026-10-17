@@ -735,6 +735,10 @@
       "sha256": "d42bdf22da164e49b5e407ce707d647469f13c1571b2fbbf3cef70024781cf5e"
     },
     {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
+      "sha256": "7935f8bb8effedf5587e28671678518f0a6bef7bb20cafd09803d56ccb63ca44"
+    },
+    {
       "path": "apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx",
       "sha256": "d3a6b054bbc51dcd6109304ef678e4aae8f7d16c442035763931cbca017773fc"
     },
@@ -796,7 +800,7 @@
     },
     {
       "path": "apps/web/features/schedules/components/LocalRoutinesSection.test.tsx",
-      "sha256": "1185a3263201699c186d7f2e23f04daa9936d76b5602b9d3ed1548004b24713d"
+      "sha256": "0a4a3a8c18b43005fbe0118f3ba4a3bb6d2d461cc0f4be1c264bef1ed1e0c46a"
     },
     {
       "path": "apps/web/features/schedules/components/LocalRoutinesSection.tsx",
@@ -832,7 +836,7 @@
     },
     {
       "path": "apps/web/lib/jobs/__tests__/job-handlers.test.ts",
-      "sha256": "2d79b7c89c7e16801470a9f08feedce2172f591240253986a487f4976981fc55"
+      "sha256": "2b5455d51691f0c26ea032a9a2da48f04e6911d72e7c24ac0a105df963e62f06"
     },
     {
       "path": "apps/web/lib/jobs/job-handlers.ts",
@@ -1047,6 +1051,10 @@
       "sha256": "7be15b4dc020143cad481ab8859e59f97bf0d4ab5e64162070b9ac98d9f04059"
     },
     {
+      "path": "packages/contracts/types/src/time-contract.json",
+      "sha256": "5136f945484d5a8a45a42679a9769266e5bc5ebdcd81f8a9ce37e43722f4a5be"
+    },
+    {
       "path": "packages/platform/artifacts/src/__tests__/artifact-store.test.ts",
       "sha256": "326a0e0eda5b7078f21c0567d86bc3058c768216fdec2fcfe9b6c9262a3b958c"
     },
@@ -1083,6 +1091,10 @@
       "sha256": "e1fe39f8e18e2cd556103b2ad17493ce6fe5a75797fd5c17b7c5f033a01fef20"
     },
     {
+      "path": "scripts/check-time-semantics.test.mjs",
+      "sha256": "1d0cc65ef1693d99728413b2f8b43670f2e9234c40d89c41ff594078c9b9d806"
+    },
+    {
       "path": "scripts/config/package-runtimes.json",
       "sha256": "9b5516bc7d245477ca66dac5eccf5c05bcdac760205095d70f6ecfdf60d3712c"
     },
@@ -1095,7 +1107,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "b6effa62b219e39d966b957c18982bfb1fdcaa6d3a22cb27e96e9a268561da42",
+  "sourceFilesDigest": "13f2c7a3edbc5bddba744cf59ac63265a7cec6394ec9ee8a37de8679d9341684",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1645,8 +1657,39 @@
         "passed": 1,
         "failed": 0,
         "reportSha256": "532193fed3d6fafe8c788caa35c0455e1f17349ecda9f755bbab9ffc789fb80e"
+      },
+      {
+        "suite": "e10-final-integration-web.json",
+        "tests": 25,
+        "passed": 25,
+        "failed": 0,
+        "reportSha256": "99e788694cb875272645a3e707622297d5255c8ec96929145e83bcdabf6d4398"
+      },
+      {
+        "suite": "e10-tool-metadata-tests.json",
+        "tests": 31,
+        "passed": 31,
+        "failed": 0,
+        "reportSha256": "60f132a43cb683d462f45a5d84ae75d692bfea86509de4bbd26d426ae39448c4"
       }
-    ]
+    ],
+    "guardSweep": {
+      "total": 206,
+      "passedInitial": 199,
+      "failedInitial": 7,
+      "integrationRepairs": [
+        "shared scheduler runtime declarations",
+        "release environment documentation",
+        "unused timezone reexport removal",
+        "canonical time-contract paths and unchanged negative controls",
+        "browser opening egress metadata",
+        "named type aliases in test mocks"
+      ],
+      "localExcludedStateFailures": ["non-md-artifacts", "db-isolation"],
+      "cleanCheckout": "/tmp/agi-e10-clean-checkout",
+      "cleanFrozenDependencyInstall": "passed; offline; install scripts disabled; existing dependency tree untouched",
+      "finalStatus": "PENDING"
+    }
   },
   "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
   "removedSourcePaths": [],

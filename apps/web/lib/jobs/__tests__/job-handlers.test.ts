@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
 type ScanModule1 = typeof import('../job-service');
+type ScheduleNotificationModule = typeof import('@/lib/services/schedule-notification-service');
+type QuietHoursModule = typeof import('@/lib/services/quiet-hours-service');
 
 const mocks = vi.hoisted(() => ({
   loadSchedulePreferences: vi.fn(),
@@ -28,12 +30,12 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn((db: DatabaseAdapter) => db),
 }));
 vi.mock('@/lib/services/schedule-notification-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/schedule-notification-service')>()),
+  ...(await importOriginal<ScheduleNotificationModule>()),
   loadSchedulePreferences: mocks.loadSchedulePreferences,
   notifyScheduleCompleted: mocks.notifyScheduleCompleted,
 }));
 vi.mock('@/lib/services/quiet-hours-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/quiet-hours-service')>()),
+  ...(await importOriginal<QuietHoursModule>()),
   quietHoursEndFor: mocks.quietHoursEndFor,
 }));
 vi.mock('@/lib/services/notification-email-service', () => ({

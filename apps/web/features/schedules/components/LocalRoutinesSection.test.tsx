@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalRoutineState } from '@agiworkforce/local-runtime-contract';
+type LocalRuntimeModule = typeof import('@agiworkforce/local-runtime-contract');
 const mocks = vi.hoisted(() => ({
   available: true,
   invoke: vi.fn(),
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   allowed: vi.fn(),
 }));
 vi.mock('@agiworkforce/local-runtime-contract', async (original) => ({
-  ...(await original<typeof import('@agiworkforce/local-runtime-contract')>()),
+  ...(await original<LocalRuntimeModule>()),
   getHostBridge: () => (mocks.available ? { invokeRuntime: mocks.invoke } : null),
 }));
 vi.mock('@/features/desktop-host', () => ({
