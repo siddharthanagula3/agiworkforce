@@ -151,6 +151,82 @@ describe('useFolderSelection', () => {
     consoleError.mockRestore();
   });
 
+  it('keeps the visible folder until the host confirms it was cleared', async () => {
+    useProjectStore.setState({ currentFolder: '/Users/me/project' });
+    let complete!: () => void;
+    invokeMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useFolderSelection());
+
+    act(() => result.current.clearFolder());
+
+    expect(useProjectStore.getState().currentFolder).toBe('/Users/me/project');
+    expect(invokeMock).toHaveBeenCalledWith('project_context_set_folder', { path: null });
+    await act(async () => complete());
+    expect(useProjectStore.getState().currentFolder).toBeNull();
+  });
+
+  it('keeps the folder visible and reports when the host refuses to clear it', async () => {
+    useProjectStore.setState({ currentFolder: '/Users/me/project' });
+    invokeMock.mockRejectedValue('Could not clear the project folder.');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useFolderSelection());
+
+    act(() => result.current.clearFolder());
+
+    await waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith('Could not clear the project folder.'),
+    );
+    expect(useProjectStore.getState().currentFolder).toBe('/Users/me/project');
+    consoleError.mockRestore();
+  });
+
+  it('discards a picker result after the folder was cleared', async () => {
+    let pick!: (path: string) => void;
+    const picker = new Promise<string>((resolve) => {
+      pick = resolve;
+    });
+    invokeMock.mockImplementation((command: string) =>
+      command === 'pick_folder' ? picker : Promise.resolve(projectContext('/Users/me/project')),
+    );
+    const { result } = renderHook(() => useFolderSelection());
+    let selection!: ReturnType<typeof result.current.selectFolder>;
+    act(() => {
+      selection = result.current.selectFolder();
+    });
+    await act(async () => result.current.clearFolder());
+    await act(async () => pick('/Users/me/project'));
+
+    await expect(selection).resolves.toBeNull();
+    expect(invokeMock).not.toHaveBeenCalledWith('project_context_set_folder', {
+      path: '/Users/me/project',
+    });
+    expect(useProjectStore.getState().currentFolder).toBeNull();
+  });
+
+  it('does not let an older clear reply remove a newer selected folder', async () => {
+    let finishClear!: () => void;
+    const clearing = new Promise<void>((resolve) => {
+      finishClear = resolve;
+    });
+    invokeMock.mockImplementation((command: string, args?: { path?: string | null }) => {
+      if (command === 'pick_folder') return Promise.resolve('/Users/me/new-project');
+      if (args?.path === null) return clearing;
+      return Promise.resolve(projectContext('/Users/me/new-project'));
+    });
+    const { result } = renderHook(() => useFolderSelection());
+    act(() => result.current.clearFolder());
+    await act(async () => {
+      await result.current.selectFolder();
+    });
+    await act(async () => finishClear());
+
+    expect(useProjectStore.getState().currentFolder).toBe('/Users/me/new-project');
+  });
+
   it('reflects the currently scoped folder as a formatted label', () => {
     useProjectStore.setState({
       currentFolder: '/Users/siddhartha/Projects/agiworkforce',
