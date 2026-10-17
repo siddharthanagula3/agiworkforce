@@ -1,5 +1,7 @@
 'use client';
 
+import { LocalRoutinesSection } from './LocalRoutinesSection';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
@@ -716,9 +718,9 @@ export function SchedulesPage({
       });
   }, [api, canCreateSchedules, listStatus, scope?.projectId, sharedScheduleToken]);
 
-  const openNotificationSettings = useCallback(() => {
-    openSettings('notifications');
-  }, [openSettings]);
+  const openNotificationSettings = (schedule: ScheduleTask) => {
+    openEdit(schedule);
+  };
 
   const openResultPanel = useCallback(
     async (schedule: ScheduleTask) => {
@@ -810,6 +812,7 @@ export function SchedulesPage({
             : 'mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12'
         }
       >
+        {!scope && <LocalRoutinesSection />}
         <header
           className={
             scope

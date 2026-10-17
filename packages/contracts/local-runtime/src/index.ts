@@ -57,6 +57,7 @@ export {
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
+  DEVELOPER_SESSION_MAX_FRAME_BYTES,
   DEVELOPER_SESSION_EVENT_MESSAGE_KINDS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
@@ -464,3 +465,15 @@ export {
 } from './local-session-route';
 
 export type { LocalSessionAddress } from './local-session-route';
+
+export type {
+  LocalRoutineInput,
+  LocalRoutineRun,
+  LocalRoutineRunState,
+  LocalRoutine,
+  LocalRoutineState,
+} from './local-routines';
+export { LOCAL_ROUTINE_COMMANDS } from './local-routines';
+
+export { SSH_ENVIRONMENT_COMMANDS, isSshEnvironmentId } from './ssh-environments';
+export type { SshEnvironment, SshEnvironmentInput } from './ssh-environments';

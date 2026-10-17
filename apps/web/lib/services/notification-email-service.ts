@@ -22,6 +22,7 @@ function escapeHtml(value: string): string {
 }
 
 export interface ScheduleEmailInput {
+  idempotencyKey?: string;
   to: string;
   taskName: string;
   status: 'success' | 'failed' | 'timeout' | 'awaiting_approval';
@@ -61,6 +62,7 @@ export async function sendScheduleCompletionEmail(
   ];
 
   const result = await sendTransactionalEmail({
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     from,
     to: input.to,
     subject,

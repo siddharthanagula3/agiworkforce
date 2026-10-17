@@ -237,6 +237,15 @@ jobs:
             --config.extraMetadata.version="${EXPECTED_VERSION}" \
             --publish never
 
+      # electron-builder notarizes the .app. Each newly created DMG needs its
+      # own submission before the ticket validation below can succeed.
+      - name: Notarize and staple installer images
+        env:
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: node apps/desktop/electron/notarizeInstallers.mjs apps/desktop/release/*.dmg
+
       - name: Verify signed and notarized installer artifacts
         shell: bash
         run: |

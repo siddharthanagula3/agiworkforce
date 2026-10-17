@@ -860,15 +860,15 @@ pub fn apply_sandboxed_environment(command: &mut tokio::process::Command, worksp
 
 fn apply_environment_policy(command: &mut tokio::process::Command, scrub: bool) {
     let policy = resolve_environment_policy(scrub, credential_filter_requested());
-    if policy == EnvironmentPolicy::Inherited {
-        return;
+    if policy != EnvironmentPolicy::Inherited {
+        command.env_clear();
+        command.envs(environment_for_a_command(
+            std::env::vars_os(),
+            policy,
+            passed_credential_names(),
+        ));
     }
-    command.env_clear();
-    command.envs(environment_for_a_command(
-        std::env::vars_os(),
-        policy,
-        passed_credential_names(),
-    ));
+    crate::session_browser::apply_environment(command);
 }
 
 /// The sandbox tool by absolute path. A bare name would be looked up on
@@ -938,7 +938,7 @@ pub fn sandboxed_program(
         agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt => Some(program_scratch_dir()?),
         agiworkforce_sandbox_policy::SandboxBackend::LinuxBubblewrap => None,
     };
-    let (program, args) = agiworkforce_sandbox_policy::sandboxed_program(
+    let (program, mut args) = agiworkforce_sandbox_policy::sandboxed_program(
         backend,
         &manager.spec(),
         scratch.as_ref().map(scratch_path).as_deref(),
@@ -946,6 +946,13 @@ pub fn sandboxed_program(
         args,
     )
     .map_err(anyhow::Error::msg)?;
+    crate::session_browser::restrict_launch(
+        &mut args,
+        matches!(
+            backend,
+            agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt
+        ),
+    )?;
     Ok(SandboxedLaunch {
         program,
         args,
@@ -1246,7 +1253,7 @@ pub fn full_read_program_guarding(
         extra_writable_roots,
         network_policy,
     };
-    let wrapped = agiworkforce_sandbox_policy::full_read_program_guarding(
+    let mut wrapped = agiworkforce_sandbox_policy::full_read_program_guarding(
         backend,
         &spec,
         &protected_paths_for(workspace),
@@ -1256,6 +1263,13 @@ pub fn full_read_program_guarding(
         &args,
     )
     .map_err(anyhow::Error::msg)?;
+    crate::session_browser::restrict_launch(
+        &mut wrapped.args,
+        matches!(
+            backend,
+            agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt
+        ),
+    )?;
     warn_unprotected_once(&wrapped.unprotected);
     Ok(Some(SandboxedLaunch {
         program: wrapped.command,
@@ -1320,6 +1334,7 @@ fn command_profile(manager: &SandboxManager, scratch_dir: &Path) -> Result<Strin
             validate_and_escape_seatbelt_path(&snapshot)?,
         ));
     }
+    crate::session_browser::extend_profile(&mut profile)?;
     Ok(profile)
 }
 
@@ -1376,6 +1391,7 @@ fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
         args.extend(["--ro-bind".to_string(), snapshot.clone(), snapshot]);
         args.push("--".to_string());
     }
+    crate::session_browser::restrict_launch(&mut args, false)?;
     Ok(args)
 }
 

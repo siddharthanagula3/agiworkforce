@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url';
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 export const ROOT_MODULES = [
-  'apps/web/lib/schedules/schedule-time.ts',
-  'apps/web/lib/schedules/recurrence-rule.ts',
+  'packages/platform/utils/src/scheduling/schedule-time.ts',
+  'packages/platform/utils/src/scheduling/recurrence-rule.ts',
 ];
 
 /** `Date.now()` and a `new Date()` that reads whatever the server clock says. */

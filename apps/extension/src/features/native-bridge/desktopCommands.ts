@@ -28,6 +28,7 @@ const MAX_DESKTOP_FIND_QUERY_CHARS = 200;
 export interface DesktopCommandContext {
   resolveTabId: (explicitTabId?: number) => Promise<number | null>;
   listTabs: () => Promise<BrowserTabSummary[]>;
+  openTab?: (url: string) => Promise<unknown>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
   history: (tabId: number, direction: 'back' | 'forward') => Promise<void>;
@@ -115,6 +116,8 @@ async function execute(
   const { args } = request;
 
   switch (request.command) {
+    case 'browser_open_tab':
+      throw new Error('Opening a tab requires the owned browser driver.');
     case 'browser_list_tabs':
       return context.listTabs();
     case 'browser_read_page': {
@@ -319,6 +322,19 @@ export async function runDesktopBrowserCommand(
   }
 
   try {
+    if (raw.command === 'browser_open_tab') {
+      const url = raw.args['url'];
+      if (typeof url !== 'string' || !context.openTab)
+        return failed(raw.id, 'Opening a new tab is unavailable.');
+      const parsed = new URL(url);
+      if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password)
+        return failed(raw.id, 'Only HTTP addresses without credentials can be opened.');
+      const rules = siteRulesOf(raw.siteRules);
+      if (rules && !webDomainAllowed(rules, url))
+        return failed(raw.id, 'The workspace website rules refuse this address.');
+      await authorizeBrowserToolUrl(url);
+      return succeeded(raw.id, await context.openTab(url));
+    }
     if (raw.command === 'browser_list_tabs') {
       return succeeded(raw.id, await context.listTabs());
     }

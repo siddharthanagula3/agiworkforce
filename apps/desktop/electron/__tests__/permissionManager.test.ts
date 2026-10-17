@@ -343,3 +343,17 @@ describe('asking for a permission', () => {
     expect(showMessageBox).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('grant revisions used by unattended local work', () => {
+  it('keeps a session grant revision stable on ordinary use and changes it across revocation and regrant', async () => {
+    const runtime = await freshRuntime();
+    runtime.recordDecision('shell.execute', LEDGER, 'granted', 'session');
+    const original = runtime.permissionRevision('shell.execute', LEDGER);
+    runtime.consumeSingleUse('shell.execute', LEDGER);
+    expect(runtime.permissionRevision('shell.execute', LEDGER)).toBe(original);
+    runtime.revokeScope(LEDGER);
+    runtime.recordDecision('shell.execute', LEDGER, 'granted', 'session');
+    expect(runtime.permissionRevision('shell.execute', LEDGER)).toBeGreaterThan(original);
+    expect(runtime.permissionRevision('shell.execute', ATLAS)).toBe(0);
+  });
+});

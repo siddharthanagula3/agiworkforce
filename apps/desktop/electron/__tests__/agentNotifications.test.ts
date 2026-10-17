@@ -565,3 +565,33 @@ describe('agent notifications', () => {
     expect(notifier.activity().runningTurns).toHaveLength(0);
   });
 });
+
+it('suppresses routine banners while still tracking approvals, terminal state and cleanup', async () => {
+  const { notifier, shown, deps } = harness();
+  notifier.handle('root', { type: 'turn-started', threadId: 'thread', turnId: 'turn' });
+  notifier.handle(
+    'root',
+    { type: 'approval-requested', ...approvalRequest, threadId: 'thread', turnId: 'turn' },
+    false,
+  );
+  expect(notifier.activity().runningTurns).toHaveLength(1);
+  expect(notifier.activity().pendingApprovals).toHaveLength(1);
+  notifier.handle(
+    'root',
+    {
+      type: 'turn-finished',
+      threadId: 'thread',
+      turnId: 'turn',
+      outcome: 'completed',
+      response: 'owned result',
+      failure: null,
+      inputTokens: 0,
+      outputTokens: 0,
+    },
+    false,
+  );
+  await settle();
+  expect(shown).toHaveLength(0);
+  expect(notifier.activity()).toEqual({ runningTurns: [], pendingApprovals: [] });
+  expect(deps.onActivityChanged).toHaveBeenCalled();
+});

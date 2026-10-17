@@ -1,4 +1,9 @@
 import {
+  noteLocalRoutineEvent,
+  startLocalRoutines,
+  stopLocalRoutines,
+} from './runtime/localRoutineService';
+import {
   BrowserWindow,
   Notification,
   app,
@@ -2007,6 +2012,7 @@ if (!hasSingleInstanceLock) {
           REMOTE_CODE_LIMITS.messageLength,
         ) || null,
       remoteControlActive,
+      mayReportRoot: (rootId) => agentAllowedIn(rootId),
       report: reportCodeSessionActivity,
     });
     configureDeveloperSessions({
@@ -2014,7 +2020,7 @@ if (!hasSingleInstanceLock) {
         noteBackgroundSessionEvent(rootId, event);
         sendRuntimeEvent({ kind: 'developer-session', rootId, event });
         relayDeveloperSessionEvent(rootId, event);
-        agentNotifier.handle(rootId, event);
+        agentNotifier.handle(rootId, event, noteLocalRoutineEvent(rootId, event).notify);
         noteDispatcherSessionEvent(rootId, event);
         codeSessionActivity(rootId, event).catch((error: unknown) =>
           console.warn('[code-session-activity] could not deliver activity:', error),
@@ -2026,6 +2032,10 @@ if (!hasSingleInstanceLock) {
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,
     });
+
+    void startLocalRoutines().catch((error: unknown) =>
+      console.warn('[local-routines] unavailable:', error),
+    );
 
     configureQuickAskBridge({
       preload: path.join(__dirname, 'preload.cjs'),
@@ -2068,6 +2078,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    stopLocalRoutines();
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
     stopRemoteControl();

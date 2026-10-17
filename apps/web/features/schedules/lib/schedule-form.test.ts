@@ -108,11 +108,18 @@ describe('schedule form contract', () => {
         missedExecutionPolicy: 'run_once',
         condition: null,
         creditCap: null,
+        notificationSettings: {
+          onSuccess: true,
+          onFailure: true,
+          onApproval: true,
+          push: true,
+          email: true,
+        },
         sources: { project: true, memory: true, web: true, recentChats: false },
         connectors: null,
       },
     });
-    expect(JSON.stringify(result)).not.toContain('notification');
+    expect(result.ok && result.payload.notificationSettings?.onApproval).toBe(true);
   });
 
   it('carries a whole-credit spend cap and refuses one outside the allowed range', () => {

@@ -3,6 +3,7 @@ import type {
   CheckpointSection,
   DeveloperAgentMode,
   DeveloperMessage,
+  DeveloperChildTask,
   DeveloperReasoningEffort,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
@@ -17,6 +18,8 @@ import type {
   WorktreeStartPoint,
 } from '@agiworkforce/types/protocol';
 import type { MessageKind } from '@agiworkforce/types';
+
+export const DEVELOPER_SESSION_MAX_FRAME_BYTES = 4 * 1024 * 1024;
 
 export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',
@@ -98,6 +101,7 @@ export interface LocalDeveloperSession {
   updatedAt: string;
   origin: DeveloperSessionSource;
   location?: 'cloud';
+  environment?: 'local' | 'worktree' | 'ssh';
 }
 
 /**
@@ -313,6 +317,7 @@ export interface DeveloperSessionList {
 }
 
 export interface DeveloperSessionTranscript {
+  childTasks?: DeveloperChildTask[];
   session: LocalDeveloperSession;
   messages: DeveloperMessage[];
   truncated: boolean;
@@ -323,6 +328,8 @@ export interface DeveloperSessionTranscript {
 export interface DeveloperActiveTurn {
   turnId: string;
   partialResponse: string;
+  nextDeltaIndex?: number;
+  nextEventSequence?: number;
   approvals: DeveloperApprovalRequest[];
   questions: DeveloperUserInputRequest[];
 }
@@ -341,9 +348,9 @@ export const DEVELOPER_FILE_CHANGE_LABELS: Record<DeveloperFileChange, string> =
   deleted: 'Deleted',
 };
 
-export type DeveloperSessionEvent =
+type DeveloperSessionEventBody =
   | { type: 'turn-started'; threadId: string; turnId: string }
-  | { type: 'output-delta'; threadId: string; turnId: string; delta: string }
+  | { type: 'output-delta'; threadId: string; turnId: string; delta: string; index?: number }
   | {
       type: 'turn-finished';
       threadId: string;
@@ -447,6 +454,8 @@ export type DeveloperSessionEvent =
       succeeded: boolean;
     }
   | { type: 'runtime-stopped'; message: string };
+
+export type DeveloperSessionEvent = DeveloperSessionEventBody & { sequence?: number };
 
 export const DEVELOPER_SESSION_EVENT_MESSAGE_KINDS = Object.freeze({
   'turn-started': 'status',
@@ -696,7 +705,7 @@ export function developerReviewDecision(answer: DeveloperApprovalAnswer): Review
  * Where a new session runs: in the approved folder itself, or in a worktree of
  * it that only that session changes.
  */
-export const DEVELOPER_SESSION_ENVIRONMENTS = ['local', 'worktree'] as const;
+export const DEVELOPER_SESSION_ENVIRONMENTS = ['local', 'worktree', 'ssh'] as const;
 
 export type DeveloperSessionEnvironment = (typeof DEVELOPER_SESSION_ENVIRONMENTS)[number];
 

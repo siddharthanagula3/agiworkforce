@@ -219,3 +219,74 @@ describe('notifyScheduleCompleted, never throws', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 });
+
+describe('per-routine notification policy', () => {
+  it.each(['success', 'failed', 'awaiting_approval'] as const)(
+    'suppresses a disabled %s event, including its feed row',
+    async (status) => {
+      mocks.query.mockResolvedValue([
+        {
+          notifications: {},
+          email: 'user@example.test',
+          schedule_notifications: { onSuccess: false, onFailure: false, onApproval: false },
+        },
+      ]);
+      expect(await notifyScheduleCompleted(callerDb, { ...notice, status })).toEqual({
+        pushed: false,
+        emailed: false,
+      });
+      expect(mocks.record).not.toHaveBeenCalled();
+      expect(mocks.sendPush).not.toHaveBeenCalled();
+      expect(mocks.sendEmail).not.toHaveBeenCalled();
+    },
+  );
+
+  it('intersects routine channels with account consent', async () => {
+    mocks.query.mockResolvedValue([
+      {
+        notifications: { [SCHEDULE_PUSH_PREFERENCE_KEY]: false },
+        email: 'user@example.test',
+        schedule_notifications: { email: false, push: true },
+      },
+    ]);
+    expect(await notifyScheduleCompleted(callerDb, notice)).toEqual({
+      pushed: false,
+      emailed: false,
+    });
+    expect(mocks.record).toHaveBeenCalledTimes(1);
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['user-1', 'task-1']);
+  });
+
+  it('does not redeliver a duplicate notification event', async () => {
+    mocks.record.mockResolvedValue({ recorded: false });
+    expect(await notifyScheduleCompleted(callerDb, { ...notice, runId: 'same-run' })).toEqual({
+      pushed: false,
+      emailed: false,
+    });
+    expect(mocks.sendPush).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on invalid persisted routine preferences', async () => {
+    mocks.query.mockResolvedValue([
+      { notifications: {}, email: 'user@example.test', schedule_notifications: { push: 'yes' } },
+    ]);
+    expect(await notifyScheduleCompleted(callerDb, notice)).toEqual({
+      pushed: false,
+      emailed: false,
+    });
+    expect(mocks.record).not.toHaveBeenCalled();
+  });
+  it('does not revive notifications for a deleted or inaccessible routine', async () => {
+    mocks.query.mockResolvedValue([
+      { notifications: {}, email: 'user@example.test', schedule_exists: false },
+    ]);
+    expect(await notifyScheduleCompleted(callerDb, notice)).toEqual({
+      pushed: false,
+      emailed: false,
+    });
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.sendPush).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+});

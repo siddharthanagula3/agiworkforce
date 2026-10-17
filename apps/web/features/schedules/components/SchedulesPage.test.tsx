@@ -486,6 +486,38 @@ describe('SchedulesPage', () => {
     expect(screen.queryByRole('dialog', { name: 'Create Schedule' })).not.toBeInTheDocument();
   });
 
+  it('edits the selected routine notification policy from its own menu', async () => {
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+    const user = userEvent.setup();
+    render(
+      <SchedulesPage
+        api={api}
+        now={() => new Date('2026-07-15T12:00:00.000Z')}
+        onOpenChat={() => undefined}
+      />,
+    );
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Notification settings' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Schedule' });
+    await user.click(within(dialog).getByRole('switch', { name: 'When completed' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() =>
+      expect(api.updateSchedule).toHaveBeenCalledWith(
+        'schedule-1',
+        expect.objectContaining({
+          notificationSettings: {
+            onSuccess: false,
+            onFailure: true,
+            onApproval: true,
+            push: true,
+            email: true,
+          },
+        }),
+      ),
+    );
+  });
+
   it('edits, pauses, resumes, and manually runs an active schedule with a stable key', async () => {
     const updated = { ...schedule, name: 'Updated brief' };
     const updateSchedule = vi.fn(async () => updated);
@@ -738,6 +770,9 @@ describe('SchedulesPage', () => {
       within(legacyCard).getByRole('button', { name: 'More actions for Legacy workflow' }),
     );
     expect(within(legacyCard).getByRole('menuitem', { name: 'Run now' })).toBeDisabled();
+    expect(
+      within(legacyCard).getByRole('menuitem', { name: 'Notification settings' }),
+    ).toBeDisabled();
 
     await user.click(
       within(finishedCard).getByRole('button', { name: 'More actions for Finished brief' }),

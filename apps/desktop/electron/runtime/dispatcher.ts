@@ -1,3 +1,12 @@
+import { openBrowserAddress } from '../windowPolicy';
+import { hasSshEnvironment, listSshEnvironments, requireSshRoot } from './sshEnvironments';
+import { connectSshSession, disconnectSshSession } from './sshSessionService';
+import {
+  createLocalRoutine,
+  readLocalRoutines,
+  setLocalRoutineEnabled,
+  removeLocalRoutine,
+} from './localRoutineService';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
@@ -16,6 +25,7 @@ import {
   evaluateShellPolicy,
   isBackgroundWorkKind,
   isDesktopCapability,
+  isSshEnvironmentId,
   isDeveloperApprovalDecision,
   isDeveloperSessionEnvironment,
   isDeveloperThreadRevertRestore,
@@ -209,6 +219,7 @@ import {
   compactDeveloperThread,
   grantDeveloperMcpApproval,
   interruptDeveloperTurn,
+  interruptOwnedDeveloperTurn,
   listDeveloperCheckpoints,
   listDeveloperPlugins,
   listDeveloperSessions,
@@ -244,6 +255,7 @@ import {
   consumeSingleUse,
   describePermission,
   getPermissionState,
+  permissionRevision,
   listPermissions,
   requestPermission,
   reviewPermissions,
@@ -599,6 +611,11 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
     capability: 'filesystem.read',
     reason: 'The agent wants to show a file from this folder in your file manager.',
   },
+  local_routine_create: {
+    capability: 'shell.execute',
+    reason:
+      'A local routine starts the coding agent in this folder at the times you choose. Main asks for separate routine consent before saving it.',
+  },
   developer_session_start: {
     capability: 'shell.execute',
     reason:
@@ -835,6 +852,7 @@ function commandRequirement(command: string, args: Args): CommandRequirement | u
 function resolveGateRoot(command: string, args: Args): WorkspaceRoot {
   const rootId = requireString(args, 'rootId');
   const approvedId = approvedRootId(rootId);
+  if (hasSshEnvironment(rootId)) return requireSshRoot(rootId);
   if (approvedId === rootId) return resolveRoot(args);
   const root = getRoot(approvedId);
   if (!root || (!command.startsWith('developer_') && !getRoot(rootId))) {
@@ -931,7 +949,9 @@ function stopScreenControl(): ReturnType<typeof stopComputerUse> {
  */
 async function listSessionsWithinGrants(): Promise<DeveloperSessionList> {
   const roots = listRoots();
-  const listed = await listDeveloperSessions((root) => agentAllowedIn(root.id));
+  const listed = await listDeveloperSessions(
+    (root) => hasSshEnvironment(root.id) || agentAllowedIn(root.id),
+  );
   const withheld = await Promise.all(
     roots
       .filter((root) => !agentAllowedIn(root.id))
@@ -1624,6 +1644,7 @@ async function approveShellCommand(
 async function approveBrowserCommand(
   window: BrowserWindow | null,
   plan: BrowserCommandPlan,
+  owner?: string,
 ): Promise<boolean> {
   const options = {
     type: 'warning' as const,
@@ -1636,7 +1657,7 @@ async function approveBrowserCommand(
     noLink: true,
   };
   const subject = {
-    group: 'browser',
+    group: owner ? `browser ${owner}` : 'browser',
     key: `${plan.summary}\n${plan.detail}`,
     quietAfterCancel: true,
   };
@@ -1727,6 +1748,7 @@ export async function runBrowserCommand(
       },
     );
   }
+  const reviewedRevision = permissionRevision(plan.capability, scope);
   // A local client already put the tool call through its own approval, so a
   // second dialog here would ask the same question with no new information.
   if (!caller && !(await approveBrowserCommand(window, plan))) {
@@ -1741,7 +1763,25 @@ export async function runBrowserCommand(
     : recordBrowserActivity(MANUAL_BROWSER_CLIENT, plan.command, plan.args);
   let value: unknown;
   try {
-    value = await sendBrowserCommand(plan.command, plan.args, undefined, signal);
+    if (
+      plan.command === 'browser_open_tab' &&
+      getPermissionState(plan.capability, scope) !== 'granted'
+    )
+      return runtimeFailure('cancelled', 'Browser access was withdrawn.');
+    if (plan.command === 'browser_open_tab' && caller && !pairingState().connected) {
+      if (!(await approveBrowserCommand(window, plan, caller.name)))
+        return runtimeFailure('cancelled', 'The default browser was not opened.');
+      if (
+        signal?.aborted ||
+        getPermissionState(plan.capability, scope) !== 'granted' ||
+        permissionRevision(plan.capability, scope) !== reviewedRevision
+      )
+        return runtimeFailure('cancelled', 'Browser authority changed before opening.');
+      await openBrowserAddress(plan.args['url'] as string);
+      value = { destination: 'default-browser', sharedProfile: true, url: plan.args['url'] };
+    } else {
+      value = await sendBrowserCommand(plan.command, plan.args, undefined, signal);
+    }
   } catch (error) {
     if (activity) {
       settleBrowserActivity(
@@ -2038,6 +2078,24 @@ async function execute(
       return reportDispatchTask(window, args);
     case BROWSER_SIGN_IN_START:
       return startBrowserSignIn();
+    case 'developer_ssh_connect':
+      return connectSshSession(window, args);
+    case 'developer_ssh_list':
+      return listSshEnvironments();
+    case 'developer_ssh_disconnect':
+      return disconnectSshSession(requireString(args, 'rootId'));
+    case 'local_routine_list':
+      return readLocalRoutines();
+    case 'local_routine_create':
+      return createLocalRoutine(window, args);
+    case 'local_routine_set_enabled':
+      return setLocalRoutineEnabled(
+        window,
+        requireString(args, 'id'),
+        requireBoolean(args, 'enabled'),
+      );
+    case 'local_routine_remove':
+      return removeLocalRoutine(requireString(args, 'id'));
     case 'developer_runtime_status':
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
@@ -2052,6 +2110,11 @@ async function execute(
     case 'developer_session_start': {
       const model = optionalString(args, 'model', '');
       const environment = args['environment'] ?? 'local';
+      if (environment === 'ssh' && !hasSshEnvironment(requireString(args, 'rootId'))) {
+        throw new InvalidArguments(
+          'Use Connect SSH and review its remote host before starting an SSH session.',
+        );
+      }
       if (!isDeveloperSessionEnvironment(environment)) {
         throw new InvalidArguments('"environment" must be "local" or "worktree".');
       }
@@ -2062,7 +2125,11 @@ async function execute(
       return startDeveloperSession(
         requireString(args, 'rootId'),
         model === '' ? undefined : model,
-        environment === 'worktree' ? { environment, worktreeStart } : {},
+        environment === 'worktree'
+          ? { environment, worktreeStart }
+          : environment === 'ssh'
+            ? { environment }
+            : {},
       );
     }
     case 'developer_worktree_delete':
@@ -2216,6 +2283,14 @@ async function execute(
       });
     }
     case 'developer_turn_interrupt':
+      if (hasSshEnvironment(requireString(args, 'rootId'))) {
+        await interruptOwnedDeveloperTurn(
+          requireString(args, 'rootId'),
+          requireString(args, 'threadId'),
+          requireString(args, 'turnId'),
+        );
+        return true;
+      }
       return interruptDeveloperTurn(
         requireString(args, 'rootId'),
         requireString(args, 'threadId'),
@@ -2443,6 +2518,12 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   BROWSER_STEP_COMMAND,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
+  'developer_ssh_connect',
+  'developer_ssh_list',
+  'developer_ssh_disconnect',
+  'local_routine_list',
+  'local_routine_set_enabled',
+  'local_routine_remove',
   'background_activity',
   'background_stop',
   'browser_activity',
@@ -2500,6 +2581,21 @@ export function commandGates(command: string): CommandGate[] {
  * refuse what this shell does not do, classify, resolve the workspace, check
  * permission, then call the service.
  */
+const SSH_SESSION_COMMANDS = new Set([
+  'developer_model_list',
+  'developer_session_read',
+  'developer_session_start',
+  'developer_turn_start',
+  'developer_turn_steer',
+  'developer_turn_interrupt',
+  'developer_approval_answer',
+  'developer_user_input_answer',
+  'developer_thread_archive',
+  'developer_thread_takeover',
+  'developer_thread_fork',
+  'developer_thread_compact',
+]);
+
 export async function dispatch(
   window: BrowserWindow | null,
   command: string,
@@ -2512,6 +2608,43 @@ export async function dispatch(
       return runtimeFailure('unsupported-platform', LOCAL_INFERENCE_UNSUPPORTED);
     }
 
+    if (
+      typeof args['rootId'] === 'string' &&
+      isSshEnvironmentId(args['rootId']) &&
+      command !== 'developer_ssh_disconnect'
+    ) {
+      requireSshRoot(args['rootId']);
+      if (!SSH_SESSION_COMMANDS.has(command))
+        return runtimeFailure(
+          'unsupported-platform',
+          'This SSH environment supports agent sessions and transcript diffs. Host file editing, PTY, worktree management and local device operations are unavailable.',
+        );
+      if (
+        args['environment'] === 'worktree' ||
+        (args['agentMode'] !== undefined && args['agentMode'] !== 'ask') ||
+        (Array.isArray(args['contextFiles']) && args['contextFiles'].length) ||
+        (Array.isArray(args['images']) && args['images'].length)
+      )
+        return runtimeFailure(
+          'unsupported-platform',
+          'SSH sessions use Ask mode and text input. Local files, images and worktree placement are not implicitly transferred.',
+        );
+      if (
+        command === 'developer_approval_answer' &&
+        !['approve_once', 'deny', 'deny_and_stop'].includes(String(args['decision']))
+      )
+        return runtimeFailure(
+          'unsupported-platform',
+          'This SSH environment supports individual approval decisions. Persistent grants must be reviewed in the remote CLI.',
+        );
+      return runtimeSuccess(
+        await execute(
+          window,
+          command,
+          command === 'developer_turn_start' ? { ...args, agentMode: 'ask' } : args,
+        ),
+      );
+    }
     if (isBrowserCommand(command)) {
       return await runBrowserCommand(window, command, args);
     }

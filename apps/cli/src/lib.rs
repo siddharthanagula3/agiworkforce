@@ -35,6 +35,7 @@ pub mod doctor;
 pub mod documents;
 pub mod errors;
 pub mod hex;
+mod session_browser;
 // hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
 // using `crate::hooks::*` continue to resolve unchanged.
 pub use features::hooks::hooks;
@@ -8097,6 +8098,9 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
         return documents::run_extract_command(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some(session_browser::HELPER_COMMAND) {
+        return session_browser::run_helper(&args[1..]);
     }
     broken_pipe::install_panic_hook();
     let result = tokio::runtime::Builder::new_multi_thread()

@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  ManagedCloudScheduleNotificationSettingsSchema,
   MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
   ManagedCloudScheduleRunApprovalToolCallSchema,
@@ -369,6 +370,9 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
       row.paused_reason === 'credit_cap_reached' || row.paused_reason === 'approval_required'
         ? row.paused_reason
         : null,
+    notificationSettings: ManagedCloudScheduleNotificationSettingsSchema.parse(
+      row.metadata?.['notificationSettings'] ?? {},
+    ),
     sources: sourcesFromMetadata(row.metadata),
     connectors: connectorsFromMetadata(row.metadata),
   };
@@ -635,9 +639,9 @@ function validateScheduleInput(
       throw new ScheduleValidationError('Description must be 2,000 characters or less');
     }
     const projectId = input.projectId?.trim() || null;
-    if (input.notificationSettings !== undefined) {
-      throw new ScheduleValidationError('Schedule notifications are not available yet');
-    }
+    const notificationSettings = ManagedCloudScheduleNotificationSettingsSchema.parse(
+      input.notificationSettings === undefined ? {} : input.notificationSettings,
+    );
     if (input.isActive !== undefined && typeof input.isActive !== 'boolean') {
       throw new ScheduleValidationError('isActive must be a boolean');
     }
@@ -784,6 +788,7 @@ function validateScheduleInput(
       nextExecutionAt,
       status: isEnabled ? 'active' : 'paused',
       metadata: {
+        notificationSettings,
         productRecurrence: input.recurrence,
         ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
         ...(input.daysOfWeek ? { daysOfWeek: [...input.daysOfWeek] } : {}),
@@ -1008,6 +1013,7 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     retryBackoffSeconds: task.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS,
     missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
     condition: task.condition ?? null,
+    notificationSettings: task.notificationSettings ?? task.metadata?.['notificationSettings'],
     sources: task.sources ?? sourcesFromMetadata(task.metadata),
     connectors: task.connectors ?? connectorsFromMetadata(task.metadata),
   };

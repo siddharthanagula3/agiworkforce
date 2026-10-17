@@ -169,6 +169,20 @@ export function planBrowserCommand(
         ),
       );
     }
+    case 'browser_open_tab': {
+      const url = requireHttpUrl(rawArgs, 'url');
+      const parsed = new URL(url);
+      if (parsed.username || parsed.password)
+        throw new InvalidBrowserArguments('Browser addresses cannot contain credentials.');
+      return plan(
+        { url },
+        'Open a new browser tab?',
+        withSent(
+          'A new tab opens this address using your browser profile and cookies. If no paired browser is connected, Desktop asks before opening your default browser.',
+          [['Address', shownValue(url, ADDRESS_SHOWN)]],
+        ),
+      );
+    }
     case 'browser_navigate': {
       const url = requireHttpUrl(rawArgs, 'url');
       return plan(

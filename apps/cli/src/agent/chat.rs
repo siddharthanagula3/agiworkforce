@@ -474,6 +474,7 @@ impl AgentSession {
     /// the partial assistant text (or a `[stopped]` marker) so history stays a
     /// valid user→assistant sequence for the next turn.
     pub async fn cancel_turn(&mut self, partial: &str) {
+        self.interrupt_child_tasks(true);
         self.close_unanswered_tool_calls();
         let was_running = self.messages.last().map(|m| m.role.as_str()) == Some("user");
         self.finalize_cancelled_turn(partial);
@@ -1032,6 +1033,54 @@ impl AgentSession {
     }
 
     pub async fn send(
+        &mut self,
+        config: &CliConfig,
+        user_input: &str,
+        on_chunk: StreamCallback,
+    ) -> Result<TurnResult> {
+        #[cfg(unix)]
+        let browser = if self.privacy_mode != super::PrivacyMode::Local
+            && !matches!(
+                self.governed_permission_mode(),
+                crate::cli_options::PermissionMode::Plan
+                    | crate::cli_options::PermissionMode::DontAsk
+            )
+            && (!self.plan_mode || self.plan_approved)
+            && crate::browser_bridge::read_bridge_file().is_some()
+        {
+            self.recorded_approval_callback()
+                .zip(self.checkpoint_file_authority().cloned())
+                .map(|(approval, workspace)| {
+                    crate::session_browser::BrowserScope::start(
+                        crate::session_browser::BrowserAuthority {
+                            workspace,
+                            approval,
+                            active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                            session_id: self
+                                .managed_session_id()
+                                .unwrap_or(&self.runtime_session_id)
+                                .to_string(),
+                            allowed_tools: self.allowed_tools.clone(),
+                            disallowed_tools: self.disallowed_tools.clone(),
+                        },
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        #[cfg(unix)]
+        let environment = browser.as_ref().map(|browser| browser.environment.clone());
+        #[cfg(not(unix))]
+        let environment = None;
+        crate::session_browser::scope(
+            environment,
+            Box::pin(self.send_inner(config, user_input, on_chunk)),
+        )
+        .await
+    }
+
+    async fn send_inner(
         &mut self,
         config: &CliConfig,
         user_input: &str,
@@ -2633,9 +2682,14 @@ impl TurnHost for TurnHostAdapter<'_> {
                 ));
             }
 
-            let approval = self.session.on_tool_approval.clone();
+            let approval = self
+                .session
+                .recorded_approval_callback()
+                .map(crate::agent::ToolApprovalSink);
+            let workspace_authority = self.session.checkpoint_file_authority().cloned();
             if let Some(manager) = self.session.subagent_manager.as_mut() {
                 manager.set_approval(approval);
+                manager.set_workspace_authority(workspace_authority);
             }
             let parent_model = self.session.model.clone();
             let parent_skip_permissions = self.session.skips_approval();
@@ -2681,15 +2735,26 @@ impl TurnHost for TurnHostAdapter<'_> {
                 mode: DispatchMode::Sequential,
             });
             let started = std::time::Instant::now();
-            let mgr = self
-                .session
-                .subagent_manager
-                .as_ref()
-                .expect("subagent_manager was just initialized above");
-            let id_result = match named_agent {
-                Some(definition) => mgr.spawn_named(definition, &prompt).await,
-                None => mgr.spawn(&description, &prompt).await,
+            let child_id = format!("subagent_{}", uuid::Uuid::new_v4());
+            let id_result = match self.session.start_child_task(&child_id, &description) {
+                Ok(()) => {
+                    self.session
+                        .subagent_manager
+                        .as_ref()
+                        .expect("subagent_manager was just initialized above")
+                        .spawn_owned(&child_id, &description, &prompt, named_agent)
+                        .await
+                }
+                Err(error) => Err(error),
             };
+            if let Err(error) = &id_result {
+                if let Err(persist_error) = self.session.settle_child_task(
+                    &child_id,
+                    &crate::subagent::SubagentStatus::Failed(format!("{error:#}")),
+                ) {
+                    narrate!("Failed to persist child failure: {persist_error:#}");
+                }
+            }
 
             hooks::run_hooks(
                 &hcfg,
@@ -2722,14 +2787,24 @@ impl TurnHost for TurnHostAdapter<'_> {
             ));
         }
 
+        let mut child_persistence_failures = std::collections::HashSet::new();
         if !task_spawn_results.is_empty() {
             if let Some(ref mgr) = self.session.subagent_manager {
-                mgr.wait_all().await;
+                let outcomes = mgr.wait_all().await;
+                for (id, status) in outcomes {
+                    if let Err(error) = self.session.settle_child_task(&id, &status) {
+                        narrate!("Failed to persist child outcome {id}: {error:#}");
+                        child_persistence_failures.insert(id);
+                    }
+                }
             }
         }
 
         for (tool_use_id, tool_name, tool_args, id_result, started) in task_spawn_results {
-            let tool_result = match id_result {
+            let persistence_failed = id_result
+                .as_ref()
+                .is_ok_and(|id| child_persistence_failures.contains(id));
+            let mut tool_result = match id_result {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
                         if let Some(sa_result) = mgr.get_result(id).await {
@@ -2737,7 +2812,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                                 &sa_result.usage.model,
                                 sa_result.usage.cost_usd,
                             );
-                            let mut output = sa_result.output;
+                            let mut output = format!("Child task: {id}\n\n{}", sa_result.output);
                             if !sa_result.files_modified.is_empty() {
                                 output.push_str("\n\nFiles modified:\n");
                                 for f in &sa_result.files_modified {
@@ -2779,6 +2854,11 @@ impl TurnHost for TurnHostAdapter<'_> {
                     output: format!("Failed to spawn subagent: {:#}", e),
                 },
             };
+
+            if persistence_failed {
+                tool_result.success = false;
+                tool_result.output.push_str("\n\nThe child finished, but its saved lifecycle could not be updated. Its effects may exist. Review this task before retrying it.");
+            }
 
             self.on_event(&TurnEvent::ToolFinished {
                 id: tool_use_id.clone(),

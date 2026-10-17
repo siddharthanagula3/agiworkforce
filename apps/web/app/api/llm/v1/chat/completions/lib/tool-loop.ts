@@ -161,7 +161,7 @@ import {
   toolDirectoryToolDef,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
-import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
+import { stageTurnAttachments, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
   STORED_RESULT_NOTICE_MARKER,
@@ -2163,6 +2163,7 @@ async function runMcpTool(
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
+    officeAttachments?: readonly TurnAttachment[];
     latestAttachedImage?: () => string | null;
     sensitiveDataRead?: () => boolean;
     googleUserDataRead?: () => boolean;
@@ -2318,7 +2319,11 @@ async function runMcpTool(
     if (!executionContext?.userId) {
       return { content: 'An authenticated file owner is required.', isError: true };
     }
-    const generated = await generateManagedOfficeFile(toolCall.args);
+    const generated = await generateManagedOfficeFile(toolCall.args, {
+      attachments: executionContext.officeAttachments,
+      executor: async () => (await e2bExecutor()).executor,
+      ...(executionContext.signal ? { signal: executionContext.signal } : {}),
+    });
     if (!generated.ok) {
       return { content: generated.message, isError: true };
     }
@@ -2334,7 +2339,7 @@ async function runMcpTool(
       ...(executionContext.conversationId
         ? { conversationId: executionContext.conversationId }
         : {}),
-      extraMetadata: { format: toolCall.args['format'] },
+      extraMetadata: { format: toolCall.args['format'], verification: generated.verification },
     });
     if (!persisted.ok) {
       return { content: 'The Office file could not be attached.', isError: true };
@@ -2342,6 +2347,7 @@ async function runMcpTool(
     return {
       content: JSON.stringify({
         ok: true,
+        verification: generated.verification,
         file: {
           name: persisted.file.file_name,
           uri: persisted.file.uri,
@@ -5008,6 +5014,7 @@ export async function* runToolLoop(
               surface: processed.chatSurface,
               temporaryChat: processed.conversationIsTemporary === true,
               conversationId: processed.conversationId ?? null,
+              officeAttachments: processed.turnAttachments,
               latestAttachedImage: () =>
                 latestTurnImage({
                   turnAttachments: processed.turnAttachments,

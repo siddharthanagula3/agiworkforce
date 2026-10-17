@@ -172,6 +172,7 @@ impl DeveloperSessionHost for FakeHost {
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Read(params));
         Ok(ThreadReadResponse {
+            child_tasks: None,
             thread: thread("thread-1"),
             messages: Vec::new(),
             transcript_truncated: false,
@@ -1251,6 +1252,7 @@ impl DeveloperSessionHost for SurfaceHost {
         _params: ThreadIdParams,
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
         Ok(ThreadReadResponse {
+            child_tasks: None,
             thread: thread("thread-1"),
             messages: Vec::new(),
             transcript_truncated: false,
@@ -2721,6 +2723,7 @@ impl DeveloperSessionHost for HandoffHost {
         _params: ThreadIdParams,
     ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
         Ok(ThreadReadResponse {
+            child_tasks: None,
             thread: thread("thread-1"),
             messages: Vec::new(),
             transcript_truncated: false,

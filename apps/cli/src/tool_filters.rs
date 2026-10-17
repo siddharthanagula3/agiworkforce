@@ -44,7 +44,7 @@ pub fn ensure_tool_call_allowed(
     }
 
     if let Some(allowed_tools) = allowed_tools {
-        if !allowed_tools.is_empty() && !specs_allow_tool_call(allowed_tools, tool_name, args) {
+        if !specs_allow_tool_call(allowed_tools, tool_name, args) {
             return Err(ToolFilterViolation {
                 rule: allowed_tools.join(", "),
                 reason: format!("Tool call `{tool_name}` does not match the allowed tool rules."),
@@ -192,7 +192,7 @@ fn call_target_for_pattern<'a>(
             .get("pattern")
             .or_else(|| args.get("query"))
             .map(String::as_str),
-        "web_fetch" => args.get("url").map(String::as_str),
+        "web_fetch" | "browser_navigate" => args.get("url").map(String::as_str),
         "web_search" => args.get("query").map(String::as_str),
         _ => None,
     }

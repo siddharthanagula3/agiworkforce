@@ -1,0 +1,1118 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-17T05:22:07.775496+00:00",
+  "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
+  "status": "selected development implementation and local acceptance; external release acceptance not certified",
+  "environment": {
+    "platform": "Darwin",
+    "architecture": "arm64",
+    "node": "v24.18.0",
+    "pnpm": "9.15.3",
+    "cargo": "cargo 1.94.0 (85eff7c80 2026-01-15)"
+  },
+  "artifacts": {
+    "electronMain": {
+      "path": "apps/desktop/electron/dist/main.cjs",
+      "sha256": "c2cea3f76d37478918091a66eae3290e62c54bd34f9367ed388e681c2db97929"
+    },
+    "electronPreload": {
+      "path": "apps/desktop/electron/dist/preload.cjs",
+      "sha256": "fe7eb4a901181e533a38c36a746fead95baf38e3bfa49b4d1fe57afb6bbdae5d"
+    },
+    "nativeBrowserHost": {
+      "path": "apps/desktop/electron/dist/native-host.cjs",
+      "sha256": "accd74c5dc5cb450623e125d10fccededd34c5cd7b849583e8a42b36a69f8f67"
+    },
+    "cli": {
+      "path": "target/debug/agi",
+      "sha256": "1b33c965c077c109d914919272890b740656adcc7f9955aa04dffd104ee14a5b"
+    },
+    "extensionManifest": {
+      "path": "apps/extension/dist/manifest.json",
+      "sha256": "132f7501f072402271b01b683458801f8b97156c826023b4ff8dbaeb958fed5d"
+    }
+  },
+  "suites": [
+    {
+      "command": "pnpm --filter @agiworkforce/desktop exec vitest run electron/__tests__ --maxWorkers=2",
+      "status": "passed",
+      "files": 75,
+      "tests": 1436,
+      "failed": 0,
+      "rawReportSha256": "011d92f5d0361df20be3633f9cb5cc03564fb23c36bbb7330aebd1b4bfde4ec2",
+      "testFiles": [
+        "apps/desktop/electron/__tests__/accountBridge.test.ts",
+        "apps/desktop/electron/__tests__/agentNotifications.test.ts",
+        "apps/desktop/electron/__tests__/appMenu.test.ts",
+        "apps/desktop/electron/__tests__/approvalConfirmations.test.ts",
+        "apps/desktop/electron/__tests__/approvalReview.test.ts",
+        "apps/desktop/electron/__tests__/appsService.test.ts",
+        "apps/desktop/electron/__tests__/browserBridge.test.ts",
+        "apps/desktop/electron/__tests__/browserCommandGate.test.ts",
+        "apps/desktop/electron/__tests__/browserSteps.test.ts",
+        "apps/desktop/electron/__tests__/bundledCli.test.ts",
+        "apps/desktop/electron/__tests__/bundledRendererIpc.test.ts",
+        "apps/desktop/electron/__tests__/clipboardService.test.ts",
+        "apps/desktop/electron/__tests__/codeRemoteController.test.ts",
+        "apps/desktop/electron/__tests__/codeSessionActivity.test.ts",
+        "apps/desktop/electron/__tests__/computerUseLoop.test.ts",
+        "apps/desktop/electron/__tests__/computerUseProtocol.test.ts",
+        "apps/desktop/electron/__tests__/computerUseSession.test.ts",
+        "apps/desktop/electron/__tests__/config.test.ts",
+        "apps/desktop/electron/__tests__/deepLink.test.ts",
+        "apps/desktop/electron/__tests__/deepLinkQueue.test.ts",
+        "apps/desktop/electron/__tests__/desktopCloudUpdate.test.ts",
+        "apps/desktop/electron/__tests__/desktopLifecycle.test.ts",
+        "apps/desktop/electron/__tests__/desktopTelemetry.test.ts",
+        "apps/desktop/electron/__tests__/developerAccountSync.test.ts",
+        "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+        "apps/desktop/electron/__tests__/dispatcher.test.ts",
+        "apps/desktop/electron/__tests__/electronFuses.test.ts",
+        "apps/desktop/electron/__tests__/filesystemService.test.ts",
+        "apps/desktop/electron/__tests__/garnishCore.test.ts",
+        "apps/desktop/electron/__tests__/gitService.test.ts",
+        "apps/desktop/electron/__tests__/hostCommandChannel.test.ts",
+        "apps/desktop/electron/__tests__/hostPreferences.test.ts",
+        "apps/desktop/electron/__tests__/localRoutineEngine.test.ts",
+        "apps/desktop/electron/__tests__/localRoutineService.test.ts",
+        "apps/desktop/electron/__tests__/mcpApprovalReview.test.ts",
+        "apps/desktop/electron/__tests__/nativeHostInstaller.test.ts",
+        "apps/desktop/electron/__tests__/nativeQuestions.test.ts",
+        "apps/desktop/electron/__tests__/nativeSurface.test.ts",
+        "apps/desktop/electron/__tests__/pairingWindow.test.ts",
+        "apps/desktop/electron/__tests__/pathGuard.test.ts",
+        "apps/desktop/electron/__tests__/permissionCore.test.ts",
+        "apps/desktop/electron/__tests__/permissionManager.test.ts",
+        "apps/desktop/electron/__tests__/permissionPolicy.test.ts",
+        "apps/desktop/electron/__tests__/preloadBridge.test.ts",
+        "apps/desktop/electron/__tests__/preloadDeepLinks.test.ts",
+        "apps/desktop/electron/__tests__/quickAsk.test.ts",
+        "apps/desktop/electron/__tests__/quitGuard.test.ts",
+        "apps/desktop/electron/__tests__/releaseMetadata.test.ts",
+        "apps/desktop/electron/__tests__/remoteControlHost.test.ts",
+        "apps/desktop/electron/__tests__/remoteControlService.test.ts",
+        "apps/desktop/electron/__tests__/remoteDispatchEnvelope.test.ts",
+        "apps/desktop/electron/__tests__/rendererRecovery.test.ts",
+        "apps/desktop/electron/__tests__/runtimeEnvironment.test.ts",
+        "apps/desktop/electron/__tests__/screenshot.test.ts",
+        "apps/desktop/electron/__tests__/shellIdentity.test.ts",
+        "apps/desktop/electron/__tests__/shellPolicyStore.test.ts",
+        "apps/desktop/electron/__tests__/shellSandbox.test.ts",
+        "apps/desktop/electron/__tests__/shellScreens.test.ts",
+        "apps/desktop/electron/__tests__/shellService.test.ts",
+        "apps/desktop/electron/__tests__/shellServiceSandbox.test.ts",
+        "apps/desktop/electron/__tests__/shellWindowContract.test.ts",
+        "apps/desktop/electron/__tests__/shellWindowStore.test.ts",
+        "apps/desktop/electron/__tests__/shortcuts.test.ts",
+        "apps/desktop/electron/__tests__/sshEnvironments.test.ts",
+        "apps/desktop/electron/__tests__/tray.test.ts",
+        "apps/desktop/electron/__tests__/voiceDictation.test.ts",
+        "apps/desktop/electron/__tests__/windowChrome.test.ts",
+        "apps/desktop/electron/__tests__/windowPolicy.test.ts",
+        "apps/desktop/electron/__tests__/windowRegistry.test.ts",
+        "apps/desktop/electron/__tests__/windowState.test.ts",
+        "apps/desktop/electron/__tests__/workspaceDrop.test.ts",
+        "apps/desktop/electron/__tests__/workspacePicker.test.ts",
+        "apps/desktop/electron/__tests__/workspaceStore.test.ts",
+        "apps/desktop/electron/__tests__/workspaceWorktrees.test.ts",
+        "apps/desktop/src/lib/tauri-electron/__tests__/voice-hotkey.test.ts"
+      ]
+    },
+    {
+      "command": "pnpm --filter @agiworkforce/web exec vitest run <testFiles> --maxWorkers=2",
+      "status": "passed",
+      "files": 30,
+      "tests": 620,
+      "failed": 0,
+      "rawReportSha256": "ca82b7280fb2e6e04b41fbed709a82c13bc7992bcc46b72c6a803e7f8a88ae22",
+      "testFiles": [
+        "apps/web/features/code/CloudCodePage.test.tsx",
+        "apps/web/lib/schedules/dayparts.test.ts",
+        "apps/web/lib/schedules/recurrence-rule.test.ts",
+        "apps/web/lib/schedules/schedule-cadence.test.ts",
+        "apps/web/lib/schedules/schedule-models.test.ts",
+        "apps/web/lib/schedules/schedule-time.test.ts",
+        "apps/web/lib/services/conversation-branch-service.artifact-index.test.ts",
+        "apps/web/lib/services/managed-office-file-service.test.ts",
+        "apps/web/lib/services/published-artifact-service.test.ts",
+        "apps/web/lib/services/schedule-service.test.ts",
+        "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.test.tsx",
+        "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+        "apps/web/features/chat/components/SandboxedIframe.test.tsx",
+        "apps/web/features/chat/hooks/use-voice-session.test.tsx",
+        "apps/web/features/chat/lib/live-voice-session.test.ts",
+        "apps/web/features/code/hooks/use-local-session.test.ts",
+        "apps/web/features/code/components/LocalSessionPanel.test.tsx",
+        "apps/web/features/schedules/lib/schedule-form.test.ts",
+        "apps/web/features/schedules/components/LocalRoutinesSection.test.tsx",
+        "apps/web/features/schedules/components/SchedulesPage.test.tsx",
+        "apps/web/lib/jobs/__tests__/job-handlers.test.ts",
+        "apps/web/lib/voice/__tests__/live-voice-tool-runner.temporary-chat.test.ts",
+        "apps/web/lib/voice/__tests__/live-voice-tools.test.ts",
+        "apps/web/lib/services/__tests__/artifact-connector-gate.test.ts",
+        "apps/web/lib/services/__tests__/artifact-runtime-service.connectors.test.ts",
+        "apps/web/lib/services/__tests__/artifact-runtime-service.google-user-data.test.ts",
+        "apps/web/lib/services/__tests__/cloud-code-changes-and-pull-request.test.ts",
+        "apps/web/lib/services/__tests__/org-shared-artifact-service.test.ts",
+        "apps/web/lib/services/__tests__/published-artifact-service.visibility.test.ts",
+        "apps/web/lib/services/__tests__/schedule-notification-service.test.ts"
+      ]
+    },
+    {
+      "command": "pnpm --filter @agiworkforce/extension test",
+      "status": "passed",
+      "files": 196,
+      "tests": 2734,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "pnpm --filter @agiworkforce/artifacts test",
+      "status": "passed",
+      "files": 4,
+      "tests": 97,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "cargo test -p agiworkforce-cli --lib app_server::developer_host::tests -- --test-threads=1",
+      "status": "passed",
+      "tests": 91,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "cargo test -p agiworkforce-cli --lib subagent::tests -- --test-threads=1",
+      "status": "passed",
+      "tests": 17,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "cargo test -p agiworkforce-cli --test normal_child_stdio -- --test-threads=1",
+      "status": "passed",
+      "tests": 1,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "cargo test -p agiworkforce-protocol --test developer_session_protocol",
+      "status": "passed",
+      "tests": 19,
+      "recordedFrom": "executed command output"
+    },
+    {
+      "command": "AGI_OFFICE_LOCAL_INTEGRATION=1 pnpm --filter @agiworkforce/web exec vitest run lib/services/managed-office-file-service.test.ts lib/services/managed-office-render.integration.test.ts",
+      "status": "passed",
+      "tests": 31,
+      "recordedFrom": "executed command output"
+    }
+  ],
+  "nativeAcceptance": {
+    "capturedAt": "2026-10-17T05:21:51.428Z",
+    "owned": "/private/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-electron-owned-d6NEe7",
+    "project": "/private/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-electron-owned-d6NEe7/project",
+    "boundary": "actual Electron main/preload, CLI and hosted hook; scripted local model and native-dialog answers",
+    "approvalBeforeReload": [
+      {
+        "requestId": "15bdbe45-b050-4b66-b481-6a7a88c419d4",
+        "turnId": "7a15cefa-e587-4cbd-8346-e4dbc5046d9b",
+        "summary": "subagent_379c145a-9461-4d25-970a-6036d480e595: Owned normal child: Allow this file write?"
+      }
+    ],
+    "approvalAfterReload": [
+      {
+        "requestId": "15bdbe45-b050-4b66-b481-6a7a88c419d4",
+        "turnId": "7a15cefa-e587-4cbd-8346-e4dbc5046d9b",
+        "summary": "subagent_379c145a-9461-4d25-970a-6036d480e595: Owned normal child: Allow this file write?"
+      }
+    ],
+    "finalState": {
+      "messages": [
+        {
+          "index": 0,
+          "role": "user",
+          "text": "PARENT_NORMAL_CHILD"
+        },
+        {
+          "index": 1,
+          "role": "assistant",
+          "text": ""
+        },
+        {
+          "index": 2,
+          "role": "user",
+          "text": ""
+        },
+        {
+          "index": 3,
+          "role": "assistant",
+          "text": "Parent completed with owned child."
+        }
+      ],
+      "children": [
+        {
+          "id": "subagent_379c145a-9461-4d25-970a-6036d480e595",
+          "title": "Owned normal child",
+          "parentSessionId": "a5a8d39c-9b44-45af-a155-3020182d689e",
+          "state": "completed"
+        }
+      ],
+      "error": null,
+      "turn": {
+        "turnId": null,
+        "prompt": "",
+        "steered": [],
+        "reply": "",
+        "tools": [],
+        "diff": null,
+        "outcome": null,
+        "failure": null
+      }
+    },
+    "routine": {
+      "deviceId": "f7521dbf-6402-40d0-ac61-2d505a343323",
+      "suspended": false,
+      "error": null,
+      "routines": [
+        {
+          "name": "Owned one-shot",
+          "rootId": "336f5c6b-b2a5-4f3a-bc66-8e8232869ec9",
+          "model": "owned-fixture-model",
+          "prompt": "OWNED_ROUTINE_ONLY",
+          "schedule": {
+            "type": "once",
+            "enabled": false,
+            "executeAt": "2026-10-17T05:21:58.245Z",
+            "timezone": "America/Chicago"
+          },
+          "missedExecutionPolicy": "run_once",
+          "keepAwake": true,
+          "notificationSettings": {
+            "onSuccess": false,
+            "onFailure": true,
+            "onApproval": true,
+            "push": false,
+            "email": false
+          },
+          "rootIdentity": "336f5c6b-b2a5-4f3a-bc66-8e8232869ec9:1792214512605:16777231:296253427",
+          "grantRevision": "1",
+          "id": "cce23b24-6195-4687-8b57-d9f3e08f9f6b",
+          "creationDigest": "53508d3e81336404582e9fc1b04c24e5ea9d17abfc8a21697f275fdcc4338eb5",
+          "deviceId": "f7521dbf-6402-40d0-ac61-2d505a343323",
+          "nextExecutionAt": null,
+          "executionCount": 1,
+          "pausedReason": null,
+          "runs": [
+            {
+              "id": "f19a79ec-6a71-4928-aca5-6b3dd69efdd8",
+              "dueAt": "2026-10-17T05:21:58.245Z",
+              "startedAt": "2026-10-17T05:21:58.381Z",
+              "state": "completed",
+              "threadId": "3370802f-0b08-482d-a9b7-8c85e5035588",
+              "turnId": "9fe43a87-a560-4e3e-b77b-5d4f78122720",
+              "finishedAt": "2026-10-17T05:21:58.689Z"
+            }
+          ],
+          "createdAt": "2026-10-17T05:21:54.309Z",
+          "updatedAt": "2026-10-17T05:21:54.309Z"
+        }
+      ]
+    },
+    "routineModelCalls": 1,
+    "noReplayAfterRestart": true,
+    "errors": [],
+    "modelCalls": [
+      {
+        "child": false,
+        "routine": false,
+        "hasResult": false
+      },
+      {
+        "child": true,
+        "routine": false,
+        "hasResult": false
+      },
+      {
+        "child": true,
+        "routine": false,
+        "hasResult": true
+      },
+      {
+        "child": false,
+        "routine": false,
+        "hasResult": true
+      },
+      {
+        "child": false,
+        "routine": true,
+        "hasResult": false
+      }
+    ]
+  },
+  "browserAcceptance": {
+    "capturedAt": "2026-10-17T05:22:05.086Z",
+    "owned": "/private/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-electron-owned-CCCLXo",
+    "project": "/private/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-electron-owned-CCCLXo/project",
+    "boundary": "actual Electron main/preload, CLI and hosted hook; scripted local model and native-dialog answers; OS open acknowledgement captured by fixture",
+    "approvals": [
+      {
+        "requestId": "f9a905be-5438-454f-8c65-ebf0d22908b8",
+        "turnId": "0839627e-90ac-4917-84ea-d1a87b046ffd",
+        "summary": "Allow this command?"
+      },
+      {
+        "requestId": "2652cf51-f8f7-40b1-be16-0327cd018f45",
+        "turnId": "0839627e-90ac-4917-84ea-d1a87b046ffd",
+        "summary": "Open a new browser tab using your browser profile and cookies?"
+      }
+    ],
+    "opened": [
+      {
+        "url": "http://127.0.0.1:52083/owned-browser-target"
+      }
+    ],
+    "modelCalls": [
+      {
+        "child": false,
+        "routine": false,
+        "hasResult": false
+      },
+      {
+        "child": false,
+        "routine": false,
+        "hasResult": true
+      }
+    ],
+    "errors": []
+  },
+  "sshAcceptance": {
+    "boundary": "real owned loopback OpenSSH server/client and CLI app-server; native consent/account behavior tested separately",
+    "result": {
+      "handshake": 8,
+      "workspaceIdentity": {
+        "cwd": "/private/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/agi-sshd-4bhp6pod/project",
+        "rootKey": "16777231:296189474"
+      },
+      "threadId": "e584f0a4-f390-49c5-bbf6-481554d3bcc6",
+      "initialRead": true,
+      "reconnectSameThread": true,
+      "unknownHostKeyRefused": true,
+      "childrenExited": true
+    },
+    "reproducerSha256": "739f87a92058d639d7125305b1738bfa021884cbe1e603248113021b26c091a8"
+  },
+  "officeAcceptance": {
+    "boundary": "real installed local LibreOfficeDev/Poppler through a test adapter of the existing executor; configured E2B deployment not exercised",
+    "receipts": {
+      "docx": {
+        "outputSha256": "dc660c16e12b3a84e169fd0fd926d2a2f7c3c30f7091ea334c8b0b2811ea9e81",
+        "structural": "package_parts_checked",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "5dba0266e3aab3ce7bb9ebef10f95c330d005545f9fb6aa9a921381d6dff9348",
+          "previewSha256": ["e7b65e964b5abc109cdde255c45eaeb78eea2c42cf2fcdaabf2504db5be44c28"]
+        }
+      },
+      "workbook": {
+        "outputSha256": "5ac19f80ea9a58b478bf9defe6e66964530da3d31db77d708cc75e0b839b0a52",
+        "structural": "package_parts_checked",
+        "recalculation": "passed",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "f49ad75082bbeca355e393e63bb8bae33218447e900a15c0add946ac38c817db",
+          "previewSha256": ["a6149e574fe78e9956ed4a7531f57ff61347fcf046731bd3871836f1cb87a561"]
+        }
+      },
+      "edited": {
+        "outputSha256": "f2272a594b7f85c0058e7137db90e5bad961e2ad97fde248a21607172b4ab578",
+        "structural": "package_parts_checked",
+        "recalculation": "passed",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "9fcb9124eff194b43bcb16c3131358d25e08bcd713c96f9acc8e6bf5dfd7476c",
+          "previewSha256": ["e229a6ed95963854246bf459ce7559390abe4140e7c87f98900c11b897bee168"]
+        },
+        "inputSha256": "5ac19f80ea9a58b478bf9defe6e66964530da3d31db77d708cc75e0b839b0a52",
+        "preservation": {
+          "changedParts": ["xl/worksheets/sheet1.xml"],
+          "unchangedParts": 5
+        }
+      },
+      "slides": {
+        "outputSha256": "80f327f1a59e980694ba9c26fbae9ce7080ca0017e2e4c9780215aa8645c7546",
+        "structural": "package_parts_checked",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "7603424abd97a3c58043b513216483ac36f9c7509a46eacd75e030e335bc7d58",
+          "previewSha256": ["f5ddae845e13acbc7275dbbd4e890925af9c416d9944ac991029dcd42c476e5a"]
+        }
+      },
+      "pdf": {
+        "outputSha256": "80a5c946134dd713dd605b7a4d33b9356b8cdec40baafac4aad7e148079637fb",
+        "structural": "pdf_parsed",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "80a5c946134dd713dd605b7a4d33b9356b8cdec40baafac4aad7e148079637fb",
+          "previewSha256": ["654018830caf1cafb4d99d8a5f65ed179184aff98ba1694758953abdbbf97fd1"]
+        }
+      },
+      "formulaErrorRefused": true
+    }
+  },
+  "externalReleaseGates": [
+    {
+      "status": "NOT_RUN",
+      "gate": "signed installation, notarization and updater rollout"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "authenticated hosted database/storage/publish/share/revoke journeys"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "actual notification delivery providers and retries"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "configured E2B Office execution image"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "same-account admission on an external SSH host"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "physical computer sleep/offline lifecycle drill"
+    },
+    {
+      "status": "NOT_RUN",
+      "gate": "other-platform packaged smoke tests"
+    }
+  ],
+  "unsupportedFirstScope": [
+    "tracked DOCX changes",
+    "insertion of new XLSX cells",
+    "active/external Office inputs",
+    "PDF/PPTX preservation edits",
+    "SSH host editor, PTY, worktree management, passwords and jump hosts",
+    "Windows session BROWSER relay"
+  ],
+  "sourceFiles": [
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "sha256": "75b73ee88b8ec2094b4a3f58d0658d890cb5037872c9b9b047a662e18884cd99"
+    },
+    {
+      "path": "apps/cli/src/agent/mod.rs",
+      "sha256": "a888eee2ada17c12bb9777b830cda384ace70d2d5517298445ffd3175034a1e0"
+    },
+    {
+      "path": "apps/cli/src/agents.rs",
+      "sha256": "dc2979e18ce44d582204ae565ccde0cc20af7a3f286f2480f241183c66698128"
+    },
+    {
+      "path": "apps/cli/src/app_server/cloud_threads.rs",
+      "sha256": "b00556cb2ce90136c350de93be9cbf529570110d990bb00d9d281571d75221c4"
+    },
+    {
+      "path": "apps/cli/src/app_server/developer_host.rs",
+      "sha256": "ed32a4d4a914e7411b651d9cb8ae526ae50804fc286bc2c7b1acc099299a918a"
+    },
+    {
+      "path": "apps/cli/src/features/exec/tools/mod.rs",
+      "sha256": "13ce96b055ec2af701a83c72ec47a454d3265c777f383221455b4014c0ede0d6"
+    },
+    {
+      "path": "apps/cli/src/lib.rs",
+      "sha256": "6b7900a952e9813b54772cc6abb2bceeb220fdba505b2845e9d7325de5aa6e16"
+    },
+    {
+      "path": "apps/cli/src/path_security/file_authority.rs",
+      "sha256": "be4550a81fbb3fed77c11cbe6e40d66b81664d4089fc02a5aea104677554b604"
+    },
+    {
+      "path": "apps/cli/src/sandbox.rs",
+      "sha256": "d2ddac967f9e3ff4223c371430c136c1316b592db747d43ce24ef118322fbd75"
+    },
+    {
+      "path": "apps/cli/src/session_browser.rs",
+      "sha256": "a6e7684bdaa84dd1d7dd5e0617770b085d5f33f931fbf52311cf4a76cdd945aa"
+    },
+    {
+      "path": "apps/cli/src/subagent.rs",
+      "sha256": "126b801409a15fbfbbe24851bc0df4178921aef9f9c6b0ca40ea5eee586856d9"
+    },
+    {
+      "path": "apps/cli/src/tool_filters.rs",
+      "sha256": "017ac1973a7bc248a79c8ece7264ebffc0bf71f2f5a71f780b82854b3d1933cd"
+    },
+    {
+      "path": "apps/cli/tests/normal_child_stdio.rs",
+      "sha256": "c0199893caa88d51ccc77ce09cb9fb50d4876bcfdd629419ed3964e247d43287"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/agentNotifications.test.ts",
+      "sha256": "e371a806b03157f073e3795429817be20faea352b44a4bff2c34f72a644b5e31"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/bundledRendererIpc.test.ts",
+      "sha256": "e387c5d7feca0926393e906fa0bc5281c32d713cad5a880711ae7e45f7ef0de4"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/codeSessionActivity.test.ts",
+      "sha256": "880192bb393212ee83ddb4b8cbd1fa60132da9f68860d9231d3ffcfac4b67ec6"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/deepLink.test.ts",
+      "sha256": "61590f1caffce8158473eb8357d6d221619cfa09c01489195a406a9422cb35d0"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/desktopLifecycle.test.ts",
+      "sha256": "cbc7312dec0aeb724d446622f9eb939fbd32a13a51e4e88b92d63708f8cee033"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
+      "sha256": "32868043b282215a1f7f808b8b04007fffe016271a0719ad6d7fb5130f927a0e"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+      "sha256": "bfa441241e8f89b97b22b42da0ab59ed9386ea572a18a6e3a83e121d729b9263"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/hostPreferences.test.ts",
+      "sha256": "f4d130d0a453ab04a727e846573041511c0769b6d788df2b695eaeae43689b92"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/localRoutineEngine.test.ts",
+      "sha256": "4cbabadfe257c84877a8c8acd71554d619d8b9bc88d402c2dd21a672dbaadf4a"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/localRoutineService.test.ts",
+      "sha256": "8cc5774f34ad01c339e7223084905adf4f439a3fea2f3e7b1d5c2e332628a93d"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/native-acceptance.mjs",
+      "sha256": "914298e90fa0582c2f12029cfce1c04e9d12d7302412861360dc7ca4b4c27441"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/permissionManager.test.ts",
+      "sha256": "576256aa5a797ff9ff05b20de9677d1bcf9df7ff1f73e41ac84c54cff83a61b9"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/sshEnvironments.test.ts",
+      "sha256": "b9b673f6268112434fda17296ffee47454bf97f02587867acf27a969be879b55"
+    },
+    {
+      "path": "apps/desktop/electron/agentNotifications.ts",
+      "sha256": "7677b6c5757b47574b120bc9d25aa423aa1e982390ec3a5979cf4ff9c415dffa"
+    },
+    {
+      "path": "apps/desktop/electron/browser/bridgeServer.ts",
+      "sha256": "8b0adf2eb04bad2fd624fa90b1698b457555206c8d8da276ee5546f7bdd2ccf8"
+    },
+    {
+      "path": "apps/desktop/electron/browser/commandGate.ts",
+      "sha256": "e7156cd0d937383db135027d5749f59d2f0f976530d2697db455407d4ecaa467"
+    },
+    {
+      "path": "apps/desktop/electron/main.ts",
+      "sha256": "a8665e551661d97f8f1eaefcf3c13f2f6f93bf5c69953a8dd85a6694c4eedb68"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/codeSessionActivity.ts",
+      "sha256": "f8f440bfcdf6cf0b911233859958399c39ac1e9d89d4137b6522e6cbe7e858b4"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/developerSessionService.ts",
+      "sha256": "51bfcaa0153cb2a3b3f972f3e7a91d469438836f2e4e06b830f2101bf8d43d70"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/dispatcher.ts",
+      "sha256": "3a4a67a8f1665abddb07aa7b637bbec9df6a65d4c656ea8e7c1c59c6162db634"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/localRoutineEngine.ts",
+      "sha256": "f3785a1afdc5c05012edae8fe6dcf34c19c064fa33f0ba88c48e89baac3ba555"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/localRoutineService.ts",
+      "sha256": "852ab48e109a163afda116ae5054e23dcde10544b36a92148245a0ed095aa9d1"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/permissionManager.ts",
+      "sha256": "a4d7fe06114bc3816fe1092cdf6eeed31b465c5a9dd506fcbcf74e337b984a81"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/sshEnvironments.ts",
+      "sha256": "3b2e077054e3ee574a436da6f8efdeae9b50b468bc8b94a7718d73a92b6b0116"
+    },
+    {
+      "path": "apps/desktop/electron/runtime/sshSessionService.ts",
+      "sha256": "b0cce63c09d4631e250c4780cf96048d78e7357f93d13252269c65a34c0786a7"
+    },
+    {
+      "path": "apps/desktop/electron/windowPolicy.ts",
+      "sha256": "fefeaef10bd71d9357060735bf87134008fdb16302a56c85544687148f0b8708"
+    },
+    {
+      "path": "apps/desktop/vite.config.ts",
+      "sha256": "a3b4005255dc44a122170fcd3cbc86522fad1d3d7b042370b29f390b62bb8169"
+    },
+    {
+      "path": "apps/extension/__tests__/desktop-browser-commands.test.ts",
+      "sha256": "50b929ab69a14687325315eb767db0e32218521fe9ffb213b0255685d2eff76a"
+    },
+    {
+      "path": "apps/extension/src/background.ts",
+      "sha256": "ad8064ba05a7b2dca9a5e34ab34cb41f0eaf862950617e8b3ef6da856c00eed8"
+    },
+    {
+      "path": "apps/extension/src/features/native-bridge/desktopCommands.ts",
+      "sha256": "4de55ce65f12a1f82e7c1e87809d33170922ee2d44f7699d1b4e032a0aabb37d"
+    },
+    {
+      "path": "apps/extension/src/features/native-bridge/nativeBrowserDriver.ts",
+      "sha256": "640b867d2134e4243655e5df81c1f10874408f7379824df9737eb1c0144fd6d1"
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "sha256": "180110225919306b41d5943d9866c5e1ddd3f9aebcbb94404f634ca6cdd19150"
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+      "sha256": "d42bdf22da164e49b5e407ce707d647469f13c1571b2fbbf3cef70024781cf5e"
+    },
+    {
+      "path": "apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx",
+      "sha256": "d3a6b054bbc51dcd6109304ef678e4aae8f7d16c442035763931cbca017773fc"
+    },
+    {
+      "path": "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.test.tsx",
+      "sha256": "89280a8cfd3a807878e2281b8eddf60ad4ef54e3d114b50f7ea928936492a87b"
+    },
+    {
+      "path": "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.ts",
+      "sha256": "c12b1fe1725c6f7a17377d58c1b0de22e33e4a5847fd86c331bfa8f631b1e653"
+    },
+    {
+      "path": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+      "sha256": "caf2773e32a05b618f0a5fc903dbd897ab74c5af4e7da2265cf652f8f96d8614"
+    },
+    {
+      "path": "apps/web/features/chat/components/SandboxedIframe.tsx",
+      "sha256": "a8c09bb32bf25889a55bd9cbf727125d8223df26c8b587a76441b1692f903b5d"
+    },
+    {
+      "path": "apps/web/features/chat/components/artifacts/artifactRuntimeClient.ts",
+      "sha256": "e71d2354e0d47feea304731a950a230352146526e6ffc530fd0f8815e9d842f7"
+    },
+    {
+      "path": "apps/web/features/code/CloudCodePage.tsx",
+      "sha256": "d6351c8d7fb379a839bd8ae856694edcb3526d57981f6a0936076dfc3c8b28f9"
+    },
+    {
+      "path": "apps/web/features/code/components/LocalSessionPanel.tsx",
+      "sha256": "99d81ed45fb260edb6307c7113f6827e124b6b1ddd2a7ba565d3028911cc35fc"
+    },
+    {
+      "path": "apps/web/features/code/components/SshConnectionControl.tsx",
+      "sha256": "0ee4677b5865436f5a6aa72fa97db6a222f9191b5e4ea448477abf5775bf5dbe"
+    },
+    {
+      "path": "apps/web/features/code/hooks/use-local-session.test.ts",
+      "sha256": "b75a475e71ba324be55b7760716b809fe78c4d3ef4655517fd5f5fa7b2b8c02b"
+    },
+    {
+      "path": "apps/web/features/code/hooks/use-local-session.ts",
+      "sha256": "f40ebb90a6b090a52cc141fb03650f002e66a419a3874d004e030811da43f28f"
+    },
+    {
+      "path": "apps/web/features/code/local-code.ts",
+      "sha256": "6808454c094b0f193f30b047591f8fc80822bb0db9b42bcf7b9ed3e8c2bf590d"
+    },
+    {
+      "path": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+      "sha256": "a9733b684f7a5d2abe6655034699c61b319c920887dbd3665fa91d9c401c7680"
+    },
+    {
+      "path": "apps/web/features/schedules/components/LocalRoutinesSection.test.tsx",
+      "sha256": "1185a3263201699c186d7f2e23f04daa9936d76b5602b9d3ed1548004b24713d"
+    },
+    {
+      "path": "apps/web/features/schedules/components/LocalRoutinesSection.tsx",
+      "sha256": "921980735be761de7ee0038bde5ee9a88107e5adfb2012cbbcace28c8edd7005"
+    },
+    {
+      "path": "apps/web/features/schedules/components/ScheduleCard.tsx",
+      "sha256": "ebda0fa86072128f4cc4f120e7720d6c53dab4eb0cf5bd7d4615ce1b0a228444"
+    },
+    {
+      "path": "apps/web/features/schedules/components/ScheduleForm.tsx",
+      "sha256": "8e54d5ff76f06e3e47561106936f9f0cb34d77cb97c5969085d95aac03cacba0"
+    },
+    {
+      "path": "apps/web/features/schedules/components/SchedulesPage.test.tsx",
+      "sha256": "771d0e00570ba80116f1dddcdaf605867f6712be647309fc108c4d2c619b7df6"
+    },
+    {
+      "path": "apps/web/features/schedules/components/SchedulesPage.tsx",
+      "sha256": "0ed90c040a13e64108adf61a2064cfc52fa3a5145d6a7a66f4bcf6145c946177"
+    },
+    {
+      "path": "apps/web/features/schedules/lib/schedule-form.test.ts",
+      "sha256": "7bf170f38174290a4369ad04fa579b15bb1916751ec13c0595084f80bb3a7db3"
+    },
+    {
+      "path": "apps/web/features/schedules/lib/schedule-form.ts",
+      "sha256": "6dbbbaeeb1dce342930cb037290ee887915a15de79e46d82967dad5e8b1fd85c"
+    },
+    {
+      "path": "apps/web/features/schedules/types/index.ts",
+      "sha256": "bb10283aab58a6984e9ad1ad7cf24bf88eaf354f0a28572526f014ea65cc544e"
+    },
+    {
+      "path": "apps/web/lib/jobs/__tests__/job-handlers.test.ts",
+      "sha256": "2d79b7c89c7e16801470a9f08feedce2172f591240253986a487f4976981fc55"
+    },
+    {
+      "path": "apps/web/lib/jobs/job-handlers.ts",
+      "sha256": "025c1173d3ce23edb4d4a69b86371b644d0338643aed5f9ce6318c41d6ef9c37"
+    },
+    {
+      "path": "apps/web/lib/schedules/dayparts.ts",
+      "sha256": "f036a4355eda6e358b6c9c9f9f65cf8b60d9ce1fb97e74f92b64bd68cca1d8a6"
+    },
+    {
+      "path": "apps/web/lib/schedules/recurrence-rule.ts",
+      "sha256": "11caadb36edcda2d501530dacb6b8961eb6bfab22a9564ffaa2535fb231b4401"
+    },
+    {
+      "path": "apps/web/lib/schedules/schedule-time.ts",
+      "sha256": "4291dc2eb8d32eb0a70aaefb49273a0644a9de3b4808dfcc5be88a4977b64a40"
+    },
+    {
+      "path": "apps/web/lib/schedules/zoned-time.ts",
+      "sha256": "9ca1978a24c50034d4ad6c01b465e192bf64d79fc4e827eca157041c9f7b14fe"
+    },
+    {
+      "path": "apps/web/lib/services/__tests__/schedule-notification-service.test.ts",
+      "sha256": "80c3de8daddc981f5450db07a8b356e744dee9927c2d285d87d454610cf86cb3"
+    },
+    {
+      "path": "apps/web/lib/services/managed-office-file-service.test.ts",
+      "sha256": "2a5df7b1743e37aa0282d902a6716788e119513196555ceda016a7c389df818d"
+    },
+    {
+      "path": "apps/web/lib/services/managed-office-file-service.ts",
+      "sha256": "55b4c6b8a4fcad5c4316579fd1b765e705db28224f679ea1514010c4076d4cac"
+    },
+    {
+      "path": "apps/web/lib/services/managed-office-preservation.ts",
+      "sha256": "532aca499897db0a4e9bf62a75157d73687c34d5e1333acf3eb07ff6fbf182b0"
+    },
+    {
+      "path": "apps/web/lib/services/managed-office-render.integration.test.ts",
+      "sha256": "0334c9b69256bd224228b8f61090e118d2b9312cec3bfb8f71f38d45a3ac3890"
+    },
+    {
+      "path": "apps/web/lib/services/notification-email-service.ts",
+      "sha256": "71051e36ed38808ae45935890af8486fcff18edfb7a8821280c67b46b05043fc"
+    },
+    {
+      "path": "apps/web/lib/services/schedule-notification-service.ts",
+      "sha256": "9f34acb34eeda9fc29ca17e6bb9abe3ab5ed9492003fb9f47068db5ffade13b6"
+    },
+    {
+      "path": "apps/web/lib/services/schedule-service.test.ts",
+      "sha256": "0115cd5063731233dc381629d77bd91a200d23337083114242195e368613b6d7"
+    },
+    {
+      "path": "apps/web/lib/services/schedule-service.ts",
+      "sha256": "9636da16caad4556d0932ab0b191a9a4e5cc3f0c326230017580d6a969cab48d"
+    },
+    {
+      "path": "apps/web/lib/voice/live-voice-tool-runner.ts",
+      "sha256": "1cf1d039f04c29d502b7c12ac74f52f5ab5fcb2d9dc4a4b2ba990d37f4d6b634"
+    },
+    {
+      "path": "crates/agiworkforce-app-server/src/developer_sessions.rs",
+      "sha256": "f3fff9601c259b22a00625d6f37e645baf8982fa3669581cb3d9cb11896ba6d2"
+    },
+    {
+      "path": "crates/agiworkforce-app-server/tests/developer_sessions.rs",
+      "sha256": "3a40447f57c39c1fa31b014864b85e840d0bf6be1f4af7c884eff64be1f69b37"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/src/developer_session.rs",
+      "sha256": "c8c63cc24061630330b345ce41c23c52f5559e2f58a592307cae16d995fca115"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/tests/developer_session_protocol.rs",
+      "sha256": "c52f8c5c3ff3fcf4e2b1db83b6744507e851c88785ac318a387b61a46050319a"
+    },
+    {
+      "path": "crates/agiworkforce-protocol/tests/export_bindings.rs",
+      "sha256": "71675782954a74ebad8414d7c21847f6ef1ec73ba8e0c97f2cd1ad6a2b17b0d0"
+    },
+    {
+      "path": "crates/agiworkforce-sandbox-policy/src/lib.rs",
+      "sha256": "16bd81ef51fe5ddb8472e1f0c9a563494752281e5353ebb97bac1eb3ba395890"
+    },
+    {
+      "path": "crates/agiworkforce-sandbox-policy/src/relay.rs",
+      "sha256": "ec04688ca094077f3167f015e62e6692c3116a8a38811f70d2101e3b402bf2a0"
+    },
+    {
+      "path": "packages/contracts/cloud-contracts/src/schedules.ts",
+      "sha256": "ebb384e7600c829a6a32ba20ee309058c266922baebe5771bd2299036c9b3fba"
+    },
+    {
+      "path": "packages/contracts/local-runtime/src/developer-sessions.ts",
+      "sha256": "5aceaf15076d38874ec8e2af5bf0580e7fae129ac4387f102be3170f88dc311d"
+    },
+    {
+      "path": "packages/contracts/local-runtime/src/index.ts",
+      "sha256": "977f551297a3597b071ba06538d18516bcece4479b19f6c9c84f2219d0d3fcb9"
+    },
+    {
+      "path": "packages/contracts/local-runtime/src/local-routines.ts",
+      "sha256": "cb708d9dc9de92d99ff370dccc239e12acaf8f781af108246508ca78e9c15ea7"
+    },
+    {
+      "path": "packages/contracts/local-runtime/src/ssh-environments.ts",
+      "sha256": "984133eff094e97df1682cdf100a758e310c63505e0db8e249cc508215f09244"
+    },
+    {
+      "path": "packages/contracts/types/src/browser-bridge.ts",
+      "sha256": "202092b9f4111ece286088522a85a4b651acdbfabb99bded54f8d70adf4e2af5"
+    },
+    {
+      "path": "packages/contracts/types/src/generated/protocol/DeveloperChildTask.ts",
+      "sha256": "71d5dfaad2e1d0bfa13b12f48e4191f785386619a6c8b6579c86a160beae35a1"
+    },
+    {
+      "path": "packages/contracts/types/src/generated/protocol/DeveloperChildTaskState.ts",
+      "sha256": "f50fbfa33c5e9ffdb6639e5109868a1adda7b27988e30d29dc06208666cbe8d2"
+    },
+    {
+      "path": "packages/contracts/types/src/generated/protocol/DeveloperWorkspaceIdentity.ts",
+      "sha256": "d1221d5c05250106af6a837f82b83c540bf56e183c0223ff01aff0bbdf0256af"
+    },
+    {
+      "path": "packages/contracts/types/src/generated/protocol/ThreadReadResponse.ts",
+      "sha256": "e7076a2252300345f65627d6beeba16b9ba0c3edc579a9cf3d1a4caca66b02db"
+    },
+    {
+      "path": "packages/contracts/types/src/generated/protocol/index.ts",
+      "sha256": "3b16db9fadab42d0c5aef36b499579a1de59bce1043435e93193ca6fe6f50c8f"
+    },
+    {
+      "path": "packages/contracts/types/src/scheduler.ts",
+      "sha256": "7be15b4dc020143cad481ab8859e59f97bf0d4ab5e64162070b9ac98d9f04059"
+    },
+    {
+      "path": "packages/platform/artifacts/src/__tests__/artifact-store.test.ts",
+      "sha256": "326a0e0eda5b7078f21c0567d86bc3058c768216fdec2fcfe9b6c9262a3b958c"
+    },
+    {
+      "path": "packages/platform/artifacts/src/artifact-store.ts",
+      "sha256": "33d45432316714cf21fde0962f1caaa76eaa9e4b7f33f48fa4f108c42119dff4"
+    },
+    {
+      "path": "packages/platform/utils/package.json",
+      "sha256": "20b9cb7037cb042887939994d635632afd2604195c869c768a0083b95630d7d1"
+    },
+    {
+      "path": "packages/platform/utils/src/scheduling/dayparts.ts",
+      "sha256": "c6569f0a2e3e9b3115c59d4e6a0b8ac0217f327d2497dea3cfe9966da70070ff"
+    },
+    {
+      "path": "packages/platform/utils/src/scheduling/recurrence-rule.ts",
+      "sha256": "057c0b76730ab196c1f4f80dc6ef86d8761f6f4bd75000e0ec2e767b1eeb42fc"
+    },
+    {
+      "path": "packages/platform/utils/src/scheduling/schedule-time.ts",
+      "sha256": "6e1e397a98e11b9eb04b711e2f58c057dd4909b07080d74a3f9db343be6298a8"
+    },
+    {
+      "path": "packages/platform/utils/src/scheduling/zoned-time.ts",
+      "sha256": "c2ecc5d58c1c82565f58cf83fade61c501827e3849cab1167cd9d92923445ff8"
+    },
+    {
+      "path": "scripts/check-schedule-clock-injection.mjs",
+      "sha256": "3ea54fe1ddc703d76d42759a8ed343f3424d2c807bf833e21a2f7c135326a26d"
+    },
+    {
+      "path": "scripts/check-schedule-clock-injection.test.mjs",
+      "sha256": "e1fe39f8e18e2cd556103b2ad17493ce6fe5a75797fd5c17b7c5f033a01fef20"
+    }
+  ],
+  "sourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
+  "limitations": [
+    "No measured product-similarity or production-completion percentage.",
+    "Native fixture model replies and native-dialog choices are scripted; OS fallback is captured rather than opened.",
+    "Passing source/mocked checks is not production acceptance.",
+    "Runtime artifact hashes identify the development build, not a signed installer."
+  ],
+  "releaseContinuation": {
+    "status": "IN_PROGRESS",
+    "updatedAt": "2026-10-17T06:20:18.912719+00:00",
+    "cleanCandidateVersion": "0.0.1-e10.20261017",
+    "officeCloud": {
+      "environment": {
+        "provider": "E2B",
+        "template": "uwk4pwp5a9usuxie4d69",
+        "sandboxId": "i99sgmou0pmjv6xi3lepe"
+      },
+      "docx": {
+        "outputSha256": "07bccbf603814b3486a0c91cbc83eb3990503f178d0f616fda373abe2c4b27da",
+        "structural": "package_parts_checked",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "d4b4abded1de1d7acb994eae9c9f3bb44afdc791746b55d4c216d96b496f7a8f",
+          "previewSha256": ["a4451eb172c77b375d150188397a65433cafb5595d1b514db32c83242f7e22e2"]
+        }
+      },
+      "workbook": {
+        "outputSha256": "30242f5fe6ea9381a13aed394bf164d51f0147715397790b244860f513317450",
+        "structural": "package_parts_checked",
+        "recalculation": "passed",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "8377c0b89190926acb61a9e61552ea5720370fa90fe0023123f2d0a9d8ff58e3",
+          "previewSha256": ["6003301f428e5122a891d48894ac3ecae674e47a6a1d6bab846c0da6dbb791ca"]
+        }
+      },
+      "edited": {
+        "outputSha256": "6327c9dc8a11359fa45a3c08688e792481caa00503b1661576795d3c0a723694",
+        "structural": "package_parts_checked",
+        "recalculation": "passed",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "0e760eb6cb5adc73d889603ad8f7a82439a25cae3dba0150da7a26d350874dcb",
+          "previewSha256": ["bdf8bc1ec8526966e332b1b920efbad607499fbc40ec2a465dec03e5dae8d04e"]
+        },
+        "inputSha256": "30242f5fe6ea9381a13aed394bf164d51f0147715397790b244860f513317450",
+        "preservation": {
+          "changedParts": ["xl/worksheets/sheet1.xml"],
+          "unchangedParts": 5
+        }
+      },
+      "slides": {
+        "outputSha256": "3a8128663d8fc7674cf1d093aef2cb6c5c5b13e1a233ca7c2cad4556cd244505",
+        "structural": "package_parts_checked",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "063c98ee80c4a4e1aa2b154fdc903cba8548d67f448bfd372cb7b986201eacae",
+          "previewSha256": ["6ebbd9d1a5f2f1762446afbac03f48475d9ea4ebfccdec9ae9f9c81704f23223"]
+        }
+      },
+      "pdf": {
+        "outputSha256": "03f9d4177bb28dd0aebd8212b857bfd18f76f38453bce0ebdf64a18bfe71779a",
+        "structural": "pdf_parsed",
+        "recalculation": "not_required",
+        "render": {
+          "status": "passed",
+          "pages": 1,
+          "pdfSha256": "03f9d4177bb28dd0aebd8212b857bfd18f76f38453bce0ebdf64a18bfe71779a",
+          "previewSha256": ["04e8ef2d343d0e227f74ef9052f1f901365f2c1922d66949736e755a6b4e2945"]
+        }
+      },
+      "formulaErrorRefused": true
+    },
+    "installerNotarization": [
+      {
+        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-arm64.dmg",
+        "notarizedAndStapled": true,
+        "sha256": "c054aeab3152f1a3e558f17772a04d0d402de355cdd1aa2f33f10c8af6b039f8"
+      },
+      {
+        "file": "/tmp/agi-e10-release/AGI-Cloud-0.0.1-e10.20261017-x64.dmg",
+        "notarizedAndStapled": true,
+        "sha256": "f4cf19640e5963fdc789588b35e8466d3f84bf12cc575420da5de6b20f5ea380"
+      }
+    ],
+    "installedArm64": {
+      "at": "2026-10-17T06:18:18.679Z",
+      "app": "/tmp/agi-e10-installed/AGI Cloud.app",
+      "checks": {
+        "strictSignature": "passed",
+        "gatekeeper": "passed",
+        "notarizationTicket": "Processing: /tmp/agi-e10-installed/AGI Cloud.app\nThe validate action worked!",
+        "bundleId": "com.agiworkforce.desktop.cloud",
+        "version": "0.0.1-e10.20261017",
+        "architecture": "arm64",
+        "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+        "packagedHostedBridge": {
+          "platform": "electron-darwin",
+          "version": "0.0.1-e10.20261017",
+          "node": "undefined",
+          "status": {
+            "ok": true,
+            "value": {
+              "available": true,
+              "name": "agi",
+              "version": "0.0.1",
+              "path": "/private/tmp/agi-e10-installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+              "hint": null,
+              "source": "bundled",
+              "accountSyncError": null,
+              "capabilities": []
+            }
+          },
+          "routines": {
+            "ok": true,
+            "value": {
+              "deviceId": "76a1b6df-f575-4fc8-bc75-ad7873f87fa7",
+              "suspended": false,
+              "error": null,
+              "routines": []
+            }
+          }
+        },
+        "updaterNoRelease": true
+      },
+      "requests": ["/api/releases/desktop-cloud/update/arm64/0.0.1-e10.20261017", "/chat"],
+      "artifacts": {
+        "asar": "9e3a82be23f1e074c473e6948211c585ae4773e20217b4aae489c2ecb61af990",
+        "cli": "4c3fd6778bc7153e5439a7d5ba77b79f702c21116d6db3269e28e107e7484330",
+        "input": "29cdaf8b667c98215d97d43c1239189f9007dcaa25fc7e1fab8672237893dd31"
+      },
+      "status": "passed"
+    },
+    "credentialIncident": {
+      "affectedCandidate": "discarded; submitted to Apple but never published",
+      "rendererBoundaryFixed": true,
+      "preUploadGuardAdded": true,
+      "rotationStatus": "REQUIRED_NOT_PERFORMED",
+      "credentialValuesRecorded": false
+    },
+    "outstanding": [
+      "complete hosted reload/version/revoke journey",
+      "positive updater application/restart",
+      "native Intel execution",
+      "notification provider access",
+      "external SSH same-account journey",
+      "physical sleep/offline host",
+      "Tauri updater signing credential rotation"
+    ],
+    "intelCandidate": {
+      "releaseTag": "e10-candidate-20261017-01a142a4",
+      "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
+      "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
+      "version": "0.0.3-e10.20261017",
+      "status": "NOT_RUN",
+      "publication": "private draft only; no public update feed"
+    }
+  }
+}

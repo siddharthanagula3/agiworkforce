@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { LANE_CAP, QueueFullError, type QueuedCommand } from '@agiworkforce/client-runtime/queue';
 import {
   DesktopRuntimeError,
+  DEVELOPER_SESSION_MAX_FRAME_BYTES,
   messageKindForDeveloperSessionEvent,
   type DeveloperAgentMode,
+  type DeveloperSessionEvent,
   type DeveloperApprovalDecision,
   type DeveloperReasoningEffort,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
-import type { DeveloperMessage } from '@agiworkforce/types/protocol';
+import type { DeveloperChildTask, DeveloperMessage } from '@agiworkforce/types/protocol';
 import {
   answerDeveloperApproval,
   answerDeveloperUserInput,
@@ -59,6 +61,7 @@ export interface LocalMessage {
 export type LocalSendOutcome = 'started' | 'held' | 'declined';
 
 export interface LocalSessionState {
+  childTasks: DeveloperChildTask[];
   messages: DeveloperMessage[];
   truncated: boolean;
   turn: LocalTurn;
@@ -161,6 +164,7 @@ export function useLocalSession(
   session: LocalDeveloperSession | null,
   options: LocalTurnOptions = {},
 ): LocalSessionState {
+  const [childTasks, setChildTasks] = useState<DeveloperChildTask[]>([]);
   const [messages, setMessages] = useState<DeveloperMessage[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [turn, setTurn] = useState<LocalTurn>(EMPTY_LOCAL_TURN);
@@ -183,6 +187,16 @@ export function useLocalSession(
     messages: [],
   });
 
+  const replayRef = useRef<{
+    turnId: string | null;
+    nextDeltaIndex?: number;
+    nextEventSequence?: number;
+    lastLiveEventSequence?: number;
+  }>({ turnId: null });
+  const bufferedEventsRef = useRef<DeveloperSessionEvent[] | null>(null);
+  const bufferedBytesRef = useRef(0);
+  const overflowedRef = useRef(false);
+  const dispatchEventRef = useRef<(event: DeveloperSessionEvent) => void>(() => undefined);
   const loadsRef = useRef(0);
   const sendingRef = useRef(false);
 
@@ -206,43 +220,110 @@ export function useLocalSession(
   const snapshot = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot);
   const queued = useMemo(() => snapshot.map(queuedMessage), [snapshot]);
 
-  const load = useCallback(async (): Promise<{ turnRunning: boolean } | null> => {
-    loadsRef.current += 1;
-    const request = loadsRef.current;
-    if (!rootId || !threadId) {
-      setLoading(false);
-      return null;
-    }
-    setLoading(true);
-    try {
-      const transcript = await readDeveloperSession(rootId, threadId);
-      if (request !== loadsRef.current) return null;
-      setMessages(transcript.messages);
-      setTruncated(transcript.truncated);
-      setError(null);
-      const active = transcript.activeTurn;
-      if (active) {
-        setTurn((current) =>
-          current.turnId === null
-            ? { ...EMPTY_LOCAL_TURN, turnId: active.turnId, reply: active.partialResponse }
-            : current,
-        );
-        setApprovals(active.approvals.map((approval) => ({ ...approval, turnId: active.turnId })));
-        setQuestions(active.questions.map((question) => ({ ...question, turnId: active.turnId })));
+  const load = useCallback(
+    async function readCurrentSession(): Promise<{ turnRunning: boolean } | null> {
+      loadsRef.current += 1;
+      const request = loadsRef.current;
+      if (!rootId || !threadId) {
+        setLoading(false);
+        return null;
       }
-      return { turnRunning: active !== null };
-    } catch (cause: unknown) {
-      if (request === loadsRef.current) {
-        setError(toUserMessage(cause, LOCAL_CODE_COPY.readFailed));
+      setLoading(true);
+      const turnAtRead = turnRef.current.turnId;
+      bufferedEventsRef.current ??= [];
+      try {
+        const transcript = await readDeveloperSession(rootId, threadId);
+        if (request !== loadsRef.current || overflowedRef.current) return null;
+        setMessages(transcript.messages);
+        setChildTasks(transcript.childTasks ?? []);
+        setTruncated(transcript.truncated);
+        setError(null);
+        const active = transcript.activeTurn;
+        const newerLocalTurn =
+          turnRef.current.turnId !== null && turnRef.current.turnId !== turnAtRead;
+        if (active && !newerLocalTurn) {
+          const replay = replayRef.current;
+          const snapshotBehind =
+            replay.turnId === active.turnId &&
+            replay.nextDeltaIndex !== undefined &&
+            active.nextDeltaIndex !== undefined &&
+            active.nextDeltaIndex < replay.nextDeltaIndex;
+          if (!snapshotBehind) {
+            replayRef.current = {
+              turnId: active.turnId,
+              ...(replay.turnId === active.turnId && replay.lastLiveEventSequence !== undefined
+                ? { lastLiveEventSequence: replay.lastLiveEventSequence }
+                : {}),
+              ...(active.nextDeltaIndex === undefined
+                ? {}
+                : { nextDeltaIndex: active.nextDeltaIndex }),
+              ...(active.nextEventSequence === undefined
+                ? {}
+                : { nextEventSequence: active.nextEventSequence }),
+            };
+            const previous = turnRef.current;
+            const next = {
+              ...(previous.turnId === active.turnId ? previous : EMPTY_LOCAL_TURN),
+              turnId: active.turnId,
+              reply: active.partialResponse,
+            };
+            turnRef.current = next;
+            setTurn(next);
+          }
+          setApprovals(
+            active.approvals.map((approval) => ({ ...approval, turnId: active.turnId })),
+          );
+          setQuestions(
+            active.questions.map((question) => ({ ...question, turnId: active.turnId })),
+          );
+        }
+        if (!active && !newerLocalTurn) {
+          setApprovals([]);
+          setQuestions([]);
+          const storedTurn = turnRef.current.turnId;
+          if (
+            storedTurn &&
+            turnRef.current.outcome === null &&
+            transcript.messages.some(
+              (message) => message.role === 'assistant' && message.turnId === storedTurn,
+            )
+          ) {
+            turnRef.current = EMPTY_LOCAL_TURN;
+            setTurn(EMPTY_LOCAL_TURN);
+          }
+        }
+        return { turnRunning: active != null || newerLocalTurn };
+      } catch (cause: unknown) {
+        if (request === loadsRef.current) {
+          setError(toUserMessage(cause, LOCAL_CODE_COPY.readFailed));
+        }
+        return null;
+      } finally {
+        if (request === loadsRef.current) {
+          setLoading(false);
+          const buffered = bufferedEventsRef.current ?? [];
+          bufferedEventsRef.current = null;
+          bufferedBytesRef.current = 0;
+          if (overflowedRef.current) {
+            overflowedRef.current = false;
+            void readCurrentSession();
+          } else {
+            for (const event of buffered) dispatchEventRef.current(event);
+          }
+        }
       }
-      return null;
-    } finally {
-      if (request === loadsRef.current) setLoading(false);
-    }
-  }, [rootId, threadId]);
+    },
+    [rootId, threadId],
+  );
 
   useEffect(() => {
+    replayRef.current = { turnId: null };
+    bufferedEventsRef.current = null;
+    bufferedBytesRef.current = 0;
+    overflowedRef.current = false;
+    turnRef.current = EMPTY_LOCAL_TURN;
     setMessages([]);
+    setChildTasks([]);
     setTruncated(false);
     setTurn(EMPTY_LOCAL_TURN);
     setChanges(null);
@@ -258,6 +339,10 @@ export function useLocalSession(
     void load().then((read) => {
       if (read && !read.turnRunning && memory.queue.size() > 0) pauseQueue(true);
     });
+    return () => {
+      loadsRef.current += 1;
+      bufferedEventsRef.current = null;
+    };
   }, [load, memory, pauseQueue]);
 
   const reload = useCallback(async () => {
@@ -405,9 +490,14 @@ export function useLocalSession(
 
   useEffect(() => {
     if (!rootId || !threadId) return;
-    return onDeveloperSessionEvent((eventRootId, event) => {
-      if (eventRootId !== rootId) return;
+    const dispatch = (event: DeveloperSessionEvent) => {
       if (event.type === 'runtime-stopped') {
+        overflowedRef.current = false;
+        bufferedBytesRef.current = 0;
+        loadsRef.current += 1;
+        bufferedEventsRef.current = null;
+        setLoading(false);
+        turnRef.current = { ...turnRef.current, outcome: turnRef.current.outcome ?? 'failed' };
         setError(LOCAL_CODE_COPY.runtimeStopped);
         setApprovals([]);
         setQuestions([]);
@@ -417,31 +507,87 @@ export function useLocalSession(
       }
       if (event.threadId !== threadId) return;
       const kind = messageKindForDeveloperSessionEvent(event.type);
+      if (
+        'turnId' in event &&
+        turnRef.current.turnId === event.turnId &&
+        turnRef.current.outcome !== null
+      )
+        return;
+      if ('turnId' in event && event.type !== 'turn-started') {
+        const currentId = replayRef.current.turnId ?? turnRef.current.turnId;
+        if (currentId !== null && currentId !== event.turnId) return;
+      }
+
+      if (event.sequence !== undefined) {
+        const replay = replayRef.current;
+        if (
+          replay.lastLiveEventSequence !== undefined &&
+          event.sequence <= replay.lastLiveEventSequence
+        )
+          return;
+        replayRef.current = {
+          ...replay,
+          lastLiveEventSequence: event.sequence,
+          nextEventSequence: Math.max(replay.nextEventSequence ?? 0, event.sequence + 1),
+        };
+      }
 
       if (kind === 'status' && event.type === 'turn-started') {
-        setTurn((current) => ({ ...current, turnId: event.turnId, outcome: null, error: null }));
+        if (replayRef.current.turnId !== event.turnId) {
+          replayRef.current = { turnId: event.turnId, nextDeltaIndex: 0, nextEventSequence: 0 };
+        }
+        setApprovals((current) => current.filter((approval) => approval.turnId === event.turnId));
+        setQuestions((current) => current.filter((question) => question.turnId === event.turnId));
+        setTurn((current) => {
+          const next = {
+            ...(current.turnId === event.turnId || current.turnId === null
+              ? current
+              : EMPTY_LOCAL_TURN),
+            turnId: event.turnId,
+            outcome: null,
+            failure: null,
+          };
+          turnRef.current = next;
+          return next;
+        });
         return;
       }
       if (kind === 'text' && event.type === 'output-delta') {
-        setTurn((current) => ({ ...current, reply: current.reply + event.delta }));
+        const replay = replayRef.current;
+        if (event.index !== undefined) {
+          const expected = replay.nextDeltaIndex ?? 0;
+          if (event.index < expected) return;
+          if (event.index > expected) {
+            void load();
+            return;
+          }
+          replayRef.current = { ...replay, turnId: event.turnId, nextDeltaIndex: event.index + 1 };
+        }
+        setTurn((current) => ({
+          ...current,
+          turnId: event.turnId,
+          reply: current.reply + event.delta,
+        }));
         return;
       }
       if (kind === 'tool_call' && event.type === 'tool-queued') {
         setTurn((current) => ({
           ...current,
-          tools: [
-            ...current.tools,
-            {
-              toolCallId: event.toolCallId,
-              name: event.name,
-              summary: event.name,
-              output: '',
-              isError: false,
-              state: 'queued',
-              command: null,
-              files: [],
-            },
-          ],
+          tools: current.tools.some((tool) => tool.toolCallId === event.toolCallId)
+            ? current.tools
+            : [
+                ...current.tools,
+                {
+                  toolCallId: event.toolCallId,
+                  name: event.name,
+                  summary: event.name,
+                  output: '',
+                  isError: false,
+                  state: 'queued',
+                  command: null,
+                  files: [],
+                },
+              ],
         }));
         return;
       }
@@ -556,6 +702,12 @@ export function useLocalSession(
         return;
       }
       if (kind === 'status' && event.type === 'turn-finished') {
+        turnRef.current = {
+          ...turnRef.current,
+          outcome: event.outcome,
+          reply: event.response || turnRef.current.reply,
+          failure: event.failure,
+        };
         setApprovals([]);
         setQuestions([]);
         const used = event.inputTokens + event.outputTokens;
@@ -563,7 +715,7 @@ export function useLocalSession(
         setTurn((current) => ({
           ...current,
           outcome: event.outcome,
-          reply: current.reply === '' ? event.response : current.reply,
+          reply: event.response || current.reply,
           failure: event.failure,
         }));
         // A completed turn is in the store, so the transcript is read again and
@@ -575,12 +727,35 @@ export function useLocalSession(
           if (queue.size() > 0) pauseQueue(true);
           return;
         }
-        void load().then(() => {
-          if (turnRef.current.turnId !== event.turnId) return;
+        void load().then((read) => {
+          if (!read || read.turnRunning || turnRef.current.turnId !== event.turnId) return;
           setTurn(EMPTY_LOCAL_TURN);
           sendNextQueued();
         });
       }
+    };
+    const receive = (event: DeveloperSessionEvent) => {
+      if (bufferedEventsRef.current !== null && event.type !== 'runtime-stopped') {
+        if (overflowedRef.current) return;
+        const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+        if (bufferedBytesRef.current + bytes > DEVELOPER_SESSION_MAX_FRAME_BYTES) {
+          overflowedRef.current = true;
+          bufferedEventsRef.current = [];
+          bufferedBytesRef.current = 0;
+          setNotice(LOCAL_CODE_COPY.activityReloaded);
+          return;
+        }
+        bufferedBytesRef.current += bytes;
+        bufferedEventsRef.current.push(event);
+        return;
+      }
+      dispatch(event);
+    };
+    dispatchEventRef.current = receive;
+    return onDeveloperSessionEvent((eventRootId, event) => {
+      if (eventRootId !== rootId) return;
+      if (event.type !== 'runtime-stopped' && event.threadId !== threadId) return;
+      receive(event);
     });
   }, [rootId, threadId, load, queue, pauseQueue, returnUnsentSteers, sendNextQueued]);
 
@@ -737,6 +912,7 @@ export function useLocalSession(
   );
 
   return {
+    childTasks,
     messages,
     truncated,
     turn,

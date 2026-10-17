@@ -69,6 +69,15 @@ pub trait DeveloperSessionHost: Send + Sync {
         env!("CARGO_PKG_VERSION")
     }
 
+    async fn workspace_identity(
+        &self,
+    ) -> Result<
+        agiworkforce_protocol::developer_session::DeveloperWorkspaceIdentity,
+        DeveloperSessionHostError,
+    > {
+        Err(unsupported(method::WORKSPACE_IDENTITY))
+    }
+
     async fn start_thread(
         &self,
         params: ThreadStartParams,
@@ -730,6 +739,7 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::THREAD_HANDOFF_ACCEPT, MethodEffect::ChangesState),
     (method::THREAD_ARCHIVE, MethodEffect::ChangesState),
     (method::THREAD_DELETE, MethodEffect::ChangesState),
+    (method::WORKSPACE_IDENTITY, MethodEffect::ReadsForOwner),
     (method::THREAD_RECONNECT, MethodEffect::ReadOnly),
     (method::THREAD_WRITER_RELEASE, MethodEffect::ChangesState),
     (method::THREAD_WRITER_TAKEOVER, MethodEffect::ChangesState),
@@ -969,10 +979,8 @@ impl DetachedJobs {
         trust: DeveloperConnectionTrust,
         running: usize,
     ) -> Result<DetachedSlot, &'static str> {
-        const CONNECTION_BUSY: &str =
-            "This connection already has as many long-running requests in flight as it may; wait for one to finish";
-        const SERVER_BUSY: &str =
-            "The app-server already has as many long-running requests in flight as it may; wait for one to finish";
+        const CONNECTION_BUSY: &str = "This connection already has as many long-running requests in flight as it may; wait for one to finish";
+        const SERVER_BUSY: &str = "The app-server already has as many long-running requests in flight as it may; wait for one to finish";
         let owner = trust == DeveloperConnectionTrust::LoopbackOwner;
         let per_connection = if owner {
             DETACHED_PER_CONNECTION
@@ -1310,6 +1318,11 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
+            method::WORKSPACE_IDENTITY => self
+                .host
+                .workspace_identity()
+                .await
+                .map(serde_json::to_value),
             method::THREAD_RECONNECT => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
                     Ok(params) => params,

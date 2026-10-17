@@ -22,6 +22,7 @@ import { recordResearchReportSettledCost } from '@/lib/services/research-report-
 import {
   loadSchedulePreferences,
   notifyScheduleCompleted,
+  scheduleNoticeKey,
 } from '@/lib/services/schedule-notification-service';
 import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
@@ -79,12 +80,6 @@ function readScheduleNotice(payload: Record<string, unknown>): ScheduleNoticePay
   };
 }
 
-function scheduleNoticeKey(prefix: string, notice: ScheduleNoticePayload): string {
-  return notice.status === 'awaiting_approval'
-    ? `${prefix}:${notice.runId}:approval:${notice.approvalStep ?? 0}`
-    : `${prefix}:${notice.runId}`;
-}
-
 function readString(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
   if (typeof value !== 'string' || !value.trim()) {
@@ -103,7 +98,7 @@ async function announceScheduleCompletion(
     organizationId: context.job.organizationId,
   });
 
-  const preferences = await loadSchedulePreferences(scopedDb, userId);
+  const preferences = await loadSchedulePreferences(scopedDb, userId, notice);
   let emailQueued = false;
   if (preferences.email && preferences.email_address) {
     const heldUntil = await quietHoursEndFor(scopedDb, userId);
@@ -153,13 +148,27 @@ async function sendScheduleCompletionEmailJob(
     organizationId: context.job.organizationId,
   });
 
-  const preferences = await loadSchedulePreferences(scopedDb, userId);
+  const preferences = await loadSchedulePreferences(scopedDb, userId, notice);
   if (!preferences.email || !preferences.email_address) return { skipped: 'opted_out' };
+
+  const heldUntil = await quietHoursEndFor(scopedDb, userId);
+  if (heldUntil) {
+    await enqueueJob(context.db, {
+      kind: 'email.schedule-completed',
+      userId,
+      organizationId: context.job.organizationId,
+      idempotencyKey: `${scheduleNoticeKey('schedule-email', notice)}:quiet:${heldUntil.toISOString()}`,
+      payload: { ...notice },
+      runAfter: heldUntil,
+    });
+    return { deferredUntil: heldUntil.toISOString() };
+  }
 
   const result = await sendScheduleCompletionEmail({
     to: preferences.email_address,
     taskName: notice.taskName,
     status: notice.status,
+    idempotencyKey: scheduleNoticeKey('schedule-email', notice),
     ...(notice.approvalSummary ? { approvalSummary: notice.approvalSummary } : {}),
   });
   if (result.delivered) return { delivered: true, providerMessageId: result.providerMessageId };

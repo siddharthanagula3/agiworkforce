@@ -4,6 +4,10 @@
  * release and stops being read, which is how a real key gets through.
  */
 export const SECRET_PATTERNS = [
+  {
+    rule: 'embedded-signing-credential',
+    re: /\b(?:TAURI_SIGNING_PRIVATE_KEY(?:_PASSWORD)?|CSC_KEY_PASSWORD|APPLE_APP_SPECIFIC_PASSWORD|APPLE_API_PRIVATE_KEY)\b["']?\s*[:=]\s*["'][^"'\r\n]+["']/g,
+  },
   { rule: 'anthropic-key', re: /\bsk-ant-[A-Za-z0-9_-]{24,}/g },
   { rule: 'openai-key', re: /\bsk-(?:proj-)?[A-Za-z0-9]{32,}/g },
   { rule: 'stripe-or-clerk-secret', re: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{20,}/g },
@@ -66,7 +70,11 @@ export function scanText(text, file, allowlist = []) {
     let match;
     while ((match = re.exec(text)) !== null) {
       const value = match[0];
-      if (allowlist.some((allowed) => value.includes(allowed))) continue;
+      if (
+        rule !== 'embedded-signing-credential' &&
+        allowlist.some((allowed) => value.includes(allowed))
+      )
+        continue;
       const secret = SECRET_PATTERNS.some((pattern) => pattern.rule === rule);
       findings.push({ file, rule, detail: secret ? redact(value) : value });
     }

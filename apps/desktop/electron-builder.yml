@@ -34,6 +34,7 @@ extraResources:
     to: agi-cli/agi
 
 beforePack: ./electron/bundleBinaries.mjs
+afterPack: ./electron/verifyReleaseArtifact.mjs
 
 # The cloud-shell link scheme, declared once for every platform: the macOS
 # Info.plist (handled through `open-url`), the Linux desktop entry's

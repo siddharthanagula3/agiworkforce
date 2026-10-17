@@ -6,6 +6,7 @@ pub mod host_path;
 pub mod launch_env;
 pub mod launch_files;
 pub mod protected_paths;
+pub mod relay;
 pub mod resolve;
 pub mod wrap;
 

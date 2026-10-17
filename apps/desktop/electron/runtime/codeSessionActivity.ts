@@ -7,6 +7,7 @@ import type { DeveloperSessionEvent } from '@agiworkforce/local-runtime-contract
 export interface CodeSessionActivityDependencies {
   sessionTitle: (rootId: string, threadId: string) => Promise<string | null>;
   remoteControlActive: () => boolean;
+  mayReportRoot?: (rootId: string) => boolean;
   report: (activity: LocalCodeSessionActivity) => Promise<void>;
 }
 
@@ -30,9 +31,10 @@ export function createCodeSessionActivity(deps: CodeSessionActivityDependencies)
   return async function handle(rootId: string, event: DeveloperSessionEvent): Promise<void> {
     if (event.type === 'runtime-stopped') return;
     const step = activityStep(event);
-    if (!step || !deps.remoteControlActive()) return;
+    if (!step || !deps.remoteControlActive() || deps.mayReportRoot?.(rootId) === false) return;
 
     const sessionTitle = await deps.sessionTitle(rootId, event.threadId).catch(() => null);
+    if (!deps.remoteControlActive() || deps.mayReportRoot?.(rootId) === false) return;
     await deps.report({
       event: step.event,
       rootId,

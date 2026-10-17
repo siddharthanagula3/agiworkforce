@@ -44,6 +44,9 @@ describe('SandboxedIframe payload changes', () => {
     expect(postRender.mock.calls[0]![1]).toEqual(first);
 
     view.rerender(<SandboxedIframe payload={second} fallbackSrcDoc="" title="preview" />);
+    const replacement = view.getByTitle('preview') as HTMLIFrameElement;
+    expect(replacement).not.toBe(frame);
+    announceReady(replacement);
     expect(postRender).toHaveBeenCalledTimes(2);
     expect(postRender.mock.calls[1]![1]).toEqual(second);
   });
