@@ -2429,6 +2429,26 @@ describe('the environment the composer starts a session in', () => {
     expect(within(menu).queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('shows the host permission profile on a local draft instead of cloud approval settings', async () => {
+    host = {};
+    localGroups = [folder()];
+    listDeveloperModels.mockImplementationOnce(async () => ({
+      models: [],
+      hostModels: [],
+      defaultModelId: null,
+      defaultAgentMode: 'auto' as const,
+    }));
+    render(<CloudCodePage api={createApi()} />);
+
+    const permissions = await screen.findByText('Permissions: Auto');
+    expect(permissions).toHaveAttribute(
+      'title',
+      'Edits files in this folder and runs safe commands without asking. Asks before anything else, such as changing git hooks or MCP servers.',
+    );
+    expect(screen.queryByRole('button', { name: 'Approval mode' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ask before every action')).not.toBeInTheDocument();
+  });
+
   it('starts a shell session in the folder used last, named on the chip', async () => {
     host = {};
     localGroups = [

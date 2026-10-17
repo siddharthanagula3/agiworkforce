@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T20:17:06.773943+00:00",
+  "capturedAt": "2026-10-17T20:26:45.242973+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -1106,8 +1106,20 @@
       "sha256": "e71d2354e0d47feea304731a950a230352146526e6ffc530fd0f8815e9d842f7"
     },
     {
+      "path": "apps/web/features/code/CloudCodePage.module.css",
+      "sha256": "be2889250d8394fa34f08d74014001477e23792ff2a6a5756106db7060625754"
+    },
+    {
+      "path": "apps/web/features/code/CloudCodePage.test.tsx",
+      "sha256": "1bfaaab20e16a16961ee90bdd6f0ce4bcc4b6710e913c904c8af2176b641e315"
+    },
+    {
       "path": "apps/web/features/code/CloudCodePage.tsx",
-      "sha256": "d6351c8d7fb379a839bd8ae856694edcb3526d57981f6a0936076dfc3c8b28f9"
+      "sha256": "f0b2bf88fb26d7d60cb6cb20e81d24352d9783b9dfbd4f9af314b1cfa8ef6626"
+    },
+    {
+      "path": "apps/web/features/code/components/CodeComposer.tsx",
+      "sha256": "95908d5d59a00967225e810c1c2fe9fa5a72e264b5c4738222f3d1c2702b7285"
     },
     {
       "path": "apps/web/features/code/components/LocalSessionPanel.tsx",
@@ -1514,7 +1526,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "cbaad43318153cb9ad020e5209c887884fe7e493a5fc25c2a549416610bcbdee",
+  "sourceFilesDigest": "2642721058cfff919d823c9b46cc6aa44a62c1596dcc50f0c58dd82a3f857146",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1524,7 +1536,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T20:17:06.773943+00:00",
+    "updatedAt": "2026-10-17T20:26:45.242973+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -4042,9 +4054,47 @@
         "visualQualification": "Accessibility shows the completed answer, while native capture returns earlier home frames or a blank area. No screenshot is credited as the completed answer, and capture discrepancy is not attributed to product source without further evidence.",
         "accountIdentifiersOmitted": true
       }
+    },
+    "localPermissionDisplay": {
+      "at": "2026-10-17T20:26:45.242973+00:00",
+      "status": "SOURCE_AND_FOCUSED_VALIDATION_PASSED_ROLLOUT_PENDING",
+      "observed": "The installed native local draft displayed the account-cloud approval selector, but its first local turn used the host permission profile. The shared cloud label promised approval for every read, unlike the actual local Ask policy.",
+      "repair": "The local draft now discloses the host default agent mode with the existing local permission labels/hints and the existing safe fallback used by the session. The account-cloud selector remains on cloud drafts. Local permission changes remain in the existing session control; no policy, account preference, grant or sandbox behavior was weakened.",
+      "files": [
+        "apps/web/features/code/CloudCodePage.module.css",
+        "apps/web/features/code/CloudCodePage.test.tsx",
+        "apps/web/features/code/CloudCodePage.tsx",
+        "apps/web/features/code/components/CodeComposer.tsx"
+      ],
+      "tests": {
+        "codePage": {
+          "filesPassed": 1,
+          "testsPassed": 124,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-local-permission-display-tests.log",
+            "sha256": "a8f88e4aa386b91d7e0e73e2332fe31e0f95312e338caa8d9c58c0963ff24f6d"
+          }
+        },
+        "webTypecheck": {
+          "status": "passed",
+          "nodeHeapMiB": 8192,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-local-permission-display-typecheck.log",
+            "sha256": "1db90647ec471abe41e6e06d303932e4430428e8a6f5c7b35b084f940289881c"
+          }
+        },
+        "focusedEslint": {
+          "status": "passed",
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-local-permission-display-eslint.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      },
+      "boundary": "Code page tests use existing host facades. The production hosted renderer has not received this Web source change; no native visual pass is inferred."
     }
   },
-  "priorSourceFilesDigest": "86496103a2da9a1b8cf66c169a43e2aaee6a94c29557fb86037a78f060df2ccd",
+  "priorSourceFilesDigest": "cbaad43318153cb9ad020e5209c887884fe7e493a5fc25c2a549416610bcbdee",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

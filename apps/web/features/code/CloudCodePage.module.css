@@ -1119,7 +1119,8 @@ svg + .menuRowLabel {
   min-width: 8px;
 }
 
-.controlButton {
+.controlButton,
+.localPermissionHint {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1131,6 +1132,9 @@ svg + .menuRowLabel {
   color: var(--chat-text-secondary);
   font: inherit;
   font-size: 13px;
+}
+
+.controlButton {
   cursor: pointer;
 }
 

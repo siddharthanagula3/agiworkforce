@@ -76,6 +76,7 @@ import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
 import { deleteDeveloperThread } from '@/features/desktop-host';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_FALLBACK_AGENT_MODE,
   localDiscardArchivesConsequence,
   localFolderChoice,
   localFolderChoices,
@@ -1094,6 +1095,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const isLocalDraft = draft.environment === 'local';
   const localDraftBlocked = isLocalDraft ? (draftFolder?.unavailable ?? null) : null;
   const composerLocal: CodeLocalState = {
+    agentMode: draftRuntime?.defaultAgentMode ?? LOCAL_FALLBACK_AGENT_MODE,
     supported: local.supported,
     worktrees: local.worktrees,
     folders: localFolderChoices(local.groups),
