@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T10:40:18.616264+00:00",
+  "capturedAt": "2026-10-17T11:36:26.566905+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -523,6 +523,18 @@
       "sha256": "27f32e7f0c92594c972446fe40c53fa419b5317f25f97f2889823de747deb17f"
     },
     {
+      "path": "Cargo.lock",
+      "sha256": "4bbefae97ae616f63b93d8a7d942217cf4f7efd28d564991840cc383617caee3"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "ed9c51a2175ebdde44d0ab321a120755965602e2088f02641f2843d813714896"
+    },
+    {
+      "path": "apps/cli/Cargo.toml",
+      "sha256": "50269d7e0b9387cc3c865232495731f33a86e4e607d54742df6b0c235223b8e2"
+    },
+    {
       "path": "apps/cli/src/agent/chat.rs",
       "sha256": "75b73ee88b8ec2094b4a3f58d0658d890cb5037872c9b9b047a662e18884cd99"
     },
@@ -541,6 +553,10 @@
     {
       "path": "apps/cli/src/app_server/developer_host.rs",
       "sha256": "ed32a4d4a914e7411b651d9cb8ae526ae50804fc286bc2c7b1acc099299a918a"
+    },
+    {
+      "path": "apps/cli/src/documents.rs",
+      "sha256": "a0f9df09f645e6cc7dc97bc9991aede7420900461d97814c9f4c6e42bd6be03e"
     },
     {
       "path": "apps/cli/src/features/exec/tools/mod.rs",
@@ -725,6 +741,26 @@
     {
       "path": "apps/desktop/electron/windowPolicy.ts",
       "sha256": "fefeaef10bd71d9357060735bf87134008fdb16302a56c85544687148f0b8708"
+    },
+    {
+      "path": "apps/desktop/src-tauri/Cargo.toml",
+      "sha256": "aa00e358451ec9f21e5328fa962c105268d062ec93d2d56691f85bb6f7f1986c"
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/mcp/extensions/installer.rs",
+      "sha256": "7f40192a3d3ef63a13e63ee827538c7569b816239b650cfbabd839ed602e35cb"
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/mcp/extensions/package.rs",
+      "sha256": "f16eed169f4c27cb70d74963deb7faf3406683f86e267fb74c2eae23039a433a"
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/document/ooxml.rs",
+      "sha256": "8e1fbf8147625dbd307feb08235bf807224bc1debfe3f86461fc22d4e2226396"
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/speech/piper_bundle.rs",
+      "sha256": "87cf7b025a068b535f92323e116fc439feba7cdfe188b47f50d875a40a25c913"
     },
     {
       "path": "apps/desktop/src/features/cloud/CloudStoragePanel.tsx",
@@ -1207,7 +1243,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "3fca4ce9b3025497e0d19c0a44372ce60d511e090b79386f44b6114710e74820",
+  "sourceFilesDigest": "f7a067ad60d8b8648969815b020935f7a14f5852bcbb14e19af39a51e55294f5",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1217,7 +1253,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T10:40:18.616264+00:00",
+    "updatedAt": "2026-10-17T11:36:26.566905+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1368,7 +1404,7 @@
       "Tauri updater signing credential rotation",
       "final clean-checkout operability and review",
       "new login candidate operational acceptance and Web rollout",
-      "current Rust dependency security audit"
+      "patched-dependency CI and newest signed candidate validation"
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
@@ -1897,11 +1933,11 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "65cc10c02badb64a832df9a70b06bb26c10e7616",
+      "verifiedCodeCommit": "de685bf985ace7981c134cd1fda03e8d37c8c3d1",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "ffd0bbc5ed021d5ac3f4e51c7fc78c6278407421c80ae04249f230097ea2221b",
-      "boundary": "all 226 commands and diff checks passed at this commit; subsequent login recovery edits require final combined verification"
+      "logSha256": "df6c822cffedc3444f290311404e2a5df98049f452bcee64c3857759a837c338",
+      "boundary": "all 226 commands and diff checks passed; SSH keepalives preserved the actual push; later ZIP repair needs its own final chain"
     },
     "normalDesktopStartup": {
       "mode": "unchanged signed app, no fixture origin and no bundled-renderer override",
@@ -2019,8 +2055,8 @@
         }
       },
       "candidate": {
-        "version": "0.0.4-e10.20261017",
-        "status": "REBUILDING_AFTER_RECURRENCE_REPAIR",
+        "version": "0.0.5-e10.20261017",
+        "status": "PENDING_BUILD_WITH_PATCHED_CLI",
         "publication": "none",
         "sourceVerification": "both previous capability-aware packages passed strict signature, Gatekeeper, ticket, lipo and arm64 protocol checks; final recurrence-hardened package not yet verified"
       },
@@ -2039,10 +2075,10 @@
       }
     },
     "dependencyAudit": {
-      "status": "FAILED",
+      "status": "LOCAL_REPAIR_PASSED_CI_PENDING",
       "run": 39020286748,
       "at": "2026-10-17",
-      "vulnerabilities": 15,
+      "vulnerabilities": 0,
       "maintenanceWarnings": 2,
       "affectedZipVersions": ["1.1.4", "2.4.2", "4.6.1", "7.2.0", "8.6.0"],
       "advisories": ["RUSTSEC-2026-0367", "RUSTSEC-2026-0368", "RUSTSEC-2026-0369"],
@@ -2052,7 +2088,7 @@
         "https://rustsec.org/advisories/RUSTSEC-2026-0369.html"
       ],
       "patchedVersionFloor": "9.0.0",
-      "repairStatus": "NOT_IMPLEMENTED",
+      "repairStatus": "IMPLEMENTED",
       "boundary": "dependency findings published October 17; not a demonstrated exploit of AGI call sites; no ignore or gate weakening applied",
       "upstreamConstraints": [
         {
@@ -2081,7 +2117,70 @@
           "zip": "^4 (optional Windows dependency)"
         }
       ],
-      "upstreamBoundary": "official crates.io dependency endpoints inspected; ordinary upstream upgrades still retain affected ZIP majors; compatible dependency repair remains under investigation"
+      "upstreamBoundary": "Releases still constrain older ZIP majors; reviewed immutable upstream revisions and one scoped AGI compatibility fork are used until patched releases are available.",
+      "priorStatus": "FAILED",
+      "priorVulnerabilities": 15,
+      "patchedVersion": "9.0.4",
+      "auditReportSha256": "9c43929851bcbd45e094228d87d3088be4937ba451ed7adcfdc11ec6f6be31cf",
+      "newIgnores": 0,
+      "pins": [
+        {
+          "crate": "calamine",
+          "url": "https://github.com/tafia/calamine",
+          "rev": "d2ddf8837d301011011439708c8395310cee3906",
+          "boundary": "reviewed unmerged PR 741; 11 commits/14 changed files from published source; used at immutable revision"
+        },
+        {
+          "crate": "docx-rs",
+          "url": "https://github.com/bokuweb/docx-rs",
+          "rev": "ad7fede6a7f3b61a097c28d0c39dd04626e44701",
+          "boundary": "upstream ZIP 9 migration"
+        },
+        {
+          "crate": "rust_xlsxwriter",
+          "url": "https://github.com/jmcnamara/rust_xlsxwriter",
+          "rev": "90e31daa3d52458c22ef88ef84c8f015438c01d1",
+          "boundary": "upstream 0.99.1 source with ZIP 9; upgraded from 0.77"
+        },
+        {
+          "crate": "tauri-plugin-updater",
+          "url": "https://github.com/tauri-apps/plugins-workspace",
+          "rev": "ba98bfadc4c868c9a7e1a226c83af528e1f11b89",
+          "boundary": "upstream ZIP 9 migration"
+        },
+        {
+          "crate": "libsodium-sys-stable",
+          "url": "https://github.com/siddharthanagula3/agiworkforce-libsodium-sys-stable",
+          "rev": "583d19e644a4fd19cf3b5f73ce402d8aa4b4d35c",
+          "boundary": "AGI fork of exact published 1.23.2 source, upstream 62c295e26c464fb8d98d34a667ef09fe48f47e36; ZIP build requirement, Rust minimum and README provenance only; original licenses retained"
+        }
+      ],
+      "validation": {
+        "cliCheck": "passed",
+        "retainedDesktopCheck": "passed",
+        "strictCliClippy": "passed -D warnings -D unsafe-code",
+        "strictRetainedDesktopClippy": "passed -D warnings -D unsafe-code",
+        "officeReadTests": 13,
+        "officeReadFailures": 0,
+        "vectors": [
+          "DOCX text",
+          "PPTX numeric slide order and exactly one read",
+          "XLSX numeric and formula cached values",
+          "CP437 legacy names",
+          "zip bomb and decompression budgets",
+          "reader crashes, hangs, output floods and environment stripping",
+          "corrupt-sheet error propagation"
+        ],
+        "retainedOfficeTests": "RUNNING",
+        "localDependencyPaths": 0,
+        "lockfile": "generated by Cargo in isolated worktree, verified --locked in app checkout; not manually edited"
+      },
+      "silentSheetRepair": {
+        "before": "valid ZIP with malformed worksheet returned empty success; regression failed",
+        "beforeLogSha256": "0bd84d1cfe3e03479da5a4c13eb44105d4f63b02104f8f7988c47a1bba1167e6",
+        "after": "error propagated with sheet context; all 13 document tests pass",
+        "afterLogSha256": "14377fead5c3abce19ab4ce7cdb2e2f3f3dd7e7734ea1493e3f95812e4e16038"
+      }
     },
     "codeqlRepairs": {
       "status": "SOURCE_FIXED_LOCAL_VALIDATION_PASSED_CI_PENDING",
@@ -2127,7 +2226,7 @@
       "fixtureCompilationLogSha256": "8ca9f80c73ecefa3f81241140538df4eb4b55f32ac703a3228430540084bc3df"
     }
   },
-  "priorSourceFilesDigest": "ff404dd364116a28a317773f43fdded98e9d73ac48d25bdc3812b72392cfc842",
+  "priorSourceFilesDigest": "3fca4ce9b3025497e0d19c0a44372ce60d511e090b79386f44b6114710e74820",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

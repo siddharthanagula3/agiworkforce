@@ -75,8 +75,11 @@ pub fn extract_pptx_text(bytes: &[u8]) -> Result<String> {
 
     let mut slides: Vec<(usize, String)> = archive
         .file_names()
-        .filter(|name: &&str| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
-        .map(|name| (slide_number(name), name.to_string()))
+        .collect::<zip::result::ZipResult<Vec<_>>>()
+        .map_err(|error| Error::Generic(format!("Invalid PPTX entry name: {error}")))?
+        .into_iter()
+        .filter(|name| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
+        .map(|name| (slide_number(&name), name.into_owned()))
         .collect();
     slides.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
