@@ -2097,6 +2097,17 @@
       "sentence": "A leaked private half lets anyone sign a manifest that every pinned install accepts, so a compromise unpins the key, deploys the website and replaces the secret before anything else.",
       "implementation": ["apps/web/public/install.sh#verify_manifest"],
       "why": "accepted-risk"
+    },
+    {
+      "id": "updater-quarantine-is-not-rotation",
+      "section": "Current quarantine, 2026-10-17",
+      "kind": "prose",
+      "sentence": "Their secret entries remain in the custody inventory pending replacement; disabling a workflow is not key rotation.",
+      "implementation": [
+        "docs/security/security.md",
+        "audit/ledger/claude-desktop-implementation.json"
+      ],
+      "why": "historical-record"
     }
   ]
 }

@@ -1123,6 +1123,10 @@
       "sha256": "6b2d87add1e77b6e1c992cad566488b479269936bdf635deab8b8dc7d40add8b"
     },
     {
+      "path": "docs/security/security-claims.json",
+      "sha256": "45b2ad2984002130a93aa745acc82826e82c03edc5b549788e81c54793747a23"
+    },
+    {
       "path": "docs/security/security.md",
       "sha256": "500f0e18a8fe9e4708c25726e97f0ccba9b474667ebce8a2f82bb4a2efcc0709"
     },
@@ -1251,7 +1255,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "415a00661593aa1941ebe78a4f6d9ba0c1b2a6bdde5c8141ecd892ee22c875e4",
+  "sourceFilesDigest": "7e02f67e233b950a9479207c32cdeca449bc9a2d7e266ef4747befd69342e8c8",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1261,7 +1265,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T11:59:56.733485+00:00",
+    "updatedAt": "2026-10-17T12:20:46.746381+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1873,7 +1877,15 @@
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
       "logSha256": "d9421611b6d4f888455fa60590fbe2787644ae8691bd2df79ac7c9e45ebfae9f",
-      "boundary": "all 226 commands and diff checks passed through the actual keepalive push; latest candidate-harness/evidence update receives its own final validation"
+      "boundary": "all 226 commands and diff checks passed through the actual keepalive push; latest candidate-harness/evidence update receives its own final validation",
+      "latestAttempt": {
+        "commit": "a27cecc45337d2594e8ee17e2a331c1e66af8e02",
+        "status": "FAILED_DOCUMENTATION_INDEX",
+        "guard": "check:security-claims",
+        "finding": "quarantine operational statement lacked its historical-record index entry",
+        "logSha256": "48852d9f81cb74f06ad0ff45f47dba0bbbbcf99d5be647c9b1e935445336a752",
+        "repair": "matching historical-record entry added; check:security-claims passed including all 13 self-tests; guard unchanged; full push validation pending"
+      }
     },
     "normalDesktopStartup": {
       "mode": "unchanged signed app, no fixture origin and no bundled-renderer override",
@@ -2075,7 +2087,7 @@
       }
     },
     "dependencyAudit": {
-      "status": "LOCAL_REPAIR_PASSED_CI_PENDING",
+      "status": "LOCAL_AND_CI_REPAIR_PASSED",
       "run": 39020286748,
       "at": "2026-10-17",
       "vulnerabilities": 0,
@@ -2198,6 +2210,12 @@
         "beforeLogSha256": "0bd84d1cfe3e03479da5a4c13eb44105d4f63b02104f8f7988c47a1bba1167e6",
         "after": "error propagated with sheet context; all 13 document tests pass",
         "afterLogSha256": "14377fead5c3abce19ab4ce7cdb2e2f3f3dd7e7734ea1493e3f95812e4e16038"
+      },
+      "ci": {
+        "head": "de19f9c4fd538f841647725746310c4a88fa9c5e",
+        "jobId": 117390612508,
+        "conclusion": "success",
+        "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39030775609/job/117390612508"
       }
     },
     "codeqlRepairs": {
