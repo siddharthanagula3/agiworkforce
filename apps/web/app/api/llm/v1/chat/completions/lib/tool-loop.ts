@@ -1177,6 +1177,29 @@ function toolHandoffEvent(calls: readonly PendingToolCall[], responseModel: stri
   });
 }
 
+// Caller-executed tools have one complete handoff. Forwarding the raw
+// provider fragments too duplicates call IDs or concatenates arguments twice.
+function providerLineWithoutCallerToolCalls(line: SseLine): SseLine {
+  if (!line.startsWith('data:')) return line;
+  const data = line.slice('data:'.length).trim();
+  if (data === '[DONE]') return line;
+  const event = JSON.parse(data) as {
+    choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>;
+  };
+  let changed = false;
+  for (const choice of event.choices ?? []) {
+    if (choice.delta && 'tool_calls' in choice.delta) {
+      delete choice.delta['tool_calls'];
+      changed = true;
+    }
+    if (choice.finish_reason === 'tool_calls') {
+      choice.finish_reason = null;
+      changed = true;
+    }
+  }
+  return changed ? sseData(event) : line;
+}
+
 function toolInputRequestEvent(
   toolId: string,
   toolName: string,
@@ -4153,7 +4176,9 @@ export async function* runToolLoop(
         -DELIVERED_TEXT_TAIL_CHARS,
       );
     }
-    yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
+    const providerLine =
+      callerOwnedTools.size > 0 ? providerLineWithoutCallerToolCalls(entry.line) : entry.line;
+    yield encoder.encode(await enrichServerSearchResultsLine(providerLine));
     if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
       yield encoder.encode(

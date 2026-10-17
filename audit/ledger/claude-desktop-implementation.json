@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T18:24:11.461867+00:00",
+  "capturedAt": "2026-10-17T19:45:13.416806+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -395,7 +395,205 @@
       "unknownHostKeyRefused": true,
       "childrenExited": true
     },
-    "reproducerSha256": "739f87a92058d639d7125305b1738bfa021884cbe1e603248113021b26c091a8"
+    "reproducerSha256": "739f87a92058d639d7125305b1738bfa021884cbe1e603248113021b26c091a8",
+    "external": {
+      "transport": {
+        "at": "2026-10-17T18:59:06.151113+00:00",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "scope": "External Linux VM via loopback WebSocket carrier; real SSH, no mocks; no account credentials",
+        "unknownHost": {
+          "exitCode": 255,
+          "stdout": "",
+          "stderr": "No ED25519 host key is known for [127.0.0.1]:61445 and you have requested strict checking.\nHost key verification failed.\n"
+        },
+        "trustedHost": {
+          "exitCode": 0,
+          "stdout": "agi 0.0.1\n",
+          "stderr": ""
+        },
+        "remoteProject": {
+          "exitCode": 0,
+          "stdout": "/home/user/project\na77bd2a6c5f67ba208baa83dcd59684b23088f31a3e95974ab1d99c7d6221a52  README.md\n22657a7870f9296414438ee9b56bb3d8c4e25cc74aeb92a0b6fe68ec13eccc72  /usr/local/bin/agi\n",
+          "stderr": ""
+        },
+        "hostPublicKeySha256": "5b07e1b390e48762f8deea20b62e47dafcf4e93aa5bfca9212cc5201219ae487",
+        "status": "PASSED_TRANSPORT_AND_UNKNOWN_HOST_REFUSAL"
+      },
+      "cli": {
+        "at": "2026-10-17T18:59:50.048380+00:00",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "scope": "External CLI via real SSH; synthetic project; no credentials or model turns",
+        "untrustedProject": {
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "Error: Current project is not trusted. Run `agi` interactively and accept the directory trust prompt, or run `agi init` as an explicit trust action before headless use.\n"
+        },
+        "explicitInit": {
+          "exitCode": 0,
+          "stdout": "Initialized ~/.agiworkforce/ directory structure.\nRegistered project: /home/user/project\n",
+          "stderr": ""
+        },
+        "appServer": {
+          "exitCode": 0,
+          "stdout": "{\"id\":1,\"result\":{\"agentEventSchemaVersion\":5,\"capabilities\":{\"account\":true,\"approvalEdits\":true,\"approvalNotes\":true,\"approvals\":true,\"bypassPerTurn\":true,\"checkpoints\":true,\"commands\":true,\"forkAtMessage\":true,\"forkThroughTurn\":true,\"hooks\":true,\"installs\":true,\"instructions\":true,\"managedWorktrees\":true,\"maxTurns\":true,\"mcp\":true,\"mcpApproval\":true,\"mcpInspect\":true,\"mcpTools\":true,\"memory\":true,\"models\":true,\"permissionRules\":true,\"plan\":true,\"planDecisions\":true,\"pluginUpdates\":true,\"plugins\":true,\"promptCommands\":true,\"providerKeys\":true,\"pullRequests\":true,\"questions\":true,\"reconnect\":true,\"revertRestore\":true,\"savedPermissions\":true,\"settings\":true,\"skills\":true,\"streaming\":true,\"threadCompact\":true,\"threadDelete\":true,\"threadSearch\":true,\"threadUnarchive\":true,\"threads\":true,\"tools\":true,\"trust\":true,\"turnToolFilters\":true,\"turns\":true,\"worktrees\":true,\"writerLease\":true},\"minimumProtocolVersion\":7,\"protocolVersion\":8,\"serverInfo\":{\"name\":\"agiworkforce-app-server\",\"title\":\"AGI Workforce App Server\",\"version\":\"0.0.1\"}}}\n{\"id\":2,\"result\":{\"cwd\":\"/home/user/project\",\"rootKey\":\"65024:2612754\"}}\n{\"id\":3,\"result\":{\"cached\":true,\"signedIn\":false,\"source\":\"cli\",\"webSearchLogins\":[\"brave\",\"tavily\"]}}\n{\"id\":4,\"result\":{\"threads\":[]}}\n",
+          "stderr": ""
+        },
+        "replies": {
+          "1": {
+            "id": 1,
+            "result": {
+              "agentEventSchemaVersion": 5,
+              "capabilities": {
+                "account": true,
+                "approvalEdits": true,
+                "approvalNotes": true,
+                "approvals": true,
+                "bypassPerTurn": true,
+                "checkpoints": true,
+                "commands": true,
+                "forkAtMessage": true,
+                "forkThroughTurn": true,
+                "hooks": true,
+                "installs": true,
+                "instructions": true,
+                "managedWorktrees": true,
+                "maxTurns": true,
+                "mcp": true,
+                "mcpApproval": true,
+                "mcpInspect": true,
+                "mcpTools": true,
+                "memory": true,
+                "models": true,
+                "permissionRules": true,
+                "plan": true,
+                "planDecisions": true,
+                "pluginUpdates": true,
+                "plugins": true,
+                "promptCommands": true,
+                "providerKeys": true,
+                "pullRequests": true,
+                "questions": true,
+                "reconnect": true,
+                "revertRestore": true,
+                "savedPermissions": true,
+                "settings": true,
+                "skills": true,
+                "streaming": true,
+                "threadCompact": true,
+                "threadDelete": true,
+                "threadSearch": true,
+                "threadUnarchive": true,
+                "threads": true,
+                "tools": true,
+                "trust": true,
+                "turnToolFilters": true,
+                "turns": true,
+                "worktrees": true,
+                "writerLease": true
+              },
+              "minimumProtocolVersion": 7,
+              "protocolVersion": 8,
+              "serverInfo": {
+                "name": "agiworkforce-app-server",
+                "title": "AGI Workforce App Server",
+                "version": "0.0.1"
+              }
+            }
+          },
+          "2": {
+            "id": 2,
+            "result": {
+              "cwd": "/home/user/project",
+              "rootKey": "65024:2612754"
+            }
+          },
+          "3": {
+            "id": 3,
+            "result": {
+              "cached": true,
+              "signedIn": false,
+              "source": "cli",
+              "webSearchLogins": ["brave", "tavily"]
+            }
+          },
+          "4": {
+            "id": 4,
+            "result": {
+              "threads": []
+            }
+          }
+        },
+        "status": "PASSED_REAL_SSH_WORKSPACE_PROTOCOL_AND_UNAUTHENTICATED_STATUS",
+        "positiveManagedTurn": "NOT_RUN: independent same-account Pro-enabled remote login required"
+      },
+      "publicAdapter": {
+        "at": "2026-10-17T19:00:37.041Z",
+        "source": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "scope": "Compiled public Electron SSH adapter and real external CLI. No mocks, account credentials, native consent automation, or model turns.",
+        "lockedLaunch": {
+          "program": "/usr/bin/ssh",
+          "strictHostKey": true,
+          "noAgentForwarding": true,
+          "noLocalConfigAtExecution": true,
+          "credentialEnvironmentKeys": [
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "LOGNAME",
+            "PATH",
+            "SSH_AUTH_SOCK",
+            "USER"
+          ]
+        },
+        "firstConnection": {
+          "protocol": 8,
+          "workspace": {
+            "cwd": "/home/user/project",
+            "rootKey": "65024:2612754"
+          },
+          "accountSignedIn": false,
+          "threadList": {
+            "id": 4,
+            "result": {
+              "threads": []
+            }
+          }
+        },
+        "reconnect": "passed: same remote directory identity",
+        "changedConfigRefused": true,
+        "replacedDirectoryRefused": "The remote project directory changed identity. Disconnect and review it before reconnecting.",
+        "disconnect": "passed",
+        "status": "PASSED_EXTERNAL_PUBLIC_SSH_ADAPTER",
+        "ownedSshConfigRemoved": true
+      },
+      "build": {
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "templateId": "mgy6zfcylq7z05dt256f",
+        "sourceCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "cliSha256": "22657a7870f9296414438ee9b56bb3d8c4e25cc74aeb92a0b6fe68ec13eccc72",
+        "scope": "Real external Linux VM and real SSH end-to-end encryption through an authenticated WebSocket TCP carrier; synthetic project; public committed Git blobs only; no account credentials provisioned"
+      },
+      "sourceExport": {
+        "commit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "authorizationHeadersSent": false,
+        "repositoryPublic": true,
+        "visibility": "public",
+        "anonymousCommitReachable": true,
+        "remoteTree": "0ebfa1173e2893b2223c448481251da34dada406",
+        "localTree": "0ebfa1173e2893b2223c448481251da34dada406",
+        "archiveEntries": 17623,
+        "archiveTreeMismatches": [],
+        "archiveSha256": "4bec767ecced89d164840a3636c001faeb0b77383d0a439acd00198e03bde2af",
+        "sourceScan": "normal full pre-push passed before this verification",
+        "status": "VERIFIED_EXACT_PUBLIC_COMMIT_ONLY"
+      },
+      "authentication": {
+        "status": "BLOCKED_EXPLICIT_AUTHORIZATION_PENDING",
+        "reason": "Automatic approval review rejected starting a remote account sign-in because persistent VM account access was not specifically authorized. No workaround or remote sign-in was attempted. The Desktop account changed; the pending question now names the current admin account."
+      },
+      "boundary": "External transport, trust refusal, protocol 8, reconnect, configuration change, directory replacement and disconnect passed. Same-account model/session admission remains NOT_RUN. The temporary local SSH configuration was removed."
+    }
   },
   "officeAcceptance": {
     "boundary": "real installed local LibreOfficeDev/Poppler through a test adapter of the existing executor; configured E2B deployment not exercised",
@@ -487,7 +685,7 @@
     {
       "status": "NOT_RUN",
       "gate": "same-account admission on external SSH host",
-      "reason": "no accessible external host supplied or configured"
+      "reason": "Owned external host transport and public adapter verified; explicit authorization for its account session is pending after automatic approval rejection."
     },
     {
       "status": "NOT_RUN",
@@ -497,13 +695,13 @@
     {
       "status": "NOT_RUN",
       "gate": "native Intel macOS packaged smoke",
-      "reason": "New immutable v7 candidate awaits native Intel run; successful final v6, v5 and v3 receipts retained separately.",
-      "version": "0.0.7-e10.20261017"
+      "reason": "Final signed v7 Intel execution passed with verified receipt; new v8 asset awaits its own run.",
+      "version": "0.0.8-e10.20261017"
     },
     {
       "status": "BLOCKED",
       "gate": "public release readiness",
-      "reason": "Positive managed coding is plan-blocked on the actual Free account; production Web rollout, real provider return-to-app and remaining selected live gates remain open. Owner-deferred Tauri signing remains quarantined independently."
+      "reason": "Enterprise access is now owner-authorized and verified. The duplicate tool handoff is repaired and a signed CLI completed a real provider read once; v8 native folder consent, current CI/Intel, production Web rollout/provider return and remaining selected live gates remain open. Owner-deferred Tauri signing remains quarantined separately."
     }
   ],
   "unsupportedFirstScope": [
@@ -824,8 +1022,12 @@
       "sha256": "180110225919306b41d5943d9866c5e1ddd3f9aebcbb94404f634ca6cdd19150"
     },
     {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.client-tools.test.ts",
+      "sha256": "8c68eaae482457fa9aaca886e8ad2bafeea0404c9cff02c0d6f4f9968378d1a1"
+    },
+    {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
-      "sha256": "d42bdf22da164e49b5e407ce707d647469f13c1571b2fbbf3cef70024781cf5e"
+      "sha256": "2faf86a1b3717bac0ca6d8aadb254d61bb17a92cecce8ea7efb19660c3b19cb0"
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
@@ -1072,6 +1274,10 @@
       "sha256": "df207f896a0f77551635cd881859c8f0a150f8c13622bae7576cf9e7399214f2"
     },
     {
+      "path": "crates/agiworkforce-llm/src/stream.rs",
+      "sha256": "b35d2190fc4bd2cd456c9f5f06873d5d780bda2fbdf1b04bb53b74bc928a9da6"
+    },
+    {
       "path": "crates/agiworkforce-protocol/bindings/CheckpointFile.ts",
       "sha256": "2699dd97b9cab422886b172c2356e6bc82f115712ab5b1c034cf22c5d0efb1fd"
     },
@@ -1296,17 +1502,17 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "3fb7f27ef8723aed562ef1bb08e37545478e6619623edfcc663b51d11e49cc82",
+  "sourceFilesDigest": "86496103a2da9a1b8cf66c169a43e2aaee6a94c29557fb86037a78f060df2ccd",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
     "Source/mocked checks do not establish production acceptance.",
     "Exact signed ASAR, bundled CLI, DMG and hosted snapshot hashes identify exercised bytes; no claim that later documentation/formatting commits were rebuilt into the candidates.",
-    "Current v7 native Intel and combined CI, external SSH, provider delivery, physical sleep and production Web rollout remain open. Actual production managed-coding plan refusal is verified; a successful real-account coding model/file-read is not claimed."
+    "V7 Intel passed. V8 signed CLI completed a real production-provider file-read exactly once, but installed native completion/reopen awaits renewed operator consent. V8 CI/Intel, external same-account authentication, provider email, physical sleep and production Web rollout remain open."
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T18:24:11.461867+00:00",
+    "updatedAt": "2026-10-17T19:45:13.416806+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1451,31 +1657,32 @@
       }
     },
     "outstanding": [
-      "actual notification provider delivery and owned test recipient",
-      "external SSH same-account journey",
+      "actual notification provider delivery and owned recipient setup",
+      "explicitly authorized external SSH same-account journey, followed by teardown and credential revocation",
       "physical sleep/offline host acceptance",
-      "positive real-account managed coding requires a developer-enabled test account or a declared test environment",
+      "current installed v8 native file-read/reopen acceptance awaiting renewed operator folder consent",
       "production Web rollout and real provider return-to-app",
-      "current-v7 combined CI and Intel execution"
+      "v8 current-source combined CI and native Intel execution"
     ],
     "intelCandidate": {
+      "at": "2026-10-17T19:39:51.530Z",
       "releaseTag": "e10-candidate-20261017-01a142a4",
       "releaseId": 415660092,
-      "publication": "private draft; no public installer or update feed",
+      "assetId": 651409009,
+      "asset": "AGI-Cloud-0.0.8-e10.20261017-x64.zip",
+      "version": "0.0.8-e10.20261017",
+      "sha256": "14e7725cafffe8c45d5e7d044b9ba5e0607a0342c0de38da1dab5f1aaebd5dbb",
+      "size": 136467204,
+      "publication": "private draft only",
+      "status": "UPLOADED_NATIVE_INTEL_PENDING",
       "permissionRepair": {
         "status": "USER_APPROVED_APPLIED",
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
         "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
       },
-      "assetId": 651193154,
-      "asset": "AGI-Cloud-0.0.7-e10.20261017-x64.zip",
-      "version": "0.0.7-e10.20261017",
-      "sha256": "edb4d99ef0cf120e4efe456e0efe3805a60afca321f8d2d5709626037a3d6721",
-      "size": 136462868,
-      "status": "UPLOADED_NATIVE_INTEL_PENDING",
       "requiresBrowserSignInCancellationContract": true,
       "requiresProcessWorkspaceConsentContract": true,
-      "boundary": "new immutable private-draft asset; v6 execution does not establish execution of these v7 bytes"
+      "boundary": "New immutable draft asset; prior v7 execution does not certify v8"
     },
     "sourceCommit": "264a606571",
     "sourceCommitBoundary": "initial 0.0.3 candidates and initial hosted snapshot predate this commit; later candidate records use their own artifact hashes and verified source pins",
@@ -1915,17 +2122,17 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "d91a738003201a5c1064760166bddb1c35b7479c",
+      "verifiedCodeCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "e8c6ed56bd44b288375cca1043982ab463f65b8262f57bf6bfa6a0f21ff2c3cf",
-      "boundary": "all 226 declared guards, nested checks and both diff checks passed through the actual normal-hook push; later live-error repairs await their own push",
+      "logSha256": "8bfd9731bf1ac7c79f8358fd6f5e20b9e7b21ed8b0f2d0b14b14656f8d6c409b",
+      "boundary": "All 226 declared guards, nested checks and diff checks passed through the actual normal-hook v7 push. The later handoff repair requires its own normal-hook push.",
       "latestAttempt": {
-        "status": "PENDING_V7_REPAIR_PUSH"
+        "status": "PENDING_HANDOFF_REPAIR_NORMAL_PUSH"
       },
       "previousVerified": {
-        "commit": "4e1fd71f2af7446eacfdf97a134de3ebece6d2ba",
-        "logSha256": "ecaddbf36952188e351250fee26b028ba8b446fa35c04a743b2671e4c7bf894a"
+        "commit": "d91a738003201a5c1064760166bddb1c35b7479c",
+        "logSha256": "e8c6ed56bd44b288375cca1043982ab463f65b8262f57bf6bfa6a0f21ff2c3cf"
       },
       "olderVerified": {
         "commit": "de19f9c4fd538f841647725746310c4a88fa9c5e",
@@ -1990,7 +2197,7 @@
     },
     "desktopLoginRecovery": {
       "status": "SOURCE_AND_FOCUSED_TESTS_PASSED",
-      "updatedAt": "2026-10-17T18:24:11.461867+00:00",
+      "updatedAt": "2026-10-17T19:45:13.416806+00:00",
       "nativeOwner": "apps/desktop/electron/browserSignIn.ts",
       "sharedOwner": "packages/contracts/local-runtime/src/desktop-sign-in.ts",
       "webOwner": "apps/web/features/desktop-host/lib/browser-sign-in.ts",
@@ -2056,18 +2263,16 @@
         }
       },
       "candidate": {
-        "version": "0.0.7-e10.20261017",
+        "version": "0.0.8-e10.20261017",
         "status": "BUILT_SIGNED_NOTARIZED_SCANNED_INSTALLED",
         "publication": "none",
         "signatures": {
-          "at": "2026-10-17T18:11:20.365426+00:00",
-          "version": "0.0.7-e10.20261017",
+          "at": "2026-10-17T19:38:29.071236+00:00",
+          "version": "0.0.8-e10.20261017",
           "packages": [
             {
-              "at": "2026-10-17T17:58:27.938541+00:00",
-              "version": "0.0.7-e10.20261017",
               "architecture": "arm64",
-              "app": "/tmp/agi-e10-auth-release/mac-arm64/AGI Cloud.app",
+              "app": "/tmp/agi-e10-handoff-release/mac-arm64/AGI Cloud.app",
               "checks": {
                 "signature": "passed",
                 "gatekeeper": "passed",
@@ -2076,25 +2281,22 @@
               "binaries": {
                 "app": {
                   "architecture": "arm64",
-                  "sha256": "a72fe73c1b2bcfb4a5f340016492d584a20da00ec7e15e690cc18b6bb9ab27e3"
+                  "sha256": "e43b5ec8e35e3deccd34ad1372c1dab5e0e93c528e8a86a1b3968736dce67c59"
                 },
                 "cli": {
                   "architecture": "arm64",
-                  "sha256": "7183e88a120302898244ad9bbde9df1d8a048c680a9504a98d886867f1f5c0e8"
+                  "sha256": "6be1537d72d5177e48d9706902ea1eb00e165aa4c74178a9b70029ffe888ca40"
                 },
                 "input": {
                   "architecture": "arm64",
-                  "sha256": "1bc8edb8c172b1925e6a54b411b9f87895b0c59125a3f3799b8b57bccfd058da"
+                  "sha256": "9e8641ffa485b4c8870e7d8a78589abdec753aa0c4db236c567e3335bd727a7a"
                 }
               },
-              "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
-              "boundary": "arm64 app notarization complete; Intel packaging continues separately"
+              "asarSha256": "4b303f21af217b2895206c6e729b49c6e0964f22b020e2430ed92c32e98da726"
             },
             {
-              "at": "2026-10-17T18:04:54.822635+00:00",
-              "version": "0.0.7-e10.20261017",
               "architecture": "x86_64",
-              "app": "/tmp/agi-e10-auth-release/mac/AGI Cloud.app",
+              "app": "/tmp/agi-e10-handoff-release/mac/AGI Cloud.app",
               "checks": {
                 "signature": "passed",
                 "gatekeeper": "passed",
@@ -2103,56 +2305,56 @@
               "binaries": {
                 "app": {
                   "architecture": "x86_64",
-                  "sha256": "9d4b11b7af4f29d2ba8c93899b1cc46d0ca7cea3a001c6d501755d3a65aef7c8"
+                  "sha256": "6bb5c079515ad808ea4a869ee8acae8b6b8d271c2f44fe811e8eb917dfd6ce65"
                 },
                 "cli": {
                   "architecture": "x86_64",
-                  "sha256": "bc9d46134f161c33199eed39cc7e0b0b5a287e929ac4b39677eb8f7a72055ab9"
+                  "sha256": "c9b1072ff043b8f12f495f33023e9f61a4495a96581b94080eab9e65ebb32ac0"
                 },
                 "input": {
                   "architecture": "x86_64",
-                  "sha256": "8df884a4ce5c18e15a54ed687c4e0bacca2a186bf49a63fb05cbe5590f12a91e"
+                  "sha256": "20f734a47eef64002b4647dcc08bd5eefdaf5b9be8d63778321d875349fe27b4"
                 }
               },
-              "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
-              "boundary": "final Intel app; no execution claim"
+              "asarSha256": "4b303f21af217b2895206c6e729b49c6e0964f22b020e2430ed92c32e98da726"
             }
           ],
-          "publication": "none"
+          "publication": "none",
+          "realProviderCliBytesMatch": true
         },
         "installerNotarization": [
           {
-            "file": "/tmp/agi-e10-auth-release/AGI-Cloud-0.0.7-e10.20261017-arm64.dmg",
+            "file": "/tmp/agi-e10-handoff-release/AGI-Cloud-0.0.8-e10.20261017-arm64.dmg",
             "notarizedAndStapled": true,
-            "sha256": "b2a8826c01b0ed39488f00429be4b02c2ec38ec7edc5151314899723e574a431"
+            "sha256": "f4e3c88638e20a88db796128415af225208d593a7236409811c1c8a0ace04ba0"
           },
           {
-            "file": "/tmp/agi-e10-auth-release/AGI-Cloud-0.0.7-e10.20261017-x64.dmg",
+            "file": "/tmp/agi-e10-handoff-release/AGI-Cloud-0.0.8-e10.20261017-x64.dmg",
             "notarizedAndStapled": true,
-            "sha256": "4656e7b39987118d03568a3e0a8586447fbbb14125b5f453ba5a9a489ba36cac"
+            "sha256": "38bf47e3490a2ee66dc73f418430bc47bc6b999ce4b13c7b19b7de4a0095f5a0"
           }
         ],
         "payloadScans": [
           {
-            "path": "/tmp/agi-implementation-checks/e10-v7-arm64-payload-scan.log",
-            "sha256": "fe37cbcc39339a643adc006dfaeaf3811ec39965873678f5d6c2761a63a8d960"
+            "path": "/tmp/agi-implementation-checks/e10-v8-arm64-payload-scan.log",
+            "sha256": "d54f7021e73797b4e5a5610917c0e913d8dea0975a974856845f9909cbf53f82"
           },
           {
-            "path": "/tmp/agi-implementation-checks/e10-v7-intel-payload-scan.log",
-            "sha256": "59c74b90036fe677b117ee613781012b0759ae151452b2ade53645ce88f1a0e3"
+            "path": "/tmp/agi-implementation-checks/e10-v8-intel-payload-scan.log",
+            "sha256": "13c26d627e7a8e041bebab9ddcd85a5630574a33f09d565ccb1a740e8e463065"
           }
         ],
-        "sourceVerification": "compiled from the focused and complete-suite-verified native/account/error source; exact hashes bind both architectures; Intel v7 operational acceptance awaits CI"
+        "sourceVerification": "Native source hashes and signed CLI hash bind the tested working-tree repair; exact arm64 signed CLI completed a real production-provider read once. Native window completion awaits renewed folder consent."
       },
       "productionRollout": "NOT_PERFORMED",
       "nativeUi": {
-        "status": "INSTALLED_SIGNED_IN_LIVE_PLAN_REFUSAL_VERIFIED",
+        "status": "INSTALLED_ENTERPRISE_SIGN_IN_PRESERVED_AWAITING_FOLDER_CONSENT",
         "installation": {
-          "at": "2026-10-17T18:03:38.802291+00:00",
+          "at": "2026-10-17T19:38:09.283648+00:00",
           "installedApp": "/Users/siddhartha/Applications/AGI Cloud.app",
-          "before": "0.0.6-e10.20261017",
-          "after": "0.0.7-e10.20261017",
-          "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
+          "before": "0.0.7-e10.20261017",
+          "after": "0.0.8-e10.20261017",
+          "asarSha256": "4b303f21af217b2895206c6e729b49c6e0964f22b020e2430ed92c32e98da726",
           "signature": "passed",
           "gatekeeper": "passed",
           "ticket": "passed",
@@ -2160,28 +2362,11 @@
           "status": "installed, awaiting live UI verification"
         },
         "signedInProfilePreserved": true,
-        "installedVersion": "0.0.7-e10.20261017",
-        "permissionDecision": "OPERATOR_APPROVED_THIS_APP_SESSION",
+        "installedVersion": "0.0.8-e10.20261017",
+        "permissionDecision": "PENDING_FRESH_OPERATOR_DECISION_AFTER_UPDATE",
         "syntheticFolder": "/private/tmp/agi-desktop-user-check",
-        "liveAcceptance": {
-          "capturedAt": "2026-10-17T18:18:33.083055+00:00",
-          "version": "0.0.7-e10.20261017",
-          "origin": "https://agiworkforce.com",
-          "installedAsarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
-          "packagedCliSha256": "7183e88a120302898244ad9bbde9df1d8a048c680a9504a98d886867f1f5c0e8",
-          "nativeFolderConsent": "operator-approved for this app session only",
-          "existingSessionRestored": true,
-          "approvalMode": "Ask",
-          "observedAccountPlan": "Free",
-          "observedRefusal": "Managed Cloud CLI, browser extension, and IDE access require Pro or higher.",
-          "misleadingSignInExpiredMessage": false,
-          "folder": "/private/tmp/agi-desktop-user-check",
-          "expectedReadmeSha256": "ec7f094800601ff90a2647f9dd72158302beadd34442d7bd6fd63d40e7358568",
-          "expectedReadmeContentPreserved": true,
-          "screenshotSha256": "f670baa269a942ab84188ef6ed0fbe277539d3f4763a989b254a487fec3e8c53",
-          "scope": "actual installed signed Electron, real first-party account and production gateway; successful folder admission/session restoration and plan refusal; model/file-read completion NOT_RUN because of the account plan"
-        },
-        "boundary": "actual installed app, existing real account and normal production origin; managed coding cannot complete on this Free account; no plan/billing gate changed"
+        "enterpriseVisible": true,
+        "boundary": "Actual installed app reopened on the operator-selected Enterprise account; no native permission accepted by the agent and no new native coding turn yet"
       },
       "localDevelopmentControl": {
         "status": "PASSED_PRODUCTION_BUILD_LOCAL_BROWSER",
@@ -2345,6 +2530,135 @@
             "sha256": "c925a3dbacae5d2fa1dee425945c4a6171f3f2a2618ec8dd235dc19d125912b7"
           },
           "sourceVerification": "final signed bundle includes process-scoped native folder consent; test harness and ledger updates do not alter the payload; Intel execution pending"
+        },
+        {
+          "version": "0.0.7-e10.20261017",
+          "status": "BUILT_SIGNED_NOTARIZED_SCANNED_INSTALLED",
+          "publication": "none",
+          "signatures": {
+            "at": "2026-10-17T18:11:20.365426+00:00",
+            "version": "0.0.7-e10.20261017",
+            "packages": [
+              {
+                "at": "2026-10-17T17:58:27.938541+00:00",
+                "version": "0.0.7-e10.20261017",
+                "architecture": "arm64",
+                "app": "/tmp/agi-e10-auth-release/mac-arm64/AGI Cloud.app",
+                "checks": {
+                  "signature": "passed",
+                  "gatekeeper": "passed",
+                  "ticket": "passed"
+                },
+                "binaries": {
+                  "app": {
+                    "architecture": "arm64",
+                    "sha256": "a72fe73c1b2bcfb4a5f340016492d584a20da00ec7e15e690cc18b6bb9ab27e3"
+                  },
+                  "cli": {
+                    "architecture": "arm64",
+                    "sha256": "7183e88a120302898244ad9bbde9df1d8a048c680a9504a98d886867f1f5c0e8"
+                  },
+                  "input": {
+                    "architecture": "arm64",
+                    "sha256": "1bc8edb8c172b1925e6a54b411b9f87895b0c59125a3f3799b8b57bccfd058da"
+                  }
+                },
+                "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
+                "boundary": "arm64 app notarization complete; Intel packaging continues separately"
+              },
+              {
+                "at": "2026-10-17T18:04:54.822635+00:00",
+                "version": "0.0.7-e10.20261017",
+                "architecture": "x86_64",
+                "app": "/tmp/agi-e10-auth-release/mac/AGI Cloud.app",
+                "checks": {
+                  "signature": "passed",
+                  "gatekeeper": "passed",
+                  "ticket": "passed"
+                },
+                "binaries": {
+                  "app": {
+                    "architecture": "x86_64",
+                    "sha256": "9d4b11b7af4f29d2ba8c93899b1cc46d0ca7cea3a001c6d501755d3a65aef7c8"
+                  },
+                  "cli": {
+                    "architecture": "x86_64",
+                    "sha256": "bc9d46134f161c33199eed39cc7e0b0b5a287e929ac4b39677eb8f7a72055ab9"
+                  },
+                  "input": {
+                    "architecture": "x86_64",
+                    "sha256": "8df884a4ce5c18e15a54ed687c4e0bacca2a186bf49a63fb05cbe5590f12a91e"
+                  }
+                },
+                "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
+                "boundary": "final Intel app; no execution claim"
+              }
+            ],
+            "publication": "none"
+          },
+          "installerNotarization": [
+            {
+              "file": "/tmp/agi-e10-auth-release/AGI-Cloud-0.0.7-e10.20261017-arm64.dmg",
+              "notarizedAndStapled": true,
+              "sha256": "b2a8826c01b0ed39488f00429be4b02c2ec38ec7edc5151314899723e574a431"
+            },
+            {
+              "file": "/tmp/agi-e10-auth-release/AGI-Cloud-0.0.7-e10.20261017-x64.dmg",
+              "notarizedAndStapled": true,
+              "sha256": "4656e7b39987118d03568a3e0a8586447fbbb14125b5f453ba5a9a489ba36cac"
+            }
+          ],
+          "payloadScans": [
+            {
+              "path": "/tmp/agi-implementation-checks/e10-v7-arm64-payload-scan.log",
+              "sha256": "fe37cbcc39339a643adc006dfaeaf3811ec39965873678f5d6c2761a63a8d960"
+            },
+            {
+              "path": "/tmp/agi-implementation-checks/e10-v7-intel-payload-scan.log",
+              "sha256": "59c74b90036fe677b117ee613781012b0759ae151452b2ade53645ce88f1a0e3"
+            }
+          ],
+          "sourceVerification": "compiled from the focused and complete-suite-verified native/account/error source; exact hashes bind both architectures; Intel v7 operational acceptance awaits CI"
+        }
+      ],
+      "nativeUiHistory": [
+        {
+          "status": "INSTALLED_SIGNED_IN_LIVE_PLAN_REFUSAL_VERIFIED",
+          "installation": {
+            "at": "2026-10-17T18:03:38.802291+00:00",
+            "installedApp": "/Users/siddhartha/Applications/AGI Cloud.app",
+            "before": "0.0.6-e10.20261017",
+            "after": "0.0.7-e10.20261017",
+            "asarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
+            "signature": "passed",
+            "gatekeeper": "passed",
+            "ticket": "passed",
+            "userData": "untouched",
+            "status": "installed, awaiting live UI verification"
+          },
+          "signedInProfilePreserved": true,
+          "installedVersion": "0.0.7-e10.20261017",
+          "permissionDecision": "OPERATOR_APPROVED_THIS_APP_SESSION",
+          "syntheticFolder": "/private/tmp/agi-desktop-user-check",
+          "liveAcceptance": {
+            "capturedAt": "2026-10-17T18:18:33.083055+00:00",
+            "version": "0.0.7-e10.20261017",
+            "origin": "https://agiworkforce.com",
+            "installedAsarSha256": "0850102c74256b6e8f02953c00884f1aa5aadb71fee62a11ae294f2baf2cc618",
+            "packagedCliSha256": "7183e88a120302898244ad9bbde9df1d8a048c680a9504a98d886867f1f5c0e8",
+            "nativeFolderConsent": "operator-approved for this app session only",
+            "existingSessionRestored": true,
+            "approvalMode": "Ask",
+            "observedAccountPlan": "Free",
+            "observedRefusal": "Managed Cloud CLI, browser extension, and IDE access require Pro or higher.",
+            "misleadingSignInExpiredMessage": false,
+            "folder": "/private/tmp/agi-desktop-user-check",
+            "expectedReadmeSha256": "ec7f094800601ff90a2647f9dd72158302beadd34442d7bd6fd63d40e7358568",
+            "expectedReadmeContentPreserved": true,
+            "screenshotSha256": "f670baa269a942ab84188ef6ed0fbe277539d3f4763a989b254a487fec3e8c53",
+            "scope": "actual installed signed Electron, real first-party account and production gateway; successful folder admission/session restoration and plan refusal; model/file-read completion NOT_RUN because of the account plan"
+          },
+          "boundary": "actual installed app, existing real account and normal production origin; managed coding cannot complete on this Free account; no plan/billing gate changed"
         }
       ]
     },
@@ -2747,6 +3061,97 @@
           "updateFeedRequested": true,
           "updaterNoRelease": true
         }
+      },
+      {
+        "releaseTag": "e10-candidate-20261017-01a142a4",
+        "releaseId": 415660092,
+        "publication": "private draft; no public installer or update feed",
+        "permissionRepair": {
+          "status": "USER_APPROVED_APPLIED",
+          "scope": "verify-desktop-candidate.yml:intel-package:contents write",
+          "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
+        },
+        "assetId": 651193154,
+        "asset": "AGI-Cloud-0.0.7-e10.20261017-x64.zip",
+        "version": "0.0.7-e10.20261017",
+        "sha256": "edb4d99ef0cf120e4efe456e0efe3805a60afca321f8d2d5709626037a3d6721",
+        "size": 136462868,
+        "status": "PASSED_NATIVE_INTEL",
+        "requiresBrowserSignInCancellationContract": true,
+        "requiresProcessWorkspaceConsentContract": true,
+        "boundary": "Exact signed v7 Intel application on real x86_64 runner; controlled hosted renderer and no real model turns",
+        "head": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "runId": 39059463873,
+        "jobId": 117474268295,
+        "artifactId": 12110773321,
+        "artifactDigest": "aa8516571cc34282d343a2101915903385f991d629b87ba64c299611f42419c2",
+        "receiptSha256": "d1ea5a3e6183ba1db661a9cb3e82c8465c675cd3fd7ba19e40bef93235fa8a7c",
+        "checks": {
+          "strictSignature": "passed",
+          "gatekeeper": "passed",
+          "notarizationTicket": "Processing: /Users/runner/work/_temp/candidate/installed/AGI Cloud.app\nThe validate action worked!",
+          "bundleId": "com.agiworkforce.desktop.cloud",
+          "version": "0.0.7-e10.20261017",
+          "architecture": "x86_64",
+          "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+          "workspaceConsent": {
+            "handshake": "passed",
+            "ordinaryRefusal": "passed",
+            "processLifetime": "passed",
+            "modelTurns": 0
+          },
+          "packagedHostedBridge": {
+            "platform": "electron-darwin",
+            "version": "0.0.7-e10.20261017",
+            "node": "undefined",
+            "status": {
+              "ok": true,
+              "value": {
+                "available": true,
+                "name": "agi",
+                "version": "0.0.1",
+                "path": "~/work/_temp/candidate/installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+                "hint": null,
+                "source": "bundled",
+                "accountSyncError": null,
+                "capabilities": []
+              }
+            },
+            "routines": {
+              "ok": true,
+              "value": {
+                "deviceId": "29ff23b1-7e13-4444-b6ef-ebce951924b9",
+                "suspended": false,
+                "error": null,
+                "routines": []
+              }
+            }
+          },
+          "browserSignIn": {
+            "cancellation": true,
+            "before": {
+              "ok": true,
+              "value": {
+                "kind": "idle"
+              }
+            },
+            "cancelled": {
+              "ok": true,
+              "value": {
+                "cancelled": true
+              }
+            },
+            "after": {
+              "ok": true,
+              "value": {
+                "kind": "idle"
+              }
+            }
+          },
+          "sessionApprovalAlerts": true,
+          "updateFeedRequested": true,
+          "updaterNoRelease": true
+        }
       }
     ],
     "updaterKeyQuarantine": {
@@ -2992,7 +3397,7 @@
         "boundary": "passed on initial signing before builder redundantly re-signed the same ASAR; superseded for executable-byte identity by final signature and CLI receipts; do not treat as final-byte UI proof"
       },
       "latestSignedCli": {
-        "binarySha256": "7183e88a120302898244ad9bbde9df1d8a048c680a9504a98d886867f1f5c0e8",
+        "binarySha256": "6be1537d72d5177e48d9706902ea1eb00e165aa4c74178a9b70029ffe888ca40",
         "checks": [
           {
             "name": "ordinary untrusted headless launch still refuses",
@@ -3043,8 +3448,8 @@
         "status": "passed"
       },
       "latestSignedCliReceipt": {
-        "path": "/tmp/agi-implementation-checks/e10-v7-final-cli-consent.json",
-        "sha256": "395c7ad781d8253f9e0c280fd32fc7022d7e040c8e163777f7bfe20e32ea7793"
+        "path": "/tmp/agi-implementation-checks/e10-v8-final-cli-consent.json",
+        "sha256": "f6680c7306e7dc32d6006297a5edaf7f8f8570f73e36c14bd07953bdb7198c94"
       }
     },
     "ciRepairs": {
@@ -3315,13 +3720,245 @@
             "path": "/tmp/agi-implementation-checks/e10-qa-plan-prior-preview.json",
             "sha256": "61064d4156a9078538602b92d5daccbd2645f4fdc3cc381204f717c15d25caee"
           }
+        },
+        {
+          "origin": "https://agiworkforce-e10-20261017.vercel.app",
+          "receipt": {
+            "at": "2026-10-17T18:35:41.780Z",
+            "origin": "https://agiworkforce-e10-20261017.vercel.app",
+            "scope": "existing owned QA identity on protected Preview; no plan mutation",
+            "browserPath": "Browser plugin not available; existing Playwright QA harness",
+            "landingStatus": 200,
+            "status": 200,
+            "plan": "free",
+            "responseFields": [
+              "id",
+              "email",
+              "name",
+              "profile",
+              "avatar_url",
+              "created_at",
+              "updated_at",
+              "plan",
+              "feature_flags",
+              "feature_flag_variants",
+              "routing_preferences",
+              "capability_handshake",
+              "disabled_features",
+              "workspace_data_region"
+            ],
+            "apiErrorCode": null,
+            "session": {
+              "hasSession": true,
+              "signInStatus": null,
+              "publicKeyKind": "test or absent"
+            },
+            "ownedSessionsRevoked": true,
+            "ownedBrowserClosed": true
+          },
+          "boundary": "Actual API 200 and Free plan, with owned browser/session cleanup; immutable Preview origins remain failed controls"
         }
       ],
       "previewProtection": "development OIDC refreshed using existing Vercel authentication; protection settings unchanged",
-      "notificationSetup": "owner reports local configuration; latest named-variable checks still find no exported zsh or web .env.local key/sender, and no owned recipient supplied; no email sent"
+      "notificationSetup": {
+        "status": "NOT_CONFIGURED",
+        "presenceOnlyChecks": [
+          "exported login-shell environment",
+          "web .env.local",
+          "zsh assignment names",
+          "Vercel production environment variable names"
+        ],
+        "result": "No RESEND_API_KEY or AGI_NOTIFICATIONS_FROM_EMAIL found; no owned delivery recipient or email sent",
+        "boundary": "Apple signing credentials are unrelated to the mail-delivery provider; user needs a plain setup explanation"
+      },
+      "sshE2bLatestRef": "#/sshAcceptance/external"
+    },
+    "enterpriseActivation": {
+      "status": "PASSED_OWNER_REQUESTED_MANUAL_GRANTS",
+      "receipt": {
+        "capturedAt": "2026-10-17T19:15:30.844Z",
+        "scope": "Explicit owner-requested grants on two existing first-party production accounts; no source gate change and no payment transaction",
+        "accountCount": 2,
+        "plan": "enterprise",
+        "status": "active",
+        "billingSource": "manual",
+        "catalogVersion": 4,
+        "consumptionPeriod": {
+          "start": "2026-10-01T00:00:00.000Z",
+          "end": "2026-11-01T00:00:00.000Z"
+        },
+        "atomicAuditRecords": 2,
+        "readBackVerified": true,
+        "installedSignedCli": {
+          "version": "0.0.7-e10.20261017",
+          "command": "agi usage",
+          "reportedPlan": "Enterprise",
+          "reportedSubscription": "active"
+        },
+        "nativeBilling": {
+          "visiblePlan": "Enterprise plan",
+          "visibleStatus": "Active",
+          "organizationManaged": true,
+          "screenshotSha256": "ca62e61cda42680030dcfad6f7322905a2928eee9e05b1847f212acf84209ad6"
+        },
+        "privacy": "Account identifiers omitted from portable receipt"
+      },
+      "boundary": "Explicit owner requests for two existing accounts; atomic subscription/audit writes, no payment transaction and no product policy change. Both grants were read back; actual signed CLI usage and native billing confirm Enterprise. Account identifiers omitted."
+    },
+    "toolHandoffRepair": {
+      "capturedAt": "2026-10-17T19:45:13.416806+00:00",
+      "status": "SOURCE_AND_REAL_SIGNED_CLI_VERIFIED_NATIVE_CONSENT_PENDING",
+      "observedBefore": {
+        "at": "2026-10-17T19:25:45.474Z",
+        "version": "0.0.7-e10.20261017",
+        "source": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "gatewaySource": "4bab0f222015650c2f49bca3b343e60a2df60e5b",
+        "scope": "Actual signed Electron, operator-granted synthetic folder, real Enterprise account and production managed provider",
+        "folder": "/private/tmp/agi-desktop-user-check",
+        "approvalMode": "Ask",
+        "tool": "read_file",
+        "visibleReadResults": 2,
+        "providerHttpStatus": 400,
+        "providerError": "messages.3.content.2: `tool_use` ids must be unique",
+        "traceId": "10ea66c8a03372a95da7d5f6d905363d",
+        "failure": "Provider rejected the follow-up after the local read",
+        "fileSha256": "ec7f094800601ff90a2647f9dd72158302beadd34442d7bd6fd63d40e7358568",
+        "rootCause": "Raw indexed provider fragments plus a complete x_tool_handoff snapshot were appended as separate tool calls or duplicate JSON arguments",
+        "accountIdentifiersOmitted": true
+      },
+      "beforeScreenshot": {
+        "path": "/tmp/agi-implementation-checks/e10-v7-live-handoff-failure.png",
+        "sha256": "921497f612f34bd228fd0a7dd3dc412f1d1dd8651cde8b6cad0338c2bd3d89f4"
+      },
+      "source": {
+        "baseCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "codePatchSha256": "82d5d28c7ea862dfde44ccd1b32fcd33128582ad2a06c2565f960c96680e4e86",
+        "files": [
+          "crates/agiworkforce-llm/src/stream.rs",
+          "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+          "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.client-tools.test.ts"
+        ]
+      },
+      "repair": "Managed x_tool_handoff is a complete, validated snapshot. Replace indexed fragments instead of appending them; reject mismatched IDs and do not emit a second start. The hosted caller-tool path withholds executable fragments and premature tool_calls finishes while preserving mixed text until its one authoritative handoff. Other provider dialects and hosted-only tool owners remain unchanged.",
+      "tests": {
+        "sharedLlm": {
+          "command": "cargo +1.94.0 test -p agiworkforce-llm",
+          "unitPassed": 105,
+          "conformancePassed": 8,
+          "redactionPassed": 2,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-rust-after.log",
+            "sha256": "12644c7439a749ee4a17caeaa94f6a6b9027d70ad15945f29aaee1d50775d49d"
+          }
+        },
+        "hostedToolLoop": {
+          "command": "pnpm --filter @agiworkforce/web exec vitest run tool-loop --maxWorkers=2",
+          "filesPassed": 49,
+          "filesSkipped": 1,
+          "testsPassed": 425,
+          "testsSkipped": 1,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-after.log",
+            "sha256": "474069f72e5e92b6b46acc5f3ad6979ae8667427d1c3bbab958613085cb5c00b"
+          }
+        },
+        "strictClippy": {
+          "command": "cargo +1.94.0 clippy -p agiworkforce-cli --all-targets -- -D warnings -D unsafe-code",
+          "status": "passed",
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-clippy.log",
+            "sha256": "c013bea3198309ca44ab242fc2e3bb7c86249b78703f187db77bacd06dc9c9fa"
+          }
+        },
+        "webTypecheck": {
+          "status": "passed",
+          "nodeHeapMiB": 8192,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-typecheck.log",
+            "sha256": "1db90647ec471abe41e6e06d303932e4430428e8a6f5c7b35b084f940289881c"
+          }
+        },
+        "failingControls": {
+          "rustRegressionsFailed": 2,
+          "hostedRegressionsFailed": 1,
+          "receipts": [
+            {
+              "path": "/tmp/agi-implementation-checks/e10-tool-handoff-rust-before.log",
+              "sha256": "82d848bc6e47271d2b00e58c7e780e483581a284efb01e6fec42fcb8a012dea9"
+            },
+            {
+              "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-before.log",
+              "sha256": "781208dd1850157bc7caff9d9dce375341f998f04703fe14aa816074996938ae"
+            }
+          ]
+        }
+      },
+      "liveSignedCli": {
+        "at": "2026-10-17T19:32:27.151Z",
+        "scope": "Independent synthetic CLI project and actual production managed provider; signed candidate CLI bytes; existing account credential consumed in place; no native folder-trust bypass",
+        "folder": "/private/tmp/agi-e10-handoff-cli-RoqH3Z",
+        "sessionId": "15ebaa55-65e2-4673-90a5-dc6b6a8abff2",
+        "cliSha256": "6be1537d72d5177e48d9706902ea1eb00e165aa4c74178a9b70029ffe888ca40",
+        "provider": "managed_cloud",
+        "model": "claude-haiku-5-5",
+        "maxBudgetUsd": 0.1,
+        "allowedTools": ["read_file"],
+        "permissionMode": "dontAsk",
+        "strictMcpConfig": true,
+        "phase": "bounded real managed provider turn",
+        "eventTypes": ["running_tool", "tool_result", "message_delta"],
+        "outputSha256": "1fa543af43d6125d92f186402e5d58b37c4466394c56ef5295877decb40342f3",
+        "completeAnswerPresent": true,
+        "readmeUnchanged": true,
+        "cliUnchanged": true,
+        "status": "PASSED_REAL_PROVIDER_READ_EXACTLY_ONCE",
+        "reviewedAt": "2026-10-17T19:33:53.867Z",
+        "answer": "# Desktop local workspace acceptance\n\nSynthetic test data owned by this verification task.\n\nCLI_HANDOFF_OK",
+        "toolStarts": ["read_file"],
+        "toolResults": [
+          {
+            "name": "read_file",
+            "ok": true
+          }
+        ],
+        "harnessCorrection": "Original assertion searched serialized JSONL for a sentinel split across deltas. Reassembled canonical message_delta text; no product retry or change."
+      },
+      "harnessQualifications": {
+        "initializationControl": {
+          "at": "2026-10-17T19:26:57.402Z",
+          "scope": "Independent synthetic CLI project and actual production managed provider; development CLI bytes; existing account credential consumed in place; no native folder-trust bypass",
+          "folder": "/private/tmp/agi-e10-handoff-cli-RoqH3Z",
+          "sessionId": "b8d08010-b896-4533-9440-3e6869977ca2",
+          "cliSha256": "3b145cee84f09f7a035a37a9170150703a38e2af88c052b59a06f2e25d207a8b",
+          "provider": "managed_cloud",
+          "model": "claude-haiku-5-5",
+          "maxBudgetUsd": 0.1,
+          "allowedTools": ["read_file"],
+          "permissionMode": "dontAsk",
+          "strictMcpConfig": true,
+          "status": "NOT_RUN_INITIALIZATION_TIMEOUT",
+          "error": {
+            "status": null,
+            "code": "ETIMEDOUT",
+            "message": "spawnSync /Users/siddhartha/Desktop/agiworkforce/target/debug/agi ETIMEDOUT",
+            "cause": "unknown; no stdout or stderr"
+          },
+          "failedPhase": "explicit synthetic-project initialization",
+          "elapsedMs": 20117,
+          "modelTurnStarted": false,
+          "ownedProcessRemaining": false
+        },
+        "initialAnswerAssertion": {
+          "path": "/tmp/agi-implementation-checks/e10-tool-handoff-live-cli-initial-assertion.json",
+          "sha256": "e17c6a641de9c94672ebd799fd6f810a6588b618ce13ef6f7f7f567e651658ca"
+        },
+        "correction": "One standalone debug initialization timed out before model execution and left no matching process. The signed-CLI probe completed successfully; its initial harness searched serialized JSONL for a sentinel split across deltas. Reassembling message_delta events established the full answer with one read_file start/result, without another product run."
+      },
+      "candidateRef": "#/releaseContinuation/desktopLoginRecovery/candidate",
+      "nativeWindowStatus": "NOT_RUN_FRESH_CONSENT_PENDING"
     }
   },
-  "priorSourceFilesDigest": "b5377c0a1567f85a0f564516ced08d22b041fcdd4a3ff00e57b1a68c957e7fc9",
+  "priorSourceFilesDigest": "3fb7f27ef8723aed562ef1bb08e37545478e6619623edfcc663b51d11e49cc82",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

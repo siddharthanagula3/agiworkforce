@@ -144,6 +144,14 @@ describe('tool loop · tools the caller declared', () => {
       runToolLoop(makeProcessed([CALLER_WRITE_FILE]), { approvalMode: 'manual', usage }),
     );
 
+    const toolCallFrames = output.split('\n').filter((line) => {
+      if (!line.startsWith('data: ') || line === 'data: [DONE]') return false;
+      const event = JSON.parse(line.slice('data: '.length));
+      return event.choices?.some(
+        (choice: { delta?: { tool_calls?: unknown[] } }) => choice.delta?.tool_calls?.length,
+      );
+    });
+    expect(toolCallFrames, 'only the authoritative handoff is executable').toHaveLength(1);
     const chunk = handoffChunk(output);
     expect(chunk.choices[0]?.finish_reason).toBe('tool_calls');
     expect(chunk.choices[0]?.delta.tool_calls).toEqual([
@@ -163,6 +171,62 @@ describe('tool loop · tools the caller declared', () => {
     );
     expect(provider.stream).toHaveBeenCalledTimes(1);
     expect(e2b.getE2BExecutor).not.toHaveBeenCalled();
+  });
+
+  it('keeps mixed-frame text while handing off fragmented calls only once', async () => {
+    provider.stream.mockResolvedValueOnce(
+      stream([
+        {
+          choices: [
+            {
+              delta: {
+                content: 'I will read. ',
+                tool_calls: [
+                  {
+                    index: 2,
+                    id: 'call-caller-1',
+                    type: 'function',
+                    function: { name: 'write_file', arguments: '{"path":"hello.txt",' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                content: 'Done choosing.',
+                tool_calls: [{ index: 2, function: { arguments: '"content":"hello"}' } }],
+              },
+              index: 0,
+            },
+          ],
+        },
+        { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }] },
+      ]),
+    );
+    const output = await collect(
+      runToolLoop(makeProcessed([CALLER_WRITE_FILE]), { approvalMode: 'manual' }),
+    );
+    const frames = output
+      .split('\n')
+      .filter((line) => line.startsWith('data: ') && line !== 'data: [DONE]')
+      .map((line) => JSON.parse(line.slice('data: '.length)));
+    const choices = frames.flatMap((frame) => frame.choices ?? []);
+    expect(choices.map((choice) => choice.delta?.content ?? '').join('')).toBe(
+      'I will read. Done choosing.',
+    );
+    const calls = choices.flatMap((choice) => choice.delta?.tool_calls ?? []);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].id).toBe('call-caller-1');
+    expect(JSON.parse(calls[0].function.arguments)).toEqual({
+      path: 'hello.txt',
+      content: 'hello',
+    });
+    expect(choices.filter((choice) => choice.finish_reason === 'tool_calls')).toHaveLength(1);
   });
 
   it('keeps a platform tool a web caller declares on the hosted path', async () => {
