@@ -9,7 +9,8 @@ import console from 'node:console';
 import { createRequire } from 'node:module';
 import { URL, fileURLToPath } from 'node:url';
 import { setTimeout } from 'node:timers';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
+import { declaredProtocolVersion } from '../../../../scripts/release/verify-cli-protocol-handshake.mjs';
 
 // Explicitly invoked against an already built/signed bundle; never discovered
 // by unit tests. Launches the unchanged packaged entry point, not a test main.
@@ -108,6 +109,77 @@ function check(name, command, args) {
   return value;
 }
 const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+function checkWorkspaceConsent() {
+  const workspace = fs.realpathSync(fs.mkdtempSync(path.join(scratch, 'consent-workspace-')));
+  const consentProfile = fs.mkdtempSync(path.join(scratch, 'consent-profile-'));
+  fs.writeFileSync(
+    path.join(workspace, 'README.md'),
+    'Synthetic packaged consent check. No hooks or tools.\n',
+  );
+  const env = Object.fromEntries(
+    ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TMPDIR']
+      .filter((key) => process.env[key])
+      .map((key) => [key, process.env[key]]),
+  );
+  Object.assign(env, { AGIWORKFORCE_HOME: consentProfile, AGI_API_URL: 'http://127.0.0.1:9' });
+  const protocolVersion = declaredProtocolVersion(
+    fs.readFileSync(
+      path.join(repo, 'crates/agiworkforce-protocol/src/developer_session.rs'),
+      'utf8',
+    ),
+  );
+  const input = `${JSON.stringify({
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion,
+      clientInfo: {
+        name: 'packaged-workspace-consent',
+        title: 'Packaged consent check',
+        version: '0.0.0',
+      },
+    },
+  })}\n`;
+  const invoke = (args) =>
+    spawnSync(cli, args, {
+      cwd: workspace,
+      env,
+      input,
+      encoding: 'utf8',
+      timeout: 30000,
+      maxBuffer: 1024 * 1024,
+    });
+  const refuses = (result) =>
+    result.status !== 0 && result.stderr.includes('Current project is not trusted');
+  if (!refuses(invoke(['app-server'])))
+    throw new Error('An unapproved packaged workspace did not refuse.');
+  const accepted = invoke([
+    'app-server',
+    '--workspace-consent',
+    workspace,
+    '--workspace-consent-at-ms',
+    String(Date.now()),
+  ]);
+  if (accepted.status !== 0) throw new Error('The packaged CLI rejected native workspace consent.');
+  const replies = accepted.stdout.split('\n').flatMap((line) => {
+    try {
+      return [JSON.parse(line)];
+    } catch {
+      return [];
+    }
+  });
+  if (!replies.some((reply) => reply.id === 1 && reply.result?.protocolVersion === protocolVersion))
+    throw new Error('The consented packaged CLI answered no protocol handshake.');
+  if (!refuses(invoke(['app-server'])))
+    throw new Error('Native consent persisted beyond its process.');
+  receipt.checks.workspaceConsent = {
+    handshake: 'passed',
+    ordinaryRefusal: 'passed',
+    processLifetime: 'passed',
+    modelTurns: 0,
+  };
+}
+
 try {
   check('strictSignature', 'codesign', ['--verify', '--deep', '--strict', app]);
   check('gatekeeper', 'spctl', ['--assess', '--type', 'execute', app]);
@@ -124,6 +196,7 @@ try {
     path.join(repo, 'scripts/release/verify-cli-protocol-handshake.mjs'),
     cli,
   ]);
+  if (process.env.AGI_ACCEPTANCE_EXPECT_WORKSPACE_CONSENT === '1') checkWorkspaceConsent();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const portOwner = net.createServer();

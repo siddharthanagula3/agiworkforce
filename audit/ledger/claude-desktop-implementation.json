@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T11:59:56.733485+00:00",
+  "capturedAt": "2026-10-17T17:20:55.954567+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -495,15 +495,15 @@
       "reason": "no spare host for disruptive test"
     },
     {
-      "status": "PASSED",
+      "status": "NOT_RUN",
       "gate": "native Intel macOS packaged smoke",
-      "reason": "Signed 0.0.5 x86_64 package executed successfully in run 39033264263, including real native browser sign-in state/cancel calls; earlier 0.0.3 result retained in priorIntelCandidates",
-      "version": "0.0.5-e10.20261017"
+      "reason": "New immutable v6 candidate awaits native Intel run; successful v5 and v3 receipts retained separately.",
+      "version": "0.0.6-e10.20261017"
     },
     {
       "status": "BLOCKED",
       "gate": "public release readiness",
-      "reason": "Installed-user UI/provider acceptance, production rollout and external live gates remain open. Exposed Tauri updater signing domain is separately quarantined pending replacement, offline escrow and transition; Electron uses separate signing."
+      "reason": "Installed-user folder/provider acceptance, production Web rollout and external live gates remain open. Owner-deferred Tauri signing stays quarantined independently."
     }
   ],
   "unsupportedFirstScope": [
@@ -516,12 +516,16 @@
   ],
   "sourceFiles": [
     {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "6f3aa87316ea6bb96c82ab0b6d84f7d227c14ebc75914fd9001693a1739f0b1c"
+    },
+    {
       "path": ".github/workflows/release-desktop-cloud.yml",
       "sha256": "045a1abf7eb8db53d80f1832d3bcce9b864d5da211f88f620a0ad616ee3c37fa"
     },
     {
       "path": ".github/workflows/verify-desktop-candidate.yml",
-      "sha256": "77b27b809daf833c47d759e34eae94a89e79347596cad0638e4dbb38d6cfb744"
+      "sha256": "19c7dd18e0c3320064044425689870715718c76ee234d0685a20391c179dccce"
     },
     {
       "path": "Cargo.lock",
@@ -556,6 +560,10 @@
       "sha256": "ed32a4d4a914e7411b651d9cb8ae526ae50804fc286bc2c7b1acc099299a918a"
     },
     {
+      "path": "apps/cli/src/app_server/surfaces.rs",
+      "sha256": "0bef110d730c8d678acc0504118d8c9856c406b9df0accbeebce0396d491c89b"
+    },
+    {
       "path": "apps/cli/src/documents.rs",
       "sha256": "a0f9df09f645e6cc7dc97bc9991aede7420900461d97814c9f4c6e42bd6be03e"
     },
@@ -565,15 +573,19 @@
     },
     {
       "path": "apps/cli/src/lib.rs",
-      "sha256": "6b7900a952e9813b54772cc6abb2bceeb220fdba505b2845e9d7325de5aa6e16"
+      "sha256": "7c2e8c3cc5a3b2ddebe8bf9b571e6b976240cc83c1f2dd74f89dd9f8c9a2de00"
     },
     {
       "path": "apps/cli/src/path_security/file_authority.rs",
       "sha256": "be4550a81fbb3fed77c11cbe6e40d66b81664d4089fc02a5aea104677554b604"
     },
     {
+      "path": "apps/cli/src/project_registry.rs",
+      "sha256": "7f5f7242d177e9f2abe93752d52f01af683489f017d4662fd8af0a7582505eb4"
+    },
+    {
       "path": "apps/cli/src/sandbox.rs",
-      "sha256": "d2ddac967f9e3ff4223c371430c136c1316b592db747d43ce24ef118322fbd75"
+      "sha256": "f6a2321aebcbcf00658ea4dc1eddc92af43f46beb4ebb922405222f9dd1cf58d"
     },
     {
       "path": "apps/cli/src/session_browser.rs",
@@ -586,6 +598,10 @@
     {
       "path": "apps/cli/src/tool_filters.rs",
       "sha256": "017ac1973a7bc248a79c8ece7264ebffc0bf71f2f5a71f780b82854b3d1933cd"
+    },
+    {
+      "path": "apps/cli/src/trust/mod.rs",
+      "sha256": "23f5d5d46b89b5c773d2a4f60e79ae4e5325b58710863afc74674cb461b2383f"
     },
     {
       "path": "apps/cli/tests/normal_child_stdio.rs",
@@ -625,7 +641,7 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/developerSessionService.test.ts",
-      "sha256": "32868043b282215a1f7f808b8b04007fffe016271a0719ad6d7fb5130f927a0e"
+      "sha256": "ede598e68c02c73a066c5505ef1f9bcd677a0c174f882c6408919f0eb18bd4a6"
     },
     {
       "path": "apps/desktop/electron/__tests__/dispatcher.test.ts",
@@ -657,11 +673,11 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/packaged-acceptance.mjs",
-      "sha256": "9aacb3ac50fa1b883d713e0beaa7410d5205144ddcdb56f1b2f02e5c34122968"
+      "sha256": "5ecd9d99fe2fcf5aa2aea9d428d041cb03d73b0cd0db5e70f39ec5996b2ca604"
     },
     {
       "path": "apps/desktop/electron/__tests__/permissionManager.test.ts",
-      "sha256": "576256aa5a797ff9ff05b20de9677d1bcf9df7ff1f73e41ac84c54cff83a61b9"
+      "sha256": "b123f36eede69c6f9704101aa900aaebcefb0f442ea4c8c7edb20abdfb93616b"
     },
     {
       "path": "apps/desktop/electron/__tests__/preloadBridge.test.ts",
@@ -693,7 +709,7 @@
     },
     {
       "path": "apps/desktop/electron/main.ts",
-      "sha256": "6b2d56b767b49b0f9b6b560498735554c3bcacf8eb8993ec0fc15c1044e3c563"
+      "sha256": "28c3302b4c4ad7665ce842d742bcf5fdf5a5819eddec564613377ff11696753e"
     },
     {
       "path": "apps/desktop/electron/notarizeInstallers.mjs",
@@ -704,12 +720,16 @@
       "sha256": "e3a9b0bffde8b78dd0bbefc3b48e5355463e35dd96b63d12b0d0e8c4300c75d5"
     },
     {
+      "path": "apps/desktop/electron/runtime/agentAccess.ts",
+      "sha256": "8cb78915f6d14b62866bd59488a250825cfea382beaa938d2b4adf24eb3cb925"
+    },
+    {
       "path": "apps/desktop/electron/runtime/codeSessionActivity.ts",
       "sha256": "f8f440bfcdf6cf0b911233859958399c39ac1e9d89d4137b6522e6cbe7e858b4"
     },
     {
       "path": "apps/desktop/electron/runtime/developerSessionService.ts",
-      "sha256": "51bfcaa0153cb2a3b3f972f3e7a91d469438836f2e4e06b830f2101bf8d43d70"
+      "sha256": "7883cbba2cd495255776dd5b1fb6ff70a059eee508f9738f71cc576efe648a37"
     },
     {
       "path": "apps/desktop/electron/runtime/dispatcher.ts",
@@ -725,7 +745,7 @@
     },
     {
       "path": "apps/desktop/electron/runtime/permissionManager.ts",
-      "sha256": "a4d7fe06114bc3816fe1092cdf6eeed31b465c5a9dd506fcbcf74e337b984a81"
+      "sha256": "84f8a99d191b6c267d0eb2b182cf4f2bab841d9957dfd9382709796eb6b9cea7"
     },
     {
       "path": "apps/desktop/electron/runtime/sshEnvironments.ts",
@@ -817,7 +837,7 @@
     },
     {
       "path": "apps/web/e2e/e10-desktop-login.spec.ts",
-      "sha256": "89725ab6653e63b61097d70464724858c99c0ea690a6182b6bce74e8a6dacb4c"
+      "sha256": "3e98311e11d6117e36efbd90dcce20831897b44252c99a4cd660b226de910791"
     },
     {
       "path": "apps/web/e2e/e10-release.spec.ts",
@@ -1000,6 +1020,10 @@
       "sha256": "9636da16caad4556d0932ab0b191a9a4e5cc3f0c326230017580d6a969cab48d"
     },
     {
+      "path": "apps/web/lib/tool-approval-view.ts",
+      "sha256": "fc1acaa75bc1fa8da5858bb7fe959d0e752b3edd262ad9da93f8623ff8fadadf"
+    },
+    {
       "path": "apps/web/lib/voice/live-voice-tool-runner.ts",
       "sha256": "1cf1d039f04c29d502b7c12ac74f52f5ab5fcb2d9dc4a4b2ba990d37f4d6b634"
     },
@@ -1125,11 +1149,11 @@
     },
     {
       "path": "docs/security/security-claims.json",
-      "sha256": "45b2ad2984002130a93aa745acc82826e82c03edc5b549788e81c54793747a23"
+      "sha256": "7b2725f815d0ded81992cab03a90f5b2fa9d9106cb77a881568fe55e35799e40"
     },
     {
       "path": "docs/security/security.md",
-      "sha256": "500f0e18a8fe9e4708c25726e97f0ccba9b474667ebce8a2f82bb4a2efcc0709"
+      "sha256": "0f37588e4a64c952d8b9f56375c6e404c24d280b2bdd9d696b4469c452e8cc4f"
     },
     {
       "path": "packages/contracts/cloud-contracts/src/schedules.ts",
@@ -1256,17 +1280,17 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "7e02f67e233b950a9479207c32cdeca449bc9a2d7e266ef4747befd69342e8c8",
+  "sourceFilesDigest": "b5377c0a1567f85a0f564516ced08d22b041fcdd4a3ff00e57b1a68c957e7fc9",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
     "Source/mocked checks do not establish production acceptance.",
     "Exact signed ASAR, bundled CLI, DMG and hosted snapshot hashes identify exercised bytes; no claim that later documentation/formatting commits were rebuilt into the candidates.",
-    "Intel, external SSH, provider delivery and physical sleep acceptance remain open."
+    "Current v6 native Intel execution, external SSH, provider delivery, physical sleep and production Web rollout remain open; prior Intel candidates passed separately."
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T12:47:46.691938+00:00",
+    "updatedAt": "2026-10-17T17:20:55.954567+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1400,7 +1424,7 @@
       "affectedCandidate": "discarded; submitted to Apple but never published",
       "rendererBoundaryFixed": true,
       "preUploadGuardAdded": true,
-      "rotationStatus": "REQUIRED_NOT_PERFORMED",
+      "rotationStatus": "DEFERRED_BY_OWNER_NOT_PERFORMED",
       "credentialValuesRecorded": false,
       "workingCopyVerification": {
         "matchesCommittedPin": true,
@@ -1414,45 +1438,27 @@
       "actual notification provider delivery",
       "external SSH same-account admission",
       "physical sleep/offline host",
-      "Tauri updater signing credential rotation and offline escrow",
       "new login candidate installed-user/provider operational acceptance and Web rollout",
       "completion of remaining current-head CI jobs"
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
       "releaseId": 415660092,
-      "assetId": 650351477,
-      "asset": "AGI-Cloud-0.0.5-e10.20261017-x64.zip",
-      "version": "0.0.5-e10.20261017",
-      "sha256": "d6a2fbea8b14a3e7034fbab59f5748fdc89db9bfb6759f01d581ee63a5d551d5",
-      "size": 136458899,
-      "status": "PASSED_NATIVE_INTEL",
       "publication": "private draft; no public installer or update feed",
-      "requiresBrowserSignInCancellationContract": true,
       "permissionRepair": {
         "status": "USER_APPROVED_APPLIED",
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
         "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
       },
-      "runId": 39033264263,
-      "jobId": 117397928318,
-      "head": "4e1fd71f2af7446eacfdf97a134de3ebece6d2ba",
-      "receiptSha256": "693dfc5bfcf66d83958838eb173e0d09c5ff3bdcb9ae292860da16e3a75e19ab",
-      "artifactId": 12101103958,
-      "artifactDigest": "0db5a4c2f0164474ae9d7ec36943f82d276c46f8bd24cf35bf646834538472ab",
-      "checks": {
-        "signature": "passed",
-        "gatekeeper": "passed",
-        "ticket": "passed",
-        "architecture": "x86_64",
-        "protocol": 8,
-        "hostedBridge": "passed",
-        "browserSignInStateAndCancellation": "passed",
-        "routineOwner": "passed",
-        "sessionApprovalAlerts": "passed",
-        "updaterNoRelease": "passed"
-      },
-      "boundary": "unchanged signed 0.0.5 package on macos-26-intel; controlled hosted renderer; no real identity-provider return-to-app or physical sleep claim"
+      "assetId": 651069991,
+      "asset": "AGI-Cloud-0.0.6-e10.20261017-x64.zip",
+      "version": "0.0.6-e10.20261017",
+      "sha256": "0d648f95d9ad7574897b9c4687ea15a9ce85ca707a0478bc8996fded0e8d6079",
+      "size": 136462575,
+      "status": "UPLOADED_NATIVE_INTEL_PENDING",
+      "requiresBrowserSignInCancellationContract": true,
+      "requiresProcessWorkspaceConsentContract": true,
+      "boundary": "new immutable private-draft asset; earlier Intel passes do not establish execution of these bytes"
     },
     "sourceCommit": "264a606571",
     "sourceCommitBoundary": "initial 0.0.3 candidates and initial hosted snapshot predate this commit; later candidate records use their own artifact hashes and verified source pins",
@@ -2026,17 +2032,16 @@
         }
       },
       "candidate": {
-        "version": "0.0.5-e10.20261017",
-        "status": "BUILT_SIGNED_NOTARIZED_SCANNED",
+        "version": "0.0.6-e10.20261017",
+        "status": "BUILT_SIGNED_NOTARIZED_SCANNED_INSTALLED",
         "publication": "none",
-        "sourceVerification": "compiled from tested runtime source; final test-adapter/ledger changes do not alter payload; Intel packaged state/cancel contract passed; installed-user UI/provider acceptance still awaits manual Mac unlock",
         "signatures": {
-          "at": "2026-10-17T11:54:17.418699+00:00",
-          "version": "0.0.5-e10.20261017",
+          "at": "2026-10-17T17:12:38.660963+00:00",
+          "version": "0.0.6-e10.20261017",
           "packages": [
             {
               "architecture": "arm64",
-              "app": "/tmp/agi-e10-patched-release/mac-arm64/AGI Cloud.app",
+              "app": "/tmp/agi-e10-consent-release/mac-arm64/AGI Cloud.app",
               "checks": {
                 "signature": "passed",
                 "gatekeeper": "passed",
@@ -2045,18 +2050,22 @@
               "binaries": {
                 "app": {
                   "architecture": "arm64",
-                  "sha256": "d08e81d3a334f239b13b330e0d1a7d8f3baef7aeef1f64590fbb81f165558b0c"
+                  "sha256": "820395a8d8b16d84cf731ed9dde5cc196449df713e9f111f1cc9370a52639bc5"
                 },
                 "cli": {
                   "architecture": "arm64",
-                  "sha256": "a36adfb227f2bfd9bc1fd0e56ea270aa72a5e632d01a2f9686bcf912b3bffc41"
+                  "sha256": "41193ddc357537b83e46d3e39965f6a7e33e6b89376c2c3198cc0d02fb00030a"
+                },
+                "input": {
+                  "architecture": "arm64",
+                  "sha256": "393140043da25dcb38b0cac577e3d2e9fbaa88a3e00cd938e238f71ec4fb9753"
                 }
               },
-              "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+              "asarSha256": "373990b0d4cde913118db951fe31b00c1396703845d5fc36fcb8e43d87d9569e"
             },
             {
-              "architecture": "x64",
-              "app": "/tmp/agi-e10-patched-release/mac/AGI Cloud.app",
+              "architecture": "x86_64",
+              "app": "/tmp/agi-e10-consent-release/mac/AGI Cloud.app",
               "checks": {
                 "signature": "passed",
                 "gatekeeper": "passed",
@@ -2065,49 +2074,148 @@
               "binaries": {
                 "app": {
                   "architecture": "x86_64",
-                  "sha256": "877440b0d33334d7d401ba5812a8ad518c95006b6937e8091fc7f9a8d154261b"
+                  "sha256": "b636a13db78a80d67f325fe1c9fe7865bb7df436e96151a390af426c666ebbb7"
                 },
                 "cli": {
                   "architecture": "x86_64",
-                  "sha256": "66978c6f0ce2c205c882659e8e6407d5b9b3ffa43ef86d29398c844dee48ba5a"
+                  "sha256": "7d760c5045989977d0571461f7740d0126b6b05ccff2b7243c93e53938106aae"
+                },
+                "input": {
+                  "architecture": "x86_64",
+                  "sha256": "6d70ada8a77315d6aa70780f66a42017d92cf2627d9e66266c13b0596d215262"
                 }
               },
-              "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+              "asarSha256": "373990b0d4cde913118db951fe31b00c1396703845d5fc36fcb8e43d87d9569e"
             }
           ],
           "publication": "none"
         },
-        "installers": [
+        "installerNotarization": [
           {
-            "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-arm64.dmg",
+            "file": "/tmp/agi-e10-consent-release/AGI-Cloud-0.0.6-e10.20261017-arm64.dmg",
             "notarizedAndStapled": true,
-            "sha256": "a8cee9937e4fa3ff36d14e7b47a7882da69d28c8b957613ed841caaca92f6b51"
+            "sha256": "8f489e19fb4d800eec83bfb1a93941232e8e9026ecc31adce164504ac6724778"
           },
           {
-            "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-x64.dmg",
+            "file": "/tmp/agi-e10-consent-release/AGI-Cloud-0.0.6-e10.20261017-x64.dmg",
             "notarizedAndStapled": true,
-            "sha256": "cdc1ba7945aae14264182ba2372914a62cf0373d62df284e3c2b6aff266443de"
+            "sha256": "6299ea06ab5bbf68e93f190e0332b72830f9605825e04f8f9d1eda96fd0a61ed"
           }
         ],
-        "scans": {
-          "arm64": "d86e7e875c4dfee8d73922657aee55670ada3dfaab889230813c760b09cc1d46",
-          "x64": "ed993ba5eb545b2ea4efde34ad5b8a1b350dee24d017b08483e12bb8cd08cd41"
+        "payloadScan": {
+          "path": "/tmp/agi-implementation-checks/e10-v6-final-payload-scan.log",
+          "sha256": "c925a3dbacae5d2fa1dee425945c4a6171f3f2a2618ec8dd235dc19d125912b7"
         },
-        "protocol": "exact arm64 packaged CLI serves protocol 8"
+        "sourceVerification": "final signed bundle includes process-scoped native folder consent; test harness and ledger updates do not alter the payload; Intel execution pending"
       },
       "productionRollout": "NOT_PERFORMED",
       "nativeUi": {
-        "status": "BLOCKED_MANUAL_UNLOCK",
-        "permissionDecision": "NOT_EXECUTED_MAC_LOCKED",
-        "installation": "NOT_PERFORMED",
-        "installedVersion": "0.0.3-e10.20261017"
+        "status": "INSTALLED_SIGNED_IN_FOLDER_PERMISSION_PENDING",
+        "installation": {
+          "at": "2026-10-17T17:18:24.501704+00:00",
+          "installedApp": "/Users/siddhartha/Applications/AGI Cloud.app",
+          "before": "0.0.3-e10.20261017",
+          "after": "0.0.6-e10.20261017",
+          "asarSha256": "373990b0d4cde913118db951fe31b00c1396703845d5fc36fcb8e43d87d9569e",
+          "signature": "passed",
+          "gatekeeper": "passed",
+          "ticket": "passed",
+          "userData": "untouched",
+          "status": "installed, awaiting live UI verification"
+        },
+        "signedInProfilePreserved": true,
+        "installedVersion": "0.0.6-e10.20261017",
+        "permissionDecision": "PENDING_HUMAN_ACTION_TIME_APPROVAL",
+        "syntheticFolder": "/private/tmp/agi-desktop-user-check",
+        "boundary": "actual unchanged signed app, normal production origin and existing user profile; no new command grant made by the agent"
       },
       "localDevelopmentControl": {
-        "minimalBindings": "invalid environment reported; login timed out; static robots served",
-        "configuredTestBindings": "environment validation succeeded; login still timed out after 15 seconds",
-        "serverDisposition": "both owned processes stopped normally after controls",
-        "boundary": "local dev route not operationally verified; no authentication, security or origin gate weakened; immutable production-mode Preview browser checks passed"
-      }
+        "status": "PASSED_PRODUCTION_BUILD_LOCAL_BROWSER",
+        "tests": 3,
+        "report": {
+          "path": "/tmp/agi-implementation-checks/e10-auth-local-browser.json",
+          "sha256": "56b12ceed516edbe550f4fddac3941174ef2b675cc11d1796f8d4ae47ec6c009"
+        },
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-auth-local-browser.log",
+          "sha256": "a920f9f68eedfb7007f969a16592825d0e1d3ecb863b7f5fdf03e4d3728f2dde"
+        },
+        "diagnosis": "configured loopback PostgreSQL was reachable; existing WebSocket proxy was absent; the existing proxy and a localhost listener repaired the local self-rewrite control",
+        "serverDisposition": "owned Web and proxy processes stopped normally after checks",
+        "boundary": "real local production build and shipped login UI with existing browser-only auth/native fixtures; no real identity-provider return claim"
+      },
+      "priorCandidateBuilds": [
+        {
+          "version": "0.0.5-e10.20261017",
+          "status": "BUILT_SIGNED_NOTARIZED_SCANNED",
+          "publication": "none",
+          "sourceVerification": "compiled from tested runtime source; final test-adapter/ledger changes do not alter payload; Intel packaged state/cancel contract passed; installed-user UI/provider acceptance still awaits manual Mac unlock",
+          "signatures": {
+            "at": "2026-10-17T11:54:17.418699+00:00",
+            "version": "0.0.5-e10.20261017",
+            "packages": [
+              {
+                "architecture": "arm64",
+                "app": "/tmp/agi-e10-patched-release/mac-arm64/AGI Cloud.app",
+                "checks": {
+                  "signature": "passed",
+                  "gatekeeper": "passed",
+                  "ticket": "passed"
+                },
+                "binaries": {
+                  "app": {
+                    "architecture": "arm64",
+                    "sha256": "d08e81d3a334f239b13b330e0d1a7d8f3baef7aeef1f64590fbb81f165558b0c"
+                  },
+                  "cli": {
+                    "architecture": "arm64",
+                    "sha256": "a36adfb227f2bfd9bc1fd0e56ea270aa72a5e632d01a2f9686bcf912b3bffc41"
+                  }
+                },
+                "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+              },
+              {
+                "architecture": "x64",
+                "app": "/tmp/agi-e10-patched-release/mac/AGI Cloud.app",
+                "checks": {
+                  "signature": "passed",
+                  "gatekeeper": "passed",
+                  "ticket": "passed"
+                },
+                "binaries": {
+                  "app": {
+                    "architecture": "x86_64",
+                    "sha256": "877440b0d33334d7d401ba5812a8ad518c95006b6937e8091fc7f9a8d154261b"
+                  },
+                  "cli": {
+                    "architecture": "x86_64",
+                    "sha256": "66978c6f0ce2c205c882659e8e6407d5b9b3ffa43ef86d29398c844dee48ba5a"
+                  }
+                },
+                "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+              }
+            ],
+            "publication": "none"
+          },
+          "installers": [
+            {
+              "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-arm64.dmg",
+              "notarizedAndStapled": true,
+              "sha256": "a8cee9937e4fa3ff36d14e7b47a7882da69d28c8b957613ed841caaca92f6b51"
+            },
+            {
+              "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-x64.dmg",
+              "notarizedAndStapled": true,
+              "sha256": "cdc1ba7945aae14264182ba2372914a62cf0373d62df284e3c2b6aff266443de"
+            }
+          ],
+          "scans": {
+            "arm64": "d86e7e875c4dfee8d73922657aee55670ada3dfaab889230813c760b09cc1d46",
+            "x64": "ed993ba5eb545b2ea4efde34ad5b8a1b350dee24d017b08483e12bb8cd08cd41"
+          },
+          "protocol": "exact arm64 packaged CLI serves protocol 8"
+        }
+      ]
     },
     "dependencyAudit": {
       "status": "LOCAL_AND_CI_REPAIR_PASSED",
@@ -2381,6 +2489,42 @@
           "receiptSha256": "8424c5e8cf771bdfe62ededf3f37688c2080d7b627f13e7876d3897314f48c1c",
           "boundary": "unchanged 0.0.3 candidate executed on macos-26-intel; later login candidate requires its own acceptance"
         }
+      },
+      {
+        "releaseTag": "e10-candidate-20261017-01a142a4",
+        "releaseId": 415660092,
+        "assetId": 650351477,
+        "asset": "AGI-Cloud-0.0.5-e10.20261017-x64.zip",
+        "version": "0.0.5-e10.20261017",
+        "sha256": "d6a2fbea8b14a3e7034fbab59f5748fdc89db9bfb6759f01d581ee63a5d551d5",
+        "size": 136458899,
+        "status": "PASSED_NATIVE_INTEL",
+        "publication": "private draft; no public installer or update feed",
+        "requiresBrowserSignInCancellationContract": true,
+        "permissionRepair": {
+          "status": "USER_APPROVED_APPLIED",
+          "scope": "verify-desktop-candidate.yml:intel-package:contents write",
+          "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
+        },
+        "runId": 39033264263,
+        "jobId": 117397928318,
+        "head": "4e1fd71f2af7446eacfdf97a134de3ebece6d2ba",
+        "receiptSha256": "693dfc5bfcf66d83958838eb173e0d09c5ff3bdcb9ae292860da16e3a75e19ab",
+        "artifactId": 12101103958,
+        "artifactDigest": "0db5a4c2f0164474ae9d7ec36943f82d276c46f8bd24cf35bf646834538472ab",
+        "checks": {
+          "signature": "passed",
+          "gatekeeper": "passed",
+          "ticket": "passed",
+          "architecture": "x86_64",
+          "protocol": 8,
+          "hostedBridge": "passed",
+          "browserSignInStateAndCancellation": "passed",
+          "routineOwner": "passed",
+          "sessionApprovalAlerts": "passed",
+          "updaterNoRelease": "passed"
+        },
+        "boundary": "unchanged signed 0.0.5 package on macos-26-intel; controlled hosted renderer; no real identity-provider return-to-app or physical sleep claim"
       }
     ],
     "updaterKeyQuarantine": {
@@ -2414,8 +2558,14 @@
       ],
       "secretValuesRetrieved": false,
       "existingSecretEntries": "retained, not replaced",
-      "blockingInput": "offline escrow location and separate passphrase destination; manual Mac unlock",
-      "securityOwner": "docs/security/security.md section 4"
+      "blockingInput": "Owner deferred offline escrow and separate passphrase storage; do not resume Tauri signing.",
+      "securityOwner": "docs/security/security.md section 4",
+      "ownerDisposition": {
+        "date": "2026-10-17",
+        "status": "DEFERRED_BY_OWNER",
+        "scope": "replacement and offline escrow only; the two Tauri signing workflows remain disabled",
+        "securityOwner": "docs/security/security.md section 4"
+      }
     },
     "packagedOfficeRead": {
       "at": "2026-10-17T12:39:30.668386+00:00",
@@ -2448,9 +2598,239 @@
       ],
       "boundary": "unchanged signed package reader subprocess, synthetic OOXML; not full UI editing or a model-quality check"
     },
-    "cleanCandidateVersionBoundary": "initial clean 0.0.3 release after the credential incident; the later 0.0.5 candidate and its own hashes/receipts are in intelCandidate and desktopLoginRecovery.candidate"
+    "cleanCandidateVersionBoundary": "initial clean 0.0.3 release after the credential incident; the later 0.0.5 candidate and its own hashes/receipts are in intelCandidate and desktopLoginRecovery.candidate",
+    "deferredScope": [
+      {
+        "scope": "Tauri updater credential replacement, separate offline escrow and transition/reinstall disposition",
+        "status": "DEFERRED_BY_OWNER",
+        "signingState": "CI_RELEASE_PATHS_QUARANTINED_NOT_ROTATED",
+        "owner": "docs/security/security.md section 4"
+      }
+    ],
+    "nativeWorkspaceConsent": {
+      "at": "2026-10-17T17:20:55.954567+00:00",
+      "observedFailure": {
+        "version": "0.0.3-e10.20261017",
+        "surface": "installed public Electron AGI Code",
+        "message": "Current project is not trusted",
+        "screenshot": {
+          "path": "/tmp/agi-implementation-checks/e10-installed-folder-trust-error.png",
+          "sha256": "12f015a842407366e64db0e74d64a7105d720288f91b10d4f586e7c6343daf93"
+        },
+        "cause": "native folder permission admitted CLI launch, but ordinary CLI trust independently refused before project configuration; fixture init preconditions masked the boundary"
+      },
+      "repair": {
+        "nativeOwner": "apps/desktop/electron/runtime/agentAccess.ts",
+        "launchOwner": "apps/desktop/electron/runtime/developerSessionService.ts",
+        "trustOwner": "apps/cli/src/trust/mod.rs",
+        "registryOwner": "apps/cli/src/project_registry.rs",
+        "contract": "paired bundled CLI borrows the exact native folder decision and original timestamp for one stdio process; no persisted trust, transport authority or approval-mode change",
+        "withdrawal": "native revocation/quit stops the owning runtime; CLI revocation writes a durable marker; a restarted CLI cannot renew the old native decision",
+        "externalCliAndSsh": "existing trust and argument ABI preserved"
+      },
+      "signedCli": {
+        "binarySha256": "41193ddc357537b83e46d3e39965f6a7e33e6b89376c2c3198cc0d02fb00030a",
+        "checks": [
+          {
+            "name": "ordinary untrusted headless launch still refuses",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "a different folder cannot be borrowed",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "network transport cannot borrow native consent",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "future consent cannot be minted",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "stdio initialization preserves normal settings without saved trust",
+            "status": "passed"
+          },
+          {
+            "name": "consent does not survive the owning process",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "real trust revocation records a denial",
+            "status": "passed"
+          },
+          {
+            "name": "restarting does not renew revoked native consent",
+            "status": "passed",
+            "exitCode": 1
+          },
+          {
+            "name": "a new explicit decision can replace the revoked one",
+            "status": "passed"
+          }
+        ],
+        "scope": "actual CLI, isolated configuration, synthetic folder, no model turns",
+        "approvalSetting": null,
+        "bypassCapabilityIsAuthority": false,
+        "status": "passed"
+      },
+      "receipt": {
+        "path": "/tmp/agi-implementation-checks/e10-v6-final-cli-consent.json",
+        "sha256": "ad630ca4993aa92fc4d2942b62f1a5cc4a4ba192533015d88245b2d8d1a9347d"
+      },
+      "tests": [
+        {
+          "scope": "Rust trust",
+          "tests": 15,
+          "log": {
+            "path": "/tmp/agi-implementation-checks/e10-native-consent-trust-tests.log",
+            "sha256": "5ed3be56aadb468d3e4ad8c599a09780742030aa289a585115341a95624ef5df"
+          }
+        },
+        {
+          "scope": "Rust project registry",
+          "tests": 22,
+          "log": {
+            "path": "/tmp/agi-implementation-checks/e10-native-consent-registry-tests.log",
+            "sha256": "4137a76f89c59d662aeadb5a9daacb720c0fa1b78bd613bebb021929da050427"
+          }
+        },
+        {
+          "scope": "Rust app-server surfaces",
+          "tests": 5,
+          "log": {
+            "path": "/tmp/agi-implementation-checks/e10-native-consent-surface-tests.log",
+            "sha256": "dc0eb44d66d4eee89ee26bce7c0dd05b9a87f48c340b27e6873e45771f245cc2"
+          }
+        },
+        {
+          "scope": "remote bypass authority denial",
+          "tests": 1,
+          "log": {
+            "path": "/tmp/agi-implementation-checks/e10-native-consent-bypass-control.log",
+            "sha256": "1e84f4e96081e6ea0e6533403e921e2c6b66483fc8f952d658b94081649fe00c"
+          }
+        },
+        {
+          "scope": "complete public Electron",
+          "files": 76,
+          "tests": 1449,
+          "workers": 2,
+          "log": {
+            "path": "/tmp/agi-implementation-checks/e10-native-consent-electron-scoped.log",
+            "sha256": "24c8e44dc3c6bc09fcdfeb06c8a6491345065e637eb0d718127d53aebe764f52"
+          }
+        }
+      ],
+      "strictCliClippy": {
+        "status": "passed",
+        "scope": "all targets, warnings and unsafe code denied",
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-native-consent-clippy.log",
+          "sha256": "f2e8580e7a22bdf2673a2c6816a2c264a0382a62ff1aba4fe6ee45fbdc39c1b5"
+        },
+        "preExistingTestWarnings": "two sandbox clone-only test warnings reproduced in HEAD; replaced with from_ref; runtime unchanged"
+      },
+      "typechecks": {
+        "electron": {
+          "path": "/tmp/agi-implementation-checks/e10-native-consent-electron-typecheck.log",
+          "sha256": "71cab875ba20cf8d4c332aebfc195039e2e67ee6edeb228860b6451aeb570e26"
+        },
+        "web": {
+          "path": "/tmp/agi-implementation-checks/e10-native-consent-web-typecheck.log",
+          "sha256": "1db90647ec471abe41e6e06d303932e4430428e8a6f5c7b35b084f940289881c"
+        }
+      },
+      "protocolCheck": {
+        "status": "passed",
+        "generatedModules": 478,
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-native-consent-protocol-check.log",
+          "sha256": "6658e6a91f8c14ff03147f1f79e2e02980f2c61fc644c24864e184f74e3b2d0b"
+        }
+      },
+      "cancelledWrongScopeRun": {
+        "status": "CANCELLED_NOT_A_PASS",
+        "reason": "unscoped Desktop vitest also selected retained Tauri frontend; stopped the exact owned test process then ran the complete electron/ scope",
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-native-consent-electron-full.log",
+          "sha256": "6b1d44127eff019aae9ec5191c34457d2fe14eb02122f692843064b37d15e753"
+        }
+      },
+      "initialPackageSmoke": {
+        "receipt": {
+          "path": "/tmp/agi-implementation-checks/e10-v6-arm64-package/packaged-acceptance.json",
+          "sha256": "7ad0c7114121ac09f6cf06479bf4fe520b7273a6ddee7112f0fed364bb1f81a3"
+        },
+        "boundary": "passed on initial signing before builder redundantly re-signed the same ASAR; superseded for executable-byte identity by final signature and CLI receipts; do not treat as final-byte UI proof"
+      }
+    },
+    "ciRepairs": {
+      "failingHead": "36646b21b5dd735c3e07553dd035740d152728fe",
+      "codeql": "passed",
+      "passedChecks": 32,
+      "failedJobs": [
+        {
+          "runId": 39035225829,
+          "jobId": 117404028658,
+          "name": "JavaScript tests"
+        },
+        {
+          "runId": 39035225861,
+          "jobId": 117403656508,
+          "name": "test-l1"
+        }
+      ],
+      "finding": "three reproducible Web drift failures: anonymous CI omitted the new Desktop login spec, browser_open_tab lacked human-readable approval copy, and the policy documentation omitted that row",
+      "coverageBoundary": "L1 reported 77.58 percent against a passing 75 percent floor; Web assertions caused job failure",
+      "before": {
+        "testsFailed": 3,
+        "testsPassed": 27,
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-web-drift-before.log",
+          "sha256": "844368b41d39abcc0615bfa7585a798c97ec80a70e819d730f5937836ac5cece"
+        }
+      },
+      "after": {
+        "testsPassed": 30,
+        "files": 3,
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-web-drift-after.log",
+          "sha256": "8cbc8dec73e2a7ca3c3d162aef48bfe5e5752b7e689d703efc4fd6ed33e7463e"
+        }
+      },
+      "repair": "CI includes the login spec; it now runs on loopback through existing browser fixtures, with explicit owned HTTPS Preview opt-in retained; approval copy and canonical security table/index updated",
+      "previewBrowser": {
+        "testsPassed": 3,
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-browser-ci-repair-preview.log",
+          "sha256": "fac5670eb24fe7fba71bd724d4be7af4a108ca730f6348f7c917714ed7f23d7e"
+        }
+      },
+      "localProductionBrowser": {
+        "testsPassed": 3,
+        "report": {
+          "path": "/tmp/agi-implementation-checks/e10-auth-local-browser.json",
+          "sha256": "56b12ceed516edbe550f4fddac3941174ef2b675cc11d1796f8d4ae47ec6c009"
+        }
+      },
+      "securityClaims": {
+        "testsPassed": 13,
+        "log": {
+          "path": "/tmp/agi-implementation-checks/e10-owner-deferral-claims.log",
+          "sha256": "5706a6dc877adb60089df47ef47090527bc89c62308685d764f95defa6f2b1f2"
+        }
+      },
+      "currentRevisionCi": "NOT_RUN_PENDING_PUSH",
+      "guardWeakening": false
+    }
   },
-  "priorSourceFilesDigest": "96b9b7f597c79a4abffa31de67b5c2faff3367f8e29b00db271500de0a9fad65",
+  "priorSourceFilesDigest": "7e02f67e233b950a9479207c32cdeca449bc9a2d7e266ef4747befd69342e8c8",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

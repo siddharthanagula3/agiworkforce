@@ -1,15 +1,26 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
+import { holdMockDevBrowser, mockAuthProvider } from './lib/mock-auth-provider';
 
-// llm-guardrail-allow: Explicit owned Preview acceptance only; native replies are controlled and no account or provider credentials are submitted.
-test.skip(
-  process.env['AGI_E10_DESKTOP_LOGIN'] !== '1',
-  'Explicit Desktop login acceptance required.',
-);
 test.use({ trace: 'off', video: 'off' });
 
-const origin = process.env['AGI_E10_OWNED_ORIGIN'];
+function acceptanceOrigin(baseURL: string | undefined): string {
+  if (!baseURL) throw new Error('Configure the browser acceptance base URL.');
+  const url = new URL(baseURL);
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/')
+    throw new Error('Use an origin without credentials, a path or query parameters.');
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (loopback && ['http:', 'https:'].includes(url.protocol)) return url.origin;
+  if (
+    process.env['AGI_E10_DESKTOP_LOGIN'] === '1' &&
+    process.env['AGI_E10_OWNED_ORIGIN'] === url.origin &&
+    url.protocol === 'https:' &&
+    url.hostname.endsWith('-siddharthanagula4.vercel.app')
+  )
+    return url.origin;
+  throw new Error('Use loopback, or explicitly opt into the owned protected Preview.');
+}
 
-async function protect(context: BrowserContext) {
+async function protect(context: BrowserContext, origin: string) {
   const token = process.env['VERCEL_OIDC_TOKEN'];
   if (!token) return;
   await context.route(`${origin}/**`, async (route) =>
@@ -22,19 +33,24 @@ async function protect(context: BrowserContext) {
   );
 }
 
+// Exercise the shipped UI without an account. Protected Preview runs keep their
+// real signed-out provider; local CI uses the existing browser-only provider fixture.
+test.beforeEach(async ({ page, context, baseURL }) => {
+  const origin = acceptanceOrigin(baseURL);
+  if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname)) {
+    await holdMockDevBrowser(page, origin);
+    await mockAuthProvider(page);
+  } else {
+    await protect(context, origin);
+  }
+});
+
 test('shared Web login stays usable through Desktop handoff, reload, cancellation and expiry', async ({
   page,
   context,
   baseURL,
-}) => {
-  if (
-    !origin ||
-    baseURL !== origin ||
-    !new URL(origin).hostname.endsWith('.vercel.app') ||
-    !new URL(origin).hostname.endsWith('-siddharthanagula4.vercel.app')
-  )
-    throw new Error('Use the explicitly owned non-production Desktop acceptance alias.');
-  await protect(context);
+}, testInfo) => {
+  const origin = acceptanceOrigin(baseURL);
   await page.setViewportSize({ width: 1280, height: 800 });
   let pending: { kind: 'idle' } | { kind: 'waiting'; expiresAtMs: number } = { kind: 'idle' };
   let starts = 0;
@@ -113,7 +129,7 @@ test('shared Web login stays usable through Desktop handoff, reload, cancellatio
   await expect(page.locator('form button[type="submit"]')).not.toHaveAttribute('aria-busy', 'true');
   expect(new URL(page.url()).origin).toBe(origin);
   expect(starts).toBe(1);
-  await page.screenshot({ path: '/tmp/agi-implementation-checks/e10-desktop-sign-in-waiting.png' });
+  await page.screenshot({ path: testInfo.outputPath('desktop-sign-in-waiting.png') });
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Cancel sign-in', exact: true })).toBeInViewport();
@@ -129,7 +145,7 @@ test('shared Web login stays usable through Desktop handoff, reload, cancellatio
   expect(cancellations).toBe(1);
   await expect(page.getByTestId('auth-phase')).toBeEmpty();
   await page.screenshot({
-    path: '/tmp/agi-implementation-checks/e10-desktop-sign-in-cancelled.png',
+    path: testInfo.outputPath('desktop-sign-in-cancelled.png'),
   });
 
   await page.getByRole('button', { name: /Continue with Google/ }).click();
@@ -151,14 +167,8 @@ test('shared Web login stays usable through Desktop handoff, reload, cancellatio
   expect(consoleErrors).toEqual([]);
 });
 
-test('the ordinary website still offers cookie preferences', async ({ page, context, baseURL }) => {
-  if (
-    !origin ||
-    baseURL !== origin ||
-    !new URL(origin).hostname.endsWith('-siddharthanagula4.vercel.app')
-  )
-    throw new Error('Owned Preview required.');
-  await protect(context);
+test('the ordinary website still offers cookie preferences', async ({ page, baseURL }) => {
+  const origin = acceptanceOrigin(baseURL);
   await page.goto(`${origin}/login?redirectTo=%2Fchat`);
   await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
   await expect(page.getByLabel('Cookie consent', { exact: true })).toBeVisible();
@@ -169,13 +179,7 @@ test('an older Desktop gets a clear update message and usable local sign-in', as
   context,
   baseURL,
 }) => {
-  if (
-    !origin ||
-    baseURL !== origin ||
-    !new URL(origin).hostname.endsWith('-siddharthanagula4.vercel.app')
-  )
-    throw new Error('Owned Preview required.');
-  await protect(context);
+  const origin = acceptanceOrigin(baseURL);
   let commands = 0;
   await context.exposeBinding('__e10UnsupportedNative', () => {
     commands += 1;

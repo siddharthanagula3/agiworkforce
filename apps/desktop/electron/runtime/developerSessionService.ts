@@ -213,6 +213,7 @@ export interface DeveloperSessionConfiguration {
    * starts, so it is never started where they have not.
    */
   mayRunIn: (root: WorkspaceRoot) => boolean;
+  workspaceConsentAtMs?: (root: WorkspaceRoot) => number | null;
   accountBridge?: DeveloperAccountBridge;
   spawn?: SpawnDeveloperRuntime;
   /** Whether a page is there to answer the agent's questions. */
@@ -223,6 +224,7 @@ let emit: DeveloperSessionEmitter = () => undefined;
 let resolveBinary: () => string = () => DEFAULT_BINARY;
 let mayRunIn: (root: WorkspaceRoot) => boolean = () => false;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
+let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
 let answersUserInput: () => boolean = () => true;
 let accountSyncError: string | null = null;
@@ -253,6 +255,7 @@ export function configureDeveloperSessions(configuration: DeveloperSessionConfig
   emit = configuration.emit;
   resolveBinary = configuration.resolveBinary;
   mayRunIn = configuration.mayRunIn;
+  workspaceConsentAtMs = configuration.workspaceConsentAtMs ?? (() => null);
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
   accountBridge = configuration.accountBridge ?? null;
   answersUserInput = configuration.answersUserInput ?? (() => true);
@@ -1201,14 +1204,35 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     );
   }
 
-  const { binary } = selectRuntimeBinary();
+  const { binary, source } = selectRuntimeBinary();
   const remote = hasSshEnvironment(root.id) ? await sshLaunch(root.id) : null;
   if (!allowed() || (remote && !hasSshEnvironment(root.id)))
     throw new Error('The runtime launch was cancelled.');
   const program = remote?.program ?? runtimeBinary();
+  // The signed bundle pairs this host with a CLI that accepts process-scoped
+  // consent. External CLIs retain their existing trust setup and argument ABI.
+  const consentAt = !remote && source === 'bundled' ? workspaceConsentAtMs(root) : null;
+  if (
+    !remote &&
+    source === 'bundled' &&
+    (consentAt === null || !Number.isSafeInteger(consentAt) || consentAt < 0)
+  )
+    throw new DeveloperAgentNotAllowedError(
+      'Allow commands in this folder again to provide its current consent.',
+    );
+  const localArgs =
+    source === 'bundled'
+      ? [
+          'app-server',
+          '--workspace-consent',
+          root.path,
+          '--workspace-consent-at-ms',
+          String(consentAt),
+        ]
+      : ['app-server'];
   let child: ChildProcessWithoutNullStreams;
   try {
-    child = spawnRuntime(program, remote?.args ?? ['app-server'], {
+    child = spawnRuntime(program, remote?.args ?? localArgs, {
       cwd: remote ? os.homedir() : root.path,
       env: remote?.env ?? runtimeEnvironment(),
       stdio: ['pipe', 'pipe', 'pipe'],

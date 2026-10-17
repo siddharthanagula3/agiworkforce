@@ -103,6 +103,18 @@ export function getPermissionState(
   return evaluatePermission({ persisted, session }, capability, scope);
 }
 
+/** A snapshot of the direct decision, including a still-unconsumed one-use grant. */
+export function getPermissionDecision(
+  capability: DesktopCapability,
+  scope: PermissionScope,
+): PermissionDecision | null {
+  load();
+  const key = permissionKey(capability, scope);
+  const decision = session.get(key) ?? persisted.get(key);
+  if (!decision) return null;
+  return { ...decision, scope: { ...decision.scope } };
+}
+
 export function recordDecision(
   capability: DesktopCapability,
   scope: PermissionScope,

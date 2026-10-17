@@ -143,6 +143,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `browser_console`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_network`              | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_navigate`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_open_tab`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_click`                | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_type`                 | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_download`             | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
@@ -961,6 +962,8 @@ document describes the procedure but the key is not escrowed.
 ### Current quarantine, 2026-10-17
 
 The working updater credential was exposed during an unpublished package build/log incident. Treat it as compromised. The idle `release-desktop.yml` and `build-windows-release.yml` workflows were disabled through GitHub to prevent further CI signing with it. Their secret entries remain in the custody inventory pending replacement; disabling a workflow is not key rotation. Electron release and candidate verification remain enabled because they use a separate signing domain.
+
+The owner deferred replacement and offline escrow on 2026-10-17; Tauri signing is not cleared to resume.
 
 Do not re-enable these Tauri release paths until a replacement is escrowed, the public pin is updated and the migration/reinstall disposition is recorded. The offline holder and separate passphrase storage still require the founder's input. No replacement or transition release has been signed by this task.
 

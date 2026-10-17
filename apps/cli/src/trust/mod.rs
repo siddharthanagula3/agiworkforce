@@ -100,11 +100,18 @@ impl TrustRestrictions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrustGrantSource {
+    Registry,
+    NativeHostProcess,
+}
+
 #[derive(Debug, Clone)]
 pub struct TrustStatus {
     pub root: PathBuf,
     pub identity: WorkspaceIdentity,
     pub state: TrustState,
+    pub grant_source: Option<TrustGrantSource>,
     pub granted_by: Option<String>,
     pub granted_on: Option<String>,
     pub granted_at: Option<String>,
@@ -123,6 +130,9 @@ impl TrustStatus {
     pub fn restrictions(&self) -> TrustRestrictions {
         let mut restrictions = TrustRestrictions::for_state(self.state);
         restrictions.repository_config &= self.grant_covers_checkout;
+        if self.grant_source == Some(TrustGrantSource::NativeHostProcess) {
+            restrictions.mcp_autostart &= self.grant_covers_checkout;
+        }
         restrictions
     }
 
@@ -140,6 +150,9 @@ impl TrustStatus {
         }
         if let Some(at) = &self.revoked_at {
             lines.push(format!("Revoked at: {at}"));
+        }
+        if self.grant_source == Some(TrustGrantSource::NativeHostProcess) {
+            lines.push("Consent: native host, for this app-server process only".to_string());
         }
         if let Some(reason) = &self.reason {
             lines.push(format!("Reason:    {reason}"));
@@ -160,6 +173,7 @@ fn restricted(root: PathBuf, identity: WorkspaceIdentity, reason: &str) -> Trust
         root,
         identity,
         state: TrustState::Ask,
+        grant_source: None,
         granted_by: None,
         granted_on: None,
         granted_at: None,
@@ -222,6 +236,7 @@ pub fn status_from_registry(
         root: scope,
         identity,
         state,
+        grant_source: Some(TrustGrantSource::Registry),
         granted_by: entry.trusted_by.clone(),
         granted_on: entry.trusted_on.clone(),
         granted_at: entry.trusted_at.clone(),
@@ -286,6 +301,191 @@ fn registry_stamp(config_dir: &Path) -> Option<SystemTime> {
         .ok()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrustDecision {
+    level: String,
+    actor: Option<String>,
+    machine: Option<String>,
+    granted_at: Option<String>,
+    revoked_at: Option<String>,
+}
+
+fn registry_decision(
+    registry: &ProjectRegistry,
+    scope: &Path,
+    identity: &WorkspaceIdentity,
+) -> Option<TrustDecision> {
+    registry
+        .entry_for(scope, &identity.key)
+        .map(|entry| TrustDecision {
+            level: entry.trust_level.clone(),
+            actor: entry.trusted_by.clone(),
+            machine: entry.trusted_on.clone(),
+            granted_at: entry.trusted_at.clone(),
+            revoked_at: entry.revoked_at.clone(),
+        })
+}
+
+#[derive(Debug, Clone)]
+struct ProcessTrustGrant {
+    root: PathBuf,
+    identity: WorkspaceIdentity,
+    actor: String,
+    machine: String,
+    granted_at: String,
+    registry_stamp: Option<SystemTime>,
+    decision: Option<TrustDecision>,
+}
+
+impl ProcessTrustGrant {
+    fn new(root: PathBuf, registry: &ProjectRegistry, stamp: Option<SystemTime>) -> Self {
+        let scope = crate::project_scope::resolve_project_scope(&root);
+        let identity = identity::workspace_identity(&scope);
+        Self {
+            decision: registry_decision(registry, &scope, &identity),
+            root,
+            identity,
+            actor: identity::current_actor(),
+            machine: identity::current_machine(),
+            granted_at: chrono::Utc::now().to_rfc3339(),
+            registry_stamp: stamp,
+        }
+    }
+
+    fn status(
+        &self,
+        root: &Path,
+        actor: &str,
+        machine: &str,
+        grants_allowed: bool,
+        changed_decision: Option<Option<TrustDecision>>,
+    ) -> Option<TrustStatus> {
+        let root = root.canonicalize().ok()?;
+        if !root.starts_with(&self.root) {
+            return None;
+        }
+        let scope = crate::project_scope::resolve_project_scope(&root);
+        let current_identity =
+            identity::workspace_identity(&crate::project_scope::resolve_project_scope(&self.root));
+        let reason = if !grants_allowed {
+            Some("managed policy no longer allows workspace consent")
+        } else if actor != self.actor || machine != self.machine {
+            Some("native workspace consent belongs to another account or machine")
+        } else if current_identity != self.identity {
+            Some("the workspace identity changed after native consent")
+        } else if changed_decision.is_some_and(|decision| {
+            decision != self.decision
+                && decision.as_ref().is_none_or(|decision| {
+                    decision.level == "untrusted" && decision.revoked_at.is_some()
+                })
+        }) {
+            Some("workspace trust was withdrawn after native consent")
+        } else {
+            None
+        };
+        Some(TrustStatus {
+            root: self.root.clone(),
+            identity: current_identity,
+            state: if reason.is_none() {
+                TrustState::Trusted
+            } else {
+                TrustState::Ask
+            },
+            grant_source: Some(TrustGrantSource::NativeHostProcess),
+            granted_by: Some(self.actor.clone()),
+            granted_on: Some(self.machine.clone()),
+            granted_at: Some(self.granted_at.clone()),
+            revoked_at: None,
+            reason: reason.map(str::to_string),
+            // A selected subfolder does not authorize a repository's config above it.
+            grant_covers_checkout: scope.starts_with(&self.root),
+        })
+    }
+}
+
+fn process_grant() -> &'static RwLock<Option<ProcessTrustGrant>> {
+    static GRANT: OnceLock<RwLock<Option<ProcessTrustGrant>>> = OnceLock::new();
+    GRANT.get_or_init(|| RwLock::new(None))
+}
+
+/// Borrow the native host's explicit folder consent for this stdio server only.
+/// The caller checks the transport before loading any project configuration.
+/// No registry decision is saved, and a native revocation stops the owning server.
+pub fn grant_for_process(root: &Path, consent_at_ms: i64) -> Result<()> {
+    if !grants_allowed() {
+        bail!(
+            "Your organization's managed policy does not allow trusting workspaces on this device"
+        );
+    }
+    let cwd = std::env::current_dir()?.canonicalize()?;
+    if !root.is_absolute() || !root.is_dir() || std::fs::symlink_metadata(root)?.is_symlink() {
+        bail!("Native workspace consent requires an absolute directory, not a symlink");
+    }
+    let canonical = root.canonicalize()?;
+    if canonical != cwd {
+        bail!("Native workspace consent must name exactly this app-server's working directory");
+    }
+    let config_dir = CliConfig::config_dir()?;
+    let registry = ProjectRegistry::load(&config_dir)?;
+    let decided_at = chrono::DateTime::from_timestamp_millis(consent_at_ms)
+        .context("Native workspace consent has an invalid decision time")?;
+    if consent_at_ms < 0 || decided_at > chrono::Utc::now() {
+        bail!("Native workspace consent cannot have a future decision time");
+    }
+    let mut grant = ProcessTrustGrant::new(canonical, &registry, registry_stamp(&config_dir));
+    if let Some(revoked_at) = grant
+        .decision
+        .as_ref()
+        .and_then(|decision| decision.revoked_at.as_deref())
+    {
+        let revoked_at = chrono::DateTime::parse_from_rfc3339(revoked_at)
+            .context("The workspace revocation marker could not be read")?;
+        if revoked_at.timestamp_millis() >= consent_at_ms {
+            bail!("Workspace trust was revoked after this Desktop consent. Revoke the folder's command permission in Desktop and allow it again.");
+        }
+    }
+    grant.granted_at = decided_at.to_rfc3339();
+    crate::platform::runtime::git::use_git_state_dir();
+    agiworkforce_worktree::config_guard::record_baseline_blocking(&grant.root)?;
+    *process_grant()
+        .write()
+        .map_err(|_| anyhow::anyhow!("Workspace consent is unavailable"))? = Some(grant);
+    invalidate();
+    Ok(())
+}
+
+fn process_status(root: &Path, config_dir: &Path) -> Option<TrustStatus> {
+    let grant = process_grant().read().ok()?.clone()?;
+    if !root.canonicalize().ok()?.starts_with(&grant.root) {
+        return None;
+    }
+    let changed = if registry_stamp(config_dir) != grant.registry_stamp {
+        match ProjectRegistry::load(config_dir) {
+            Ok(registry) => Some(registry_decision(
+                &registry,
+                &grant.identity.root,
+                &grant.identity,
+            )),
+            Err(_) => {
+                return Some(restricted(
+                    grant.root,
+                    grant.identity,
+                    "the project registry could not be read",
+                ))
+            }
+        }
+    } else {
+        None
+    };
+    grant.status(
+        root,
+        &identity::current_actor(),
+        &identity::current_machine(),
+        grants_allowed(),
+        changed,
+    )
+}
+
 /// The trust status for a workspace root.
 ///
 /// The result is cached against the registry file's timestamp, so a revoke from
@@ -301,6 +501,9 @@ pub fn status_for(root: &Path) -> TrustStatus {
             "the configuration directory is unavailable",
         );
     };
+    if let Some(status) = process_status(root, &config_dir) {
+        return status;
+    }
     let stamp = registry_stamp(&config_dir);
     if let Ok(cached) = cache().read() {
         if let Some(entry) = cached.get(root) {
@@ -419,17 +622,170 @@ pub fn revoke(root: &Path) -> Result<usize> {
     let scope = crate::project_scope::resolve_project_scope(root);
     let identity = identity::workspace_identity(&scope);
     let mut registry = ProjectRegistry::load(&config_dir)?;
-    let revoked = registry.revoke(&scope, &identity.key);
-    if revoked > 0 {
-        registry.save(&config_dir)?;
+    if registry.entry_for(&scope, &identity.key).is_none() {
+        registry.register_project(&scope, "untrusted")?;
     }
+    let process_revoked = if let Ok(mut active) = process_grant().write() {
+        if active
+            .as_ref()
+            .is_some_and(|grant| grant.identity == identity)
+        {
+            active.take();
+            1
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+    let revoked = registry.revoke(&scope, &identity.key);
+    registry.save(&config_dir)?;
     invalidate();
-    Ok(revoked)
+    Ok(revoked.max(process_revoked))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_consent_stays_in_its_folder_and_out_of_the_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("approved");
+        let sibling = temp.path().join("sibling");
+        std::fs::create_dir_all(root.join("child")).unwrap();
+        std::fs::create_dir(&sibling).unwrap();
+        let root = root.canonicalize().unwrap();
+        let registry = ProjectRegistry::default();
+        let grant = ProcessTrustGrant::new(root.clone(), &registry, None);
+        let status = grant
+            .status(&root, &grant.actor, &grant.machine, true, None)
+            .unwrap();
+        assert!(status.state.is_trusted());
+        assert_eq!(
+            status.grant_source,
+            Some(TrustGrantSource::NativeHostProcess)
+        );
+        assert!(status.render().contains("for this app-server process only"));
+        assert!(grant
+            .status(
+                &root.join("child"),
+                &grant.actor,
+                &grant.machine,
+                true,
+                None
+            )
+            .unwrap()
+            .state
+            .is_trusted());
+        assert!(grant
+            .status(&sibling, &grant.actor, &grant.machine, true, None)
+            .is_none());
+        assert!(grant
+            .status(temp.path(), &grant.actor, &grant.machine, true, None)
+            .is_none());
+        assert!(registry
+            .entry_for(&grant.identity.root, &grant.identity.key)
+            .is_none());
+        assert!(!root.join("projects.json").exists());
+    }
+
+    #[test]
+    fn native_consent_obeys_policy_identity_and_later_withdrawal() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let grant = ProcessTrustGrant::new(root.clone(), &ProjectRegistry::default(), None);
+        for (actor, machine, allowed) in [
+            ("another-actor", grant.machine.as_str(), true),
+            (grant.actor.as_str(), "another-machine", true),
+            (grant.actor.as_str(), grant.machine.as_str(), false),
+        ] {
+            assert!(!grant
+                .status(&root, actor, machine, allowed, None)
+                .unwrap()
+                .state
+                .is_trusted());
+        }
+        let discovery = TrustDecision {
+            level: "ask".into(),
+            actor: None,
+            machine: None,
+            granted_at: None,
+            revoked_at: None,
+        };
+        assert!(grant
+            .status(
+                &root,
+                &grant.actor,
+                &grant.machine,
+                true,
+                Some(Some(discovery))
+            )
+            .unwrap()
+            .state
+            .is_trusted());
+        let withdrawal = TrustDecision {
+            level: "untrusted".into(),
+            actor: Some(grant.actor.clone()),
+            machine: Some(grant.machine.clone()),
+            granted_at: None,
+            revoked_at: Some("later".into()),
+        };
+        assert!(!grant
+            .status(
+                &root,
+                &grant.actor,
+                &grant.machine,
+                true,
+                Some(Some(withdrawal))
+            )
+            .unwrap()
+            .state
+            .is_trusted());
+        assert!(std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://example.invalid/changed/project.git"
+            ])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        let status = grant
+            .status(&root, &grant.actor, &grant.machine, true, None)
+            .unwrap();
+        assert!(!status.state.is_trusted());
+        assert!(status.reason.unwrap().contains("identity changed"));
+    }
+
+    #[test]
+    fn native_subfolder_consent_does_not_load_parent_repository_configuration() {
+        let temp = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(temp.path())
+            .status()
+            .unwrap()
+            .success());
+        let root = temp.path().join("selected");
+        std::fs::create_dir(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let grant = ProcessTrustGrant::new(root.clone(), &ProjectRegistry::default(), None);
+        let status = grant
+            .status(&root, &grant.actor, &grant.machine, true, None)
+            .unwrap();
+        assert!(status.state.is_trusted());
+        assert!(!status.restrictions().repository_config);
+        assert!(!status.restrictions().mcp_autostart);
+    }
 
     fn registry_with(path: &Path, actor: &str, machine: &str) -> ProjectRegistry {
         let mut registry = ProjectRegistry::default();

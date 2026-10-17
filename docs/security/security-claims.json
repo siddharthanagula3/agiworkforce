@@ -489,7 +489,7 @@
       "id": "oauth-registry-ships-no-providers",
       "section": "1.8 Known gaps this file deliberately records rather than papers over",
       "kind": "prose",
-      "sentence": "**A connector that needs an operator OAuth client can only be connected where the operator configured it.** The hosted broker exists end to end (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in `apps/web/lib/connectors/oauth-store.ts`), and `apps/web/lib/connectors/oauth-registry.ts` ships **zero** descriptor providers on purpose, so such a provider becomes connectable only when an operator supplies its endpoints and client credentials, while a self-registered MCP endpoint or a directory-discovered server needs no operator client.",
+      "sentence": "**A connector that needs an operator OAuth client can only be connected where the operator configured it.** The hosted broker exists end to end (`/api/connectors/oauth/start` \u2192 `/api/connectors/oauth/callback`, grants in `apps/web/lib/connectors/oauth-store.ts`), and `apps/web/lib/connectors/oauth-registry.ts` ships **zero** descriptor providers on purpose, so such a provider becomes connectable only when an operator supplies its endpoints and client credentials, while a self-registered MCP endpoint or a directory-discovered server needs no operator client.",
       "implementation": [
         "apps/web/lib/connectors/oauth-registry.ts",
         "apps/web/lib/connectors/mcp-endpoints.ts#isSelfServiceConnector"
@@ -988,7 +988,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.properties.test.ts",
-          "name": "envelope · a ciphertext belongs to one tenant and one key version"
+          "name": "envelope \u00b7 a ciphertext belongs to one tenant and one key version"
         },
         {
           "kind": "test",
@@ -1007,7 +1007,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.properties.test.ts",
-          "name": "envelope · every corruption fails closed"
+          "name": "envelope \u00b7 every corruption fails closed"
         },
         {
           "kind": "guard",
@@ -1025,7 +1025,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.properties.test.ts",
-          "name": "envelope · a ciphertext with no associated data"
+          "name": "envelope \u00b7 a ciphertext with no associated data"
         }
       ]
     },
@@ -1043,7 +1043,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.properties.test.ts",
-          "name": "envelope · a ciphertext with no associated data"
+          "name": "envelope \u00b7 a ciphertext with no associated data"
         }
       ]
     },
@@ -1374,7 +1374,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 80,
+      "rows": 81,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
@@ -2107,6 +2107,14 @@
         "docs/security/security.md",
         "audit/ledger/claude-desktop-implementation.json"
       ],
+      "why": "historical-record"
+    },
+    {
+      "id": "updater-replacement-deferred-by-owner",
+      "section": "Current quarantine, 2026-10-17",
+      "kind": "prose",
+      "sentence": "The owner deferred replacement and offline escrow on 2026-10-17; Tauri signing is not cleared to resume.",
+      "implementation": ["docs/security/security.md"],
       "why": "historical-record"
     }
   ]

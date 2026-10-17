@@ -1900,11 +1900,11 @@ mod environment_and_policy_tests {
         let root = root.path().canonicalize().unwrap();
         assert!(writable_from_inside(
             &root.join("not-yet").join("made"),
-            &[root.clone()]
+            std::slice::from_ref(&root)
         ));
         assert!(!writable_from_inside(
             Path::new("relative/cache"),
-            &[root.clone()]
+            std::slice::from_ref(&root)
         ));
         assert!(!writable_from_inside(Path::new("/"), &[root]));
     }

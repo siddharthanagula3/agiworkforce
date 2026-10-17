@@ -27,7 +27,15 @@ const statSync = vi.fn(() => ({ isDirectory: () => true }));
 const accessSync = vi.fn();
 const constants = { X_OK: 1 };
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }));
+let packagedHost = false;
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => '/tmp',
+    get isPackaged() {
+      return packagedHost;
+    },
+  },
+}));
 vi.mock('node:fs', () => ({
   statSync,
   accessSync,
@@ -218,6 +226,8 @@ async function loadService(
     approveDeviceCode: (userCode: string) => Promise<void>;
   },
   answersUserInput?: () => boolean,
+  preferredBinary = 'agi',
+  consentAtMs?: number,
 ) {
   vi.resetModules();
   const children: FakeChild[] = [];
@@ -238,8 +248,9 @@ async function loadService(
   loadedServices.push(service);
   service.configureDeveloperSessions({
     emit: (rootId, event) => events.push({ rootId, event }),
-    resolveBinary: () => 'agi',
+    resolveBinary: () => preferredBinary,
     mayRunIn: (candidate) => agentAllowed(candidate),
+    workspaceConsentAtMs: () => consentAtMs ?? null,
     spawn: spawn as never,
     ...(accountBridge ? { accountBridge } : {}),
     ...(answersUserInput ? { answersUserInput } : {}),
@@ -249,6 +260,7 @@ async function loadService(
 }
 
 beforeEach(() => {
+  packagedHost = false;
   vi.clearAllMocks();
   ssh.active = false;
   ssh.launch.mockReset().mockResolvedValue({
@@ -300,6 +312,41 @@ describe('developer session runtime', () => {
       ['app-server'],
       expect.objectContaining({ cwd: root.path }),
     );
+  });
+
+  it('carries an approved folder into the paired CLI as process consent', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: '/owned/e10/resources',
+    });
+    packagedHost = true;
+    statSync.mockImplementation(() => ({ isDirectory: () => true, isFile: () => true }));
+    try {
+      const { service, spawn } = await loadService(
+        defaultResponder,
+        undefined,
+        undefined,
+        '',
+        1_700_000_000_123,
+      );
+      await service.listDeveloperSessions();
+      expect(spawn).toHaveBeenCalledWith(
+        '/owned/e10/resources/agi-cli/agi',
+        [
+          'app-server',
+          '--workspace-consent',
+          root.path,
+          '--workspace-consent-at-ms',
+          '1700000000123',
+        ],
+        expect.objectContaining({ cwd: root.path }),
+      );
+    } finally {
+      packagedHost = false;
+      if (descriptor) Object.defineProperty(process, 'resourcesPath', descriptor);
+      else Reflect.deleteProperty(process, 'resourcesPath');
+    }
   });
 
   it('points the app-server at the origin the shell itself is signed in to', async () => {

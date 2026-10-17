@@ -91,7 +91,7 @@ import {
   stopRemoteControl,
 } from './remote/remoteControlService';
 import { getRoot } from './runtime/workspaceStore';
-import { agentAllowedIn } from './runtime/agentAccess';
+import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
@@ -2029,6 +2029,7 @@ if (!hasSingleInstanceLock) {
       },
       resolveBinary: () => getPreferences().cliPath,
       mayRunIn: (root) => agentAllowedIn(root.id),
+      workspaceConsentAtMs: (root) => agentConsentAt(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,

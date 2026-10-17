@@ -76,6 +76,22 @@ describe('a command that arrived from another device', () => {
 });
 
 describe('listing and withdrawing decisions', () => {
+  it('keeps the original time of a one-use decision and removes it when consumed', async () => {
+    const runtime = await freshRuntime();
+    const original = runtime.recordDecision('shell.execute', LEDGER, 'granted', 'once');
+    expect(runtime.listPermissions()).toEqual([]);
+    const snapshot = runtime.getPermissionDecision('shell.execute', LEDGER);
+    expect(snapshot).toEqual(original);
+    Object.assign(snapshot!.scope, { target: '/somewhere-else' });
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)?.scope).toEqual(LEDGER);
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)?.decidedAtMs).toBe(
+      original.decidedAtMs,
+    );
+    runtime.consumeSingleUse('shell.execute', LEDGER);
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)).toBeNull();
+    expect(runtime.getPermissionState('shell.execute', LEDGER)).toBe('prompt');
+  });
+
   it('lists what is in force, a session decision standing in front of a stored one', async () => {
     const runtime = await freshRuntime();
     runtime.recordDecision('filesystem.write', LEDGER, 'granted', 'always');
