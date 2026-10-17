@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T19:45:13.416806+00:00",
+  "capturedAt": "2026-10-17T20:17:06.773943+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -589,10 +589,22 @@
         "status": "VERIFIED_EXACT_PUBLIC_COMMIT_ONLY"
       },
       "authentication": {
-        "status": "BLOCKED_EXPLICIT_AUTHORIZATION_PENDING",
-        "reason": "Automatic approval review rejected starting a remote account sign-in because persistent VM account access was not specifically authorized. No workaround or remote sign-in was attempted. The Desktop account changed; the pending question now names the current admin account."
+        "status": "AUTHORIZED_DEVICE_SIGN_IN_AWAITING_OWNER_CREDENTIALS",
+        "reason": "The owner explicitly authorized a temporary admin account session on the named task-owned VM, followed by revocation. The normal device flow is waiting at the admin browser sign-in; no Desktop credential was copied or forwarded.",
+        "priorAuthorizationRefusal": {
+          "reason": "Automatic approval review rejected starting a remote account sign-in because persistent VM account access was not specifically authorized. No workaround or remote sign-in was attempted. The Desktop account changed; the pending question now names the current admin account.",
+          "status": "BLOCKED_EXPLICIT_AUTHORIZATION_PENDING"
+        }
       },
-      "boundary": "External transport, trust refusal, protocol 8, reconnect, configuration change, directory replacement and disconnect passed. Same-account model/session admission remains NOT_RUN. The temporary local SSH configuration was removed."
+      "boundary": "External transport, trust refusal, protocol 8, reconnect, configuration change, directory replacement and disconnect passed. Same-account model/session admission remains NOT_RUN pending the authorized device sign-in. The temporary local SSH configuration was removed.",
+      "lifecycleExtension": {
+        "at": "2026-10-17T20:10:31.485Z",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "purpose": "e10-external-ssh-01a142a4",
+        "previousEndAt": "2026-10-17T20:20:15.546Z",
+        "endAt": "2026-10-17T21:10:31.395Z",
+        "reason": "Active authorized admin sign-in and external SSH acceptance pending"
+      }
     }
   },
   "officeAcceptance": {
@@ -685,7 +697,7 @@
     {
       "status": "NOT_RUN",
       "gate": "same-account admission on external SSH host",
-      "reason": "Owned external host transport and public adapter verified; explicit authorization for its account session is pending after automatic approval rejection."
+      "reason": "Temporary admin test-host sign-in is explicitly authorized. The normal device flow awaits owner credentials in the opened browser tab."
     },
     {
       "status": "NOT_RUN",
@@ -701,7 +713,7 @@
     {
       "status": "BLOCKED",
       "gate": "public release readiness",
-      "reason": "Enterprise access is now owner-authorized and verified. The duplicate tool handoff is repaired and a signed CLI completed a real provider read once; v8 native folder consent, current CI/Intel, production Web rollout/provider return and remaining selected live gates remain open. Owner-deferred Tauri signing remains quarantined separately."
+      "reason": "Enterprise access and real v8 native file-read exactly once are verified. Current CI/Intel, native visual capture/reopen, production Web rollout/provider return, external same-account device sign-in, notification delivery and physical sleep remain open. Owner-deferred Tauri signing remains quarantined separately."
     }
   ],
   "unsupportedFirstScope": [
@@ -1023,11 +1035,11 @@
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.client-tools.test.ts",
-      "sha256": "8c68eaae482457fa9aaca886e8ad2bafeea0404c9cff02c0d6f4f9968378d1a1"
+      "sha256": "4d3d24e2334a8d15f03182aa39c83f090e903408a0b839524646f178df6c869e"
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
-      "sha256": "2faf86a1b3717bac0ca6d8aadb254d61bb17a92cecce8ea7efb19660c3b19cb0"
+      "sha256": "5900c3da39540415b7da8b730e0add20dabf2247ea7426219a5ef9b28fe95ae3"
     },
     {
       "path": "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
@@ -1502,17 +1514,17 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "86496103a2da9a1b8cf66c169a43e2aaee6a94c29557fb86037a78f060df2ccd",
+  "sourceFilesDigest": "cbaad43318153cb9ad020e5209c887884fe7e493a5fc25c2a549416610bcbdee",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
     "Source/mocked checks do not establish production acceptance.",
     "Exact signed ASAR, bundled CLI, DMG and hosted snapshot hashes identify exercised bytes; no claim that later documentation/formatting commits were rebuilt into the candidates.",
-    "V7 Intel passed. V8 signed CLI completed a real production-provider file-read exactly once, but installed native completion/reopen awaits renewed operator consent. V8 CI/Intel, external same-account authentication, provider email, physical sleep and production Web rollout remain open."
+    "V7 Intel passed. V8 signed CLI completed a real production-provider file-read exactly once, but actual installed native read-once and renderer accessibility also passed; native image capture/reopen remain unresolved. V8 CI/Intel, external same-account owner device sign-in, provider email, physical sleep and production Web rollout remain open."
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T19:45:13.416806+00:00",
+    "updatedAt": "2026-10-17T20:17:06.773943+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1658,9 +1670,9 @@
     },
     "outstanding": [
       "actual notification provider delivery and owned recipient setup",
-      "explicitly authorized external SSH same-account journey, followed by teardown and credential revocation",
+      "external SSH same-account journey after owner device sign-in, followed by teardown and credential revocation",
       "physical sleep/offline host acceptance",
-      "current installed v8 native file-read/reopen acceptance awaiting renewed operator folder consent",
+      "current installed v8 visual rendering/capture and reopen verification; actual native read-once already passed",
       "production Web rollout and real provider return-to-app",
       "v8 current-source combined CI and native Intel execution"
     ],
@@ -2128,7 +2140,17 @@
       "logSha256": "8bfd9731bf1ac7c79f8358fd6f5e20b9e7b21ed8b0f2d0b14b14656f8d6c409b",
       "boundary": "All 226 declared guards, nested checks and diff checks passed through the actual normal-hook v7 push. The later handoff repair requires its own normal-hook push.",
       "latestAttempt": {
-        "status": "PENDING_HANDOFF_REPAIR_NORMAL_PUSH"
+        "status": "CORRECTED_SOURCE_NORMAL_PUSH_PENDING",
+        "superseded": {
+          "at": "2026-10-17T19:52:23.326334+00:00",
+          "source": "80cc8d6c6d6af3eeb20f4dc4c0386759712a0b49",
+          "status": "INTERRUPTED_SUPERSEDED_SOURCE",
+          "reason": "Self-review regression demonstrated a new opaque-frame compatibility failure; full checks will restart on corrected code",
+          "rootPid": 66290,
+          "signaledPids": [41182, 41197, 41211, 66290, 66311, 66312, 66313, 66321, 66322, 66334],
+          "scope": "Exact owned pre-push tree only; no user app, another task, or product test host stopped"
+        },
+        "boundary": "The exact owned earlier push process tree was stopped before publication when final review exposed the opaque-frame regression. It is an interrupted superseded attempt, not a passing check."
       },
       "previousVerified": {
         "commit": "d91a738003201a5c1064760166bddb1c35b7479c",
@@ -2197,7 +2219,7 @@
     },
     "desktopLoginRecovery": {
       "status": "SOURCE_AND_FOCUSED_TESTS_PASSED",
-      "updatedAt": "2026-10-17T19:45:13.416806+00:00",
+      "updatedAt": "2026-10-17T20:17:06.773943+00:00",
       "nativeOwner": "apps/desktop/electron/browserSignIn.ts",
       "sharedOwner": "packages/contracts/local-runtime/src/desktop-sign-in.ts",
       "webOwner": "apps/web/features/desktop-host/lib/browser-sign-in.ts",
@@ -2344,11 +2366,11 @@
             "sha256": "13c26d627e7a8e041bebab9ddcd85a5630574a33f09d565ccb1a740e8e463065"
           }
         ],
-        "sourceVerification": "Native source hashes and signed CLI hash bind the tested working-tree repair; exact arm64 signed CLI completed a real production-provider read once. Native window completion awaits renewed folder consent."
+        "sourceVerification": "Native source and signed CLI hashes bind the v8 repair. Its signed CLI and actual installed native runtime each completed a real production-provider file-read exactly once. Visual capture/reopen remain pending; the later opaque-frame compatibility change affects hosted source only."
       },
       "productionRollout": "NOT_PERFORMED",
       "nativeUi": {
-        "status": "INSTALLED_ENTERPRISE_SIGN_IN_PRESERVED_AWAITING_FOLDER_CONSENT",
+        "status": "REAL_NATIVE_READ_ONCE_AND_RENDERER_AX_PASSED_VISUAL_REOPEN_PENDING",
         "installation": {
           "at": "2026-10-17T19:38:09.283648+00:00",
           "installedApp": "/Users/siddhartha/Applications/AGI Cloud.app",
@@ -2363,10 +2385,11 @@
         },
         "signedInProfilePreserved": true,
         "installedVersion": "0.0.8-e10.20261017",
-        "permissionDecision": "PENDING_FRESH_OPERATOR_DECISION_AFTER_UPDATE",
+        "permissionDecision": "OPERATOR_GRANTED_CURRENT_PROCESS_SESSION",
         "syntheticFolder": "/private/tmp/agi-desktop-user-check",
         "enterpriseVisible": true,
-        "boundary": "Actual installed app reopened on the operator-selected Enterprise account; no native permission accepted by the agent and no new native coding turn yet"
+        "boundary": "The operator renewed the native folder grant. The actual installed Desktop completed one read_file/result and a full answer in default permission mode; transcript and renderer accessibility verified. Native image capture disagrees with live accessibility; visual capture and reopening remain unclaimed.",
+        "liveReadRef": "#/releaseContinuation/toolHandoffRepair/liveNative"
       },
       "localDevelopmentControl": {
         "status": "PASSED_PRODUCTION_BUILD_LOCAL_BROWSER",
@@ -3806,8 +3829,8 @@
       "boundary": "Explicit owner requests for two existing accounts; atomic subscription/audit writes, no payment transaction and no product policy change. Both grants were read back; actual signed CLI usage and native billing confirm Enterprise. Account identifiers omitted."
     },
     "toolHandoffRepair": {
-      "capturedAt": "2026-10-17T19:45:13.416806+00:00",
-      "status": "SOURCE_AND_REAL_SIGNED_CLI_VERIFIED_NATIVE_CONSENT_PENDING",
+      "capturedAt": "2026-10-17T20:17:06.773943+00:00",
+      "status": "SOURCE_SIGNED_CLI_AND_INSTALLED_NATIVE_RUNTIME_VERIFIED_VISUAL_REOPEN_PENDING",
       "observedBefore": {
         "at": "2026-10-17T19:25:45.474Z",
         "version": "0.0.7-e10.20261017",
@@ -3832,7 +3855,7 @@
       },
       "source": {
         "baseCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
-        "codePatchSha256": "82d5d28c7ea862dfde44ccd1b32fcd33128582ad2a06c2565f960c96680e4e86",
+        "codePatchSha256": "b8bbf58dbc8fbebf17bac091e1d1a2f59d1d6317524a30927f4a3c4f9edc6d38",
         "files": [
           "crates/agiworkforce-llm/src/stream.rs",
           "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
@@ -3858,6 +3881,10 @@
           "testsPassed": 425,
           "testsSkipped": 1,
           "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-complete.log",
+            "sha256": "90ee3a92eda54d6a88a3639b478fbc6806026de8e41139d8ea2ff6cf8fcc7fa3"
+          },
+          "priorReceipt": {
             "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-after.log",
             "sha256": "474069f72e5e92b6b46acc5f3ad6979ae8667427d1c3bbab958613085cb5c00b"
           }
@@ -3874,7 +3901,7 @@
           "status": "passed",
           "nodeHeapMiB": 8192,
           "receipt": {
-            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-typecheck.log",
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-typecheck-complete.log",
             "sha256": "1db90647ec471abe41e6e06d303932e4430428e8a6f5c7b35b084f940289881c"
           }
         },
@@ -3891,6 +3918,26 @@
               "sha256": "781208dd1850157bc7caff9d9dce375341f998f04703fe14aa816074996938ae"
             }
           ]
+        },
+        "focusedEslint": {
+          "status": "passed",
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-eslint-final.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "opaqueProviderFrames": {
+          "status": "passed",
+          "testsPassed": 4,
+          "receipt": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-opaque-final.log",
+            "sha256": "5de91a1f5fea84a7609f62c45e596d75cd43f0a705ce3533caa47ffdda29acb2"
+          },
+          "failedBefore": {
+            "path": "/tmp/agi-implementation-checks/e10-tool-handoff-opaque-before.log",
+            "sha256": "254bc5ce682447d03aa193c6aca796510c38fce17af074c7558b18d9499beb07"
+          },
+          "repair": "Pass through opaque/null/malformed SSE records already accepted by the collector while filtering executable caller-tool fragments."
         }
       },
       "liveSignedCli": {
@@ -3952,13 +3999,52 @@
           "path": "/tmp/agi-implementation-checks/e10-tool-handoff-live-cli-initial-assertion.json",
           "sha256": "e17c6a641de9c94672ebd799fd6f810a6588b618ce13ef6f7f7f567e651658ca"
         },
-        "correction": "One standalone debug initialization timed out before model execution and left no matching process. The signed-CLI probe completed successfully; its initial harness searched serialized JSONL for a sentinel split across deltas. Reassembling message_delta events established the full answer with one read_file start/result, without another product run."
+        "correction": "One standalone debug initialization timed out before model execution and left no matching process. The signed-CLI probe completed successfully; its initial harness searched serialized JSONL for a sentinel split across deltas. Reassembling message_delta events established the full answer with one read_file start/result, without another product run.",
+        "opaqueFrameFixture": {
+          "status": "CORRECTED_AND_RETESTED",
+          "failedReceipts": [
+            {
+              "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-final.log",
+              "sha256": "49087cdc802b3bd1faaab230f0a586ce0d1c9a9c4a33e7486e3ea34cd5ac68d7"
+            },
+            {
+              "path": "/tmp/agi-implementation-checks/e10-tool-handoff-web-typecheck-final.log",
+              "sha256": "ddb08f9af0c235df5c006e6bfc8e8b9ff0c2cae70278f1b2ddeef366ad6c2f0a"
+            }
+          ],
+          "cause": "The first test helper invocation supplied a raw prefix before its optional parameter was declared and consumed. The corrected helper passed focused tests, the complete 425-test selection, typecheck and lint."
+        }
       },
       "candidateRef": "#/releaseContinuation/desktopLoginRecovery/candidate",
-      "nativeWindowStatus": "NOT_RUN_FRESH_CONSENT_PENDING"
+      "nativeWindowStatus": "REAL_NATIVE_READ_ONCE_AND_RENDERER_AX_PASSED_VISUAL_REOPEN_PENDING",
+      "liveNative": {
+        "at": "2026-10-17T20:16:20.405384+00:00",
+        "status": "PASSED_REAL_NATIVE_RUNTIME_AND_RENDERER_AX_VISUAL_CAPTURE_UNRESOLVED",
+        "version": "0.0.8-e10.20261017",
+        "scope": "Actual installed signed Electron; operator-granted synthetic folder; owner-selected Enterprise account; production managed provider",
+        "sessionId": "d3c08ed9-6c5b-4419-854c-5d4654723259",
+        "createdAt": "2026-10-17T20:11:21.873724Z",
+        "completedAt": "2026-10-17T20:11:27.362878Z",
+        "permissionMode": "default",
+        "provider": "managed_cloud",
+        "model": "claude-haiku-5-5",
+        "readFileCalls": 1,
+        "successfulResults": 1,
+        "answer": "<thinking></thinking>**Heading:** Desktop local workspace acceptance\n\n**Body:** Synthetic test data owned by this verification task.\n\nDESKTOP_V8_OK",
+        "inputSha256": "ec7f094800601ff90a2647f9dd72158302beadd34442d7bd6fd63d40e7358568",
+        "cliSha256": "6be1537d72d5177e48d9706902ea1eb00e165aa4c74178a9b70029ffe888ca40",
+        "transcriptSha256": "5078fe0d8b9ac07f99686f6a74df14d9a11fea0b39f1c1cadcc4359d7fc3e50e",
+        "rendererAx": {
+          "path": "/tmp/agi-implementation-checks/e10-v8-native-answer.ax.txt",
+          "sha256": "ece862265db2164ab58988f1afe69c6e83e5eb527006914aad518ca63613ee9e"
+        },
+        "reopen": "NOT_RUN",
+        "visualQualification": "Accessibility shows the completed answer, while native capture returns earlier home frames or a blank area. No screenshot is credited as the completed answer, and capture discrepancy is not attributed to product source without further evidence.",
+        "accountIdentifiersOmitted": true
+      }
     }
   },
-  "priorSourceFilesDigest": "3fb7f27ef8723aed562ef1bb08e37545478e6619623edfcc663b51d11e49cc82",
+  "priorSourceFilesDigest": "86496103a2da9a1b8cf66c169a43e2aaee6a94c29557fb86037a78f060df2ccd",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

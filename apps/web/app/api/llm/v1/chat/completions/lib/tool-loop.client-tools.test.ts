@@ -30,12 +30,14 @@ const CALLER_WRITE_FILE = {
   },
 };
 
-function stream(events: unknown[]): ReadableStream<Uint8Array> {
+function stream(events: unknown[], prefix = ''): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
       controller.enqueue(
-        encoder.encode(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')),
+        encoder.encode(
+          prefix + events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+        ),
       );
       controller.close();
     },
@@ -175,47 +177,59 @@ describe('tool loop · tools the caller declared', () => {
 
   it('keeps mixed-frame text while handing off fragmented calls only once', async () => {
     provider.stream.mockResolvedValueOnce(
-      stream([
-        {
-          choices: [
-            {
-              delta: {
-                content: 'I will read. ',
-                tool_calls: [
-                  {
-                    index: 2,
-                    id: 'call-caller-1',
-                    type: 'function',
-                    function: { name: 'write_file', arguments: '{"path":"hello.txt",' },
-                  },
-                ],
+      stream(
+        [
+          null,
+          {
+            choices: [
+              {
+                delta: {
+                  content: 'I will read. ',
+                  tool_calls: [
+                    {
+                      index: 2,
+                      id: 'call-caller-1',
+                      type: 'function',
+                      function: { name: 'write_file', arguments: '{"path":"hello.txt",' },
+                    },
+                  ],
+                },
+                index: 0,
               },
-              index: 0,
-            },
-          ],
-        },
-        {
-          choices: [
-            {
-              delta: {
-                content: 'Done choosing.',
-                tool_calls: [{ index: 2, function: { arguments: '"content":"hello"}' } }],
+            ],
+          },
+          {
+            choices: [
+              {
+                delta: {
+                  content: 'Done choosing.',
+                  tool_calls: [{ index: 2, function: { arguments: '"content":"hello"}' } }],
+                },
+                index: 0,
               },
-              index: 0,
-            },
-          ],
-        },
-        { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }] },
-      ]),
+            ],
+          },
+          { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }] },
+        ],
+        'data: not-json\n\n',
+      ),
     );
     const output = await collect(
       runToolLoop(makeProcessed([CALLER_WRITE_FILE]), { approvalMode: 'manual' }),
     );
+    expect(output).toContain('data: null');
+    expect(output).toContain('data: not-json');
     const frames = output
       .split('\n')
       .filter((line) => line.startsWith('data: ') && line !== 'data: [DONE]')
-      .map((line) => JSON.parse(line.slice('data: '.length)));
-    const choices = frames.flatMap((frame) => frame.choices ?? []);
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line.slice('data: '.length))];
+        } catch {
+          return [];
+        }
+      });
+    const choices = frames.flatMap((frame) => frame?.choices ?? []);
     expect(choices.map((choice) => choice.delta?.content ?? '').join('')).toBe(
       'I will read. Done choosing.',
     );

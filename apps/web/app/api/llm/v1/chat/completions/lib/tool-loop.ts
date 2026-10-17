@@ -1183,12 +1183,19 @@ function providerLineWithoutCallerToolCalls(line: SseLine): SseLine {
   if (!line.startsWith('data:')) return line;
   const data = line.slice('data:'.length).trim();
   if (data === '[DONE]') return line;
-  const event = JSON.parse(data) as {
-    choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>;
-  };
+  let event: {
+    choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null } | null>;
+  } | null;
+  try {
+    event = JSON.parse(data) as typeof event;
+  } catch {
+    return line;
+  }
+  if (!event || !Array.isArray(event.choices)) return line;
   let changed = false;
-  for (const choice of event.choices ?? []) {
-    if (choice.delta && 'tool_calls' in choice.delta) {
+  for (const choice of event.choices) {
+    if (!choice) continue;
+    if (choice.delta && typeof choice.delta === 'object' && 'tool_calls' in choice.delta) {
       delete choice.delta['tool_calls'];
       changed = true;
     }
