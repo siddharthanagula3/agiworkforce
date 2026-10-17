@@ -25,8 +25,10 @@ export async function loadSchedulePreferences(
       `select coalesce(us.settings -> 'notifications', '{}'::jsonb) as notifications,
               p.email as email,
               (select st.metadata -> 'notificationSettings' from public.scheduled_tasks st
-                where st.id = $2 and st.user_id = $1) as schedule_notifications,
-              ($2::uuid is null or exists (select 1 from public.scheduled_tasks st where st.id = $2 and st.user_id = $1)) as schedule_exists
+                where st.id = $2 and st.user_id = $1
+                  and st.organization_id is not distinct from public.current_app_org_id()) as schedule_notifications,
+              ($2::uuid is null or exists (select 1 from public.scheduled_tasks st where st.id = $2 and st.user_id = $1
+                  and st.organization_id is not distinct from public.current_app_org_id())) as schedule_exists
          from public.profiles as p
          left join public.user_settings as us on us.user_id = p.id
         where p.id = $1

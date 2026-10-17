@@ -520,7 +520,7 @@
     },
     {
       "path": ".github/workflows/verify-desktop-candidate.yml",
-      "sha256": "2ef789ae0c57891761106f8dd67e5899b0190ee6f3a074c5ed0ccf1af03f6a22"
+      "sha256": "84b58131e5a9a917a027d53d3a4c67cd791aec67f5d5825aa933fd2f5b30272c"
     },
     {
       "path": "apps/cli/src/agent/chat.rs",
@@ -880,7 +880,7 @@
     },
     {
       "path": "apps/web/lib/services/schedule-notification-service.ts",
-      "sha256": "9f34acb34eeda9fc29ca17e6bb9abe3ab5ed9492003fb9f47068db5ffade13b6"
+      "sha256": "d81c951a2826c416ec653b0027abaab21fd4ddf0df9f2b831f4df78a7e007b6b"
     },
     {
       "path": "apps/web/lib/services/schedule-service.test.ts",
@@ -1107,7 +1107,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "13f2c7a3edbc5bddba744cf59ac63265a7cec6394ec9ee8a37de8679d9341684",
+  "sourceFilesDigest": "1ec9f09ef33bcb655ea24cd26bda4d2768db2c443d575ea6b36ec71a297a5aa6",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1267,7 +1267,7 @@
       "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
       "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
       "version": "0.0.3-e10.20261017",
-      "status": "BLOCKED_CI_STARTUP",
+      "status": "RETRY_PENDING",
       "publication": "private draft only; no public update feed",
       "run": {
         "id": 39017236080,
@@ -1276,6 +1276,16 @@
         "executedSteps": 0,
         "reason": "recent account payments have failed or spending limit needs to be increased",
         "productResult": "NOT_RUN"
+      },
+      "assetId": 649889053,
+      "releaseId": 415660092,
+      "publicRetry": {
+        "attempt": 3,
+        "runnerStarted": true,
+        "failedStep": "Download the private draft candidate",
+        "reason": "release not found through tag lookup",
+        "productResult": "NOT_RUN",
+        "repair": "use the pinned immutable asset-ID API with the existing contents-read token; no public release or personal credential export"
       }
     },
     "sourceCommit": "264a606571",
@@ -1679,6 +1689,13 @@
         "passed": 31,
         "failed": 0,
         "reportSha256": "60f132a43cb683d462f45a5d84ae75d692bfea86509de4bbd26d426ae39448c4"
+      },
+      {
+        "suite": "notification/workspace scope",
+        "tests": 48,
+        "passed": 48,
+        "failed": 0,
+        "reportSha256": "612237c6d2435a5930a1e246fc5826d312e6ea793fcd8a129a0e86a64bc0cfca"
       }
     ],
     "guardSweep": {
@@ -1691,12 +1708,15 @@
         "unused timezone reexport removal",
         "canonical time-contract paths and unchanged negative controls",
         "browser opening egress metadata",
-        "named type aliases in test mocks"
+        "named type aliases in test mocks",
+        "notification preference subqueries explicitly constrain organization_id to the existing claimed current_app_org_id"
       ],
-      "localExcludedStateFailures": ["non-md-artifacts", "db-isolation"],
+      "localExcludedStateFailures": ["non-md-artifacts: owner-excluded private local material"],
       "cleanCheckout": "/tmp/agi-e10-clean-checkout",
       "cleanFrozenDependencyInstall": "passed; offline; install scripts disabled; existing dependency tree untouched",
-      "finalStatus": "PENDING"
+      "finalStatus": "PENDING",
+      "cleanCheckoutFinding": "database isolation guard caught missing explicit workspace predicate despite existing scoped transaction; fixed without an allowlist",
+      "evidencePlacement": "unique machine acceptance record moved to the existing classified audit/ledger owner"
     }
   },
   "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",

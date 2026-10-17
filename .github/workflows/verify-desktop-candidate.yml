@@ -38,13 +38,17 @@ jobs:
           node --input-type=module <<'JS'
           import fs from 'node:fs';
           const candidate = JSON.parse(fs.readFileSync('audit/ledger/claude-desktop-implementation.json')).releaseContinuation.intelCandidate;
+          if (!Number.isSafeInteger(candidate.assetId) || candidate.assetId < 1) throw Error('Invalid asset ID');
           if (!/^e10-candidate-[a-z0-9-]+$/.test(candidate.releaseTag) || !/^AGI-Cloud-[0-9A-Za-z.-]+-x64\.zip$/.test(candidate.asset) || !/^[a-f0-9]{64}$/.test(candidate.sha256) || !/^[0-9A-Za-z.-]+$/.test(candidate.version)) throw Error('Invalid candidate identity');
-          for (const [key, value] of Object.entries({ CANDIDATE_TAG: candidate.releaseTag, CANDIDATE_ASSET: candidate.asset, CANDIDATE_SHA256: candidate.sha256, CANDIDATE_VERSION: candidate.version })) fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
+          for (const [key, value] of Object.entries({ CANDIDATE_TAG: candidate.releaseTag, CANDIDATE_ASSET_ID: candidate.assetId, CANDIDATE_ASSET: candidate.asset, CANDIDATE_SHA256: candidate.sha256, CANDIDATE_VERSION: candidate.version })) fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
           JS
       - name: Download the private draft candidate
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "$CANDIDATE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$CANDIDATE_ASSET" --dir "$RUNNER_TEMP/candidate"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/candidate"
+          gh api "repos/$GITHUB_REPOSITORY/releases/assets/$CANDIDATE_ASSET_ID" --header 'Accept: application/octet-stream' > "$RUNNER_TEMP/candidate/$CANDIDATE_ASSET"
       - name: Verify bytes and install in an owned directory
         run: |
           set -euo pipefail
