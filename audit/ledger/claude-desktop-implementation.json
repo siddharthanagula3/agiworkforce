@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T11:42:04.889051+00:00",
+  "capturedAt": "2026-10-17T11:59:56.733485+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -520,7 +520,7 @@
     },
     {
       "path": ".github/workflows/verify-desktop-candidate.yml",
-      "sha256": "27f32e7f0c92594c972446fe40c53fa419b5317f25f97f2889823de747deb17f"
+      "sha256": "77b27b809daf833c47d759e34eae94a89e79347596cad0638e4dbb38d6cfb744"
     },
     {
       "path": "Cargo.lock",
@@ -656,7 +656,7 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/packaged-acceptance.mjs",
-      "sha256": "3b6d3b0465349d71549fd3e26e4d56c6f48799148636d5bd76a37d768d05e5c0"
+      "sha256": "9aacb3ac50fa1b883d713e0beaa7410d5205144ddcdb56f1b2f02e5c34122968"
     },
     {
       "path": "apps/desktop/electron/__tests__/permissionManager.test.ts",
@@ -1123,6 +1123,10 @@
       "sha256": "6b2d87add1e77b6e1c992cad566488b479269936bdf635deab8b8dc7d40add8b"
     },
     {
+      "path": "docs/security/security.md",
+      "sha256": "500f0e18a8fe9e4708c25726e97f0ccba9b474667ebce8a2f82bb4a2efcc0709"
+    },
+    {
       "path": "packages/contracts/cloud-contracts/src/schedules.ts",
       "sha256": "ebb384e7600c829a6a32ba20ee309058c266922baebe5771bd2299036c9b3fba"
     },
@@ -1247,7 +1251,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "96b9b7f597c79a4abffa31de67b5c2faff3367f8e29b00db271500de0a9fad65",
+  "sourceFilesDigest": "415a00661593aa1941ebe78a4f6d9ba0c1b2a6bdde5c8141ecd892ee22c875e4",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1257,7 +1261,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T11:36:26.566905+00:00",
+    "updatedAt": "2026-10-17T11:59:56.733485+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1412,91 +1416,19 @@
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
-      "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
-      "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
-      "version": "0.0.3-e10.20261017",
-      "status": "PASSED",
-      "publication": "private draft only; no public update feed",
-      "run": {
-        "id": 39017236080,
-        "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39017236080",
-        "runnerName": "",
-        "executedSteps": 0,
-        "reason": "recent account payments have failed or spending limit needs to be increased",
-        "productResult": "NOT_RUN"
-      },
-      "assetId": 649889053,
       "releaseId": 415660092,
-      "publicRetry": {
-        "attempt": 3,
-        "runnerStarted": true,
-        "failedStep": "Download the private draft candidate",
-        "reason": "release not found through tag lookup",
-        "productResult": "NOT_RUN",
-        "repair": "use the pinned immutable asset-ID API with the existing contents-read token; no public release or personal credential export"
-      },
+      "assetId": 650351477,
+      "asset": "AGI-Cloud-0.0.5-e10.20261017-x64.zip",
+      "version": "0.0.5-e10.20261017",
+      "sha256": "d6a2fbea8b14a3e7034fbab59f5748fdc89db9bfb6759f01d581ee63a5d551d5",
+      "size": 136458899,
+      "status": "UPLOADED_PRIVATE_DRAFT_PENDING_EXECUTION",
+      "publication": "private draft; no public installer or update feed",
+      "requiresBrowserSignInCancellationContract": true,
       "permissionRepair": {
         "status": "USER_APPROVED_APPLIED",
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
-        "reason": "read-only integration token returned HTTP 403 for the unpublished asset-ID endpoint",
-        "limits": "dedicated trusted job; token passed only to download step; no checkout persistence; app harness strips token variables; no publication code"
-      },
-      "completedRun": {
-        "id": 39020283675,
-        "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39020283675",
-        "conclusion": "success",
-        "receipt": {
-          "at": "2026-10-17T09:19:30.980Z",
-          "app": "/Users/runner/work/_temp/candidate/installed/AGI Cloud.app",
-          "checks": {
-            "strictSignature": "passed",
-            "gatekeeper": "passed",
-            "notarizationTicket": "Processing: /Users/runner/work/_temp/candidate/installed/AGI Cloud.app\nThe validate action worked!",
-            "bundleId": "com.agiworkforce.desktop.cloud",
-            "version": "0.0.3-e10.20261017",
-            "architecture": "x86_64",
-            "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
-            "packagedHostedBridge": {
-              "platform": "electron-darwin",
-              "version": "0.0.3-e10.20261017",
-              "node": "undefined",
-              "status": {
-                "ok": true,
-                "value": {
-                  "available": true,
-                  "name": "agi",
-                  "version": "0.0.1",
-                  "path": "~/work/_temp/candidate/installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
-                  "hint": null,
-                  "source": "bundled",
-                  "accountSyncError": null,
-                  "capabilities": []
-                }
-              },
-              "routines": {
-                "ok": true,
-                "value": {
-                  "deviceId": "d18676c7-c1d9-4cd8-968f-c53c34e7afef",
-                  "suspended": false,
-                  "error": null,
-                  "routines": []
-                }
-              }
-            },
-            "sessionApprovalAlerts": true,
-            "updateFeedRequested": true,
-            "updaterNoRelease": true
-          },
-          "requests": ["/api/releases/desktop-cloud/update/x64/0.0.3-e10.20261017", "/chat"],
-          "artifacts": {
-            "asar": "4881ef342ade5cc5113fd17fa39443b53f9c2ff6dc2d6c7caa57767644c9a1c6",
-            "cli": "2ecec17e9078e6b9d9449837e688d5c733421cab72b002add6216fc110098e7a",
-            "input": "daf0e30e80dbeb0261e341cac2f656014b3f47a30224bb3794699f097de10eb8"
-          },
-          "status": "passed"
-        },
-        "receiptSha256": "8424c5e8cf771bdfe62ededf3f37688c2080d7b627f13e7876d3897314f48c1c",
-        "boundary": "unchanged 0.0.3 candidate executed on macos-26-intel; later login candidate requires its own acceptance"
+        "limits": "dedicated trusted job; token used only by immutable asset download; checkout persistence disabled; runtime strips token variables"
       }
     },
     "sourceCommit": "264a606571",
@@ -1937,11 +1869,11 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "de685bf985ace7981c134cd1fda03e8d37c8c3d1",
+      "verifiedCodeCommit": "de19f9c4fd538f841647725746310c4a88fa9c5e",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "df6c822cffedc3444f290311404e2a5df98049f452bcee64c3857759a837c338",
-      "boundary": "all 226 commands and diff checks passed; SSH keepalives preserved the actual push; later ZIP repair needs its own final chain"
+      "logSha256": "d9421611b6d4f888455fa60590fbe2787644ae8691bd2df79ac7c9e45ebfae9f",
+      "boundary": "all 226 commands and diff checks passed through the actual keepalive push; latest candidate-harness/evidence update receives its own final validation"
     },
     "normalDesktopStartup": {
       "mode": "unchanged signed app, no fixture origin and no bundled-renderer override",
@@ -2060,9 +1992,73 @@
       },
       "candidate": {
         "version": "0.0.5-e10.20261017",
-        "status": "PENDING_BUILD_WITH_PATCHED_CLI",
+        "status": "BUILT_SIGNED_NOTARIZED_SCANNED",
         "publication": "none",
-        "sourceVerification": "both previous capability-aware packages passed strict signature, Gatekeeper, ticket, lipo and arm64 protocol checks; final recurrence-hardened package not yet verified"
+        "sourceVerification": "compiled from tested runtime source; final test-adapter/evidence changes do not alter payload; native runtime acceptance pending manual unlock and new Intel run",
+        "signatures": {
+          "at": "2026-10-17T11:54:17.418699+00:00",
+          "version": "0.0.5-e10.20261017",
+          "packages": [
+            {
+              "architecture": "arm64",
+              "app": "/tmp/agi-e10-patched-release/mac-arm64/AGI Cloud.app",
+              "checks": {
+                "signature": "passed",
+                "gatekeeper": "passed",
+                "ticket": "passed"
+              },
+              "binaries": {
+                "app": {
+                  "architecture": "arm64",
+                  "sha256": "d08e81d3a334f239b13b330e0d1a7d8f3baef7aeef1f64590fbb81f165558b0c"
+                },
+                "cli": {
+                  "architecture": "arm64",
+                  "sha256": "a36adfb227f2bfd9bc1fd0e56ea270aa72a5e632d01a2f9686bcf912b3bffc41"
+                }
+              },
+              "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+            },
+            {
+              "architecture": "x64",
+              "app": "/tmp/agi-e10-patched-release/mac/AGI Cloud.app",
+              "checks": {
+                "signature": "passed",
+                "gatekeeper": "passed",
+                "ticket": "passed"
+              },
+              "binaries": {
+                "app": {
+                  "architecture": "x86_64",
+                  "sha256": "877440b0d33334d7d401ba5812a8ad518c95006b6937e8091fc7f9a8d154261b"
+                },
+                "cli": {
+                  "architecture": "x86_64",
+                  "sha256": "66978c6f0ce2c205c882659e8e6407d5b9b3ffa43ef86d29398c844dee48ba5a"
+                }
+              },
+              "asarSha256": "8801060c3aeb7ab020f57e12b010b2b66df340627f95f0fa933715ff8dd30a40"
+            }
+          ],
+          "publication": "none"
+        },
+        "installers": [
+          {
+            "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-arm64.dmg",
+            "notarizedAndStapled": true,
+            "sha256": "a8cee9937e4fa3ff36d14e7b47a7882da69d28c8b957613ed841caaca92f6b51"
+          },
+          {
+            "file": "/tmp/agi-e10-patched-release/AGI-Cloud-0.0.5-e10.20261017-x64.dmg",
+            "notarizedAndStapled": true,
+            "sha256": "cdc1ba7945aae14264182ba2372914a62cf0373d62df284e3c2b6aff266443de"
+          }
+        ],
+        "scans": {
+          "arm64": "d86e7e875c4dfee8d73922657aee55670ada3dfaab889230813c760b09cc1d46",
+          "x64": "ed993ba5eb545b2ea4efde34ad5b8a1b350dee24d017b08483e12bb8cd08cd41"
+        },
+        "protocol": "exact arm64 packaged CLI serves protocol 8"
       },
       "productionRollout": "NOT_PERFORMED",
       "nativeUi": {
@@ -2175,10 +2171,27 @@
           "reader crashes, hangs, output floods and environment stripping",
           "corrupt-sheet error propagation"
         ],
-        "retainedOfficeTests": "RUNNING",
+        "retainedOfficeTests": {
+          "tests": 34,
+          "passed": 34,
+          "failed": 0,
+          "logSha256": "f05b65cc66e79c6b05807b72cc8a2f955adde2b659744be6a7fa64f84b6b2b74"
+        },
         "localDependencyPaths": 0,
         "lockfile": "generated by Cargo in isolated worktree, verified --locked in app checkout; not manually edited",
-        "presentationTestAdapters": "two existing tests collect fallible ZIP names; original package-part assertions retained"
+        "presentationTestAdapters": "two existing tests collect fallible ZIP names; original package-part assertions retained",
+        "retainedExtensionTests": {
+          "tests": 40,
+          "passed": 40,
+          "failed": 0,
+          "logSha256": "8cc43aed50faf2431ed1ce29bdf0f94d1cca2faed8ceb9041cf3c108b6ad349f"
+        },
+        "piperArchiveTests": {
+          "tests": 7,
+          "passed": 7,
+          "failed": 0,
+          "logSha256": "aff358b60b4e1183d3a87108b19f1c6d394c9e49f46943098654e92eddb2c681"
+        }
       },
       "silentSheetRepair": {
         "before": "valid ZIP with malformed worksheet returned empty success; regression failed",
@@ -2229,9 +2242,134 @@
         "fixtureCompilation": "passed without launching Desktop"
       },
       "fixtureCompilationLogSha256": "8ca9f80c73ecefa3f81241140538df4eb4b55f32ac703a3228430540084bc3df"
+    },
+    "priorIntelCandidates": [
+      {
+        "releaseTag": "e10-candidate-20261017-01a142a4",
+        "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
+        "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
+        "version": "0.0.3-e10.20261017",
+        "status": "PASSED",
+        "publication": "private draft only; no public update feed",
+        "run": {
+          "id": 39017236080,
+          "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39017236080",
+          "runnerName": "",
+          "executedSteps": 0,
+          "reason": "recent account payments have failed or spending limit needs to be increased",
+          "productResult": "NOT_RUN"
+        },
+        "assetId": 649889053,
+        "releaseId": 415660092,
+        "publicRetry": {
+          "attempt": 3,
+          "runnerStarted": true,
+          "failedStep": "Download the private draft candidate",
+          "reason": "release not found through tag lookup",
+          "productResult": "NOT_RUN",
+          "repair": "use the pinned immutable asset-ID API with the existing contents-read token; no public release or personal credential export"
+        },
+        "permissionRepair": {
+          "status": "USER_APPROVED_APPLIED",
+          "scope": "verify-desktop-candidate.yml:intel-package:contents write",
+          "reason": "read-only integration token returned HTTP 403 for the unpublished asset-ID endpoint",
+          "limits": "dedicated trusted job; token passed only to download step; no checkout persistence; app harness strips token variables; no publication code"
+        },
+        "completedRun": {
+          "id": 39020283675,
+          "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39020283675",
+          "conclusion": "success",
+          "receipt": {
+            "at": "2026-10-17T09:19:30.980Z",
+            "app": "/Users/runner/work/_temp/candidate/installed/AGI Cloud.app",
+            "checks": {
+              "strictSignature": "passed",
+              "gatekeeper": "passed",
+              "notarizationTicket": "Processing: /Users/runner/work/_temp/candidate/installed/AGI Cloud.app\nThe validate action worked!",
+              "bundleId": "com.agiworkforce.desktop.cloud",
+              "version": "0.0.3-e10.20261017",
+              "architecture": "x86_64",
+              "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+              "packagedHostedBridge": {
+                "platform": "electron-darwin",
+                "version": "0.0.3-e10.20261017",
+                "node": "undefined",
+                "status": {
+                  "ok": true,
+                  "value": {
+                    "available": true,
+                    "name": "agi",
+                    "version": "0.0.1",
+                    "path": "~/work/_temp/candidate/installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+                    "hint": null,
+                    "source": "bundled",
+                    "accountSyncError": null,
+                    "capabilities": []
+                  }
+                },
+                "routines": {
+                  "ok": true,
+                  "value": {
+                    "deviceId": "d18676c7-c1d9-4cd8-968f-c53c34e7afef",
+                    "suspended": false,
+                    "error": null,
+                    "routines": []
+                  }
+                }
+              },
+              "sessionApprovalAlerts": true,
+              "updateFeedRequested": true,
+              "updaterNoRelease": true
+            },
+            "requests": ["/api/releases/desktop-cloud/update/x64/0.0.3-e10.20261017", "/chat"],
+            "artifacts": {
+              "asar": "4881ef342ade5cc5113fd17fa39443b53f9c2ff6dc2d6c7caa57767644c9a1c6",
+              "cli": "2ecec17e9078e6b9d9449837e688d5c733421cab72b002add6216fc110098e7a",
+              "input": "daf0e30e80dbeb0261e341cac2f656014b3f47a30224bb3794699f097de10eb8"
+            },
+            "status": "passed"
+          },
+          "receiptSha256": "8424c5e8cf771bdfe62ededf3f37688c2080d7b627f13e7876d3897314f48c1c",
+          "boundary": "unchanged 0.0.3 candidate executed on macos-26-intel; later login candidate requires its own acceptance"
+        }
+      }
+    ],
+    "updaterKeyQuarantine": {
+      "at": "2026-10-17T11:59:56.733485+00:00",
+      "status": "CI_RELEASE_PATHS_QUARANTINED_NOT_ROTATED",
+      "repository": "siddharthanagula3/agiworkforce",
+      "workflows": [
+        {
+          "id": 224010036,
+          "path": "release-desktop.yml",
+          "state": "disabled_manually"
+        },
+        {
+          "id": 242324924,
+          "path": "build-windows-release.yml",
+          "state": "disabled_manually"
+        }
+      ],
+      "activeOrQueuedReleaseJobs": 0,
+      "stillEnabled": [
+        {
+          "id": 328277655,
+          "path": "release-desktop-cloud.yml",
+          "state": "active"
+        },
+        {
+          "id": 387480732,
+          "path": "verify-desktop-candidate.yml",
+          "state": "active"
+        }
+      ],
+      "secretValuesRetrieved": false,
+      "existingSecretEntries": "retained, not replaced",
+      "blockingInput": "offline escrow location and separate passphrase destination; manual Mac unlock",
+      "securityOwner": "docs/security/security.md section 4"
     }
   },
-  "priorSourceFilesDigest": "f7a067ad60d8b8648969815b020935f7a14f5852bcbb14e19af39a51e55294f5",
+  "priorSourceFilesDigest": "96b9b7f597c79a4abffa31de67b5c2faff3367f8e29b00db271500de0a9fad65",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

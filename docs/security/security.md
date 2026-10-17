@@ -943,11 +943,11 @@ Every location holding the private half must be listed here. A copy that is not
 listed is an untracked liability; a listed location that no longer holds the key
 must be removed in the same change that destroys it.
 
-| Location                                               | Role               | Holder     |
-| ------------------------------------------------------ | ------------------ | ---------- |
-| `~/.tauri/agiworkforce.key` on the founder workstation | working copy       | founder    |
-| GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`      | deployment copy    | CI         |
-| _unfilled_, offline escrow                             | recovery authority | _unfilled_ |
+| Location                                               | Role                | Holder     |
+| ------------------------------------------------------ | ------------------- | ---------- |
+| `~/.tauri/agiworkforce.key` on the founder workstation | working copy        | founder    |
+| GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`      | quarantined CI copy | CI         |
+| _unfilled_, offline escrow                             | recovery authority  | _unfilled_ |
 
 The passphrase is a separate secret and must never be escrowed in the same
 container as the key file.
@@ -957,6 +957,12 @@ deployment copies on media the founder controls day to day, so a single lost
 machine or a single deleted GitHub secret is still an unrecoverable event.
 Until an offline escrow location and a named recovery holder exist, this
 document describes the procedure but the key is not escrowed.
+
+### Current quarantine, 2026-10-17
+
+The working updater credential was exposed during an unpublished package build/log incident. Treat it as compromised. The idle `release-desktop.yml` and `build-windows-release.yml` workflows were disabled through GitHub to prevent further CI signing with it. Their secret entries remain in the custody inventory pending replacement; disabling a workflow is not key rotation. Electron release and candidate verification remain enabled because they use a separate signing domain.
+
+Do not re-enable these Tauri release paths until a replacement is escrowed, the public pin is updated and the migration/reinstall disposition is recorded. The offline holder and separate passphrase storage still require the founder's input. No replacement or transition release has been signed by this task.
 
 ### Escrow
 

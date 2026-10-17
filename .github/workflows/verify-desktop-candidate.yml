@@ -70,6 +70,7 @@ jobs:
       - name: Exercise the unchanged signed Intel application
         env:
           AGI_ACCEPTANCE_OUTPUT_DIR: ${{ runner.temp }}/candidate/evidence
+          AGI_ACCEPTANCE_EXPECT_BROWSER_SIGN_IN: '1'
         run: |
           node apps/desktop/electron/__tests__/packaged-acceptance.mjs "$RUNNER_TEMP/candidate/installed/AGI Cloud.app"
           node --input-type=module <<'JS'

@@ -182,6 +182,30 @@ try {
   if (!bridge.status.ok || !bridge.routines.ok)
     throw new Error('Packaged runtime bridge refused its hosted renderer.');
   receipt.checks.packagedHostedBridge = bridge;
+  if (process.env.AGI_ACCEPTANCE_EXPECT_BROWSER_SIGN_IN === '1') {
+    const signIn = await page.evaluate(async () => {
+      const host = globalThis.window.agiHost;
+      return {
+        cancellation: host.browserSignIn?.cancellation === true,
+        before: await host.invokeRuntime('browser_sign_in_state'),
+        cancelled: await host.invokeRuntime('browser_sign_in_cancel'),
+        after: await host.invokeRuntime('browser_sign_in_state'),
+      };
+    });
+    if (
+      !signIn.cancellation ||
+      !signIn.before.ok ||
+      signIn.before.value.kind !== 'idle' ||
+      !signIn.cancelled.ok ||
+      signIn.cancelled.value.cancelled !== true ||
+      !signIn.after.ok ||
+      signIn.after.value.kind !== 'idle'
+    ) {
+      throw new Error('Packaged browser sign-in cancellation contract failed.');
+    }
+    receipt.checks.browserSignIn = signIn;
+  }
+
   const preferences = await page.evaluate(() => globalThis.window.agiHost.readPreferences());
   receipt.checks.sessionApprovalAlerts = preferences.preferences.sessionApprovalAlerts;
   if (
