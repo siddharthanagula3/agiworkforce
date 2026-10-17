@@ -12,6 +12,8 @@ import os from 'node:os';
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import {
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   DEVELOPER_AGENT_MODES,
   DEVELOPER_REASONING_EFFORTS,
@@ -117,7 +119,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
-import { startBrowserSignIn } from '../browserSignIn';
+import { browserSignInState, cancelBrowserSignIn, startBrowserSignIn } from '../browserSignIn';
 import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
 import {
@@ -2078,6 +2080,10 @@ async function execute(
       return reportDispatchTask(window, args);
     case BROWSER_SIGN_IN_START:
       return startBrowserSignIn();
+    case BROWSER_SIGN_IN_CANCEL:
+      return cancelBrowserSignIn();
+    case BROWSER_SIGN_IN_STATE:
+      return browserSignInState();
     case 'developer_ssh_connect':
       return connectSshSession(window, args);
     case 'developer_ssh_list':
@@ -2515,6 +2521,8 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
   BROWSER_STEP_COMMAND,
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,

@@ -54,8 +54,8 @@ fs.writeFileSync(
   path.join(dir, 'entry.tsx'),
   String.raw`import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {useLocalSession} from '__REPOSITORY__/apps/web/features/code/hooks/use-local-session';
-import {LocalRoutinesSection} from '__REPOSITORY__/apps/web/features/schedules/components/LocalRoutinesSection';
+import {useLocalSession} from '@/features/code/hooks/use-local-session';
+import {LocalRoutinesSection} from '@/features/schedules/components/LocalRoutinesSection';
 function App(){
  const [session,setSession]=useState(()=>JSON.parse(localStorage.getItem('owned-session')||'null'));
  const state=useLocalSession(session,{agentMode:'ask'});
@@ -63,7 +63,7 @@ function App(){
  return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl">Owned Electron integration</h1><button onClick={()=>void state.send('PARENT_NORMAL_CHILD')}>Run normal child</button>{state.approvals.map(a=><section key={a.requestId}><p>{a.summary}</p><button onClick={()=>void state.decideApproval(a,'approve_once')}>Approve owned write once</button></section>)}<pre id="state">{JSON.stringify({messages:state.messages,turn:state.turn,children:state.childTasks,error:state.error,loading:state.loading},null,2)}</pre><LocalRoutinesSection/></main>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);
-`.replaceAll('__REPOSITORY__', repo),
+`,
 );
 req('esbuild').buildSync({
   absWorkingDir: repo,
@@ -83,6 +83,20 @@ req('esbuild').buildSync({
   },
   define: { 'process.env.NODE_ENV': '"production"' },
 });
+if (process.argv.includes('--check-bundle')) {
+  console.log(
+    JSON.stringify({
+      phase: 'fixture-compilation-only',
+      bundleSha256: crypto
+        .createHash('sha256')
+        .update(fs.readFileSync(path.join(dir, 'bundle.js')))
+        .digest('hex'),
+    }),
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(owned, { recursive: true, force: true });
+  process.exit(0);
+}
 const server = http.createServer(async (q, s) => {
   const u = new URL(q.url, 'http://localhost');
   if (u.pathname.startsWith('/api/releases/desktop-cloud/update/')) {
@@ -278,6 +292,11 @@ async function launch(origin) {
       AGIWORKFORCE_HOME: home,
       ...(browserOnly ? { AGI_OWNED_FIXTURE_KEY: 'test-only-owned-fixture' } : {}),
       AGI_OWNED_PROFILE: profile,
+      AGI_OWNED_BOOTSTRAP_FIXTURE: fileURLToPath(
+        new URL('./fixtures/native-bootstrap.cjs', import.meta.url),
+      ),
+      AGI_OWNED_MAIN: path.join(repo, 'apps/desktop/electron/dist/main.cjs'),
+      AGI_OWNED_BROWSER_ONLY: browserOnly ? '1' : '0',
       AGI_OWNED_PROJECT: project,
       AGI_OWNED_ORIGIN: origin,
     },
@@ -314,13 +333,10 @@ async function launch(origin) {
     JSON.stringify({ name: 'agi-owned-acceptance', version: '0.0.1', main: 'bootstrap.cjs' }),
   );
   fs.writeFileSync(
-    dir + '/bootstrap.cjs',
-    `const {app,dialog,globalShortcut,shell}=require('electron');if(${browserOnly})shell.openExternal=async(url)=>{require('node:fs').appendFileSync(process.env.AGI_OWNED_PROFILE+'/opened.jsonl',JSON.stringify({url})+'\\n');};app.setPath('userData',process.env.AGI_OWNED_PROFILE);app.setPath('logs',process.env.AGI_OWNED_PROFILE+'/logs');app.setAsDefaultProtocolClient=()=>false;app.setLoginItemSettings=()=>{};globalShortcut.register=()=>false;dialog.showOpenDialog=async()=>({canceled:false,filePaths:[process.env.AGI_OWNED_PROJECT]});dialog.showMessageBox=async()=>({response:1,checkboxChecked:false});globalThis.fetch=async(input,options)=>{const url=typeof input==='string'?input:input.url;if(!url.startsWith(process.env.AGI_OWNED_ORIGIN))throw Error('External network is outside this owned fixture');return require('node:http')&&originalFetch(input,options)};const originalFetch=globalThis.fetch;require(${JSON.stringify(path.join(repo, 'apps/desktop/electron/dist/main.cjs'))});`
-      .replace(
-        'globalThis.fetch=async',
-        'const originalFetch=globalThis.fetch;globalThis.fetch=async',
-      )
-      .replace(';const originalFetch=globalThis.fetch;require', ';require'),
+    path.join(dir, 'bootstrap.cjs'),
+    String.raw`const { bootstrapOwnedNative } = require(process.env.AGI_OWNED_BOOTSTRAP_FIXTURE);
+bootstrapOwnedNative(require('electron'), process.env, globalThis, require);
+`,
   );
   let app;
   let completed = false;

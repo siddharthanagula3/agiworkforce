@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { act, renderHook } from '@testing-library/react';
 
 const signInState = vi.hoisted(() => ({
@@ -58,6 +59,14 @@ vi.mock('@clerk/nextjs', () => ({
   useSignUp: () => ({ signUp: signUpState, errors: null, fetchStatus: 'idle' }),
 }));
 
+const browserSignIn = vi.hoisted(() => ({ begin: vi.fn(), cancel: vi.fn() }));
+type BrowserSignInModule = typeof import('@/features/desktop-host/lib/browser-sign-in');
+vi.mock('@/features/desktop-host/lib/browser-sign-in', async (importOriginal) => ({
+  ...(await importOriginal<BrowserSignInModule>()),
+  beginBrowserSignIn: browserSignIn.begin,
+  cancelBrowserSignIn: browserSignIn.cancel,
+}));
+
 import { useIdentityAuthClient } from '../identityAuthAdapter';
 import type { AuthMode } from '../authContract';
 import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
@@ -78,6 +87,9 @@ function client(mode: AuthMode) {
 const ok = { error: null };
 
 beforeEach(() => {
+  delete window.agiHost;
+  browserSignIn.begin.mockReset().mockResolvedValue(true);
+  browserSignIn.cancel.mockReset().mockResolvedValue(true);
   clerkState.loaded = true;
   clerkState.listeners.clear();
   clerkState.client.sessions = [];
@@ -1423,4 +1435,72 @@ describe('a retry after the code was accepted but the session did not open', () 
     expect(accepted).toEqual({ status: 'complete' });
     expect(signInState.emailCode.verifyCode).toHaveBeenCalledTimes(2);
   });
+});
+
+afterEach(() => {
+  delete window.agiHost;
+});
+
+describe('desktop identity handoff', () => {
+  it.each(['google', 'github', 'microsoft', 'apple'] as const)(
+    'opens %s sign-in through the native browser broker',
+    async (provider) => {
+      window.agiHost = hostBridgeStub();
+      expect(await client('login').current.startProvider(provider)).toEqual({
+        status: 'redirecting',
+        phase: 'browser',
+      });
+      expect(browserSignIn.begin).toHaveBeenCalledOnce();
+      expect(signInState.sso).not.toHaveBeenCalled();
+      expect(signUpState.sso).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps desktop sign-up in the same first-party browser handoff', async () => {
+    window.agiHost = hostBridgeStub();
+    expect(await client('signup').current.startProvider('google')).toEqual({
+      status: 'redirecting',
+      phase: 'browser',
+    });
+    expect(signUpState.sso).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate inside the window after a failed browser launch', async () => {
+    window.agiHost = hostBridgeStub();
+    browserSignIn.begin.mockResolvedValue(false);
+    expect(await client('login').current.startProvider('google')).toMatchObject({
+      status: 'failed',
+    });
+    expect(signInState.sso).not.toHaveBeenCalled();
+  });
+
+  it('invalidates pending native sign-in before resetting the local form', async () => {
+    window.agiHost = hostBridgeStub();
+    await client('login').current.restart();
+    expect(browserSignIn.cancel).toHaveBeenCalledOnce();
+    expect(signInState.reset).toHaveBeenCalledOnce();
+    expect(browserSignIn.cancel.mock.invocationCallOrder[0]).toBeLessThan(
+      signInState.reset.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('does not reset the form while cancellation is unconfirmed', async () => {
+    window.agiHost = hostBridgeStub();
+    browserSignIn.cancel.mockResolvedValue(false);
+    await client('login').current.restart();
+    expect(signInState.reset).not.toHaveBeenCalled();
+  });
+});
+
+it('offers an update instead of starting uncancellable browser sign-in on an older Desktop', async () => {
+  window.agiHost = hostBridgeStub({ browserSignIn: undefined });
+  expect(await client('login').current.startProvider('google')).toMatchObject({
+    status: 'failed',
+    message: expect.stringContaining('Update AGI Cloud'),
+  });
+  expect(browserSignIn.begin).not.toHaveBeenCalled();
+  expect(signInState.sso).not.toHaveBeenCalled();
+  await client('login').current.restart();
+  expect(browserSignIn.cancel).not.toHaveBeenCalled();
+  expect(signInState.reset).toHaveBeenCalledOnce();
 });

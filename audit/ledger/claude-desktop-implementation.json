@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T08:21:21.805514+00:00",
+  "capturedAt": "2026-10-17T10:40:18.616264+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
   "status": "selected source implementation and configured operational acceptance; release gates remain open",
   "environment": {
@@ -467,7 +467,7 @@
     {
       "status": "PASSED",
       "gate": "signed macOS application and DMG notarization; arm64 installation, updater, preference restart and manual rollback",
-      "boundary": "owned candidates only; native Intel execution pending, no public rollout"
+      "boundary": "owned candidates; arm64 and Intel 0.0.3 execution passed; no public rollout"
     },
     {
       "status": "PASSED",
@@ -495,9 +495,9 @@
       "reason": "no spare host for disruptive test"
     },
     {
-      "status": "PENDING",
+      "status": "PASSED",
       "gate": "native Intel macOS packaged smoke",
-      "reason": "candidate uploaded privately; CI execution pending"
+      "reason": "Signed 0.0.3 x86_64 package executed successfully in run 39020283675; 0.0.4 is a later unaccepted candidate"
     },
     {
       "status": "BLOCKED",
@@ -587,6 +587,10 @@
       "sha256": "e371a806b03157f073e3795429817be20faea352b44a4bff2c34f72a644b5e31"
     },
     {
+      "path": "apps/desktop/electron/__tests__/browserSignIn.test.ts",
+      "sha256": "a740bd3950866509a65c9fb0bb50c2e42cff3e61e85eb4de8e3de9cb80705dca"
+    },
+    {
       "path": "apps/desktop/electron/__tests__/bundledRendererIpc.test.ts",
       "sha256": "e387c5d7feca0926393e906fa0bc5281c32d713cad5a880711ae7e45f7ef0de4"
     },
@@ -608,7 +612,11 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/dispatcher.test.ts",
-      "sha256": "bfa441241e8f89b97b22b42da0ab59ed9386ea572a18a6e3a83e121d729b9263"
+      "sha256": "9b23a6524f01a4457eae696da0f072119262c6074f89f54a02834c6ef7b6c862"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/fixtures/native-bootstrap.cjs",
+      "sha256": "b502fb4d3d474960df044f622ff58ef1a65b9669758164b6e73b580a2c5c0118"
     },
     {
       "path": "apps/desktop/electron/__tests__/hostPreferences.test.ts",
@@ -624,7 +632,11 @@
     },
     {
       "path": "apps/desktop/electron/__tests__/native-acceptance.mjs",
-      "sha256": "284f7d561df81f164c2d15bf7d6beffc720f7fdb034486d8c3270b00f40545e9"
+      "sha256": "fb5e1f9db6c598a1dcfb21a61e5a4be6213c93e23fc072f455a73c349eafbf88"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/nativeBootstrap.node-check.mjs",
+      "sha256": "6db01641b18b656b55012aab2a081b68b05ae2c2837278a829bb4beb7bfd0f02"
     },
     {
       "path": "apps/desktop/electron/__tests__/packaged-acceptance.mjs",
@@ -633,6 +645,10 @@
     {
       "path": "apps/desktop/electron/__tests__/permissionManager.test.ts",
       "sha256": "576256aa5a797ff9ff05b20de9677d1bcf9df7ff1f73e41ac84c54cff83a61b9"
+    },
+    {
+      "path": "apps/desktop/electron/__tests__/preloadBridge.test.ts",
+      "sha256": "d769bc85a83fd8485c42a2132f2e4eb363c66b098c522abe334d89ea383309a2"
     },
     {
       "path": "apps/desktop/electron/__tests__/releaseArtifact.node-check.mjs",
@@ -655,12 +671,20 @@
       "sha256": "e7156cd0d937383db135027d5749f59d2f0f976530d2697db455407d4ecaa467"
     },
     {
+      "path": "apps/desktop/electron/browserSignIn.ts",
+      "sha256": "abf756fb4d6031a09b85d380e1ea20021db13a333a19be5e938c2745cbef2f89"
+    },
+    {
       "path": "apps/desktop/electron/main.ts",
-      "sha256": "a8665e551661d97f8f1eaefcf3c13f2f6f93bf5c69953a8dd85a6694c4eedb68"
+      "sha256": "6b2d56b767b49b0f9b6b560498735554c3bcacf8eb8993ec0fc15c1044e3c563"
     },
     {
       "path": "apps/desktop/electron/notarizeInstallers.mjs",
       "sha256": "9252986b84b1df400fbd1a5692bab2cca6dd335ce479944ef2787831b063330f"
+    },
+    {
+      "path": "apps/desktop/electron/preload.ts",
+      "sha256": "e3a9b0bffde8b78dd0bbefc3b48e5355463e35dd96b63d12b0d0e8c4300c75d5"
     },
     {
       "path": "apps/desktop/electron/runtime/codeSessionActivity.ts",
@@ -672,7 +696,7 @@
     },
     {
       "path": "apps/desktop/electron/runtime/dispatcher.ts",
-      "sha256": "3a4a67a8f1665abddb07aa7b637bbec9df6a65d4c656ea8e7c1c59c6162db634"
+      "sha256": "7cf0c130a60bf1867d68b6d5dab117ab44d56d953364a4daa76f05e18924e785"
     },
     {
       "path": "apps/desktop/electron/runtime/localRoutineEngine.ts",
@@ -751,8 +775,36 @@
       "sha256": "c12b1fe1725c6f7a17377d58c1b0de22e33e4a5847fd86c331bfa8f631b1e653"
     },
     {
+      "path": "apps/web/e2e/e10-desktop-login.spec.ts",
+      "sha256": "89725ab6653e63b61097d70464724858c99c0ea690a6182b6bce74e8a6dacb4c"
+    },
+    {
       "path": "apps/web/e2e/e10-release.spec.ts",
       "sha256": "aabaec6189b89e3792d930155441c6019820022a64de961eca2f052a8765412e"
+    },
+    {
+      "path": "apps/web/features/auth/AuthEmailStep.tsx",
+      "sha256": "a3bb109be6d72e420df2908c68b3385f2c7f855bca7d806959864a8701253035"
+    },
+    {
+      "path": "apps/web/features/auth/AuthFlow.tsx",
+      "sha256": "4f2dfa05c137d574a6031934912f92abe5d50208d32fd79d744f6250416c1b71"
+    },
+    {
+      "path": "apps/web/features/auth/AuthPhaseStatus.tsx",
+      "sha256": "cf165b381a89b7d4f60cead628d4b634acfc2817dd3799694e142cb408c80b46"
+    },
+    {
+      "path": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+      "sha256": "39a18a591bb2a1d58a3d5a30c80d0ab6f143e531e7608648c8987742ee6f4bd3"
+    },
+    {
+      "path": "apps/web/features/auth/authContract.ts",
+      "sha256": "cbc254da66bb2dd3e7ad384ec94076c50f5f0c8d6803b47b4fb51969ef02e979"
+    },
+    {
+      "path": "apps/web/features/auth/identityAuthAdapter.tsx",
+      "sha256": "b29238e7fee0dfd33df689240272c607556ac06992e557421bd3b74fae1dea4f"
     },
     {
       "path": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
@@ -795,8 +847,24 @@
       "sha256": "6808454c094b0f193f30b047591f8fc80822bb0db9b42bcf7b9ed3e8c2bf590d"
     },
     {
+      "path": "apps/web/features/desktop-host/__tests__/browser-sign-in.test.tsx",
+      "sha256": "7fa1341400d11a1786968ed049e13f966a9e5c709876674b3fcadad77b23f73e"
+    },
+    {
       "path": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
       "sha256": "a9733b684f7a5d2abe6655034699c61b319c920887dbd3665fa91d9c401c7680"
+    },
+    {
+      "path": "apps/web/features/desktop-host/components/DesktopBrowserSignIn.tsx",
+      "sha256": "ec12760796a55f561a14d6c77b46be3c8c3ceec0bb71321e2e78af767e0f9a79"
+    },
+    {
+      "path": "apps/web/features/desktop-host/lib/browser-sign-in.ts",
+      "sha256": "75910c5b17ad44cc06abf3d2c32fdfcef947429e915ec7457459dbe190824e92"
+    },
+    {
+      "path": "apps/web/features/desktop-host/lib/runtime-client.ts",
+      "sha256": "f880ba734d98e356069994108e3b3dfea7a1af475fca8d6e62e1d8d3e4e6f1bd"
     },
     {
       "path": "apps/web/features/schedules/components/LocalRoutinesSection.test.tsx",
@@ -907,6 +975,10 @@
       "sha256": "5e6623ca8b4900ac71a04d56fe33cfa276823a270081263dfaa903c9de2637f1"
     },
     {
+      "path": "apps/web/test/host-bridge-stub.ts",
+      "sha256": "63851643fc00d29468860d4456308bde49e87494a62195633c036b3cd7ea8e6f"
+    },
+    {
       "path": "audit/README.md",
       "sha256": "363c5e51a2529fd6df37d486f5539cd59ccfaf436b50d622a0ca3c523df8ac42"
     },
@@ -1015,12 +1087,20 @@
       "sha256": "ebb384e7600c829a6a32ba20ee309058c266922baebe5771bd2299036c9b3fba"
     },
     {
+      "path": "packages/contracts/local-runtime/src/desktop-sign-in.ts",
+      "sha256": "6f8da3b07142e588fbe50134a3774cc7a2ce325b3768e03ce1f239a3cdd7edb5"
+    },
+    {
       "path": "packages/contracts/local-runtime/src/developer-sessions.ts",
       "sha256": "5aceaf15076d38874ec8e2af5bf0580e7fae129ac4387f102be3170f88dc311d"
     },
     {
+      "path": "packages/contracts/local-runtime/src/host-bridge.ts",
+      "sha256": "dfb69e0987dd9cd0fa088be6c3197a16deaf2fde56fbe8550929cdafdad98756"
+    },
+    {
       "path": "packages/contracts/local-runtime/src/index.ts",
-      "sha256": "977f551297a3597b071ba06538d18516bcece4479b19f6c9c84f2219d0d3fcb9"
+      "sha256": "cdb46347b2f9d1c807815857ab90f73f48a8b58c61df882e5fefbd9b31b02d9c"
     },
     {
       "path": "packages/contracts/local-runtime/src/local-routines.ts",
@@ -1029,6 +1109,10 @@
     {
       "path": "packages/contracts/local-runtime/src/ssh-environments.ts",
       "sha256": "984133eff094e97df1682cdf100a758e310c63505e0db8e249cc508215f09244"
+    },
+    {
+      "path": "packages/contracts/types/src/__tests__/browser-bridge.test.ts",
+      "sha256": "f6c798c3f45f13aa8551648e31b6c2de73b68e52cd777a3707301f64fa40ce18"
     },
     {
       "path": "packages/contracts/types/src/browser-bridge.ts",
@@ -1075,12 +1159,16 @@
       "sha256": "20b9cb7037cb042887939994d635632afd2604195c869c768a0083b95630d7d1"
     },
     {
+      "path": "packages/platform/utils/src/__tests__/recurrenceRule.test.ts",
+      "sha256": "bb8627dea5a9d79f0f4cfc38c250209b6e6a875b0771a739e184bbead3dabc00"
+    },
+    {
       "path": "packages/platform/utils/src/scheduling/dayparts.ts",
       "sha256": "c6569f0a2e3e9b3115c59d4e6a0b8ac0217f327d2497dea3cfe9966da70070ff"
     },
     {
       "path": "packages/platform/utils/src/scheduling/recurrence-rule.ts",
-      "sha256": "057c0b76730ab196c1f4f80dc6ef86d8761f6f4bd75000e0ec2e767b1eeb42fc"
+      "sha256": "2f56b680a7d33840d4aec4f892335041a7b31709d76a4250050413e92b6f5765"
     },
     {
       "path": "packages/platform/utils/src/scheduling/schedule-time.ts",
@@ -1119,7 +1207,7 @@
       "sha256": "e9dc639726f9f137c7eb4732423645369385eb8681f42b9b73d9d493a13891f6"
     }
   ],
-  "sourceFilesDigest": "a0e11dc28e389bf7def82a75079ae06b3118300787ef2abc2dd79689b4aab557",
+  "sourceFilesDigest": "3fca4ce9b3025497e0d19c0a44372ce60d511e090b79386f44b6114710e74820",
   "limitations": [
     "No measured product-similarity or production-completion percentage.",
     "Signed native fixture uses a scripted loopback model and actual operator-reviewed native dialogs; earlier development fixture mocks dialogs and captures OS fallback.",
@@ -1129,7 +1217,7 @@
   ],
   "releaseContinuation": {
     "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T08:21:21.805514+00:00",
+    "updatedAt": "2026-10-17T10:40:18.616264+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1274,19 +1362,20 @@
       }
     },
     "outstanding": [
-      "native Intel execution CI",
       "actual notification provider delivery",
       "external SSH same-account admission",
       "physical sleep/offline host",
       "Tauri updater signing credential rotation",
-      "final clean-checkout operability and review"
+      "final clean-checkout operability and review",
+      "new login candidate operational acceptance and Web rollout",
+      "current Rust dependency security audit"
     ],
     "intelCandidate": {
       "releaseTag": "e10-candidate-20261017-01a142a4",
       "asset": "AGI-Cloud-0.0.3-e10.20261017-x64.zip",
       "sha256": "b7676d21036bd1dd29a49bd34ebb7dd63dd8c1a8cfb17811326ba033741c58e8",
       "version": "0.0.3-e10.20261017",
-      "status": "RETRY_PENDING",
+      "status": "PASSED",
       "publication": "private draft only; no public update feed",
       "run": {
         "id": 39017236080,
@@ -1311,6 +1400,63 @@
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
         "reason": "read-only integration token returned HTTP 403 for the unpublished asset-ID endpoint",
         "limits": "dedicated trusted job; token passed only to download step; no checkout persistence; app harness strips token variables; no publication code"
+      },
+      "completedRun": {
+        "id": 39020283675,
+        "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39020283675",
+        "conclusion": "success",
+        "receipt": {
+          "at": "2026-10-17T09:19:30.980Z",
+          "app": "/Users/runner/work/_temp/candidate/installed/AGI Cloud.app",
+          "checks": {
+            "strictSignature": "passed",
+            "gatekeeper": "passed",
+            "notarizationTicket": "Processing: /Users/runner/work/_temp/candidate/installed/AGI Cloud.app\nThe validate action worked!",
+            "bundleId": "com.agiworkforce.desktop.cloud",
+            "version": "0.0.3-e10.20261017",
+            "architecture": "x86_64",
+            "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+            "packagedHostedBridge": {
+              "platform": "electron-darwin",
+              "version": "0.0.3-e10.20261017",
+              "node": "undefined",
+              "status": {
+                "ok": true,
+                "value": {
+                  "available": true,
+                  "name": "agi",
+                  "version": "0.0.1",
+                  "path": "~/work/_temp/candidate/installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+                  "hint": null,
+                  "source": "bundled",
+                  "accountSyncError": null,
+                  "capabilities": []
+                }
+              },
+              "routines": {
+                "ok": true,
+                "value": {
+                  "deviceId": "d18676c7-c1d9-4cd8-968f-c53c34e7afef",
+                  "suspended": false,
+                  "error": null,
+                  "routines": []
+                }
+              }
+            },
+            "sessionApprovalAlerts": true,
+            "updateFeedRequested": true,
+            "updaterNoRelease": true
+          },
+          "requests": ["/api/releases/desktop-cloud/update/x64/0.0.3-e10.20261017", "/chat"],
+          "artifacts": {
+            "asar": "4881ef342ade5cc5113fd17fa39443b53f9c2ff6dc2d6c7caa57767644c9a1c6",
+            "cli": "2ecec17e9078e6b9d9449837e688d5c733421cab72b002add6216fc110098e7a",
+            "input": "daf0e30e80dbeb0261e341cac2f656014b3f47a30224bb3794699f097de10eb8"
+          },
+          "status": "passed"
+        },
+        "receiptSha256": "8424c5e8cf771bdfe62ededf3f37688c2080d7b627f13e7876d3897314f48c1c",
+        "boundary": "unchanged 0.0.3 candidate executed on macos-26-intel; later login candidate requires its own acceptance"
       }
     },
     "sourceCommit": "264a606571",
@@ -1751,20 +1897,35 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "094f6b201ff57193b2da346b029938b1cd5675ee",
+      "verifiedCodeCommit": "65cc10c02badb64a832df9a70b06bb26c10e7616",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "3137b85875c71e1a79f8b076324a66afc657d8c860e57008e52ac74e81da722f",
-      "boundary": "later missing-profile and Desktop-cookie repairs have focused passing checks and will receive final combined validation"
+      "logSha256": "ffd0bbc5ed021d5ac3f4e51c7fc78c6278407421c80ae04249f230097ea2221b",
+      "boundary": "all 226 commands and diff checks passed at this commit; subsequent login recovery edits require final combined verification"
     },
     "normalDesktopStartup": {
       "mode": "unchanged signed app, no fixture origin and no bundled-renderer override",
       "observedUrl": "https://agiworkforce.com/login?redirectTo=%2Fchat",
       "observedTitle": "Sign In | AGI",
       "currentSharedWebLoginRendered": true,
-      "authenticationCompleted": false,
+      "authenticationCompleted": true,
       "cookieBannerObserved": true,
-      "boundary": "normal production startup and visible login, not complete web/Desktop workflow parity"
+      "boundary": "authenticated shared production Web and real chat observed in installed app; not all Web/Desktop workflows certified",
+      "authenticatedObservationAt": "2026-10-17T09:57:05.229595+00:00",
+      "signInReturnMethod": "human sign-in completed; exact provider callback was not instrumented",
+      "actualLiveChat": {
+        "status": "passed",
+        "actualSubmittedText": "Desktop acceptance check: reply with exactly 'Deskto chat is working'.",
+        "visibleReply": "Deskto chat is working",
+        "completeIndicator": true,
+        "visibleReplyCount": 1,
+        "boundary": "real installed 0.0.3 production user profile and model response; CUA typing omitted one character from the intended prompt, so this does not prove typing fidelity or model quality"
+      },
+      "nativeCodeWindow": {
+        "opened": true,
+        "syntheticFolderRegistered": "/private/tmp/agi-desktop-user-check",
+        "commandExecution": "PENDING_ACTION_SPECIFIC_NATIVE_APPROVAL"
+      }
     },
     "desktopCookieRepair": {
       "source": "apps/web/shared/components/CookieConsent.tsx",
@@ -1786,12 +1947,187 @@
           "sourceFiles": 12696,
           "sourceDigest": "b8d576e97661d9c0b2042ddfd3601374097fea578f23e7c785569efac8d1f921"
         },
-        "status": "BUILDING"
+        "status": "READY"
       },
       "productionRollout": "NOT_PERFORMED"
+    },
+    "desktopLoginRecovery": {
+      "status": "SOURCE_AND_FOCUSED_TESTS_PASSED",
+      "updatedAt": "2026-10-17T09:57:05.229595+00:00",
+      "nativeOwner": "apps/desktop/electron/browserSignIn.ts",
+      "sharedOwner": "packages/contracts/local-runtime/src/desktop-sign-in.ts",
+      "webOwner": "apps/web/features/desktop-host/lib/browser-sign-in.ts",
+      "behavior": [
+        "social and enterprise sign-in use existing browser broker",
+        "main-process cancellation invalidates the verifier",
+        "reopen preserves attempt and deadline",
+        "renderer reload restores native pending state",
+        "stale launch replies and cancelled or replayed callbacks cannot revive the attempt",
+        "waiting and expiry provide visible Cancel/Back in a dialog",
+        "Escape cancellation uses the same native invalidation",
+        "older host capability is explicit; browser sign-in requests an update and ordinary in-window form remains usable"
+      ],
+      "verification": {
+        "focusedNativeTests": 168,
+        "sharedTypesTests": 2156,
+        "hostContractTests": 331,
+        "initialAuthAndRuntimeTests": 503,
+        "finalFocusedAuthTests": 91,
+        "fullWebTypecheck": "passed",
+        "completeElectron": {
+          "tests": 1447,
+          "passed": 1447,
+          "isolatedRechecks": "deep-link suite passed and accountBridge 21 tests passed with unchanged time limits; final bounded-worker full run pending",
+          "priorTimeouts": ["accountBridge first renewal case", "deepLink first default-mode case"],
+          "status": "passed",
+          "files": 76,
+          "failed": 0,
+          "workers": 2,
+          "logSha256": "ee52e4d43d0f65edcb5570f4ce3a5c6e551a4ce851cea7057973baf19e58f72d",
+          "boundary": "complete login-change suite; later recurrence repair has focused native and shared-consumer validation"
+        },
+        "initialBrowser": {
+          "tests": 2,
+          "passed": 2,
+          "reportSha256": "abbe81607aeedff84f847b42b8ab9e06f73d2d15b9a48c0f56bc3e41bc67e578",
+          "boundary": "actual shared Web UI on protected immutable Preview with controlled native replies; before centered dialog/capability revisions"
+        },
+        "electronTypecheck": "passed",
+        "finalAuthAndRuntimeTests": {
+          "files": 24,
+          "tests": 505,
+          "failed": 0,
+          "logSha256": "bc36712db69af53216f72c461e6f2ac26631cc3087dc40a1b86be45c01324335"
+        },
+        "finalBrowser": {
+          "tests": 3,
+          "passed": 3,
+          "failed": 0,
+          "reportSha256": "4f23c5a54c62f5b390fd1cd95f6cc5654dba592a7d8ab4845c38f1a60ec01ddb",
+          "deploymentId": "dpl_9HgT23h7DMyXVwfKDEidxs6pJYJv",
+          "url": "https://agiworkforce-fc2vzfjk6-siddharthanagula4.vercel.app",
+          "viewport": {
+            "width": 1280,
+            "height": 800
+          },
+          "boundaries": [
+            "actual hosted Web UI, controlled native replies",
+            "Cancel and Back in viewport; Escape; reload; expiry; old-host update message",
+            "ordinary Web cookie prompt retained; native consent not granted automatically",
+            "no live provider or packaged return-to-app claim"
+          ]
+        }
+      },
+      "candidate": {
+        "version": "0.0.4-e10.20261017",
+        "status": "REBUILDING_AFTER_RECURRENCE_REPAIR",
+        "publication": "none",
+        "sourceVerification": "both previous capability-aware packages passed strict signature, Gatekeeper, ticket, lipo and arm64 protocol checks; final recurrence-hardened package not yet verified"
+      },
+      "productionRollout": "NOT_PERFORMED",
+      "nativeUi": {
+        "status": "BLOCKED_MANUAL_UNLOCK",
+        "permissionDecision": "NOT_EXECUTED_MAC_LOCKED",
+        "installation": "NOT_PERFORMED",
+        "installedVersion": "0.0.3-e10.20261017"
+      },
+      "localDevelopmentControl": {
+        "minimalBindings": "invalid environment reported; login timed out; static robots served",
+        "configuredTestBindings": "environment validation succeeded; login still timed out after 15 seconds",
+        "serverDisposition": "both owned processes stopped normally after controls",
+        "boundary": "local dev route not operationally verified; no authentication, security or origin gate weakened; immutable production-mode Preview browser checks passed"
+      }
+    },
+    "dependencyAudit": {
+      "status": "FAILED",
+      "run": 39020286748,
+      "at": "2026-10-17",
+      "vulnerabilities": 15,
+      "maintenanceWarnings": 2,
+      "affectedZipVersions": ["1.1.4", "2.4.2", "4.6.1", "7.2.0", "8.6.0"],
+      "advisories": ["RUSTSEC-2026-0367", "RUSTSEC-2026-0368", "RUSTSEC-2026-0369"],
+      "primarySources": [
+        "https://rustsec.org/advisories/RUSTSEC-2026-0367.html",
+        "https://rustsec.org/advisories/RUSTSEC-2026-0368.html",
+        "https://rustsec.org/advisories/RUSTSEC-2026-0369.html"
+      ],
+      "patchedVersionFloor": "9.0.0",
+      "repairStatus": "NOT_IMPLEMENTED",
+      "boundary": "dependency findings published October 17; not a demonstrated exploit of AGI call sites; no ignore or gate weakening applied",
+      "upstreamConstraints": [
+        {
+          "crate": "calamine",
+          "latest": "0.36.1",
+          "zip": "^8.6"
+        },
+        {
+          "crate": "docx-rs",
+          "latest": "0.4.22",
+          "zip": "^8.6.0"
+        },
+        {
+          "crate": "libsodium-sys-stable",
+          "latest": "1.24.3",
+          "zip": "^8.6"
+        },
+        {
+          "crate": "rust_xlsxwriter",
+          "latest": "0.99.1",
+          "zip": "^8.3"
+        },
+        {
+          "crate": "tauri-plugin-updater",
+          "latest": "2.14.0",
+          "zip": "^4 (optional Windows dependency)"
+        }
+      ],
+      "upstreamBoundary": "official crates.io dependency endpoints inspected; ordinary upstream upgrades still retain affected ZIP majors; compatible dependency repair remains under investigation"
+    },
+    "codeqlRepairs": {
+      "status": "SOURCE_FIXED_LOCAL_VALIDATION_PASSED_CI_PENDING",
+      "reportedAtHead": "65cc10c02badb64a832df9a70b06bb26c10e7616",
+      "checkRunId": 117360732787,
+      "findings": [
+        {
+          "path": "packages/platform/utils/src/scheduling/recurrence-rule.ts",
+          "issue": "unbounded overlapping whitespace/line-start regex before existing parser length guard",
+          "repair": "shared input bound before normalization plus linear line-prefix detection",
+          "before": {
+            "elapsedMs": 2008,
+            "status": null,
+            "signal": "SIGTERM",
+            "error": "ETIMEDOUT",
+            "output": "",
+            "stderr": ""
+          },
+          "after": {
+            "elapsedMs": 204,
+            "status": 0,
+            "signal": null,
+            "error": null,
+            "output": "Recurrence rule is too long",
+            "stderr": ""
+          },
+          "boundary": "one bounded local adversarial control including process startup; not a general throughput benchmark"
+        },
+        {
+          "path": "apps/desktop/electron/__tests__/native-acceptance.mjs",
+          "issue": "fixture source interpolation and post-construction string rewrites",
+          "repair": "static source, alias-based imports, environment-carried data and a pure bootstrap owner with exact-origin network fencing",
+          "boundary": "unpackaged fixture only; normal packaged entry point remains unchanged"
+        }
+      ],
+      "tests": {
+        "utils": 367,
+        "webScheduleConsumers": 84,
+        "nativeRoutineOwners": 22,
+        "bootstrapControls": 4,
+        "fixtureCompilation": "passed without launching Desktop"
+      },
+      "fixtureCompilationLogSha256": "8ca9f80c73ecefa3f81241140538df4eb4b55f32ac703a3228430540084bc3df"
     }
   },
-  "priorSourceFilesDigest": "8e64bbacabf479f99153a93dea7c19f6b9af7db3f12799f68a5c383c0f649622",
+  "priorSourceFilesDigest": "ff404dd364116a28a317773f43fdded98e9d73ac48d25bdc3812b72392cfc842",
   "removedSourcePaths": [],
   "sourceFilesDigestEncoding": "SHA256 of UTF-8 sorted-key compact JSON sourceFiles array"
 }

@@ -1,6 +1,14 @@
-import { DESKTOP_DEEP_LINK_SCHEME } from './host-bridge';
+import { DESKTOP_DEEP_LINK_SCHEME, type HostBridge } from './host-bridge';
+
+export function hostSupportsBrowserSignIn(host: HostBridge | null | undefined): boolean {
+  return host?.shell === 'electron' && host.browserSignIn?.cancellation === true;
+}
 
 export const BROWSER_SIGN_IN_START = 'browser_sign_in_start';
+export const BROWSER_SIGN_IN_CANCEL = 'browser_sign_in_cancel';
+export const BROWSER_SIGN_IN_STATE = 'browser_sign_in_state';
+
+export type PendingBrowserSignIn = { kind: 'idle' } | { kind: 'waiting'; expiresAtMs: number };
 
 export const DESKTOP_SIGN_IN_PATH = '/auth/desktop';
 

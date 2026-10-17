@@ -447,6 +447,9 @@ export type {
 } from './background-activity';
 export {
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
+  hostSupportsBrowserSignIn,
   DESKTOP_SIGN_IN_COMPLETE_PATH,
   DESKTOP_SIGN_IN_LINK_HOST,
   DESKTOP_SIGN_IN_PATH,
@@ -455,6 +458,7 @@ export {
   readDesktopSignInChallenge,
   readDesktopSignInCode,
 } from './desktop-sign-in';
+export type { PendingBrowserSignIn } from './desktop-sign-in';
 
 export {
   CODE_LOCAL_ROOT_PARAM,

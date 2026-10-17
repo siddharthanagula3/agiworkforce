@@ -136,10 +136,15 @@ function parseByDay(value: string, freq: RecurrenceFrequency): RecurrenceWeekday
   });
 }
 
-export function parseRecurrenceRule(text: string, timezone: string): RecurrenceRule {
+function boundedRuleSource(text: string): string {
   const source = text.trim();
-  if (!source) fail('A recurrence rule is required');
   if (source.length > MAX_RULE_LENGTH) fail('Recurrence rule is too long');
+  return source;
+}
+
+export function parseRecurrenceRule(text: string, timezone: string): RecurrenceRule {
+  const source = boundedRuleSource(text);
+  if (!source) fail('A recurrence rule is required');
 
   let start: WallClock | null = null;
   let ruleLine: string | null = null;
@@ -249,8 +254,10 @@ export function formatRecurrenceRule(rule: RecurrenceRule): string {
 }
 
 export function normalizeRecurrenceRule(text: string, timezone: string, now: Date): string {
-  const source = text.trim();
-  const anchored = /(^|\n)\s*DTSTART/i.test(source)
+  const source = boundedRuleSource(text);
+  const anchored = source
+    .split('\n')
+    .some((line) => line.trimStart().toUpperCase().startsWith('DTSTART'))
     ? source
     : `DTSTART:${formatWall(wallClockAt(now, timezone))}\n${source}`;
   return formatRecurrenceRule(parseRecurrenceRule(anchored, timezone));

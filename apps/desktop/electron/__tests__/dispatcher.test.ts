@@ -6,6 +6,8 @@ import {
   APPLICATION_COMMANDS,
   BROWSER_PAIRING_COMMANDS,
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
   BROWSER_STEP_COMMAND,
   CLIPBOARD_COMMANDS,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
@@ -2998,6 +3000,8 @@ describe('the commands the contract lists', () => {
   /** Answered here although no contract list names them. */
   const ANSWERED_UNLISTED = new Set<string>([
     BROWSER_SIGN_IN_START,
+    BROWSER_SIGN_IN_CANCEL,
+    BROWSER_SIGN_IN_STATE,
     DISPATCH_TASK_REPORT,
     DISPATCH_TASK_RUNNER_READY,
     'background_activity',
@@ -3027,6 +3031,8 @@ describe('the commands the contract lists', () => {
   ]);
   const CONSTANT_LABELS: Record<string, string> = {
     BROWSER_SIGN_IN_START,
+    BROWSER_SIGN_IN_CANCEL,
+    BROWSER_SIGN_IN_STATE,
     BROWSER_STEP_COMMAND,
     DEVICE_REGISTRY_PROFILE_COMMAND,
     DISPATCH_TASK_REPORT,
