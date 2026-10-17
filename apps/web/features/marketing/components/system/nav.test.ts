@@ -171,8 +171,6 @@ describe('nav, the release archive', () => {
     'app/about/page.tsx',
     'app/status/page.tsx',
     'features/settings/sections/HelpSection.tsx',
-    'features/marketing/components/next/LandingNext.tsx',
-    'features/marketing/components/options/f1/content.ts',
   ])('is linked from %s at the canonical address only', (file) => {
     const source = readFileSync(resolve(APP_DIR, '..', file), 'utf8');
     expect(source).toMatch(new RegExp(`['"]${RELEASE_ARCHIVE}['"]`));

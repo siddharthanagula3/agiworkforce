@@ -180,16 +180,11 @@ describe('/desktop separates what is built from what is published', () => {
   });
 
   it('shows the registry label on the landing Desktop cards and types no publication state', () => {
-    for (const file of [
-      'features/marketing/components/MarketingLanding.tsx',
-      'features/marketing/components/next/LandingNext.tsx',
-    ]) {
-      const card = collapsed(file);
-      expect(card, file).toMatch(
-        /platforms: 'macOS, Apple silicon and Intel', status: SURFACE_STATUS\.desktop,/u,
-      );
-      expect(card, file).not.toMatch(/not yet published|has not been published/iu);
-    }
+    const card = collapsed('features/marketing/components/MarketingLanding.tsx');
+    expect(card).toMatch(
+      /platforms: 'macOS, Apple silicon and Intel', status: SURFACE_STATUS\.desktop,/u,
+    );
+    expect(card).not.toMatch(/not yet published|has not been published/iu);
   });
 
   it('advertises computer use only as the macOS implementation supports it', () => {
@@ -212,7 +207,6 @@ describe('Desktop computer use is described by the prompts the runtime really sh
   const PAGES = [
     'app/desktop/page.tsx',
     'features/marketing/components/MarketingLanding.tsx',
-    'features/marketing/components/next/LandingNext.tsx',
     'lib/changelog-entries.ts',
   ];
 
@@ -252,12 +246,10 @@ describe('Desktop computer use is described by the prompts the runtime really sh
     }
   });
 
-  it('carries the same two prompts into the landing cards and the dated changelog entry', () => {
-    for (const file of PAGES.slice(1, 3)) {
-      const page = collapsed(file);
-      expect(page).toContain('computer use that asks each session and before each app');
-      expect(page).toContain('Computer use on macOS, asked per session and per app');
-    }
+  it('carries the same two prompts into the landing cards', () => {
+    const page = collapsed('features/marketing/components/MarketingLanding.tsx');
+    expect(page).toContain('computer use that asks each session and before each app');
+    expect(page).toContain('Computer use on macOS, asked per session and per app');
     expect(collapsed('lib/changelog-entries.ts')).toContain(
       'computer use that asks before its first step each session and before each app it controls',
     );
@@ -518,11 +510,6 @@ describe('a notify action lands on the form that takes the address', () => {
       );
     }
     expect(collapsed('app/agi-code/page.tsx')).toMatch(/surfaceCta\('vscode'\), \]\}/u);
-
-    const nextLanding = collapsed('features/marketing/components/next/LandingNext.tsx');
-    for (const surface of ['chrome', 'vscode', 'mobile']) {
-      expect(nextLanding, surface).toContain(`_CTA = surfaceCta('${surface}');`);
-    }
   });
 
   it('gives the notify-list surfaces a notify action first, not the Enterprise enquiry', () => {

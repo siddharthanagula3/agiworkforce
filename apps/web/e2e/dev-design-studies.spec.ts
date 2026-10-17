@@ -1,22 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { routeIsServed } from './route-availability';
 
-const STUDIES = [
-  '/dev/frame-1',
-  '/dev/frame-2',
-  '/dev/frame-3',
-  '/dev/frame-4',
-  '/dev/frame-5',
-  '/dev/frame-6',
-  '/dev/landing-1',
-  '/dev/landing-2',
-  '/dev/landing-3',
-  '/dev/landing-next',
-  '/dev/landing-options',
-  '/dev/mockup-fidelity',
-  '/dev/review',
-  '/dev/review/web',
-] as const;
+const STUDIES = ['/dev/mockup-fidelity', '/dev/review', '/dev/review/web'] as const;
 
 test.describe('design study pages', () => {
   test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' } as never);

@@ -12,7 +12,7 @@ const BASELINE_FILE = path.join(__dirname, 'public-typography-source.baseline.js
 
 function sourceFiles(folder: string): string[] {
   return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.name === 'options' || entry.name === 'next' || entry.name === '__tests__') return [];
+    if (entry.name === '__tests__') return [];
     const file = path.join(folder, entry.name);
     if (entry.isDirectory()) return sourceFiles(file);
     return /\.(?:css|tsx?)$/.test(entry.name) && !/\.(?:test|spec)\./.test(entry.name)
