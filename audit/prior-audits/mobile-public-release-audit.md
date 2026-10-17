@@ -1,28 +1,80 @@
 # AGI Workforce Mobile Public Release Audit
 
-Status: Paused unresolved register; historical evidence current through 2026-09-14
+Status: Active public-store release preparation; submission not verified
 Owner: Mobile lead
-Last updated: 2026-09-21
-Scope: `apps/mobile` (Expo SDK 57, React Native 0.86.2, Expo Router 57) on iOS
-and Android, measured against the current ChatGPT and Claude mobile apps.
+Last updated: 2026-10-17
+Scope: `apps/mobile` on iOS and Android. The current release preparation uses
+Expo SDK 57 and React Native 0.86.3. The September comparison below is historical.
 
-Mobile implementation is paused while Website is the active release surface.
-When the founder advances the sequence, re-verify every competitor claim against
-`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`, re-run the
-instrumented audit against the then-current tree, and preserve this document's
-September 14 evidence. Mobile is next after Website and must consume the Account
-Cloud contracts rather than create private chat, memory, project, OAuth, file,
-or entitlement owners.
+The founder requested release to both public stores on October 17. Mobile must
+consume the Account Cloud contracts rather than create private chat, memory,
+project, OAuth, file, or entitlement owners. September competitor claims and
+device-independent findings below require fresh validation before reuse.
 
-This is the one canonical mobile release audit. It lives in `docs/work/`
-because that is the row `AGENTS.md` §11 assigns to release readiness, and
-because `scripts/check-repo-organization.mjs` refuses unregistered root files
-and records why earlier root-level audit artifacts were deleted. Rows that
+This is the canonical mobile release audit under `audit/`, as required by
+`AGENTS.md` §11. Rows that
 become code-cited defects move to `audit/registers/known-flaws.md`; product
 scope moves to `audit/registers/capability-gaps.csv`. A finding closed here is deleted,
 not archived; git carries the history.
 
-## How this audit was produced, and what it cannot claim
+## Current release preparation: 2026-10-17
+
+Source baseline: `c86971ce48a7d0f81e3d660df2d305fe44491f63`, with release fixes
+isolated on `codex/mobile-store-release`. No signed build, store upload, review
+acceptance, or public availability is established by the checks below.
+
+Verified changes and checks:
+
+- The iOS integrity guard now accepts exactly the app's production App Links and
+  webcredentials domains. Its regression test evaluates the actual app config;
+  missing, duplicate, and unrelated domains still fail.
+- `local-llm` now shares mobile's Metro and `llama.rn` versions, removing the
+  duplicate React Native resolution. Expo aligned the SDK 57 dependencies and
+  regenerated the lockfile; the online compatibility check passes (MOBILE-048).
+  The generated lock also contains shared transitive and peer-resolution changes.
+- Mobile typecheck and lint pass. The full mobile suite passes: 490 Jest suites,
+  4,744 tests, 24 snapshots, 105 Node release tests, and four Python verifier
+  fixture tests. Fixture IPA verification does not establish a signed archive.
+- Production Hermes exports compile for both platforms. The scanner now counts
+  development fallbacks separately per bundle. The actual scan still fails on
+  124 OOXML identifier findings. An identifier allowlist would also exempt a
+  real HTTP request using the same URI, so no exemption was retained. A new
+  bytecode regression preserves rejection of that case. This gate remains
+  blocking; compilation alone does not establish release acceptance.
+- Release integrity, build-environment configuration, privacy declarations, and
+  TLS pin provisioning checks pass. Pinning remains report-only (MOBILE-085).
+- EAS production now has `EXPO_PUBLIC_API_URL=https://agiworkforce.com` alongside
+  its existing live Clerk publishable key. EAS authentication works. The queried
+  build history is empty; no prior release candidate was available to reuse.
+- The deployed required Cloud API routes return their expected unauthenticated
+  error envelopes. Live store lookups agree with the unpublished release-state
+  registry (CRIT-007). Neither check proves authenticated product flows.
+
+Remaining submission and acceptance gates:
+
+| Gate                        | Observed state on October 17                                                                                                                                                                              | Required evidence                                                                                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Apple app access            | EAS reports no iOS signing credentials configured and cannot find `com.agiworkforce.app` with its available App Store Connect keys; numeric `ascAppId` and the configured local submission key are absent | Accessible App Store Connect app record, signing setup, and valid submission credentials                                                                                       |
+| Apple login                 | Production Clerk's public environment, including its native request variant, advertises Google and GitHub; Apple is absent                                                                                | Enable and verify Apple login, then configure the matching EAS/CI provider list; pass device sign-in                                                                           |
+| Google enrollment           | Computer Use observed the organization account still at the About you/verification stage                                                                                                                  | Completed Play Console account and app record                                                                                                                                  |
+| Android credentials         | EAS has a JKS upload key; Play submission and FCM V1 service accounts are unassigned                                                                                                                      | Authorized Play submission credentials; verify notification delivery if advertised                                                                                             |
+| App associations            | Apple association document returns HTTP 200; Android `assetlinks.json` returns HTTP 503                                                                                                                   | Publish the real Play App Signing certificate fingerprint and pass the association check                                                                                       |
+| Release CI                  | No `mobile-store-release` GitHub environment or mobile release secrets were found; the release workflow has no runs                                                                                       | Configure the protected release inputs if using that workflow                                                                                                                  |
+| Store and device acceptance | No current signed-device run or store-console metadata review performed                                                                                                                                   | Verify sign-in, chat, Local isolation, purchase/restore when enabled, permissions, deletion, screenshots (MOBILE-016), and reviewer access against the exact signed candidates |
+
+The Android production submission profile intentionally uploads an internal-track
+draft. Public promotion remains a separate Play Console action. iOS upload also
+does not constitute App Store review or publication. Keep the release-state
+registry unpublished until live listing evidence exists.
+
+Historical MOBILE-001 and MOBILE-002 are corrected in current source and covered
+by real store tests. MOBILE-010 remains a gap in the specifically named
+`trust-boundary.test.ts`, which still tests local helper implementations; the
+production-importing privacy-boundary, egress-guard, classification, and chat
+store suites provide separate evidence. This is not a newly demonstrated Local
+data leak.
+
+## Historical audit: September 14 methodology and limits
 
 - Audit date 2026-09-14, branch `claude/agi-workforce-mobile-audit-m7999y`,
   head at `83e0283a`.
@@ -51,7 +103,7 @@ not archived; git carries the history.
   found. Apple HealthKit claims come from developer.apple.com pages fetched
   on 2026-09-14.
 
-## Executive summary
+## Historical September 14 executive summary
 
 **Release recommendation: NOT READY.**
 

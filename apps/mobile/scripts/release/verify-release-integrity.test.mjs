@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import process from 'node:process';
 import test from 'node:test';
+import { fileURLToPath, URL } from 'node:url';
 
 import {
   CANONICAL_IDENTITY,
@@ -19,7 +23,7 @@ function productionConfig(overrides = {}) {
     ios: {
       bundleIdentifier: CANONICAL_IDENTITY.iosBundleIdentifier,
       buildNumber: '2',
-      associatedDomains: ['applinks:agiworkforce.com'],
+      associatedDomains: ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com'],
       entitlements: {
         'com.apple.developer.siri': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
@@ -75,10 +79,36 @@ function extensionInputs(overrides = {}) {
   };
 }
 
-test('the shipped configuration passes every identity check', () => {
+test('a production configuration passes every identity check', () => {
   assertStableIdentifiers(productionConfig());
   assertProductionHardening(productionConfig(), productionEas());
   assertShareExtensionAlignment(extensionInputs());
+});
+
+test('the actual production app config passes the release guard', () => {
+  const config = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        '-e',
+        'process.stdout.write(JSON.stringify(require(process.argv[1]).expo))',
+        fileURLToPath(new URL('../../app.config.js', import.meta.url)),
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          APP_ENV: 'production',
+          EXPO_PUBLIC_APP_ENV: 'production',
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_release_contract_test',
+          EXPO_PUBLIC_API_URL: 'https://agiworkforce.com',
+        },
+      },
+    ),
+  );
+  const eas = JSON.parse(readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'));
+
+  assertStableIdentifiers(config);
+  assertProductionHardening(config, eas);
 });
 
 test('a changed bundle identifier fails', () => {
@@ -190,6 +220,29 @@ test('a deep-link domain that is not ours fails', () => {
       ),
     /associatedDomains/u,
   );
+});
+
+test('production requires exactly the approved App Links and webcredentials domains', () => {
+  for (const associatedDomains of [
+    ['applinks:agiworkforce.com'],
+    ['webcredentials:agiworkforce.com'],
+    ['applinks:agiworkforce.com', 'webcredentials:example.com'],
+    ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com', 'applinks:example.com'],
+    [
+      'applinks:agiworkforce.com',
+      'webcredentials:agiworkforce.com',
+      'webcredentials:agiworkforce.com',
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        assertProductionHardening(
+          productionConfig({ ios: { associatedDomains } }),
+          productionEas(),
+        ),
+      /associatedDomains/u,
+    );
+  }
 });
 
 test('a share extension pinned to its own version fails', () => {

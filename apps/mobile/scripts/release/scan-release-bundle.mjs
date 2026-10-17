@@ -2,11 +2,12 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import console from 'node:console';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, extname, join, relative } from 'node:path';
 import process from 'node:process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import ts from 'typescript';
 
 const MOBILE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -129,7 +130,7 @@ function hermesCompilerPath() {
 }
 
 export function parseHermesStrings(dump) {
-  const count = Number(dump.match(/^  String count: (\d+)$/mu)?.[1]);
+  const count = Number(dump.match(/^ {2}String count: (\d+)$/mu)?.[1]);
   const start = dump.indexOf('Global String Table:\n');
   if (!Number.isSafeInteger(count) || start < 0) {
     throw new Error('Hermes dump has no complete global string table');
@@ -176,6 +177,11 @@ function inspectDevelopmentFallbacks(seenDevelopmentFallbacks) {
       );
     }
   }
+  return findings;
+}
+
+function inspectMobileSourceEndpoints() {
+  const findings = [];
   for (const sourceDirectory of ['app', 'src', 'lib', 'services']) {
     for (const file of walk(join(MOBILE_ROOT, sourceDirectory))) {
       if (
@@ -277,7 +283,6 @@ export function scanBundleDirectory(directory, productionOrigins) {
   let sawProductionOrigin = false;
   const legalBodies = readLegalAttributionBodies(readFileSync(LEGAL_BODIES_PATH, 'utf8'));
   const legalBodySet = new Set(legalBodies);
-  const seenDevelopmentFallbacks = new Map();
 
   for (const file of walk(directory)) {
     if (!SCANNED_EXTENSIONS.has(extname(file))) continue;
@@ -298,6 +303,7 @@ export function scanBundleDirectory(directory, productionOrigins) {
       problems.push({ file: relative(directory, file), finding });
     }
     if (extension !== '.hbc') continue;
+    const seenDevelopmentFallbacks = new Map();
     try {
       for (const entry of readHermesStrings(file)) {
         if (legalBodySet.has(entry)) continue;
@@ -311,12 +317,15 @@ export function scanBundleDirectory(directory, productionOrigins) {
           problems.push({ file: relative(directory, file), finding });
         }
       }
+      for (const finding of inspectDevelopmentFallbacks(seenDevelopmentFallbacks)) {
+        problems.push({ file: relative(directory, file), finding });
+      }
     } catch (error) {
       problems.push({ file: relative(directory, file), finding: error.message });
     }
   }
 
-  for (const finding of inspectDevelopmentFallbacks(seenDevelopmentFallbacks)) {
+  for (const finding of inspectMobileSourceEndpoints()) {
     problems.push({ file: '.', finding });
   }
 

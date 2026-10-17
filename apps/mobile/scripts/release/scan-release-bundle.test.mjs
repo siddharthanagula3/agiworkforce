@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import process from 'node:process';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 import {
   readLegalAttributionBodies,
@@ -183,6 +185,56 @@ test('a complete generated legal attribution is data, while another cleartext UR
   assert.ok(
     scanBundleDirectory(withExtraUrl).problems.some((problem) =>
       problem.finding.includes('cleartext URL'),
+    ),
+  );
+});
+
+test('development fallback attribution is independent for each platform bundle', () => {
+  const directory = bytecodeDirectory(`${CLEAN_BUNDLE}var DEV="http://localhost:8081/";`);
+  mkdirSync(join(directory, 'android'));
+  copyFileSync(join(directory, 'index.hbc'), join(directory, 'android', 'index.hbc'));
+
+  assert.deepEqual(scanBundleDirectory(directory).problems, []);
+});
+
+test('DOCX schema hosts do not exempt cleartext network endpoints', () => {
+  const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  assert.deepEqual(scanText(`fetch(${JSON.stringify(namespace)});`), [
+    'a cleartext URL (schemas.openxmlformats.org)',
+  ]);
+
+  for (const host of ['schemas.openxmlformats.org', 'schemas.microsoft.com', 'purl.org']) {
+    const directory = bytecodeDirectory(
+      `${CLEAN_BUNDLE}var XML=${JSON.stringify(namespace)};fetch("http://${host}/upload-private-data");`,
+    );
+    assert.ok(
+      scanBundleDirectory(directory).problems.some((problem) =>
+        problem.finding.includes(`a cleartext URL (${host})`),
+      ),
+    );
+  }
+});
+
+test('an exact DOCX namespace used by fetch in Hermes remains forbidden', () => {
+  const directory = bytecodeDirectory(
+    `${CLEAN_BUNDLE}fetch("http://schemas.openxmlformats.org/wordprocessingml/2006/main");`,
+  );
+
+  assert.ok(
+    scanBundleDirectory(directory).problems.some((problem) =>
+      problem.finding.includes('a cleartext URL (schemas.openxmlformats.org)'),
+    ),
+  );
+});
+
+test('DOCX identifiers do not mask secrets elsewhere in the same bytecode', () => {
+  const directory = bytecodeDirectory(
+    `${CLEAN_BUNDLE}var XML="http://purl.org/dc/terms/";var KEY="sk_live_0123456789abcdefghij";`,
+  );
+
+  assert.ok(
+    scanBundleDirectory(directory).problems.some((problem) =>
+      problem.finding.includes('a Clerk secret key'),
     ),
   );
 });

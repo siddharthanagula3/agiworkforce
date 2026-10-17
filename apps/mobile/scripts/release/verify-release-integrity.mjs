@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import console from 'node:console';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -26,7 +27,10 @@ export const CANONICAL_IDENTITY = Object.freeze({
 
 const PRODUCTION_ENTITLEMENTS = Object.freeze(['com.apple.developer.siri']);
 
-const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze(['applinks:agiworkforce.com']);
+const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze([
+  'applinks:agiworkforce.com',
+  'webcredentials:agiworkforce.com',
+]);
 
 // expo-dev-client stays a dependency: its native launcher is excluded from a
 // Release build, and the profile below is what keeps that true.

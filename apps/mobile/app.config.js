@@ -229,6 +229,7 @@ const config = {
   },
   plugins: [
     'expo-asset',
+    '@react-native-community/datetimepicker',
     'expo-iap',
     'expo-font',
     [
