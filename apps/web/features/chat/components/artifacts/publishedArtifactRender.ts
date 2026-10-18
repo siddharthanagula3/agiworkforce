@@ -1,4 +1,3 @@
-
 import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 import {
   buildArtifactCspMeta,
@@ -9,13 +8,7 @@ import {
 } from '@shared/utils/html-sanitizer';
 
 export type PublishedArtifactKind =
-  | 'html'
-  | 'react'
-  | 'svg'
-  | 'mermaid'
-  | 'markdown'
-  | 'text'
-  | 'code';
+  'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export const PUBLISHED_SANDBOX_KINDS: readonly PublishedArtifactKind[] = [
   'html',
@@ -55,9 +48,9 @@ export function buildPublishedFallbackSrcDoc(kind: PublishedArtifactKind, conten
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ${buildArtifactCspMeta()}
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@8.0.4/babel.min.js" integrity="sha384-bdF7m0Y1IFKt9Q6xC8X9qkXn0OBriQWKyWwZKYsN05zF6P/g9OakjjL0G2Sd4pB4" crossorigin="anonymous"></script>
   </head>
   <body>
     <div id="root"></div>
@@ -77,7 +70,7 @@ if (__AgiApp) {
   <head>
     <meta charset="UTF-8">
     ${buildArtifactCspMeta()}
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js" integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2" crossorigin="anonymous"></script>
     <script>mermaid.initialize({ startOnLoad: true, securityLevel: 'strict' });</script>
   </head>
   <body>
