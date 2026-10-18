@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { exportedMethods, handlerBody } from './lib/admin-route-guards.mjs';
 
@@ -93,7 +93,7 @@ export function classifyRoutes(routes, classification, read) {
   return { unclassified, stale, malformed, ungated };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const read = (rel) => fs.readFileSync(path.join(scanRoot, rel), 'utf8');
   const routes = operatorReachableRoutes(routeFiles(API_ROOT), read);
   if (routes.length === 0) {

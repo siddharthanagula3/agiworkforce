@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const LEDGER = 'audit/prior-audits/parity-implementation-matrix.md';
 const MARKER = /hard\s+precondition/gi;
@@ -72,7 +73,7 @@ export function auditLedger(root) {
   return errors;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const errors = auditLedger(process.cwd());
   if (errors.length > 0) {
     console.error('Capability precondition check failed:');

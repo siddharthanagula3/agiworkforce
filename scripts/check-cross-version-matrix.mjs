@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const CHECKLIST = 'audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md';
 const VERSION_MATRIX = '.github/cross-version-matrix.json';
@@ -183,7 +184,7 @@ export function runChecks() {
   return [...errors];
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const found = runChecks();
   if (found.length > 0) {
     console.error('Cross-version and cross-surface matrix check failed:\n');

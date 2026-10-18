@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 import { missingEnvironment, reportNotRun } from './lib/ci-prerequisites.mjs';
 
@@ -88,5 +89,5 @@ export function runChain({
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   process.exitCode = runChain();

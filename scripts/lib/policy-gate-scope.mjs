@@ -38,6 +38,12 @@ function declarationOf(source, resolver) {
   };
 }
 
+export function declaredAccountLevelResolvers(source) {
+  return ACCOUNT_LEVEL_RESOLVERS.filter((resolver) => declarationOf(source, resolver) !== null);
+}
+
+export { ACCOUNT_LEVEL_RESOLVERS };
+
 export function findRequestScopedPolicyResolvers(source) {
   const hits = [];
 

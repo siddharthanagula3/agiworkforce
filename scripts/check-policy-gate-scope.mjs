@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-import { findRequestScopedPolicyResolvers } from './lib/policy-gate-scope.mjs';
+import {
+  ACCOUNT_LEVEL_RESOLVERS,
+  declaredAccountLevelResolvers,
+  findRequestScopedPolicyResolvers,
+} from './lib/policy-gate-scope.mjs';
 
 const root = process.cwd();
 
@@ -15,6 +19,7 @@ const GATE_FILES = [
 ];
 
 const findings = [];
+const declared = new Set();
 
 for (const relative of GATE_FILES) {
   const absolute = path.join(root, relative);
@@ -22,8 +27,20 @@ for (const relative of GATE_FILES) {
     findings.push({ file: relative, line: 0, detail: 'file is missing from the guarded set' });
     continue;
   }
-  for (const hit of findRequestScopedPolicyResolvers(fs.readFileSync(absolute, 'utf8'))) {
+  const source = fs.readFileSync(absolute, 'utf8');
+  for (const resolver of declaredAccountLevelResolvers(source)) declared.add(resolver);
+  for (const hit of findRequestScopedPolicyResolvers(source)) {
     findings.push({ file: relative, ...hit });
+  }
+}
+
+for (const resolver of ACCOUNT_LEVEL_RESOLVERS) {
+  if (!declared.has(resolver)) {
+    findings.push({
+      file: GATE_FILES.join(', '),
+      line: 0,
+      detail: `${resolver} is not declared as \`export async function ${resolver}(...):\` in any gate file, so it went unchecked`,
+    });
   }
 }
 
