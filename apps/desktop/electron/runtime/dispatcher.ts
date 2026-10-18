@@ -2584,11 +2584,6 @@ export function commandGates(command: string): CommandGate[] {
   return gates;
 }
 
-/**
- * The single entry point from IPC into anything privileged. Order matters:
- * refuse what this shell does not do, classify, resolve the workspace, check
- * permission, then call the service.
- */
 const SSH_SESSION_COMMANDS = new Set([
   'developer_model_list',
   'developer_session_read',
@@ -2604,6 +2599,11 @@ const SSH_SESSION_COMMANDS = new Set([
   'developer_thread_compact',
 ]);
 
+/**
+ * The single entry point from IPC into anything privileged. Order matters:
+ * refuse what this shell does not do, classify, resolve the workspace, check
+ * permission, then call the service.
+ */
 export async function dispatch(
   window: BrowserWindow | null,
   command: string,

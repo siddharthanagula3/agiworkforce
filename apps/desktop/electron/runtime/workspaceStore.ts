@@ -187,20 +187,6 @@ export function forgetWorktreeRoot(id: string): void {
   worktrees.delete(id);
 }
 
-/**
- * Finds the approved root containing a resolved absolute path.
- *
- * The caller must have resolved symlinks first; a path that has not been
- * through `realpath` can point outside every root while appearing inside one.
- */
-export function findContainingRoot(resolvedPath: string): WorkspaceRoot | undefined {
-  load();
-  for (const root of roots.values()) {
-    if (isPathInside(root.path, resolvedPath, { platform: currentPlatform() })) return root;
-  }
-  return undefined;
-}
-
 export class WorkspaceGrantRefused extends Error {}
 
 export async function grantRoot(selectedPath: string): Promise<WorkspaceRoot> {
@@ -254,14 +240,6 @@ export function revokeRoot(id: string): boolean {
   persist();
   revokeScope({ kind: 'workspace', target: root.path });
   return true;
-}
-
-export function touchRoot(id: string): void {
-  load();
-  const root = roots.get(id);
-  if (!root) return;
-  roots.set(id, { ...root, lastOpenedAtMs: Date.now() });
-  persist();
 }
 
 export function setRootGit(id: string, gitRoot: string | undefined): void {

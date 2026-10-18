@@ -31,7 +31,6 @@ vi.mock('../browser/bridgeServer', () => ({
   installHostForPairedExtension: vi.fn(),
   isLoopbackAddress: vi.fn(),
   listBrowserActivity: vi.fn(),
-  listLocalClientActivity: vi.fn(),
   pairingState: vi.fn(),
   protocolMismatch: vi.fn(),
   removeHostAndPairing: vi.fn(),

@@ -1106,10 +1106,6 @@ export function settleBrowserActivity(entry: BrowserActivityEntry, error: string
   entry.error = error;
 }
 
-export function listLocalClientActivity(): readonly BrowserActivityEntry[] {
-  return localClientActivity;
-}
-
 export function listBrowserActivity(): BrowserActivityEntry[] {
   return localClientActivity.map((entry) => ({ ...entry })).reverse();
 }

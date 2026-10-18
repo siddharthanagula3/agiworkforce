@@ -10,8 +10,7 @@ vi.mock('electron', () => ({
   dialog: { showMessageBox: vi.fn() },
 }));
 
-const { findContainingRoot, grantRoot, listRoots, revokeRoot } =
-  await import('../runtime/workspaceStore');
+const { grantRoot, listRoots, revokeRoot } = await import('../runtime/workspaceStore');
 const { getPermissionState, recordDecision } = await import('../runtime/permissionManager');
 
 const scratch: string[] = [];
@@ -42,7 +41,6 @@ describe('the workspaces the app has been given', () => {
     // in one window is the grant the next window already has.
     expect(listRoots().map((root) => root.id)).toEqual([granted.id]);
     expect(listRoots().map((root) => root.id)).toEqual([granted.id]);
-    expect(findContainingRoot(path.join(granted.path, 'src', 'index.ts'))?.id).toBe(granted.id);
   });
 
   it('are written down once, not once per window', async () => {
@@ -61,7 +59,6 @@ describe('the workspaces the app has been given', () => {
 
     expect(revokeRoot(granted.id)).toBe(true);
     expect(listRoots()).toEqual([]);
-    expect(findContainingRoot(path.join(granted.path, 'src'))).toBeUndefined();
   });
 
   it('take every grant made on them along when one is revoked, and leave a refusal standing', async () => {

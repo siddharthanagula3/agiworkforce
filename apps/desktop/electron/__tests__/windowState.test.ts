@@ -157,7 +157,6 @@ describe('the state file', () => {
     state = {
       ...state,
       lastRoute: '/chat/abc',
-      lastWorkspace: 'workspace-1',
       secondaryPanelWidth: 380,
     };
     writeWindowState(file, state);
@@ -181,7 +180,6 @@ describe('the state file', () => {
         b: { x: 1, y: 2, width: 0, height: 5 },
       },
       lastRoute: '/sign-in',
-      lastWorkspace: '   ',
       secondaryPanelWidth: Number.NaN,
       lastAccount: 'not-a-fingerprint',
       sidebarCollapsed: 'yes',
@@ -189,7 +187,6 @@ describe('the state file', () => {
 
     expect(state.frames).toEqual({});
     expect(state.lastRoute).toBeNull();
-    expect(state.lastWorkspace).toBeNull();
     expect(state.secondaryPanelWidth).toBeNull();
     expect(state.lastAccount).toBeNull();
     expect(state.sidebarCollapsed).toBeNull();
@@ -218,14 +215,12 @@ describe('what a launch restores', () => {
   function afterAdaLeft(): ShellWindowState {
     let state = rememberFrame(normalizeWindowState(null), LAPTOP, frame(), 1_000);
     state = rememberRoute(state, '/chat/ada-private', ADA);
-    state = { ...state, lastWorkspace: '/Users/ada/secrets' };
     return adoptAccount(state, ADA);
   }
 
   it('reopens the route for the account that left it there', () => {
     const restored = resolveWindowRestore(afterAdaLeft(), [LAPTOP]);
     expect(restored.route).toBe('/chat/ada-private');
-    expect(restored.workspace).toBe('/Users/ada/secrets');
   });
 
   it('never reopens it for a different account', () => {
@@ -234,7 +229,6 @@ describe('what a launch restores', () => {
 
     expect(switched.lastRoute).toBeNull();
     expect(restored.route).toBeNull();
-    expect(restored.workspace).toBeNull();
   });
 
   it('never reopens it after a sign-out, whoever signs in next', () => {
@@ -300,22 +294,8 @@ describe('the bounds a launch opens on', () => {
   });
 
   it('opens on the defaults rather than nothing when the state file is corrupt', () => {
-    const { bounds, route, workspace } = resolveWindowRestore(normalizeWindowState('{ broken'), [
-      LAPTOP,
-    ]);
+    const { bounds, route } = resolveWindowRestore(normalizeWindowState('{ broken'), [LAPTOP]);
     expect(bounds.width).toBeGreaterThanOrEqual(MIN_WINDOW_WIDTH);
     expect(route).toBeNull();
-    expect(workspace).toBeNull();
-  });
-
-  it('carries the layout the shell is holding for the next window', () => {
-    const state = {
-      ...normalizeWindowState(null),
-      secondaryPanelWidth: 380,
-      sidebarCollapsed: true,
-    };
-    const restored = resolveWindowRestore(state, [LAPTOP]);
-    expect(restored.secondaryPanelWidth).toBe(380);
-    expect(restored.sidebarCollapsed).toBe(true);
   });
 });

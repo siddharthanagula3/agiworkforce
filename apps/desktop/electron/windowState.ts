@@ -31,7 +31,6 @@ export interface ShellWindowState {
   lastRouteAccount: string | null;
   /** The account this shell last saw signed in, null while signed out. */
   lastAccount: string | null;
-  lastWorkspace: string | null;
   secondaryPanelWidth: number | null;
   sidebarCollapsed: boolean | null;
 }
@@ -50,7 +49,6 @@ export const EMPTY_WINDOW_STATE: ShellWindowState = {
   lastRoute: null,
   lastRouteAccount: null,
   lastAccount: null,
-  lastWorkspace: null,
   secondaryPanelWidth: null,
   sidebarCollapsed: null,
 };
@@ -121,12 +119,6 @@ export function normalizeSecondaryPanelWidth(value: unknown): number | null {
   return Math.min(MAX_SECONDARY_PANEL_WIDTH, Math.max(MIN_SECONDARY_PANEL_WIDTH, width));
 }
 
-function normalizeWorkspace(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : null;
-}
-
 function normalizeAccountKey(value: unknown): string | null {
   return typeof value === 'string' && /^[0-9a-f]{32}$/.test(value) ? value : null;
 }
@@ -162,7 +154,6 @@ export function normalizeWindowState(raw: unknown): ShellWindowState {
     lastRoute: isRestorableRoute(source['lastRoute']) ? source['lastRoute'].trim() : null,
     lastRouteAccount: normalizeAccountKey(source['lastRouteAccount']),
     lastAccount: normalizeAccountKey(source['lastAccount']),
-    lastWorkspace: normalizeWorkspace(source['lastWorkspace']),
     secondaryPanelWidth: normalizeSecondaryPanelWidth(source['secondaryPanelWidth']),
     sidebarCollapsed:
       typeof source['sidebarCollapsed'] === 'boolean' ? source['sidebarCollapsed'] : null,
@@ -272,9 +263,6 @@ export interface WindowRestore {
   bounds: { x: number; y: number; width: number; height: number };
   maximized: boolean;
   route: string | null;
-  workspace: string | null;
-  secondaryPanelWidth: number | null;
-  sidebarCollapsed: boolean | null;
 }
 
 function centeredDefaultBounds(workArea: WorkArea): WindowRestore['bounds'] {
@@ -309,20 +297,16 @@ export function resolveWindowRestore(
           height: DEFAULT_WINDOW_HEIGHT,
         },
       );
-  const ownsRoute = routeBelongsToCurrentAccount(state);
   return {
     bounds,
     maximized: frame?.maximized ?? false,
-    route: ownsRoute ? state.lastRoute : null,
-    workspace: ownsRoute ? state.lastWorkspace : null,
-    secondaryPanelWidth: state.secondaryPanelWidth,
-    sidebarCollapsed: state.sidebarCollapsed,
+    route: routeBelongsToCurrentAccount(state) ? state.lastRoute : null,
   };
 }
 
 /**
  * Records who is signed in. An account this shell has not seen before drops the
- * route and workspace the previous one left behind.
+ * route the previous one left behind.
  */
 export function adoptAccount(state: ShellWindowState, account: string | null): ShellWindowState {
   if (account !== null && account === state.lastRouteAccount) {
@@ -333,7 +317,6 @@ export function adoptAccount(state: ShellWindowState, account: string | null): S
     lastAccount: account,
     lastRoute: null,
     lastRouteAccount: null,
-    lastWorkspace: null,
   };
 }
 

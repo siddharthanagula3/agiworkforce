@@ -409,7 +409,7 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
           'turn-complete',
           {
             title: `Agent finished in ${label()}`,
-            body: clip(event.response) || 'The turn is complete.',
+            body: clip(redactSecrets(event.response)) || 'The turn is complete.',
           },
           () => deps.openSession(rootId, event.threadId),
         );
@@ -419,7 +419,7 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
           'turn-failed',
           {
             title: `Agent stopped with an error in ${label()}`,
-            body: clip(event.failure?.message ?? '') || 'The turn did not finish.',
+            body: clip(redactSecrets(event.failure?.message ?? '')) || 'The turn did not finish.',
           },
           () => deps.openSession(rootId, event.threadId),
         );
