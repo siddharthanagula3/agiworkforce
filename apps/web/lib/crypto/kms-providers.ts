@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 
 import { signAwsRequest, type AwsCredentials } from './aws-sigv4';
+import { isAwsKmsRegion, isAzureKeyVaultHost } from './cmek-lifecycle';
 import {
   CMEK_DATA_KEY_LENGTH,
   CmekProviderUnconfiguredError,
@@ -128,6 +129,11 @@ export function createAwsKmsProvider(options: KmsProviderOptions = {}): CmekProv
     target: 'GenerateDataKey' | 'Decrypt',
     payload: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
+    if (!isAwsKmsRegion(descriptor.region)) {
+      throw new Error(
+        `"${descriptor.region}" is not an AWS region, so no KMS request is signed for it`,
+      );
+    }
     const signed = signAwsRequest({
       credentials,
       region: descriptor.region,
@@ -241,6 +247,15 @@ export function createGcpKmsProvider(options: GcpKmsProviderOptions = {}): CmekP
   };
 }
 
+function isKeyVaultKeyUrl(keyUri: string): boolean {
+  try {
+    const url = new URL(keyUri);
+    return url.protocol === 'https:' && url.port === '' && isAzureKeyVaultHost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function base64UrlEncode(value: Buffer): string {
   return value.toString('base64url');
 }
@@ -288,6 +303,11 @@ export function createAzureKeyVaultProvider(options: KmsProviderOptions = {}): C
     operation: 'wrapkey' | 'unwrapkey',
     value: string,
   ): Promise<string> {
+    if (!isKeyVaultKeyUrl(descriptor.keyUri)) {
+      throw new Error(
+        'The key URL is not under vault.azure.net, so no Key Vault token is sent to it',
+      );
+    }
     const token = await accessToken();
     const response = await call(
       `${descriptor.keyUri}/${operation}?api-version=${AZURE_KEY_VAULT_API_VERSION}`,

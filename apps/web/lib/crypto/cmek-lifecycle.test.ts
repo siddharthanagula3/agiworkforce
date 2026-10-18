@@ -89,6 +89,28 @@ describe('the key name a customer types', () => {
     expect(result.detail).toMatch(/query string/);
   });
 
+  it('refuses an AWS key whose region is not a region name', () => {
+    expect(
+      validateCmekKeyUri({
+        provider: 'aws_kms',
+        keyUri: 'alias/main',
+        region: 'collector.example/x?',
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('refuses a Key Vault URL on a host outside vault.azure.net', () => {
+    for (const keyUri of [
+      'https://collector.example/keys/main',
+      'https://vault.azure.net.collector.example/keys/main',
+      'https://acme.vault.azure.net:8443/keys/main',
+    ]) {
+      expect(validateCmekKeyUri({ provider: 'azure_key_vault', keyUri, region: 'eastus' }).ok).toBe(
+        false,
+      );
+    }
+  });
+
   it('refuses a Key Vault key addressed over plain http', () => {
     expect(
       validateCmekKeyUri({

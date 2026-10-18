@@ -60,6 +60,24 @@ const AWS_BARE_KEY =
 const GCP_CRYPTO_KEY =
   /^projects\/[^/\s]+\/locations\/([^/\s]+)\/keyRings\/[^/\s]+\/cryptoKeys\/[^/\s]+$/;
 const LOCAL_KEY_URI = /^local:\/\/[^\s]+$/;
+const AWS_REGION = /^[a-z]{2}(?:-[a-z]+)+-\d{1,2}$/;
+const AZURE_KEY_VAULT_HOST_SUFFIX = '.vault.azure.net';
+
+/**
+ * The region becomes the AWS KMS hostname and the Key Vault URL is the request
+ * target, so either one unchecked would send a signed request or a Key Vault
+ * bearer token to a host the workspace chose.
+ */
+export function isAwsKmsRegion(region: string): boolean {
+  return AWS_REGION.test(region);
+}
+
+export function isAzureKeyVaultHost(hostname: string): boolean {
+  return (
+    hostname.endsWith(AZURE_KEY_VAULT_HOST_SUFFIX) &&
+    hostname.length > AZURE_KEY_VAULT_HOST_SUFFIX.length
+  );
+}
 
 /**
  * The shapes the three adapters in kms-providers.ts actually put on the wire.
@@ -73,6 +91,9 @@ export function validateCmekKeyUri(descriptor: CmekKeyDescriptor): {
   const uri = descriptor.keyUri.trim();
   switch (descriptor.provider) {
     case 'aws_kms': {
+      if (!isAwsKmsRegion(descriptor.region)) {
+        return { ok: false, detail: `"${descriptor.region}" is not an AWS region name` };
+      }
       const arn = AWS_KEY_ARN.exec(uri);
       if (arn) {
         const arnRegion = arn[1] as string;
@@ -115,6 +136,9 @@ export function validateCmekKeyUri(descriptor: CmekKeyDescriptor): {
       }
       if (parsed.protocol !== 'https:') {
         return { ok: false, detail: 'a Key Vault key must be addressed over https' };
+      }
+      if (!isAzureKeyVaultHost(parsed.hostname) || parsed.port !== '') {
+        return { ok: false, detail: 'expected a key in a vault under vault.azure.net' };
       }
       if (parsed.search.length > 0) {
         return {

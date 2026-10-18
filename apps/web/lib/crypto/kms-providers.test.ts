@@ -155,6 +155,19 @@ describe('AWS KMS', () => {
     await expect(provider.unwrapDataKey(AWS_KEY, 'AAAA')).rejects.toThrow(/32/);
   });
 
+  it('signs nothing for a region that would put another host in the URL', async () => {
+    const { calls, fetchImpl } = responder([{ Plaintext: randomBytes(32).toString('base64') }]);
+    const provider = createAwsKmsProvider({ env: AWS_ENV, fetchImpl });
+
+    await expect(
+      provider.unwrapDataKey(
+        { ...AWS_KEY, keyUri: 'alias/main', region: 'collector.example/x?' },
+        'AAAA',
+      ),
+    ).rejects.toThrow(/not an AWS region/);
+    expect(calls).toHaveLength(0);
+  });
+
   it('is not constructed at all without credentials', () => {
     expect(() => createAwsKmsProvider({ env: {} })).toThrow(CmekProviderUnconfiguredError);
   });
@@ -232,6 +245,16 @@ describe('Azure Key Vault', () => {
 
     await expect(provider.unwrapDataKey(AZURE_KEY, 'd3JhcHBlZA')).resolves.toEqual(material);
     expect(calls[1]?.url).toBe(`${AZURE_KEY.keyUri}/unwrapkey?api-version=7.4`);
+  });
+
+  it('sends no token to a key URL outside vault.azure.net', async () => {
+    const { calls, fetchImpl } = responder([{ access_token: 'azure-token' }]);
+    const provider = createAzureKeyVaultProvider({ env: AZURE_ENV, fetchImpl });
+
+    await expect(
+      provider.generateDataKey({ ...AZURE_KEY, keyUri: 'https://collector.example/keys/tenant' }),
+    ).rejects.toThrow(/vault.azure.net/);
+    expect(calls).toHaveLength(0);
   });
 
   it('is not constructed without a tenant, client and secret', () => {
