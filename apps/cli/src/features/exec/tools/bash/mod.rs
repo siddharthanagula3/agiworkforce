@@ -484,9 +484,7 @@ pub(super) async fn approve_command(
     // override. Confirmation is only waived when EVERY segment matched an explicit
     // allow rule.
     let asks = require_confirmation
-        && crate::permissions::PermissionStore::load()
-            .unwrap_or_default()
-            .asks_before(command);
+        && crate::permissions::PermissionStore::load_or_ask().asks_before(command);
     {
         use crate::features::exec::exec_policy::{evaluate_command, load_policy};
         use agiworkforce_execpolicy::Decision;
@@ -514,7 +512,7 @@ pub(super) async fn approve_command(
         let safety = classify_command(command);
         let hook_bypass = bypasses_git_hooks(command);
         if asks || !matches!(safety, CommandSafety::Safe) {
-            let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+            let perms = crate::permissions::PermissionStore::load_or_ask();
 
             match saved_command_decision(&perms, command, safety) {
                 Some(true) => {
@@ -576,8 +574,7 @@ pub(super) async fn approve_command(
                             }));
                         }
 
-                        let mut perms =
-                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        let mut perms = crate::permissions::PermissionStore::load_or_ask();
                         match decision {
                             ApprovalDecision::AllowSession => {
                                 perms.allow_session_for_process(command);
@@ -646,8 +643,7 @@ pub(super) async fn approve_command(
                             }));
                         }
 
-                        let mut perms =
-                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        let mut perms = crate::permissions::PermissionStore::load_or_ask();
                         perms.allow_session_for_process(command);
                     }
                 }

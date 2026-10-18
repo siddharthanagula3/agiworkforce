@@ -1173,6 +1173,7 @@ pub fn remove_saved_permission(
                 .map(|rule| (deny, rule.clone()))
         });
     let mcp_rule = crate::platform::policy::user_mcp_rules()
+        .map_err(internal)?
         .into_iter()
         .find(|(target, _)| saved_permission_id(MCP_RULE_SCOPE, target) == id);
     if let Some((target, _)) = mcp_rule {
@@ -1243,7 +1244,7 @@ pub fn list_permission_rules() -> Result<PermissionRulesResponse, DeveloperSessi
         })
         .collect();
     let server_prefix = crate::platform::policy::mcp_rule_target("", None);
-    for (target, decision) in crate::platform::policy::user_mcp_rules() {
+    for (target, decision) in crate::platform::policy::user_mcp_rules().map_err(internal)? {
         let shown = target
             .strip_prefix(&server_prefix)
             .unwrap_or(&target)

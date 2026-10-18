@@ -582,7 +582,7 @@ async fn run_approved_push(
     plan: PushPlan,
     consent: PushConsent,
 ) -> Result<ToolResult> {
-    let store = crate::permissions::PermissionStore::load().unwrap_or_default();
+    let store = crate::permissions::PermissionStore::load_or_ask();
     let profile = store.code_permission_profile(None);
     let plan = plan.approved(consent);
     Ok(match git.push(&plan, &profile).await {

@@ -2399,7 +2399,7 @@ async fn execute_powershell(
     let permission_command = format!("powershell -NoProfile -NonInteractive -Command {}", command);
 
     if require_confirmation {
-        let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+        let perms = crate::permissions::PermissionStore::load_or_ask();
         match bash::saved_command_decision(
             &perms,
             &permission_command,
@@ -2438,7 +2438,7 @@ async fn execute_powershell(
                         });
                     }
 
-                    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                    let mut perms = crate::permissions::PermissionStore::load_or_ask();
                     match decision {
                         ApprovalDecision::AllowSession => {
                             perms.allow_session_for_process(&permission_command);
@@ -2468,7 +2468,7 @@ async fn execute_powershell(
                         });
                     }
 
-                    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                    let mut perms = crate::permissions::PermissionStore::load_or_ask();
                     perms.allow_session_for_process(&permission_command);
                 }
             }

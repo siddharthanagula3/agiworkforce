@@ -46,7 +46,7 @@ async fn worktree_approval_denial(
         return None;
     }
 
-    let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+    let perms = crate::permissions::PermissionStore::load_or_ask();
     match perms.check_command(permission_command) {
         Some(true) => None,
         Some(false) => Some(ToolResult {
@@ -79,7 +79,7 @@ async fn worktree_approval_denial(
                     });
                 }
 
-                let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                let mut perms = crate::permissions::PermissionStore::load_or_ask();
                 match decision {
                     ApprovalDecision::AllowSession => {
                         perms.allow_session_for_process(permission_command);
@@ -110,7 +110,7 @@ async fn worktree_approval_denial(
                     });
                 }
 
-                let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                let mut perms = crate::permissions::PermissionStore::load_or_ask();
                 perms.allow_session_for_process(permission_command);
                 None
             }

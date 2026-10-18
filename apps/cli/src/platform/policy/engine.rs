@@ -434,25 +434,23 @@ fn write_user_mcp_rule(
     Ok(path)
 }
 
-pub fn user_mcp_rules() -> Vec<(String, PolicyDecision)> {
+pub fn user_mcp_rules() -> Result<Vec<(String, PolicyDecision)>> {
     let Some(path) = user_policy_path().filter(|path| path.exists()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|contents| toml::from_str::<WorkspacePolicy>(&contents).ok())
-        .map(|policy| {
-            policy
-                .rules
-                .into_iter()
-                .filter(|rule| rule.pattern.is_none() && rule.tool.starts_with(MCP_TOOL_PREFIX))
-                .map(|rule| {
-                    let decision = decision_of(&rule);
-                    (rule.tool, decision)
-                })
-                .collect()
+    let contents = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let policy: WorkspacePolicy = toml::from_str(&contents)
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    Ok(policy
+        .rules
+        .into_iter()
+        .filter(|rule| rule.pattern.is_none() && rule.tool.starts_with(MCP_TOOL_PREFIX))
+        .map(|rule| {
+            let decision = decision_of(&rule);
+            (rule.tool, decision)
         })
-        .unwrap_or_default()
+        .collect())
 }
 
 fn workspace_policy_path(workspace_root: &Path) -> PathBuf {

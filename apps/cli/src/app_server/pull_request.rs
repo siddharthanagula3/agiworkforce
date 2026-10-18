@@ -249,8 +249,7 @@ pub async fn create(
                     "The push was not approved and nothing left this machine",
                 )
             })?;
-        let profile = crate::permissions::PermissionStore::load()
-            .unwrap_or_default()
+        let profile = crate::permissions::PermissionStore::load_or_ask()
             .code_permission_profile(None);
         GitApi::at(root)
             .push(&plan.clone().approved(consent), &profile)

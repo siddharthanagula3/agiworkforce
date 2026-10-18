@@ -31,7 +31,7 @@ struct MultiEditOp {
 }
 
 fn saved_file_permission(operation: FilePermissionOperation, paths: &[PathBuf]) -> Option<bool> {
-    let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+    let perms = crate::permissions::PermissionStore::load_or_ask();
     perms.check_files(operation, paths)
 }
 
@@ -44,7 +44,7 @@ fn persist_file_permission_decision(
         return;
     }
 
-    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+    let mut perms = crate::permissions::PermissionStore::load_or_ask();
     match decision {
         ApprovalDecision::AllowSession => {
             for path in paths {

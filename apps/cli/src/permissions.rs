@@ -283,6 +283,11 @@ pub struct PermissionStore {
     /// the invocation, not to the machine.
     #[serde(skip)]
     pub active_mode: Option<PermissionMode>,
+
+    /// permissions.toml exists but could not be read: no stored rule applies
+    /// and every command asks first.
+    #[serde(skip)]
+    unreadable: bool,
 }
 
 /// The capability a stored command rule decides, for the capabilities a rule
@@ -382,6 +387,32 @@ impl PermissionStore {
         Ok(store)
     }
 
+    /// The stored rules, or, when permissions.toml cannot be read, a store
+    /// that applies no rule and asks before every command. The reason is
+    /// shown once per process.
+    pub fn load_or_ask() -> Self {
+        match Self::load() {
+            Ok(store) => store,
+            Err(error) => {
+                static WARNED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    let file = Self::path()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|_| "permissions.toml".to_string());
+                    crate::output::print_warn(&format!(
+                        "{file} could not be read ({error:#}), so no saved permission applies and every command asks first. Fix or remove that file."
+                    ));
+                }
+                Self {
+                    active_mode: persisted_active_mode(),
+                    unreadable: true,
+                    ..Self::default()
+                }
+            }
+        }
+    }
+
     pub fn save(&self) -> Result<()> {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir)?;
@@ -416,7 +447,7 @@ impl PermissionStore {
         // stored `git status` rule with no metachar in any trailing token.
         // the prompt was skipped and sh -c ran both lines. A stored rule can
         // never span lines, so a multi-line command has no stored decision.
-        if command.contains('\n') || command.contains('\r') {
+        if self.unreadable || command.contains('\n') || command.contains('\r') {
             return None;
         }
         let trimmed = command.trim();
@@ -550,6 +581,9 @@ impl PermissionStore {
     /// Check a path-scoped file mutation rule. File rules use exact keys so
     /// paths containing spaces are not interpreted as command tokens.
     pub fn check_file(&self, operation: FilePermissionOperation, path: &Path) -> Option<bool> {
+        if self.unreadable {
+            return None;
+        }
         let key = file_permission_key(operation, path)?;
         if self.always_deny.contains(&key) {
             return Some(false);
@@ -684,11 +718,12 @@ impl PermissionStore {
     }
 
     pub fn asks_before(&self, command: &str) -> bool {
-        self.command_matches_rules(
-            command,
-            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
-            false,
-        )
+        self.unreadable
+            || self.command_matches_rules(
+                command,
+                self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+                false,
+            )
     }
 
     pub fn denies_powershell_command(&self, command: &str) -> bool {
@@ -696,11 +731,12 @@ impl PermissionStore {
     }
 
     pub fn asks_before_powershell(&self, command: &str) -> bool {
-        self.command_matches_rules(
-            command,
-            self.ask_list.iter().map(|rule| rule.pattern.as_str()),
-            true,
-        )
+        self.unreadable
+            || self.command_matches_rules(
+                command,
+                self.ask_list.iter().map(|rule| rule.pattern.as_str()),
+                true,
+            )
     }
 
     fn command_matches_rules<'a>(

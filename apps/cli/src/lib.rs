@@ -4823,7 +4823,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             );
             println!("{:<10} {}", "file", McpRegistry::default_path()?.display());
             let prefix = crate::platform::policy::mcp_rule_target(name, None);
-            for (target, decision) in crate::platform::policy::user_mcp_rules()
+            for (target, decision) in crate::platform::policy::user_mcp_rules()?
                 .into_iter()
                 .filter(|(target, _)| {
                     target == &prefix || target.starts_with(&format!("{prefix}__"))
