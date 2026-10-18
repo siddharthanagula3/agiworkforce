@@ -322,7 +322,9 @@ export function useLiveVoiceSession({
     );
 
     const appState = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' || cancelled) return;
+      // iOS reports 'inactive' while its own microphone prompt is on screen,
+      // which is where the first session asks for access.
+      if (nextState !== 'background' || cancelled) return;
       cancelled = true;
       const session = sessionRef.current;
       sessionRef.current = null;

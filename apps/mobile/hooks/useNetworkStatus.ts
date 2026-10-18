@@ -40,8 +40,19 @@ export function useNetworkStatus(): NetworkStatus {
 
     try {
       await offlineQueue.processQueue(async (msg) => {
-        resolveOfflineMessage(msg.conversationId, msg.id);
-        await sendMessage(msg.conversationId, msg.content, msg.model);
+        let accepted = false;
+        try {
+          await sendMessage(msg.conversationId, msg.content, msg.model, undefined, {
+            onAccepted: () => {
+              accepted = true;
+              resolveOfflineMessage(msg.conversationId, msg.id);
+            },
+          });
+        } catch (error) {
+          if (!accepted) throw error;
+          return;
+        }
+        if (!accepted) throw new Error('The queued message was not accepted for sending.');
       });
     } finally {
       reconnectInFlightRef.current = false;

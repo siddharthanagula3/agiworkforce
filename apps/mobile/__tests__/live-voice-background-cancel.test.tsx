@@ -44,11 +44,15 @@ function Harness({ onEnded }: { onEnded: (message: string | null) => void }) {
   return <Text testID="status">{controller.status}</Text>;
 }
 
-function backgroundApp() {
+function changeAppState(state: string) {
   const calls = (AppState.addEventListener as unknown as jest.Mock).mock.calls;
   for (const [event, handler] of calls) {
-    if (event === 'change') (handler as (state: string) => void)('background');
+    if (event === 'change') (handler as (state: string) => void)(state);
   }
+}
+
+function backgroundApp() {
+  changeAppState('background');
 }
 
 function fakeSession(sessionId: string) {
@@ -101,6 +105,21 @@ describe('live voice session backgrounded mid-connect', () => {
     await waitFor(() => expect(mockClose).toHaveBeenCalledTimes(1));
     expect(getByTestId('status').props.children).toBe('idle');
     await waitFor(() => expect(mockSettle).toHaveBeenCalled());
+  });
+
+  it('keeps connecting while the system microphone prompt makes the app inactive', async () => {
+    mockStart.mockImplementation(async () => fakeSession('s3'));
+    const onEnded = jest.fn();
+    const { getByTestId } = render(<Harness onEnded={onEnded} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+
+    await act(async () => {
+      changeAppState('inactive');
+    });
+
+    expect(onEnded).not.toHaveBeenCalled();
+    expect(mockClose).not.toHaveBeenCalled();
+    expect(getByTestId('status').props.children).toBe('connecting');
   });
 
   it('ignores session callbacks delivered after backgrounding', async () => {
