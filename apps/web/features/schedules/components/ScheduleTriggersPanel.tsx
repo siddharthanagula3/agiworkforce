@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Input, Label, Spinner, Switch, useConfirm } from '@agiworkforce/ui';
+import { Button, Input, Label, Spinner, Switch, useConfirmAction } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_TRIGGERS_PATH,
   ManagedCloudEventTriggerCreatedResponseSchema,
@@ -135,7 +135,7 @@ export default function ScheduleTriggersPanel({
   } | null>(null);
   const [savingConditions, setSavingConditions] = useState(false);
   const [watching, setWatching] = useState<string | null>(null);
-  const { confirm, dialog } = useConfirm();
+  const { confirm, dialog } = useConfirmAction();
 
   const selected = SOURCES.find((entry) => entry.value === source)!;
 
@@ -276,30 +276,31 @@ export default function ScheduleTriggersPanel({
   }
 
   async function remove(trigger: EventTrigger) {
-    const confirmed = await confirm({
+    confirm({
       title: `Delete the ${SOURCE_LABELS[trigger.source]} trigger “${trigger.name}”?`,
       description:
         `${scheduleName} stops running when these events arrive, and the delivery history for this ` +
         `trigger is deleted with it. A connector trigger's URL and signing secret stop working and ` +
         `a new trigger gets new ones. This cannot be undone.`,
-      confirmText: 'Delete trigger',
-      variant: 'destructive',
+      confirmLabel: 'Delete trigger',
+      destructive: true,
+      onConfirm: async () => {
+        setError(null);
+        try {
+          const response = await fetch(managedCloudTriggerPath(trigger.id), {
+            method: 'DELETE',
+            headers: await addCsrfHeaders({}),
+          });
+          if (!response.ok) {
+            const body = await response.json().catch(() => null);
+            throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+          }
+          await load();
+        } catch (deleteError) {
+          setError(toUserMessage(deleteError, 'Could not delete that trigger.'));
+        }
+      },
     });
-    if (!confirmed) return;
-    setError(null);
-    try {
-      const response = await fetch(managedCloudTriggerPath(trigger.id), {
-        method: 'DELETE',
-        headers: await addCsrfHeaders({}),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-      }
-      await load();
-    } catch (deleteError) {
-      setError(toUserMessage(deleteError, 'Could not delete that trigger.'));
-    }
   }
 
   return (

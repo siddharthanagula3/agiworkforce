@@ -3,7 +3,7 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import { useState } from 'react';
 import { BarChart3, Download } from 'lucide-react';
-import { formatCredits } from '@agiworkforce/types';
+import { formatCredits, usageWorkloadLabel } from '@agiworkforce/types';
 
 import { WorkspaceSpendLimit } from './WorkspaceSpendLimit';
 import {
@@ -82,19 +82,6 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
       ))}
     </div>
   );
-}
-
-const WORKLOAD_LABELS: Record<string, string> = {
-  chat: 'Chat',
-  work: 'AGI Work',
-  research: 'Deep Research',
-  code: 'AGI Code',
-  browser: 'Browser',
-  unknown: 'Not attributed',
-};
-
-function workloadLabel(key: string): string {
-  return WORKLOAD_LABELS[key] ?? key;
 }
 
 function BreakdownTable({
@@ -330,7 +317,7 @@ export function WorkspaceUsageAnalytics() {
             title="By product area"
             caption="Chat, AGI Work, Deep Research, AGI Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
             rows={usage.byWorkload}
-            labelFor={workloadLabel}
+            labelFor={usageWorkloadLabel}
           />
           <BreakdownTable
             title="By model"

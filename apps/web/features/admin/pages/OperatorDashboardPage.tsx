@@ -7,7 +7,7 @@ import type {
   UserRow,
 } from '@/features/admin/services/operator-metrics';
 import { centsFromCredits, formatCredits } from '@agiworkforce/types';
-import { useConfirm, translateUiPlural } from '@agiworkforce/ui';
+import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import BackgroundJobsPanel from '../components/BackgroundJobsPanel';
@@ -155,7 +155,7 @@ export function OperatorDashboardPage() {
   // The shared AlertDialog rather than window.confirm: these are the most
   // destructive controls in the product and they should not be gated by a
   // browser chrome dialog that carries no severity styling and is suppressible.
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   const load = useCallback(async (view: Tab) => {
     // Cleared for every view, not only the ones that fetch here: a failure from
@@ -210,29 +210,37 @@ export function OperatorDashboardPage() {
       }
       // Two gates on purpose: the styled dialog states the blast radius with
       // proper severity, and only then does the typed phrase confirm intent.
-      const acknowledged = await confirmDestructive({
+      confirmDestructive({
         title: 'Clear usage for every account?',
         description: `This clears ${formatCreditAmount(cleared)} of usage across ${affected} account(s) and cannot be undone. You will be asked to type a confirmation next.`,
-        confirmText: 'Continue',
-        variant: 'destructive',
+        confirmLabel: 'Continue',
+        destructive: true,
+        onConfirm: async () => {
+          const typed = window.prompt('Type RESET ALL USAGE to confirm.');
+          if (typed === null) return;
+          setBulkBusy(true);
+          try {
+            const result = await operatorAction({ action: 'reset-all-usage', confirm: typed });
+            setNotice(
+              translateUiPlural(
+                'settings',
+                'counts.clearedAcrossAccounts',
+                Number(result['affectedUsers'] ?? 0),
+                {
+                  one: 'Cleared {{credits}} across {{count}} account.',
+                  other: 'Cleared {{credits}} across {{count}} accounts.',
+                },
+                { credits: formatCreditAmount(Number(result['clearedCredits'] ?? 0)) },
+              ),
+            );
+            await load(tab);
+          } catch (e) {
+            setError(toUserMessage(e, 'Could not reset usage.'));
+          } finally {
+            setBulkBusy(false);
+          }
+        },
       });
-      if (!acknowledged) return;
-      const typed = window.prompt('Type RESET ALL USAGE to confirm.');
-      if (typed === null) return;
-      const result = await operatorAction({ action: 'reset-all-usage', confirm: typed });
-      setNotice(
-        translateUiPlural(
-          'settings',
-          'counts.clearedAcrossAccounts',
-          Number(result['affectedUsers'] ?? 0),
-          {
-            one: 'Cleared {{credits}} across {{count}} account.',
-            other: 'Cleared {{credits}} across {{count}} accounts.',
-          },
-          { credits: formatCreditAmount(Number(result['clearedCredits'] ?? 0)) },
-        ),
-      );
-      await load(tab);
     } catch (e) {
       setError(toUserMessage(e, 'Could not reset usage.'));
     } finally {
@@ -285,35 +293,36 @@ export function OperatorDashboardPage() {
     // A usage reset rewrites live billing state, so it asks first and names the
     // account it is about to touch rather than only the row that was clicked.
     const label = user.email ?? user.id;
-    const confirmed = await confirmDestructive({
+    confirmDestructive({
       title: `Reset usage for ${label}?`,
       description:
         'This clears consumed credits for the current period. Allocation is untouched, and the amount cleared is recorded against the account.',
-      confirmText: 'Reset usage',
-      variant: 'destructive',
+      confirmLabel: 'Reset usage',
+      destructive: true,
+      onConfirm: async () => {
+        setBusyUserId(user.id);
+        setNotice(null);
+        try {
+          const response = await fetch('/api/operator', {
+            method: 'POST',
+            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ action: 'reset-usage', userId: user.id }),
+          });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body?.error?.message ?? `Failed (${response.status})`);
+          setNotice(
+            body.reset
+              ? `Cleared ${formatCreditAmount(body.clearedCredits)} of usage for ${label}.`
+              : `${label} has no active credit period, so there was nothing to reset.`,
+          );
+          await load('users');
+        } catch (e) {
+          setError(toUserMessage(e, 'Reset failed.'));
+        } finally {
+          setBusyUserId(null);
+        }
+      },
     });
-    if (!confirmed) return;
-    setBusyUserId(user.id);
-    setNotice(null);
-    try {
-      const response = await fetch('/api/operator', {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ action: 'reset-usage', userId: user.id }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body?.error?.message ?? `Failed (${response.status})`);
-      setNotice(
-        body.reset
-          ? `Cleared ${formatCreditAmount(body.clearedCredits)} of usage for ${label}.`
-          : `${label} has no active credit period, so there was nothing to reset.`,
-      );
-      await load('users');
-    } catch (e) {
-      setError(toUserMessage(e, 'Reset failed.'));
-    } finally {
-      setBusyUserId(null);
-    }
   }
 
   return (

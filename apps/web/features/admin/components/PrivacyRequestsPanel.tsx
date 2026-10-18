@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Spinner, useConfirm, translateUiPlural } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import type {
@@ -60,7 +60,7 @@ export default function PrivacyRequestsPanel() {
   const [erasing, setErasing] = useState(false);
   const [report, setReport] = useState<ErasureReport | null>(null);
   const [erasureError, setErasureError] = useState<string | null>(null);
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     setListError(null);
@@ -93,47 +93,47 @@ export default function PrivacyRequestsPanel() {
       setErasureError('An email address and a reason are both required.');
       return;
     }
-    const confirmed = await confirmDestructive({
+    confirmDestructive({
       title: 'Erase every record held against this address?',
       description:
         `Rows the waitlist, the consent ledger and the data rights log hold against this address are deleted outright, ` +
         `so any consent history and request trail for it is gone and cannot be restored from this console. ` +
         `Rows bound to a signed-up account are not touched here and are reported back for account deletion instead. ` +
         `Your account, this reason and the time are written to the audit log.`,
-      confirmText: 'Erase subject',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-
-    setErasing(true);
-    setErasureError(null);
-    setReport(null);
-    try {
-      const response = await fetch(ERASURES_ENDPOINT, {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ email: contactEmail, reason: recordedReason }),
-      });
-      const body = await response.json().catch(() => null);
-      const candidate = body as ErasureReport | null;
-      if (candidate && typeof candidate.complete === 'boolean' && candidate.tables) {
-        setReport(candidate);
-        if (candidate.complete) {
-          setEmail('');
-          setReason('');
+      confirmLabel: 'Erase subject',
+      destructive: true,
+      onConfirm: async () => {
+        setErasing(true);
+        setErasureError(null);
+        setReport(null);
+        try {
+          const response = await fetch(ERASURES_ENDPOINT, {
+            method: 'POST',
+            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ email: contactEmail, reason: recordedReason }),
+          });
+          const body = await response.json().catch(() => null);
+          const candidate = body as ErasureReport | null;
+          if (candidate && typeof candidate.complete === 'boolean' && candidate.tables) {
+            setReport(candidate);
+            if (candidate.complete) {
+              setEmail('');
+              setReason('');
+            }
+            await load();
+            return;
+          }
+          throw new Error(
+            (body as { error?: { message?: string } })?.error?.message ??
+              `Request failed (${response.status})`,
+          );
+        } catch (error) {
+          setErasureError(toUserMessage(error, 'Could not erase that subject.'));
+        } finally {
+          setErasing(false);
         }
-        await load();
-        return;
-      }
-      throw new Error(
-        (body as { error?: { message?: string } })?.error?.message ??
-          `Request failed (${response.status})`,
-      );
-    } catch (error) {
-      setErasureError(toUserMessage(error, 'Could not erase that subject.'));
-    } finally {
-      setErasing(false);
-    }
+      },
+    });
   }
 
   return (

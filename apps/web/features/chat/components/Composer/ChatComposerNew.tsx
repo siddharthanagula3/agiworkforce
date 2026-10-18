@@ -254,16 +254,6 @@ const IMAGE_EDIT_OPERATIONS = [
 
 type ImageEditOperation = (typeof IMAGE_EDIT_OPERATIONS)[number]['id'];
 
-export {
-  getImageAspectOptionsForModel,
-  IMAGE_MODEL_DEFAULT,
-  IMAGE_MODELS,
-  isImageAspectRatioSupported,
-  type ImageAspectOption,
-  type ImageAspectRatio,
-  type ImageModelOption,
-} from '../../lib/imageGenerationOptions';
-
 /**
  * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
  * no budget warning, so an over-long message was only rejected server-side

@@ -49,7 +49,3 @@ export function resolveComposerEditorBuildMode(): ComposerEditorMode {
 export function resolveComposerEditorMode(): ComposerEditorMode {
   return readQueryOverride() ?? readStoredOverride() ?? resolveComposerEditorBuildMode();
 }
-
-export function resolveComposerEditorEnabled(): boolean {
-  return resolveComposerEditorMode() === COMPOSER_EDITOR_MODES.editor;
-}

@@ -3,7 +3,7 @@
 import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, RefreshCw, ShieldAlert, UserRoundCog } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { useConfirm } from '@agiworkforce/ui';
+import { useConfirmAction } from '@agiworkforce/ui';
 import {
   fetchAdminSecurityOperations,
   performAdminAccountAction,
@@ -48,7 +48,7 @@ export default function SecurityOperationsPanel() {
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionResult, setActionResult] = useState<string | null>(null);
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   const loadOperations = useCallback(async () => {
     setLoading(true);
@@ -76,37 +76,41 @@ export default function SecurityOperationsPanel() {
     const normalizedReason = reason.trim();
     if (!normalizedUserId || !normalizedReason || submitting) return;
 
+    const run = async () => {
+      setSubmitting(true);
+      setActionResult(null);
+      try {
+        const token = await getToken();
+        if (!token) throw new Error('Admin session token is unavailable');
+        const result = await performAdminAccountAction(
+          token,
+          action,
+          normalizedUserId,
+          normalizedReason,
+        );
+        setActionResult(result.message);
+        setTargetUserId('');
+        setReason('');
+        await loadOperations();
+      } catch (error) {
+        setActionResult(toUserMessage(error, 'Account action failed'));
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
     const consequence = ACTION_CONSEQUENCE[action];
     if (consequence) {
-      const confirmed = await confirmDestructive({
+      confirmDestructive({
         title: `${ACTION_LABELS[action]} for ${normalizedUserId}?`,
         description: consequence,
-        confirmText: ACTION_LABELS[action],
-        variant: 'destructive',
+        confirmLabel: ACTION_LABELS[action],
+        destructive: true,
+        onConfirm: run,
       });
-      if (!confirmed) return;
+      return;
     }
-
-    setSubmitting(true);
-    setActionResult(null);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Admin session token is unavailable');
-      const result = await performAdminAccountAction(
-        token,
-        action,
-        normalizedUserId,
-        normalizedReason,
-      );
-      setActionResult(result.message);
-      setTargetUserId('');
-      setReason('');
-      await loadOperations();
-    } catch (error) {
-      setActionResult(toUserMessage(error, 'Account action failed'));
-    } finally {
-      setSubmitting(false);
-    }
+    await run();
   }
 
   const triggeredAlerts = dashboard?.alerts.filter((alert) => alert.triggered) ?? [];

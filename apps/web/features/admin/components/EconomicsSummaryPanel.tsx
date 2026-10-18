@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import { MICROUSD_PER_USD } from '@agiworkforce/types';
 
 import { toUserMessage } from '@/lib/user-error-message';
 import type {
@@ -13,7 +14,6 @@ import type {
 import { formatCount, UNKNOWN } from '../lib/operator-format';
 
 const ECONOMICS_ENDPOINT = '/api/admin/economics';
-const MICROUSD_PER_USD = 1_000_000;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_WINDOW_DAYS = 30;
 const PERCENT_SCALE = 100;

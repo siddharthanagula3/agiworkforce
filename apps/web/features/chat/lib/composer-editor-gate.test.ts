@@ -4,7 +4,6 @@ import {
   COMPOSER_EDITOR_QUERY_PARAM,
   COMPOSER_EDITOR_STORAGE_KEY,
   resolveComposerEditorBuildMode,
-  resolveComposerEditorEnabled,
   resolveComposerEditorMode,
 } from './composer-editor-gate';
 
@@ -25,20 +24,19 @@ afterEach(() => {
 describe('composer editor gate', () => {
   it('renders the legacy textarea when nothing asks for the editor', () => {
     expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.textarea);
-    expect(resolveComposerEditorEnabled()).toBe(false);
   });
 
   it('takes the build-time default when there is no override', () => {
     process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.editor;
 
-    expect(resolveComposerEditorEnabled()).toBe(true);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.editor);
   });
 
   it('lets a stored override beat the build-time default', () => {
     process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.textarea;
     window.localStorage.setItem(COMPOSER_EDITOR_STORAGE_KEY, COMPOSER_EDITOR_MODES.editor);
 
-    expect(resolveComposerEditorEnabled()).toBe(true);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.editor);
   });
 
   it('lets the query param beat both, so an e2e run can pin either side', () => {
@@ -46,7 +44,7 @@ describe('composer editor gate', () => {
     window.localStorage.setItem(COMPOSER_EDITOR_STORAGE_KEY, COMPOSER_EDITOR_MODES.editor);
     setQuery(COMPOSER_EDITOR_MODES.textarea);
 
-    expect(resolveComposerEditorEnabled()).toBe(false);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.textarea);
   });
 
   it('ignores values that name neither implementation', () => {
@@ -54,7 +52,7 @@ describe('composer editor gate', () => {
     window.localStorage.setItem(COMPOSER_EDITOR_STORAGE_KEY, 'yes');
     process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.editor;
 
-    expect(resolveComposerEditorEnabled()).toBe(true);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.editor);
   });
 
   /**
@@ -80,6 +78,6 @@ describe('composer editor gate', () => {
     });
     process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.editor;
 
-    expect(resolveComposerEditorEnabled()).toBe(true);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.editor);
   });
 });

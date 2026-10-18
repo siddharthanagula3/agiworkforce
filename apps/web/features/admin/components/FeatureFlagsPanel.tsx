@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Spinner, useConfirm } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { FlagDefinition, FlagOverride } from '@/lib/feature-flags/flag-definition';
@@ -108,7 +108,7 @@ export default function FeatureFlagsPanel() {
   const [overrides, setOverrides] = useState<FlagOverride[] | null>(null);
   const [overrideForm, setOverrideForm] = useState<OverrideForm>(EMPTY_OVERRIDE);
   const [testPurchaseAccount, setTestPurchaseAccount] = useState('');
-  const { confirm, dialog } = useConfirm();
+  const { confirm, dialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     setError(null);
@@ -171,49 +171,54 @@ export default function FeatureFlagsPanel() {
   }
 
   async function toggleKillSwitch(flag: FlagDefinition) {
-    if (!flag.killSwitch) {
-      const acknowledged = await confirm({
-        title: `Serve ${flag.key} as off for everyone?`,
-        description:
-          'The kill switch overrides every rule, percentage and override at once, so every user and workspace that currently has this flag loses it on their next request. Turning it back off restores the targeting as it was; nothing about the definition is lost.',
-        confirmText: 'Engage kill switch',
-        variant: 'destructive',
-      });
-      if (!acknowledged) return;
+    const run = async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        await mutate(`${FLAGS_ENDPOINT}/${encodeURIComponent(flag.key)}`, 'PATCH', {
+          killSwitch: !flag.killSwitch,
+        });
+        await load();
+      } catch (toggleError) {
+        setError(toUserMessage(toggleError, 'Could not change the kill switch.'));
+      } finally {
+        setBusy(false);
+      }
+    };
+    if (flag.killSwitch) {
+      await run();
+      return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      await mutate(`${FLAGS_ENDPOINT}/${encodeURIComponent(flag.key)}`, 'PATCH', {
-        killSwitch: !flag.killSwitch,
-      });
-      await load();
-    } catch (toggleError) {
-      setError(toUserMessage(toggleError, 'Could not change the kill switch.'));
-    } finally {
-      setBusy(false);
-    }
+    confirm({
+      title: `Serve ${flag.key} as off for everyone?`,
+      description:
+        'The kill switch overrides every rule, percentage and override at once, so every user and workspace that currently has this flag loses it on their next request. Turning it back off restores the targeting as it was; nothing about the definition is lost.',
+      confirmLabel: 'Engage kill switch',
+      destructive: true,
+      onConfirm: run,
+    });
   }
 
   async function archive(flag: FlagDefinition) {
-    const acknowledged = await confirm({
+    confirm({
       title: `Archive ${flag.key}?`,
       description:
         'An archived flag stops being evaluated for everyone, and this console does not bring it back: a replacement has to be created under the same name. Its overrides stay in place but answer nothing.',
-      confirmText: 'Archive',
-      variant: 'destructive',
+      confirmLabel: 'Archive',
+      destructive: true,
+      onConfirm: async () => {
+        setBusy(true);
+        setError(null);
+        try {
+          await mutate(`${FLAGS_ENDPOINT}/${encodeURIComponent(flag.key)}`, 'DELETE', {});
+          await load();
+        } catch (archiveError) {
+          setError(toUserMessage(archiveError, 'Could not archive that flag.'));
+        } finally {
+          setBusy(false);
+        }
+      },
     });
-    if (!acknowledged) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await mutate(`${FLAGS_ENDPOINT}/${encodeURIComponent(flag.key)}`, 'DELETE', {});
-      await load();
-    } catch (archiveError) {
-      setError(toUserMessage(archiveError, 'Could not archive that flag.'));
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function allowStoreTestPurchases() {

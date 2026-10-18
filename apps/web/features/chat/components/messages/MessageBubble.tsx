@@ -239,7 +239,7 @@ import {
 import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
-import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
+import type { ImageAspectRatio } from '../../lib/imageGenerationOptions';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';

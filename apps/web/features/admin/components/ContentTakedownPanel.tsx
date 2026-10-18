@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Spinner, useConfirm } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { PublicContentTarget } from '@/app/api/admin/takedown/lib/public-target';
@@ -46,7 +46,7 @@ export default function ContentTakedownPanel() {
   const [error, setError] = useState<string | null>(null);
   const [looking, setLooking] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   async function lookUp() {
     const candidate = token.trim();
@@ -84,34 +84,34 @@ export default function ContentTakedownPanel() {
       );
       return;
     }
-    const confirmed = await confirmDestructive({
+    confirmDestructive({
       title: `Unpublish this ${KIND_LABEL[target.kind].toLowerCase()}?`,
       description:
         `The public link stops resolving for everyone who holds it and the published copy is deleted rather than hidden, ` +
         `so nothing in this console can restore it; only the owner can publish again. Their own conversation and files are untouched. ` +
         `Your account, this reason and the time are written to the audit log.`,
-      confirmText: 'Unpublish',
-      variant: 'destructive',
+      confirmLabel: 'Unpublish',
+      destructive: true,
+      onConfirm: async () => {
+        setRemoving(true);
+        setError(null);
+        try {
+          const body = await readJson<TakedownResult>(TAKEDOWN_ENDPOINT, {
+            method: 'POST',
+            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ token: target.token, reason: recordedReason }),
+          });
+          setResult(body);
+          setTarget(null);
+          setToken('');
+          setReason('');
+        } catch (takedownError) {
+          setError(toUserMessage(takedownError, 'Could not unpublish that content.'));
+        } finally {
+          setRemoving(false);
+        }
+      },
     });
-    if (!confirmed) return;
-
-    setRemoving(true);
-    setError(null);
-    try {
-      const body = await readJson<TakedownResult>(TAKEDOWN_ENDPOINT, {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ token: target.token, reason: recordedReason }),
-      });
-      setResult(body);
-      setTarget(null);
-      setToken('');
-      setReason('');
-    } catch (takedownError) {
-      setError(toUserMessage(takedownError, 'Could not unpublish that content.'));
-    } finally {
-      setRemoving(false);
-    }
   }
 
   return (

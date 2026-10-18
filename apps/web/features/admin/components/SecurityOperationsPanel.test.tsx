@@ -10,14 +10,22 @@ const mocks = vi.hoisted(() => ({
   performAction: vi.fn(),
 }));
 
+type ConfirmRequest = { title: string; description: string; onConfirm: () => unknown };
+
 const confirmStub = vi.hoisted(() => ({
-  confirm: vi.fn(async (_options: { title: string; description: string }) => true),
+  confirm: vi.fn((_request: ConfirmRequest) => undefined as void),
   dialog: null as React.ReactNode,
 }));
 
+function acceptConfirmations(): void {
+  confirmStub.confirm.mockImplementation((request: ConfirmRequest) => {
+    void request.onConfirm();
+  });
+}
+
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  useConfirm: () => confirmStub,
+  useConfirmAction: () => confirmStub,
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -71,9 +79,9 @@ const OPERATIONS = {
 
 describe('SecurityOperationsPanel', () => {
   beforeEach(() => {
-    confirmStub.confirm.mockReset();
-    confirmStub.confirm.mockResolvedValue(true);
     vi.clearAllMocks();
+    confirmStub.confirm.mockReset();
+    acceptConfirmations();
     mocks.getToken.mockResolvedValue('session-token');
     mocks.fetchOperations.mockResolvedValue(OPERATIONS);
     mocks.performAction.mockResolvedValue({
@@ -135,7 +143,7 @@ describe('SecurityOperationsPanel', () => {
   });
 
   it('does not suspend anyone when the operator backs out of the confirmation', async () => {
-    confirmStub.confirm.mockResolvedValueOnce(false);
+    confirmStub.confirm.mockImplementation(() => undefined);
     render(<SecurityOperationsPanel />);
     await screen.findByText('authorization_failed');
 

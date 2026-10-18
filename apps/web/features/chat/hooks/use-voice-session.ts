@@ -6,6 +6,7 @@ import type {
   LiveVoicePendingApproval,
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
+import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import {
@@ -256,8 +257,16 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
         }),
       }),
     )
-    .then(() => undefined)
-    .catch(() => undefined);
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    })
+    .catch((error: unknown) => {
+      console.warn('[voice] The live session close was not recorded:', error);
+      toast.error(
+        'This voice session did not close cleanly, so it may keep counting toward your voice usage for a few more minutes.',
+        { id: `voice-session-close-${session.sessionId}` },
+      );
+    });
 }
 
 function clearSessionBudget(): void {

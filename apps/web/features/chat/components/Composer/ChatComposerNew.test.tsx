@@ -2,12 +2,8 @@ import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  ChatComposerNew,
-  IMAGE_MODELS,
-  VIDEO_MODELS,
-  type ComposerProjectPicker,
-} from './ChatComposerNew';
+import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
+import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capability-gate';
 import {
