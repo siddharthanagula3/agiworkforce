@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-13
+Last updated: 2026-10-18
 
 A free quota model is a QwenCloud model served from the promotional free quota
 on the company's QwenCloud account. Free plan accounts reach one in two ways:
@@ -954,20 +954,17 @@ inventory, holds one daily cap per account for each kind:
 ### What users see
 
 - In the chat composer's plus menu, Create image and Create video say Limited
-  with a clock where they said Upgrade, with one line under the row: "Free while
-  our free capacity lasts, until {day} (UTC) at the latest." Once today's share
-  is used the line says so, with the time to the reset.
-- The day in that line is the last UTC day on which an offering of that kind is
-  still served in full: the day before the latest end date among the ready
-  offerings, because `decideFreeQuotaOffering` refuses an offering from 00:00
-  UTC on its end date. `readyFreeMediaOffer` in
-  `apps/web/features/models/lib/free-media-offer.ts` is the one place that
-  derives it and `freeMediaLastDayLabel` the one place that prints it, with the
-  zone named, for the composer, the picker and the pricing page. An offering
-  the provider retires partway through a day (`retiresAt`) is served into that
-  day, so when such an offering is the latest to end, the line understates by
-  less than a day and names the day before even on that last partial day. It
-  never overstates.
+  with a clock where they said Upgrade. While today's share lasts there is no
+  line under the row; once it is used, one line says so, with the time to the
+  reset (`freeMediaTodayLine` in
+  `apps/web/features/models/lib/free-media-offer.ts`).
+- `readyFreeMediaOffer` in the same file derives the last UTC day on which an
+  offering of that kind is still served in full: the day before the latest end
+  date among the ready offerings, because `decideFreeQuotaOffering` refuses an
+  offering from 00:00 UTC on its end date. An offering the provider retires
+  partway through a day (`retiresAt`) is served into that day, so when such an
+  offering is the latest to end, that day understates by less than a day. It
+  never overstates. No surface prints the day.
 - Choosing either, or typing a request for an image, uses the ready offering
   whose allowance ends soonest, the one with most allowance left on a tie
   (`freeQuotaMediaUseOrder`), so capacity that is about to expire goes first.
@@ -979,10 +976,11 @@ inventory, holds one daily cap per account for each kind:
 - The free image and video models are listed in the model picker's Free section
   with the same mark.
 - The pricing page says "Limited preview" in the image and video columns for
-  plans without the capability, with one line under its heading and one on the
-  Free plan card. It reads
+  plans without the capability, and the Free plan card lists the running kind
+  first (`freeMediaFeatureKey` in
+  `apps/web/features/billing/lib/plan-card-copy.ts`). It reads
   `apps/web/app/api/models/free-quota/media-offer/route.ts`, which is public,
-  cached for a minute and answers only which kind is running and that last day.
+  cached for a minute and answers only which kind is running and its last day.
 - The home page hero pill reads "Limited" and "Free image and video" (or the one
   kind that is ready) and links to the pricing page while a kind is ready. It
   reads the same catalogue entry as the pricing endpoint through

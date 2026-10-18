@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-18
+Last updated: 2026-10-18
 
 The contract a receiver parses against. Two transports carry the same audit
 trail and they do not carry it in the same shape, so each is specified
@@ -125,7 +125,7 @@ The export is camelCase and has no envelope, because each line stands alone.
 `apps/web/lib/security-audit.ts`, which is the only place the set is declared.
 It is not repeated here: a second copy is a second source of truth, and the
 values a given workspace has actually produced are what
-`/api/settings/organization/audit/facets` returns for it.
+`/api/settings/organization/audit?facets=true` returns for it.
 
 `metadata` keys are the optional fields of `AuditEventDetail` in the same file.
 Treat both sets as open: a new action or key is an additive change and keeps

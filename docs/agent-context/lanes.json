@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-15",
+  "lastUpdated": "2026-10-18",
   "purpose": "Machine-readable write-lane map for safe 15+ parallel human/agent implementation work.",
   "recommendedParallelism": {
     "writerLanes": 19,
@@ -35,7 +35,7 @@
       "name": "CLI app and terminal UX",
       "ownerRole": "CLI lead",
       "ownedWritePaths": ["apps/cli/**"],
-      "readOnlyContextPaths": ["crates/**", "docs/cli/**"],
+      "readOnlyContextPaths": ["crates/**", "docs/standards/cli-command-surface.md"],
       "blockedPaths": ["crates/**", "Cargo.toml", "Cargo.lock"],
       "requiredChecks": ["cargo check -p agiworkforce-cli", "cargo test -p agiworkforce-cli --lib"],
       "escalationOwners": ["Rust platform", "Security/privacy lead"]
@@ -45,7 +45,7 @@
       "name": "Rust slash command registry",
       "ownerRole": "Rust platform",
       "ownedWritePaths": ["crates/agiworkforce-command-registry/**"],
-      "readOnlyContextPaths": ["apps/cli/**", "docs/cli/**"],
+      "readOnlyContextPaths": ["apps/cli/**", "docs/standards/cli-command-surface.md"],
       "blockedPaths": ["apps/cli/**", "Cargo.lock"],
       "requiredChecks": ["cargo test -p agiworkforce-command-registry --test slash_palette_golden"],
       "escalationOwners": ["CLI lead"]

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-29
+Last updated: 2026-10-18
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
@@ -382,14 +382,15 @@ After each vendor's variables are in Production and the app is redeployed:
 
 ## Local desktop app (Tauri) sign-in apps
 
-The local desktop app signs in to GitHub, Google and Microsoft itself, on a
-loopback address, with apps you register once. Notion, Jira and Confluence use
+The retained Tauri app, which is internal code and not the public Electron
+Desktop, signs in to GitHub, Google and Microsoft itself, on a loopback
+address, with apps you register once. Notion, Jira and Confluence use
 the vendors' own MCP servers and need nothing from you. Slack and Figma are not
 offered in the local app, because neither accepts a loopback sign-in.
 
 1. **GitHub:** create an OAuth App with the callback
-   `http://127.0.0.1/callback`; GitHub accepts any loopback port. Keep the
-   client secret.
+   `http://127.0.0.1/oauth/callback`, the redirect the app sends; GitHub
+   accepts any loopback port. Keep the client secret.
 2. **Google:** in the same Google Cloud project, create an OAuth client of
    type **Desktop app**. It uses a loopback address and PKCE, so there is no
    redirect to register.
@@ -397,12 +398,15 @@ offered in the local app, because neither accepts a loopback sign-in.
    desktop applications** platform and no secret. The portal refuses an http
    loopback address, so add `http://127.0.0.1/oauth/callback` through the
    manifest's `replyUrlsWithType`.
-4. Add these to the secrets the desktop release workflow reads, so release
-   builds carry them: `AGI_GITHUB_OAUTH_CLIENT_ID`,
-   `AGI_GITHUB_OAUTH_CLIENT_SECRET`, `AGI_GOOGLE_OAUTH_CLIENT_ID`,
-   `AGI_GOOGLE_OAUTH_CLIENT_SECRET` and `AGI_MICROSOFT_OAUTH_CLIENT_ID`.
-   `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` override the GitHub pair at
-   run time.
+4. Set these in the environment of the Tauri build, because they are read at
+   compile time (`option_env!` in
+   `apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs`):
+   `AGI_GITHUB_OAUTH_CLIENT_ID`, `AGI_GITHUB_OAUTH_CLIENT_SECRET`,
+   `AGI_GOOGLE_OAUTH_CLIENT_ID`, `AGI_GOOGLE_OAUTH_CLIENT_SECRET` and
+   `AGI_MICROSOFT_OAUTH_CLIENT_ID`. No release workflow passes them, so a
+   workflow build carries none. At run time `GITHUB_CLIENT_ID`,
+   `GOOGLE_CLIENT_ID` or `MICROSOFT_CLIENT_ID` (with its `_CLIENT_SECRET`), or a
+   pair stored in the app's settings, takes precedence over the built-in pair.
 
 ## Descriptor entries
 

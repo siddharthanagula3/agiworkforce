@@ -535,7 +535,7 @@
       "id": "tool-permission-panel-covers-every-connector",
       "section": "1.8 Known gaps this file deliberately records rather than papers over",
       "kind": "prose",
-      "sentence": "**The standing per-tool permission UI is no longer GitHub-only, and this entry used to say it was.** `ToolPermissionsPanel.tsx` is rendered by `features/settings/components/WebSettingsModal.tsx` for whichever connector the settings adapter selects, and it lists tools from live discovery (`useConnectorCapabilities`).",
+      "sentence": "**The standing per-tool permission UI covers every connector, not only GitHub.** `ToolPermissionsPanel.tsx` is rendered by `features/settings/components/WebSettingsModal.tsx` for whichever connector the settings adapter selects, and it lists tools from live discovery (`useConnectorCapabilities`).",
       "implementation": [
         "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
         "apps/web/features/settings/components/WebSettingsModal.tsx"
@@ -1110,7 +1110,7 @@
       "id": "device-token-key-is-required-by-nothing",
       "section": "What is encrypted, and with which key",
       "kind": "prose",
-      "sentence": "`apps/web/lib/validate-env.ts` does not require the old encryption key and no module reads it.",
+      "sentence": "`DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing: no module reads it and `apps/web/lib/validate-env.ts` does not require it.",
       "implementation": ["apps/web/lib/validate-env.ts"],
       "proof": [
         {
@@ -1124,11 +1124,11 @@
       "id": "device-authorization-bearer-columns-are-dropped",
       "section": "What is encrypted, and with which key",
       "kind": "prose",
-      "sentence": "That column was never encrypted, and current routes neither read nor write it or its sibling `refresh_token`.",
+      "sentence": "`device_authorization_codes` does not hold a token: migration `0292`, which production has applied (`scripts/config/production-migrations-applied.json`), dropped its `access_token` and `refresh_token` columns.",
       "implementation": [
         "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
-        "apps/web/app/api/auth/device/approve/route.ts",
-        "apps/web/lib/validate-env.ts"
+        "scripts/config/production-migrations-applied.json",
+        "apps/web/app/api/auth/device/approve/route.ts"
       ],
       "proof": [
         {
@@ -1789,22 +1789,6 @@
       "why": "maintenance-rule"
     },
     {
-      "id": "totp-reader-became-ring-aware",
-      "section": "Which readers understand the ring",
-      "kind": "prose",
-      "sentence": "`user_two_factor.totp_secret_enc` used to be the exception: the reader built one WebCrypto key straight from `TOTP_ENCRYPTION_KEY` and never consulted `_RETIRED`.",
-      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
-      "why": "historical-record"
-    },
-    {
-      "id": "totp-seal-lives-server-side",
-      "section": "Which readers understand the ring",
-      "kind": "prose",
-      "sentence": "It could not simply be imported into `features/settings/services/user-preferences.ts`, because that module is also bundled for the browser and `envelope.ts` needs `node:crypto`; the seal/open calls live in the new server-only sibling instead, and the four `/api/settings/2fa/*` routes call it directly.",
-      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
-      "why": "historical-record"
-    },
-    {
       "id": "scheduled-and-incident-rotation-are-one-procedure",
       "section": "Rotation cadence",
       "kind": "prose",
@@ -2026,17 +2010,6 @@
       "kind": "prose",
       "sentence": "The review returned GO-WITH-CONDITIONS on seven conditions: the bridge structurally absent from every anonymous published surface, per-call consent rendered in parent chrome, server-side call and spend caps that fail closed, exact origin validation with the capability default off, the cross-origin invariant preserved, audit logging plus a kill switch, and subresource integrity on the sandbox CDN loads.",
       "implementation": ["audit/registers/capability-gaps.csv"],
-      "why": "historical-record"
-    },
-    {
-      "id": "legacy-device-token-retirement-rehearsal",
-      "section": "What is encrypted, and with which key",
-      "kind": "prose",
-      "sentence": "Candidate migration `0292` retires both only if every value is NULL; it has passed a rolled-back local rehearsal but is not applied to production.",
-      "implementation": [
-        "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
-        "audit/prior-audits/active-issues-register.md"
-      ],
       "why": "historical-record"
     },
     {

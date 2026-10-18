@@ -2,9 +2,116 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-13
+Last updated: 2026-10-18
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, cleanup and Chrome extension parity], 2026-10-18
+
+### Added
+
+- **The Chrome extension's chat works like the web app's.** Browser tasks run
+  inside the chat turn: steps, approvals, take over and hand back show in the
+  reply, and a site the task needs gets an inline card (Allow this time,
+  Always allow on this site, Decline) that never overrides the organization's
+  site policy. Replies show artifacts as cards with a panel that opens by
+  itself and an Outputs list, name the model that answered, can be read
+  aloud, and render maths, footnotes and code as the web chat does. Paid
+  plans can create images and videos in the side panel. Text highlighted on
+  the active tab is offered as a dismissible "Selected text" chip, and only
+  that passage is sent.
+- **A new Chrome extension layout.** A compact top bar with a conversation
+  title menu and a More popover replaces the drawer. Options gains Shortcuts,
+  task notifications, microphone access, read aloud and dictation language.
+  A welcome page opens on install in place of the six-step modal, and a
+  notification says when a browser task finishes, fails or needs you. The
+  extension is named AGI Workforce.
+- **Role viewers see who holds each role.** A workspace member with
+  `admin.roles.view` sees the holders of every additional role in the
+  workspace console, read-only; members who manage roles keep the editor.
+- **Mobile can branch a conversation from a message**, as the web does. A
+  cloud branch is created on the server, so the web lists it too.
+- **Research activity shows the gaps a run reports** in the plan view.
+- **The Free plan gets response styles.** The composer's style picker
+  (Default, Concise, Explanatory, Formal and custom styles) is no longer
+  hidden from Free accounts.
+
+### Changed
+
+- **A lapsed paid plan is served as Free** instead of refusing every chat. A
+  past-due or unpaid account gets the Free experience, and the chat says once
+  per session to update payment, with a link to billing settings. Enterprise
+  keeps its collection grace and refusal.
+- **`/trust`, revised 2026-10-18.** The Desktop credential storage row now
+  says Desktop writes no account credential of its own: the sign-in session
+  lives in a persistent browser profile that belongs to the app alone. The
+  prior text is archived.
+- **Every public page except the landing page is neutral black and white**,
+  and `/web` and `/pricing` are rebuilt.
+- **Every remote-control host asks before a new phone takes control.** VS Code
+  now shows the confirmation Desktop shows, naming the phone and the pairing
+  code.
+- **Free accounts see only Upgrade** in mobile Settings > Usage and in the
+  Chrome extension, never meters or a plan badge.
+- **The retained Tauri desktop build runs every agent turn on its chat loop.**
+  This is internal code, not the public Electron Desktop. Scheduled tasks,
+  background runs, triggers, mobile dispatch and the MCP `run_task` tool run
+  as unattended chat turns in their own conversation, owned by the signed-in
+  account, and resuming one continues that conversation.
+
+### Removed
+
+- **From the retained Tauri desktop build: the Tasks panel, the governance
+  dashboard and the analytics collector.** The Tasks panel goes with the goal
+  engine it drove, whose work now runs as chat turns (above). The governance
+  dashboard with its approval and audit views, the analytics collector and
+  the productivity clients delivered nothing and have no replacement.
+- **Admin delegations in the workspace console.** Nothing outside that panel
+  read a delegation. To give a member admin permissions, assign a role.
+- **The `/verify` page and the QR device-link flow.** A code from the live
+  device flow could never be approved there; the connect page now links to
+  the code-entry page at `/auth/device`.
+- **The CLI's `team_create` and `team_delete` tools**, which reported success
+  and did nothing. Teams run behind `--team`.
+- **VS Code crash telemetry**, which posted to an endpoint no service serves,
+  with its endpoint setting. Product analytics, which honours
+  `telemetryEnabled`, stays.
+- **Eight Anthropic-hosted connectors from the MCP directory** (bioRxiv,
+  ChEMBL, Clinical Trials, CMS Coverage, ICD-10 codes, Microsoft 365, NPI
+  Registry, PubMed), and every directory link to Claude's documentation.
+
+### Fixed
+
+- **PDFs are read in production again.** The deployed functions shipped
+  without the pdf.js worker, so every chat attachment, project knowledge
+  file, Gmail or OneDrive attachment and fetched PDF failed to parse.
+- **Changing your password signs out CLI and desktop devices.** Their refresh
+  tokens used to survive it.
+- **Sandboxed hooks and MCP servers cannot read home credentials.** On macOS,
+  CLI and desktop hooks could read `~/.ssh`, `~/.aws` and similar, and CLI
+  hooks could also read its token files and history; both platforms now hide
+  them.
+- **The CLI asks before every command when `permissions.toml` cannot be
+  read**, instead of silently dropping the saved deny and ask rules. Task
+  subagents still running after 600 seconds are stopped and reported as timed
+  out.
+- **Closing the Chrome side panel no longer cancels a running reply.** The
+  reply is saved to the conversation, or picked up again when the panel
+  reopens.
+- **Mobile imports memory from a ChatGPT, Claude or Gemini export**, using the
+  web's parser; a vendor file used to import nothing. A failed offline send
+  shows Retry instead of a queued badge that never cleared.
+- **Enterprise overage is reported once.** Each report is claimed and sent
+  under a stable identifier, so a retry cannot bill twice, and billing
+  reconciliation now reaches every subscription rather than the same oldest
+  hundred.
+- **Irreversible admin and schedule actions name their consequence first**:
+  unpublish, erase subject, ban and suspend, usage resets, trigger delete and
+  flag archive.
+- **Help no longer says a temporary chat is never saved.** It says the chat
+  stays out of your history and links to what is kept.
+- **In the retained Tauri desktop build, folder grants hold through
+  symlinks**: a link inside a granted folder no longer reaches outside it.
 
 ## [Unreleased, skills catalog trimmed], 2026-10-13
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-05",
+  "lastUpdated": "2026-10-18",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -19,8 +19,8 @@
       "name": "Desktop",
       "path": "apps/desktop",
       "owner": "Desktop lead",
-      "stack": "Tauri v2, React, Vite, Rust backend",
-      "purpose": "Local-first private compute host, artifacts, MCP/connectors, computer use, local files",
+      "stack": "Electron shell that loads the hosted web app; retained internal Tauri v2, React, Vite, Rust tree",
+      "purpose": "Public desktop shell for the hosted web app, with a capability-gated local runtime for workspace files, commands, computer use and remote control (apps/desktop/electron); the Tauri tree under apps/desktop/src and src-tauri is retained internal code",
       "primaryChecks": [
         "pnpm --filter @agiworkforce/desktop typecheck",
         "pnpm --filter @agiworkforce/desktop test"

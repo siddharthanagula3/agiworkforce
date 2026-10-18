@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-09-20
+Last updated: 2026-10-18
 
 The one route an enterprise deal takes, from a quote to a billed subscription,
 and the code that enforces each step. The two documents a customer signs are
@@ -15,18 +15,18 @@ counsel review, and the Order Form template says so on its first line.
 
 ## 1. The route a deal takes
 
-| Step               | What happens                                                                | Where it is enforced                                                                              |
-| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Quote              | Seats, cadence, term, payment terms and tax status are agreed               | Nothing in code yet; the Order Form is filled in by hand                                          |
-| Order Form issued  | The template is completed and sent for signature                            | Outside the product; no e-signature provider is integrated                                        |
-| Signature          | Both parties execute; the signed order is recorded                          | `recordSignedOrder` writes `organization_commercial_agreements`; no route calls it yet            |
-| Agreement authored | The signed terms become version N of a commercial agreement                 | `authorCommercialAgreementVersion`; an amendment supersedes rather than edits                     |
-| Activation         | Billing should start only against an executed agreement                     | Not enforced in code; each invoice is checked against the agreement when its webhook arrives      |
-| Stripe sync        | Contract fields are generated from the agreement, not read back from Stripe | `enterprise-billing-service.ts` `syncEnterpriseContractFromSubscription`                          |
-| Drift detection    | A term retyped in the Stripe dashboard is reported, never adopted           | `compareStripeContractMetadata`                                                                   |
-| Invoice routing    | Invoices address the billing contact; procurement gets the PO reference     | `organization_billing_contracts.billing_contact_*`, `procurement_contact_*`                       |
-| Issuance           | An invoice the agreement does not permit is never created                   | `assertInvoiceIssuable` throws before the first Stripe call; six refusal reasons, listed below    |
-| Payment method     | Only the methods the signed policy permits may collect                      | Refused at issuance; `auditInvoiceAgainstAgreement` audits an invoice created outside the product |
+| Step               | What happens                                                                | Where it is enforced                                                                             |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Quote              | Seats, cadence, term, payment terms and tax status are agreed               | Nothing in code yet; the Order Form is filled in by hand                                         |
+| Order Form issued  | The template is completed and sent for signature                            | Outside the product; no e-signature provider is integrated                                       |
+| Signature          | Both parties execute; the signed order is recorded                          | `recordSignedOrder` writes `organization_commercial_agreements`; no route calls it yet           |
+| Agreement authored | The signed terms become version N of a commercial agreement                 | `authorCommercialAgreementVersion`; an amendment supersedes rather than edits                    |
+| Activation         | Billing should start only against an executed agreement                     | Not enforced in code; each invoice is checked against the agreement when its webhook arrives     |
+| Stripe sync        | Contract fields are generated from the agreement, not read back from Stripe | `enterprise-billing-service.ts` `syncEnterpriseContractFromSubscription`                         |
+| Drift detection    | A term retyped in the Stripe dashboard is reported, never adopted           | `compareStripeContractMetadata`                                                                  |
+| Invoice routing    | Invoices address the billing contact; procurement gets the PO reference     | `organization_billing_contracts.billing_contact_*`, `procurement_contact_*`                      |
+| Issuance           | Each invoice is checked against the agreement after Stripe issues it        | `auditInvoiceAgainstAgreement` re-runs the six refusal checks listed below; a failure is flagged |
+| Payment method     | Only the methods the signed policy permits should collect                   | Checked as `payment_method_not_permitted` by the same audit; flagged, not refused                |
 
 ## 2. Invoice routing
 
@@ -81,9 +81,9 @@ launch checklist.
 **Discount authority.** `CommercialAgreementTerms` now carries
 `seatUnitPriceCents`
 (`apps/web/lib/services/enterprise-contracts/types.ts`), stored on
-`organization_commercial_agreements.seat_unit_price_cents`, and an agreement
-with no positive rate cannot issue an invoice at all. What is still missing is
-the authority to set it:
+`organization_commercial_agreements.seat_unit_price_cents`, and an invoice
+against an agreement with no positive rate is flagged
+`negotiated_rate_missing`. What is still missing is the authority to set it:
 
 1. A product decision on discount thresholds and who approves each band. The
    Enterprise tier is `contractPriced: true`, so there is no list price in

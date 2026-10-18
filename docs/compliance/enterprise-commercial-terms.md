@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-09-20
+Last updated: 2026-10-18
 
 What an enterprise contract may say, what each term does once it is signed, and
 the function that makes it true. `enterprise-procurement-standard.md` is the
@@ -81,10 +81,12 @@ days, not as a label. The due date of an invoice finalised on a day is that day
 plus the term (`invoiceDueDate`), and the label a surface prints comes from
 `paymentTermLabel` rather than from a string typed into a page.
 
-## 5. What stops an invoice being issued
+## 5. What flags an invoice
 
-`invoiceIssuanceRefusals` refuses an enterprise invoice, rather than issuing an
-incomplete one, when any of these is true:
+Enterprise invoices are issued from the Stripe dashboard, so nothing in the
+product can stop one. When an invoice's webhook arrives,
+`auditInvoiceAgainstAgreement` runs `invoiceIssuanceRefusals` and records an
+audit event, without voiding the invoice, when any of these is true:
 
 - the contract is not in force on the day of issue;
 - the customer requires a purchase order number and none is on the agreement;
@@ -101,8 +103,8 @@ administrator.
 
 The payment method policy on the agreement decides which rails may collect:
 invoice with ACH and wire, the same plus card, or card only. A card charge
-against an invoiced agreement is refused at issuance and audited if a provider
-event shows one.
+against an invoiced agreement is audited when a provider event shows one; it is
+not refused.
 
 A bank transfer is settled in two steps, because a screenshot is not a payment:
 

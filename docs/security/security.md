@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-03
+Last updated: 2026-10-18
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -294,14 +294,14 @@ the account rows and tokens they had stored.
 
 ### 1.4 Chrome extension, computer use
 
-| Fact                                                                                                      | Citation                                                                          |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts`, `askBeforeActing`                             |
-| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts`, the approval timeout                                             |
-| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts`                                                   |
-| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts`                                                                    |
-| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts`, "Do not claim screenshots are redacted anywhere in this codebase" |
-| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts`; `cloudAgentClient.ts`                                            |
+| Fact                                                                                                      | Citation                                                                         |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts`, `askBeforeActing`                            |
+| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts`, the approval timeout                                            |
+| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts`                                                  |
+| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts`                                                                   |
+| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts` attaches the captured PNG to the turn as an `image_url` unchanged |
+| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts`; `cloudAgentClient.ts`                                           |
 
 ---
 
@@ -396,14 +396,12 @@ the account rows and tokens they had stored.
    above.
 3. **The GitHub App installation permission set is not declared in this repo**, so
    it cannot be documented from code.
-4. **The standing per-tool permission UI is no longer GitHub-only, and this
-   entry used to say it was.** `ToolPermissionsPanel.tsx` is rendered by
+4. **The standing per-tool permission UI covers every connector, not only
+   GitHub.** `ToolPermissionsPanel.tsx` is rendered by
    `features/settings/components/WebSettingsModal.tsx` for whichever connector
    the settings adapter selects, and it lists tools from live discovery
-   (`useConnectorCapabilities`). The older gating symbol `hasWireToolNames` and
-   the `CONNECTOR_TOOLS` table it read no longer exist. The in-chat approval
-   card (`ToolTimeline.tsx`) remains the only control reachable while a tool is
-   actually asking.
+   (`useConnectorCapabilities`). The in-chat approval card (`ToolTimeline.tsx`)
+   remains the only control reachable while a tool is actually asking.
 5. **A connector whose tools this repository does not implement still falls back
    to nothing.** When discovery fails the panel shows
    `getDeclaredConnectorActions` from `apps/web/lib/connectors/catalog.ts`, and
@@ -633,15 +631,12 @@ The last row holds a minutes-lived value. Rotating its key strands in-flight
 flows only: a user retries the connect and it works. It gets no bookkeeping
 column and the rotation sweep does not touch it.
 
-`DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing and this table used to say it
-sealed `device_authorization_codes.access_token`. That column was never
-encrypted, and current routes neither read nor write it or its sibling
-`refresh_token`. Candidate migration `0292` retires both only if every value is
-NULL; it has passed a rolled-back local rehearsal but is not applied to
-production. The production non-NULL count remains to be checked before that
-release. A device's real credential is a hashed renewable pair in
-`device_refresh_tokens`. `apps/web/lib/validate-env.ts` does not require the
-old encryption key and no module reads it.
+`DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing: no module reads it and
+`apps/web/lib/validate-env.ts` does not require it. `device_authorization_codes`
+does not hold a token: migration `0292`, which production has applied
+(`scripts/config/production-migrations-applied.json`), dropped its
+`access_token` and `refresh_token` columns. A device's real credential is a
+hashed renewable pair in `device_refresh_tokens`.
 
 `TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
 32 characters of the env value as raw bytes through
@@ -681,14 +676,11 @@ previous build can read what a new instance wrote during a rolling deploy;
 sweep refuses it for any column whose reader is not ring-aware
 (`versionedReaderReady` in `scripts/reencrypt.mjs`).
 
-`user_two_factor.totp_secret_enc` used to be the exception: the reader built one
-WebCrypto key straight from `TOTP_ENCRYPTION_KEY` and never consulted
-`_RETIRED`. `lib/crypto/totp-envelope.ts` now calls `sealEnvelope`/`openEnvelope`
-from `lib/crypto/envelope.ts` directly, so it is ring-aware like the other three.
-It could not simply be imported into `features/settings/services/user-preferences.ts`,
-because that module is also bundled for the browser and `envelope.ts` needs
-`node:crypto`; the seal/open calls live in the new server-only sibling instead,
-and the four `/api/settings/2fa/*` routes call it directly.
+`lib/crypto/totp-envelope.ts` calls `sealEnvelope`/`openEnvelope` from
+`lib/crypto/envelope.ts` directly, so `user_two_factor.totp_secret_enc` is
+ring-aware like the other three. It is a server module because `envelope.ts` needs
+`node:crypto`; the `/api/settings/2fa/setup` and `/api/settings/2fa/verify`
+routes and `lib/server/step-up/second-factor.ts` call it.
 
 ### Rotation cadence
 
@@ -914,12 +906,6 @@ which names its key in the bytes instead of relying on trial decryption. Only
 run it after the ring-aware reader is fully deployed, no instance of an older
 build may still be serving that column. The sweep enforces the ready/not-ready
 half of that itself; the "fully deployed" half is yours to confirm.
-
-### Not yet done
-
-Nothing remains on this list. The `lib/device-token-crypto.ts` module and the
-desktop sign-in token route this section used to name both no longer exist; a
-device's credential is the hashed renewable pair in `device_refresh_tokens`.
 
 ---
 

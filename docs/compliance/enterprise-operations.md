@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-03
+Last updated: 2026-10-18
 
 Who administers what in an enterprise workspace, how a customer is run from
 go-live to offboarding, and what this product does not do for them yet. The
@@ -203,8 +203,9 @@ says. Tests: `apps/web/app/api/admin/sso/__tests__/route.roundtrip.test.ts`,
 The order a new enterprise customer goes through, each step naming what the
 product checks rather than what a person promises:
 
-1. **Agreement.** The commercial agreement is authored and executed; billing
-   refuses to activate before it (section 3, Go-live).
+1. **Agreement.** The commercial agreement is authored and executed. Nothing
+   blocks billing before it, but billing that runs without one is audited
+   (section 3, Go-live).
 2. **Workspace.** The customer's owner creates the workspace in Settings,
    Workspace. An account owns one workspace at most. SSO and directory sync
    check the plan of the person using them, so the owner's own account has to

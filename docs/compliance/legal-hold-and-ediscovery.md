@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-09-20
+Last updated: 2026-10-18
 
 What a legal hold does in this product, what an eDiscovery export contains, and
 what neither of them can do. Every statement below is provable from the file it
@@ -83,8 +83,9 @@ carry that exception.
 
 ## What a hold does not do
 
-- It does not stop an archive or a soft delete. `holdBlocksTransition` in the
-  contract refuses only the transition to `purged`, because archive and soft
+- It does not stop an archive or a soft delete. The hold is enforced only in
+  the statements that remove content for good, through `legalHoldExclusion`
+  and `refuseHeldDeletion` in `legal-hold-gate.ts`, because archive and soft
   delete are reversible and the bytes stay.
 - It does not preserve bytes this product never stored. A
   `project_knowledge_files` row with a null `storage_uri`, or a `media_assets`

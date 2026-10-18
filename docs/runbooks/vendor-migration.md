@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-18
+Last updated: 2026-10-18
 
 What it takes to replace each third-party dependency, and which of them can be
 replaced today without a code change. This is the operational companion to
@@ -19,7 +19,7 @@ lock-in.
 | Dependency                | Interface                                                         | Adapters that exist today          | Swappable by       |
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------------- | ------------------ |
 | Database                  | `DatabaseAdapter` in `packages/platform/data-layer`               | Neon, plain Postgres               | configuration      |
-| Auth                      | `AuthAdapter` in `packages/platform/data-layer`                   | Clerk                              | writing an adapter |
+| Auth                      | `IdentityProvider` in `packages/platform/identity`                | Clerk                              | writing an adapter |
 | Key-value + rate limiting | `KeyValueStore` in `packages/platform/key-value`                  | Upstash, Redis, in-memory          | configuration      |
 | Object storage            | `ObjectStore` in `packages/platform/object-storage`               | S3-compatible, in-memory           | configuration      |
 | Search                    | `SearchProvider` in `packages/platform/data-layer`                | Postgres lexical plus pgvector     | writing an adapter |
@@ -55,11 +55,16 @@ different collector is an endpoint and a header.
 
 ## The rows that need an adapter written
 
-**Auth.** `AuthAdapter` is the interface and Clerk is the only implementation.
-The migration is in two halves, and the second is the expensive one:
+**Auth.** `IdentityProvider` is the interface and Clerk is the only
+implementation; `resolveIdentityProvider` picks one from `AGI_IDENTITY_PROVIDER`
+(`packages/platform/identity/src/factory.ts`). The migration is in two halves,
+and the second is the expensive one:
 
-1. Write the adapter. The interface is small: verify a token, refresh a token,
-   resolve a subject.
+1. Write the adapter and add its name to `IDENTITY_PROVIDERS`. The interface is
+   not small: besides verifying a session token it reads and suspends users,
+   lists and revokes sessions, issues sign-in tokens, lists organisation
+   memberships, manages second factors, passwords and email addresses, and
+   supplies the session middleware.
 2. Move the accounts. Clerk exports users, and password hashes are exportable in
    a form other providers accept, but every session is invalidated and every
    user signs in again. Organisation membership and roles live in our own tables
@@ -110,10 +115,11 @@ implementation does not.
 
 ## The rows with nothing to move
 
-**Analytics.** There is no server-side product analytics pipeline. The desktop
-and VS Code surfaces post telemetry to configurable endpoints, which is already
-neutral. Adding a pipeline is new work, not a migration, and it should be built
-behind an interface from the start rather than retrofitted.
+**Analytics.** Product analytics is first party. Surfaces post events to
+`/api/analytics/events`, which checks consent and writes them to
+`public.product_analytics_events` in our own database
+(`apps/web/lib/server/product-analytics.ts`). No analytics vendor holds the
+data, so there is nothing to move.
 
 **CDN and hosting.** Neither is modelled in this repository, because neither is
 code here. What is measured is the thing that matters: the weekly container
