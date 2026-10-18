@@ -3,16 +3,13 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ContractForce } from '@agiworkforce/types';
 
-import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 import {
   authorCommercialAgreementVersion,
-  readAgreementByEnvelope,
   readCurrentCommercialAgreement,
 } from './agreement-store';
-import { isEnvelopeExecuted, type ESignatureEnvelope } from './e-signature';
 import { compareStripeContractMetadata } from './stripe-metadata';
 import {
   agreementForce,
@@ -176,40 +173,6 @@ export async function auditActivationState(
   });
 }
 
-const FORCE_REFUSALS: Readonly<Record<ContractForce['reason'], string>> = {
-  in_force: '',
-  in_grace: '',
-  not_started: 'The signed agreement for this workspace has not started yet.',
-  expired: 'The signed agreement for this workspace has ended and its grace period has run out.',
-  terminated: 'The signed agreement for this workspace was terminated.',
-  superseded: 'The signed agreement for this workspace has been superseded.',
-  not_executed:
-    'This workspace has no signed order form on file, so enterprise billing cannot be activated.',
-};
-
-/**
- * The gate every enterprise entitlement passes. An agreement that is not in
- * force grants nothing, whatever its status column still says.
- */
-export async function assertEnterpriseBillingActivated(
-  db: DatabaseAdapter,
-  organizationId: string,
-  asOfDate: string = today(),
-): Promise<ExecutedCommercialAgreement> {
-  const state = await readEnterpriseActivationState(db, organizationId, null, asOfDate);
-  if (state.blockedReason !== null || !isExecutedAgreement(state.agreement)) {
-    throw createError.forbidden(
-      state.blockedReason === 'agreement_terms_mismatch'
-        ? 'The provider subscription for this workspace disagrees with the signed agreement.'
-        : FORCE_REFUSALS.not_executed,
-    );
-  }
-  if (!state.force.inForce) {
-    throw createError.forbidden(FORCE_REFUSALS[state.force.reason]);
-  }
-  return state.agreement;
-}
-
 export interface RecordSignedOrderInput {
   organizationId: string;
   terms: CommercialAgreementTerms;
@@ -236,59 +199,4 @@ export async function recordSignedOrder(
     throw new Error('The signed order form was not recorded as an executed agreement.');
   }
   return agreement;
-}
-
-/**
- * Records the signature an envelope carries, once. A provider that delivers
- * the same completed envelope twice returns the version it already authored
- * rather than amending the workspace with terms nobody renegotiated.
- */
-export async function recordSignedOrderFromEnvelope(
-  db: DatabaseAdapter,
-  input: {
-    organizationId: string;
-    orderFormReference: string;
-    terms: CommercialAgreementTerms;
-    envelope: ESignatureEnvelope;
-    amendmentReason?: string | null;
-    authoredBy?: string | null;
-    event?: 'amend' | 'renew';
-  },
-): Promise<ExecutedCommercialAgreement> {
-  if (!isEnvelopeExecuted(input.envelope)) {
-    throw createError.badRequest('This order form has not been signed yet.');
-  }
-
-  const envelopeId = input.envelope.envelopeId;
-  if (envelopeId) {
-    const existing = await readAgreementByEnvelope(db, input.organizationId, envelopeId);
-    if (existing) {
-      if (!isExecutedAgreement(existing)) {
-        throw createError.conflict(
-          'This envelope is already recorded against a version that is not executed.',
-        );
-      }
-      logger.info(
-        { organizationId: input.organizationId, version: existing.version },
-        'Signed order form already recorded for this envelope; no new version authored',
-      );
-      return existing;
-    }
-  }
-
-  return recordSignedOrder(db, {
-    organizationId: input.organizationId,
-    terms: input.terms,
-    signature: {
-      orderFormReference: input.orderFormReference,
-      provider: input.envelope.provider,
-      envelopeId,
-      signedAt: input.envelope.completedAt ?? new Date().toISOString(),
-      signerName: input.envelope.signerName,
-      signerEmail: input.envelope.signerEmail,
-    },
-    amendmentReason: input.amendmentReason ?? null,
-    authoredBy: input.authoredBy ?? null,
-    ...(input.event ? { event: input.event } : {}),
-  });
 }

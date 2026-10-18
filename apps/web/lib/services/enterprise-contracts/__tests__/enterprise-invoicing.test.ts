@@ -16,7 +16,6 @@ vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
-  assertInvoiceIssuable,
   contractInvoiceDueDate,
   contractViewOf,
   invoiceRefusalsFor,
@@ -187,16 +186,12 @@ beforeEach(() => {
 describe('an invoice the contract does not permit is not issued', () => {
   it('issues under terms that are all present', () => {
     expect(invoiceRefusalsFor(agreement(), ISSUABLE_REQUEST, IN_TERM)).toEqual([]);
-    expect(() => assertInvoiceIssuable(agreement(), ISSUABLE_REQUEST, IN_TERM)).not.toThrow();
   });
 
   it('refuses an invoice with no PO number when the customer requires one', () => {
     expect(
       invoiceRefusalsFor(agreement({ procurementReference: null }), ISSUABLE_REQUEST, IN_TERM),
     ).toEqual(['purchase_order_required']);
-    expect(() =>
-      assertInvoiceIssuable(agreement({ procurementReference: null }), ISSUABLE_REQUEST, IN_TERM),
-    ).toThrow(/cannot be issued/i);
   });
 
   it('refuses an invoice with no recipient and no negotiated rate', () => {

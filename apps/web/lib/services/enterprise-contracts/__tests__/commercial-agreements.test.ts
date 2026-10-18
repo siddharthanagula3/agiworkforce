@@ -17,7 +17,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
   agreementLifecycleState,
-  assertEnterpriseBillingActivated,
   auditActivationState,
   authorCommercialAgreementVersion,
   compareStripeContractMetadata,
@@ -27,7 +26,6 @@ import {
   readCurrentCommercialAgreement,
   readEnterpriseActivationState,
   recordSignedOrder,
-  recordSignedOrderFromEnvelope,
   resolveActivationState,
   terminateCommercialAgreement,
   toStripeContractMetadata,
@@ -127,14 +125,12 @@ function agreementDb() {
       return [target];
     }
     if (sql.includes('from public.organization_commercial_agreements')) {
-      const byEnvelope = sql.includes('signature_envelope_id = $2');
       const live = sql.includes('superseded_at is null');
       const matching = rows
         .filter((row) => row['organization_id'] === params[0])
-        .filter((row) => !byEnvelope || row['signature_envelope_id'] === params[1])
         .filter((row) => !live || row['superseded_at'] === null)
         .sort((a, b) => Number(b['version']) - Number(a['version']));
-      return live || byEnvelope ? matching.slice(0, 1) : matching;
+      return live ? matching.slice(0, 1) : matching;
     }
     return [];
   });
@@ -306,9 +302,7 @@ describe('billing activation requires a signed order', () => {
     const state = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, IN_TERM);
     expect(state.blockedReason).toBe('missing_signed_order');
     expect(state.signedOrderReference).toBeNull();
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, IN_TERM),
-    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(state.force.inForce).toBe(false);
   });
 
   it('blocks activation when only a draft exists', async () => {
@@ -336,9 +330,8 @@ describe('billing activation requires a signed order', () => {
     );
     expect(state.blockedReason).toBeNull();
     expect(state.signedOrderReference).toBe('OF-2026-001');
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, IN_TERM),
-    ).resolves.toMatchObject({ version: 1 });
+    expect(state.force).toMatchObject({ inForce: true, reason: 'in_force' });
+    expect(state.agreement).toMatchObject({ version: 1 });
   });
 
   it('blocks activation when Stripe metadata contradicts the signed terms', async () => {
@@ -441,56 +434,6 @@ describe('a new version has to say what kind of change it is', () => {
   });
 });
 
-describe('one signature signs one version', () => {
-  it('returns the version it already authored when the envelope arrives twice', async () => {
-    const { db, rows } = agreementDb();
-    const envelope = {
-      provider: 'docusign' as const,
-      envelopeId: 'env_dup',
-      status: 'completed' as const,
-      completedAt: '2025-12-15T10:00:00.000Z',
-      signerName: 'Dana Buyer',
-      signerEmail: 'buyer@northwind.example',
-    };
-    const first = await recordSignedOrderFromEnvelope(db, {
-      organizationId: ORGANIZATION_ID,
-      orderFormReference: 'OF-2026-001',
-      terms: terms(),
-      envelope,
-    });
-    const second = await recordSignedOrderFromEnvelope(db, {
-      organizationId: ORGANIZATION_ID,
-      orderFormReference: 'OF-2026-001',
-      terms: terms(),
-      envelope,
-    });
-
-    expect(second.id).toBe(first.id);
-    expect(second.version).toBe(1);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!['superseded_at']).toBeNull();
-  });
-
-  it('will not record an envelope that has not been signed', async () => {
-    const { db } = agreementDb();
-    await expect(
-      recordSignedOrderFromEnvelope(db, {
-        organizationId: ORGANIZATION_ID,
-        orderFormReference: 'OF-2026-001',
-        terms: terms(),
-        envelope: {
-          provider: 'docusign',
-          envelopeId: 'env_open',
-          status: 'sent',
-          completedAt: null,
-          signerName: null,
-          signerEmail: null,
-        },
-      }),
-    ).rejects.toMatchObject({ statusCode: 400 });
-  });
-});
-
 describe('an agreement stops granting when its term ends', () => {
   async function executedAgreement(overrides: Partial<CommercialAgreementTerms> = {}) {
     const { db, rows } = agreementDb();
@@ -504,9 +447,6 @@ describe('an agreement stops granting when its term ends', () => {
 
   it('refuses activation the day after the term ends, with no sweep having run', async () => {
     const { db } = await executedAgreement();
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, AFTER_TERM),
-    ).rejects.toMatchObject({ statusCode: 403 });
     const state = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, AFTER_TERM);
     expect(state.force).toMatchObject({ inForce: false, reason: 'expired' });
     expect(state.agreement?.status).toBe('executed');
@@ -514,21 +454,21 @@ describe('an agreement stops granting when its term ends', () => {
 
   it('keeps granting inside a negotiated grace and stops the day after it', async () => {
     const { db } = await executedAgreement({ expiryGraceDays: 30 });
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, '2027-01-30'),
-    ).resolves.toMatchObject({ version: 1 });
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, '2027-01-31'),
-    ).rejects.toMatchObject({ statusCode: 403 });
+    const lastGraceDay = await readEnterpriseActivationState(
+      db,
+      ORGANIZATION_ID,
+      null,
+      '2027-01-30',
+    );
+    expect(lastGraceDay.force.inForce).toBe(true);
+    const afterGrace = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, '2027-01-31');
+    expect(afterGrace.force).toMatchObject({ inForce: false, reason: 'expired' });
   });
 
   it('refuses activation before the term starts', async () => {
     const { db } = await executedAgreement();
     const state = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, '2025-12-31');
     expect(state.force).toMatchObject({ inForce: false, reason: 'not_started' });
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, '2025-12-31'),
-    ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('audits billing that runs outside the term', async () => {
@@ -575,17 +515,15 @@ describe('terminating an agreement', () => {
 
   it('stops granting from the moment it is terminated, inside the term', async () => {
     const { db } = await executed();
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, IN_TERM),
-    ).resolves.toMatchObject({ version: 1 });
+    const before = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, IN_TERM);
+    expect(before.force.inForce).toBe(true);
     await terminateCommercialAgreement(db, {
       organizationId: ORGANIZATION_ID,
       reason: 'non payment',
       terminatedBy: 'deal-desk',
     });
-    await expect(
-      assertEnterpriseBillingActivated(db, ORGANIZATION_ID, IN_TERM),
-    ).rejects.toMatchObject({ statusCode: 403 });
+    const after = await readEnterpriseActivationState(db, ORGANIZATION_ID, null, IN_TERM);
+    expect(after.force).toMatchObject({ inForce: false, reason: 'terminated' });
   });
 
   it('is recorded once: terminating twice does not rewrite the first ending', async () => {

@@ -18,10 +18,10 @@ counsel review, and the Order Form template says so on its first line.
 | Step               | What happens                                                                | Where it is enforced                                                                              |
 | ------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Quote              | Seats, cadence, term, payment terms and tax status are agreed               | Nothing in code yet; the Order Form is filled in by hand                                          |
-| Order Form issued  | The template is completed and sent for signature                            | `enterprise-contracts/e-signature.ts` (`sendOrderForm`), unconfigured without DocuSign env        |
-| Signature          | Both parties execute; the envelope is recorded                              | `recordSignedOrderFromEnvelope` writes `organization_commercial_agreements`                       |
+| Order Form issued  | The template is completed and sent for signature                            | Outside the product; no e-signature provider is integrated                                        |
+| Signature          | Both parties execute; the signed order is recorded                          | `recordSignedOrder` writes `organization_commercial_agreements`; no route calls it yet            |
 | Agreement authored | The signed terms become version N of a commercial agreement                 | `authorCommercialAgreementVersion`; an amendment supersedes rather than edits                     |
-| Activation         | Billing may start only against an executed agreement                        | `assertEnterpriseBillingActivated` rejects with 403; the sync records `activation_blocked_reason` |
+| Activation         | Billing should start only against an executed agreement                     | Not enforced in code; each invoice is checked against the agreement when its webhook arrives      |
 | Stripe sync        | Contract fields are generated from the agreement, not read back from Stripe | `enterprise-billing-service.ts` `syncEnterpriseContractFromSubscription`                          |
 | Drift detection    | A term retyped in the Stripe dashboard is reported, never adopted           | `compareStripeContractMetadata`                                                                   |
 | Invoice routing    | Invoices address the billing contact; procurement gets the PO reference     | `organization_billing_contracts.billing_contact_*`, `procurement_contact_*`                       |
@@ -102,16 +102,8 @@ owned by the workspace-policy surfaces, not by billing.
 
 ## 5. Sending an Order Form for signature
 
-The e-signature provider reports itself unconfigured rather than throwing when
-its environment is unset, so a deployment without these variables degrades to
-manual signature rather than failing at import:
-
-`DOCUSIGN_INTEGRATION_KEY`, `DOCUSIGN_USER_ID`, `DOCUSIGN_ACCOUNT_ID`,
-`DOCUSIGN_PRIVATE_KEY`, `DOCUSIGN_OAUTH_BASE_URL`, `DOCUSIGN_API_BASE_URL`.
-
-No route calls `sendOrderForm` or `readEnvelope` yet. Until one exists, a
-signed Order Form reaches the system through
-`recordSignedOrderFromEnvelope` only.
+Order Forms are sent and signed outside the product; no e-signature provider is
+integrated. A signed order reaches the system only through `recordSignedOrder`.
 
 ## 6. The security pack a reviewer asks for
 

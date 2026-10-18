@@ -1,11 +1,9 @@
 import 'server-only';
 
 export {
-  assertEnterpriseBillingActivated,
   auditActivationState,
   readEnterpriseActivationState,
   recordSignedOrder,
-  recordSignedOrderFromEnvelope,
   resolveActivationState,
   today,
   type EnterpriseActivationState,
@@ -13,7 +11,6 @@ export {
 } from './activation';
 export {
   authorCommercialAgreementVersion,
-  readAgreementByEnvelope,
   readCommercialAgreementHistory,
   readCurrentCommercialAgreement,
   terminateCommercialAgreement,
@@ -21,17 +18,6 @@ export {
   type TerminateCommercialAgreementInput,
 } from './agreement-store';
 export {
-  docusignESignatureProvider,
-  getESignatureProvider,
-  isEnvelopeExecuted,
-  manualCountersignedProvider,
-  type ESignatureEnvelope,
-  type ESignatureEnvelopeStatus,
-  type ESignatureProvider,
-  type SendOrderFormInput,
-} from './e-signature';
-export {
-  assertInvoiceIssuable,
   contractInvoiceDueDate,
   contractViewOf,
   invoiceRefusalsFor,

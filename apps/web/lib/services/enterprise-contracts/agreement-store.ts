@@ -190,23 +190,6 @@ export async function readCommercialAgreementHistory(
   return rows.map(toCommercialAgreement);
 }
 
-export async function readAgreementByEnvelope(
-  db: DatabaseAdapter,
-  organizationId: string,
-  envelopeId: string,
-): Promise<CommercialAgreement | null> {
-  const [row] = await db.query<AgreementRow>(
-    `select ${AGREEMENT_COLUMNS}
-       from public.organization_commercial_agreements
-      where organization_id = $1::uuid
-        and signature_envelope_id = $2
-      order by version desc
-      limit 1`,
-    [organizationId, envelopeId],
-  );
-  return row ? toCommercialAgreement(row) : null;
-}
-
 export interface AuthorCommercialAgreementInput {
   organizationId: string;
   terms: CommercialAgreementTerms;

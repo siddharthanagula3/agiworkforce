@@ -97,11 +97,10 @@ failing, so a deployment without them dispatches nothing and says so.
 
 ## 3. Customer lifecycle
 
-**Go-live.** Billing may not start before an executed agreement:
-`assertEnterpriseBillingActivated` rejects with 403 and the sync records an
-`activation_blocked_reason`. The order is therefore fixed: agreement authored
-and signed, then activation, then the first invoice, which
-`assertInvoiceIssuable` refuses if any term is missing.
+**Go-live.** Billing should not start before an executed agreement. Nothing in
+code blocks it: the order is agreement authored and signed, then activation,
+then the first invoice, which is issued from the Stripe dashboard and checked
+against the agreement when its webhook arrives, flagged rather than refused.
 
 **Expansion.** A change of seats or terms is a new version of the commercial
 agreement, recorded as an amendment or a renewal through

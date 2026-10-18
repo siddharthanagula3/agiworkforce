@@ -1454,51 +1454,6 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     description:
       'the Play signing certificate fingerprints the app links association file ' + 'publishes',
   }),
-  published('DOCUSIGN_ACCOUNT_ID', {
-    type: 'string',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    description: 'the e-signature account an enterprise contract envelope is created under',
-  }),
-  published('DOCUSIGN_INTEGRATION_KEY', {
-    type: 'string',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    description: 'the integration this deployment authenticates to the e-signature vendor as',
-  }),
-  published('DOCUSIGN_USER_ID', {
-    type: 'string',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    description: 'the user an envelope is sent on behalf of',
-  }),
-  secret('DOCUSIGN_PRIVATE_KEY', {
-    type: 'string',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    description: 'the key a JWT grant to the e-signature vendor is signed with',
-  }),
-  published('DOCUSIGN_API_BASE_URL', {
-    type: 'url',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    validate: isUrl,
-    description:
-      'the e-signature api origin, which differs between the demo and live ' + 'accounts',
-  }),
-  published('DOCUSIGN_OAUTH_BASE_URL', {
-    type: 'url',
-    owner: 'apps/web/lib/services',
-    defaultValue: null,
-    requiredIn: [],
-    validate: isUrl,
-    description: 'the e-signature token origin, which must match the api origin account',
-  }),
   published('AGI_SUPPORT_LIVE_HANDOFF_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/lib/support',

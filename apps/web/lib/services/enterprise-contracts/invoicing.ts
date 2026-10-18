@@ -98,24 +98,6 @@ export function invoiceRefusalsFor(
   );
 }
 
-/**
- * Refuses an enterprise invoice the contract does not permit. A missing PO
- * number stops the invoice here rather than printing blank on it and being
- * rejected by the customer's accounts payable.
- */
-export function assertInvoiceIssuable(
-  agreement: CommercialAgreement,
-  request: InvoiceIssuanceRequest,
-  asOfDate: string,
-): void {
-  const refusals = invoiceRefusalsFor(agreement, request, asOfDate);
-  if (refusals.length === 0) return;
-  throw createError.validation(
-    'This invoice cannot be issued under the signed agreement.',
-    refusals,
-  );
-}
-
 export function contractInvoiceDueDate(
   agreement: CommercialAgreement,
   finalizedOnIsoDate: string,
