@@ -25,7 +25,13 @@ import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkfor
 import { getExtensionTokensCssAuto } from './tokens';
 import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
-import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
+import {
+  chooseBrowserContextTabs,
+  prepareSelectionContext,
+  readVisibleSelection,
+  TAB_CONTEXT_PICKER_CSS,
+  type PageSelection,
+} from './features/side-panel/tabContext';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
@@ -48,7 +54,6 @@ import {
   sitePolicyDenialMessage,
   formatCredits,
   formatUsageResetIn,
-  getBillingPlanPricing,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -224,8 +229,7 @@ import {
   resolveDictationLanguage,
   writeDictationLanguage,
 } from './features/side-panel/dictation-language';
-import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
-import { DATA_HANDLING_DISCLOSURES } from './features/privacy/dataHandling';
+import { mountOnboardingPrompt } from './features/side-panel/onboardingPrompt';
 import {
   cloudMirroringEnabledSnapshot,
   readCloudMirroringEnabled,
@@ -445,7 +449,6 @@ import {
 } from './features/cloud-bridge/managedModelPicker';
 import {
   isManagedCloudBroadcastOwnedBy,
-  managedCloudOwnerKey,
   normalizeManagedCloudOwner,
   sameManagedCloudOwner,
   type ManagedCloudOwner,
@@ -464,7 +467,6 @@ const extensionSendQueue = getExtensionSendQueue();
 const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
-let refreshOnboardingAccount: () => void = () => undefined;
 let capabilityDocument: CapabilityDocument | null = null;
 let accountDisplayName: string | null = null;
 let applyCapabilityGates: () => void = () => undefined;
@@ -675,7 +677,7 @@ function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
     case 'top_up':
       return t('spQuotaRecoveryTopUp');
     case 'upgrade':
-      return t('spQuotaUpgrade');
+      return t('spQuotaFreeUpgrade');
     case 'view_usage':
       return t('spQuotaManageUsage');
     case 'contact_support':
@@ -746,6 +748,7 @@ interface UsageBanner {
 }
 
 let usageBanner: UsageBanner | null = null;
+const FULL_ACCESS_NOTICE_DISMISSED_KEY = 'agi.notice.full-access-dismissed';
 const quotaWarnedStreamIds = new Set<string>();
 const MODEL_USAGE_ROW_LIMIT = 5;
 
@@ -775,6 +778,7 @@ function managedPlanTier(access: ManagedModelAccess): string {
 
 function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
   if (!managedModelAccess || managedCloudChatState !== 'ready') return;
+  if (isFreeBillingPlanTier(normalizeBillingPlanTier(managedPlanTier(managedModelAccess)))) return;
   const warning = quotaWarningFromSignal(
     usageWindowViews(managedModelAccess.usage),
     signal,
@@ -1794,7 +1798,6 @@ function injectStyles(): void {
     #sp-mic-btn:not(:disabled):active,
     #sp-model-badge:not(:disabled):active,
     #sp-model-selector-btn:not(:disabled):active,
-    #sp-onboarding-skip:not(:disabled):active,
     #sp-project-chip:not(:disabled):active,
     #sp-project-chip-clear:not(:disabled):active,
     #sp-recents-close:not(:disabled):active,
@@ -4166,6 +4169,16 @@ function injectStyles(): void {
     }
     .sp-autonomy-chip:hover { filter: brightness(1.12); }
     .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
+    .sp-autonomy-heading {
+      padding: 4px 9px 6px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 600;
+    }
+    .sp-autonomy-learn-more { margin: 4px 9px 2px; }
+    .sp-autonomy-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-full-access-notice { color: var(--agi-ext-text); }
 
     /* Per-row provenance badge in the history drawer. */
     .sp-drawer-history-badge {
@@ -5645,279 +5658,6 @@ function injectStyles(): void {
       position: relative;
     }
 
-    /* ── First-run onboarding carousel overlay ── */
-    #sp-onboarding-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: var(--z-modal);
-      background: var(--agi-ext-bg);
-      flex-direction: column;
-      align-items: stretch;
-      justify-content: flex-start;
-      overflow: hidden;
-    }
-    #sp-onboarding-overlay.visible { display: flex; }
-
-    #sp-onboarding-header {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      padding: 10px 12px 6px;
-      flex-shrink: 0;
-    }
-    #sp-onboarding-skip {
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 4px 8px;
-      border-radius: var(--corner-control);
-      transition: color var(--duration-quick), background var(--duration-quick);
-    }
-    #sp-onboarding-skip:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
-    #sp-onboarding-skip:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    #sp-onboarding-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* individual step panels */
-    .sp-ob-step {
-      display: none;
-      flex: 1;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 20px 24px 0;
-      gap: 0;
-      overflow-y: auto;
-    }
-    .sp-ob-step.active { display: flex; }
-
-    .sp-ob-hero {
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 18px;
-      flex-shrink: 0;
-    }
-    .sp-ob-hero svg { width: 80px; height: 80px; display: block; }
-
-    .sp-ob-title {
-      font-size: var(--type-title-size);
-      line-height: var(--type-title-height);
-      font-weight: 700;
-      color: var(--agi-ext-text);
-      text-align: center;
-      margin-bottom: 16px;
-      flex-shrink: 0;
-    }
-
-    /* Step 1 uses icon-text rows instead of a body paragraph */
-    .sp-ob-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      max-width: 340px;
-    }
-    .sp-ob-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-menu);
-      padding: 10px 12px;
-    }
-    .sp-ob-row-icon {
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 1px;
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-ob-row-icon svg { width: 16px; height: 16px; display: block; }
-    .sp-ob-row-icon.danger { color: var(--agi-ext-danger-text); }
-    .sp-ob-row-text {
-      font-size: var(--type-caption-size);
-      color: var(--agi-ext-text-muted);
-      line-height: var(--type-caption-height);
-    }
-    .sp-ob-row-text.danger { color: var(--agi-ext-danger-text); }
-    .sp-ob-privacy-row .sp-ob-row-text > strong { display: block; }
-    .sp-ob-learn-more {
-      color: var(--agi-ext-accent-text);
-      text-decoration: underline;
-      cursor: pointer;
-      background: none;
-      border: none;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 0;
-      display: inline;
-      font-family: inherit;
-    }
-    .sp-ob-learn-more:hover { text-decoration-thickness: 2px; }
-    .sp-ob-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    /* Steps 2-5 body text */
-    .sp-ob-body {
-      font-size: var(--type-caption-size);
-      color: var(--agi-ext-text-muted);
-      line-height: var(--type-caption-height);
-      text-align: center;
-      max-width: 300px;
-      flex-shrink: 0;
-    }
-    .sp-ob-body:empty { display: none; }
-    .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
-    .sp-drawer-memory-preferences[hidden] { display: none; }
-    .sp-drawer-personalization { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
-    .sp-drawer-personalization[hidden] { display: none; }
-    .sp-drawer-memory-preference {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-drawer-memory-preference input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
-    .sp-drawer-memory-preference input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-ob-action {
-      min-height: var(--control-lg);
-      padding: 6px 16px;
-      border: none;
-      border-radius: var(--corner-field);
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
-      cursor: pointer;
-      font: inherit;
-      font-size: var(--type-caption-size);
-      font-weight: 600;
-    }
-    .sp-ob-action[hidden],
-    .sp-ob-field[hidden] { display: none; }
-    .sp-ob-field { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); }
-    .sp-ob-label { color: var(--agi-ext-text); font-size: var(--type-caption-size); font-weight: 600; line-height: var(--type-caption-height); }
-    .sp-ob-input {
-      box-sizing: border-box;
-      width: 100%;
-      min-height: var(--control-lg);
-      padding: 6px 10px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-field);
-      background: var(--agi-ext-bg);
-      color: var(--agi-ext-text);
-      font: inherit;
-      font-size: var(--type-body-size);
-    }
-    .sp-ob-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
-    .sp-ob-choices { display: flex; flex-direction: column; gap: 6px; width: min(300px, 100%); max-height: 220px; overflow-y: auto; }
-    .sp-ob-check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: min(300px, 100%);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      text-align: left;
-    }
-    .sp-ob-check input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
-    .sp-ob-check input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-ob-error {
-      margin: 0 0 8px;
-      color: var(--agi-ext-danger-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      text-align: center;
-    }
-    .sp-ob-error[hidden] { display: none; }
-    @media (pointer: coarse) {
-      .sp-ob-check { min-height: 44px; }
-    }
-
-    /* footer: step dots + nav buttons */
-    #sp-onboarding-footer {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 24px 22px;
-      flex-shrink: 0;
-    }
-
-    .sp-ob-dots {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .sp-ob-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: var(--corner-pill);
-      background: var(--agi-ext-border-strong);
-      transition: background var(--duration-quick), width var(--duration-quick);
-    }
-    .sp-ob-dot.active {
-      width: 18px;
-      border-radius: var(--corner-compact);
-      background: var(--agi-ext-accent);
-    }
-
-    .sp-ob-nav {
-      display: flex;
-      gap: 8px;
-      width: 100%;
-      max-width: 300px;
-    }
-    .sp-ob-btn-back {
-      flex: 1;
-      padding: 8px 14px;
-      border-radius: var(--corner-field);
-      border: 1px solid var(--agi-ext-border-strong);
-      background: transparent;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      cursor: pointer;
-      transition: background var(--duration-instant), color var(--duration-instant);
-      font-family: inherit;
-    }
-    .sp-ob-btn-back:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-ob-btn-back:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-ob-btn-back[hidden] { display: none; }
-
-    .sp-ob-btn-next {
-      flex: 2;
-      padding: 8px 14px;
-      border-radius: var(--corner-field);
-      border: none;
-      background: var(--agi-ext-primary);
-      color: var(--agi-ext-on-primary);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 600;
-      cursor: pointer;
-      transition: background var(--duration-instant);
-      font-family: inherit;
-    }
-    .sp-ob-btn-next:hover { background: var(--agi-ext-primary-hover); }
-    .sp-ob-btn-next:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
     /* ── 2026-08 browser-surface polish ───────────────────────────────────
        Chrome's side panel is a narrow, long-lived surface. Keep its hierarchy
        calm: one quiet header, a spacious transcript, and one rounded composer.
@@ -6154,7 +5894,6 @@ function injectStyles(): void {
     #sp-blocked,
     .sp-agent-approval,
     .sp-create-shortcut-modal,
-    .sp-ob-row { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
       align-items: center;
@@ -10191,20 +9930,82 @@ function renderVideoModeChip(bar: HTMLElement): void {
   bar.appendChild(chip);
 }
 
+let pendingSelectionText: string | null = null;
+let offeredSelectionKey: string | null = null;
+
+function pendingSelectionAttached(): boolean {
+  return pendingSelectionText !== null && _ctx.pendingPageContext === pendingSelectionText;
+}
+
+async function offerPageSelection(): Promise<void> {
+  if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
+  if (pendingBrowserContextTabs.length > 0) return;
+  if (_ctx.pendingPageContext !== null && !pendingSelectionAttached()) return;
+  const generation = _ctx.conversationGeneration;
+  let tab: chrome.tabs.Tab | undefined;
+  let selection: PageSelection | null = null;
+  try {
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url) return;
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readVisibleSelection,
+      args: [MAX_PAGE_TEXT_CHARACTERS],
+    });
+    selection = (result?.result as PageSelection | null | undefined) ?? null;
+  } catch {
+    return;
+  }
+  if (!tab?.id || !tab.url || !selection) return;
+  const prepared = prepareSelectionContext(selection, tab.url);
+  if (!prepared) return;
+  const key = `${tab.id}\n${tab.url}\n${prepared.text}`;
+  if (key === offeredSelectionKey) return;
+  if (
+    generation !== _ctx.conversationGeneration ||
+    _ctx.isStreaming ||
+    managedCloudChatState !== 'ready' ||
+    pendingBrowserContextTabs.length > 0 ||
+    (_ctx.pendingPageContext !== null && !pendingSelectionAttached())
+  ) {
+    return;
+  }
+  offeredSelectionKey = key;
+  pendingSelectionText = prepared.text;
+  _ctx.pendingPageContext = prepared.text;
+  _ctx.pendingPageContextSource = {
+    tabId: tab.id,
+    url: tab.url,
+    title: t('spSelectionChipTitle', [pageChipLabel(tab.url)]),
+  };
+  composerContextNotice = null;
+  updateAttachmentPreview();
+  updateContextButton();
+}
+
 function renderPendingPageChip(bar: HTMLElement): void {
   const source = _ctx.pendingPageContextSource;
   if (!_ctx.pendingPageContext || !source) return;
+  const selection = pendingSelectionAttached();
   const label = source.title || pageChipLabel(source.url);
   const chip = el('div', {
-    class: 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
-    title: source.url,
+    class: selection
+      ? 'sp-attachment-chip sp-attachment-doc sp-attachment-page sp-attachment-selection'
+      : 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
+    title: selection ? _ctx.pendingPageContext : source.url,
   });
   const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
-  icon.appendChild(renderIcon(Globe, 16));
+  icon.appendChild(renderIcon(selection ? FileText : Globe, 16));
   chip.appendChild(icon);
   const copy = el('div', { class: 'sp-attachment-doc-copy' });
   copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
-  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, pageChipLabel(source.url)));
+  copy.appendChild(
+    el(
+      'span',
+      { class: 'sp-attachment-doc-status' },
+      selection ? _ctx.pendingPageContext : pageChipLabel(source.url),
+    ),
+  );
   chip.appendChild(copy);
   const removeBtn = el(
     'button',
@@ -10388,564 +10189,6 @@ function refreshPageHostname(): void {
     });
   } catch {
     /* noop */
-  }
-}
-
-function buildOnboardingOverlay(onComplete: () => void): void {
-  const TOTAL_STEPS = 6;
-  let currentStep = 0;
-
-  const flaskSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M9 3h6M9 3v7l-4 8a2 2 0 0 0 1.8 2.9h10.4A2 2 0 0 0 19 18.9L15 10V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="9.5" cy="16" r="0.75" fill="currentColor"/>
-    <circle cx="13" cy="17.5" r="0.75" fill="currentColor"/>
-  </svg>`;
-
-  const eyeSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
-  </svg>`;
-
-  const warnSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-    <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-    <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
-  </svg>`;
-
-  const tabGroupSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="8" y="28" width="64" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <rect x="10" y="14" width="22" height="16" rx="4" fill="var(--agi-ext-accent)" opacity="0.85"/>
-    <rect x="34" y="18" width="18" height="12" rx="3" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-border-strong)" stroke-width="1"/>
-    <rect x="54" y="18" width="14" height="12" rx="3" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-border-strong)" stroke-width="1"/>
-    <text x="21" y="25" font-size="7" fill="var(--agi-ext-on-accent)" text-anchor="middle" font-family="-apple-system,sans-serif" font-weight="600">AGI</text>
-    <line x1="16" y1="44" x2="64" y2="44" stroke="var(--agi-ext-border)" stroke-width="1"/>
-    <rect x="14" y="50" width="52" height="8" rx="2" fill="var(--agi-ext-surface)"/>
-    <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
-  </svg>`;
-
-  const pinHintSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="8" y="28" width="52" height="34" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <rect x="14" y="36" width="28" height="4" rx="2" fill="var(--agi-ext-surface)"/>
-    <rect x="14" y="44" width="20" height="3" rx="1.5" fill="var(--agi-ext-surface)"/>
-    <!-- pin icon in top-right of card, highlighted -->
-    <circle cx="53" cy="35" r="10" fill="var(--agi-ext-accent)" opacity="0.15"/>
-    <path d="M53 29l2 4h3l-2.5 3.5 1 4-3.5-2-3.5 2 1-4L48 33h3l2-4z" stroke="var(--agi-ext-accent)" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
-    <!-- arrow pointing to pin -->
-    <path d="M44 50 Q42 42 48 37" stroke="var(--agi-ext-accent-secondary)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-    <polyline points="46,36 48,37 47,39" stroke="var(--agi-ext-accent-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-
-  const overlay = el('div', {
-    id: 'sp-onboarding-overlay',
-    role: 'dialog',
-    'aria-modal': 'true',
-    'aria-label': 'Welcome to AGI, first-time setup',
-    'aria-hidden': 'true',
-    inert: '',
-  });
-
-  const header = el('div', { id: 'sp-onboarding-header' });
-  const skipBtn = el(
-    'button',
-    { id: 'sp-onboarding-skip', 'aria-label': 'Skip onboarding' },
-    'Skip',
-  );
-  header.appendChild(skipBtn);
-  overlay.appendChild(header);
-
-  const body = el('div', { id: 'sp-onboarding-body' });
-
-  const step0 = el('div', {
-    class: 'sp-ob-step active',
-    'data-step': '0',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
-    'aria-hidden': 'false',
-  });
-  step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
-  const rows0 = el('div', { class: 'sp-ob-rows' });
-
-  const row0a = el('div', { class: 'sp-ob-row' });
-  const row0aIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
-  appendSvgString(row0aIcon, flaskSvg);
-  const row0aText = el(
-    'div',
-    { class: 'sp-ob-row-text' },
-    'This is an early beta with risks distinct from other AGI products. You are fully responsible for all actions taken with it.',
-  );
-  row0a.appendChild(row0aIcon);
-  row0a.appendChild(row0aText);
-  rows0.appendChild(row0a);
-
-  const row0b = el('div', { class: 'sp-ob-row' });
-  const row0bIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
-  appendSvgString(row0bIcon, eyeSvg);
-  const row0bText = el(
-    'div',
-    { class: 'sp-ob-row-text' },
-    'AGI can take screenshots of the page when responding. For privacy, avoid using it on sensitive sites like health, banking, or dating platforms.',
-  );
-  row0b.appendChild(row0bIcon);
-  row0b.appendChild(row0bText);
-  rows0.appendChild(row0b);
-
-  const row0c = el('div', { class: 'sp-ob-row' });
-  const row0cIcon = el('div', { class: 'sp-ob-row-icon danger', 'aria-hidden': 'true' });
-  appendSvgString(row0cIcon, warnSvg);
-  const row0cText = el('div', { class: 'sp-ob-row-text danger' });
-  row0cText.appendChild(
-    document.createTextNode(
-      'Malicious actors can hide instructions in websites, emails, and documents that trick AI into taking harmful actions without your knowledge. ',
-    ),
-  );
-  const learnMoreBtn = el('button', { class: 'sp-ob-learn-more' }, 'Learn more');
-  learnMoreBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: agiWebUrl('/security') }).catch(() => {});
-  });
-  row0cText.appendChild(learnMoreBtn);
-  row0c.appendChild(row0cIcon);
-  row0c.appendChild(row0cText);
-  rows0.appendChild(row0c);
-
-  for (const disclosure of DATA_HANDLING_DISCLOSURES) {
-    const privacyRow = el('div', { class: 'sp-ob-row sp-ob-privacy-row' });
-    const privacyIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
-    appendSvgString(privacyIcon, eyeSvg);
-    const privacyText = el('div', { class: 'sp-ob-row-text' });
-    privacyText.appendChild(el('strong', {}, disclosure.label));
-    privacyText.appendChild(document.createTextNode(` ${disclosure.body}`));
-    privacyRow.appendChild(privacyIcon);
-    privacyRow.appendChild(privacyText);
-    rows0.appendChild(privacyRow);
-  }
-
-  const privacySettingsRow = el('div', { class: 'sp-ob-row sp-ob-privacy-row' });
-  const privacySettingsText = el('div', { class: 'sp-ob-row-text' });
-  const privacySettingsBtn = el('button', { class: 'sp-ob-learn-more' }, 'Open privacy settings');
-  privacySettingsBtn.addEventListener('click', () => {
-    if (typeof chrome.runtime.openOptionsPage === 'function') chrome.runtime.openOptionsPage();
-  });
-  privacySettingsText.appendChild(privacySettingsBtn);
-  privacySettingsRow.appendChild(privacySettingsText);
-  rows0.appendChild(privacySettingsRow);
-
-  step0.appendChild(rows0);
-  body.appendChild(step0);
-
-  const setupName = el('input', {
-    class: 'sp-ob-input',
-    id: 'sp-ob-name',
-    type: 'text',
-    autocomplete: 'name',
-  }) as HTMLInputElement;
-  const setupAccountStatus = el('p', { class: 'sp-ob-body', role: 'status' });
-  const setupSignIn = el(
-    'button',
-    { class: 'sp-ob-action', type: 'button' },
-    t('spSetupAccountSignIn'),
-  );
-  const setupNameField = el(
-    'div',
-    { class: 'sp-ob-field' },
-    el('label', { class: 'sp-ob-label', for: 'sp-ob-name' }, t('spSetupNameLabel')),
-    setupName,
-  );
-  const stepAccount = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '1',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['2', String(TOTAL_STEPS)]),
-    'aria-hidden': 'true',
-  });
-  stepAccount.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupAccountTitle')));
-  stepAccount.appendChild(setupAccountStatus);
-  stepAccount.appendChild(setupSignIn);
-  stepAccount.appendChild(setupNameField);
-  body.appendChild(stepAccount);
-  setupSignIn.addEventListener('click', () => {
-    setupSignIn.disabled = true;
-    void openClerkSignIn()
-      .catch((error: unknown) => {
-        setupAccountStatus.textContent =
-          error instanceof Error ? error.message : t('spSetupAccountSignedOut');
-      })
-      .finally(() => {
-        setupSignIn.disabled = false;
-      });
-  });
-
-  const setupModels = el('div', {
-    class: 'sp-ob-choices',
-    role: 'radiogroup',
-    'aria-labelledby': 'sp-ob-model-title',
-  });
-  const setupModelNote = el('p', { class: 'sp-ob-body' });
-  const stepModel = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '2',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['3', String(TOTAL_STEPS)]),
-    'aria-hidden': 'true',
-  });
-  stepModel.appendChild(
-    el('div', { class: 'sp-ob-title', id: 'sp-ob-model-title' }, t('spSetupModelTitle')),
-  );
-  stepModel.appendChild(setupModelNote);
-  stepModel.appendChild(setupModels);
-  body.appendChild(stepModel);
-
-  const setupRemember = el('input', {
-    type: 'checkbox',
-    id: 'sp-ob-memory-remember',
-  }) as HTMLInputElement;
-  const setupSearchPast = el('input', {
-    type: 'checkbox',
-    id: 'sp-ob-memory-search',
-  }) as HTMLInputElement;
-  const setupMemoryNote = el('p', { class: 'sp-ob-body', role: 'status' });
-  const stepMemory = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '3',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['4', String(TOTAL_STEPS)]),
-    'aria-hidden': 'true',
-  });
-  stepMemory.appendChild(el('div', { class: 'sp-ob-title' }, t('spSetupMemoryTitle')));
-  stepMemory.appendChild(el('p', { class: 'sp-ob-body' }, t('spSetupMemoryBody')));
-  stepMemory.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-check' },
-      setupRemember,
-      el('label', { for: 'sp-ob-memory-remember' }, t('spSetupMemoryRemember')),
-    ),
-  );
-  stepMemory.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-check' },
-      setupSearchPast,
-      el('label', { for: 'sp-ob-memory-search' }, t('spSetupMemorySearch')),
-    ),
-  );
-  stepMemory.appendChild(setupMemoryNote);
-  body.appendChild(stepMemory);
-
-  const setupState: {
-    ownerKey: string | null;
-    loadedName: string;
-    memory: MemoryPreferences | null;
-    model: string;
-  } = { ownerKey: null, loadedName: '', memory: null, model: _ctx.selectedModel };
-
-  function renderSetupModels(signedIn: boolean): void {
-    const options = signedIn ? regenerateModelOptions() : [];
-    const choices =
-      options.length > 0 ? options : [{ value: 'auto', label: t('spSetupModelAuto') }];
-    if (!choices.some((choice) => choice.value === setupState.model)) setupState.model = 'auto';
-    setupModelNote.textContent = signedIn ? t('spSetupModelBody') : t('spSetupModelSignedOut');
-    setupModels.replaceChildren();
-    for (const choice of choices) {
-      const id = `sp-ob-model-${choice.value.replace(/[^A-Za-z0-9_-]/g, '-')}`;
-      const radio = el('input', {
-        type: 'radio',
-        name: 'sp-ob-model',
-        id,
-        value: choice.value,
-      }) as HTMLInputElement;
-      radio.checked = choice.value === setupState.model;
-      radio.addEventListener('change', () => {
-        if (radio.checked) setupState.model = choice.value;
-      });
-      setupModels.appendChild(
-        el('div', { class: 'sp-ob-check' }, radio, el('label', { for: id }, choice.label)),
-      );
-    }
-  }
-
-  function renderSetupMemory(signedIn: boolean): void {
-    const memory = setupState.memory;
-    const usable = signedIn && memory !== null && memory.organizationAllows;
-    setupRemember.disabled = !usable;
-    setupSearchPast.disabled = !usable;
-    setupMemoryNote.textContent = !signedIn
-      ? t('spSetupMemorySignedOut')
-      : memory && !memory.organizationAllows
-        ? t('spSetupMemoryOrgOff')
-        : '';
-  }
-
-  refreshOnboardingAccount = () => {
-    const owner = _ctx.managedCloudOwner;
-    const signedIn = owner !== null && managedModelAccess !== null;
-    const ownerKey = owner ? managedCloudOwnerKey(owner) : null;
-    setupSignIn.hidden = signedIn;
-    setupNameField.hidden = !signedIn;
-    setupAccountStatus.textContent = signedIn
-      ? t('spSetupAccountSignedIn', [setupState.loadedName || t('spCloudAccountFallbackName')])
-      : t('spSetupAccountSignedOut');
-    renderSetupModels(signedIn);
-    renderSetupMemory(signedIn);
-    if (!signedIn || ownerKey === setupState.ownerKey) return;
-    setupState.ownerKey = ownerKey;
-    void getClerkAccountProfile()
-      .then((profile) => {
-        if (setupState.ownerKey !== ownerKey) return;
-        setupState.loadedName = accountDisplayName ?? profile?.displayName ?? '';
-        if (!setupName.value) setupName.value = setupState.loadedName;
-        setupAccountStatus.textContent = t('spSetupAccountSignedIn', [
-          setupState.loadedName || profile?.email || t('spCloudAccountFallbackName'),
-        ]);
-      })
-      .catch(() => undefined);
-    void getManagedCloudAuthContext()
-      .then(async (auth) => {
-        if (!auth || setupState.ownerKey !== ownerKey) return;
-        const preferences = await fetchMemoryPreferences(auth.token);
-        if (setupState.ownerKey !== ownerKey) return;
-        setupState.memory = preferences;
-        setupRemember.checked = preferences.memory;
-        setupSearchPast.checked = preferences.searchPastChats;
-        renderSetupMemory(true);
-      })
-      .catch(() => {
-        setupMemoryNote.textContent = t('spSetupMemoryUnavailable');
-      });
-  };
-
-  async function saveSetupChoices(): Promise<void> {
-    if (setupState.model !== _ctx.selectedModel) applyModelSelection(setupState.model);
-    const auth = await getManagedCloudAuthContext();
-    if (!auth) return;
-    const name = setupName.value.trim();
-    if (!setupNameField.hidden && name && name !== setupState.loadedName) {
-      await saveAccountDisplayName(auth.token, name);
-    }
-    const memory = setupState.memory;
-    if (
-      memory &&
-      memory.organizationAllows &&
-      (memory.memory !== setupRemember.checked ||
-        memory.searchPastChats !== setupSearchPast.checked)
-    ) {
-      await saveMemoryPreferences(auth.token, {
-        memory: setupRemember.checked,
-        searchPastChats: setupSearchPast.checked,
-      });
-    }
-  }
-
-  const step2 = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '4',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['5', String(TOTAL_STEPS)]),
-    'aria-hidden': 'true',
-  });
-  const step2Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step2Hero, tabGroupSvg);
-  step2.appendChild(step2Hero);
-  step2.appendChild(el('div', { class: 'sp-ob-title' }, 'AGI has tab group access'));
-  step2.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'When AGI is open in a tab group, it can access the URL, context, and information of all the tabs in that group.',
-    ),
-  );
-  body.appendChild(step2);
-
-  const step4 = el('div', {
-    class: 'sp-ob-step',
-    'data-step': '5',
-    role: 'group',
-    'aria-label': t('spOnboardingStepLabel', ['6', String(TOTAL_STEPS)]),
-    'aria-hidden': 'true',
-  });
-  const step4Hero = el('div', { class: 'sp-ob-hero' });
-  appendSvgString(step4Hero, pinHintSvg);
-  step4.appendChild(step4Hero);
-  step4.appendChild(el('div', { class: 'sp-ob-title' }, 'Pin AGI for quick access'));
-  step4.appendChild(
-    el(
-      'div',
-      { class: 'sp-ob-body' },
-      'Click the pin icon in the top-right corner of the extension window to keep AGI always one click away.',
-    ),
-  );
-  body.appendChild(step4);
-
-  overlay.appendChild(body);
-
-  const footer = el('div', { id: 'sp-onboarding-footer' });
-
-  const dotsRow = el('div', {
-    class: 'sp-ob-dots',
-    role: 'progressbar',
-    'aria-label': 'Onboarding progress',
-    'aria-valuemin': '1',
-    'aria-valuemax': String(TOTAL_STEPS),
-    'aria-valuenow': '1',
-    'aria-valuetext': t('spOnboardingStepLabel', ['1', String(TOTAL_STEPS)]),
-  });
-  const dots: HTMLElement[] = [];
-  for (let i = 0; i < TOTAL_STEPS; i++) {
-    const dot = el('div', {
-      class: i === 0 ? 'sp-ob-dot active' : 'sp-ob-dot',
-      'aria-hidden': 'true',
-    });
-    dots.push(dot);
-    dotsRow.appendChild(dot);
-  }
-  footer.appendChild(dotsRow);
-
-  const navRow = el('div', { class: 'sp-ob-nav' });
-  const backBtn = el(
-    'button',
-    { class: 'sp-ob-btn-back', 'aria-label': 'Back', hidden: '' },
-    'Back',
-  );
-  const nextBtn = el(
-    'button',
-    {
-      class: 'sp-ob-btn-next',
-      'aria-label': t('spOnboardingContinueAria', ['1', String(TOTAL_STEPS)]),
-    },
-    'I understand',
-  );
-  navRow.appendChild(backBtn);
-  navRow.appendChild(nextBtn);
-  footer.appendChild(navRow);
-  overlay.appendChild(footer);
-
-  const stepLabels: string[] = [
-    t('spOnboardingUnderstand'),
-    t('spNext'),
-    t('spNext'),
-    t('spNext'),
-    t('spOnboardingLetsGo'),
-    t('spOnboardingDone'),
-  ];
-  const total = String(TOTAL_STEPS);
-  const stepAriaLabels: string[] = [
-    t('spOnboardingContinueAria', ['1', total]),
-    t('spOnboardingContinueAria', ['2', total]),
-    t('spOnboardingContinueAria', ['3', total]),
-    t('spOnboardingContinueAria', ['4', total]),
-    t('spOnboardingContinueAria', ['5', total]),
-    t('spOnboardingDismissAria'),
-  ];
-
-  function dismiss(): void {
-    markOnboardingComplete();
-    overlay.classList.remove('visible');
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.setAttribute('inert', '');
-    onComplete();
-    const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-    const fallback = document.getElementById('sp-menu-btn') as HTMLButtonElement | null;
-    (composer && !composer.disabled ? composer : fallback)?.focus();
-  }
-
-  function goToStep(step: number): void {
-    refreshOnboardingAccount();
-    const steps = body.querySelectorAll<HTMLElement>('.sp-ob-step');
-    steps.forEach((s, i) => {
-      s.classList.toggle('active', i === step);
-      s.setAttribute('aria-hidden', String(i !== step));
-    });
-    dots.forEach((d, i) => {
-      d.classList.toggle('active', i === step);
-    });
-    currentStep = step;
-    dotsRow.setAttribute('aria-valuenow', String(step + 1));
-    dotsRow.setAttribute(
-      'aria-valuetext',
-      t('spOnboardingStepLabel', [String(step + 1), String(TOTAL_STEPS)]),
-    );
-    if (step === 0) {
-      backBtn.setAttribute('hidden', '');
-    } else {
-      backBtn.removeAttribute('hidden');
-    }
-    nextBtn.textContent = stepLabels[step] ?? t('spNext');
-    nextBtn.setAttribute('aria-label', stepAriaLabels[step] ?? t('spWizardContinueAria'));
-    nextBtn.focus();
-  }
-
-  const setupError = el('p', { class: 'sp-ob-error', role: 'alert', hidden: '' });
-  footer.insertBefore(setupError, navRow);
-
-  nextBtn.addEventListener('click', () => {
-    if (currentStep < TOTAL_STEPS - 1) {
-      goToStep(currentStep + 1);
-      return;
-    }
-    nextBtn.disabled = true;
-    setupError.hidden = true;
-    nextBtn.textContent = t('spSetupSaving');
-    void saveSetupChoices()
-      .then(() => dismiss())
-      .catch((error: unknown) => {
-        setupError.textContent = t('spSetupSaveFailed', [
-          error instanceof Error ? error.message : t('spSetupSaveFailedGeneric'),
-        ]);
-        setupError.hidden = false;
-        nextBtn.textContent = stepLabels[currentStep] ?? t('spOnboardingDone');
-      })
-      .finally(() => {
-        nextBtn.disabled = false;
-      });
-  });
-
-  backBtn.addEventListener('click', () => {
-    if (currentStep > 0) {
-      goToStep(currentStep - 1);
-    }
-  });
-
-  skipBtn.addEventListener('click', () => dismiss());
-
-  overlay.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      dismiss();
-      return;
-    }
-    if (e.key === 'Tab') {
-      const focusable = Array.from(
-        overlay.querySelectorAll<HTMLElement>(
-          'button:not([disabled]):not([hidden]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((element) => {
-        const style = getComputedStyle(element);
-        return style.display !== 'none' && style.visibility !== 'hidden';
-      });
-      if (focusable.length === 0) return;
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  });
-
-  document.body.appendChild(overlay);
-}
-
-function showOnboardingOverlay(): void {
-  const overlay = document.getElementById('sp-onboarding-overlay');
-  if (!overlay) return;
-  overlay.classList.add('visible');
-  overlay.setAttribute('aria-hidden', 'false');
-  overlay.removeAttribute('inert');
-  const nextBtn = overlay.querySelector<HTMLButtonElement>('.sp-ob-btn-next');
-  if (nextBtn) {
-    setTimeout(() => nextBtn.focus(), 50);
   }
 }
 
@@ -11668,9 +10911,6 @@ function buildUI(): void {
     switchTab('chat');
   });
   headerRight.appendChild(newChatBtn);
-
-  const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
-  headerRight.appendChild(quotaBadgeSlot);
 
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
@@ -14856,19 +14096,6 @@ function buildUI(): void {
     drawerMenu.appendChild(row);
   }
 
-  const quotaBadgeEl = el('button', {
-    id: 'sp-quota-badge',
-    type: 'button',
-    title: 'AGI Cloud plan',
-    'aria-label': 'AGI Cloud plan and usage, open menu',
-  });
-  quotaBadgeEl.addEventListener('click', () => {
-    openDrawer(quotaBadgeEl);
-  });
-  const quotaSlot = document.getElementById('sp-quota-badge-slot');
-  if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
-  else document.body.appendChild(quotaBadgeEl);
-
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearUsageResetTimer(): void {
@@ -14971,7 +14198,6 @@ function buildUI(): void {
     const views = usageWindowViews(usage);
     const purchased = purchasedCreditsView(usage);
     const recovery = planQuotaRecovery(managedPlanTier(access));
-    const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
     const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier));
     quotaWrap.dataset['upgradeOnly'] = String(upgradeOnly);
     clearChildren(quotaWindowsEl);
@@ -14980,15 +14206,12 @@ function buildUI(): void {
       if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
     }
     renderPlanComparison(access.subscriptionTier);
+    planCompareEl.hidden = upgradeOnly;
     quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
-    quotaBadgeEl.classList.add('visible');
 
     if (usage.usage_allocation === 'pending') {
       setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
       quotaUpgradeRow.style.display = 'none';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('unavailable', {
         message: t('spQuotaAllocationPending'),
         action: 'retry',
@@ -15008,9 +14231,6 @@ function buildUI(): void {
       quotaUpgradeBtn.dataset['destination'] = 'recovery';
       quotaUpgradeBtn.dataset['href'] = recovery.href;
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spQuotaManageUsage');
       setManagedCloudChatState('unavailable', {
         message,
         action: 'recovery',
@@ -15024,13 +14244,10 @@ function buildUI(): void {
     if (upgradeOnly) {
       setQuotaNotice('', null);
       quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
-      quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
+      quotaUpgradeBtn.textContent = t('spQuotaFreeUpgrade');
       delete quotaUpgradeBtn.dataset['destination'];
       delete quotaUpgradeBtn.dataset['href'];
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('ready');
       renderUsageBanner(null);
       return;
@@ -15045,9 +14262,6 @@ function buildUI(): void {
         : null;
     setQuotaNotice(banner?.text ?? '', banner?.severity ?? null);
     quotaUpgradeRow.style.display = 'none';
-    quotaBadgeEl.classList.add('has-prompts');
-    quotaBadgeEl.classList.remove('exhausted');
-    quotaBadgeEl.textContent = planLabel;
     setManagedCloudChatState('ready');
     renderUsageBanner(banner);
   }
@@ -15067,7 +14281,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
         message: t('spGateVerifyFailed'),
@@ -15084,7 +14297,6 @@ function buildUI(): void {
     if (!token) {
       capabilityDocument = null;
       applyCapabilityGates();
-      refreshOnboardingAccount();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
       _ctx.currentModelKey = undefined;
@@ -15102,7 +14314,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
         message: isClerkExtensionAuthConfigured()
@@ -15144,7 +14355,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof AccountUnavailableError) {
         signinPrompt.style.display = 'none';
@@ -15196,7 +14406,6 @@ function buildUI(): void {
     accountDisplayName = accountSummary?.displayName ?? currentAccountProfile?.displayName ?? null;
     applyCapabilityGates();
     managedModelAccess = access;
-    refreshOnboardingAccount();
     signInAwaitingCompletion = false;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
@@ -15240,9 +14449,6 @@ function buildUI(): void {
       quotaUpgradeBtn.textContent = t('spBillingManage');
       quotaUpgradeBtn.dataset['destination'] = 'billing';
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('visible', 'exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spBillingBadge');
       setManagedCloudChatState('unavailable', {
         message:
           access.subscriptionStatus === 'past_due'
@@ -15294,10 +14500,6 @@ function buildUI(): void {
     quotaUpgradeBtn.dataset['destination'] = 'pricing';
     quotaUpgradeRow.style.display = '';
 
-    quotaBadgeEl.classList.add('visible');
-    quotaBadgeEl.classList.remove('has-prompts');
-    quotaBadgeEl.classList.add('exhausted');
-    quotaBadgeEl.textContent = t('spQuotaUpgrade');
     setManagedCloudChatState('unavailable', {
       message: t('spQuotaProRequired'),
       action: 'upgrade',
@@ -15619,7 +14821,6 @@ function buildUI(): void {
   document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key.toLowerCase() !== 'k' || event.altKey || event.shiftKey) return;
     if (!(event.metaKey || event.ctrlKey)) return;
-    if (document.getElementById('sp-onboarding-overlay')?.classList.contains('visible')) return;
     event.preventDefault();
     commandPalette.open(
       document.activeElement instanceof HTMLElement ? document.activeElement : null,
@@ -16970,6 +16171,8 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
+  inputEl.addEventListener('focus', () => void offerPageSelection());
+  window.addEventListener('focus', () => void offerPageSelection());
 
   const slashMenu = el('div', {
     id: 'sp-slash-menu',
@@ -17801,8 +17004,15 @@ function buildUI(): void {
   const autonomyPopover = el('div', {
     id: 'sp-autonomy-popover',
     role: 'menu',
-    'aria-label': 'Browser action approvals',
+    'aria-labelledby': 'sp-autonomy-heading',
   });
+  autonomyPopover.appendChild(
+    el(
+      'div',
+      { id: 'sp-autonomy-heading', class: 'sp-autonomy-heading', role: 'presentation' },
+      t('spAutonomyMenuHeading'),
+    ),
+  );
   const askFirstOption = el('button', {
     class: 'sp-autonomy-option',
     type: 'button',
@@ -17829,6 +17039,12 @@ function buildUI(): void {
   fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
   autonomyPopover.appendChild(fullAccessOption);
+  const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
+  autonomyLearnMore.classList.add('sp-autonomy-learn-more');
+  autonomyLearnMore.setAttribute('role', 'menuitem');
+  autonomyLearnMore.addEventListener('click', () => closeAutonomyPopover());
+  autonomyPopover.appendChild(autonomyLearnMore);
+  wireMenuArrowKeys(autonomyPopover);
   autonomyControl.appendChild(autonomyChip);
   autonomyControl.appendChild(autonomyPopover);
   composerBarStart.appendChild(autonomyControl);
@@ -17885,8 +17101,41 @@ function buildUI(): void {
     }
   });
 
+  const fullAccessNotice = el('div', {
+    id: 'sp-full-access-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  fullAccessNotice.appendChild(el('span', {}, t('spFullAccessNotice')));
+  const fullAccessNoticeDismiss = el('button', {
+    class: 'sp-composer-notice-dismiss',
+    type: 'button',
+    'aria-label': t('spFullAccessNoticeDismiss'),
+  });
+  fullAccessNoticeDismiss.appendChild(renderIcon(X, 12));
+  fullAccessNoticeDismiss.addEventListener('click', () => {
+    fullAccessNotice.classList.remove('visible');
+    void chrome.storage.local.set({ [FULL_ACCESS_NOTICE_DISMISSED_KEY]: true }).catch(() => {});
+    autonomyChip.focus();
+  });
+  fullAccessNotice.appendChild(fullAccessNoticeDismiss);
+
+  async function discloseFullAccess(): Promise<void> {
+    let dismissed = false;
+    try {
+      const stored = await chrome.storage.local.get(FULL_ACCESS_NOTICE_DISMISSED_KEY);
+      dismissed = stored[FULL_ACCESS_NOTICE_DISMISSED_KEY] === true;
+    } catch {
+      dismissed = false;
+    }
+    if (autonomyChip.getAttribute('data-mode') !== 'full') return;
+    fullAccessNotice.classList.toggle('visible', !dismissed);
+  }
+
   askFirstOption.addEventListener('click', () => {
     renderAutonomyChip(true);
+    fullAccessNotice.classList.remove('visible');
     void chrome.storage.local.set({ agi_cu_ask_before_acting: true });
     closeAutonomyPopover(true);
   });
@@ -17894,12 +17143,16 @@ function buildUI(): void {
     renderAutonomyChip(false);
     void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
     closeAutonomyPopover(true);
+    void discloseFullAccess();
   });
   autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeAutonomyPopover(true);
+      return;
     }
+    if (event.key === 'Tab') closeAutonomyPopover();
   });
   document.addEventListener('click', (event: MouseEvent) => {
     if (!autonomyControl.contains(event.target as Node)) closeAutonomyPopover();
@@ -17910,6 +17163,7 @@ function buildUI(): void {
     const change = changes['agi_cu_ask_before_acting'];
     if (!change) return;
     renderAutonomyChip(change.newValue !== false);
+    if (change.newValue !== false) fullAccessNotice.classList.remove('visible');
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -18060,6 +17314,7 @@ function buildUI(): void {
   freePlanNotices = buildFreePlanNotices();
   inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
+  inputArea.appendChild(fullAccessNotice);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);
   inputArea.appendChild(memoryNotice);
@@ -18078,11 +17333,7 @@ function buildUI(): void {
   });
   renderUsageBanner(usageBanner);
 
-  buildOnboardingOverlay(() => {
-    void probeBridgeStatus();
-    checkPendingChat();
-    void checkPendingBackgroundResult();
-  });
+  mountOnboardingPrompt(inputArea);
 
   composerShell.addEventListener('dragover', (event: DragEvent) => {
     if (!dataTransferCarriesFiles(event.dataTransfer)) return;
@@ -18976,17 +18227,6 @@ chrome.tabs.onRemoved?.addListener((tabId) => {
 refreshPageHostname();
 
 void (async () => {
-  const onboardingDone = await isOnboardingComplete();
-  if (!onboardingDone) {
-    showOnboardingOverlay();
-    void checkPendingContextHandoff();
-    initialCloudAccountRefresh
-      .then(() => {
-        if (_ctx.messages.length > 0) renderMessages();
-      })
-      .catch(() => {});
-    return;
-  }
   Promise.all([
     initialCloudAccountRefresh.then(() => {
       if (_ctx.messages.length > 0) {

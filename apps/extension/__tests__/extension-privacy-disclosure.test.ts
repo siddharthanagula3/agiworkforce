@@ -252,8 +252,9 @@ describe('options data-handling disclosure', () => {
 
 describe('first-run disclosure', () => {
   it('tells the user about page injection and the account mirror before first use', () => {
-    const sidePanel = readSource('src/side_panel.ts');
-    expect(sidePanel).toContain('DATA_HANDLING_DISCLOSURES');
-    expect(sidePanel).toMatch(/sp-ob-privacy-row/);
+    const welcome = readSource('src/features/onboarding/welcome-page.ts');
+    expect(welcome).toContain('DATA_HANDLING_DISCLOSURES');
+    expect(welcome).toMatch(/wl-details/);
+    expect(readSource('src/side_panel.ts')).toContain('mountOnboardingPrompt(');
   });
 });

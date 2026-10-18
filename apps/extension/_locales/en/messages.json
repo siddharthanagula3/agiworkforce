@@ -1,6 +1,6 @@
 {
   "commandOpenSidePanel": {
-    "message": "Open agiworkforce side panel",
+    "message": "Open AGI Workforce side panel",
     "description": "chrome://extensions/shortcuts label for the _execute_action command"
   },
   "commandCapturePage": {
@@ -8,7 +8,7 @@
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
   "menuAskAgi": {
-    "message": "Ask agiworkforce about \"%s\"",
+    "message": "Ask AGI Workforce about \"%s\"",
     "description": "Context menu on a text selection. %s is Chrome's own selection substitution and must survive translation."
   },
   "menuExplainSelection": {
@@ -26,10 +26,6 @@
   "menuAddToTabGroup": {
     "message": "Add Tab to AGI Workforce Group",
     "description": "Context menu that moves the tab into the extension's tab group"
-  },
-  "spNext": {
-    "message": "Next",
-    "description": "First-run wizard primary button, used when a step declares no label of its own"
   },
   "spModelBadgeDefault": {
     "message": "AI Assistant",
@@ -264,10 +260,6 @@
   "spBillingManage": {
     "message": "Manage billing",
     "description": "Quota button that opens the billing settings page"
-  },
-  "spBillingBadge": {
-    "message": "Billing",
-    "description": "Header badge while a paid subscription needs attention"
   },
   "spQuotaPaidPlanRequired": {
     "message": "Checking your shared AGI plan and usage…",
@@ -540,40 +532,6 @@
   "spSendSendAria": {
     "message": "Send message",
     "description": "Composer send button accessible name at rest"
-  },
-  "spWizardContinueAria": {
-    "message": "Continue",
-    "description": "First-run wizard primary button accessible name when the step declares none"
-  },
-  "spOnboardingUnderstand": {
-    "message": "I understand",
-    "description": "First-run onboarding primary button on the opening step"
-  },
-  "spOnboardingLetsGo": {
-    "message": "Let's go",
-    "description": "First-run onboarding primary button on the penultimate step"
-  },
-  "spOnboardingDone": {
-    "message": "Done",
-    "description": "First-run onboarding primary button on the final step"
-  },
-  "spOnboardingContinueAria": {
-    "message": "Continue, step $STEP$ of $TOTAL$",
-    "description": "First-run onboarding primary button accessible name on a non-final step",
-    "placeholders": {
-      "step": {
-        "content": "$1",
-        "example": "2"
-      },
-      "total": {
-        "content": "$2",
-        "example": "5"
-      }
-    }
-  },
-  "spOnboardingDismissAria": {
-    "message": "Dismiss onboarding",
-    "description": "First-run onboarding primary button accessible name on the final step"
   },
   "spHistoryDelete": {
     "message": "Delete chat",
@@ -3737,70 +3695,6 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
-  "spOnboardingStepLabel": {
-    "message": "Step $STEP$ of $TOTAL$",
-    "description": "Names a first-run setup step and how many there are",
-    "placeholders": {
-      "step": {
-        "content": "$1",
-        "example": "2"
-      },
-      "total": {
-        "content": "$2",
-        "example": "6"
-      }
-    }
-  },
-  "spSetupAccountTitle": {
-    "message": "Your account",
-    "description": "Heading of the first-run setup step that signs in"
-  },
-  "spSetupAccountSignedOut": {
-    "message": "Sign in to use AGI Cloud from the side panel. You can also sign in later from the menu.",
-    "description": "First-run setup text while signed out"
-  },
-  "spSetupAccountSignIn": {
-    "message": "Sign in",
-    "description": "Opens sign-in from the first-run setup"
-  },
-  "spSetupAccountSignedIn": {
-    "message": "Signed in as $NAME$.",
-    "description": "First-run setup text once signed in",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Ada Lovelace"
-      }
-    }
-  },
-  "spSetupNameLabel": {
-    "message": "What should AGI call you?",
-    "description": "Label of the first-run setup name field"
-  },
-  "spSetupModelTitle": {
-    "message": "Choose a default model",
-    "description": "Heading of the first-run setup step that picks the model new chats start with"
-  },
-  "spSetupModelBody": {
-    "message": "New chats start with this model. You can switch any time from the model menu.",
-    "description": "Explains the default model choice"
-  },
-  "spSetupModelSignedOut": {
-    "message": "Sign in to choose a model. Until then, Auto picks one for each message.",
-    "description": "Model step text while signed out"
-  },
-  "spSetupModelAuto": {
-    "message": "Auto",
-    "description": "The automatic model choice"
-  },
-  "spSetupMemoryTitle": {
-    "message": "Memory",
-    "description": "Heading of the first-run setup step about memory"
-  },
-  "spSetupMemoryBody": {
-    "message": "AGI can remember details you share and use them in later chats. You decide whether it does, and you can change it any time under Settings in the menu.",
-    "description": "Explains memory during first-run setup"
-  },
   "spSetupMemoryRemember": {
     "message": "Remember details across chats",
     "description": "Turns saved memory on or off"
@@ -3820,24 +3714,6 @@
   "spSetupMemoryUnavailable": {
     "message": "Your memory settings could not be loaded. You can change them later under Settings.",
     "description": "Loading memory settings failed"
-  },
-  "spSetupSaving": {
-    "message": "Saving…",
-    "description": "The final setup button while choices are saved"
-  },
-  "spSetupSaveFailed": {
-    "message": "Your choices could not be saved: $REASON$",
-    "description": "Saving first-run setup choices failed",
-    "placeholders": {
-      "reason": {
-        "content": "$1",
-        "example": "Network error."
-      }
-    }
-  },
-  "spSetupSaveFailedGeneric": {
-    "message": "try again, or skip and change them later.",
-    "description": "Fallback reason when setup saving fails without a message"
   },
   "spMemoryPreferenceSaved": {
     "message": "Memory setting saved.",
@@ -4601,6 +4477,536 @@
   "spVideoModeNoAttachments": {
     "message": "Videos are made from your words only. Remove the attachments or the page, or stop creating a video.",
     "description": "Composer notice when video mode has attachments"
+  },
+  "optNavPermissions": {
+    "message": "Permissions",
+    "description": "Options page navigation: approved sites and browser control."
+  },
+  "optNavShortcuts": {
+    "message": "Shortcuts",
+    "description": "Options page navigation: saved prompt shortcuts, recorded steps and schedules."
+  },
+  "optNavOptions": {
+    "message": "Options",
+    "description": "Options page navigation and section title: notifications, microphone, read aloud and preferences."
+  },
+  "optNavAccount": {
+    "message": "Account",
+    "description": "Options page navigation: sign in, plan, memory, desktop app and privacy."
+  },
+  "optNavHelp": {
+    "message": "Help",
+    "description": "Options page navigation: help links and diagnostics."
+  },
+  "optSaving": {
+    "message": "Saving…",
+    "description": "Status while an Options preference is being stored."
+  },
+  "optSaveFailed": {
+    "message": "Could not save this preference. Please try again.",
+    "description": "Status when an Options preference could not be stored."
+  },
+  "optCancel": {
+    "message": "Cancel",
+    "description": "Button that closes a form without saving."
+  },
+  "optKeep": {
+    "message": "Keep",
+    "description": "Button that cancels a delete confirmation and keeps the item."
+  },
+  "optOpen": {
+    "message": "Open",
+    "description": "Link that opens a web page in a new tab."
+  },
+  "optNotificationsTitle": {
+    "message": "Task completion notifications",
+    "description": "Options toggle title."
+  },
+  "optNotificationsHint": {
+    "message": "Get a Chrome notification when a task finishes or needs your input while you are in another window or tab.",
+    "description": "Options toggle hint under Task completion notifications."
+  },
+  "optNotificationsOn": {
+    "message": "Task completion notifications are on.",
+    "description": "Status after the toggle is switched on."
+  },
+  "optNotificationsOff": {
+    "message": "Task completion notifications are off.",
+    "description": "Status after the toggle is switched off."
+  },
+  "optMicrophoneTitle": {
+    "message": "Microphone access",
+    "description": "Options row title."
+  },
+  "optMicrophoneHint": {
+    "message": "Voice input needs your permission to use the microphone. Audio is turned into text by your browser.",
+    "description": "Options row hint for microphone access."
+  },
+  "optMicrophoneAllow": {
+    "message": "Allow microphone access",
+    "description": "Button that triggers Chrome's microphone permission prompt."
+  },
+  "optMicrophoneGranted": {
+    "message": "Microphone access is allowed.",
+    "description": "Status when the microphone permission is granted."
+  },
+  "optMicrophoneDenied": {
+    "message": "Microphone access is blocked. Allow it for this extension in Chrome's site settings, then reload this page.",
+    "description": "Status when the microphone permission is blocked."
+  },
+  "optMicrophonePrompt": {
+    "message": "Chrome will ask before the microphone is used.",
+    "description": "Status when the microphone permission has not been decided."
+  },
+  "optMicrophoneUnknown": {
+    "message": "Microphone access could not be checked. Select Allow microphone access to try again.",
+    "description": "Status when the microphone permission state cannot be read."
+  },
+  "optMicrophoneUnsupported": {
+    "message": "This browser cannot provide microphone input here.",
+    "description": "Status when there is no media device API."
+  },
+  "optReadAloudTitle": {
+    "message": "Read aloud",
+    "description": "Options row title for spoken replies."
+  },
+  "optReadAloudHint": {
+    "message": "Choose the voice and speed used when you read a reply aloud. Speech is generated on this device by your browser.",
+    "description": "Options row hint for Read aloud."
+  },
+  "optReadAloudVoice": {
+    "message": "Voice",
+    "description": "Accessible name of the voice selector."
+  },
+  "optReadAloudRate": {
+    "message": "Speed",
+    "description": "Accessible name of the speech speed selector."
+  },
+  "optReadAloudVoiceDefault": {
+    "message": "Browser default voice",
+    "description": "First option in the voice selector."
+  },
+  "optReadAloudPreview": {
+    "message": "Preview",
+    "description": "Button that speaks a sample sentence."
+  },
+  "optReadAloudStop": {
+    "message": "Stop",
+    "description": "Button that stops the sample sentence."
+  },
+  "optReadAloudSample": {
+    "message": "This is how replies will sound when read aloud.",
+    "description": "Sentence spoken by Preview."
+  },
+  "optReadAloudUnsupported": {
+    "message": "This browser cannot read text aloud.",
+    "description": "Status when speech synthesis is unavailable."
+  },
+  "optKeyboardTitle": {
+    "message": "Keyboard shortcuts",
+    "description": "Options section title."
+  },
+  "optShortcutOpenPanel": {
+    "message": "Open side panel",
+    "description": "Label of the open-panel keyboard command."
+  },
+  "optShortcutCapturePage": {
+    "message": "Capture page",
+    "description": "Label of the capture-page keyboard command."
+  },
+  "optShortcutNotAssigned": {
+    "message": "Not assigned",
+    "description": "Shown when a keyboard command has no keys."
+  },
+  "optShortcutConfigure": {
+    "message": "Configure",
+    "description": "Button that opens Chrome's keyboard shortcut settings."
+  },
+  "optShortcutConfigureFailed": {
+    "message": "Chrome's keyboard shortcut page could not be opened. Open chrome://extensions/shortcuts yourself.",
+    "description": "Status when the settings tab fails to open."
+  },
+  "optShortcutLoadFailed": {
+    "message": "Current Chrome shortcuts could not be loaded.",
+    "description": "Status when keyboard commands cannot be read."
+  },
+  "optShortcutsTitle": {
+    "message": "Shortcuts",
+    "description": "Options section title for saved prompts, recordings and schedules."
+  },
+  "optShortcutsHint": {
+    "message": "Type / in the chat to run a saved prompt. Recorded steps and schedules live here too.",
+    "description": "Options section subtitle."
+  },
+  "optShortcutsSavedTitle": {
+    "message": "Saved shortcuts",
+    "description": "Row title above the list of saved shortcuts."
+  },
+  "optShortcutsSavedHint": {
+    "message": "Prompts you reuse, and steps you recorded on a site.",
+    "description": "Row hint above the list of saved shortcuts."
+  },
+  "optShortcutsEmpty": {
+    "message": "No shortcuts yet. Create a prompt shortcut or record steps on a site.",
+    "description": "Empty state of the shortcuts list."
+  },
+  "optShortcutNameLabel": {
+    "message": "Name",
+    "description": "Label of the shortcut name field."
+  },
+  "optShortcutPromptLabel": {
+    "message": "Prompt",
+    "description": "Label of the shortcut prompt field."
+  },
+  "optShortcutCreated": {
+    "message": "Shortcut “$NAME$” created.",
+    "description": "Status after a shortcut is created.",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "optShortcutPromptKind": {
+    "message": "Prompt shortcut",
+    "description": "Meta text for a prompt shortcut without a usable command."
+  },
+  "optShortcutRecordedMeta": {
+    "message": "$COUNT$ recorded actions · $DATE$",
+    "description": "Meta text for a recorded shortcut: action count and creation date.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      },
+      "date": {
+        "content": "$2"
+      }
+    }
+  },
+  "optShortcutRun": {
+    "message": "Run",
+    "description": "Button that runs a saved shortcut."
+  },
+  "optShortcutRunAria": {
+    "message": "Run $NAME$",
+    "description": "Accessible name of the Run button for one shortcut.",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "optShortcutEdit": {
+    "message": "Edit",
+    "description": "Button that edits a prompt shortcut."
+  },
+  "optShortcutDeleteAria": {
+    "message": "Delete $NAME$",
+    "description": "Accessible name of the Delete button for one shortcut.",
+    "placeholders": {
+      "name": {
+        "content": "$1"
+      }
+    }
+  },
+  "optRecordTitle": {
+    "message": "Record steps",
+    "description": "Row title for recording a workflow."
+  },
+  "optRecordHint": {
+    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded.",
+    "description": "Row hint for recording a workflow."
+  },
+  "optRecordStart": {
+    "message": "Start recording",
+    "description": "Button that starts recording."
+  },
+  "optRecordStop": {
+    "message": "Stop recording",
+    "description": "Button that stops recording."
+  },
+  "optRecordCaptureValues": {
+    "message": "Capture typed values (passwords and sensitive fields are redacted)",
+    "description": "Checkbox label for recording typed values."
+  },
+  "optRecordNoTab": {
+    "message": "Open a website in another tab first. The most recently used website tab is the one that gets recorded.",
+    "description": "Status when there is no web tab to record."
+  },
+  "optRecordStartFailed": {
+    "message": "Recording could not start. Approve the site under Permissions, then try again.",
+    "description": "Status when recording could not start."
+  },
+  "optRecordStopFailed": {
+    "message": "Recording could not be stopped. Please try again.",
+    "description": "Status when recording could not stop."
+  },
+  "optRecordRecording": {
+    "message": "Recording actions on $HOST$. Do the steps in that tab, then come back and stop.",
+    "description": "Status while recording.",
+    "placeholders": {
+      "host": {
+        "content": "$1"
+      }
+    }
+  },
+  "optRecordCount": {
+    "message": "Recording on $HOST$: $COUNT$ actions so far.",
+    "description": "Status while recording with a running count.",
+    "placeholders": {
+      "host": {
+        "content": "$1"
+      },
+      "count": {
+        "content": "$2"
+      }
+    }
+  },
+  "optRecordNameIt": {
+    "message": "Recording stopped. Name it to save the shortcut.",
+    "description": "Status after stopping a recording."
+  },
+  "optRecordNameLabel": {
+    "message": "Shortcut name",
+    "description": "Placeholder and accessible name of the recording name field."
+  },
+  "optRecordNameMissing": {
+    "message": "Give the recording a name.",
+    "description": "Error when saving a recording without a name."
+  },
+  "optRecordNothing": {
+    "message": "No actions were recorded, so there is nothing to save.",
+    "description": "Error when a recording has no actions."
+  },
+  "optRecordSave": {
+    "message": "Save",
+    "description": "Button that saves a recording."
+  },
+  "optRecordDiscard": {
+    "message": "Discard",
+    "description": "Button that discards a recording."
+  },
+  "optRecordDiscarded": {
+    "message": "Recording discarded.",
+    "description": "Status after discarding a recording."
+  },
+  "optAccountLinksTitle": {
+    "message": "Your account",
+    "description": "Options section title for account links."
+  },
+  "optAccountPlan": {
+    "message": "Plan and usage",
+    "description": "Account row title."
+  },
+  "optAccountPlanHint": {
+    "message": "See your plan, usage and upgrade options on the web.",
+    "description": "Account row hint."
+  },
+  "optAccountMemory": {
+    "message": "Memory",
+    "description": "Account row title."
+  },
+  "optAccountMemoryHint": {
+    "message": "Review or clear what AGI remembers about you.",
+    "description": "Account row hint."
+  },
+  "optDesktopTitle": {
+    "message": "Desktop app",
+    "description": "Options section title for pairing with the desktop app."
+  },
+  "optPairingUnpair": {
+    "message": "Unpair",
+    "description": "Button that disconnects the desktop app. Pairing again restores it."
+  },
+  "welcomeTitle": {
+    "message": "Welcome to AGI",
+    "description": "Heading of the post-install page."
+  },
+  "welcomeLead": {
+    "message": "Your AI workforce now lives in Chrome. A few things to know before you start.",
+    "description": "Intro under the post-install heading."
+  },
+  "welcomePinTitle": {
+    "message": "Pin AGI to your toolbar",
+    "description": "Post-install step heading."
+  },
+  "welcomePinBody": {
+    "message": "Select the puzzle icon in Chrome's toolbar, then the pin next to AGI. One click then opens the side panel on any page.",
+    "description": "Post-install pin instructions."
+  },
+  "welcomeSignInTitle": {
+    "message": "Sign in",
+    "description": "Post-install step heading."
+  },
+  "welcomeSignInBody": {
+    "message": "Sign in to chat with your AGI account and keep your conversations in sync across devices.",
+    "description": "Post-install sign-in text."
+  },
+  "welcomeSignInAction": {
+    "message": "Sign in",
+    "description": "Post-install button that starts sign-in."
+  },
+  "welcomeSignedIn": {
+    "message": "You are signed in.",
+    "description": "Post-install status once signed in."
+  },
+  "welcomeCanTitle": {
+    "message": "What AGI can do",
+    "description": "Post-install section heading."
+  },
+  "welcomeCan1": {
+    "message": "Read the page you are on, only when you ask.",
+    "description": "Post-install capability."
+  },
+  "welcomeCan2": {
+    "message": "Click, type and navigate on sites you approve.",
+    "description": "Post-install capability."
+  },
+  "welcomeCan3": {
+    "message": "Run saved prompts, recorded steps and schedules.",
+    "description": "Post-install capability."
+  },
+  "welcomeCannotTitle": {
+    "message": "What AGI will not do",
+    "description": "Post-install section heading."
+  },
+  "welcomeCannot1": {
+    "message": "Act on a site you have not approved.",
+    "description": "Post-install limit."
+  },
+  "welcomeCannot2": {
+    "message": "Enter passwords or payment details for you.",
+    "description": "Post-install limit."
+  },
+  "welcomeCannot3": {
+    "message": "Keep going when you press Stop.",
+    "description": "Post-install limit."
+  },
+  "welcomeTryTitle": {
+    "message": "Try it",
+    "description": "Post-install step heading."
+  },
+  "welcomeTryBody": {
+    "message": "Open the side panel and ask your first question. On any website you approve, AGI can read the page and act on it.",
+    "description": "Post-install try-it text."
+  },
+  "welcomeTryAction": {
+    "message": "Get started",
+    "description": "Post-install button that confirms the page was read and opens the side panel."
+  },
+  "welcomeTryFailed": {
+    "message": "Chrome did not open the panel. Use the toolbar icon or press the shortcut shown in Options.",
+    "description": "Post-install error when the panel could not be opened."
+  },
+  "welcomeSettings": {
+    "message": "Open settings",
+    "description": "Post-install link to the Options page."
+  },
+  "obPinTitle": {
+    "message": "Pin AGI to keep it in your toolbar",
+    "description": "In-panel pin prompt text."
+  },
+  "obPinHint": {
+    "message": "Select the puzzle icon, then the pin next to AGI.",
+    "description": "In-panel pin prompt instructions."
+  },
+  "obPinDismiss": {
+    "message": "Not now",
+    "description": "Button that dismisses the pin prompt."
+  },
+  "obPinDone": {
+    "message": "Got it",
+    "description": "Button that confirms the pin prompt was followed."
+  },
+  "notifyTaskFinishedTitle": {
+    "message": "Task finished",
+    "description": "Chrome notification title when a browser task finishes."
+  },
+  "notifyTaskFinishedBody": {
+    "message": "AGI finished your task. Select to see the result.",
+    "description": "Chrome notification body when a browser task finishes. Never includes page content."
+  },
+  "notifyTaskFailedTitle": {
+    "message": "Task stopped",
+    "description": "Chrome notification title when a browser task fails."
+  },
+  "notifyTaskFailedBody": {
+    "message": "AGI could not finish your task. Select to see why.",
+    "description": "Chrome notification body when a browser task fails."
+  },
+  "notifyTaskInputTitle": {
+    "message": "AGI needs your input",
+    "description": "Chrome notification title when a task waits for approval."
+  },
+  "notifyTaskInputBody": {
+    "message": "A task is waiting for your approval. Select to review it.",
+    "description": "Chrome notification body when a task waits for approval."
+  },
+  "welcomeSignInOpened": {
+    "message": "Finish signing in in the tab that opened, then come back here.",
+    "description": "Post-install status after sign-in opens."
+  },
+  "welcomeSignInFailed": {
+    "message": "Sign-in could not be opened. Please try again.",
+    "description": "Post-install error when sign-in fails to open."
+  },
+  "welcomePinned": {
+    "message": "AGI is pinned to your toolbar.",
+    "description": "Post-install status when the extension is pinned."
+  },
+  "welcomeDataTitle": {
+    "message": "How AGI handles your data",
+    "description": "Post-install section heading."
+  },
+  "welcomeInjection": {
+    "message": "Websites, emails and documents can hide instructions that try to trick an AI into acting against you. Review what AGI is about to do on sensitive sites.",
+    "description": "Post-install prompt-injection warning."
+  },
+  "welcomeLearnMore": {
+    "message": "Learn more",
+    "description": "Link to the security page."
+  },
+  "welcomeReady": {
+    "message": "The side panel is open. You can close this tab.",
+    "description": "Post-install status after the panel opened."
+  },
+  "obReviewText": {
+    "message": "Review how AGI handles your data and what it can do.",
+    "description": "In-panel prompt on first run or after the data handling text changes."
+  },
+  "obReviewAction": {
+    "message": "Review",
+    "description": "Button that opens the welcome page."
+  },
+  "spQuotaFreeUpgrade": {
+    "message": "Upgrade",
+    "description": "Single action a Free account sees on its usage card and when it reaches the Free limit; matches the web Free branch."
+  },
+  "spAutonomyMenuHeading": {
+    "message": "How should AGI act in your browser?",
+    "description": "Heading and accessible name of the approval-mode menu beside the + button."
+  },
+  "spAutonomyLearnMore": {
+    "message": "Learn more",
+    "description": "Link at the foot of the approval-mode menu to the tool approvals help article."
+  },
+  "spFullAccessNotice": {
+    "message": "Full access is on. AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "description": "One-time composer notice after choosing Full access. Lists only always-ask reasons approvalPolicy.ts enforces."
+  },
+  "spFullAccessNoticeDismiss": {
+    "message": "Dismiss the full access notice",
+    "description": "Accessible label of the X that closes the Full access notice for good."
+  },
+  "spSelectionChipTitle": {
+    "message": "Selected text · $HOST$",
+    "description": "Name of the composer chip and the sent-message disclosure for a passage highlighted on the active tab",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
   },
   "spBrowserStepReading": {
     "message": "Reading the page",

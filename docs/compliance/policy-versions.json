@@ -19,6 +19,12 @@
       "served": "8d01d87295d203a0bc607b2cc8098418e373842d",
       "main": "bf17e854d59d79b97ae1ad41b47162a4ee1d1e52",
       "note": "On 13 October 2026 production answered /api/version with commit 8d01d87295, which main holds, and the live /privacy, /privacy/india, /data-use, /subprocessors and /terms pages each printed 2026-10-08, read from each page that day. Those versions were therefore published on this site. bf17e854d5 is the commit on this branch that moves the first four dates to 2026-10-13 and leaves the terms date where it is; it had not been deployed when this was checked."
+    },
+    {
+      "checkedOn": "2026-10-18",
+      "served": "4bab0f222015650c2f49bca3b343e60a2df60e5b",
+      "main": "6e450460b042402081aea754697f84f81e3d2b2d",
+      "note": "On 18 October 2026 agiworkforce.com/privacy printed Last updated 2026-10-15, the date POLICY_LAST_UPDATED gives at 4bab0f2220, the commit production served. 6e450460b0 moves the privacy date to 2026-10-18 for the Chrome extension wording, so the 2026-10-15 version applied until this release replaces it."
     }
   ],
   "documents": {
@@ -182,9 +188,10 @@
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Two honest caveats reads Two caveats, the download basis no longer says the caveats are in section 01 rather than buried here, and the access answer drops so the honest answer is not nobody, leaving the sentence that limits access by people at AGI to those who need it and to the cases in the table. The fixed salt, the raw IP in application logs and the limits on access are unchanged, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         },
         {
-          "date": "2026-10-15",
+          "date": "2026-10-18",
           "digest": "b581eb89ebed549a",
-          "note": "Chrome extension wording before its Chrome Web Store submission: the tool-calls row no longer calls the extension unreleased, and adds the affirmative statement the Chrome Web Store Limited Use policy requires on the extension's website, that data the extension receives follows the Chrome Web Store User Data Policy including Limited Use, is used only for the task asked for, never sold and never used for advertising. No new collection; the sale and advertising statements repeat sections already on the page. The date stays at 2026-10-15 on this branch and moves to the ship day with the other held policy dates when it deploys."
+          "note": "Chrome extension wording for its Chrome Web Store submission: the tool-calls row no longer calls the extension unreleased, and adds the affirmative statement the Chrome Web Store Limited Use policy requires on the extension's website. No new collection; the sale and advertising statements repeat sections already on the page.",
+          "summary": "Describes the Chrome extension without a release status and states that data it receives follows the Chrome Web Store User Data Policy, including Limited Use: used only for the task you ask for, never sold and never used for advertising."
         }
       ]
     },
