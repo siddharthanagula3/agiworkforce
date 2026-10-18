@@ -98,24 +98,6 @@ export function validateFormData<T>(
   return { success: false, errors };
 }
 
-export function getFirstError(error: z.ZodError): string {
-  const issues = (error as { issues?: Array<{ message: string }> }).issues || [];
-  return issues[0]?.message || 'Validation failed';
-}
-
-export function zodErrorsToFormErrors(error: z.ZodError): Record<string, { message: string }> {
-  const formErrors: Record<string, { message: string }> = {};
-
-  for (const zodError of error.issues) {
-    const path = zodError.path.join('.');
-    if (path && !formErrors[path]) {
-      formErrors[path] = { message: zodError.message };
-    }
-  }
-
-  return formErrors;
-}
-
 const IPV4_OCTET = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 const IPV4_ADDRESS_PATTERN = new RegExp(
   `^${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}$`,

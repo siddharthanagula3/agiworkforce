@@ -15,38 +15,6 @@ import type { ArtifactData } from './ArtifactPreview';
 export const ARTIFACT_KIND_LABEL = 'Artifact';
 export const UNTITLED_ARTIFACT_TITLE = 'Untitled';
 
-export function artifactTypeLabel(type: ArtifactData['type']): string {
-  switch (type) {
-    case 'html':
-      return 'HTML';
-    case 'react':
-      return 'React';
-    case 'svg':
-      return 'SVG';
-    case 'mermaid':
-      return 'Diagram';
-    case 'code':
-      return 'Code';
-    case 'document':
-      return 'Document';
-    case 'spreadsheet':
-    case 'csv':
-      return 'Spreadsheet';
-    case 'table':
-      return 'Table';
-    case 'presentation':
-      return 'Slides';
-    case 'email':
-      return 'Email';
-    case 'image':
-      return 'Image';
-    case 'chart':
-      return 'Chart';
-    default:
-      return 'File';
-  }
-}
-
 export function artifactKindLabel(type: ArtifactData['type']): string {
   switch (type) {
     case 'html':

@@ -77,6 +77,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
       );
+      if (!response.ok) throw new Error(`Knowledge files request failed: ${response.status}`);
       const body = (await response.json()) as {
         files?: ProjectKnowledgeFile[];
         storage?: { usedBytes: number | null; limitBytes: number | null };

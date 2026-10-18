@@ -632,25 +632,6 @@ export interface Conversation {
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';
 
-export interface SelectedModel {
-  id: string;
-  name: string;
-  provider: string;
-  tier: ModelTier;
-}
-
-// Single self-routing Auto. Profile/tier are chosen per message by the
-// resolver, not by the user picking economy/balanced/premium.
-export const AUTO_MODELS = {
-  auto: {
-    id: 'auto',
-    name: 'Auto',
-    description: 'Routes each message to the best model for the task and your plan',
-    tier: 'balanced' as ModelTier,
-  },
-} as const;
-
-// State interface
 interface ChatState {
   // Conversations
   conversations: Conversation[];
@@ -2317,7 +2298,6 @@ export const selectIsActiveConversationStreaming = (state: ChatState) =>
   state.activeConversationId !== null &&
   state.streamingConversationIds.includes(state.activeConversationId);
 export const selectSelectedModel = (state: ChatState) => state.selectedModel;
-export const selectSelectedModelTier = (state: ChatState) => state.selectedModelTier;
 export const selectError = (state: ChatState) => state.error;
 export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 

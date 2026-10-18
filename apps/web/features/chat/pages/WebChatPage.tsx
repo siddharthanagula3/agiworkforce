@@ -4286,8 +4286,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleOpenSearch = useCallback(() => {
-    // Dialogs are now at page level; dispatch kept for backward compat with
-    // any other component that fires the event (e.g. collapsed rail search btn).
     setSearchDialogOpen(true);
   }, []);
 
@@ -4669,12 +4667,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (ids.length === 0) return;
       const authToken = await getToken();
       if (!authToken) return;
+      let failed = 0;
       for (const messageId of ids) {
         try {
           await deleteConversationMessage({ conversationId, messageId, authToken });
         } catch (error) {
-          void error;
+          failed += 1;
+          console.warn('[chat] Could not remove a replaced message from history:', error);
         }
+      }
+      if (failed > 0) {
+        toast.error(
+          'The replaced reply could not be removed from your history. It may reappear after a reload.',
+        );
       }
     },
     [getToken],

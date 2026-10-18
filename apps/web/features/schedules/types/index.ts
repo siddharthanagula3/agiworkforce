@@ -205,10 +205,6 @@ export function taskRecurrence(task: ScheduleTask): ProductRecurrence {
   return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
 }
 
-export function scheduleConditionUrl(task: ScheduleTask): string {
-  return task.condition?.url ?? '';
-}
-
 export type { ManagedCloudScheduleRunTiming as ScheduleRunTiming } from '@agiworkforce/cloud-contracts';
 
 export function scheduleRunTiming(run: ScheduleRun, timezone: string) {

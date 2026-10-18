@@ -80,15 +80,6 @@ describe('includeTimestamps reaches every format that offers it', () => {
     expect(without).toContain('hello');
   });
 
-  it('omits per-message timestamps from text when disabled', () => {
-    const withStamps = service.exportAsText(session('t'), messages());
-    const without = service.exportAsText(session('t'), messages(), { includeTimestamps: false });
-
-    expect(withStamps).toContain(stamp);
-    expect(without).not.toContain(stamp);
-    expect(without).toContain('[User]');
-  });
-
   it('keeps timestamps when the option is omitted', () => {
     expect(service.exportAsMarkdown(session('t'), messages())).toContain(stamp);
   });
@@ -155,7 +146,6 @@ describe('a downloaded export outlives the session that made it', () => {
     for (const content of [
       service.exportAsMarkdown(session('t'), msgs),
       service.exportAsHTML(session('t'), msgs),
-      service.exportAsText(session('t'), msgs),
     ]) {
       expect(content).not.toContain('X-Amz-Signature');
       expect(content).toContain('clip.mp4');

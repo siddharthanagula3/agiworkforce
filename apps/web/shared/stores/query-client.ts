@@ -130,24 +130,20 @@ export const queryKeys = {
   },
 
   settings: {
-    all: () => ['settings'] as const,
     preferences: (userId?: string) => ['settings', 'preferences', userId] as const,
     apiKeys: (userId?: string) => ['settings', 'apiKeys', userId] as const,
     accountDeletionStatus: () => ['settings', 'accountDeletionStatus'] as const,
   },
 
   connectors: {
-    all: () => ['connectors'] as const,
     permissions: () => ['connectors', 'permissions'] as const,
   },
 
   media: {
-    all: () => ['media'] as const,
     availability: () => ['media', 'availability'] as const,
   },
 
   skills: {
-    all: () => ['skills'] as const,
     catalog: () => ['skills', 'catalog'] as const,
   },
 } as const;

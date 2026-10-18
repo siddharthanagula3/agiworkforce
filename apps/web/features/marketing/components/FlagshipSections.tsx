@@ -369,33 +369,6 @@ export function LandingDevBand({
   );
 }
 
-export function LandingFinalCta({
-  eyebrow,
-  title,
-  body,
-  ctas,
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-  ctas: LandingCta[];
-}) {
-  return (
-    <section className="agi-fl-final" aria-labelledby="agi-fl-final-title">
-      <p className="agi-fl-eyebrow">{eyebrow}</p>
-      <h2 id="agi-fl-final-title" className="agi-fl-final-title">
-        {title}
-      </h2>
-      <p className="agi-fl-section-lede agi-fl-final-lede">{body}</p>
-      <div className="agi-fl-cta-row agi-fl-final-ctas">
-        {ctas.map((cta, i) => (
-          <CtaButton key={cta.label} cta={cta} kind={ctaKind(i)} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export interface ProofFact {
   value: string;
   label: string;

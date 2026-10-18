@@ -90,6 +90,3 @@ export const useThinkingStore = create<ThinkingStore>()(
     { name: 'ThinkingStore', enabled: process.env.NODE_ENV !== 'production' },
   ),
 );
-
-export const selectThinkingEnabled = (state: ThinkingStore) => state.enabled;
-export const selectEffortLevel = (state: ThinkingStore) => state.effort;

@@ -15,7 +15,6 @@ import {
   teamSeatPlanTier,
   type BillingInterval,
   type BillingPlanTier,
-  type SelfServeIndividualPlanTier,
   type SelfServePaidPlanTier,
   type TeamSeatType,
 } from '@agiworkforce/types';
@@ -308,10 +307,6 @@ export function planCtaLabel(plan: SelfServePaidPlanTier, t: PricingT): string {
     case 'team':
       return t('teamCta');
   }
-}
-
-export function isIndividualPlanCard(plan: string): plan is SelfServeIndividualPlanTier | 'free' {
-  return (INDIVIDUAL_PLAN_CARDS as readonly string[]).includes(plan);
 }
 
 export function pricingUsageExplainer(t: PricingT): string {

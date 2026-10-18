@@ -144,25 +144,13 @@ function EnhancedExportDialogImpl({
 
         case 'html': {
           const content = exportService.exportAsHTML(session, messages, contentOptions);
-          const blob = new Blob([content], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.click();
-          URL.revokeObjectURL(url);
+          exportService.downloadFile(content, filename, 'text/html');
           break;
         }
 
         case 'json': {
           const content = exportService.exportAsJSON(session, messages);
-          const blob = new Blob([content], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.click();
-          URL.revokeObjectURL(url);
+          exportService.downloadFile(content, filename, 'application/json');
           break;
         }
       }

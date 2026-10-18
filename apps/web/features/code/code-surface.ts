@@ -380,8 +380,6 @@ export const DEFAULT_NETWORK_ACCESS: CloudCodeNetworkAccess = 'none';
 export const REPOSITORY_MINIMUM_NETWORK_ACCESS: CloudCodeNetworkAccess = 'trusted';
 /** The catalogue never contains an empty id, so it cannot collide with a real image. */
 export const DEFAULT_RUNTIME_ID = '';
-export const DEFAULT_RUNTIME_LABEL = 'Default image';
-
 export function networkAccessLabel(access: CloudCodeNetworkAccess): string {
   return CODE_NETWORK_OPTIONS.find((option) => option.id === access)?.label ?? access;
 }

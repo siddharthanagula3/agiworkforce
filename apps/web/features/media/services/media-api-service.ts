@@ -227,9 +227,3 @@ export async function getVideoStatus(taskId: string): Promise<VideoStatusRespons
 
   return (await response.json()) as VideoStatusResponse;
 }
-
-export function getImageDisplayUrl(image: GeneratedImage): string {
-  if (image.url) return image.url;
-  if (image.b64_json) return `data:image/png;base64,${image.b64_json}`;
-  return '';
-}

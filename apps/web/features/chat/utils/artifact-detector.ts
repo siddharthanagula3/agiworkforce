@@ -6,7 +6,6 @@ import {
   type ArtifactProseSplit,
   hasArtifacts as hasArtifactsShared,
   extractArtifactTitle,
-  isRenderableArtifact,
   extractCodeBlocks,
   artifactInclusionForPolicy,
   type DeriveArtifactsOptions,
@@ -17,8 +16,6 @@ import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 
 export { extractCodeBlocks, extractArtifactTitle };
-export const shouldRenderAsArtifact = isRenderableArtifact;
-
 export interface ExtractArtifactsContext {
   conversationId?: string;
   messageId?: string;

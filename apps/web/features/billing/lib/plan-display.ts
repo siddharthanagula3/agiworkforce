@@ -29,8 +29,6 @@ import {
 } from './plan-capability-release';
 
 export type SelectablePaidPlan = SelfServePaidPlanTier;
-export type DisplayPaidPlan = SelectablePaidPlan | 'team';
-
 export const WEB_PAID_PLAN_ORDER: readonly SelectablePaidPlan[] = [
   'basic',
   'pro',

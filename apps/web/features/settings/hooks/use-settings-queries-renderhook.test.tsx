@@ -96,79 +96,6 @@ beforeAll(async () => {
   await import('./use-settings-queries');
 }, 60_000);
 
-describe('useOrganizationSettings · renderHook (GET /api/settings/organization)', () => {
-  beforeEach(async () => {
-    fetchMock.mockReset();
-    await setupMocks();
-  });
-
-  it('calls GET /api/settings/organization with auth header and populates hook data', async () => {
-    const ORG_ID = '11111111-1111-4111-8111-111111111111';
-    const org = {
-      id: ORG_ID,
-      name: 'ACME',
-      slug: 'acme',
-      plan: 'free',
-      memberCount: 2,
-      maxMembers: 5,
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-      currentUserRole: 'owner' as const,
-    };
-    const overview = {
-      organization: org,
-      activeOrganizationId: ORG_ID,
-      workspaces: [
-        {
-          id: ORG_ID,
-          name: 'ACME',
-          slug: 'acme',
-          role: 'owner' as const,
-          joinedAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-      access: {
-        plan: 'free',
-        canManageTeam: true,
-        maxMembers: 5,
-        seatsConsumed: 2,
-        seatsAvailable: 3,
-        seatSource: 'billing' as const,
-      },
-    };
-    fetchMock.mockResolvedValue(makeResponse(overview));
-
-    const { useOrganizationSettings } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useOrganizationSettings(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/settings/organization',
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
-      }),
-    );
-    expect(result.current.data).toEqual(org);
-  });
-
-  it('surfaces error when server returns 403 · was previously silently null', async () => {
-    fetchMock.mockResolvedValue(makeResponse({ error: 'Forbidden' }, 403));
-
-    const { useOrganizationSettings } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useOrganizationSettings(), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-
-    expect(result.current.data).toBeUndefined();
-    expect(result.current.error).toBeTruthy();
-  });
-});
-
 describe('useWorkspaceAudit · interactive session', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -248,36 +175,6 @@ describe('team administration mutations · renderHook', () => {
       }),
     );
     expect(result.current.data).toEqual(organization);
-  });
-
-  it('preserves the actionable nested API message when an account email is unknown', async () => {
-    fetchMock.mockResolvedValue(
-      makeResponse(
-        {
-          error: {
-            code: 'VALIDATION_ERROR',
-            message:
-              'No AGI account uses that email. Ask them to create an AGI account, then try again. No invitation was sent.',
-          },
-        },
-        400,
-      ),
-    );
-
-    const { useInviteTeamMember } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useInviteTeamMember(), { wrapper: makeWrapper() });
-
-    act(() =>
-      result.current.mutate({
-        organizationId: 'org-1',
-        email: 'unknown@example.com',
-        role: 'member',
-      }),
-    );
-    await waitFor(() => expect(result.current.isError).toBe(true));
-
-    expect(result.current.error?.message).toMatch(/create an AGI account/i);
-    expect(result.current.error?.message).toMatch(/No invitation was sent/i);
   });
 });
 
@@ -421,7 +318,7 @@ describe('useUserActivity · renderHook (GET /api/settings/activity)', () => {
     fetchMock.mockResolvedValue(makeResponse({ activities, limit: 50, offset: 0 }));
 
     const { useUserActivity } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useUserActivity(undefined, 50), {
+    const { result } = renderHook(() => useUserActivity(50), {
       wrapper: makeWrapper(),
     });
 

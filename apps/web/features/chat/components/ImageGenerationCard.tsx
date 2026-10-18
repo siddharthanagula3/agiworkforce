@@ -67,13 +67,6 @@ export type { ImageAspectRatio, ImageRevisionRequest } from '../lib/imageGenerat
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ImageGenMeta {
-  imageUrl: string;
-  prompt: string;
-  aspectRatio?: ImageAspectRatio;
-  modelId?: string;
-}
-
 interface ImageGenerationCardProps {
   /** undefined = currently generating (state A); string = image ready (state B+) */
   imageUrl?: string;

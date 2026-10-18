@@ -123,40 +123,6 @@ export function getConnectorAvailability(
   return connector.phase > 1 ? 'planned' : 'unavailable';
 }
 
-export function isConnectorReady(
-  connector: Connector,
-  availableIds?: ReadonlySet<string>,
-): boolean {
-  return getConnectorAvailability(connector, availableIds) === 'ready';
-}
-
-export function getConnectorAvailabilityLabelFor(
-  connector: Connector,
-  isAvailable: boolean,
-): string {
-  return getConnectorAvailabilityLabel(
-    connector,
-    isAvailable ? new Set([connector.id]) : new Set<string>(),
-  );
-}
-
-export function getConnectorAvailabilityLabel(
-  connector: Connector,
-  availableIds?: ReadonlySet<string>,
-): string {
-  const availability = getConnectorAvailability(connector, availableIds);
-  switch (availability) {
-    case 'ready':
-      return 'Ready';
-    case 'planned':
-      return `Phase ${connector.phase}`;
-    case 'exclusive':
-      return 'Exclusive';
-    case 'unavailable':
-      return 'Not available here';
-  }
-}
-
 const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'gmail',

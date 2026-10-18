@@ -935,10 +935,6 @@ export function localTranscriptItems(
   return items;
 }
 
-export function localGroupsHaveSessions(groups: readonly DeveloperSessionGroup[]): boolean {
-  return groups.some((group) => group.sessions.length > 0);
-}
-
 export interface LocalFolderChoice {
   rootId: string;
   name: string;

@@ -61,7 +61,7 @@ function formatWhen(createdAt: string): string {
  * what is signed in right now.
  */
 export function RecentActivityPanel() {
-  const { data, isPending, error, refetch } = useUserActivity(undefined, ACTIVITY_LIMIT);
+  const { data, isPending, error, refetch } = useUserActivity(ACTIVITY_LIMIT);
   const groups = useMemo(() => groupConsecutiveActivity(data ?? []), [data]);
 
   return (

@@ -7,7 +7,6 @@ import {
 } from '@agiworkforce/utils';
 import {
   detectProviderFromModelId,
-  formatPrivacyModeLabel,
   formatProviderModeLabel,
   getProviderSurface,
   providerSurfaceToProviderMode,
@@ -30,12 +29,6 @@ export interface WebHandoffContextCandidate extends HandoffPreviewContextItem {
 
 export interface WebLocalToByokPreview extends LocalToByokHandoffPreview {
   selectedContext: WebHandoffContextCandidate[];
-}
-
-export interface WebProviderModeInfo {
-  providerMode: ProviderMode;
-  label: string;
-  privacyLabel: string;
 }
 
 function normalizeProviderKey(value: string | null | undefined): string | null {
@@ -171,14 +164,6 @@ export function getByokTargetProviderLabel(modelId: string | null | undefined): 
   const provider = inferProviderFromModelId(modelId);
   if (!provider) return undefined;
   return PROVIDER_LABELS[provider] ?? PROVIDER_LABELS[normalizeProviderKey(provider) ?? ''];
-}
-
-export function getProviderModeInfo(providerMode: ProviderMode): WebProviderModeInfo {
-  return {
-    providerMode,
-    label: formatProviderModeLabel(providerMode),
-    privacyLabel: formatPrivacyModeLabel(providerMode === 'Local' ? 'local' : 'byok'),
-  };
 }
 
 function roleLabel(role: Message['role']): string {

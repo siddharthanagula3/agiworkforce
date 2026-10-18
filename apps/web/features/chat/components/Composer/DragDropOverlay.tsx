@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload } from '@agiworkforce/icons';
 import { MAX_CHAT_ATTACHMENT_COUNT } from '@agiworkforce/cloud-contracts';
@@ -8,26 +8,24 @@ import { cn } from '@shared/lib/utils';
 
 interface DragDropOverlayProps {
   onDrop: (files: File[]) => void;
-  accept?: string[];
   maxFiles?: number;
   className?: string;
 }
 
 export function DragDropOverlay({
   onDrop,
-  accept,
   maxFiles = MAX_CHAT_ATTACHMENT_COUNT,
   className,
 }: DragDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
+  const dragDepth = useRef(0);
 
   useEffect(() => {
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.dataTransfer?.types.includes('Files')) {
-        setDragCounter((prev) => prev + 1);
+        dragDepth.current += 1;
         setIsDragging(true);
       }
     };
@@ -35,11 +33,8 @@ export function DragDropOverlay({
     const handleDragLeave = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setDragCounter((prev) => {
-        const next = prev - 1;
-        if (next === 0) setIsDragging(false);
-        return next;
-      });
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setIsDragging(false);
     };
 
     const handleDragOver = (e: DragEvent) => {
@@ -51,22 +46,13 @@ export function DragDropOverlay({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      setDragCounter(0);
+      dragDepth.current = 0;
 
       const files = Array.from(e.dataTransfer?.files || []);
-      const filtered = accept
-        ? files.filter((file) =>
-            accept.some((type) => {
-              if (type.endsWith('/*')) return file.type.startsWith(type.replace('/*', ''));
-              return file.type === type || file.name.endsWith(type);
-            }),
-          )
-        : files;
-
       // Every dropped file goes to the attachment hook, which owns the limit
       // and names what it refused; truncating here dropped the extras silently.
-      if (filtered.length > 0) {
-        onDrop(filtered);
+      if (files.length > 0) {
+        onDrop(files);
       }
     };
 
@@ -81,9 +67,7 @@ export function DragDropOverlay({
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('drop', handleDrop);
     };
-  }, [accept, onDrop]);
-
-  void dragCounter;
+  }, [onDrop]);
 
   return (
     <AnimatePresence>
@@ -104,20 +88,17 @@ export function DragDropOverlay({
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
             className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-e4"
           >
-            {/* Corner accents */}
             <div className="absolute start-4 top-4 h-8 w-8 rounded-ss-xl border-s-2 border-t-2 border-primary" />
             <div className="absolute end-4 top-4 h-8 w-8 rounded-se-xl border-e-2 border-t-2 border-primary" />
             <div className="absolute bottom-4 start-4 h-8 w-8 rounded-es-xl border-b-2 border-s-2 border-primary" />
             <div className="absolute bottom-4 end-4 h-8 w-8 rounded-ee-xl border-b-2 border-e-2 border-primary" />
 
-            {/* Pulsing ring */}
             <motion.div
               className="absolute inset-0 rounded-3xl border-2 border-primary"
               animate={{ scale: [1, 1.04, 1], opacity: [0.5, 0.15, 0.5] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
 
-            {/* Bouncing icon */}
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}

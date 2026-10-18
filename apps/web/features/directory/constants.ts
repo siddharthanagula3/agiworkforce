@@ -9,11 +9,9 @@ import { payloadCeilingBytes } from '@/lib/payload-ceiling';
 
 export const DIRECTORY_SOURCE_AGI = 'agi';
 export const DIRECTORY_SOURCE_YOURS = 'yours';
-export const DIRECTORY_SOURCE_PARTNERS = 'partners';
 
 export const DIRECTORY_SOURCE_LABEL_AGI = 'Made by AGI';
 export const DIRECTORY_SOURCE_LABEL_YOURS = 'Yours';
-export const DIRECTORY_SOURCE_LABEL_PARTNERS = 'Partners';
 
 export const SKILL_PUBLISHER_AGI = 'Made by AGI';
 export const SKILL_PUBLISHER_YOU = 'Yours';
@@ -75,17 +73,8 @@ export const SKILL_LIFECYCLE_GROUP_LABEL = 'Status';
 export const SKILL_LIFECYCLE_INCLUDED_LABEL = 'Included';
 export const SKILL_LIFECYCLE_DRAFT_LABEL = 'Coming later';
 
-export const CONNECTOR_AVAILABILITY_GROUP_ID = 'availability';
-export const CONNECTOR_AVAILABILITY_GROUP_LABEL = 'Availability';
 export const CONNECTOR_CATEGORY_GROUP_ID = 'category';
 export const CONNECTOR_CATEGORY_GROUP_LABEL = 'Category';
-
-export const CONNECTOR_AVAILABILITY_LABELS: Record<string, string> = {
-  connect: 'Connect',
-  'api-key-form': 'API key',
-  'desktop-and-cli': 'Desktop and CLI',
-  'needs-setup': 'Needs setup',
-};
 
 export const PLUGIN_PUBLISHED_STATUS = 'published';
 export const PLUGIN_STATE_INSTALLED = 'Installed';
@@ -403,7 +392,3 @@ export function pluginDependenciesInstalledLine(
 }
 export const PLUGIN_MARKETPLACE_ENTRIES_PATH = `${PLUGIN_MARKETPLACES_API_PATH}/entries`;
 export const PLUGIN_MARKETPLACE_INSTALLATIONS_PATH = PLUGIN_MARKETPLACE_INSTALLATIONS_API_PATH;
-
-export const ADD_MARKETPLACE_TRIGGER_LABEL = 'Add marketplace';
-export const MARKETPLACE_TRIGGER_CLASS =
-  'inline-flex size-8 items-center justify-center rounded-md border border-border text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';

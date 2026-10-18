@@ -126,34 +126,6 @@ export function FlagshipHero({
   );
 }
 
-export function SurfaceTicker({ words }: { words: string[] }) {
-  const repeated = [...Array(6)].flatMap(() => words);
-
-  const row = (key: string) => (
-    <span className="agi-fl-ticker-row" aria-hidden="true">
-      {repeated.map((word, i) => (
-        <span key={`${key}-${i}`} className="agi-fl-ticker-word">
-          {word}
-          <span className="agi-fl-ticker-dot" aria-hidden="true">
-            ·
-          </span>
-        </span>
-      ))}
-    </span>
-  );
-
-  return (
-    <div className="agi-fl-ticker" role="presentation">
-      {/* visible label for screen readers */}
-      <span className="sr-only">{words.join(', ')}</span>
-      <div className="agi-fl-ticker-track" aria-hidden="true">
-        {row('a')}
-        {row('b')}
-      </div>
-    </div>
-  );
-}
-
 export interface StatBandItem {
   value: string;
   label: string;
@@ -168,59 +140,6 @@ export function StatBand({ items }: { items: StatBandItem[] }) {
           <span className="agi-fl-stat-label">{item.label}</span>
         </Reveal>
       ))}
-    </section>
-  );
-}
-
-export interface AvailabilityItem {
-  name: string;
-  status: string;
-  available: boolean;
-  href: string;
-}
-
-export function AvailabilityStrip({
-  eyebrow,
-  title,
-  note,
-  items,
-}: {
-  eyebrow: string;
-  title: string;
-  note?: string;
-  items: AvailabilityItem[];
-}) {
-  return (
-    <section className="agi-fl-avail" aria-labelledby="agi-fl-avail-title">
-      <p className="agi-fl-eyebrow">{eyebrow}</p>
-      <h2 id="agi-fl-avail-title" className="agi-fl-avail-title">
-        {title}
-      </h2>
-      <ul className="agi-fl-avail-grid">
-        {items.map((item) => (
-          <li key={item.name} className="agi-fl-avail-item">
-            <Link href={item.href} className="agi-fl-avail-link">
-              <span className="agi-fl-avail-name">{item.name}</span>
-              <span
-                className={
-                  item.available
-                    ? 'agi-fl-avail-status agi-fl-avail-status--live'
-                    : 'agi-fl-avail-status'
-                }
-              >
-                <span
-                  className={
-                    item.available ? 'agi-fl-avail-dot agi-fl-avail-dot--live' : 'agi-fl-avail-dot'
-                  }
-                  aria-hidden="true"
-                />
-                {item.status}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      {note ? <p className="agi-fl-avail-note">{note}</p> : null}
     </section>
   );
 }

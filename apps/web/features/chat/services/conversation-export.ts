@@ -194,44 +194,6 @@ export class ChatExportService {
     return html;
   }
 
-  exportAsText(
-    session: ChatSession,
-    messages: ChatMessage[],
-    options: ExportContentOptions = {},
-  ): string {
-    const includeTimestamps = options.includeTimestamps !== false;
-    let text = `${session.title}\n`;
-    text += `${'='.repeat(session.title.length)}\n\n`;
-    text += `Created: ${session.createdAt.toLocaleString()}\n`;
-    text += `Last Updated: ${session.updatedAt.toLocaleString()}\n`;
-    text += `Messages: ${messages.length}\n\n`;
-    text += `${'-'.repeat(50)}\n\n`;
-
-    for (const message of messages) {
-      const role = message.role === 'user' ? 'User' : 'Assistant';
-      text += includeTimestamps
-        ? `[${role}] ${message.createdAt.toLocaleString()}\n`
-        : `[${role}]\n`;
-      text += `${message.content}\n`;
-
-      const textAttachments = message.metadata?.attachments as
-        Array<{ name: string; size: number }> | undefined;
-      if (textAttachments && textAttachments.length > 0) {
-        text += `\nAttachments:\n`;
-        for (const attachment of textAttachments) {
-          text += `- ${attachment.name} (${this.formatFileSize(attachment.size)})\n`;
-        }
-      }
-
-      text += `\n${'-'.repeat(50)}\n\n`;
-    }
-
-    return text;
-  }
-
-  /**
-   * Download exported content as a file
-   */
   downloadFile(content: string, filename: string, mimeType: string): void {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -242,68 +204,6 @@ export class ChatExportService {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }
-
-  async exportChat(
-    session: ChatSession,
-    messages: ChatMessage[],
-    format: 'markdown' | 'json' | 'html' | 'text',
-  ): Promise<void> {
-    let content: string;
-    let extension: string;
-    let mimeType: string;
-
-    switch (format) {
-      case 'markdown':
-        content = this.exportAsMarkdown(session, messages);
-        extension = 'md';
-        mimeType = 'text/markdown';
-        break;
-
-      case 'json':
-        content = this.exportAsJSON(session, messages);
-        extension = 'json';
-        mimeType = 'application/json';
-        break;
-
-      case 'html':
-        content = this.exportAsHTML(session, messages);
-        extension = 'html';
-        mimeType = 'text/html';
-        break;
-
-      case 'text':
-        content = this.exportAsText(session, messages);
-        extension = 'txt';
-        mimeType = 'text/plain';
-        break;
-
-      default:
-        throw new Error(`Unsupported format: ${format}`);
-    }
-
-    const filename = `${this.sanitizeFilename(session.title)}_${Date.now()}.${extension}`;
-    this.downloadFile(content, filename, mimeType);
-  }
-
-  async generateShareLink(_sessionId: string): Promise<string> {
-    const shareToken = this.generateShareToken();
-    const shareLink = `${window.location.origin}/share/${shareToken}`;
-
-    return shareLink;
-  }
-
-  async copyToClipboard(
-    session: ChatSession,
-    messages: ChatMessage[],
-    format: 'markdown' | 'text' = 'markdown',
-  ): Promise<void> {
-    const content =
-      format === 'markdown'
-        ? this.exportAsMarkdown(session, messages)
-        : this.exportAsText(session, messages);
-
-    await navigator.clipboard.writeText(content);
   }
 
   private formatFileSize(bytes: number): string {
@@ -322,16 +222,4 @@ export class ChatExportService {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
-
-  private sanitizeFilename(filename: string): string {
-    return filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  }
-
-  private generateShareToken(): string {
-    return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
 }
-
-export const chatExportService = new ChatExportService();

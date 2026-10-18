@@ -548,19 +548,6 @@ export function useCancelAccountDeletion(): UseMutationResult<
   });
 }
 
-/**
- * Invalidate all settings queries
- *
- * @returns Callback function to invalidate all settings queries
- */
-export function useInvalidateSettingsQueries(): () => void {
-  const queryClient: QueryClient = useQueryClient();
-
-  return (): void => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.settings.all() });
-  };
-}
-
 // ============================================================================
 // ORGANIZATION SETTINGS HOOKS
 // ============================================================================
@@ -723,28 +710,6 @@ export function useSwitchWorkspace(): UseMutationResult<void, Error, string | nu
       await finalizeWorkspaceSwitch(queryClient, organizationId);
     },
     onError: (error) => toast.error(toUserMessage(error, 'Failed to switch workspace')),
-  });
-}
-
-/**
- * Fetch organization settings
- *
- * @param organizationId - Optional organization ID (uses user's org if not provided)
- * @returns UseQueryResult with OrganizationSettings or null
- */
-export function useOrganizationSettings(
-  organizationId?: string,
-): UseQueryResult<OrganizationSettings | null, Error> {
-  void organizationId; // compatibility only; the route returns the durable active workspace
-  return useQuery<OrganizationOverview, Error, OrganizationSettings | null>({
-    queryKey: ['settings', 'organization', 'current'],
-    queryFn: fetchOrganizationOverview,
-    select: (overview) => overview.organization,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
-    meta: {
-      errorMessage: 'Failed to load organization settings',
-    },
   });
 }
 
@@ -1279,70 +1244,6 @@ export function useLeaveOrganization(): UseMutationResult<
 }
 
 /**
- * Add an existing AGI account to the team.
- *
- * The legacy hook name is retained for compatibility; this does not send an
- * invitation email and the server rejects unknown account addresses.
- */
-export function useInviteTeamMember(): UseMutationResult<
-  TeamMember,
-  Error,
-  { organizationId: string; email: string; role: TeamMember['role'] }
-> {
-  const queryClient: QueryClient = useQueryClient();
-
-  return useMutation<
-    TeamMember,
-    Error,
-    { organizationId: string; email: string; role: TeamMember['role'] }
-  >({
-    mutationFn: async ({
-      organizationId,
-      email,
-      role,
-    }: {
-      organizationId: string;
-      email: string;
-      role: TeamMember['role'];
-    }): Promise<TeamMember> => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-
-      const csrfToken = await getCsrfToken();
-
-      const res = await fetch('/api/settings/team', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ organizationId, email, role }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      const json = (await res.json()) as { member: TeamMember };
-      if (!json.member) throw new Error('Invalid response from server');
-      return json.member;
-    },
-    onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({
-        queryKey: ['settings', 'team', organizationId],
-      });
-      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
-      toast.success('Team member added');
-    },
-    onError: (error: Error) => {
-      logger.error('Failed to add team member:', error);
-      toast.error(toUserMessage(error, 'Failed to add team member'));
-    },
-  });
-}
-
-/**
  * Remove team member mutation
  *
  * @returns UseMutationResult for removing a team member
@@ -1514,20 +1415,9 @@ export interface UserActivity {
   createdAt: string;
 }
 
-/**
- * Fetch user activity history
- *
- * @param userId - Optional user ID (uses current user if not provided)
- * @param limit - Maximum number of records
- * @returns UseQueryResult with array of UserActivity
- */
-export function useUserActivity(
-  userId?: string,
-  limit: number = 50,
-): UseQueryResult<UserActivity[], Error> {
-  void userId; // current user is resolved server-side from auth token
+export function useUserActivity(limit: number = 50): UseQueryResult<UserActivity[], Error> {
   return useQuery<UserActivity[], Error>({
-    queryKey: ['settings', 'activity', userId ?? 'current', limit],
+    queryKey: ['settings', 'activity', limit],
     queryFn: async (): Promise<UserActivity[]> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');

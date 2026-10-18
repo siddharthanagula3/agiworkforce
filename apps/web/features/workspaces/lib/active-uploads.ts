@@ -38,7 +38,3 @@ export function beginActiveUpload(label: string): () => void {
   useActiveUploadStore.getState().begin({ id, label });
   return () => useActiveUploadStore.getState().end(id);
 }
-
-export function useActiveUploads(): ActiveUpload[] {
-  return useActiveUploadStore((state) => state.uploads);
-}

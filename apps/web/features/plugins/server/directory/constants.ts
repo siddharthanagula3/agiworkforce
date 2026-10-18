@@ -2,8 +2,6 @@ export const OFFICIAL_MARKETPLACE_NAME = 'claude-plugins-official';
 export const OFFICIAL_MARKETPLACE_REPOSITORY_URL =
   'https://github.com/anthropics/claude-plugins-official';
 export const OFFICIAL_MARKETPLACE_REF = 'main';
-export const OFFICIAL_MARKETPLACE_OWNER_NAME = 'Anthropic';
-
 export const CLAUDE_MARKETPLACE_MANIFEST_PATH = '.claude-plugin/marketplace.json';
 export const CLAUDE_PLUGIN_METADATA_PATH = '.claude-plugin/plugin.json';
 export const CLAUDE_PLUGIN_HOOKS_PATH = 'hooks/hooks.json';
@@ -158,11 +156,6 @@ export const PLUGIN_UPLOAD_MAX_TOTAL_BYTES = 20_000_000;
 export const PLUGIN_UPLOAD_MAX_PATH_CHARS = 400;
 export const PLUGIN_UPLOAD_FILE_FIELD = 'file';
 export const PLUGIN_UPLOAD_NAME_FIELD = 'name';
-export const PLUGIN_UPLOAD_ARCHIVE_MEDIA_TYPES = [
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/octet-stream',
-] as const;
 
 export const UNIX_FILE_TYPE_MASK = 0xf000;
 export const UNIX_FILE_TYPE_SYMLINK = 0xa000;

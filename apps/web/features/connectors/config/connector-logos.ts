@@ -470,7 +470,3 @@ export const CONNECTOR_LOGOS: Record<
 export function getConnectorLogo(connectorId: string) {
   return CONNECTOR_LOGOS[connectorId] || null;
 }
-
-export function hasOfficialLogo(connectorId: string): boolean {
-  return !!CONNECTOR_LOGOS[connectorId];
-}
