@@ -20,6 +20,7 @@ import {
   type CodeRemoteDependencies,
   type DeveloperSessionActivity,
   type RemoteControlHost,
+  type RemotePhoneToConfirm,
 } from '@agiworkforce/utils/remote-control';
 import type { ThreadSummary } from '@agiworkforce/types';
 import { Config } from '../../platform/config';
@@ -55,6 +56,29 @@ interface RemoteRoot {
 }
 
 export class RemoteControlUnavailable extends Error {}
+
+const PHONE_NAME_SHOWN_CHARS = 80;
+const ALLOW_PHONE = 'Allow this phone';
+
+function shownPhoneName(name: string | null): string {
+  const printable = (name ?? '').replace(/\p{Cc}/gu, ' ').trim();
+  if (printable === '') return 'an unnamed phone';
+  return printable.length > PHONE_NAME_SHOWN_CHARS
+    ? `${printable.slice(0, PHONE_NAME_SHOWN_CHARS)}…`
+    : printable;
+}
+
+async function confirmPhone({ name, pairingCode }: RemotePhoneToConfirm): Promise<boolean> {
+  const choice = await vscode.window.showWarningMessage(
+    `Allow ${shownPhoneName(name)} to control coding sessions on this computer?`,
+    {
+      modal: true,
+      detail: `Pairing code ${pairingCode}\n\nThat phone will be able to read and steer coding sessions on this computer, see their output and file changes, and answer the agent's approval requests, until you stop Remote Control.\n\nAllow it only if this is the phone you just used to scan the code.`,
+    },
+    ALLOW_PHONE,
+  );
+  return choice === ALLOW_PHONE;
+}
 
 function workspaceRoots(): RemoteRoot[] {
   return (vscode.workspace.workspaceFolders ?? []).map((folder) => ({
@@ -134,6 +158,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
     this._host = createRemoteControlHost({
       allowInsecureLoopback: this._context.extensionMode === vscode.ExtensionMode.Development,
       code: this._dependencies(),
+      confirmPhone,
       deviceName: () =>
         t('remote.deviceName', { host: os.hostname().replace(/\.local$/iu, '') || 'VS Code' }),
       appVersion: () => getExtensionVersion(),
