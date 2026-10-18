@@ -42,14 +42,6 @@
       "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
     },
     {
-      "key": "--radix-navigation-menu-viewport-height",
-      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
-    },
-    {
-      "key": "--radix-navigation-menu-viewport-width",
-      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
-    },
-    {
       "key": "--radix-select-trigger-height",
       "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
     },

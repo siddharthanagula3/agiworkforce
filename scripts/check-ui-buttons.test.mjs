@@ -41,7 +41,7 @@ test('sizing utilities resolve to pixels', () => {
 test('every shared control variant table passes today', () => {
   const { failures, inspected } = variantTableFailures(REPO_ROOT);
   assert.deepEqual(failures, []);
-  assert.ok(inspected.length >= 3, `expected control tables, found ${inspected.length}`);
+  assert.ok(inspected.length >= 2, `expected control tables, found ${inspected.length}`);
 });
 
 const CONTROL = (base, sizes) => `

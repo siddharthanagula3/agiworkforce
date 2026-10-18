@@ -100,7 +100,6 @@
   --color-success-on-fill: var(--success-on-fill);
   --color-info-text: var(--info-text);
   --color-info-fill: var(--info-fill);
-  --color-info-on-fill: var(--info-on-fill);
   --color-diff-added-fill: var(--diff-added-fill);
   --color-diff-added-text: var(--diff-added-text);
   --color-diff-removed-fill: var(--diff-removed-fill);
@@ -147,18 +146,10 @@
   /* Custom colors - Charcoal */
 
   /* Custom colors - Teal */
-  --color-teal: #21808d;
   --color-teal-400: #2d9ba8;
   --color-teal-500: #21808d;
   --color-teal-600: #196068;
   --color-teal-700: #124043;
-
-  /* Agent status colors */
-  --color-agent-thinking: #a855f7;
-  --color-agent-active: #3b82f6;
-  --color-agent-success: #10b981;
-  --color-agent-error: #ef4444;
-  --color-agent-warning: #f59e0b;
 
   /* Surface colors */
 
