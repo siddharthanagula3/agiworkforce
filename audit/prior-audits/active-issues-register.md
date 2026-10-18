@@ -4037,18 +4037,6 @@ Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
-## CHROME-SAME-ACCOUNT-NEW-SESSION-HISTORY-01
-
-Severity: Medium. Status: reproduced against current source `49d0c30f`; deployed behavior unknown.
-
-The history drawer and active conversation lookup cannot find the retained record. Pending local mirror work is also filtered out. This hides data rather than deleting it; account-backed history cannot be rehydrated by the current flags-only pull.
-
-The real upsertConversation/listConversations/getConversation functions ran against callback-correct mocked chrome.storage.local. Old-session owner could list/read the chat, another account saw none, and the persisted conversations array retained one record. The same account/new-session list returned [] instead of one chat. Clerk resolveSessionOwner sets authIncarnation to session.id. Persistent conversation owner is that complete ManagedCloudOwner, and sameManagedCloudOwner compares both accountId and authIncarnation. The mounted owner-transition resets visible messages/conversation id and drawer calls listConversations for the current owner. Cloud delta pull filters the same owner and its insert port is a no-op, so it cannot recover earlier-session history.
-
-Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
-
-Resolution/acceptance: Save account A history under session A1, revoke/sign out, sign in as A2 and require retained history plus safe pending mirror recovery; account B remains isolated. Model persistent data ownership separately from auth-incarnation operation leases, retaining strict stale-stream/approval/cancellation fencing.
-
 ## MEMORY-SENSITIVE-OFF-KEEPS-SAVED-01
 
 Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
@@ -4265,18 +4253,6 @@ Source: `scripts/check-agent-docs.mjs:79`. Exact evidence (`audit/checklist/evid
 
 Resolution/acceptance: Enumerate tracked plus current nonignored untracked scoped files, retain vendored ownership exclusions, and test both untracked and staged fixtures. No implementation fix was made, per the documentation-only audit scope.
 
-## CHROME-AUTOMATION-OUTBOX-LOST-RECEIPTS-01
-
-Severity: Medium. Status: unchanged source read independently by specialist and lead; deterministic component race reproduced on 2026-10-09. Actual browser, backend and deployed behavior unverified.
-
-`enqueue` reads the current array, pushes and writes a capped replacement without serialization. Two concurrent calls with independent storage snapshots each see the same old queue and the later replacement drops the other receipt. `flushAutomationAuditOutbox` snapshots a batch, awaits acceptance, then removes `batch.length` from the current capped queue rather than removing accepted event IDs. With 200 queued receipts and a new enqueue during a blocked flush, the cap evicts an old receipt; acceptance of the original batch then deletes the new, never-posted receipt.
-
-The real transpiled source was probed with structured-clone-correct Chrome storage mocks, canonical batch limit, blocked fetch and device/auth/origin dependencies mocked. Concurrent expected 2, actual 1; capped enqueue during accepted flush lost the new receipt. Sequential enqueue and clone-isolation controls passed. The component's existing storage fixture returns shared object references and does not reproduce these snapshot races. Exact command, replay steps, controls and output: specialist review (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked).
-
-Source: `apps/extension/src/features/observability/automationAudit.ts:128` and `:177`; the worker mounts flushing and the computer-use loop mounts recording. Lead read the complete unchanged owner source. No live Chrome storage, installed extension or network service ran; no source change was made.
-
-Resolution/acceptance: Serialize queue mutations and reconcile acceptance by event ID. Verify concurrent writers and a blocked accepted flush with cap eviction preserve every newer unsent event within the stated retention contract. Retain realistic independent storage snapshots in adverse tests.
-
 ## EXT-MIRROR-TEST-FAKE-COVERAGE-01
 
 Severity: Low. Status: existing open instrument defect; additional concrete instances recorded 2026-10-09. The original `security-fixes.test.ts` scope and prior evidence remain open; it was not freshly read or closed in this wave.
@@ -4287,7 +4263,7 @@ Full-file review, exact locations and separate source claims (`audit/checklist/r
 
 Resolution/acceptance: Exercise the real message handlers and native worker lifecycle with controlled dependencies, or accurately qualify helper-only coverage. Adverse controls must detect removing the actual producer/consumer behavior. The October9 fourth Chrome packet separately re-read the original security-fixes file through EOF: its private test subjects remain disconnected, while real gateway/Markdown/redactor groups are distinguished. No test or implementation edits were made.
 
-October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot implementation correctness is separately tracked as CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01. Production recorder behavior and full browser tests were not run.
+October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot capture against the real handler is covered by `apps/extension/__tests__/background-screenshot-capture.test.ts`. Production recorder behavior and full browser tests were not run.
 
 ## AUDIT-CODEOWNERS-COMMENT-ONLY-01
 
@@ -4308,26 +4284,6 @@ UPDATE cloud_agent_execution_operations SET status=$1, lease_token=$2 WHERE id=$
 Source: `scripts/check-concurrent-step-lease.mjs:17`. Exact fixture results (`audit/checklist/evidence/coverage-governance-guards-2026-10-09.json`, untracked) and full-file review (`audit/checklist/reviews/coverage-ecosystem-governance-2026-10-09-002.json`, untracked). No SQL ran and no mounted double execution or current unsafe production statement was established. The existing twelve CODEOWNERS/coverage-floor tests passed; no tests or guard code were changed.
 
 Resolution/acceptance: Require current lease comparison in the mutation WHERE clause or verify actual transaction-scoped locked ownership. Reject SET-only token writes, comments/literals and unrelated locks while accepting the real claim transaction.
-
-## CHROME-SSE-READ-AGGREGATE-CAP-01
-
-Severity: Medium. Status: complete owner source reviewed by specialist and lead; unchanged decoder reproduced in isolated transpiled-source probes on 2026-10-09. Live network/browser behavior unverified.
-
-`BoundedSseDecoder.assertWithinLimit` compares `buffer.length + dataLength` with the per-frame limit while draining each line. The buffer still contains later complete frames from the same network read. Three individually valid `data: a` events decode when delivered separately with cap 12 but fail when coalesced into one read. At the actual 1,048,576 frame cap, five individually valid frames decode separately but a combined read fails, although their combined visible output remains below the 4,194,304 total cap.
-
-Source when found: `apps/extension/src/features/cloud-bridge/boundedSseDecoder.ts:35`, `:55`, `:92`. Main replaced that decoder on 2026-09-28 with the shared `ServerSentEventDecoder` (`packages/client/client-runtime/src/sse.ts:59-60,78`), which the managed chat stream and the computer-use cloud client read through; its `assertWithinLimit` makes the same `buffer.length + dataLength` comparison while later frames of the same read are still buffered. Repointed 2026-10-14 by source reading; the probe was not re-run against the shared decoder. Actual-source probe output, controls and caller scope (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). Transport chunk boundaries must not change valid event acceptance. The current parser was fully read; no live transport or extension run was performed.
-
-Resolution/acceptance: Enforce frame bounds on the current partial frame while draining complete later frames, retaining a separately bounded transport buffer and cumulative output budget. Equivalent event sequences must pass or fail identically under separate, combined and arbitrary boundary splits; oversized individual frames must still fail. No implementation change was made.
-
-## CHROME-STREAM-TOTAL-CAP-TEST-INTERCEPTED-01
-
-Severity: Low. Status: source-supported instrument defect with decoder interception reproduced in isolated component probes on 2026-10-09; the original Vitest file was not newly executed.
-
-The cumulative-output cap case supplies one approximately 4 MiB event. The per-frame decoder rejects it against the smaller approximately 1 MiB frame cap before the cumulative-output condition can be reached. The asserted generic `protocol_error` can therefore remain green if the intended cumulative guard is removed.
-
-Full-file specialist evidence, exact test locations and decoder controls (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). This concerns what the test establishes; it does not claim the cumulative guard is missing or broken in production.
-
-Resolution/acceptance: Construct multiple individually valid frames whose cumulative visible payload crosses the total cap; distinguish or instrument the cumulative rejection subject and verify removing that guard invalidates the test. Retain separate oversized-frame cases. No tests or implementation were changed.
 
 ## AUDIT-IMMUTABILITY-HISTORICAL-TRIGGER-01
 
@@ -4366,18 +4322,6 @@ Verification: Actual runStateWrites: id-only predicate yields guarded=false; add
 Limit: Exported classifier was executed, not SQL or a run-state transition. Current service race/exploit and database behavior were not run.
 
 Resolution/acceptance: Make the instrument reject the demonstrated negative case while retaining the valid control. Verify the actual guarded behavior independently before using a green scanner as product acceptance. No guard or product code was edited.
-
-## CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01
-
-Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation changes.
-
-The screenshot branch resolves the content sender tab/window but calls captureVisibleTab with the window alone, then labels the returned image with the sender tab id. After a user switches tabs during awaited page actions, a successful capture can therefore pair the active tab image with the sender document URL/title. The [current Chrome API contract](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab), independently checked October 9, specifies the current active tab in the window as the capture target.
-
-Verification: The specialist executed the unchanged selected handler and actual resolver helpers in an isolated transpiled VM. One coherent tab map supplies sender/get/query/capture state: active sender control captures and reports 42; inactive sender42 in window7 with unique active99 captures99 but reports42. Exact component controls and current-source anchors (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). Lead independently read the branch, page-action consumer and current full manifest.
-
-Limit: The outer admission wrapper, real Chrome capture, pixels and permission grants were not run. The scenario requires an admitted sender and capture permission for the captured active tab. Current manifest has narrow required hosts, optional HTTP/HTTPS hosts and activeTab, without all_urls; tabs and optional hosts alone are not evidence of capture authorization. No actual privacy disclosure or permission bypass is asserted.
-
-Resolution/acceptance: Return a screenshot bound to its actual captured identity and refuse or safely retry when the requested sender is not the capturable active target. A real admitted action/tab-switch test must cover success, refusal and denied capture permission. Source remains unchanged.
 
 ## DESKTOP-SETTINGS-SYNC-GAP-01
 

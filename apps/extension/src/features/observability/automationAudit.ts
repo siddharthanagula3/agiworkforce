@@ -120,15 +120,25 @@ async function writeOutbox(reports: readonly AutomationAuditReport[]): Promise<v
   }
 }
 
+let outboxMutation: Promise<void> = Promise.resolve();
+
+function mutateOutbox(
+  change: (queued: AutomationAuditReport[]) => readonly AutomationAuditReport[],
+): Promise<void> {
+  const mutation = outboxMutation.then(async () => {
+    await writeOutbox(change(await readOutbox()));
+  });
+  outboxMutation = mutation.catch(() => undefined);
+  return mutation;
+}
+
 /**
  * The oldest receipts are dropped rather than the newest refused: a queue that
  * stopped accepting would make the trail silently stop at the moment a run went
  * wrong, which is the moment it is read for.
  */
-async function enqueue(report: AutomationAuditReport): Promise<void> {
-  const queued = await readOutbox();
-  queued.push(report);
-  await writeOutbox(queued.slice(-AUTOMATION_AUDIT_BATCH_SIZE));
+function enqueue(report: AutomationAuditReport): Promise<void> {
+  return mutateOutbox((queued) => [...queued, report].slice(-AUTOMATION_AUDIT_BATCH_SIZE));
 }
 
 export async function recordAutomationAction(
@@ -181,8 +191,8 @@ export function flushAutomationAuditOutbox(fetchImpl: typeof fetch = fetch): Pro
     const batch = queued.slice(0, AUTOMATION_AUDIT_BATCH_SIZE);
     const accepted = await postOutbox(batch, fetchImpl).catch(() => false);
     if (!accepted) return false;
-    const remaining = (await readOutbox()).slice(batch.length);
-    await writeOutbox(remaining);
+    const sent = new Set(batch.map((report) => report.eventId));
+    await mutateOutbox((current) => current.filter((report) => !sent.has(report.eventId)));
     return true;
   })().finally(() => {
     flushing = null;

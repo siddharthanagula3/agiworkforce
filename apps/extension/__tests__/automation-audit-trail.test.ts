@@ -29,12 +29,12 @@ vi.stubGlobal('chrome', {
       get: (keys: string | string[]) => {
         const result: Record<string, unknown> = {};
         for (const key of typeof keys === 'string' ? [keys] : keys) {
-          if (key in storage.local) result[key] = storage.local[key];
+          if (key in storage.local) result[key] = structuredClone(storage.local[key]);
         }
         return Promise.resolve(result);
       },
       set: (items: Record<string, unknown>) => {
-        Object.assign(storage.local, items);
+        Object.assign(storage.local, structuredClone(items));
         return Promise.resolve();
       },
     },
@@ -255,5 +255,40 @@ describe('the outbox between the action and the account', () => {
     const queued = storage.local[AUTOMATION_AUDIT_OUTBOX_KEY] as { action: string }[];
     expect(queued).toHaveLength(AUTOMATION_AUDIT_BATCH_SIZE);
     expect(queued[queued.length - 1]?.action).toBe(`action-${AUTOMATION_AUDIT_BATCH_SIZE + 4}`);
+  });
+
+  it('keeps both receipts when two actions settle at once', async () => {
+    await Promise.all([
+      recordAutomationAction(attempt('first'), { claim: 'failed', reason: 'it failed' }, null),
+      recordAutomationAction(attempt('second'), { claim: 'failed', reason: 'it failed' }, null),
+    ]);
+
+    const queued = storage.local[AUTOMATION_AUDIT_OUTBOX_KEY] as { action: string }[];
+    expect(queued.map((report) => report.action).sort()).toEqual(['first', 'second']);
+  });
+
+  it('keeps a receipt queued while a full batch was in flight', async () => {
+    for (let index = 0; index < AUTOMATION_AUDIT_BATCH_SIZE; index += 1) {
+      await recordAutomationAction(
+        attempt(`sent-${index}`),
+        { claim: 'failed', reason: 'it failed' },
+        null,
+      );
+    }
+    let accept: (value: unknown) => void = () => undefined;
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        accept = resolve;
+      }),
+    );
+
+    const flushed = flushAutomationAuditOutbox(fetchMock as unknown as typeof fetch);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await recordAutomationAction(attempt('unsent'), { claim: 'failed', reason: 'it failed' }, null);
+    accept({ ok: true, json: () => Promise.resolve({ accepted: AUTOMATION_AUDIT_BATCH_SIZE }) });
+
+    await expect(flushed).resolves.toBe(true);
+    const queued = storage.local[AUTOMATION_AUDIT_OUTBOX_KEY] as { action: string }[];
+    expect(queued.map((report) => report.action)).toEqual(['unsent']);
   });
 });
