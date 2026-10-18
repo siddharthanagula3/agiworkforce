@@ -1878,8 +1878,8 @@ async function execute(
     case 'permission_revoke':
       return revokeGrant(window, args);
     case 'workspace_reveal': {
-      const root = resolveRoot(args);
-      shell.openPath(root.path);
+      const failure = await shell.openPath(resolveRoot(args).path);
+      if (failure !== '') throw new InvalidArguments(failure);
       return true;
     }
     case 'file_list':

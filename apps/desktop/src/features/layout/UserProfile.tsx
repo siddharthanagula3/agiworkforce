@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
+import { WEB_APP_URL } from '../../api/config';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -256,9 +257,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
           <div className="border-t border-[hsl(var(--border))] py-1">
             <button
               type="button"
-              onClick={() =>
-                handleAction(() => window.open('https://docs.agiworkforce.com', '_blank'))
-              }
+              onClick={() => handleAction(() => window.open(`${WEB_APP_URL}/docs`, '_blank'))}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
             >
               <HelpCircle className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />

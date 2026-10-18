@@ -794,7 +794,7 @@ function worktreeSetupEvent(
   const threadId = readString(params, 'threadId');
   if (!worktreeId || !threadId) return;
   const rootId = worktreeRootId(server.root.id, worktreeId);
-  if (method === 'worktree/setup/log') {
+  if (method === 'worktree/managed/setup/log') {
     const stream = readString(params, 'stream');
     const text = params['text'];
     if ((stream !== 'stdout' && stream !== 'stderr') || typeof text !== 'string') return;
@@ -817,7 +817,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     agentEvent(server, params);
     return;
   }
-  if (method === 'worktree/setup/log' || method === 'worktree/setup/finished') {
+  if (method === 'worktree/managed/setup/log' || method === 'worktree/managed/setup/finished') {
     worktreeSetupEvent(server, method, params);
     return;
   }
@@ -1414,7 +1414,7 @@ async function listWorktrees(parent: WorkspaceRoot): Promise<{
   worktrees: Array<{ worktree: DeveloperWorktree; thread: unknown }>;
 }> {
   const server = await readyServer(parent);
-  const result = await request(server, 'worktree/list', {});
+  const result = await request(server, 'worktree/managed/list', {});
   const setupScript = isRecord(result) ? toSetupScript(result['setupScript']) : null;
   const raw = isRecord(result) && Array.isArray(result['worktrees']) ? result['worktrees'] : [];
   const listed = await Promise.all(
@@ -2049,7 +2049,12 @@ export async function startDeveloperSession(
     input.worktreeStart === 'working_tree'
       ? { kind: 'working_tree' }
       : { kind: 'ref', name: 'HEAD' };
-  const created = await request(parentServer, 'worktree/create', { start }, SNAPSHOT_TIMEOUT_MS);
+  const created = await request(
+    parentServer,
+    'worktree/managed/create',
+    { start },
+    SNAPSHOT_TIMEOUT_MS,
+  );
   const setupScript = isRecord(created) ? toSetupScript(created['setupScript']) : null;
   const worktree = toWorktree(
     parent.id,
@@ -2060,7 +2065,7 @@ export async function startDeveloperSession(
   const cleanupFailures = toCleanupFailures(isRecord(created) ? created['cleanupFailures'] : null);
   const root = await rememberWorktree(parent, worktree);
   if (!root) {
-    await requestOrNull(parentServer, 'worktree/delete', { worktreeId: worktree.id });
+    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
     throw new Error('The AGI CLI made a worktree this app could not verify.');
   }
   try {
@@ -2074,7 +2079,7 @@ export async function startDeveloperSession(
     return cleanupFailures.length > 0 ? { ...session, cleanupFailures } : session;
   } catch (error) {
     await stopWorktreeRuntime(root.id);
-    await requestOrNull(parentServer, 'worktree/delete', { worktreeId: worktree.id });
+    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
     forgetWorktreeRoot(root.id);
     throw error;
   }
@@ -2108,7 +2113,12 @@ export async function deleteDeveloperWorktree(rootId: string): Promise<{ snapsho
   const { parent, worktreeId } = requireWorktree(rootId);
   await stopWorktreeRuntime(rootId);
   const server = await readyServer(parent);
-  const result = await request(server, 'worktree/delete', { worktreeId }, SNAPSHOT_TIMEOUT_MS);
+  const result = await request(
+    server,
+    'worktree/managed/delete',
+    { worktreeId },
+    SNAPSHOT_TIMEOUT_MS,
+  );
   forgetWorktreeRoot(rootId);
   const snapshotRef = isRecord(result) ? readString(result, 'snapshotRef') : null;
   if (!snapshotRef) throw new Error('The AGI CLI did not say where it kept the worktree.');
@@ -2118,7 +2128,7 @@ export async function deleteDeveloperWorktree(rootId: string): Promise<{ snapsho
 export async function pinDeveloperWorktree(rootId: string, pinned: boolean): Promise<boolean> {
   const { parent, worktreeId } = requireWorktree(rootId);
   const server = await readyServer(parent);
-  await request(server, 'worktree/pin', { worktreeId, pinned });
+  await request(server, 'worktree/managed/pin', { worktreeId, pinned });
   return pinned;
 }
 
@@ -2158,7 +2168,7 @@ export async function developerWorktreeKeep(
   const root = requireRoot(rootId);
   const server = keep === undefined ? await runningServer(root) : await readyServer(root);
   if (server === null) return null;
-  const result = await request(server, 'worktree/keep', keep === undefined ? {} : { keep });
+  const result = await request(server, 'worktree/managed/keep', keep === undefined ? {} : { keep });
   const count = isRecord(result) ? readNumber(result, 'keep') : null;
   const maxKeep = isRecord(result) ? readNumber(result, 'maxKeep') : null;
   if (count === null || maxKeep === null) {
@@ -2176,7 +2186,7 @@ export async function applyDeveloperWorktree(
   const server = await readyServer(parent);
   const result = await request(
     server,
-    'worktree/applyToLocal',
+    'worktree/managed/applyToLocal',
     { worktreeId, ...(preview ? { preview: true } : {}) },
     SNAPSHOT_TIMEOUT_MS,
   );
@@ -2193,7 +2203,7 @@ export async function applyDeveloperWorktree(
 export async function runDeveloperWorktreeSetup(rootId: string, sha256: string): Promise<boolean> {
   const { parent, worktreeId } = requireWorktree(rootId);
   const server = await readyServer(parent);
-  await request(server, 'worktree/setup/run', { worktreeId, sha256 });
+  await request(server, 'worktree/managed/setup/run', { worktreeId, sha256 });
   return true;
 }
 

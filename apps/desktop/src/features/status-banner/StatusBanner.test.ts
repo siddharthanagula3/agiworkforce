@@ -1,92 +1,88 @@
 import { describe, expect, it } from 'vitest';
-import { parseStatusMessages } from '.';
+import { WEB_APP_URL } from '../../api/config';
+import { parseServiceNotices, serviceNoticeUrl } from '.';
 
-const NOW = new Date('2026-07-31T12:00:00.000Z').getTime();
+const ORIGIN = new URL(WEB_APP_URL).origin;
 
-describe('parseStatusMessages', () => {
-  it('accepts supported incident rows and removes expired notices', () => {
+describe('parseServiceNotices', () => {
+  it('reads the notices the cloud publishes at the service notices path', () => {
     expect(
-      parseStatusMessages(
-        {
-          messages: [
-            {
-              id: 'incident-live',
-              severity: 'warning',
-              title: 'Provider delays',
-              message: 'Requests may take longer than usual.',
-              dismissible: true,
-              expiresAt: '2026-07-31T12:30:00.000Z',
-            },
-            {
-              id: 'incident-expired',
-              severity: 'info',
-              title: 'Resolved',
-              message: 'This notice is no longer current.',
-              dismissible: true,
-              expiresAt: '2026-07-31T11:59:59.000Z',
-            },
-          ],
-        },
-        NOW,
-      ),
+      parseServiceNotices({
+        notices: [
+          {
+            id: 'incident-live',
+            kind: 'incident',
+            tone: 'warning',
+            scope: 'product',
+            message: 'Requests may take longer than usual.',
+            href: '/status',
+            linkLabel: 'View status',
+          },
+        ],
+      }),
     ).toEqual([
       {
         id: 'incident-live',
-        severity: 'warning',
-        title: 'Provider delays',
+        kind: 'incident',
+        tone: 'warning',
+        scope: 'product',
         message: 'Requests may take longer than usual.',
-        dismissible: true,
-        expiresAt: '2026-07-31T12:30:00.000Z',
+        href: '/status',
+        linkLabel: 'View status',
       },
     ]);
   });
 
   it('drops malformed rows independently instead of crashing the banner', () => {
     expect(
-      parseStatusMessages(
-        {
-          messages: [
-            {
-              id: 'bad-severity',
-              severity: 'emergency',
-              title: 'Unknown severity',
-              message: 'Must not reach the renderer.',
-              dismissible: false,
-            },
-            {
-              id: 'bad-expiry',
-              severity: 'critical',
-              title: 'Invalid expiry',
-              message: 'Must not become permanent.',
-              dismissible: false,
-              expiresAt: 'not-a-date',
-            },
-            {
-              id: 'incident-valid',
-              severity: 'critical',
-              title: 'Service unavailable',
-              message: '',
-              dismissible: false,
-            },
-          ],
-        },
-        NOW,
-      ),
+      parseServiceNotices({
+        notices: [
+          {
+            id: 'bad-tone',
+            kind: 'incident',
+            tone: 'emergency',
+            message: 'Must not reach the renderer.',
+            href: '/status',
+            linkLabel: 'View status',
+          },
+          {
+            id: 'maintenance',
+            kind: 'maintenance',
+            tone: 'info',
+            message: 'Scheduled maintenance tonight.',
+            href: '/maintenance',
+            linkLabel: 'Details',
+          },
+        ],
+      }),
     ).toEqual([
       {
-        id: 'incident-valid',
-        severity: 'critical',
-        title: 'Service unavailable',
-        message: '',
-        dismissible: false,
+        id: 'maintenance',
+        kind: 'maintenance',
+        tone: 'info',
+        scope: 'product',
+        message: 'Scheduled maintenance tonight.',
+        href: '/maintenance',
+        linkLabel: 'Details',
       },
     ]);
   });
 
-  it.each([null, [], {}, { messages: null }, { messages: 'not-an-array' }])(
+  it.each([null, [], {}, { notices: null }, { notices: 'not-an-array' }, { messages: [] }])(
     'returns an empty list for a malformed response: %j',
     (value) => {
-      expect(parseStatusMessages(value, NOW)).toEqual([]);
+      expect(parseServiceNotices(value)).toEqual([]);
     },
   );
+});
+
+describe('serviceNoticeUrl', () => {
+  it('opens a notice link on the app origin', () => {
+    expect(serviceNoticeUrl('/status')).toBe(`${ORIGIN}/status`);
+  });
+
+  it('refuses a link to any other site', () => {
+    expect(serviceNoticeUrl('https://evil.example/status')).toBeNull();
+    expect(serviceNoticeUrl('//evil.example/status')).toBeNull();
+  });
 });

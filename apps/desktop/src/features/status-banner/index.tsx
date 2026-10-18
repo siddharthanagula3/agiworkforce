@@ -1,34 +1,25 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Info, X, XCircle } from 'lucide-react';
+import {
+  SERVICE_NOTICES_PATH,
+  ServiceNoticeSchema,
+  type ServiceNotice,
+  type ServiceNoticeTone,
+} from '@agiworkforce/cloud-contracts';
+import { WEB_APP_URL } from '../../api/config';
 import { isTauri } from '../../lib/tauri-mock';
 import { guardedFetch } from '../../lib/egressGuard';
-
-const STATUS_URL: string =
-  (typeof import.meta !== 'undefined' &&
-    typeof import.meta.env?.['VITE_STATUS_URL'] === 'string' &&
-    import.meta.env?.['VITE_STATUS_URL']) ||
-  'https://status.agiworkforce.com/status.json';
+import { openExternalUrl } from '../../utils/navigation';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
-
-type Severity = 'info' | 'warning' | 'critical';
-
-export interface StatusMessage {
-  id: string;
-  severity: Severity;
-  title: string;
-  message: string;
-  dismissible: boolean;
-  expiresAt?: string;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const severityConfig: Record<
-  Severity,
+const toneConfig: Record<
+  ServiceNoticeTone,
   {
     Icon: typeof Info;
     containerClass: string;
@@ -51,7 +42,7 @@ const severityConfig: Record<
     textClass: 'text-warning-text',
     dismissClass: 'text-warning-text',
   },
-  critical: {
+  danger: {
     Icon: XCircle,
     containerClass: 'bg-danger-fill/10 border-b border-danger-fill/30',
     iconClass: 'text-danger-text',
@@ -60,71 +51,48 @@ const severityConfig: Record<
   },
 };
 
-function isExpired(message: StatusMessage, now = Date.now()): boolean {
-  if (!message.expiresAt) return false;
-  return new Date(message.expiresAt).getTime() <= now;
+/** Each row is checked on its own, so one malformed notice cannot hide the rest. */
+export function parseServiceNotices(value: unknown): ServiceNotice[] {
+  if (!isRecord(value) || !Array.isArray(value['notices'])) return [];
+  return value['notices'].flatMap((candidate) => {
+    const parsed = ServiceNoticeSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
-export function parseStatusMessages(value: unknown, now = Date.now()): StatusMessage[] {
-  if (!isRecord(value) || !Array.isArray(value['messages'])) return [];
-
-  const messages: StatusMessage[] = [];
-  for (const candidate of value['messages']) {
-    if (!isRecord(candidate)) continue;
-
-    const id = candidate['id'];
-    const severity = candidate['severity'];
-    const title = candidate['title'];
-    const message = candidate['message'];
-    const dismissible = candidate['dismissible'];
-    const expiresAt = candidate['expiresAt'];
-
-    if (typeof id !== 'string' || id.trim().length === 0) continue;
-    if (severity !== 'info' && severity !== 'warning' && severity !== 'critical') continue;
-    if (typeof title !== 'string' || title.trim().length === 0) continue;
-    if (typeof message !== 'string') continue;
-    if (typeof dismissible !== 'boolean') continue;
-    if (expiresAt !== undefined) {
-      if (typeof expiresAt !== 'string' || !Number.isFinite(new Date(expiresAt).getTime()))
-        continue;
-    }
-
-    const parsed: StatusMessage = {
-      id,
-      severity,
-      title,
-      message,
-      dismissible,
-      ...(typeof expiresAt === 'string' ? { expiresAt } : {}),
-    };
-    if (!isExpired(parsed, now)) messages.push(parsed);
+export function serviceNoticeUrl(href: string): string | null {
+  try {
+    const origin = new URL(WEB_APP_URL).origin;
+    const url = new URL(href, origin);
+    return url.origin === origin ? url.toString() : null;
+  } catch {
+    return null;
   }
-
-  return messages;
 }
 
-async function fetchStatusMessages(): Promise<StatusMessage[]> {
+async function fetchServiceNotices(): Promise<ServiceNotice[]> {
   if (!isTauri || import.meta.env.DEV) return [];
   try {
-    const response = await guardedFetch(STATUS_URL, {
+    const response = await guardedFetch(`${WEB_APP_URL}${SERVICE_NOTICES_PATH}`, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       cache: 'no-store',
     });
     if (!response.ok) return [];
-    return parseStatusMessages(await response.json());
+    return parseServiceNotices(await response.json());
   } catch {
     return [];
   }
 }
 
 interface StatusBannerItemProps {
-  message: StatusMessage;
+  notice: ServiceNotice;
   onDismiss: (id: string) => void;
 }
 
-function StatusBannerItem({ message, onDismiss }: StatusBannerItemProps) {
-  const config = severityConfig[message.severity];
+function StatusBannerItem({ notice, onDismiss }: StatusBannerItemProps) {
+  const config = toneConfig[notice.tone];
   const { Icon } = config;
+  const link = serviceNoticeUrl(notice.href);
 
   return (
     <div
@@ -134,39 +102,40 @@ function StatusBannerItem({ message, onDismiss }: StatusBannerItemProps) {
     >
       <div className={`flex items-center gap-2 ${config.textClass}`}>
         <Icon className={`h-4 w-4 shrink-0 ${config.iconClass}`} aria-hidden="true" />
-        <span className="font-medium">{message.title}</span>
-        {message.message && (
-          <>
-            <span className="opacity-60">, </span>
-            <span className="opacity-80">{message.message}</span>
-          </>
+        <span className="font-medium">{notice.message}</span>
+        {link && (
+          <button
+            type="button"
+            onClick={() => void openExternalUrl(link)}
+            className="font-medium underline underline-offset-2"
+          >
+            {notice.linkLabel}
+          </button>
         )}
       </div>
-      {message.dismissible && (
-        <button
-          type="button"
-          onClick={() => onDismiss(message.id)}
-          className={`shrink-0 rounded p-0.5 transition-colors ${config.dismissClass}`}
-          aria-label={`Dismiss: ${message.title}`}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => onDismiss(notice.id)}
+        className={`shrink-0 rounded p-0.5 transition-colors ${config.dismissClass}`}
+        aria-label={`Dismiss: ${notice.message}`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
 
 export function StatusBanner() {
-  const [messages, setMessages] = useState<StatusMessage[]>([]);
+  const [notices, setNotices] = useState<ServiceNotice[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
 
     const poll = async () => {
-      const fetched = await fetchStatusMessages();
+      const fetched = await fetchServiceNotices();
       if (!cancelled) {
-        setMessages(fetched);
+        setNotices(fetched);
       }
     };
 
@@ -186,14 +155,14 @@ export function StatusBanner() {
     setDismissedIds((prev) => new Set(prev).add(id));
   };
 
-  const visibleMessages = messages.filter((msg) => !dismissedIds.has(msg.id));
+  const visibleNotices = notices.filter((notice) => !dismissedIds.has(notice.id));
 
-  if (visibleMessages.length === 0) return null;
+  if (visibleNotices.length === 0) return null;
 
   return (
     <div className="w-full">
-      {visibleMessages.map((msg) => (
-        <StatusBannerItem key={msg.id} message={msg} onDismiss={handleDismiss} />
+      {visibleNotices.map((notice) => (
+        <StatusBannerItem key={notice.id} notice={notice} onDismiss={handleDismiss} />
       ))}
     </div>
   );

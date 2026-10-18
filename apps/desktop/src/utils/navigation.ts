@@ -1,7 +1,8 @@
 import { open } from '@tauri-apps/plugin-shell';
+import { WEB_APP_URL } from '../api/config';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 
-const PRICING_URL = 'https://www.agiworkforce.com/billing';
+const PRICING_URL = `${WEB_APP_URL}/billing`;
 
 export async function openExternalUrl(url: string) {
   if (isTauri || isElectronHost) {

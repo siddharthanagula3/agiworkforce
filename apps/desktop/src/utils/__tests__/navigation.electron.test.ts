@@ -20,7 +20,7 @@ describe('Electron external navigation', () => {
     expect(openMock).toHaveBeenNthCalledWith(1, 'https://agiworkforce.com/user');
     expect(openMock).toHaveBeenNthCalledWith(
       2,
-      'https://www.agiworkforce.com/billing?reason=upgrade_required',
+      'https://agiworkforce.com/billing?reason=upgrade_required',
     );
   });
 });

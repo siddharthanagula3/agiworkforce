@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { toast } from 'sonner';
 import { PrivacyConsent } from '../../types/analytics';
+import { WEB_APP_URL } from '../../api/config';
 
 export const AnalyticsSettings = () => {
   const { privacyConsent, updatePrivacyConsent, exportAnalyticsData, deleteAllAnalyticsData } =
@@ -224,7 +225,7 @@ export const AnalyticsSettings = () => {
       {}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
         <a
-          href="https://app.agiworkforce.com/privacy"
+          href={`${WEB_APP_URL}/privacy`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-sm text-blue-600 dark:text-blue-400 hover:underline"

@@ -175,7 +175,7 @@ function defaultResponder(method: string): unknown {
     };
   }
   if (method === 'thread/reconnect') return { thread };
-  if (method === 'worktree/list') return { worktrees: [], keep: 15 };
+  if (method === 'worktree/managed/list') return { worktrees: [], keep: 15 };
   if (method === 'turn/start' || method === 'turn/steer')
     return { turn: { id: 'turn-1', threadId: thread.id, status: 'running' } };
   if (
@@ -853,7 +853,7 @@ describe('developer session runtime', () => {
     ).rejects.toThrow(CLI_UPDATE);
 
     const sent = children.flatMap((child) => child.written.map((entry) => entry.method));
-    expect(sent).not.toContain('worktree/create');
+    expect(sent).not.toContain('worktree/managed/create');
     expect(sent.some((method) => method.startsWith('checkpoint/'))).toBe(false);
     expect(sent).not.toContain('thread/delete');
     expect(sent).not.toContain('thread/fork');
@@ -1074,7 +1074,7 @@ describe('developer session runtime', () => {
 
   it('reads the setup script and the worktree name from the folder own CLI, never from the caller', async () => {
     const { service } = await loadService((method) =>
-      method === 'worktree/list'
+      method === 'worktree/managed/list'
         ? {
             keep: 15,
             setupScript: {
@@ -2293,7 +2293,7 @@ describe('developer session runtime', () => {
 
   it('reads the worktree count without starting a CLI, and through one already running', async () => {
     const { service, spawn, children } = await loadService((method, params) =>
-      method === 'worktree/keep'
+      method === 'worktree/managed/keep'
         ? { keep: params['keep'] ?? 15, maxKeep: 100 }
         : defaultResponder(method),
     );
@@ -2312,7 +2312,9 @@ describe('developer session runtime', () => {
     });
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(
-      children[0]?.written.filter((entry) => entry.method === 'worktree/keep').map((e) => e.params),
+      children[0]?.written
+        .filter((entry) => entry.method === 'worktree/managed/keep')
+        .map((e) => e.params),
     ).toEqual([{}, { keep: 4 }]);
   });
 
@@ -2478,7 +2480,7 @@ describe('developer session runtime', () => {
       start: { kind: 'ref', name: 'HEAD' },
     };
     const { service } = await loadService((method) =>
-      method === 'worktree/create'
+      method === 'worktree/managed/create'
         ? {
             worktree,
             copiedFiles: [],
@@ -2508,7 +2510,7 @@ describe('developer session runtime', () => {
 
   it('starts a worktree session with no cleanup report when the CLI sends none', async () => {
     const { service } = await loadService((method) =>
-      method === 'worktree/create'
+      method === 'worktree/managed/create'
         ? {
             worktree: {
               id: 'a1b2c3d4',

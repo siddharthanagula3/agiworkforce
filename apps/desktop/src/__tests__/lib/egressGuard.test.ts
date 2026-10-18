@@ -27,7 +27,7 @@ describe('isOurCloudHost', () => {
   it('matches our cloud hosts and subdomains (boundary-safe)', () => {
     expect(isOurCloudHost('agiworkforce.com')).toBe(true);
     expect(isOurCloudHost('www.agiworkforce.com')).toBe(true);
-    expect(isOurCloudHost('gateway.agiworkforce.com')).toBe(true);
+    expect(isOurCloudHost('api.agiworkforce.com')).toBe(true);
     expect(isOurCloudHost('my-app.vercel.app')).toBe(true);
     expect(isOurCloudHost('ep-cool-db.neon.tech')).toBe(true);
     expect(isOurCloudHost('clerk.com')).toBe(true);
