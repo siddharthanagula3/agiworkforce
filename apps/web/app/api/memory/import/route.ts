@@ -12,9 +12,11 @@ import {
   buildImportPreview,
   importSourceValue,
   normalizeImportSourceName,
-  normalizeMemoryKey,
+  normalizeImportedMemoryKey,
   parseImportedMemoryText,
-} from '@/lib/memory/import-parser';
+  type ManagedMemoryImportCommitResponse,
+  type ManagedMemoryImportPreviewResponse,
+} from '@agiworkforce/types';
 import { persistImportedMemories, type ImportMemoryDb } from '@/lib/memory/import-store';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
@@ -22,10 +24,6 @@ import {
   memoryWriteAdmission,
   workspaceMemoryPredicate,
 } from '@/lib/services/managed-memory-context-service';
-import type {
-  ManagedMemoryImportCommitResponse,
-  ManagedMemoryImportPreviewResponse,
-} from '@agiworkforce/types';
 
 interface ImportRequestBody {
   mode?: string;
@@ -46,7 +44,7 @@ async function loadExistingNormalizedKeys(
       where user_id = $1 and is_deleted = false and ${workspaceMemoryPredicate(2)}`,
     [userId, organizationId],
   );
-  return new Set(rows.map((row) => normalizeMemoryKey(row.content)));
+  return new Set(rows.map((row) => normalizeImportedMemoryKey(row.content)));
 }
 
 async function handleDryRun(request: NextRequest, body: ImportRequestBody) {

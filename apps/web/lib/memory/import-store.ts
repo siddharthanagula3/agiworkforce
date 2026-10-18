@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { clampImportItemLength, normalizeMemoryKey } from './import-parser';
+import { clampImportItemLength, normalizeImportedMemoryKey } from '@agiworkforce/types';
 
 export interface ImportMemoryDb {
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
@@ -31,7 +31,7 @@ export async function persistImportedMemories(
   for (const raw of params.items) {
     const content = clampImportItemLength(raw.trim());
     if (!content) continue;
-    const importKey = normalizeMemoryKey(content);
+    const importKey = normalizeImportedMemoryKey(content);
     if (!importKey || seen.has(importKey)) continue;
     seen.add(importKey);
     batch.push({ content, importKey });

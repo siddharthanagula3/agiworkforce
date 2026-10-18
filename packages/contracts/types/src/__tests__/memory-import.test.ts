@@ -9,9 +9,9 @@ import {
   importSourceDisplayName,
   importSourceValue,
   normalizeImportSourceName,
-  normalizeMemoryKey,
+  normalizeImportedMemoryKey,
   parseImportedMemoryText,
-} from '../import-parser';
+} from '../memory-import';
 
 describe('parseImportedMemoryText: plain line lists', () => {
   it('splits one memory per line', () => {
@@ -143,9 +143,9 @@ describe('parseImportedMemoryText: size limits', () => {
   });
 });
 
-describe('normalizeMemoryKey', () => {
+describe('normalizeImportedMemoryKey', () => {
   it('trims, lowercases, and collapses whitespace', () => {
-    expect(normalizeMemoryKey('  Likes   Dark\tMode  ')).toBe('likes dark mode');
+    expect(normalizeImportedMemoryKey('  Likes   Dark\tMode  ')).toBe('likes dark mode');
   });
 });
 

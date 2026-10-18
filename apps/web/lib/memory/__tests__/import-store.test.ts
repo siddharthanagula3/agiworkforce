@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { persistImportedMemories } from '../import-store';
-import { normalizeMemoryKey } from '../import-parser';
+import { normalizeImportedMemoryKey } from '@agiworkforce/types';
 
 const VICTIM = 'user_victim';
 const SOURCE = 'imported:chatgpt';
@@ -59,7 +59,7 @@ describe('persistImportedMemories row identity', () => {
     const content = 'Lives in Bengaluru';
     await persistImportedMemories({ query }, { userId: VICTIM, items: [content], source: SOURCE });
 
-    const guessable = legacyDerivedId(VICTIM, SOURCE, normalizeMemoryKey(content));
+    const guessable = legacyDerivedId(VICTIM, SOURCE, normalizeImportedMemoryKey(content));
     expect(JSON.stringify(batch())).not.toContain(guessable);
     expect(JSON.stringify(issued().params)).not.toContain(guessable);
   });

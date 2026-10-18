@@ -1,4 +1,4 @@
-import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from './memory-wire';
 
 export const MAX_IMPORT_TEXT_CHARS = 200_000;
 export const MAX_IMPORT_ITEMS = 500;
@@ -29,7 +29,7 @@ export interface ImportPreviewItem {
   duplicate: boolean;
 }
 
-export function normalizeMemoryKey(value: string): string {
+export function normalizeImportedMemoryKey(value: string): string {
   return value.trim().replace(/\s+/gu, ' ').toLowerCase();
 }
 
@@ -93,7 +93,7 @@ export function parseImportedMemoryText(raw: string): ParsedImportResult {
   for (const candidate of rawCandidates) {
     const trimmed = candidate.trim();
     if (!trimmed) continue;
-    const normalizedKey = normalizeMemoryKey(trimmed);
+    const normalizedKey = normalizeImportedMemoryKey(trimmed);
     if (!normalizedKey || seen.has(normalizedKey)) continue;
     seen.add(normalizedKey);
     items.push(clampImportItemLength(trimmed));
@@ -114,7 +114,7 @@ export function buildImportPreview(
   existingNormalizedKeys: ReadonlySet<string>,
 ): ImportPreviewItem[] {
   return items.map((content) => {
-    const normalizedKey = normalizeMemoryKey(content);
+    const normalizedKey = normalizeImportedMemoryKey(content);
     return { content, normalizedKey, duplicate: existingNormalizedKeys.has(normalizedKey) };
   });
 }

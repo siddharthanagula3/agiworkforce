@@ -135,6 +135,7 @@ export * from './scheduler';
 
 export * from './memory';
 export * from './memory-wire';
+export * from './memory-import';
 
 export * from './research';
 

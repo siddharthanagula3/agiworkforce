@@ -14,6 +14,8 @@ import {
   translateUiPlural,
 } from '@agiworkforce/ui';
 import {
+  MAX_IMPORT_ITEMS,
+  MAX_IMPORT_TEXT_CHARS,
   parseManagedMemoryImportCommitResponse,
   parseManagedMemoryImportPreviewResponse,
   type ManagedMemoryImportCommitResponse,
@@ -23,7 +25,6 @@ import {
 } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
-import { MAX_IMPORT_ITEMS, MAX_IMPORT_TEXT_CHARS } from '@/lib/memory/import-parser';
 
 const IMPORT_ENDPOINT = '/api/memory/import';
 const IMPORT_FILE_ACCEPT = '.txt,.json,text/plain,application/json';
