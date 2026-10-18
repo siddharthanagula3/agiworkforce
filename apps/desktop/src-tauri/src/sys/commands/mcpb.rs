@@ -1,15 +1,6 @@
-//! MCP Bundle (MCPB) Support
-//!
-//! This module provides comprehensive support for discovering, installing, managing,
-//! and updating MCP server bundles. Bundles are pre-configured MCP server packages
-//! that can be easily installed via npm.
-//!
-//! ## Features
-//! - Registry-based bundle discovery (official MCP Registry + reviewed embedded data)
-//! - Bundle installation via npm
-//! - Bundle updates and version management
-//! - Progress events during installation
-//! - Persistent metadata storage
+//! MCP server bundles: the official MCP Registry merged with an embedded
+//! list, installed through npm only at a version the packaged allow-list
+//! pins, and only after a native confirmation.
 
 use crate::core::mcp::manifest::{AllowedPackage, AllowlistState};
 use crate::core::mcp::McpServerConfig;
@@ -21,10 +12,6 @@ use std::sync::Arc;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::process::Command;
-
-// ============================================================================
-// Types
-// ============================================================================
 
 /// A tool provided by an MCP bundle
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,13 +97,8 @@ pub struct McpBundle {
     pub config_template: McpConfigTemplate,
     /// Required credentials
     pub required_credentials: Vec<RequiredCredential>,
-    /// Registry rating, only present when supplied by a verified live source.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rating: Option<f64>,
-    /// Registry download count, only present when supplied by a verified live source.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub downloads: Option<u32>,
-    /// Whether this bundle is verified by the registry
+    /// Whether the packaged allow-list pins this bundle's package, the only
+    /// review an install is held to. Set by `apply_allowlist`.
     pub verified: bool,
     /// Whether this bundle is featured
     pub featured: bool,
@@ -435,10 +417,6 @@ fn official_registry_bundle(entry: OfficialRegistryEntry) -> McpBundle {
         tools: Vec::new(),
         config_template,
         required_credentials,
-        rating: None,
-        downloads: None,
-        // Namespace ownership in the official registry is not an AGI Workforce
-        // review of the package. Keep the explicit unverified-install gate.
         verified: false,
         featured: false,
         tags,
@@ -468,11 +446,11 @@ fn mark_installed_bundles(
     installed: &HashMap<String, InstalledBundleMetadata>,
 ) {
     for bundle in bundles {
-        if let Some(metadata) = installed.get(&bundle.id) {
-            bundle.installed = true;
-            bundle.installed_version = Some(metadata.version.clone());
-            bundle.update_available = metadata.version != bundle.version;
-        }
+        let metadata = installed.get(&bundle.id);
+        bundle.installed = metadata.is_some();
+        bundle.installed_version = metadata.map(|metadata| metadata.version.clone());
+        bundle.update_available =
+            metadata.is_some_and(|metadata| metadata.version != bundle.version);
     }
 }
 
@@ -485,6 +463,41 @@ fn merge_installed_bundle_snapshots(
             merge_registry_bundles(bundles, vec![bundle.clone()]);
         }
     }
+}
+
+/// A bundle is verified only when the packaged allow-list pins its package,
+/// and is then offered at the pinned version, the one npm installs.
+fn apply_allowlist(bundles: &mut [McpBundle], allowlist: &AllowlistState) {
+    for bundle in bundles {
+        let pin = bundle
+            .npm_package
+            .as_deref()
+            .and_then(|package| allowlist.pinned(package));
+        bundle.verified = pin.is_some();
+        if let Some(pin) = pin {
+            bundle.version = pin.version.clone();
+        }
+    }
+}
+
+/// The cached registry, or the embedded one before the first fetch, with
+/// every installed bundle's snapshot merged in, checked against `allowlist`
+/// and marked with what is installed.
+fn catalog(state: &McpbState, allowlist: &AllowlistState) -> Vec<McpBundle> {
+    let mut bundles = {
+        let cache = state.registry_cache.lock();
+        if cache.is_empty() {
+            drop(cache);
+            get_embedded_registry()
+        } else {
+            cache.clone()
+        }
+    };
+    let installed = state.installed.lock();
+    merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
+    apply_allowlist(&mut bundles, allowlist);
+    mark_installed_bundles(&mut bundles, &installed.bundles);
+    bundles
 }
 
 /// The reviewed pin for a bundle's npm package. A package outside the
@@ -663,10 +676,6 @@ async fn install_pinned_package(pin: &AllowedPackage) -> Result<(), String> {
     Ok(())
 }
 
-// ============================================================================
-// State
-// ============================================================================
-
 /// State for the MCPB system
 pub struct McpbState {
     /// Cached registry data
@@ -713,7 +722,6 @@ impl McpbState {
     async fn save_installed_metadata(&self) -> Result<(), String> {
         let path = Self::metadata_path()?;
 
-        // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
@@ -731,27 +739,14 @@ impl McpbState {
     }
 }
 
-// ============================================================================
-// Event Emission Helpers
-// ============================================================================
-
 fn emit_install_progress(app: &AppHandle, progress: &InstallProgress) {
     let _ = app.emit("mcpb:install_progress", progress);
 }
 
-// ============================================================================
-// Registry Data (Embedded)
-// ============================================================================
-
-/// Get the embedded registry data for popular MCP servers.
-///
-/// In the future, this could be replaced or augmented with:
-/// - API call to: GET https://registry.mcpservers.io/api/v1/bundles
-/// - Local cache with TTL
-/// - User-contributed bundles
+/// The bundles listed beside the official MCP Registry, and alone when it
+/// cannot be reached.
 fn get_embedded_registry() -> Vec<McpBundle> {
     vec![
-        // Filesystem - Local file system access
         McpBundle {
             id: "mcp-filesystem".to_string(),
             name: "Filesystem".to_string(),
@@ -870,8 +865,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["files".to_string(), "filesystem".to_string(), "io".to_string(), "storage".to_string()],
@@ -879,8 +872,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Git - Local repository operations
         McpBundle {
             id: "mcp-git".to_string(),
             name: "Git".to_string(),
@@ -1000,8 +991,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["git".to_string(), "version-control".to_string(), "development".to_string(), "diff".to_string(), "commit".to_string()],
@@ -1009,8 +998,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // GitHub
         McpBundle {
             id: "mcp-github".to_string(),
             name: "GitHub".to_string(),
@@ -1111,8 +1098,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["github".to_string(), "git".to_string(), "code".to_string(), "development".to_string(), "version-control".to_string()],
@@ -1120,8 +1105,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Slack
         McpBundle {
             id: "mcp-slack".to_string(),
             name: "Slack".to_string(),
@@ -1220,8 +1203,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["slack".to_string(), "messaging".to_string(), "chat".to_string(), "team".to_string(), "communication".to_string()],
@@ -1229,8 +1210,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // PostgreSQL
         McpBundle {
             id: "mcp-postgres".to_string(),
             name: "PostgreSQL".to_string(),
@@ -1269,8 +1248,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["database".to_string(), "postgresql".to_string(), "sql".to_string(), "data".to_string()],
@@ -1278,8 +1255,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Memory
         McpBundle {
             id: "mcp-memory".to_string(),
             name: "Memory".to_string(),
@@ -1360,8 +1335,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["memory".to_string(), "knowledge-graph".to_string(), "persistence".to_string(), "entities".to_string()],
@@ -1369,8 +1342,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Puppeteer
         McpBundle {
             id: "mcp-puppeteer".to_string(),
             name: "Puppeteer".to_string(),
@@ -1441,8 +1412,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["browser".to_string(), "automation".to_string(), "puppeteer".to_string(), "web".to_string(), "scraping".to_string()],
@@ -1450,8 +1419,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Fetch
         McpBundle {
             id: "mcp-fetch".to_string(),
             name: "Fetch".to_string(),
@@ -1481,8 +1448,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["http".to_string(), "fetch".to_string(), "web".to_string(), "content".to_string()],
@@ -1490,8 +1455,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Sequential Thinking
         McpBundle {
             id: "mcp-sequential-thinking".to_string(),
             name: "Sequential Thinking".to_string(),
@@ -1526,8 +1489,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["reasoning".to_string(), "thinking".to_string(), "problem-solving".to_string(), "chain-of-thought".to_string()],
@@ -1535,8 +1496,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Google Drive
         McpBundle {
             id: "mcp-gdrive".to_string(),
             name: "Google Drive".to_string(),
@@ -1585,8 +1544,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["google".to_string(), "drive".to_string(), "cloud".to_string(), "storage".to_string(), "files".to_string()],
@@ -1594,8 +1551,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Notion
         McpBundle {
             id: "mcp-notion".to_string(),
             name: "Notion".to_string(),
@@ -1649,8 +1604,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: true,
             tags: vec!["notion".to_string(), "productivity".to_string(), "notes".to_string(), "wiki".to_string(), "database".to_string()],
@@ -1658,8 +1611,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Linear
         McpBundle {
             id: "mcp-linear".to_string(),
             name: "Linear".to_string(),
@@ -1713,8 +1664,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["linear".to_string(), "issues".to_string(), "project-management".to_string(), "development".to_string()],
@@ -1722,8 +1671,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Stripe
         McpBundle {
             id: "mcp-stripe".to_string(),
             name: "Stripe".to_string(),
@@ -1774,8 +1721,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["stripe".to_string(), "payments".to_string(), "billing".to_string(), "finance".to_string()],
@@ -1783,8 +1728,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Sentry
         McpBundle {
             id: "mcp-sentry".to_string(),
             name: "Sentry".to_string(),
@@ -1838,8 +1781,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["sentry".to_string(), "errors".to_string(), "monitoring".to_string(), "debugging".to_string()],
@@ -1847,8 +1788,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Cloudflare
         McpBundle {
             id: "mcp-cloudflare".to_string(),
             name: "Cloudflare".to_string(),
@@ -1909,8 +1848,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["cloudflare".to_string(), "workers".to_string(), "kv".to_string(), "r2".to_string(), "d1".to_string(), "edge".to_string()],
@@ -1918,8 +1855,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Desktop Commander
         McpBundle {
             id: "mcp-desktop-commander".to_string(),
             name: "Desktop Commander".to_string(),
@@ -1982,8 +1917,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: true,
             tags: vec!["terminal".to_string(), "process".to_string(), "file-system".to_string(), "code-editing".to_string(), "automation".to_string()],
@@ -1991,8 +1924,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Time
         McpBundle {
             id: "mcp-time".to_string(),
             name: "Time".to_string(),
@@ -2028,8 +1959,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: false,
             tags: vec!["time".to_string(), "timezone".to_string(), "date".to_string(), "utility".to_string()],
@@ -2037,8 +1966,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Apidog - API Specification Integration
         McpBundle {
             id: "mcp-apidog".to_string(),
             name: "Apidog".to_string(),
@@ -2078,8 +2005,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: true,
             tags: vec!["api".to_string(), "openapi".to_string(), "swagger".to_string(), "code-generation".to_string(), "development".to_string()],
@@ -2087,8 +2012,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Figma - Design to Code
         McpBundle {
             id: "mcp-figma".to_string(),
             name: "Figma".to_string(),
@@ -2142,8 +2065,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: true,
             tags: vec!["figma".to_string(), "design".to_string(), "ui".to_string(), "components".to_string(), "prototyping".to_string()],
@@ -2151,8 +2072,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Zapier - Cross-App Automation
         McpBundle {
             id: "mcp-zapier".to_string(),
             name: "Zapier".to_string(),
@@ -2197,8 +2116,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["zapier".to_string(), "automation".to_string(), "workflow".to_string(), "integration".to_string(), "no-code".to_string()],
@@ -2206,8 +2123,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Playwright - Browser automation by Microsoft
         McpBundle {
             id: "mcp-playwright".to_string(),
             name: "Playwright".to_string(),
@@ -2364,8 +2279,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: true,
             featured: true,
             tags: vec!["browser".to_string(), "playwright".to_string(), "testing".to_string(), "automation".to_string(), "microsoft".to_string(), "e2e".to_string()],
@@ -2373,8 +2286,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Vercel - Deployment Management
         McpBundle {
             id: "mcp-vercel".to_string(),
             name: "Vercel".to_string(),
@@ -2498,8 +2409,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                     required: true,
                 },
             ],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["vercel".to_string(), "deployment".to_string(), "hosting".to_string(), "devops".to_string(), "ci-cd".to_string()],
@@ -2507,8 +2416,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // Shadcn UI - Component Library
         McpBundle {
             id: "mcp-shadcn-ui".to_string(),
             name: "Shadcn UI".to_string(),
@@ -2566,8 +2473,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["shadcn".to_string(), "ui".to_string(), "components".to_string(), "design-system".to_string(), "react".to_string()],
@@ -2575,8 +2480,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
             installed_version: None,
             update_available: false,
         },
-
-        // CodeMCP - Pair Programming
         McpBundle {
             id: "mcp-codemcp".to_string(),
             name: "CodeMCP".to_string(),
@@ -2604,8 +2507,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
                 env: HashMap::new(),
             },
             required_credentials: vec![],
-            rating: None,
-            downloads: None,
             verified: false,
             featured: false,
             tags: vec!["coding".to_string(), "pair-programming".to_string(), "refactoring".to_string(), "git".to_string(), "testing".to_string()],
@@ -2615,10 +2516,6 @@ fn get_embedded_registry() -> Vec<McpBundle> {
         },
     ]
 }
-
-// ============================================================================
-// Remote Registry API
-// ============================================================================
 
 /// Fetch servers from the official MCP Registry and adapt its published
 /// server.json contract to the bundle model used by the Desktop client.
@@ -2670,16 +2567,15 @@ async fn fetch_official_registry(search: Option<&str>) -> Result<Vec<McpBundle>,
         .collect())
 }
 
-// ============================================================================
-// Tauri Commands
-// ============================================================================
-
 /// Fetch the bundle registry.
 ///
-/// Merges the official MCP Registry with reviewed embedded entries. If the
+/// Merges the official MCP Registry with the embedded entries. If the
 /// network is unavailable, the embedded directory remains usable.
 #[tauri::command]
-pub async fn mcpb_fetch_registry(state: State<'_, McpbState>) -> Result<Vec<McpBundle>, String> {
+pub async fn mcpb_fetch_registry(
+    state: State<'_, McpbState>,
+    app: AppHandle,
+) -> Result<Vec<McpBundle>, String> {
     tracing::info!("Fetching MCPB registry");
 
     let mut bundles = get_embedded_registry();
@@ -2693,14 +2589,16 @@ pub async fn mcpb_fetch_registry(state: State<'_, McpbState>) -> Result<Vec<McpB
         }
         Err(e) => {
             tracing::warn!(
-                "Failed to fetch the official MCP Registry, using reviewed embedded data: {}",
+                "Failed to fetch the official MCP Registry, using the embedded list: {}",
                 e
             );
         }
     }
 
+    let allowlist = load_packaged_allowlist(&app);
     let installed = state.installed.lock();
     merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
+    apply_allowlist(&mut bundles, &allowlist);
     mark_installed_bundles(&mut bundles, &installed.bundles);
     drop(installed);
 
@@ -2714,6 +2612,7 @@ pub async fn mcpb_fetch_registry(state: State<'_, McpbState>) -> Result<Vec<McpB
 #[tauri::command]
 pub async fn mcpb_search_bundles(
     state: State<'_, McpbState>,
+    app: AppHandle,
     query: String,
     category: Option<String>,
 ) -> Result<Vec<McpBundle>, String> {
@@ -2723,27 +2622,15 @@ pub async fn mcpb_search_bundles(
         category
     );
 
-    let mut bundles = {
-        let cache = state.registry_cache.lock();
-        if cache.is_empty() {
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        }
-    };
-
-    {
-        let installed = state.installed.lock();
-        merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
-    }
-
     let normalized_query = query.trim();
     if !normalized_query.is_empty() {
         match fetch_official_registry(Some(normalized_query)).await {
             Ok(official_matches) => {
-                merge_registry_bundles(&mut bundles, official_matches);
                 let mut cache = state.registry_cache.lock();
-                merge_registry_bundles(&mut cache, bundles.clone());
+                if cache.is_empty() {
+                    *cache = get_embedded_registry();
+                }
+                merge_registry_bundles(&mut cache, official_matches);
             }
             Err(error) => {
                 tracing::warn!(
@@ -2754,23 +2641,17 @@ pub async fn mcpb_search_bundles(
         }
     }
 
-    let installed = state.installed.lock();
-    mark_installed_bundles(&mut bundles, &installed.bundles);
-    drop(installed);
-
     let query_lower = normalized_query.to_lowercase();
 
-    let filtered: Vec<McpBundle> = bundles
+    let filtered: Vec<McpBundle> = catalog(&state, &load_packaged_allowlist(&app))
         .into_iter()
         .filter(|bundle| {
-            // Category filter
             if let Some(ref cat) = category {
                 if !cat.is_empty() && bundle.category != *cat {
                     return false;
                 }
             }
 
-            // Query filter (search name, description, tags)
             if query_lower.is_empty() {
                 return true;
             }
@@ -2797,35 +2678,15 @@ pub async fn mcpb_search_bundles(
 #[tauri::command]
 pub async fn mcpb_get_bundle_details(
     state: State<'_, McpbState>,
+    app: AppHandle,
     bundle_id: String,
 ) -> Result<McpBundle, String> {
     tracing::info!("Getting bundle details: {}", bundle_id);
 
-    let mut bundles = {
-        let cache = state.registry_cache.lock();
-        if cache.is_empty() {
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        }
-    };
-
-    let installed = state.installed.lock();
-    merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
-
-    let mut bundle = bundles
+    catalog(&state, &load_packaged_allowlist(&app))
         .into_iter()
         .find(|b| b.id == bundle_id)
-        .ok_or_else(|| format!("Bundle not found: {}", bundle_id))?;
-
-    // Check installed status
-    if let Some(metadata) = installed.bundles.get(&bundle.id) {
-        bundle.installed = true;
-        bundle.installed_version = Some(metadata.version.clone());
-        bundle.update_available = metadata.version != bundle.version;
-    }
-
-    Ok(bundle)
+        .ok_or_else(|| format!("Bundle not found: {}", bundle_id))
 }
 
 /// Resolves the allow-list shipped alongside the binary. Declared in
@@ -2852,20 +2713,11 @@ pub async fn mcpb_install_bundle(
 ) -> Result<String, String> {
     tracing::info!("Installing bundle: {}", bundle_id);
 
-    // Get bundle info
-    let bundle = {
-        let cache = state.registry_cache.lock();
-        let bundles = if cache.is_empty() {
-            drop(cache);
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        };
-        bundles
-            .into_iter()
-            .find(|b| b.id == bundle_id)
-            .ok_or_else(|| format!("Bundle not found: {}", bundle_id))?
-    };
+    let allowlist = load_packaged_allowlist(&app);
+    let bundle = catalog(&state, &allowlist)
+        .into_iter()
+        .find(|b| b.id == bundle_id)
+        .ok_or_else(|| format!("Bundle not found: {}", bundle_id))?;
 
     let npm_package = bundle
         .npm_package
@@ -2873,11 +2725,10 @@ pub async fn mcpb_install_bundle(
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
     // The spec is refused before npm can fetch the package and run its install
     // scripts, so a typosquatted registry entry never reaches the network.
-    let pin = verified_install_spec(&npm_package, &load_packaged_allowlist(&app))?;
+    let pin = verified_install_spec(&npm_package, &allowlist)?;
     confirm_package_install(&app, &pin).await?;
     let install_spec = pin.install_spec();
 
-    // Phase 1: Downloading/Installing npm package
     emit_install_progress(
         &app,
         &InstallProgress {
@@ -2904,7 +2755,6 @@ pub async fn mcpb_install_bundle(
         },
     );
 
-    // Phase 2: Add to MCP config
     let server_name = bundle_id
         .strip_prefix("mcp-")
         .unwrap_or(&bundle_id)
@@ -2914,12 +2764,11 @@ pub async fn mcpb_install_bundle(
         command: bundle.config_template.command.clone(),
         args: pinned_launch_args(&bundle.config_template.args, &pin),
         env: bundle.config_template.env.clone(),
-        enabled: false,  // Start disabled so user can configure credentials
-        transport: None, // Use default STDIO transport
+        enabled: false, // Start disabled so user can configure credentials
+        transport: None,
         allow_local_network: false,
     };
 
-    // Add to MCP config
     let config_clone = {
         let mut config = mcp_state.config.lock();
         config
@@ -2928,7 +2777,6 @@ pub async fn mcpb_install_bundle(
         config.clone()
     };
 
-    // Save config (outside the lock)
     mcp_state.persist_config_snapshot(&config_clone).await?;
 
     emit_install_progress(
@@ -2941,7 +2789,6 @@ pub async fn mcpb_install_bundle(
         },
     );
 
-    // Phase 3: Save installed metadata
     {
         let mut installed = state.installed.lock();
         let now = std::time::SystemTime::now()
@@ -2953,7 +2800,7 @@ pub async fn mcpb_install_bundle(
             bundle_id.clone(),
             InstalledBundleMetadata {
                 bundle_id: bundle_id.clone(),
-                version: bundle.version.clone(),
+                version: pin.version.clone(),
                 npm_package: bundle.npm_package.clone(),
                 installed_at: now,
                 updated_at: now,
@@ -2981,7 +2828,6 @@ pub async fn mcpb_uninstall_bundle(
 ) -> Result<String, String> {
     tracing::info!("Uninstalling bundle: {}", bundle_id);
 
-    // Get installed metadata
     let metadata = {
         let installed = state.installed.lock();
         installed
@@ -2991,7 +2837,6 @@ pub async fn mcpb_uninstall_bundle(
             .ok_or_else(|| format!("Bundle not installed: {}", bundle_id))?
     };
 
-    // Remove from MCP config
     let (config_clone, orphaned_credential_rows) = {
         let mut config = mcp_state.config.lock();
 
@@ -3006,7 +2851,6 @@ pub async fn mcpb_uninstall_bundle(
         (config.clone(), rows)
     };
 
-    // Save config (outside the lock)
     mcp_state.persist_config_snapshot(&config_clone).await?;
     if let Err(error) = crate::sys::commands::mcp::forget_credential_rows(&orphaned_credential_rows)
     {
@@ -3017,15 +2861,6 @@ pub async fn mcpb_uninstall_bundle(
         );
     }
 
-    // Optionally uninstall npm package (commented out to avoid breaking other uses)
-    // if let Some(ref npm_package) = metadata.npm_package {
-    //     let _ = Command::new("npm")
-    //         .args(["uninstall", "-g", npm_package])
-    //         .output()
-    //         .await;
-    // }
-
-    // Remove from installed metadata
     {
         let mut installed = state.installed.lock();
         installed.bundles.remove(&bundle_id);
@@ -3041,32 +2876,13 @@ pub async fn mcpb_uninstall_bundle(
 #[tauri::command]
 pub async fn mcpb_get_installed_bundles(
     state: State<'_, McpbState>,
+    app: AppHandle,
 ) -> Result<Vec<McpBundle>, String> {
     tracing::info!("Getting installed bundles");
 
-    let installed = state.installed.lock();
-    let mut registry = {
-        let cache = state.registry_cache.lock();
-        if cache.is_empty() {
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        }
-    };
-    merge_installed_bundle_snapshots(&mut registry, &installed.bundles);
-
-    let installed_bundles: Vec<McpBundle> = registry
+    let installed_bundles: Vec<McpBundle> = catalog(&state, &load_packaged_allowlist(&app))
         .into_iter()
-        .filter_map(|mut bundle| {
-            if let Some(metadata) = installed.bundles.get(&bundle.id) {
-                bundle.installed = true;
-                bundle.installed_version = Some(metadata.version.clone());
-                bundle.update_available = metadata.version != bundle.version;
-                Some(bundle)
-            } else {
-                None
-            }
-        })
+        .filter(|bundle| bundle.installed)
         .collect();
 
     tracing::info!("Found {} installed bundles", installed_bundles.len());
@@ -3075,33 +2891,15 @@ pub async fn mcpb_get_installed_bundles(
 
 /// Check for bundle updates.
 #[tauri::command]
-pub async fn mcpb_check_updates(state: State<'_, McpbState>) -> Result<Vec<McpBundle>, String> {
+pub async fn mcpb_check_updates(
+    state: State<'_, McpbState>,
+    app: AppHandle,
+) -> Result<Vec<McpBundle>, String> {
     tracing::info!("Checking for bundle updates");
 
-    let installed = state.installed.lock();
-    let mut registry = {
-        let cache = state.registry_cache.lock();
-        if cache.is_empty() {
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        }
-    };
-    merge_installed_bundle_snapshots(&mut registry, &installed.bundles);
-
-    let updates: Vec<McpBundle> = registry
+    let updates: Vec<McpBundle> = catalog(&state, &load_packaged_allowlist(&app))
         .into_iter()
-        .filter_map(|mut bundle| {
-            if let Some(metadata) = installed.bundles.get(&bundle.id) {
-                if metadata.version != bundle.version {
-                    bundle.installed = true;
-                    bundle.installed_version = Some(metadata.version.clone());
-                    bundle.update_available = true;
-                    return Some(bundle);
-                }
-            }
-            None
-        })
+        .filter(|bundle| bundle.update_available)
         .collect();
 
     tracing::info!("Found {} bundles with updates", updates.len());
@@ -3118,7 +2916,6 @@ pub async fn mcpb_update_bundle(
 ) -> Result<String, String> {
     tracing::info!("Updating bundle: {}", bundle_id);
 
-    // Get current metadata
     let metadata = {
         let installed = state.installed.lock();
         installed
@@ -3128,24 +2925,13 @@ pub async fn mcpb_update_bundle(
             .ok_or_else(|| format!("Bundle not installed: {}", bundle_id))?
     };
 
-    // Get latest bundle info
-    let bundle = {
-        let cache = state.registry_cache.lock();
-        let mut registry = if cache.is_empty() {
-            get_embedded_registry()
-        } else {
-            cache.clone()
-        };
-        if let Some(snapshot) = metadata.bundle.clone() {
-            merge_registry_bundles(&mut registry, vec![snapshot]);
-        }
-        registry
-            .into_iter()
-            .find(|b| b.id == bundle_id)
-            .ok_or_else(|| format!("Bundle not found in registry: {}", bundle_id))?
-    };
+    let allowlist = load_packaged_allowlist(&app);
+    let bundle = catalog(&state, &allowlist)
+        .into_iter()
+        .find(|b| b.id == bundle_id)
+        .ok_or_else(|| format!("Bundle not found in registry: {}", bundle_id))?;
 
-    if metadata.version == bundle.version {
+    if !bundle.update_available {
         return Ok("Bundle is already up to date".to_string());
     }
 
@@ -3153,7 +2939,7 @@ pub async fn mcpb_update_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
-    let pin = verified_install_spec(&npm_package, &load_packaged_allowlist(&app))?;
+    let pin = verified_install_spec(&npm_package, &allowlist)?;
     confirm_package_install(&app, &pin).await?;
 
     emit_install_progress(
@@ -3181,7 +2967,6 @@ pub async fn mcpb_update_bundle(
         },
     );
 
-    // Update MCP config if needed
     let config_clone = {
         let mut config = mcp_state.config.lock();
         if let Some(server_config) = config.mcp_servers.get_mut(&metadata.server_name) {
@@ -3190,14 +2975,12 @@ pub async fn mcpb_update_bundle(
         config.clone()
     };
 
-    // Save config (outside the lock)
     mcp_state.persist_config_snapshot(&config_clone).await?;
 
-    // Update metadata
     {
         let mut installed = state.installed.lock();
         if let Some(meta) = installed.bundles.get_mut(&bundle_id) {
-            meta.version = bundle.version.clone();
+            meta.version = pin.version.clone();
             meta.updated_at = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -3208,10 +2991,10 @@ pub async fn mcpb_update_bundle(
 
     state.save_installed_metadata().await?;
 
-    tracing::info!("Bundle {} updated to version {}", bundle_id, bundle.version);
+    tracing::info!("Bundle {} updated to version {}", bundle_id, pin.version);
     Ok(format!(
         "Bundle '{}' updated to version {}",
-        bundle.name, bundle.version
+        bundle.name, pin.version
     ))
 }
 
@@ -3236,28 +3019,14 @@ pub async fn mcpb_get_categories(state: State<'_, McpbState>) -> Result<Vec<Stri
 
 /// Get featured bundles.
 #[tauri::command]
-pub async fn mcpb_get_featured(state: State<'_, McpbState>) -> Result<Vec<McpBundle>, String> {
-    let cache = state.registry_cache.lock();
-    let mut bundles = if cache.is_empty() {
-        drop(cache);
-        get_embedded_registry()
-    } else {
-        cache.clone()
-    };
-
-    // Mark installed bundles
-    let installed = state.installed.lock();
-    for bundle in &mut bundles {
-        if let Some(metadata) = installed.bundles.get(&bundle.id) {
-            bundle.installed = true;
-            bundle.installed_version = Some(metadata.version.clone());
-            bundle.update_available = metadata.version != bundle.version;
-        }
-    }
-
-    let featured: Vec<McpBundle> = bundles.into_iter().filter(|b| b.featured).collect();
-
-    Ok(featured)
+pub async fn mcpb_get_featured(
+    state: State<'_, McpbState>,
+    app: AppHandle,
+) -> Result<Vec<McpBundle>, String> {
+    Ok(catalog(&state, &load_packaged_allowlist(&app))
+        .into_iter()
+        .filter(|b| b.featured)
+        .collect())
 }
 
 #[cfg(test)]
@@ -3561,6 +3330,51 @@ mod tests {
             .expect("reviewed entry should remain");
         assert_eq!(merged.name, reviewed.name);
         assert!(merged.verified);
+    }
+
+    #[test]
+    fn only_an_allowlisted_package_is_verified_and_offered_at_its_pin() {
+        let package = "@modelcontextprotocol/server-filesystem";
+        let mut bundles = get_embedded_registry();
+        apply_allowlist(&mut bundles, &allowlist_naming(package));
+
+        let pinned = bundles
+            .iter()
+            .find(|bundle| bundle.npm_package.as_deref() == Some(package))
+            .expect("embedded entry for the pinned package");
+        assert!(pinned.verified);
+        assert_eq!(pinned.version, "1.2.3");
+        assert!(bundles
+            .iter()
+            .filter(|bundle| bundle.npm_package.as_deref() != Some(package))
+            .all(|bundle| !bundle.verified));
+
+        apply_allowlist(&mut bundles, &AllowlistState::Absent);
+        assert!(bundles.iter().all(|bundle| !bundle.verified));
+    }
+
+    #[test]
+    fn an_uninstalled_bundle_loses_its_installed_mark() {
+        let mut bundles = get_embedded_registry();
+        let id = bundles[0].id.clone();
+        let metadata = InstalledBundleMetadata {
+            bundle_id: id.clone(),
+            version: "0.0.1".to_string(),
+            npm_package: None,
+            installed_at: 1,
+            updated_at: 1,
+            server_name: "server".to_string(),
+            bundle: None,
+        };
+
+        mark_installed_bundles(&mut bundles, &HashMap::from([(id, metadata)]));
+        assert!(bundles[0].installed);
+        assert!(bundles[0].update_available);
+
+        mark_installed_bundles(&mut bundles, &HashMap::new());
+        assert!(!bundles[0].installed);
+        assert!(bundles[0].installed_version.is_none());
+        assert!(!bundles[0].update_available);
     }
 
     #[test]

@@ -1050,47 +1050,12 @@ const CATASTROPHIC_COMMAND_PATTERNS: &[&str] = &[
     "dd if=/dev/random",
     "> /dev/sda",
     ":(){ :|:& };:",
-    "chmod -R 777 /",
-    "chown -R",
+    "chmod -r 777 /",
+    "chown -r",
     "curl | sh",
     "curl | bash",
-    "wget -O - | sh",
-    "wget -O - | bash",
-];
-
-/// Programs that read an argument as shell text, so an argument vector naming
-/// one is judged as a shell command.
-const SHELL_PROGRAMS: &[&str] = &[
-    "sh",
-    "bash",
-    "zsh",
-    "dash",
-    "ksh",
-    "fish",
-    "csh",
-    "tcsh",
-    "cmd",
-    "powershell",
-    "pwsh",
-];
-
-const MAX_ARGV_COMMAND_LENGTH: usize = 65_536;
-
-/// Programs whose arguments are another command to run.
-const COMMAND_RUNNERS: &[&str] = &[
-    "xargs", "env", "busybox", "nohup", "nice", "timeout", "time", "watch", "sudo", "doas", "su",
-    "parallel", "setsid", "chroot",
-];
-
-/// `find` flags that run a command for each match.
-const FIND_RUN_FLAGS: &[&str] = &["-exec", "-execdir", "-ok", "-okdir"];
-
-/// Commands that only move, copy, remove or inspect the files named in their
-/// arguments. Shell-text patterns such as `mv /` refuse every full path, so
-/// these are judged by the path rule instead.
-const FILE_COMMANDS: &[&str] = &[
-    "mv", "cp", "rm", "ln", "chmod", "chown", "chgrp", "mkdir", "rmdir", "touch", "cat", "ls",
-    "head", "tail", "stat", "du", "wc",
+    "wget -o - | sh",
+    "wget -o - | bash",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -2615,7 +2580,7 @@ impl ToolExecutionGuard {
     /// to 20 calls/min. File/URL/command parameters are still validated by
     /// `validate_mcp_tool_params` during `validate_tool_call`.
     ///
-    /// FIX R-25: Dynamically registered MCP tools default to `requires_approval: true`.
+    /// Dynamically registered MCP tools default to `requires_approval: true`.
     /// MCP tools come from external servers whose behavior is not audited by us.
     /// Requiring user approval by default ensures no MCP tool can perform side-effects
     /// without explicit user consent, following the principle of least privilege.
@@ -3732,7 +3697,7 @@ impl ToolExecutionGuard {
                 }
             }
         } else {
-            // FIX R-22: For non-existent paths (writes), validate the parent directory
+            // For non-existent paths (writes), validate the parent directory
             // to prevent symlink attacks where an attacker creates a symlink after the
             // existence check but before the actual write operation (TOCTOU).
             if let Some(parent) = path_buf.parent() {
@@ -3789,6 +3754,15 @@ impl ToolExecutionGuard {
         Ok(())
     }
 
+    /// A URL as a log may hold it: origin and path. The query, the fragment
+    /// and any user or password in the authority can carry a credential.
+    fn url_for_log(url: &str) -> String {
+        match url::Url::parse(url) {
+            Ok(parsed) => format!("{}{}", parsed.origin().ascii_serialization(), parsed.path()),
+            Err(_) => "<unparseable URL>".to_string(),
+        }
+    }
+
     /// Judge a tool-supplied URL against the one host-authoritative egress
     /// policy (`sys::security::egress_policy`). The same policy governs the
     /// renderer-reachable `api_*` commands, so an LLM tool call and an
@@ -3799,15 +3773,6 @@ impl ToolExecutionGuard {
     /// the DNS rebinding RACE, not the static case: a resolver that answers
     /// public here and private when the connection is made still wins. Closing
     /// that needs connect-time address pinning or a network-level firewall rule.
-    /// A URL as a log may hold it: origin and path. The query, the fragment
-    /// and any user or password in the authority can carry a credential.
-    fn url_for_log(url: &str) -> String {
-        match url::Url::parse(url) {
-            Ok(parsed) => format!("{}{}", parsed.origin().ascii_serialization(), parsed.path()),
-            Err(_) => "<unparseable URL>".to_string(),
-        }
-    }
-
     fn validate_url(&self, url: &str) -> std::result::Result<(), SecurityError> {
         debug!("Validating URL: {}", Self::url_for_log(url));
 
@@ -3860,166 +3825,6 @@ impl ToolExecutionGuard {
             }
         }
 
-        Ok(())
-    }
-
-    /// Judges a command that runs as an argument vector, with no shell between
-    /// the caller and the program. A `;`, `&` or `|` inside an argument is
-    /// then data (a commit message, a query string), so the shell operator
-    /// rules do not apply; the blocklists still do. A vector that names a
-    /// shell anywhere hands its text to that shell after all, so it is judged
-    /// as shell text by the full terminal rule.
-    pub fn validate_argv(
-        &self,
-        program: &str,
-        args: &[String],
-    ) -> std::result::Result<(), SecurityError> {
-        use crate::sys::security::command_validator::matches_dangerous_pattern;
-
-        if program.trim().is_empty() {
-            return Err(SecurityError::InvalidParameter(
-                "Missing program to run".to_string(),
-            ));
-        }
-        let line = std::iter::once(program)
-            .chain(args.iter().map(String::as_str))
-            .collect::<Vec<_>>()
-            .join(" ");
-        if line.contains('\0') {
-            return Err(SecurityError::CommandInjection(
-                "null byte in command".to_string(),
-            ));
-        }
-        if line.len() > MAX_ARGV_COMMAND_LENGTH {
-            return Err(SecurityError::InvalidParameter(format!(
-                "Command is longer than {MAX_ARGV_COMMAND_LENGTH} bytes"
-            )));
-        }
-
-        let words: Vec<&str> = std::iter::once(program)
-            .chain(args.iter().map(String::as_str))
-            .collect();
-        let names: Vec<String> = words.iter().map(|word| Self::program_name(word)).collect();
-
-        if let Some(inline) = Self::inline_code(&names, &words) {
-            warn!("Refused a command that carries its own code: {}", inline);
-            return Err(SecurityError::CommandInjection(format!(
-                "{inline} runs code written on the command line"
-            )));
-        }
-
-        let hands_text_to_a_shell = names
-            .iter()
-            .any(|name| SHELL_PROGRAMS.contains(&name.as_str()));
-        let runs_another_command = names
-            .iter()
-            .any(|name| COMMAND_RUNNERS.contains(&name.as_str()))
-            || (names[0] == "find"
-                && args
-                    .iter()
-                    .any(|arg| FIND_RUN_FLAGS.contains(&arg.as_str())));
-        if hands_text_to_a_shell || runs_another_command {
-            return self.validate_terminal_command(&line);
-        }
-
-        if FILE_COMMANDS.contains(&names[0].as_str()) {
-            return self.validate_file_command_paths(args);
-        }
-
-        if let Some(pattern) = matches_dangerous_pattern(&line) {
-            warn!("Dangerous command pattern detected: {}", pattern);
-            return Err(SecurityError::CommandInjection(pattern.to_string()));
-        }
-        Self::refuse_catastrophic_command(&line)
-    }
-
-    /// A program's name as the lists here spell it: no folder, no `.exe`,
-    /// lower case.
-    fn program_name(word: &str) -> String {
-        let name = word
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or(word)
-            .to_ascii_lowercase();
-        name.strip_suffix(".exe").unwrap_or(&name).to_string()
-    }
-
-    /// The interpreter and flag, when an argument vector carries code for an
-    /// interpreter to run. No rule here can read that code, so it is refused.
-    fn inline_code(names: &[String], words: &[&str]) -> Option<String> {
-        for (index, name) in names.iter().enumerate() {
-            let later = &words[index + 1..];
-            let flags: &[&str] = if name.starts_with("python") || name.starts_with("pypy") {
-                &["-c"]
-            } else {
-                match name.as_str() {
-                    "node" | "nodejs" | "bun" | "deno" => {
-                        &["-e", "--eval", "-p", "--print", "eval"]
-                    }
-                    "perl" => &["-e", "-E"],
-                    "ruby" | "lua" | "osascript" => &["-e"],
-                    "php" => &["-r"],
-                    _ => &[],
-                }
-            };
-            if let Some(flag) = later.iter().find(|arg| flags.contains(arg)) {
-                return Some(format!("{name} {flag}"));
-            }
-            if matches!(name.as_str(), "awk" | "gawk" | "mawk" | "nawk")
-                && later.iter().any(|arg| arg.contains("system("))
-            {
-                return Some(format!("{name} system()"));
-            }
-            if name == "git"
-                && later.iter().any(|arg| {
-                    *arg == "-c"
-                        || arg.starts_with("--config-env")
-                        || arg.starts_with("--upload-pack")
-                        || arg.starts_with("--receive-pack")
-                        || arg.starts_with("--exec")
-                        || (arg.contains("alias.") && arg.contains('!'))
-                })
-            {
-                return Some("git with a command in its configuration".to_string());
-            }
-        }
-        None
-    }
-
-    /// A file command is judged by where its arguments point: every full path
-    /// meets the same path rule as a file tool, and none may be the whole
-    /// disk, the home folder or a folder above it.
-    fn validate_file_command_paths(
-        &self,
-        args: &[String],
-    ) -> std::result::Result<(), SecurityError> {
-        let home = dirs::home_dir();
-        for arg in args.iter().filter(|arg| !arg.starts_with('-')) {
-            if arg.split(['/', '\\']).any(|segment| segment == "..") {
-                return Err(SecurityError::PathTraversal(arg.clone()));
-            }
-            let expanded = match (&home, arg.as_str()) {
-                (Some(home), "~") => home.clone(),
-                (Some(home), path) if path.starts_with("~/") => home.join(&path[2..]),
-                _ => PathBuf::from(arg),
-            };
-            if !expanded.has_root() {
-                continue;
-            }
-            let covers_home = home
-                .as_ref()
-                .is_some_and(|home| home.starts_with(&expanded));
-            if expanded.parent().is_none() || covers_home {
-                return Err(SecurityError::CommandInjection(format!(
-                    "'{arg}' is the whole disk, the home folder or a folder above it"
-                )));
-            }
-            self.validate_path(
-                &expanded.to_string_lossy(),
-                PathUse::Modify,
-                FolderGrants::Enforced,
-            )?;
-        }
         Ok(())
     }
 
@@ -6556,14 +6361,14 @@ impl ToolExecutionGuard {
             );
         }
 
-        // Determine reversibility based on tool type
         let (reversible, undo_description) = match tool_name {
-            "file_write" | "file_create" => {
-                (true, Some("Restore the previous file contents".to_string()))
-            }
+            "file_write" => (true, Some("Restore the previous file contents".to_string())),
             "file_delete" => (
-                true,
-                Some("Restore the deleted file from backup".to_string()),
+                false,
+                Some(
+                    "Undo can restore a deleted text file. Any other file cannot be recovered."
+                        .to_string(),
+                ),
             ),
             "undo_last" | "undo_change" => (
                 false,
@@ -6919,29 +6724,21 @@ mod tests {
     }
 
     #[test]
-    fn test_create_confirmation_request_file_delete_is_reversible() {
+    fn test_create_confirmation_request_file_delete_says_what_cannot_be_recovered() {
         let guard = ToolExecutionGuard::new();
-        let params = json!({"path": "/tmp/test.txt"});
+        let params = json!({"path": "/tmp/test.bin"});
         let request =
             guard.create_confirmation_request("file_delete", &params, Some("Delete a file"));
 
         assert_eq!(request.tool_name, "file_delete");
         assert!(
-            request.reversible,
-            "file_delete should be marked as reversible"
+            !request.reversible,
+            "undo keeps only a text copy, so a deletion is not promised to be reversible"
         );
-        assert!(
-            request.undo_description.is_some(),
-            "file_delete should have an undo_description"
-        );
-        assert!(
-            request
-                .undo_description
-                .as_ref()
-                .unwrap()
-                .contains("Restore"),
-            "undo_description should mention restoring"
-        );
+        assert!(request
+            .undo_description
+            .as_deref()
+            .is_some_and(|description| description.contains("cannot be recovered")));
         assert_eq!(request.risk_level, RiskLevel::High);
         assert_eq!(request.safety_tier, ToolSafetyTier::RequiresConfirmation);
     }
@@ -8945,114 +8742,6 @@ mod tests {
                 .validate_after_folder_consent("file_read", &json!({ "path": file }))
                 .await
                 .expect("the second pass charges no rate limit");
-        }
-    }
-
-    #[test]
-    fn an_argument_vector_is_judged_as_arguments_and_a_shell_as_a_shell() {
-        let guard = ToolExecutionGuard::new();
-        fn args(words: &[&str]) -> Vec<String> {
-            words.iter().map(|word| word.to_string()).collect()
-        }
-
-        guard
-            .validate_argv("git", &args(&["commit", "-m", "a; b"]))
-            .expect("a semicolon in a commit message is text");
-        guard
-            .validate_argv("curl", &args(&["https://x.example/?a=1&b=2"]))
-            .expect("an ampersand in a query string is text");
-
-        for (program, words) in [
-            ("sh", vec!["-c", "id; whoami"]),
-            ("/bin/bash", vec!["-c", "true && curl x.example"]),
-            ("env", vec!["FOO=1", "zsh", "-c", "a; b"]),
-            ("cmd.exe", vec!["/C", "dir & calc"]),
-            ("rm", vec!["-rf", "/"]),
-            ("", vec![]),
-        ] {
-            assert!(
-                guard.validate_argv(program, &args(&words)).is_err(),
-                "{program} {words:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn an_argument_vector_that_carries_code_or_runs_another_command_is_not_plain() {
-        let guard = ToolExecutionGuard::new();
-        fn args(words: &[&str]) -> Vec<String> {
-            words.iter().map(|word| word.to_string()).collect()
-        }
-
-        for (program, words) in [
-            ("python3", vec!["-I", "-c", "print(1)"]),
-            ("/usr/bin/python3.12", vec!["-c", "print(1)"]),
-            ("osascript", vec!["-e", "display dialog 1"]),
-            ("node", vec!["--eval", "1"]),
-            ("env", vec!["FOO=1", "perl", "-e", "1"]),
-            ("awk", vec!["BEGIN { system(1) }"]),
-            ("git", vec!["-c", "alias.x=!id", "x"]),
-        ] {
-            assert!(
-                matches!(
-                    guard.validate_argv(program, &args(&words)),
-                    Err(SecurityError::CommandInjection(_))
-                ),
-                "{program} {words:?}"
-            );
-        }
-
-        for (program, words) in [
-            ("find", vec![".", "-name", "x", "-exec", "rm", "{}", ";"]),
-            ("xargs", vec!["sh", "-c", "a; b"]),
-            ("busybox", vec!["sh", "-c", "a && b"]),
-        ] {
-            assert!(
-                guard.validate_argv(program, &args(&words)).is_err(),
-                "{program} {words:?} is judged as shell text"
-            );
-        }
-        guard
-            .validate_argv("env", &args(&["FOO=1", "git", "status"]))
-            .expect("a wrapper around a harmless command passes the shell rule");
-        guard
-            .validate_argv("find", &args(&[".", "-name", "notes.txt"]))
-            .expect("find with no command to run is a plain command");
-    }
-
-    #[test]
-    fn a_file_command_is_judged_by_where_its_paths_point() {
-        let guard = ToolExecutionGuard::new();
-        let Some(home) = dirs::home_dir() else {
-            return;
-        };
-        let in_home = |name: &str| home.join(name).to_string_lossy().into_owned();
-
-        guard
-            .validate_argv("mv", &[in_home("a.txt"), in_home("b.txt")])
-            .expect("moving a file inside the home folder is an ordinary command");
-        guard
-            .validate_argv("rm", &["-rf".to_string(), in_home("project/tmp")])
-            .expect("removing a folder inside the home folder is an ordinary command");
-        guard
-            .validate_argv("rm", &["notes.txt".to_string()])
-            .expect("a bare file name is left to the folder the command runs in");
-
-        for (program, words) in [
-            ("mv", vec!["/etc/hosts".to_string(), in_home("hosts")]),
-            ("rm", vec!["-rf".to_string(), "/".to_string()]),
-            ("rm", vec!["-rf".to_string(), "~/".to_string()]),
-            ("rm", vec!["-rf".to_string(), "~".to_string()]),
-            (
-                "chmod",
-                vec!["777".to_string(), home.to_string_lossy().into_owned()],
-            ),
-            ("cp", vec![in_home("a"), "../../outside".to_string()]),
-        ] {
-            assert!(
-                guard.validate_argv(program, &words).is_err(),
-                "{program} {words:?}"
-            );
         }
     }
 
