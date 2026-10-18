@@ -3,10 +3,9 @@
  *
  * Moonshot AI (Kimi) provider adapter implementing `ProviderAdapter` from
  * `@agiworkforce/types`. Moonshot ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.moonshot.ai/v1`. The compat layer registers this
- * as `endpointClass: 'moonshot-native'` (see provider-attribution.ts +
- * openai-responses-payload-policy.ts's `MOONSHOT_NATIVE_BASE_URLS`), which
- * enables native streaming-usage compat (`stream_options.include_usage`).
+ * endpoint at `https://api.moonshot.ai/v1`. The registry's provider-hosts.json
+ * classifies it as `endpointClass: 'moonshot-native'`, which enables native
+ * streaming-usage compat (`stream_options.include_usage`).
  *
  * Moonshot reports cache-read tokens on a flat `usage.cached_tokens` field
  * instead of OpenAI's nested `usage.prompt_tokens_details.cached_tokens`.

@@ -14,9 +14,8 @@
  *   dashscope-intl.aliyuncs.com -> 200
  *   dashscope.aliyuncs.com      -> 401 Incorrect API key provided
  *
- * Both compatible-mode URLs are registered in
- * `openai-responses-payload-policy.ts`'s MODELSTUDIO_NATIVE_BASE_URLS, so the
- * `modelstudio-native` endpoint class and its streaming-usage compat hold for
+ * Both compatible-mode URLs are registered in the model registry's
+ * provider-hosts.json, so the `modelstudio-native` endpoint class and its streaming-usage compat hold for
  * either region.
  */
 export const QWEN_DEFAULT_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';

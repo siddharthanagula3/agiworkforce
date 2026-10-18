@@ -1,7 +1,7 @@
 /**
  * @agiworkforce/routing
  *
- * Shared heuristic classifier, Indic-script detector, and pricing/promo helpers
+ * Shared heuristic classifier, Indic-script detector, and pricing helpers
  * for the AGI Workforce auto-routing system. Pure-TypeScript, zero side effects,
  * zero shared module state, safe to call from any surface (web, desktop,
  * mobile, extensions).
@@ -15,11 +15,8 @@
  *   - `applyConversationContext(local, ctx)`, 5-turn sticky pivot.
  *   - `estimateTokens(text, model?)`, provider-specific tokenizer estimates.
  *   - `detectIndicScript(text, threshold?)`, Pool C language gate.
- *   - `isDeprecated(modelId, now?)` / `isPromoExpired(modelId, now?)`, guards.
- *   - `effectiveInputPrice(modelId, now?)` / `effectiveOutputPrice(modelId, now?)`
- *, pricing that auto-switches to `post_promo_prices` past `promo_expires_at`.
- *   - `tokenizerDriftFactor(modelId)` / `ESTIMATE_INFLATION`, tokenizer-drift
- *     inflation for cost/latency re-baselining.
+ *   - `tokenizerDriftFactor(modelId)`, tokenizer-drift inflation for
+ *     cost/latency re-baselining.
  *   - `classifyTaskFamily(signals)`, deterministic structural task-family fast
  *     path; returns `family: null` when it declines, and the caller must then
  *     run the existing Auto policy unchanged.
@@ -273,14 +270,7 @@ export {
   type IndicDetectionResult,
   type IndicScript,
 } from './indic';
-export {
-  effectiveInputPrice,
-  effectiveOutputPrice,
-  ESTIMATE_INFLATION,
-  isDeprecated,
-  isPromoExpired,
-  tokenizerDriftFactor,
-} from './pricing';
+export { tokenizerDriftFactor } from './pricing';
 export {
   canonicalProvider,
   evaluateModelAccess,

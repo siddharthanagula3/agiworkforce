@@ -44,7 +44,7 @@ import {
 
 const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 
-const OPENROUTER_DEFAULT_SITE_URL = 'https://agiworkforce.app';
+const OPENROUTER_DEFAULT_SITE_URL = 'https://agiworkforce.com';
 const OPENROUTER_DEFAULT_APP_TITLE = 'AGI Workforce';
 
 const OPENROUTER_ALLOWED_BASE_HOSTS: readonly string[] = [

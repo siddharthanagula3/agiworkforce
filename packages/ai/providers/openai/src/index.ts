@@ -51,15 +51,6 @@ import {
 import type { OpenAIChatCompletionChunk } from './types';
 import type { ResponsesCreateParams, ResponsesStreamEvent } from './responses-types';
 
-export {
-  buildOpenAIContainerGeneratedFileBundles,
-  extractOpenAIContainerFileCitations,
-  type BuildOpenAIContainerGeneratedFilesInput,
-  type OpenAIContainerFileCitation,
-  type OpenAIContainerFileMaterialization,
-  type OpenAIContainerGeneratedFileBundle,
-} from './generated-files';
-
 const OPENAI_AUTH_METHODS: readonly AuthMethod[] = [
   {
     kind: 'api-key',

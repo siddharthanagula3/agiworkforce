@@ -2,16 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import realCatalog from '@agiworkforce/types/models.json';
 
-import {
-  effectiveInputPrice,
-  effectiveModelPricing,
-  effectiveOutputPrice,
-  ESTIMATE_INFLATION,
-  isDeprecated,
-  isPromoExpired,
-  tokenizerDriftFactor,
-  type Catalog,
-} from '../pricing';
+import { effectiveModelPricing, tokenizerDriftFactor, type Catalog } from '../pricing';
 
 const FIXTURE: Catalog = {
   models: {
@@ -72,50 +63,15 @@ const FIXTURE: Catalog = {
   },
 };
 
-const BEFORE = new Date('2026-05-30T00:00:00Z');
 const AFTER = new Date('2026-06-10T00:00:00Z');
-const AFTER_SUNSET = new Date('2026-06-20T00:00:00Z');
 
-describe('tokenizerDriftFactor + ESTIMATE_INFLATION (logic)', () => {
+describe('tokenizerDriftFactor (logic)', () => {
   it('returns 1 + drift factor for drifted models', () => {
     expect(tokenizerDriftFactor('fx-drift', FIXTURE)).toBeCloseTo(1.35, 5);
-    expect(ESTIMATE_INFLATION.conservative('fx-drift', FIXTURE)).toBeCloseTo(1.35, 5);
   });
   it('returns 1.0 for models without a drift factor and for unknown ids', () => {
     expect(tokenizerDriftFactor('fx-flat', FIXTURE)).toBe(1.0);
     expect(tokenizerDriftFactor('does-not-exist', FIXTURE)).toBe(1.0);
-  });
-});
-
-describe('isDeprecated (logic)', () => {
-  it('returns false for models with no deprecation date', () => {
-    expect(isDeprecated('fx-flat', AFTER_SUNSET, FIXTURE)).toBe(false);
-  });
-  it('treats unknown ids as deprecated (fail-safe against ghost ids)', () => {
-    expect(isDeprecated('does-not-exist', BEFORE, FIXTURE)).toBe(true);
-  });
-  it('flips to true once past a model deprecation_date', () => {
-    expect(isDeprecated('fx-sunset', BEFORE, FIXTURE)).toBe(false);
-    expect(isDeprecated('fx-sunset', AFTER_SUNSET, FIXTURE)).toBe(true);
-  });
-});
-
-describe('isPromoExpired + effective prices (logic)', () => {
-  it('promo active before the cutoff, expired at/after it', () => {
-    expect(isPromoExpired('fx-promo', BEFORE, FIXTURE)).toBe(false);
-    expect(isPromoExpired('fx-promo', AFTER, FIXTURE)).toBe(true);
-    expect(isPromoExpired('fx-flat', AFTER, FIXTURE)).toBe(false);
-  });
-  it('effective prices switch to post_promo_prices once the promo expires', () => {
-    expect(effectiveInputPrice('fx-promo', BEFORE, FIXTURE)).toBe(0.5);
-    expect(effectiveOutputPrice('fx-promo', BEFORE, FIXTURE)).toBe(1);
-    expect(effectiveInputPrice('fx-promo', AFTER, FIXTURE)).toBe(2);
-    expect(effectiveOutputPrice('fx-promo', AFTER, FIXTURE)).toBe(4);
-  });
-  it('non-promo models return their flat price; unknown ids return 0', () => {
-    expect(effectiveInputPrice('fx-flat', AFTER, FIXTURE)).toBe(3);
-    expect(effectiveOutputPrice('fx-flat', AFTER, FIXTURE)).toBe(15);
-    expect(effectiveInputPrice('does-not-exist', AFTER, FIXTURE)).toBe(0);
   });
 });
 
@@ -218,10 +174,6 @@ describe('real catalog invariants', () => {
 
   it('exported helpers run against the real catalog without throwing and return finite numbers', () => {
     const [sampleId] = realEntries[0];
-    expect(typeof isDeprecated(sampleId)).toBe('boolean');
-    expect(typeof isPromoExpired(sampleId)).toBe('boolean');
-    expect(Number.isFinite(effectiveInputPrice(sampleId))).toBe(true);
-    expect(Number.isFinite(effectiveOutputPrice(sampleId))).toBe(true);
     expect(Number.isFinite(tokenizerDriftFactor(sampleId))).toBe(true);
   });
 });
