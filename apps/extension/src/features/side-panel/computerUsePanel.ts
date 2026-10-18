@@ -596,6 +596,41 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-auth-chip.unauthed .sp-cu-auth-dot {
     background: var(--agi-ext-warning);
   }
+
+  .sp-browser-turn {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0;
+  }
+  .sp-browser-turn:empty { display: none; }
+  .sp-browser-turn .sp-cu-approval { margin: 0; }
+  .sp-browser-turn .sp-cu-screenshot {
+    width: 100%;
+    max-width: 320px;
+    margin: 0;
+  }
+  .sp-browser-turn__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--agi-ext-text-muted);
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
+  }
+  .sp-browser-turn__bar[hidden] { display: none; }
+  .sp-browser-turn__notice { flex: 1 1 160px; min-width: 0; color: var(--agi-ext-text); }
+  .sp-browser-turn__notice:empty { display: none; }
+  .sp-browser-turn__error { color: var(--agi-ext-danger-text); }
+  .sp-browser-turn__error:empty { display: none; }
+  .sp-browser-grant__body { color: var(--agi-ext-text-muted); }
+  @media (pointer: coarse) {
+    .sp-browser-turn .sp-cu-takeover-btn,
+    .sp-browser-grant .sp-agent-approval__button {
+      min-height: 44px;
+    }
+  }
 `;
 
 const TOOL_ICONS: Record<string, string> = {
@@ -719,6 +754,215 @@ export type ComputerUseTaskSite =
   { kind: 'none' | 'restricted' } | { kind: 'ready' | 'needs-approval'; origin: string };
 
 export type ComputerUseApprovalDecision = 'allow' | 'allow-for-task' | 'skip';
+
+export interface BrowserApprovalCardOptions {
+  toolName: string;
+  description: string;
+  canAllowForTask: boolean;
+  upload?: { binding: BrowserUploadBinding; assertCurrent: () => void | Promise<void> };
+  isCurrent: (binding: BrowserUploadBinding) => boolean;
+  onSettled?: (restoreFocus: boolean) => void;
+  resolve: (decision: ComputerUseApprovalDecision, upload?: BrowserUploadedFileMetadata[]) => void;
+}
+
+export interface BrowserApprovalCard {
+  element: HTMLElement;
+  dismiss: () => void;
+  focus: () => void;
+}
+
+let approvalCardSequence = 0;
+
+export function buildBrowserApprovalCard(options: BrowserApprovalCardOptions): BrowserApprovalCard {
+  const { toolName, description, canAllowForTask, resolve, upload } = options;
+  const approvalId = ++approvalCardSequence;
+  const card = document.createElement('div');
+  card.className = 'sp-cu-approval';
+  card.setAttribute('role', 'alertdialog');
+  card.setAttribute('aria-labelledby', `sp-cu-approval-title-${approvalId}`);
+  card.setAttribute('aria-describedby', `sp-cu-approval-desc-${approvalId}`);
+
+  const cardTitle = document.createElement('div');
+  cardTitle.className = 'sp-cu-approval-title';
+  cardTitle.id = `sp-cu-approval-title-${approvalId}`;
+  cardTitle.textContent = `Approve action: ${toolName}`;
+
+  const cardDesc = document.createElement('div');
+  cardDesc.className = 'sp-cu-approval-desc';
+  cardDesc.id = `sp-cu-approval-desc-${approvalId}`;
+  cardDesc.textContent = description;
+
+  const btns = document.createElement('div');
+  btns.className = 'sp-cu-approval-btns';
+
+  const allowBtn = document.createElement('button');
+  allowBtn.className = 'sp-cu-approval-allow';
+  allowBtn.textContent = 'Allow';
+
+  const allowForTaskBtn = document.createElement('button');
+  allowForTaskBtn.className = 'sp-cu-approval-task';
+  allowForTaskBtn.textContent = 'Allow for this task';
+  allowForTaskBtn.title = `Allow ${toolName} without asking again until this task ends.`;
+
+  const denyBtn = document.createElement('button');
+  denyBtn.className = 'sp-cu-approval-deny';
+  denyBtn.textContent = 'Skip';
+
+  let settled = false;
+  let inspecting = false;
+  let inspectionStarted = false;
+  let selectedFiles: File[] = [];
+  const uploadController = new AbortController();
+  const fileInput = upload ? document.createElement('input') : null;
+  const filePreview = upload ? document.createElement('div') : null;
+  if (upload && fileInput && filePreview) {
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.className = 'sp-cu-upload-picker';
+    fileInput.setAttribute('aria-label', 'Choose files to upload');
+    filePreview.className = 'sp-cu-approval-desc';
+    filePreview.setAttribute('aria-live', 'polite');
+    cardTitle.textContent = 'Approve file upload';
+    cardDesc.textContent = `${description}\n\nAllow sends the selected files to AGI Cloud for inspection, then sends their approved contents to ${new URL(upload.binding.tabUrl).origin}. Choosing files sends nothing.`;
+    allowBtn.disabled = true;
+    fileInput.addEventListener('change', () => {
+      selectedFiles = Array.from(fileInput.files ?? []);
+      filePreview.textContent = selectedFiles
+        .map((file) => `${file.name} · ${new Intl.NumberFormat().format(file.size)} bytes`)
+        .join('\n');
+      allowBtn.disabled = selectedFiles.length === 0 || inspecting || settled;
+    });
+  }
+  const expiry = setTimeout(() => {
+    if (settled) return;
+    const shouldRestoreFocus = card.contains(document.activeElement);
+    settled = true;
+    options.onSettled?.(false);
+    uploadController.abort();
+    selectedFiles = [];
+    if (fileInput) {
+      fileInput.disabled = true;
+      fileInput.value = '';
+    }
+    clearTimeout(expiry);
+    card.classList.add('expired');
+    card.setAttribute('role', 'status');
+    allowBtn.disabled = true;
+    allowForTaskBtn.disabled = true;
+    denyBtn.disabled = true;
+    cardTitle.textContent = `Skipped (no response): ${toolName}`;
+    cardDesc.textContent = upload
+      ? `This approval expired. No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`
+      : 'This action timed out after 30 seconds and was skipped automatically.';
+    if (shouldRestoreFocus) {
+      card.tabIndex = -1;
+      card.focus();
+    }
+    resolve('skip');
+  }, APPROVAL_TIMEOUT_MS);
+
+  function cleanup(
+    decision: ComputerUseApprovalDecision,
+    metadata?: BrowserUploadedFileMetadata[],
+  ): void {
+    if (settled) return;
+    const shouldRestoreFocus = card.contains(document.activeElement);
+    settled = true;
+    uploadController.abort();
+    selectedFiles = [];
+    if (fileInput) fileInput.value = '';
+    clearTimeout(expiry);
+    if (upload && decision === 'skip' && inspectionStarted) {
+      card.classList.add('expired');
+      card.setAttribute('role', 'status');
+      cardTitle.textContent = 'File upload skipped';
+      cardDesc.textContent =
+        'No file was sent to the website. Files may already have reached AGI Cloud for inspection.';
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      if (fileInput) fileInput.disabled = true;
+      if (shouldRestoreFocus) {
+        card.tabIndex = -1;
+        card.focus();
+      }
+    } else {
+      card.remove();
+    }
+    options.onSettled?.(shouldRestoreFocus && !card.isConnected);
+    resolve(decision, metadata);
+  }
+  const dismiss = (): void => cleanup('skip');
+
+  allowBtn.addEventListener('click', () => {
+    if (!upload) {
+      cleanup('allow');
+      return;
+    }
+    if (settled || inspecting || selectedFiles.length === 0) return;
+    inspecting = true;
+    allowBtn.disabled = true;
+    if (fileInput) fileInput.disabled = true;
+    cardDesc.textContent =
+      'Inspecting your approved files with AGI Cloud. They have not been sent to the website yet.';
+    void (async () => {
+      try {
+        const assertCurrent = async (): Promise<void> => {
+          if (settled || uploadController.signal.aborted || !options.isCurrent(upload.binding))
+            throw new Error('The file upload approval is no longer current.');
+          await upload.assertCurrent();
+          if (settled || uploadController.signal.aborted)
+            throw new Error('The file upload approval is no longer current.');
+        };
+        await assertCurrent();
+        inspectionStarted = true;
+        const metadata = await uploadSelectedUserFiles(selectedFiles, upload.binding, {
+          signal: uploadController.signal,
+          assertCurrent,
+        });
+        await assertCurrent();
+        cleanup('allow', metadata);
+      } catch (error) {
+        if (settled) return;
+        inspecting = false;
+        allowBtn.disabled = true;
+        if (fileInput) fileInput.disabled = true;
+        card.classList.add('expired');
+        cardTitle.textContent = 'File upload skipped';
+        cardDesc.textContent = `${error instanceof Error ? error.message : 'File inspection failed.'} No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`;
+        settled = true;
+        options.onSettled?.(false);
+        clearTimeout(expiry);
+        uploadController.abort();
+        selectedFiles = [];
+        if (fileInput) fileInput.value = '';
+        denyBtn.disabled = true;
+        card.setAttribute('role', 'status');
+        resolve('skip');
+      }
+    })();
+  });
+  denyBtn.addEventListener('click', () => cleanup('skip'));
+  allowForTaskBtn.addEventListener('click', () => {
+    if (!upload) cleanup('allow-for-task');
+  });
+
+  btns.appendChild(allowBtn);
+  if (canAllowForTask && !upload) btns.appendChild(allowForTaskBtn);
+  btns.appendChild(denyBtn);
+  card.appendChild(cardTitle);
+  card.appendChild(cardDesc);
+  if (fileInput && filePreview) {
+    card.appendChild(fileInput);
+    card.appendChild(filePreview);
+  }
+  card.appendChild(btns);
+
+  return {
+    element: card,
+    dismiss,
+    focus: () => (fileInput ?? allowBtn).focus(),
+  };
+}
 
 export interface ComputerUsePanelAPI {
   panelEl: HTMLElement;
@@ -1549,8 +1793,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     return askCheckbox.checked;
   }
 
-  let approvalCardSequence = 0;
-
   function showApprovalCard(
     toolName: string,
     description: string,
@@ -1569,199 +1811,23 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       resolve('skip');
       return;
     }
-    const approvalId = ++approvalCardSequence;
-    const card = document.createElement('div');
-    card.className = 'sp-cu-approval';
-    card.setAttribute('role', 'alertdialog');
-    card.setAttribute('aria-labelledby', `sp-cu-approval-title-${approvalId}`);
-    card.setAttribute('aria-describedby', `sp-cu-approval-desc-${approvalId}`);
-
-    const cardTitle = document.createElement('div');
-    cardTitle.className = 'sp-cu-approval-title';
-    cardTitle.id = `sp-cu-approval-title-${approvalId}`;
-    cardTitle.textContent = `Approve action: ${toolName}`;
-
-    const cardDesc = document.createElement('div');
-    cardDesc.className = 'sp-cu-approval-desc';
-    cardDesc.id = `sp-cu-approval-desc-${approvalId}`;
-    cardDesc.textContent = description;
-
-    const btns = document.createElement('div');
-    btns.className = 'sp-cu-approval-btns';
-
-    const allowBtn = document.createElement('button');
-    allowBtn.className = 'sp-cu-approval-allow';
-    allowBtn.textContent = 'Allow';
-
-    const allowForTaskBtn = document.createElement('button');
-    allowForTaskBtn.className = 'sp-cu-approval-task';
-    allowForTaskBtn.textContent = 'Allow for this task';
-    allowForTaskBtn.title = `Allow ${toolName} without asking again until this task ends.`;
-
-    const denyBtn = document.createElement('button');
-    denyBtn.className = 'sp-cu-approval-deny';
-    denyBtn.textContent = 'Skip';
-
-    let settled = false;
-    let inspecting = false;
-    let inspectionStarted = false;
-    let selectedFiles: File[] = [];
-    const uploadController = new AbortController();
-    const fileInput = upload ? document.createElement('input') : null;
-    const filePreview = upload ? document.createElement('div') : null;
-    if (upload && fileInput && filePreview) {
-      fileInput.type = 'file';
-      fileInput.multiple = true;
-      fileInput.className = 'sp-cu-upload-picker';
-      fileInput.setAttribute('aria-label', 'Choose files to upload');
-      filePreview.className = 'sp-cu-approval-desc';
-      filePreview.setAttribute('aria-live', 'polite');
-      cardTitle.textContent = 'Approve file upload';
-      cardDesc.textContent = `${description}\n\nAllow sends the selected files to AGI Cloud for inspection, then sends their approved contents to ${new URL(upload.binding.tabUrl).origin}. Choosing files sends nothing.`;
-      allowBtn.disabled = true;
-      fileInput.addEventListener('change', () => {
-        selectedFiles = Array.from(fileInput.files ?? []);
-        filePreview.textContent = selectedFiles
-          .map((file) => `${file.name} · ${new Intl.NumberFormat().format(file.size)} bytes`)
-          .join('\n');
-        allowBtn.disabled = selectedFiles.length === 0 || inspecting || settled;
-      });
-    }
-    const expiry = setTimeout(() => {
-      if (settled) return;
-      const shouldRestoreFocus = card.contains(document.activeElement);
-      settled = true;
-      pendingApprovals.delete(dismiss);
-      uploadController.abort();
-      selectedFiles = [];
-      if (fileInput) {
-        fileInput.disabled = true;
-        fileInput.value = '';
-      }
-      clearTimeout(expiry);
-      card.classList.add('expired');
-      card.setAttribute('role', 'status');
-      allowBtn.disabled = true;
-      allowForTaskBtn.disabled = true;
-      denyBtn.disabled = true;
-      cardTitle.textContent = `Skipped (no response): ${toolName}`;
-      cardDesc.textContent = upload
-        ? `This approval expired. No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`
-        : 'This action timed out after 30 seconds and was skipped automatically.';
-      if (shouldRestoreFocus) {
-        card.tabIndex = -1;
-        card.focus();
-      }
-      resolve('skip');
-    }, APPROVAL_TIMEOUT_MS);
-
-    function cleanup(
-      decision: ComputerUseApprovalDecision,
-      metadata?: BrowserUploadedFileMetadata[],
-    ): void {
-      if (settled) return;
-      const shouldRestoreFocus = card.contains(document.activeElement);
-      settled = true;
-      pendingApprovals.delete(dismiss);
-      uploadController.abort();
-      selectedFiles = [];
-      if (fileInput) fileInput.value = '';
-      clearTimeout(expiry);
-      if (upload && decision === 'skip' && inspectionStarted) {
-        card.classList.add('expired');
-        card.setAttribute('role', 'status');
-        cardTitle.textContent = 'File upload skipped';
-        cardDesc.textContent =
-          'No file was sent to the website. Files may already have reached AGI Cloud for inspection.';
-        allowBtn.disabled = true;
-        denyBtn.disabled = true;
-        if (fileInput) fileInput.disabled = true;
-        if (shouldRestoreFocus) {
-          card.tabIndex = -1;
-          card.focus();
-        }
-      } else {
-        card.remove();
-        if (shouldRestoreFocus) stopBtn.focus();
-      }
-      resolve(decision, metadata);
-    }
-    const dismiss = (): void => cleanup('skip');
-    pendingApprovals.add(dismiss);
-
-    allowBtn.addEventListener('click', () => {
-      if (!upload) {
-        cleanup('allow');
-        return;
-      }
-      if (settled || inspecting || selectedFiles.length === 0) return;
-      inspecting = true;
-      allowBtn.disabled = true;
-      if (fileInput) fileInput.disabled = true;
-      cardDesc.textContent =
-        'Inspecting your approved files with AGI Cloud. They have not been sent to the website yet.';
-      void (async () => {
-        try {
-          const assertCurrent = async (): Promise<void> => {
-            if (
-              settled ||
-              uploadController.signal.aborted ||
-              activeRunId !== upload.binding.runId ||
-              activeRunGeneration !== upload.binding.runGeneration
-            )
-              throw new Error('The file upload approval is no longer current.');
-            await upload.assertCurrent();
-            if (settled || uploadController.signal.aborted)
-              throw new Error('The file upload approval is no longer current.');
-          };
-          await assertCurrent();
-          inspectionStarted = true;
-          const metadata = await uploadSelectedUserFiles(selectedFiles, upload.binding, {
-            signal: uploadController.signal,
-            assertCurrent,
-          });
-          await assertCurrent();
-          cleanup('allow', metadata);
-        } catch (error) {
-          if (settled) return;
-          inspecting = false;
-          allowBtn.disabled = true;
-          if (fileInput) fileInput.disabled = true;
-          card.classList.add('expired');
-          cardTitle.textContent = 'File upload skipped';
-          cardDesc.textContent = `${error instanceof Error ? error.message : 'File inspection failed.'} No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`;
-          settled = true;
-          pendingApprovals.delete(dismiss);
-          clearTimeout(expiry);
-          uploadController.abort();
-          selectedFiles = [];
-          if (fileInput) fileInput.value = '';
-          denyBtn.disabled = true;
-          card.setAttribute('role', 'status');
-          resolve('skip');
-        }
-      })();
+    const card = buildBrowserApprovalCard({
+      toolName,
+      description,
+      canAllowForTask,
+      ...(upload ? { upload } : {}),
+      isCurrent: (binding) =>
+        activeRunId === binding.runId && activeRunGeneration === binding.runGeneration,
+      onSettled: (restoreFocus) => {
+        pendingApprovals.delete(card.dismiss);
+        if (restoreFocus) stopBtn.focus();
+      },
+      resolve,
     });
-    denyBtn.addEventListener('click', () => cleanup('skip'));
-    allowForTaskBtn.addEventListener('click', () => {
-      if (!upload) cleanup('allow-for-task');
-    });
-
-    btns.appendChild(allowBtn);
-    if (canAllowForTask && !upload) btns.appendChild(allowForTaskBtn);
-    btns.appendChild(denyBtn);
-    card.appendChild(cardTitle);
-    card.appendChild(cardDesc);
-    if (fileInput && filePreview) {
-      card.appendChild(fileInput);
-      card.appendChild(filePreview);
-    }
-    card.appendChild(btns);
-
-    logEl.insertBefore(card, logEl.firstChild);
+    pendingApprovals.add(card.dismiss);
+    logEl.insertBefore(card.element, logEl.firstChild);
     logEl.scrollTop = 0;
-    if (fileInput) fileInput.focus();
-    else allowBtn.focus();
+    card.focus();
   }
 
   function onRunAutofill(handler: () => void): void {

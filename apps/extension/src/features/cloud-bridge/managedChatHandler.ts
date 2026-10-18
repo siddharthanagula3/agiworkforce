@@ -50,6 +50,7 @@ import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits'
 import { normalizeAnsweredModel } from './answeredModel';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
+import { MAX_CHAT_TOOL_RESULT_CHARS } from '../computer-use/chatBrowserTools';
 import type { ToolCall } from '../computer-use/toolHandoff';
 
 const MAX_MESSAGE_CHARS = 32_000;
@@ -58,7 +59,6 @@ const MAX_SYSTEM_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
 export const MAX_MANAGED_TOOL_LEGS = 10;
-const MAX_TOOL_RESULT_CHARS = 64_000;
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -749,7 +749,10 @@ export async function executeChromeManagedChat(
     signal: request.signal,
   };
   let latestTaskState: AgentTaskState | undefined;
-  let tools = request.tools ?? [];
+  let tools =
+    getModelMetadataById(routing.modelKey)?.capabilities.tools === true
+      ? (request.tools ?? [])
+      : [];
   for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
     const legTools = leg === MAX_MANAGED_TOOL_LEGS - 1 ? [] : tools;
     const legOptions: ManagedChatStreamOptions = {
@@ -861,7 +864,7 @@ export async function executeChromeManagedChat(
         tool_call_id: call.id,
         content: (
           resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
-        ).slice(0, MAX_TOOL_RESULT_CHARS),
+        ).slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
       });
     }
     if (outcome.tools) tools = outcome.tools;

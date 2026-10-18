@@ -97,6 +97,7 @@ function harness() {
     updateAttachmentPreview: vi.fn(),
     composerBrowserRun: null,
     cancelComposerBrowserTask: vi.fn(),
+    dismissPendingSiteGrants: vi.fn(),
     stopManagedChatKeepalive: vi.fn(),
     removeThinking: vi.fn(),
     resolvedRouteByStreamId: new Map(),

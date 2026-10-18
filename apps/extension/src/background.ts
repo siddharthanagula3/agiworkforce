@@ -114,6 +114,8 @@ import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
+  readBrowserControlConsent,
+  removeBrowserControlHostPermission,
   sanitizeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
 import {
@@ -151,7 +153,21 @@ import {
   normalizeChromeManagedRoutingMetadata,
   type ChromeManagedChatResult,
   type ChromeManagedResumeCallbacks,
+  type ChromeManagedToolHandoffOutcome,
 } from './features/cloud-bridge/managedChatHandler';
+import {
+  chatBrowserToolDefinitions,
+  isChatBrowserToolTier,
+  MAX_CHAT_TOOL_RESULT_CHARS,
+} from './features/computer-use/chatBrowserTools';
+import type { ToolCall } from './features/computer-use/toolHandoff';
+import {
+  addOneTimeSiteGrant,
+  expiredOneTimeSiteGrants,
+  isOneTimeSiteGrantId,
+  oneTimeGrantedOrigins,
+  removeOneTimeSiteGrant,
+} from './features/computer-use/oneTimeSiteGrants';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import {
   isPermanentNativeDisconnect,
@@ -307,6 +323,154 @@ function releaseChatStream(streamKey: string, activeStream: ActiveChatStream): v
 
 function resolveChatStreamKey(streamKey: string): string {
   return adoptedChatStreamKeys.get(streamKey) ?? streamKey;
+}
+
+const CHAT_TOOL_HANDOFF_TIMEOUT_MS = 15 * 60_000;
+
+interface PendingChatToolHandoff {
+  owner: ManagedCloudOwner;
+  clientInstanceId: string;
+  streamId: string;
+  callIds: readonly string[];
+  finish: (outcome: ChromeManagedToolHandoffOutcome) => void;
+}
+
+const pendingChatToolHandoffs = new Map<string, PendingChatToolHandoff>();
+
+function unansweredToolResults(calls: readonly ToolCall[], content: string) {
+  return calls.map((call) => ({ toolCallId: call.id, content }));
+}
+
+function requestChatToolHandoff(
+  active: ActiveChatStream,
+  streamId: string,
+  calls: ToolCall[],
+): Promise<ChromeManagedToolHandoffOutcome> {
+  const handoffId = `handoff_${crypto.randomUUID()}`;
+  const signal = active.controller.signal;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (outcome: ChromeManagedToolHandoffOutcome): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      pendingChatToolHandoffs.delete(handoffId);
+      resolve(outcome);
+    };
+    const onAbort = (): void => finish({ status: 'cancelled' });
+    const timeout = setTimeout(
+      () =>
+        finish({
+          status: 'resolved',
+          results: unansweredToolResults(calls, 'The browser tool did not answer in time.'),
+        }),
+      CHAT_TOOL_HANDOFF_TIMEOUT_MS,
+    );
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    pendingChatToolHandoffs.set(handoffId, {
+      owner: active.owner,
+      clientInstanceId: active.clientInstanceId,
+      streamId,
+      callIds: calls.map((call) => call.id),
+      finish,
+    });
+    const handoff: import('./types').ChatToolHandoffMessage = {
+      type: 'CHAT_TOOL_HANDOFF',
+      owner: active.owner,
+      clientInstanceId: active.clientInstanceId,
+      id: streamId,
+      handoffId,
+      calls,
+    };
+    void chrome.runtime.sendMessage(handoff).catch(() =>
+      finish({
+        status: 'resolved',
+        results: unansweredToolResults(
+          calls,
+          'The side panel closed, so the browser tool could not run.',
+        ),
+      }),
+    );
+  });
+}
+
+function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
+  const pending = pendingChatToolHandoffs.get(message.handoffId);
+  const owner = normalizeManagedCloudOwner(message.owner);
+  if (
+    !pending ||
+    !owner ||
+    !sameManagedCloudOwner(owner, pending.owner) ||
+    message.clientInstanceId !== pending.clientInstanceId ||
+    message.id !== pending.streamId
+  )
+    return false;
+  if (message.cancelled === true) {
+    pending.finish({ status: 'cancelled' });
+    return true;
+  }
+  const results = message.results;
+  if (
+    !Array.isArray(results) ||
+    results.length !== pending.callIds.length ||
+    results.some(
+      (result, index) =>
+        !result ||
+        result.toolCallId !== pending.callIds[index] ||
+        typeof result.content !== 'string' ||
+        result.content.length > MAX_CHAT_TOOL_RESULT_CHARS,
+    ) ||
+    (message.browserToolTier !== undefined && !isChatBrowserToolTier(message.browserToolTier))
+  )
+    return false;
+  pending.finish({
+    status: 'resolved',
+    results: results.map((result) => ({
+      toolCallId: result.toolCallId,
+      content: result.content,
+    })),
+    ...(message.browserToolTier
+      ? { tools: chatBrowserToolDefinitions(message.browserToolTier) }
+      : {}),
+  });
+  return true;
+}
+
+const oneTimeSiteGrantTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+async function revokeOneTimeSiteGrant(grantId: string): Promise<void> {
+  clearTimeout(oneTimeSiteGrantTimers.get(grantId));
+  oneTimeSiteGrantTimers.delete(grantId);
+  const grant = removeOneTimeSiteGrant(grantId);
+  if (!grant) return;
+  if (grant.hostPermissionAdded && !oneTimeGrantedOrigins().includes(grant.origin)) {
+    const keptForever =
+      siteAllowlistCache.has(grant.origin) &&
+      (await readBrowserControlConsent().catch(() => [] as string[])).includes(grant.origin);
+    if (!keptForever) await removeBrowserControlHostPermission(grant.origin);
+  }
+  cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+}
+
+function grantSiteOnce(message: import('./types').GrantSiteOnceMessage): boolean {
+  for (const expired of expiredOneTimeSiteGrants()) void revokeOneTimeSiteGrant(expired.grantId);
+  if (!isOneTimeSiteGrantId(message.grantId) || typeof message.origin !== 'string') return false;
+  const grant = addOneTimeSiteGrant(
+    message.grantId,
+    message.origin,
+    message.hostPermissionAdded === true,
+  );
+  if (!grant) return false;
+  oneTimeSiteGrantTimers.set(
+    grant.grantId,
+    setTimeout(() => void revokeOneTimeSiteGrant(grant.grantId), grant.expiresAtMs - Date.now()),
+  );
+  return true;
 }
 const scheduledTaskExecutions = new ScheduledTaskExecutionCoordinator();
 interface ActiveScheduledRecovery {
@@ -2875,7 +3039,10 @@ const siteAllowlistReady: Promise<void> = Promise.all([
  */
 function isOriginApprovedForAutomation(origin: string): boolean {
   return evaluateSitePolicy(
-    { admin: adminSitePolicyCache, userAllowlist: [...siteAllowlistCache] },
+    {
+      admin: adminSitePolicyCache,
+      userAllowlist: [...siteAllowlistCache, ...oneTimeGrantedOrigins()],
+    },
     origin,
     'automation',
   ).allowed;
@@ -3962,6 +4129,30 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
       void handleResolveChatApproval({ ...inputMsg, owner });
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'RESOLVE_CHAT_TOOLS': {
+      const resolved = resolveChatToolHandoff(message as import('./types').ResolveChatToolsMessage);
+      return (
+        resolved
+          ? { success: true }
+          : { success: false, error: 'This browser tool request is no longer active.' }
+      ) as ExtensionResponse;
+    }
+
+    case 'GRANT_SITE_ONCE': {
+      const granted = grantSiteOnce(message as import('./types').GrantSiteOnceMessage);
+      return (
+        granted ? { success: true } : { success: false, error: 'Invalid one-time site grant.' }
+      ) as ExtensionResponse;
+    }
+
+    case 'REVOKE_SITE_ONCE': {
+      const revokeMsg = message as import('./types').RevokeSiteOnceMessage;
+      if (!isOneTimeSiteGrantId(revokeMsg.grantId))
+        return { success: false, error: 'Invalid one-time site grant.' } as ExtensionResponse;
+      await revokeOneTimeSiteGrant(revokeMsg.grantId);
       return { success: true } as ExtensionResponse;
     }
 
@@ -6000,6 +6191,9 @@ async function handleChatMessage(
         conversationId: message.conversationId,
         assistantMessageId: message.assistantMessageId,
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
+        ...(!delivery && isChatBrowserToolTier(message.browserToolTier)
+          ? { tools: chatBrowserToolDefinitions(message.browserToolTier) }
+          : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
@@ -6061,6 +6255,10 @@ async function handleChatMessage(
               done: false,
               quotaWarning,
             }),
+          onToolHandoff: (calls) =>
+            isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream)
+              ? requestChatToolHandoff(activeStream, id, calls)
+              : Promise.resolve({ status: 'cancelled' }),
         }),
         getAuthToken: async () => {
           activeStream.controller.signal.throwIfAborted();

@@ -9,7 +9,9 @@ import {
   readBrowserProfileScope,
   type SitePermissionPolicyStorage,
 } from '../options/site-permission-policy';
-import { assertSiteAccess } from '../site-policy/store';
+import { assertSiteAccess, readAdminSitePolicy } from '../site-policy/store';
+import { hasOneTimeSiteGrant } from '../computer-use/oneTimeSiteGrants';
+import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
 import type { BrowserProfileCapability } from '@agiworkforce/types';
 
 export const SITE_NOT_APPROVED_FOR_BROWSER_TOOLS =
@@ -114,7 +116,17 @@ export async function authorizeBrowserToolCapability(
     throw new Error('Browser task URLs cannot contain credentials.');
   const origin = normalizeApprovedSiteOrigin(parsed.origin);
   if (!origin) throw new Error('Only http and https tabs are supported.');
-  await assertSiteAccess(url, capability, `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`);
+  const notApproved = `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`;
+  if (capability === 'automation' && hasOneTimeSiteGrant(origin)) {
+    const evaluation = evaluateSitePolicy(
+      { admin: await readAdminSitePolicy(), userAllowlist: [origin] },
+      url,
+      capability,
+    );
+    if (!evaluation.allowed) throw new Error(sitePolicyDenialMessage(evaluation, notApproved));
+  } else {
+    await assertSiteAccess(url, capability, notApproved);
+  }
 
   return { origin, url, profileId: await profileForTab(url, storage, capability) };
 }
