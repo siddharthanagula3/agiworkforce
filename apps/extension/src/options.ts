@@ -193,7 +193,7 @@ function injectStyles(): void {
 
     .opt-policy-select {
       flex-shrink: 0;
-      max-width: 260px;
+      max-width: 340px;
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
@@ -889,7 +889,39 @@ function injectStyles(): void {
 
     kbd { min-width: 25px; padding: 3px 7px; border-radius: 7px; text-align: center; }
     .opt-link { font-size: 12px; text-decoration: none; }
+    button.opt-link {
+      appearance: none;
+      padding: 0;
+      border: 0;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button.opt-link:disabled { color: var(--agi-ext-text-muted); cursor: default; text-decoration: none; }
     .opt-version { padding-top: 4px; }
+    .opt-approval-history,
+    .opt-shortcuts-table + .opt-save-status { padding-inline: 22px; }
+
+    summary.opt-section-header {
+      position: relative;
+      padding-inline-end: 56px;
+      list-style: none;
+      cursor: pointer;
+    }
+    summary.opt-section-header::-webkit-details-marker { display: none; }
+    summary.opt-section-header::after {
+      content: '';
+      position: absolute;
+      inset-inline-end: 24px;
+      top: 28px;
+      width: 8px;
+      height: 8px;
+      border-inline-end: 2px solid var(--agi-ext-text-muted);
+      border-block-end: 2px solid var(--agi-ext-text-muted);
+      transform: rotate(45deg);
+    }
+    details[open] > summary.opt-section-header::after { top: 32px; transform: rotate(-135deg); }
+    summary.opt-section-header:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; border-radius: 16px; }
 
     @media (max-width: 900px) {
       .opt-shell { grid-template-columns: 204px minmax(0, 1fr); }
@@ -933,7 +965,11 @@ function injectStyles(): void {
       .opt-allowlist-body,
       .opt-bearer-body,
       .opt-profile-grid,
-      .opt-profile-actions { padding-inline: 16px; }
+      .opt-profile-actions,
+      .opt-approval-history,
+      .opt-shortcuts-table + .opt-save-status { padding-inline: 16px; }
+      summary.opt-section-header { padding-inline-end: 48px; }
+      summary.opt-section-header::after { inset-inline-end: 18px; }
       .opt-row:has(.opt-policy-select) { flex-direction: column; align-items: stretch; gap: 12px; }
       .opt-policy-select { width: 100%; max-width: none; }
     }

@@ -28,6 +28,7 @@ import {
 } from './pageActions';
 import type { PageAction } from './pageActions';
 import { readYouTubeTranscript } from './youtubeTranscript';
+import { setImportantStyles } from './launcher';
 import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
 import {
   ArrowUp,
@@ -389,8 +390,17 @@ export function createPanel(): {
 } {
   const host = document.createElement('div');
   host.setAttribute('data-agi-panel', 'true');
-  host.style.cssText =
-    'all:initial;position:fixed;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483647;';
+  setImportantStyles(host, {
+    all: 'initial',
+    display: 'block',
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '0',
+    height: '0',
+    overflow: 'visible',
+    'z-index': '2147483647',
+  });
 
   const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
