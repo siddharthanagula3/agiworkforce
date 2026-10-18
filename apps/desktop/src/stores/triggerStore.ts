@@ -3,8 +3,6 @@ import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
 
-// TODO(types-agent): These local type definitions diverge from the canonical
-
 export type TriggerType = 'cron' | 'webhook' | 'file_watcher';
 
 export const TRIGGER_RUN_OUTCOMES = [
@@ -102,8 +100,6 @@ export type CreateTriggerInput = Omit<
   | 'webhookUrl'
   | 'runLive'
 >;
-
-// TODO(types-agent): Once @agiworkforce/types EventTriggerDefinition and
 
 function normalizeTimestamp(raw: string | number | null | undefined): number | null {
   if (raw === null || raw === undefined) return null;

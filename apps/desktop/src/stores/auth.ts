@@ -131,7 +131,6 @@ interface AuthActions {
   clearAuth: () => void;
   setHasHydrated: (state: boolean) => void;
   setSessionValidated: (state: boolean) => void;
-  isAuthReady: () => boolean;
 
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   completeNativeSignIn: (credential: {
@@ -200,31 +199,11 @@ function clearCachedSubscription(): void {
   }
 }
 
-interface CreditsCacheEntry {
-  accessToken: string;
-  credits: CreditBalance | null;
-  fetchedAt: number;
-}
-interface Credits401CacheEntry {
-  accessToken: string;
-  at: number;
-}
-
-// Exported for use by authOrchestrator
-export let creditsCache: CreditsCacheEntry | null = null;
-export let credits401Cache: Credits401CacheEntry | null = null;
-
-function clearCreditsCache(): void {
-  creditsCache = null;
-  credits401Cache = null;
-}
-
 let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 let retryCount = 0;
 let authAttemptGeneration = 0;
 const MAX_SUBSCRIPTION_RETRIES = 3;
 
-// Schedule retry is exported for use by authOrchestrator
 export function scheduleSubscriptionRetry(userId: string): void {
   if (retryCount >= MAX_SUBSCRIPTION_RETRIES) {
     return;
@@ -244,7 +223,7 @@ export function scheduleSubscriptionRetry(userId: string): void {
   }, delay);
 }
 
-function resetRetryCount(): void {
+export function resetRetryCount(): void {
   retryCount = 0;
   if (retryTimeout) {
     clearTimeout(retryTimeout);
@@ -510,11 +489,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ sessionValidated: state }, undefined, 'auth/setSessionValidated');
         },
 
-        isAuthReady: () => {
-          const state = get();
-          return state._hasHydrated && state.sessionValidated;
-        },
-
         signIn: async (email: string, password: string) => {
           const attemptGeneration = ++authAttemptGeneration;
           set({ isLoading: true, error: null }, undefined, 'auth/signIn/start');
@@ -619,7 +593,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           } finally {
             if (isStillSignedOut()) {
               clearCachedSubscription();
-              clearCreditsCache();
               resetRetryCount();
 
               set(
@@ -903,7 +876,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 
         reset: () => {
           clearCachedSubscription();
-          clearCreditsCache();
           resetRetryCount();
 
           set(
@@ -1044,7 +1016,6 @@ export function getPlanDescription(plan: PlanTier): string {
 export function cleanupUnifiedAuthStore(): void {
   resetRetryCount();
   clearCachedSubscription();
-  clearCreditsCache();
 }
 
 export const useAuthStore = useUnifiedAuthStore;

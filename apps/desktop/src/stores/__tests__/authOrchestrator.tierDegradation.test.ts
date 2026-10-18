@@ -43,6 +43,7 @@ vi.mock('../../api/accountApi', () => ({
 
 import { initializeAuthOrchestrator, resetAuthOrchestrator } from '../authOrchestrator';
 import { useUnifiedAuthStore } from '../auth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 
 interface FakeAuthState {
   user: { id: string; email: string; created_at: string } | null;
@@ -159,5 +160,24 @@ describe('DES-C20: a failed /api/me never strands Cloud on a null plan', () => {
     const state = useUnifiedAuthStore.getState();
     expect(state.plan).toBe('free');
     expect(state.subscriptionFetchStatus).toBe('succeeded');
+  });
+
+  it('schedules a refetch of the account after a failed fetch', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const refreshUserData = vi.mocked(cloudAccountAuth.refreshUserData);
+      refreshUserData.mockClear();
+
+      await emitUntil(
+        authState({ subscription: null, subscriptionFetchStatus: 'failed' }),
+        planIs('free'),
+      );
+      expect(refreshUserData).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(refreshUserData).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

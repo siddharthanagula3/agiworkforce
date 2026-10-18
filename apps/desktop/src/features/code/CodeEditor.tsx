@@ -1,4 +1,3 @@
-import { invoke } from '@/lib/tauri-mock';
 import Editor, { Monaco, OnMount } from '@monaco-editor/react';
 import { Check, Copy, Download, RotateCcw, Save } from 'lucide-react';
 import type { editor } from 'monaco-editor';
@@ -15,7 +14,7 @@ interface CodeEditorProps {
   path?: string;
   readOnly?: boolean;
   onChange?: (value: string | undefined) => void;
-  onSave?: (value: string, context: { auto: boolean; path?: string }) => Promise<void> | void;
+  onSave: (value: string, context: { auto: boolean; path?: string }) => Promise<void> | void;
   className?: string;
 }
 
@@ -58,35 +57,18 @@ export function CodeEditor({
     const auto = options?.auto ?? false;
     const nextValue = options?.content ?? valueRef.current;
 
-    const showLocalToast = !onSave;
+    const context = path ? { auto, path } : { auto };
+    await onSave(nextValue, context);
 
-    try {
-      if (onSave) {
-        const context = path ? { auto, path } : { auto };
-        await onSave(nextValue, context);
-      } else if (path) {
-        await invoke('file_write', { path, content: nextValue });
-      }
+    setValue(nextValue);
+    setOriginalValue(nextValue);
 
-      setValue(nextValue);
-      setOriginalValue(nextValue);
-
-      if (!auto) {
-        setSaved(true);
-        if (showLocalToast) {
-          toast.success(path ? `Saved ${path}` : 'Code saved');
-        }
-        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-        savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
-      } else {
-        setSaved(false);
-      }
-    } catch (error) {
-      console.error('Failed to save file:', error);
-      if (!auto && showLocalToast) {
-        toast.error(`Failed to save${path ? ` ${path}` : ''}`);
-      }
-      throw error;
+    if (!auto) {
+      setSaved(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+    } else {
+      setSaved(false);
     }
   };
 

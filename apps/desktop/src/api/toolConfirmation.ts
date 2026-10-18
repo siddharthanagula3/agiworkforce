@@ -5,7 +5,7 @@
  * Provides functions to interact with tool safety tiers and confirmation responses.
  */
 
-import { invoke, isTauri } from '../lib/tauri-mock';
+import { invoke } from '../lib/tauri-mock';
 
 export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -56,18 +56,6 @@ export async function respondToolConfirmation(
   if (!requestId || requestId.trim().length === 0) {
     throw new Error('[toolConfirmation] requestId is required');
   }
-  if (!isTauri) {
-    console.debug('[toolConfirmation] respondToolConfirmation (mock)', {
-      requestId,
-      approved,
-      rememberChoice,
-      reason,
-      rememberForSession,
-      toolName,
-    });
-    return { allowedDirectories: null };
-  }
-
   try {
     return await invoke<ToolConfirmationResolution>('respond_tool_confirmation', {
       requestId: requestId,
@@ -84,51 +72,5 @@ export async function respondToolConfirmation(
 }
 
 export async function clearSessionToolApprovals(): Promise<void> {
-  if (!isTauri) {
-    console.debug('[toolConfirmation] clearSessionToolApprovals (mock)');
-    return;
-  }
-
   await invoke<void>('clear_session_tool_approvals');
-}
-
-/**
- * Get a user-friendly description for a safety tier.
- */
-export function getSafetyTierDescription(tier: SafetyTier): string {
-  const descriptions: Record<SafetyTier, string> = {
-    Safe: 'This action is safe and will execute immediately.',
-    RequiresNotification: "This action will execute, and you'll be notified in the activity panel.",
-    RequiresConfirmation: 'This action requires your confirmation before proceeding.',
-    RequiresExplicitApproval:
-      'This action requires your explicit approval. Please review the details carefully.',
-  };
-  return descriptions[tier] || tier;
-}
-
-export function getRiskLevelLabel(level: RiskLevel): string {
-  const labels: Record<RiskLevel, string> = {
-    Low: 'Low Risk',
-    Medium: 'Medium Risk',
-    High: 'High Risk',
-    Critical: 'Critical Risk',
-  };
-  return labels[level] || level;
-}
-
-export function getRiskLevelColor(level: RiskLevel): string {
-  const colors: Record<RiskLevel, string> = {
-    Low: 'text-success-text',
-    Medium: 'text-warning-text',
-    High: 'text-danger-text',
-    Critical: 'text-danger-text font-semibold',
-  };
-  return colors[level] || 'text-muted-foreground';
-}
-
-/**
- * Check if a safety tier requires user interaction.
- */
-export function requiresUserAction(tier: SafetyTier): boolean {
-  return tier === 'RequiresConfirmation' || tier === 'RequiresExplicitApproval';
 }

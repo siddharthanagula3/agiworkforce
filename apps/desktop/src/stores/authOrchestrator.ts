@@ -1,11 +1,12 @@
 import { cloudAccountAuth, type AuthState } from '../services/cloudAccountAuth';
 import {
+  resetRetryCount,
+  scheduleSubscriptionRetry,
   useUnifiedAuthStore,
   type CreditBalance,
   type SubscriptionStatus,
   type SubscriptionFetchStatus,
 } from './auth';
-import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/cloudAccountTypes';
 import { accountApi } from '../api/accountApi';
 import { isTauri, invoke } from '../lib/tauri-mock';
@@ -221,6 +222,10 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     let subscriptionStatus: SubscriptionStatus = 'none';
     const userId = authState.user.id;
 
+    if (authState.subscriptionFetchStatus === 'succeeded') {
+      resetRetryCount();
+    }
+
     if (authState.subscription?.plan_tier) {
       subscriptionStatus = (authState.subscription.status as SubscriptionStatus) || 'none';
       planTier = asPlanTier(
@@ -228,6 +233,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       );
       setCachedSubscription(userId, planTier, subscriptionStatus);
     } else if (authState.subscriptionFetchStatus === 'failed') {
+      scheduleSubscriptionRetry(userId);
       const cached = getCachedSubscription(userId);
       const previous = useUnifiedAuthStore.getState();
       if (cached) {
@@ -389,39 +395,12 @@ export function initializeAuthOrchestrator(): () => void {
     void processAuthStateChange(authState);
   });
 
-  const unsubscribeUsage = useUnifiedAuthStore.subscribe((authState) => {
-    const billingUsageStore = useBillingUsageStore.getState();
-    const subscription = authState.stripeSubscription;
-    const customer = authState.stripeCustomer;
-
-    if (subscription && subscription.current_period_start && subscription.current_period_end) {
-      if (
-        subscription.current_period_start !== billingUsageStore.usagePeriodStartSec ||
-        subscription.current_period_end !== billingUsageStore.usagePeriodEndSec
-      ) {
-        billingUsageStore.setUsagePeriod(
-          subscription.current_period_start,
-          subscription.current_period_end,
-        );
-
-        if (customer) {
-          void billingUsageStore.fetchUsage(
-            customer.id,
-            subscription.current_period_start,
-            subscription.current_period_end,
-          );
-        }
-      }
-    }
-  });
-
   return () => {
     orchestratorInitialized = false;
     if (unsubscribeFn) {
       unsubscribeFn();
       unsubscribeFn = null;
     }
-    unsubscribeUsage();
     creditsCache = null;
     credits401Cache = null;
     isProcessingAuthChange = false;
