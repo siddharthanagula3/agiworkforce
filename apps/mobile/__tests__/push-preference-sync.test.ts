@@ -236,18 +236,18 @@ describe('push delivery preference sync', () => {
 
     const allowed = (await capturedNotificationHandler?.({
       request: { content: { data: { type: 'agent_approval_needed' } } },
-    })) as { shouldShowAlert: boolean };
-    expect(allowed.shouldShowAlert).toBe(true);
+    })) as { shouldShowBanner: boolean };
+    expect(allowed.shouldShowBanner).toBe(true);
 
     const suppressedByCategory = (await capturedNotificationHandler?.({
       request: { content: { data: { type: 'heartbeat_info' } } },
-    })) as { shouldShowAlert: boolean };
-    expect(suppressedByCategory.shouldShowAlert).toBe(false);
+    })) as { shouldShowBanner: boolean };
+    expect(suppressedByCategory.shouldShowBanner).toBe(false);
 
     useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
     const suppressedAfterToggle = (await capturedNotificationHandler?.({
       request: { content: { data: { type: 'agent_approval_needed' } } },
-    })) as { shouldShowAlert: boolean };
-    expect(suppressedAfterToggle.shouldShowAlert).toBe(false);
+    })) as { shouldShowBanner: boolean };
+    expect(suppressedAfterToggle.shouldShowBanner).toBe(false);
   });
 });

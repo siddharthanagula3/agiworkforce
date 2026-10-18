@@ -47,10 +47,11 @@ Notifications.setNotificationHandler({
 
     if (data?.type && !notificationAllowed(data.type)) {
       return {
-        shouldShowAlert: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
         shouldPlaySound: false,
         shouldSetBadge: false,
-      } as Notifications.NotificationBehavior;
+      };
     }
 
     const priority = data?.priority ?? inferPriority(data?.type);
@@ -58,28 +59,32 @@ Notifications.setNotificationHandler({
     switch (priority) {
       case 'critical':
         return {
-          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
-        } as Notifications.NotificationBehavior;
+        };
       case 'high':
         return {
-          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: true,
           shouldSetBadge: true,
-        } as Notifications.NotificationBehavior;
+        };
       case 'normal':
         return {
-          shouldShowAlert: true,
+          shouldShowBanner: true,
+          shouldShowList: true,
           shouldPlaySound: false,
           shouldSetBadge: true,
-        } as Notifications.NotificationBehavior;
+        };
       case 'low':
         return {
-          shouldShowAlert: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
           shouldPlaySound: false,
           shouldSetBadge: true,
-        } as Notifications.NotificationBehavior;
+        };
     }
   },
 });
@@ -529,6 +534,9 @@ const notificationCenterStore = (() => {
     for (const listener of listeners) {
       listener([...items]);
     }
+    Notifications.setBadgeCountAsync(items.filter((item) => !item.read).length).catch((err) => {
+      console.warn('[notifications] Failed to update badge count:', err);
+    });
   }
 
   return {
@@ -579,7 +587,6 @@ const notificationCenterStore = (() => {
 
 whenMmkvReady(() => {
   notificationCenterStore.hydrate();
-  Notifications.setBadgeCountAsync(notificationCenterStore.getUnreadCount()).catch(() => undefined);
 });
 
 export { notificationCenterStore };
@@ -630,20 +637,7 @@ export function setupNotificationListeners(
   }
 
   foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
-    const data = notification.request.content.data as NotificationData | undefined;
-
     notificationCenterStore.add(notification);
-
-    if (
-      data?.type === 'agent_approval_needed' ||
-      data?.type === 'agent_failed' ||
-      data?.type === 'emergency_stop_triggered' ||
-      data?.type === 'approval_pending_escalation'
-    ) {
-      Notifications.setBadgeCountAsync(notificationCenterStore.getUnreadCount()).catch((err) => {
-        console.warn('[Notifications] Failed to update badge count:', err);
-      });
-    }
   });
 
   responseSubscription = Notifications.addNotificationResponseReceivedListener(
@@ -694,19 +688,6 @@ function inferPriority(type: NotificationEventType | undefined): NotificationPri
       return 'low';
     default:
       return 'normal';
-  }
-}
-
-export function getPriorityColor(priority: NotificationPriority): string {
-  switch (priority) {
-    case 'critical':
-      return '#ef4444';
-    case 'high':
-      return '#f59e0b';
-    case 'normal':
-      return '#21808d';
-    case 'low':
-      return '#6b7280';
   }
 }
 
