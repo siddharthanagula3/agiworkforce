@@ -5,7 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { hashIpAddress } from '@/lib/server/ip-hash';
 import type { ReleaseRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
+import { getClientIpForRateLimit, withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@shared/utils/env';
@@ -110,10 +110,8 @@ async function recordDownload(releaseId: string, request: NextRequest): Promise<
   try {
     const db = getNeonDb();
 
-    const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip')?.trim() ||
-      null;
+    const clientIp = getClientIpForRateLimit(request);
+    const ip = clientIp === 'unknown' ? null : clientIp;
 
     const userAgent = request.headers.get('user-agent') || null;
     const country = request.headers.get('cf-ipcountry') || null;

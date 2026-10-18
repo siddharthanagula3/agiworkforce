@@ -9,7 +9,10 @@ const { executeMock, getOptionalEnvMock, queryMock, withRateLimitMock } = vi.hoi
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: withRateLimitMock }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: withRateLimitMock,
+}));
 vi.mock('@shared/utils/env', () => ({ getOptionalEnv: getOptionalEnvMock }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -77,7 +80,7 @@ afterEach(() => {
 
 describe('release download analytics IP handling', () => {
   it('sends a peppered HMAC digest to the database, never the address', async () => {
-    const response = await requestLatestRelease({ 'x-forwarded-for': `${CLIENT_IP}, 10.0.0.1` });
+    const response = await requestLatestRelease({ 'x-forwarded-for': `10.0.0.1, ${CLIENT_IP}` });
     expect(response.status).toBe(200);
 
     const [sql, params] = executeMock.mock.calls[0] as [string, unknown[]];

@@ -41,10 +41,6 @@ async function handleDownload(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const clientIp =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
   const userAgent = request.headers.get('user-agent') || 'unknown';
 
   const { searchParams } = new URL(request.url);
@@ -54,7 +50,6 @@ async function handleDownload(request: NextRequest) {
 
   logger.info(
     {
-      clientIp,
       userAgent: userAgent.substring(0, 200),
       platform,
       app,
