@@ -172,26 +172,21 @@ export const maxDuration = 300;
  * loop only when MCP/platform tools are present. Run state and canonical events
  * are journaled durably either way.
  *
- * Transport: a turn that holds a managed-usage reservation starts on the Vercel
+ * Transport: a turn that holds a free-tier or managed reservation starts on the Vercel
  * Workflow transport unless the `AGI_DURABLE_INITIAL_TURNS` kill-switch is
  * engaged, so the run outlives the request that started it, the client can
  * disconnect and later reattach through the run journal, and its approvals stay
- * claimable from any surface. Free-trial turns, an engaged kill-switch, and a
+ * claimable from any surface. An engaged kill-switch, a turn with no reservation and a
  * workflow that fails to start use the request-scoped inline stream, which
  * emits the identical SSE wire.
  * The approval_mode query parameter controls gating: ?approval_mode=auto skips
  * the per-tool prompt; the default 'manual' persists a signed checkpoint before
  * emitting x_tool_approval_request events.
  *
- * Provider dispatch, for the standard (non-agentic) paths below (restructure
- * Wave 2, task #34): Anthropic, Google, OpenAI, and the 8 openai-compat
- * providers (minimax, moonshot, zhipu, qwen, openrouter, deepseek,
- * xai, perplexity) go through `packages/ai/providers/*` adapters
- * (`ADAPTER_PROVIDERS`, ./lib/adapter-providers.ts) -- that is every provider
- * `processed.provider` (request-processor.ts's catalog lookup + heuristic
- * fallback chain) can resolve to, so there is no longer a `LLMProviderFactory`
- * (apps/web/lib/llm-providers, retired) dispatch fallback below; an unlisted
- * provider id is treated as an explicit unsupported-provider failure instead.
+ * Provider dispatch, for the standard (non-agentic) paths below: every provider
+ * `processed.provider` can resolve to goes through a `packages/ai/providers/*`
+ * adapter listed in `ADAPTER_PROVIDERS` (./lib/adapter-providers.ts); an
+ * unlisted provider id is an explicit unsupported-provider failure.
  * The agentic tool-loop path (MCP/E2B, `runToolLoop`) shares the SAME
  * `ADAPTER_PROVIDERS` table via its own table-driven per-step dispatch, see
  * tool-loop-anthropic.ts.
@@ -546,25 +541,10 @@ async function dispatchChatCompletions(
   if (processed.chatRequest.stream) {
     // Deep Research path: bounded multi-turn research loop (plan -> search
     // rounds -> cited synthesis). Free requests are rejected in processRequest;
-    // this defense-in-depth gate keeps the paid-only contract explicit.
-    //
-    // EVERY adapter-backed provider takes this path, Anthropic included. The
-    // old `provider !== 'anthropic'` exclusion here was written when the loop
-    // was believed to consume raw provider SSE ("only normalized by
-    // buildStreamResponse"); that stopped being true when `buildToolLoopStream`
-    // was generalized off its Anthropic-only origin (restructure Wave 2, task
-    // #34). `runResearchLoop` dispatches solely through `buildToolLoopStream`,
-    // which reshapes every provider's canonical `StreamChunk`s onto
-    // OpenAI-compatible bytes via `OpenAIWireAssembler` using that provider's
-    // own `wireMode` -- Anthropic's `legacy-web` mode maps `server-tool-result`
-    // (`web_search_tool_result`) to `x_search_results`, `tool-use-*` to
-    // `tool_calls`, and `stop_reason: tool_use` to `finish_reason:
-    // 'tool_calls'`, which is exactly the shape `collectTurn` consumes.
-    // Keeping the exclusion meant Anthropic -- the DEFAULT provider -- lit the
-    // same Deep Research badge but silently ran the single-turn fallback: real
-    // citations, but no plan card, no process narration, and no persisted
-    // report. One badge, two behaviours. Verified end-to-end against the real
-    // Anthropic translation pipeline in research-loop.anthropic-wire.test.ts.
+    // this defense-in-depth gate keeps the paid-only contract explicit. Every
+    // adapter-backed provider takes this path, Anthropic included:
+    // `buildToolLoopStream` normalizes each provider's chunks onto the
+    // OpenAI-compatible shape `collectTurn` reads.
     if (processed.researchMode && !processed.freeTrial) {
       const startedRun = await beginCloudAgentRun(userId, processed, 'research', requestDb);
       if (startedRun instanceof NextResponse) return startedRun;
@@ -772,31 +752,14 @@ async function dispatchChatCompletions(
       addProjectSourcesHeader(researchHeaders, processed);
       addRouteLaneHeader(researchHeaders, processed);
 
-      // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
-      // stream-transform.ts but NOT here -- the research loop goes silent for
-      // whole search rounds, so it is the stream that most needs a keepalive
-      // and was the one without it. Intermediaries and clients idle-timed out
-      // mid-run.
+      // The loop is silent for whole search rounds; without the heartbeat
+      // intermediaries idle-time out mid-run.
       return new NextResponse(withSseHeartbeat(researchStream), { headers: researchHeaders });
     }
 
-    // Agentic path: load MCP tools (fast -- catalog is cached for 60s).
-    // If no tools are configured, mcpTools is empty and we fall through to
-    // the standard single-turn streaming path unchanged.
-    //
-    // Additive per-user connector tools (fixes WEB-CONNECTORS-NO-RUNTIME-EFFECT-01):
-    // a signed-in user's CONNECTED connectors (github built-in / operator-mapped
-    // remote MCP connectors) contribute tools alongside the operator MCP catalog.
-    // Fully server-side and degrades to [] on any failure, so the SSE wire shape
-    // is unchanged (no new event types) and an unconfigured/empty environment
-    // behaves exactly as before.
-    // Per-model tools gate (WEB-TOOLS-MODEL-CAP-GATE-01): a model whose registry
-    // capability `tools` is false (for example, a search-native model) cannot
-    // do function calling. Shipping MCP / connector tool definitions to it makes the
-    // provider reject the whole request. Skip tool loading for such models so they
-    // fall through to the standard single-turn path, search-native models still
-    // answer; connectors/MCP are simply not offered. The office-creation, skill, and
-    // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
+    // A model whose registry capability `tools` is false cannot take function
+    // definitions: the provider rejects the whole request. Such a model gets no
+    // MCP or connector tools and takes the single-turn path.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
     const userConnectorToolsEnabled =
@@ -812,15 +775,10 @@ async function dispatchChatCompletions(
     const toolApprovalPolicyRequired =
       processed.toolApprovalPolicy === undefined &&
       (connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn);
-    // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
-    // the catalog is built. `deny` tools are dropped from the catalog entirely
-    // (so a Blocked tool is never advertised to the model and stops re-surfacing
-    // an approval card every turn), and the full verdict map is handed to the
-    // tool loop, which enforces it before any execution.
-    // The policy is read on every turn, tools:false included: it also decides
-    // whether the provider-native search below is withdrawn for the gated
-    // shape, so skipping the read forced the default onto accounts that had
-    // chosen otherwise and broke search-native models.
+    // The saved allow/ask/deny verdicts are loaded before the catalog is built:
+    // a denied tool is never advertised, and the tool loop enforces the rest.
+    // tools:false models read the policy too, because it decides whether the
+    // provider-native search below is withdrawn.
     const turnToolPermissions =
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
@@ -848,10 +806,8 @@ async function dispatchChatCompletions(
       temporary: processed.conversationIsTemporary === true,
       disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
     });
-    // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
-    // flat 32 for everybody, and the truncation it causes is reported back
-    // rather than only logged, a "Connected" connector whose tools were
-    // silently dropped is indistinguishable from a broken one.
+    // The connector-tool ceiling is the caller's plan ceiling, and what it drops
+    // is reported to the client so a truncated connector does not look broken.
     const connectorCatalog =
       modelSupportsTools && userConnectorToolsEnabled
         ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () =>
@@ -918,17 +874,8 @@ async function dispatchChatCompletions(
           ...getSecurityHeaders(),
         };
         addAgentRunHeaders(headers, run);
-        // The model that ACTUALLY answered, after routing and any fallback.
-        //
-        // The client labels each assistant message with what it REQUESTED, so
-        // an Auto-routed turn was labelled `auto`, not a catalog id, and the
-        // transcript rendered "Unavailable model" under every reply. Same class
-        // of wrongness when a credit fallback silently swaps the model: the
-        // footer named a model that never ran. Report the resolved id and let
-        // the client show the truth.
-        // `chatRequest.model` is the routed value, routing and fallback both
-        // mutate it in place, whereas `requestedModel`/`originalModel` keep the
-        // caller's pre-routing string.
+        // `chatRequest.model` is the model that answered, after routing and
+        // fallback; `requestedModel` keeps the caller's pre-routing string.
         if (processed.chatRequest.model) {
           headers['X-AGI-Resolved-Model'] = processed.chatRequest.model;
         }
@@ -953,42 +900,12 @@ async function dispatchChatCompletions(
         return headers;
       };
 
-      // DURABLE INITIAL TURNS: a paid managed turn runs on the Workflow
-      // transport, so closing the laptop no longer kills work the user is being
-      // charged for, the run continues server-side, its approval is claimable
-      // from any surface, and the client reattaches through the run journal.
-      //
-      // The module docstring above used to say the Workflow transport was
-      // deliberately kept off this path because a poisoned `start()` could hang
-      // before returning and strand the client at startup. That is handled by
-      // ordering rather than avoidance: nothing has been generated, streamed, or
-      // consumed at this point, so a `start()` that THROWS falls through to the
-      // inline path below with no double execution possible
-      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
-      // durable attach fails). `approve/route.ts` has awaited the same call on a
-      // request path since durable resumes shipped.
-      //
-      // AGI-126: this used to read `processed.managedUsage && ...`, so the DEFAULT
-      // tier was the one tier that was never durable. A free-trial turn still got
-      // a `cloud_agent_runs` row, listed by the runs API, claimable by the
-      // approval APIs, so it LOOKED durable, then died with the client
-      // connection; and once such a turn paused on an approval it could never be
-      // resumed, because the resume routes could not rebuild a workflow input
-      // without a managed reservation.
-      //
-      // The tier no longer decides the transport. `CloudAgentWorkflowBilling`
-      // carries either reservation across the invocation boundary, and the
-      // workflow rehydrates it onto the matching side of `ProcessedRequest`, so a
-      // durable free turn is metered by exactly the free-tier budget an inline
-      // one is. A turn that carries neither reservation raises
-      // `CloudAgentWorkflowBillingUnavailableError` from the builder and lands in
-      // the same degrade below.
-      //
-      // A `start()` that THROWS is safe here: nothing has been generated,
-      // streamed, or consumed at this point, so falling through to the inline
-      // path cannot double-execute
-      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
-      // durable attach fails).
+      // A managed turn runs on the Workflow transport so it outlives the
+      // request, whatever the tier: the workflow carries the turn's free-tier or
+      // managed reservation. Nothing has been generated or streamed yet, so a
+      // `start()` that throws falls through to the inline path below without
+      // running the turn twice (`startCloudAgentWorkflowExecution` cancels the
+      // run it started if the durable attach fails).
       const durableBudgetApplies = !isAgiWorkTurn;
       const durableFirstEventBudgetMs = resolveDurableFirstEventBudgetMs();
       const durableTurnsEnabled = areDurableInitialTurnsEnabled();
@@ -1230,8 +1147,6 @@ async function dispatchChatCompletions(
       const streamHeaders = baseAgentHeaders();
       streamHeaders['X-AGI-Tool-Loop'] = 'active';
 
-      // AUDIT-FIX BUG-8: same gap as the research branch -- the agentic stream
-      // can sit silent through a 120 s tool call with no keepalive at all.
       return new NextResponse(withSseHeartbeat(agentStream), { headers: streamHeaders });
     }
 
@@ -1342,14 +1257,8 @@ async function dispatchChatCompletions(
       }
     }
 
-    // `processed.provider` is resolved via `getProviderFromModel`'s catalog
-    // lookup + heuristic fallback chain (request-processor.ts), which never
-    // produces anything outside the 12 providers in `ADAPTER_PROVIDERS`
-    // above -- so this is unreachable in practice, not a live dispatch path.
-    // Kept as an explicit, typed failure (refund + normal error response)
-    // rather than silently falling through to a removed module, so a future
-    // catalog change that somehow produces an unlisted provider id fails
-    // loud instead of throwing an unhandled "not a function" at runtime.
+    // A provider id outside `ADAPTER_PROVIDERS` is refunded and refused, so a
+    // catalog change that produced one fails as an ordinary error response.
     await refundFailedReservation(userId, processed, 'streaming_failure', 'unsupported_provider');
     return buildUpstreamErrorResponse(
       new Error(`Provider "${processed.provider}" is not supported.`),
@@ -1443,9 +1352,6 @@ async function dispatchChatCompletions(
     }
   }
 
-  // See the streaming branch's identical comment above: `processed.provider`
-  // can never fall outside `ADAPTER_PROVIDERS`, so this is an explicit,
-  // typed failure guard, not a live dispatch path.
   await refundFailedReservation(userId, processed, 'request_failure', 'unsupported_provider');
   return buildUpstreamErrorResponse(
     new Error(`Provider "${processed.provider}" is not supported.`),

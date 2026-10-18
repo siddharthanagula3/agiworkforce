@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { DeviceStepResumeRequestSchema } from '@agiworkforce/cloud-contracts';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
@@ -88,6 +90,7 @@ function buildSyntheticRequest(
 ): NextRequest {
   const headers = new Headers(request.headers);
   headers.delete('content-length');
+  if (!headers.has('idempotency-key')) headers.set('idempotency-key', randomUUID());
   return new NextRequest(request.url, {
     method: 'POST',
     headers,
