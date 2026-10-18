@@ -1152,7 +1152,7 @@ export async function loadManagedMemoryContext(
       where user_id = $1 and ${activeMemoryPredicate()} ${sourceFilter} ${projectFilter}
         and ${workspaceFilter}
         and ${memoryFreeOfGoogleUserDataSql(
-          "to_jsonb(user_memories)->>'source_conversation_id'",
+          'user_memories.source_conversation_id::text',
           'user_memories.user_id',
         )}
       order by pinned desc, updated_at desc
