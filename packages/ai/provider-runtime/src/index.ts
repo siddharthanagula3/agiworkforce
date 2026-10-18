@@ -88,6 +88,8 @@ export {
   type CredentialFailoverStateOptions,
 } from './failover';
 
+export { parseRetryAfter, parseRetryAfterFromError } from './retry-after-internal';
+
 export {
   TRACEPARENT_HEADER,
   installProviderTracer,
