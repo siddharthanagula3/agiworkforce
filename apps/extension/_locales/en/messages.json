@@ -5219,5 +5219,13 @@
   "spBrowserScreenshotAlt": {
     "message": "The page AGI is working on",
     "description": "Alt text of the latest browser task screenshot"
+  },
+  "spReadAloud": {
+    "message": "Read aloud",
+    "description": "Answer action that speaks the answer with the browser voice"
+  },
+  "spReadAloudStop": {
+    "message": "Stop reading aloud",
+    "description": "Answer action that stops speaking"
   }
 }

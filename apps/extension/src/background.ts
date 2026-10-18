@@ -5027,6 +5027,12 @@ async function handleMessageAsync(
       }
 
       clearPendingComputerUseStart(cuRunId);
+      const notificationTarget =
+        typeof cuMsg.historyConversationId === 'string' &&
+        cuMsg.historyConversationId.length > 0 &&
+        cuMsg.historyConversationId.length <= 200
+          ? { conversationId: cuMsg.historyConversationId, owner: authContext.owner }
+          : undefined;
       const lease = computerUseRuns.begin({
         runId: cuRunId,
         generation: Date.now() * 1_000 + (startGeneration % 1_000),
@@ -5100,6 +5106,7 @@ async function handleMessageAsync(
               ? 'Type into this field. The text is hidden here.'
               : describeComputerUseAction(toolName, args);
           const reason = describeApprovalReason(requirement);
+          void notifyBrowserTask('needs-input', notificationTarget);
           broadcastComputerUseForCurrentRun(lease, {
             type: 'AGI_CU_APPROVE_REQUEST',
             requestId,
@@ -5275,7 +5282,10 @@ async function handleMessageAsync(
             .sendMessage(cuTabId, { type: 'AGI_CU_SHOW_ACTION', x: point.x, y: point.y })
             .catch(() => undefined);
         },
-        requestTakeover: (reason) => handComputerUseTabToUser(lease, reason),
+        requestTakeover: (reason) => {
+          void notifyBrowserTask('needs-input', notificationTarget);
+          return handComputerUseTabToUser(lease, reason);
+        },
         pendingTakeover: () => (lease.takeover ? untilHandedBack(lease, lease.takeover) : null),
         isTakenOver: () => lease.takeover !== null,
         onBeforeAction,
@@ -5296,6 +5306,7 @@ async function handleMessageAsync(
       void completion.then(
         () => {
           if (!computerUseRuns.finish(lease)) return;
+          void notifyBrowserTask('finished', notificationTarget);
           sendComputerUseLifecycle({
             type: 'AGI_CU_STATE',
             status: 'completed',
@@ -5308,6 +5319,7 @@ async function handleMessageAsync(
           if (!computerUseRuns.finish(lease)) return;
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error('Computer-use agent loop error', err);
+          void notifyBrowserTask('failed', notificationTarget);
           sendComputerUseLifecycle({
             type: 'AGI_CU_ESCALATE',
             reason: errMsg,

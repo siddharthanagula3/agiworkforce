@@ -318,6 +318,7 @@ describe('browser tasks from the real composer functions', () => {
       goal: 'Click the Update preview button',
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]).toMatchObject({
       role: 'user',
@@ -355,6 +356,7 @@ describe('browser tasks from the real composer functions', () => {
       goal,
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]?.content).toBe(goal);
   });

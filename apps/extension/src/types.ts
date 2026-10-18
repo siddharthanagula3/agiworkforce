@@ -1034,6 +1034,7 @@ export interface StartComputerUseMessage {
   modelSelection?: string;
   selectedTabs?: readonly BrowserContextTabReference[];
   pageContext?: string;
+  historyConversationId?: string;
 }
 
 export interface CancelComputerUseMessage extends BaseMessage {

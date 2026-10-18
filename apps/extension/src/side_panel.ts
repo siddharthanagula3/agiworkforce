@@ -2255,6 +2255,7 @@ function injectStyles(): void {
     /* Keyboard users tab to an opacity:0 control and cannot see where focus is;
        touch devices never hover at all, so Copy was unreachable there. */
     .sp-copy-btn:focus-visible { opacity: 1; }
+    .sp-copy-btn.speaking { opacity: 1; color: var(--agi-ext-text); }
     @media (hover: none) {
       .sp-copy-btn { opacity: 1; }
     }
@@ -7900,6 +7901,7 @@ function startComposerBrowserTask(
         tabId: tab.id,
         modelSelection: run.modelSelection,
         ...(selectedTabs.length ? { selectedTabs, pageContext: pageContext ?? undefined } : {}),
+        ...(_ctx.temporaryChat ? {} : { historyConversationId: run.conversationId }),
       })) as ComputerUseCommandResponse | undefined;
       if (composerBrowserRun !== run || run.cancelling) return;
       if (response?.success !== true || response.runId !== run.runId) {

@@ -41,6 +41,8 @@ function collect(node: ts.Node): void {
 }
 collect(program);
 
+const notifyBrowserTask = vi.fn(async () => true);
+
 function harness() {
   const state = {
     current: true,
@@ -88,6 +90,8 @@ function harness() {
       sent.push(message as (typeof sent)[number]),
     describeComputerUseAction: () => 'Upload selected user files.',
     describeApprovalReason: () => 'Always requires approval.',
+    notifyBrowserTask,
+    notificationTarget: { conversationId: 'conversation-a', owner },
   };
   const snippet = [...declarations.values()]
     .map((node) => `const ${node.getText(program)};`)
@@ -174,6 +178,18 @@ describe('production background browser upload approval', () => {
     await expect(test.resolveUploadFile({ index: 1 })).rejects.toThrow('exact action');
     expect((await test.resolveUploadFile(args)).files[0]?.bytes).toEqual(bytes);
     await expect(test.resolveUploadFile(args)).rejects.toThrow('exact action');
+  });
+
+  it('tells the user the task waits on them when it asks for approval', async () => {
+    notifyBrowserTask.mockClear();
+    const test = harness();
+    const { decision, response } = await test.approve({ index: 1 });
+    expect(notifyBrowserTask).toHaveBeenCalledWith('needs-input', {
+      conversationId: 'conversation-a',
+      owner,
+    });
+    test.respond(response);
+    await decision;
   });
 
   it('refuses cross-run approval metadata and arbitrary model file arguments', async () => {

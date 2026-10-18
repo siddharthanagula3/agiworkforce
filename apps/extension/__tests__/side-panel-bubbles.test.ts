@@ -372,3 +372,69 @@ describe('interrupted reply (reload mid-stream)', () => {
     expect(onRetry).toHaveBeenCalledWith('stream-9');
   });
 });
+
+describe('in-chat browser turns and read aloud', () => {
+  it('renders the browser activity and its live controls inside the assistant turn', () => {
+    const controls = document.createElement('div');
+    controls.className = 'sp-browser-turn';
+    const el = buildBubbleWithTools(
+      msg({
+        role: 'assistant',
+        content: 'Filled the form.',
+        browserActivity: activity('completed'),
+      }),
+      { browserControls: controls },
+    );
+    const groups = el.querySelectorAll('.sp-agent-activity');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.querySelector('summary')?.textContent).toContain('Worked for');
+    expect(el.contains(controls)).toBe(true);
+    expect(groups[0]!.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('reads a finished answer aloud with the browser voice and stops on a second press', async () => {
+    const speak = vi.fn();
+    const cancel = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak, cancel, getVoices: () => [] });
+    vi.stubGlobal(
+      'SpeechSynthesisUtterance',
+      class {
+        rate = 1;
+        constructor(readonly text: string) {}
+      },
+    );
+    (globalThis as { chrome?: unknown }).chrome = {
+      i18n: { getMessage, getUILanguage: () => 'en' },
+      storage: { local: { get: vi.fn(async () => ({})) } },
+    };
+    try {
+      const el = buildBubbleWithTools(msg({ role: 'assistant', content: 'The answer is 42.' }));
+      const button = el.querySelector<HTMLButtonElement>('.sp-read-aloud-btn');
+      expect(button?.getAttribute('aria-label')).toBe('Read aloud');
+      button!.click();
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce());
+      expect((speak.mock.calls[0]![0] as { text: string }).text).toBe('The answer is 42.');
+      expect(button!.getAttribute('aria-pressed')).toBe('true');
+      button!.click();
+      expect(cancel).toHaveBeenCalled();
+      expect(button!.getAttribute('aria-label')).toBe('Read aloud');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('offers no read aloud on a failed answer or where the browser has no voice', () => {
+    expect(
+      buildBubbleWithTools(msg({ role: 'assistant', content: 'x', error: true })).querySelector(
+        '.sp-read-aloud-btn',
+      ),
+    ).toBeNull();
+    expect(
+      buildBubbleWithTools(msg({ role: 'assistant', content: 'x' })).querySelector(
+        '.sp-read-aloud-btn',
+      ),
+    ).toBeNull();
+  });
+});

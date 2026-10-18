@@ -45,7 +45,14 @@ import {
   Loader2,
   Monitor,
   RotateCcw,
+  Volume2,
 } from '../../assets/icons';
+import {
+  isReadAloudSupported,
+  loadReadAloudSettings,
+  speakAloud,
+  stopSpeaking,
+} from '../read-aloud';
 import { t, tPlural } from '../../i18n';
 import { renderMarkdownInto } from './markdown';
 import { el, formatTime } from './dom';
@@ -489,6 +496,46 @@ function buildCopyButton(label: string, text: () => string): HTMLElement {
   return el('span', { class: 'sp-copy-control' }, copyBtn, status);
 }
 
+let speakingButton: HTMLButtonElement | null = null;
+
+function setReadAloudState(button: HTMLButtonElement, speaking: boolean): void {
+  const label = speaking ? t('spReadAloudStop') : t('spReadAloud');
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-pressed', String(speaking));
+  button.classList.toggle('speaking', speaking);
+}
+
+function buildReadAloudButton(text: () => string): HTMLButtonElement {
+  const button = el('button', { class: 'sp-copy-btn sp-read-aloud-btn', type: 'button' });
+  button.appendChild(renderIcon(Volume2, 11));
+  setReadAloudState(button, false);
+  button.addEventListener('click', () => {
+    if (speakingButton === button) {
+      stopSpeaking();
+      setReadAloudState(button, false);
+      speakingButton = null;
+      return;
+    }
+    if (speakingButton) setReadAloudState(speakingButton, false);
+    speakingButton = button;
+    setReadAloudState(button, true);
+    void loadReadAloudSettings().then((settings) => {
+      if (speakingButton !== button) return;
+      const started = speakAloud(text(), settings, globalThis.speechSynthesis, () => {
+        if (speakingButton !== button) return;
+        speakingButton = null;
+        setReadAloudState(button, false);
+      });
+      if (!started) {
+        speakingButton = null;
+        setReadAloudState(button, false);
+      }
+    });
+  });
+  return button;
+}
+
 function buildRegenerateControl(
   msg: ChatMessage,
   onRegenerate: (messageId: string, modelSelection?: string) => void,
@@ -549,6 +596,9 @@ function buildActionRow(
     actionRow.appendChild(
       buildCopyButton(msg.role === 'user' ? t('spCopyMessage') : t('spCopyResponse'), copyText),
     );
+    if (msg.role === 'assistant' && !msg.error && isReadAloudSupported()) {
+      actionRow.appendChild(buildReadAloudButton(copyText));
+    }
   }
   if (options.onRegenerate && !msg.error && !msg.interrupted) {
     if (msg.role === 'user') {
