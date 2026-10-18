@@ -496,4 +496,27 @@ describe('live preview through the artifact sandbox', () => {
       'The live preview is not available right now, so the panel shows the source.',
     );
   });
+
+  it('falls back when the renderer says ready but never renders, as it does for a parent it refuses', () => {
+    vi.useFakeTimers();
+    const msg = finished();
+    live.close();
+    live.open(live.viewFor(msg).artifacts[0]!.id);
+    fromSandbox({ type: 'sandbox-ready' });
+    frame().dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(14_000);
+    expect(live.panelEl.querySelector('iframe')).not.toBeNull();
+    vi.advanceTimersByTime(1_000);
+    expect(live.panelEl.querySelector('iframe')).toBeNull();
+    expect(live.panelEl.querySelector('code')?.textContent).toBe(HTML_ARTIFACT);
+  });
+
+  it('keeps the preview once the renderer reports it rendered', () => {
+    vi.useFakeTimers();
+    fromSandbox({ type: 'sandbox-ready' });
+    fromSandbox({ type: 'render-complete', kind: 'html' });
+    vi.advanceTimersByTime(30_000);
+    expect(live.panelEl.querySelector('iframe')).not.toBeNull();
+    expect(live.panelEl.querySelector('.sp-artifact-panel__status')?.textContent).toBe('');
+  });
 });

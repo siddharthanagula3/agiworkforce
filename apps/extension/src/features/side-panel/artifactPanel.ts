@@ -266,6 +266,7 @@ const MAX_FILE_STEM_CHARS = 60;
 
 const SANDBOX_DOCUMENT_TIMEOUT_MS = 15_000;
 const SANDBOX_CONNECT_TIMEOUT_MS = 3_000;
+const SANDBOX_RENDER_TIMEOUT_MS = 15_000;
 const RUNTIME_REQUEST_ID = /^runtime-\d{1,12}$/;
 const SANDBOX_RENDERED_TYPES: ReadonlySet<SharedArtifactType> = new Set([
   'html',
@@ -533,7 +534,8 @@ export function createArtifactOutputs(
   let sandboxUnavailable = false;
   let frame: HTMLIFrameElement | null = null;
   let framePayload: ArtifactRenderPayload | null = null;
-  let frameConnected = false;
+  let frameReady = false;
+  let frameRendered = false;
   let frameEpoch = 0;
   let frameDeadline: ReturnType<typeof setTimeout> | null = null;
 
@@ -776,14 +778,15 @@ export function createArtifactOutputs(
     frameEpoch += 1;
     frame = null;
     framePayload = null;
-    frameConnected = false;
+    frameReady = false;
+    frameRendered = false;
     panelBody.classList.remove('sp-artifact-panel__body--frame');
   }
 
   function armFrameDeadline(epoch: number, milliseconds: number): void {
     clearFrameDeadline();
     frameDeadline = setTimeout(() => {
-      if (epoch !== frameEpoch || frameConnected) return;
+      if (epoch !== frameEpoch || frameRendered) return;
       sandboxUnavailable = true;
       renderedKey = null;
       renderPanel();
@@ -809,7 +812,7 @@ export function createArtifactOutputs(
     iframe.addEventListener('load', () => {
       if (epoch !== frameEpoch) return;
       postFramePayload();
-      if (!frameConnected) armFrameDeadline(epoch, SANDBOX_CONNECT_TIMEOUT_MS);
+      if (!frameReady) armFrameDeadline(epoch, SANDBOX_CONNECT_TIMEOUT_MS);
     });
     frame = iframe;
     framePayload = payload;
@@ -826,17 +829,19 @@ export function createArtifactOutputs(
     if (!data || typeof data !== 'object') return;
     switch (data.type) {
       case 'sandbox-ready':
-        frameConnected = true;
-        clearFrameDeadline();
+        frameReady = true;
         postFramePayload();
+        armFrameDeadline(frameEpoch, SANDBOX_RENDER_TIMEOUT_MS);
         return;
       case 'render-complete':
-        frameConnected = true;
+        frameReady = true;
+        frameRendered = true;
         clearFrameDeadline();
         panelStatus.textContent = '';
         return;
       case 'render-error':
-        frameConnected = true;
+        frameReady = true;
+        frameRendered = true;
         clearFrameDeadline();
         panelStatus.textContent = t('spArtifactPreviewFailed');
         return;
