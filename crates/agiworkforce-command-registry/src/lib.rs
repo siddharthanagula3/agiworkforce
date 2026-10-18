@@ -124,20 +124,6 @@ impl RegistryCommand {
         let normalized = candidate.trim_start_matches('/');
         self.name == normalized || self.aliases.iter().any(|alias| *alias == normalized)
     }
-
-    pub fn matches_filter(&self, filter: &str) -> bool {
-        if filter.is_empty() {
-            return true;
-        }
-
-        let normalized = filter.trim_start_matches('/').to_lowercase();
-        self.name.to_lowercase().contains(&normalized)
-            || self.description.to_lowercase().contains(&normalized)
-            || self
-                .aliases
-                .iter()
-                .any(|alias| alias.to_lowercase().contains(&normalized))
-    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -565,13 +551,6 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             true,
             false,
             vec!["quit", "q"],
-        ),
-        RegistryCommand::builtin_slash(
-            "focus",
-            "Toggle focus view (hide chrome, full-width composer)",
-            true,
-            false,
-            vec![],
         ),
         RegistryCommand::builtin_slash(
             "advisor",

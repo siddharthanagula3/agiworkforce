@@ -499,7 +499,6 @@ mod tests {
             "recap",
             "release-notes",
             "keybindings",
-            "focus",
             "remote-env",
             "add-dir",
             "color",

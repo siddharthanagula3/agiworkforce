@@ -28,6 +28,7 @@ pub enum CloudError {
         message: String,
     },
     Decode(String),
+    LocalFile(String),
     /// The deployment refused this build's contract version. Held as the CLI
     /// error itself so the process exits on its class rather than on the
     /// undifferentiated failure every other HTTP status shares.
@@ -61,6 +62,7 @@ impl std::fmt::Display for CloudError {
             }
             CloudError::Api { status, message } => write!(f, "{message} (HTTP {status})"),
             CloudError::UpgradeRequired(error) => error.fmt(f),
+            CloudError::LocalFile(message) => f.write_str(message),
             CloudError::Decode(message) => {
                 write!(
                     f,
@@ -486,25 +488,51 @@ async fn write_body(
     mut response: reqwest::Response,
     target: &std::path::Path,
 ) -> Result<u64, CloudError> {
-    let write_error = |error: std::io::Error| {
-        CloudError::Transport(format!("could not write {}: {error}", target.display()))
-    };
-    let mut file = tokio::fs::File::create(target).await.map_err(write_error)?;
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(target)
+        .await
+        .map_err(|error| local_file_error(target, &error))?;
+    let written = copy_body(&mut response, &mut file, target).await;
+    if written.is_err() {
+        drop(file);
+        let _ = tokio::fs::remove_file(target).await;
+    }
+    written
+}
+
+async fn copy_body(
+    response: &mut reqwest::Response,
+    file: &mut tokio::fs::File,
+    target: &std::path::Path,
+) -> Result<u64, CloudError> {
     let mut written = 0u64;
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|error| CloudError::Transport(error.to_string()))?
     {
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+        tokio::io::AsyncWriteExt::write_all(&mut *file, &chunk)
             .await
-            .map_err(write_error)?;
+            .map_err(|error| local_file_error(target, &error))?;
         written += chunk.len() as u64;
     }
-    tokio::io::AsyncWriteExt::flush(&mut file)
+    tokio::io::AsyncWriteExt::flush(&mut *file)
         .await
-        .map_err(write_error)?;
+        .map_err(|error| local_file_error(target, &error))?;
     Ok(written)
+}
+
+fn local_file_error(target: &std::path::Path, error: &std::io::Error) -> CloudError {
+    CloudError::LocalFile(if error.kind() == std::io::ErrorKind::AlreadyExists {
+        format!(
+            "{} already exists, so nothing was overwritten. Move it, or download into another folder.",
+            target.display()
+        )
+    } else {
+        format!("could not write {}: {error}", target.display())
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

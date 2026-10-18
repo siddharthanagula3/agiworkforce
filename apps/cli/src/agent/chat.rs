@@ -3436,11 +3436,9 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
             }
             // Text/reasoning deltas are rendered app-locally inside `complete`;
-            // the fallback rotation fires the session's own `on_fallback` sink
-            // there; `TurnComplete` is observed post-loop by the orchestrator.
+            // `TurnComplete` is observed post-loop by the orchestrator.
             TurnEvent::TextDelta { .. }
             | TurnEvent::ReasoningDelta { .. }
-            | TurnEvent::FallbackRotated { .. }
             | TurnEvent::TurnComplete { .. } => {}
         }
     }

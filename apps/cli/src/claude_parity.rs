@@ -57,7 +57,6 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "insights",
         "feedback",
         "bug",
-        "focus",
         "team-onboarding",
         "terminal-setup",
         "shell-setup",
@@ -214,10 +213,6 @@ pub fn handle_shared_command(
                 message: feature.unwrap_or(request).trim().to_string(),
             }
         }
-        "/focus" => ParityCommandResult::SystemMessage(
-            "Focus mode is not implemented. Use /statusline to choose which status fields render."
-                .to_string(),
-        ),
         "/advisor" => ParityCommandResult::NotHandled,
         "/team-onboarding" => ParityCommandResult::SystemMessage(render_team_onboarding()),
         "/terminal-setup" | "/shell-setup" => {

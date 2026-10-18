@@ -316,7 +316,7 @@ pub(crate) fn remove_plugin(name: &str) -> Result<PathBuf> {
         .plugins
         .contains_key(name)
     {
-        crate::marketplace::Marketplace::new_production().uninstall(name, &home)?;
+        crate::marketplace::Marketplace.uninstall(name, &home)?;
         return Ok(target);
     }
     let metadata = std::fs::symlink_metadata(&target)

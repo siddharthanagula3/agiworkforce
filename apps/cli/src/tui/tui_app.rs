@@ -5466,12 +5466,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
         }
 
-        "/focus" => {
-            SlashResult::SystemMessage(
-                "Focus mode is not implemented. Use /statusline to choose which status fields render.".into(),
-            )
-        }
-
         "/advisor" => {
             if arg.is_empty() {
                 SlashResult::SystemMessage(
@@ -8979,7 +8973,6 @@ mod tests {
             "statusline",
             "title",
             "diff-review",
-            "focus",
             "advisor",
             "team-onboarding",
             "onboarding",

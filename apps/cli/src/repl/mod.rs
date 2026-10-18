@@ -332,18 +332,18 @@ pub async fn run_repl(
                             match (subcmd.as_str(), home) {
                                 (sub, Ok(_home)) if sub.starts_with("search ") => {
                                     let query = sub.strip_prefix("search ").unwrap_or_default();
-                                    let mp = crate::marketplace::Marketplace::new_production();
-                                    match mp.search(query).await {
-                                        Ok(results) => {
-                                            eprintln!(
-                                                "{}",
-                                                sanitize_terminal_text(
-                                                    &crate::marketplace::format_search_results(
-                                                        &results
-                                                    )
-                                                )
-                                            );
+                                    let privacy = crate::account_privacy_mode();
+                                    let found = match crate::cloud::CloudClient::connect(privacy) {
+                                        Ok(client) => {
+                                            crate::cloud::marketplaces::search_catalogue(
+                                                &client, query,
+                                            )
+                                            .await
                                         }
+                                        Err(error) => Err(error),
+                                    };
+                                    match found {
+                                        Ok(text) => eprintln!("{text}"),
                                         Err(e) => {
                                             output::print_error(&format!(
                                                 "Marketplace search failed: {}",

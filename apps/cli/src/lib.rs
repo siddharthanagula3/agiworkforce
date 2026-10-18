@@ -161,10 +161,6 @@ pub mod trust;
 pub mod update_check;
 pub mod usage_summary;
 
-// Phase-2 candidates, implementations exist but the user-facing surface is
-// not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
-#[allow(dead_code)]
-// PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
 #[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
 pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
@@ -2258,7 +2254,7 @@ enum MarketplaceSubcommand {
     },
     /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
     Get { reference: String },
-    /// Search the remote plugin marketplace.
+    /// Search the plugins on the marketplaces added to your account.
     Search {
         /// Search query.
         query: String,
@@ -6992,7 +6988,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             // --- Marketplace ---
             Command::Marketplace { action } => {
                 let home = config::CliConfig::config_dir()?;
-                let mp = marketplace::Marketplace::new_production();
+                let mp = marketplace::Marketplace;
                 match action {
                     MarketplaceSubcommand::Add {
                         repository_url,
@@ -7140,13 +7136,18 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         Ok(())
                     }
                     MarketplaceSubcommand::Search { query } => {
-                        let results = mp.search(query).await?;
-                        println!(
-                            "{}",
-                            terminal_text::sanitize_terminal_text(
-                                &marketplace::format_search_results(&results)
-                            )
-                        );
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let found = cloud::marketplaces::search_catalogue(&client, query)
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!("{found}");
                         Ok(())
                     }
                     MarketplaceSubcommand::Install {

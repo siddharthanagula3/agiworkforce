@@ -1028,18 +1028,11 @@ fn turn_failure_code_for_gateway_code(code: &str) -> Option<TurnFailureCode> {
 // ---------------------------------------------------------------------------
 
 /// Default retry delay when no explicit `retry_after` is available.
-#[allow(dead_code)]
 const DEFAULT_RETRY_DELAY_SECS: u64 = 2;
 
-/// Maximum backoff delay (30 seconds).
-#[allow(dead_code)]
-const MAX_BACKOFF_MS: u64 = 30_000;
-
 /// HTTP status codes that indicate a retryable server-side error.
-#[allow(dead_code)]
 const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504];
 
-#[allow(dead_code)]
 impl CliError {
     /// Returns `true` if the error is transient and the request can be retried.
     ///
@@ -1074,24 +1067,6 @@ impl CliError {
             } => Duration::from_secs(*secs),
             _ => Duration::from_secs(DEFAULT_RETRY_DELAY_SECS),
         }
-    }
-
-    /// Exponential backoff delay for retry attempt `attempt` (1-indexed).
-    ///
-    /// Uses `retry_delay()` as the base and multiplies by 2^(attempt-1),
-    /// capped at 30 seconds. Attempt 0 and 1 both return the base delay.
-    ///
-    /// Examples (with 2s base):
-    /// - attempt 1 → 2s
-    /// - attempt 2 → 4s
-    /// - attempt 3 → 8s
-    /// - attempt 4 → 16s
-    /// - attempt 5 → 30s (capped)
-    pub fn retry_delay_with_backoff(&self, attempt: u32) -> Duration {
-        let base = self.retry_delay();
-        let multiplier = 2u64.pow(attempt.saturating_sub(1));
-        let delay = base.as_millis() as u64 * multiplier;
-        Duration::from_millis(delay.min(MAX_BACKOFF_MS))
     }
 
     /// Returns `true` if this error represents a context/token overflow,
@@ -1703,85 +1678,6 @@ mod tests {
         assert_eq!(
             err.retry_delay(),
             Duration::from_secs(DEFAULT_RETRY_DELAY_SECS)
-        );
-    }
-
-    // -- retry_delay_with_backoff --
-
-    #[test]
-    fn backoff_attempt_0_returns_base() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 0: 2^(0-1 saturating) = 2^0 = 1 => 2000 * 1 = 2000ms
-        assert_eq!(err.retry_delay_with_backoff(0), Duration::from_millis(2000));
-    }
-
-    #[test]
-    fn backoff_attempt_1_returns_base() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 1: 2^(1-1) = 2^0 = 1 => 2000 * 1 = 2000ms
-        assert_eq!(err.retry_delay_with_backoff(1), Duration::from_millis(2000));
-    }
-
-    #[test]
-    fn backoff_attempt_2_doubles() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 2: 2^(2-1) = 2 => 2000 * 2 = 4000ms
-        assert_eq!(err.retry_delay_with_backoff(2), Duration::from_millis(4000));
-    }
-
-    #[test]
-    fn backoff_attempt_3_quadruples() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 3: 2^(3-1) = 4 => 2000 * 4 = 8000ms
-        assert_eq!(err.retry_delay_with_backoff(3), Duration::from_millis(8000));
-    }
-
-    #[test]
-    fn backoff_attempt_4() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 4: 2^(4-1) = 8 => 2000 * 8 = 16000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(4),
-            Duration::from_millis(16_000)
-        );
-    }
-
-    #[test]
-    fn backoff_caps_at_30s() {
-        let err = CliError::api("openai", 500, "error");
-        // attempt 5: 2^(5-1) = 16 => 2000 * 16 = 32000ms, capped to 30000
-        assert_eq!(
-            err.retry_delay_with_backoff(5),
-            Duration::from_millis(30_000)
-        );
-    }
-
-    #[test]
-    fn backoff_very_high_attempt_caps() {
-        let err = CliError::api("openai", 500, "error");
-        assert_eq!(
-            err.retry_delay_with_backoff(20),
-            Duration::from_millis(30_000)
-        );
-    }
-
-    #[test]
-    fn backoff_with_rate_limit_retry_after() {
-        let err = CliError::rate_limited("anthropic", Some(10));
-        // base = 10s = 10000ms, attempt 2 => 10000 * 2 = 20000ms
-        assert_eq!(
-            err.retry_delay_with_backoff(2),
-            Duration::from_millis(20_000)
-        );
-    }
-
-    #[test]
-    fn backoff_rate_limit_caps_at_30s() {
-        let err = CliError::rate_limited("anthropic", Some(10));
-        // base = 10s = 10000ms, attempt 3 => 10000 * 4 = 40000ms, capped to 30000
-        assert_eq!(
-            err.retry_delay_with_backoff(3),
-            Duration::from_millis(30_000)
         );
     }
 

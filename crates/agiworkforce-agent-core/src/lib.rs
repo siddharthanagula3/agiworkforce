@@ -197,9 +197,7 @@ pub enum LoopControl {
 /// `TextDelta`/`ReasoningDelta` are populated only when the host feeds stream
 /// events to [`TurnHost::complete`]'s sink; the CLI renders text app-locally
 /// inside `complete` (to keep byte-for-byte incremental output) and treats these
-/// as no-ops, while fixtures and the desktop host consume them. `FallbackRotated`
-/// is likewise host-emitted in the CLI (its `on_fallback` sink fires inside
-/// `complete`); the variant exists for the desktop host and fixtures.
+/// as no-ops, while fixtures and the desktop host consume them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum TurnEvent {
@@ -207,13 +205,6 @@ pub enum TurnEvent {
     TextDelta { text: String, phase: TurnPhase },
     /// An extended-thinking delta (never merged into the answer).
     ReasoningDelta { text: String },
-    /// The fallback chain rotated models. (Desktop/fixtures; the CLI fires its
-    /// own `on_fallback` sink inside `complete`.)
-    FallbackRotated {
-        from: String,
-        to: String,
-        kind: String,
-    },
     /// A new agentic iteration is about to dispatch `tool_count` tools.
     IterationStarted {
         tool_count: usize,

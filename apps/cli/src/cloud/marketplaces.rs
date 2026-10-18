@@ -137,6 +137,66 @@ pub async fn install(
     Ok(installed.installation)
 }
 
+/// Every plugin on the account's marketplaces whose name or description holds
+/// `query`, rendered the way `browse` names them.
+pub async fn search_catalogue(client: &CloudClient, query: &str) -> Result<String, CloudError> {
+    let sources = list(client).await?;
+    let catalogue = entries(client).await?;
+    Ok(render_search(query, &sources, &matching(&catalogue, query)))
+}
+
+fn matching<'a>(catalogue: &'a [MarketplaceEntry], query: &str) -> Vec<&'a MarketplaceEntry> {
+    let needle = query.trim().to_lowercase();
+    catalogue
+        .iter()
+        .filter(|entry| {
+            entry.name.to_lowercase().contains(&needle)
+                || entry
+                    .description
+                    .as_deref()
+                    .is_some_and(|description| description.to_lowercase().contains(&needle))
+        })
+        .collect()
+}
+
+fn render_search(
+    query: &str,
+    sources: &[MarketplaceSource],
+    matches: &[&MarketplaceEntry],
+) -> String {
+    let sanitize = |text: &str| crate::terminal_text::sanitize_terminal_text(text).into_owned();
+    if matches.is_empty() {
+        return format!(
+            "No plugin on your account's marketplaces matches \"{}\". `agi marketplace sources` lists them.",
+            sanitize(query)
+        );
+    }
+    let mut lines = vec![format!(
+        "Plugins matching \"{}\" ({})",
+        sanitize(query),
+        matches.len()
+    )];
+    for entry in matches {
+        let marketplace = sources
+            .iter()
+            .find(|source| source.id == entry.source_id)
+            .map_or_else(|| sanitize(&entry.source_id), |source| sanitize(&source.name));
+        lines.push(format!(
+            "  {}@{}  {}",
+            sanitize(&entry.name),
+            marketplace,
+            entry.version.as_deref().map(sanitize).unwrap_or_default()
+        ));
+        if let Some(description) = entry.description.as_deref() {
+            lines.push(format!("      {}", sanitize(description)));
+        }
+    }
+    lines.push(
+        "Install one on your account with `agi marketplace get <plugin>@<marketplace>`.".to_string(),
+    );
+    lines.join("\n")
+}
+
 pub fn source_matches(source: &MarketplaceSource, reference: &str) -> bool {
     source.id == reference || source.name.eq_ignore_ascii_case(reference)
 }

@@ -78,7 +78,6 @@ fn m22_targeted_commands_are_all_registered() {
 
     // Newly added by M22:
     for name in [
-        "focus",
         "advisor",
         "team-onboarding",
         "terminal-setup",

@@ -1,8 +1,5 @@
-//! Plugin marketplace registry, search, install, uninstall, and update plugins.
-//!
-//! The remote registry at `registry.agiworkforce.com` is future-proofed;
-//! `search()` degrades gracefully to an empty list when the registry is
-//! unreachable.  Primary install methods are local path and git URL.
+//! Install, uninstall and update plugins from a local path or git URL. The
+//! account's marketplace catalogue is read through `crate::cloud::marketplaces`.
 //!
 //! Installed plugins are tracked in `~/.agiworkforce/plugins/installed.json`.
 //!
@@ -140,154 +137,16 @@ fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> b
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_REGISTRY_URL: &str = "https://registry.agiworkforce.com/plugins/v1";
-/// Placeholder URL used by `Marketplace::default()`, matches the v1.2.1 spec.
-const MARKETPLACE_PLACEHOLDER_URL: &str = "https://marketplace.agiworkforce.com";
 const CACHE_DIR: &str = "cache";
-
-// ---------------------------------------------------------------------------
-// Registry types
-// ---------------------------------------------------------------------------
-
-/// A plugin listed in the remote marketplace registry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MarketplacePlugin {
-    pub name: String,
-    pub description: String,
-    #[serde(default)]
-    pub version: String,
-    #[serde(default)]
-    pub author: String,
-    #[serde(default)]
-    pub download_url: Option<String>,
-    #[serde(default)]
-    pub repository: Option<String>,
-    #[serde(default)]
-    pub category: String,
-    #[serde(default)]
-    pub keywords: Vec<String>,
-}
-
-/// Wrapper for the remote registry JSON response.
-#[derive(Debug, Deserialize)]
-struct RegistryResponse {
-    #[serde(default)]
-    plugins: Vec<MarketplacePlugin>,
-}
-
-/// Top-level registry index document (v1.2.1 format).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MarketplaceIndex {
-    pub registry_version: String,
-    pub plugins: Vec<MarketplacePlugin>,
-}
 
 // ---------------------------------------------------------------------------
 // Marketplace client
 // ---------------------------------------------------------------------------
 
-/// Client for the AGI Workforce plugin marketplace.
-pub struct Marketplace {
-    pub registry_url: String,
-    client: reqwest::Client,
-}
-
-impl Default for Marketplace {
-    fn default() -> Self {
-        Self::new(MARKETPLACE_PLACEHOLDER_URL)
-    }
-}
+/// Installs and maintains plugins under the AGI Workforce config directory.
+pub struct Marketplace;
 
 impl Marketplace {
-    /// Create a client targeting `registry_url`.
-    pub fn new(registry_url: impl Into<String>) -> Self {
-        Self {
-            registry_url: registry_url.into(),
-            client: reqwest::Client::builder()
-                .user_agent(concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")))
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .unwrap_or_default(),
-        }
-    }
-
-    /// Create a client pointing at the production registry URL.
-    pub fn new_production() -> Self {
-        Self::new(DEFAULT_REGISTRY_URL)
-    }
-
-    /// Create a marketplace client with a custom registry URL (compat alias).
-    #[allow(dead_code)]
-    pub fn with_url(url: &str) -> Self {
-        Self::new(url)
-    }
-
-    /// Fetch and return the registry index document.
-    pub async fn list_plugins(&self) -> Result<Vec<MarketplacePlugin>> {
-        let url = format!("{}/registry.json", self.registry_url.trim_end_matches('/'));
-        let resp = match self.client.get(&url).send().await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[marketplace] registry unreachable: {e}");
-                return Ok(Vec::new());
-            }
-        };
-        if !resp.status().is_success() {
-            eprintln!(
-                "Marketplace list returned HTTP {}: results may be incomplete.",
-                resp.status()
-            );
-            return Ok(Vec::new());
-        }
-        let index: MarketplaceIndex = resp.json().await.context("parse registry.json")?;
-        Ok(index.plugins)
-    }
-
-    // -----------------------------------------------------------------------
-    // Search
-    // -----------------------------------------------------------------------
-
-    /// Search the remote marketplace.
-    ///
-    /// Tries an HTTP GET to the registry. If the registry is unreachable or
-    /// returns an error, returns an empty list instead of failing.
-    pub async fn search(&self, query: &str) -> Result<Vec<MarketplacePlugin>> {
-        let url = format!("{}/search?q={}", self.registry_url, urlencoded(query));
-
-        let result = self.client.get(&url).send().await;
-
-        match result {
-            Ok(resp) if resp.status().is_success() => {
-                let body = resp.text().await.unwrap_or_default();
-                match serde_json::from_str::<RegistryResponse>(&body) {
-                    Ok(registry) => Ok(registry.plugins),
-                    Err(_) => {
-                        // Try alternate format: bare array
-                        match serde_json::from_str::<Vec<MarketplacePlugin>>(&body) {
-                            Ok(plugins) => Ok(plugins),
-                            Err(_) => Ok(Vec::new()),
-                        }
-                    }
-                }
-            }
-            Ok(resp) => {
-                eprintln!(
-                    "Marketplace search returned HTTP {}: results may be incomplete.",
-                    resp.status()
-                );
-                Ok(Vec::new())
-            }
-            Err(e) => {
-                eprintln!("[marketplace] registry unreachable: {e}");
-                Ok(Vec::new())
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Install
-    // -----------------------------------------------------------------------
-
     /// Install a plugin from a local path or git URL.
     ///
     /// - Local path: copies the directory into `~/.agiworkforce/plugins/<name>/`
@@ -978,33 +837,6 @@ pub fn format_installed(registry: &InstalledPlugins) -> String {
     out
 }
 
-/// Format marketplace search results for display.
-pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
-    if plugins.is_empty() {
-        return "No plugins found.\n\nThe marketplace registry may be offline. \
-                Try installing directly:\n  agi plugin install <git-url>"
-            .to_string();
-    }
-
-    let mut out = String::new();
-    for p in plugins {
-        let author = if p.author.is_empty() {
-            "unknown".to_string()
-        } else {
-            p.author.clone()
-        };
-        out.push_str(&format!(
-            "  {:<25} {} (by {}, v{})\n",
-            p.name, p.description, author, p.version,
-        ));
-        if let Some(ref url) = p.repository {
-            out.push_str(&format!("    {}\n", url));
-        }
-    }
-    out.push_str(&format!("\n{} result(s).", plugins.len()));
-    out
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -1158,14 +990,6 @@ pub(crate) fn validate_git_clone_url(url: &str) -> Result<()> {
     Ok(())
 }
 
-/// Minimal percent-encoding for query strings.
-fn urlencoded(s: &str) -> String {
-    s.replace(' ', "%20")
-        .replace('&', "%26")
-        .replace('=', "%3D")
-        .replace('#', "%23")
-}
-
 /// Recursively copy a directory tree.
 ///
 /// Symlinks are skipped rather than followed: `symlink_metadata` does not
@@ -1268,116 +1092,6 @@ mod tests {
     }
 
     #[test]
-    fn test_urlencoded_spaces() {
-        assert_eq!(urlencoded("hello world"), "hello%20world");
-    }
-
-    #[test]
-    fn test_urlencoded_special_chars() {
-        assert_eq!(urlencoded("a&b=c#d"), "a%26b%3Dc%23d");
-    }
-
-    #[test]
-    fn test_marketplace_new() {
-        let m = Marketplace::new_production();
-        assert_eq!(m.registry_url, DEFAULT_REGISTRY_URL);
-    }
-
-    #[test]
-    fn test_marketplace_custom_url() {
-        let m = Marketplace::with_url("https://custom.example.com/v1");
-        assert_eq!(m.registry_url, "https://custom.example.com/v1");
-    }
-
-    #[test]
-    fn default_uses_placeholder_url() {
-        let m = Marketplace::default();
-        assert!(m.registry_url.contains("agiworkforce.com"));
-    }
-
-    #[test]
-    fn explicit_url_overrides_default() {
-        let m = Marketplace::new("https://internal.example.com");
-        assert_eq!(m.registry_url, "https://internal.example.com");
-    }
-
-    #[test]
-    fn marketplace_plugin_serde_roundtrip() {
-        let p = MarketplacePlugin {
-            name: "demo".into(),
-            version: "0.1.0".into(),
-            description: "Test plugin".into(),
-            author: "me".into(),
-            download_url: Some("https://example.com/demo-0.1.0.tar.gz".into()),
-            repository: None,
-            category: "test".into(),
-            keywords: vec!["test".into()],
-        };
-        let j = serde_json::to_string(&p).unwrap();
-        let back: MarketplacePlugin = serde_json::from_str(&j).unwrap();
-        assert_eq!(p.name, back.name);
-        assert_eq!(p.version, back.version);
-    }
-
-    #[test]
-    fn index_serde_roundtrip() {
-        let idx = MarketplaceIndex {
-            registry_version: "1.0".into(),
-            plugins: vec![MarketplacePlugin {
-                name: "demo".into(),
-                version: "0.1.0".into(),
-                description: "Test".into(),
-                author: String::new(),
-                download_url: Some("https://example.com/x.tar.gz".into()),
-                repository: None,
-                category: String::new(),
-                keywords: vec![],
-            }],
-        };
-        let j = serde_json::to_string(&idx).unwrap();
-        let back: MarketplaceIndex = serde_json::from_str(&j).unwrap();
-        assert_eq!(back.registry_version, "1.0");
-        assert_eq!(back.plugins.len(), 1);
-    }
-
-    #[test]
-    fn search_filters_by_name_description_or_keyword() {
-        let plugins = [
-            MarketplacePlugin {
-                name: "rust-helper".into(),
-                version: "1.0".into(),
-                description: "Helps with Rust".into(),
-                author: String::new(),
-                download_url: None,
-                repository: None,
-                category: String::new(),
-                keywords: vec!["rust".into()],
-            },
-            MarketplacePlugin {
-                name: "linter".into(),
-                version: "1.0".into(),
-                description: "Generic linter".into(),
-                author: String::new(),
-                download_url: None,
-                repository: None,
-                category: String::new(),
-                keywords: vec!["lint".into()],
-            },
-        ];
-        let q = "rust";
-        let filtered: Vec<_> = plugins
-            .iter()
-            .filter(|p| {
-                p.name.to_lowercase().contains(q)
-                    || p.description.to_lowercase().contains(q)
-                    || p.keywords.iter().any(|t| t.to_lowercase().contains(q))
-            })
-            .collect();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].name, "rust-helper");
-    }
-
-    #[test]
     fn test_format_installed_empty() {
         let reg = InstalledPlugins {
             version: 1,
@@ -1410,32 +1124,6 @@ mod tests {
         assert!(out.contains("1.2.0"));
         assert!(out.contains("[user]"));
         assert!(out.contains("1 plugin(s) installed."));
-    }
-
-    #[test]
-    fn test_format_search_results_empty() {
-        let out = format_search_results(&[]);
-        assert!(out.contains("No plugins found."));
-    }
-
-    #[test]
-    fn test_format_search_results_with_results() {
-        let plugins = vec![MarketplacePlugin {
-            name: "cool-plugin".to_string(),
-            description: "Does cool things".to_string(),
-            version: "2.0.0".to_string(),
-            author: "Jane".to_string(),
-            download_url: None,
-            repository: Some("https://github.com/jane/cool-plugin".to_string()),
-            category: "tools".to_string(),
-            keywords: vec!["cool".to_string()],
-        }];
-        let out = format_search_results(&plugins);
-        assert!(out.contains("cool-plugin"));
-        assert!(out.contains("Does cool things"));
-        assert!(out.contains("Jane"));
-        assert!(out.contains("https://github.com/jane/cool-plugin"));
-        assert!(out.contains("1 result(s)."));
     }
 
     #[test]
@@ -1495,7 +1183,7 @@ mod tests {
         std::fs::create_dir_all(&keep).unwrap();
         std::fs::write(keep.join("marker.txt"), "keep").unwrap();
 
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let err = mp
             .install(
                 "https://example.invalid/..",
@@ -1542,7 +1230,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let (_source, source_dir) = unsigned_source();
 
-        Marketplace::with_url("http://127.0.0.1:1")
+        Marketplace
             .install(
                 source_dir.to_str().unwrap(),
                 home.path(),
@@ -1644,7 +1332,7 @@ mod tests {
 
     #[test]
     fn an_unsigned_update_rolls_back_when_signatures_are_required_without_asking() {
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
         let mut asked = 0;
         mp.update_all_with(
@@ -1668,7 +1356,7 @@ mod tests {
 
     #[test]
     fn a_pulled_update_stays_only_when_it_is_approved() {
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let policy = crate::plugins::PluginSignaturePolicy::default();
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
 
@@ -1720,7 +1408,7 @@ mod tests {
 
     #[test]
     fn an_update_pulled_and_never_decided_is_asked_about_on_the_next_run() {
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let policy = crate::plugins::PluginSignaturePolicy::default();
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
         let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
@@ -1753,7 +1441,7 @@ mod tests {
 
     #[test]
     fn a_marker_that_names_no_commit_keeps_the_plugin_off_when_the_update_is_refused() {
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let (_origin, home, install_path) = cloned_plugin_with_pending_update();
         let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
         std::fs::write(&marker, "--hard-to-believe").unwrap();
@@ -1775,7 +1463,7 @@ mod tests {
 
     #[test]
     fn the_review_names_the_hooks_and_servers_an_update_brings() {
-        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let mp = Marketplace;
         let (_origin, home, _install_path) = cloned_plugin_with_update(
             r#"{
                 "name": "tracked",
@@ -1851,7 +1539,7 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let (_source, source_dir) = unsigned_source();
 
-        let err = Marketplace::with_url("http://127.0.0.1:1")
+        let err = Marketplace
             .install(
                 source_dir.to_str().unwrap(),
                 home.path(),
@@ -1870,13 +1558,5 @@ mod tests {
         assert!(!Marketplace::list_installed(home.path())
             .plugins
             .contains_key("unsigned"));
-    }
-
-    #[tokio::test]
-    async fn test_search_unreachable_registry() {
-        // Search against a guaranteed-unreachable URL should return empty, not error
-        let m = Marketplace::with_url("http://127.0.0.1:1");
-        let results = m.search("test").await.unwrap();
-        assert!(results.is_empty());
     }
 }

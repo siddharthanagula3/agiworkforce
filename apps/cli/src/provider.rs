@@ -1,15 +1,4 @@
-//! LLM provider trait and per-provider implementations.
-//!
-//! Each provider normalizes messages, tool definitions, and streaming responses
-//! into a common format. Provider-specific quirks are handled here.
-
-// Provider catalog mixes live helpers (find_model, provider_for_model,
-// format_model_list[_with_local], used by lib.rs, doctor.rs, slash_commands.rs,
-// --list-models) with reserved-for-future-wiring helpers
-// (models_for_provider, supports_tool_use, default_temperature, …). Rather than
-// a blanket file-level `#![allow(dead_code)]`, each currently-unwired item
-// carries its own scoped `#[allow(dead_code)]` so a genuinely orphaned *new*
-// helper still trips the dead-code lint instead of rotting unnoticed.
+//! Model catalog view used for listing, lookup and provider detection.
 
 use crate::model_catalog;
 
@@ -93,15 +82,6 @@ pub fn find_model(model_id: &str) -> Option<ModelInfo> {
     }
 }
 
-/// List all models for a given provider.
-#[allow(dead_code)] // reserved: provider-scoped catalog views (exercised by tests)
-pub fn models_for_provider(provider: &str) -> Vec<ModelInfo> {
-    model_catalog()
-        .into_iter()
-        .filter(|m| m.provider == provider)
-        .collect()
-}
-
 fn looks_like_local_ollama_model(model_id: &str) -> bool {
     let lower = model_id.to_lowercase();
     lower.starts_with("ollama:") || (lower.contains(':') && !lower.contains('/'))
@@ -127,61 +107,6 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     } else {
         None
     }
-}
-
-/// Check whether a model supports tool use (function calling).
-///
-/// Returns `false` for unknown models (safe default, avoids sending tool
-/// schemas to models that would reject or ignore them).
-#[allow(dead_code)] // reserved: tool-schema gating (exercised by tests)
-pub fn supports_tool_use(model_id: &str) -> bool {
-    find_model(model_id).is_some_and(|m| m.supports_tools)
-}
-
-/// Get default temperature for a model (some models have specific defaults).
-///
-/// Returns `None` when the parameter should be omitted and the provider default
-/// used. Returns `Some(value)` only when a model-specific temperature is both
-/// recommended *and* accepted by that provider.
-///
-/// Provider-specific sampling exclusions are enforced by the request boundary
-/// from `reasoning.rejectsSamplingParameters` in the canonical catalog. This
-/// helper only supplies an accepted family default where one is documented.
-#[allow(dead_code)] // reserved: per-model temperature defaulting (exercised by tests)
-pub fn default_temperature(model_id: &str) -> Option<f64> {
-    // The DeepSeek reasoning tier prefers deterministic output and accepts low
-    // temperatures. Both provider and reasoning support come from the catalog.
-    if provider_for_model(model_id) == Some("deepseek") && supports_reasoning(model_id) {
-        return Some(0.0);
-    }
-
-    // Google models default to 1.0. Models whose provider genuinely rejects sampling parameters
-    // are excluded at the request boundary from the catalog flag
-    // (`models::streaming::effective_temperature`), not from a list here.
-    if provider_for_model(model_id) == Some("google") {
-        return Some(1.0);
-    }
-
-    // Claude models: use provider default (1.0 server-side)
-    // OpenAI non-reasoning: use provider default
-    // Ollama: use provider default
-    None
-}
-
-/// Check if a model supports extended thinking / reasoning mode.
-///
-/// Returns `false` for unknown models.
-#[allow(dead_code)] // reserved: reasoning-mode gating (exercised by tests)
-pub fn supports_reasoning(model_id: &str) -> bool {
-    find_model(model_id).is_some_and(|m| m.supports_reasoning)
-}
-
-/// Check if a model is deprecated.
-///
-/// Returns `false` for unknown models.
-#[allow(dead_code)] // reserved: deprecation warnings (exercised by tests)
-pub fn is_deprecated(model_id: &str) -> bool {
-    find_model(model_id).is_some_and(|m| m.status == "deprecated")
 }
 
 /// Format a verbose detail string for a single model.
@@ -409,36 +334,6 @@ fn format_context_size(tokens: usize) -> String {
     }
 }
 
-/// Provider-specific message normalization rules.
-///
-/// Namespace-only unit struct: its associated helpers are reserved for the
-/// not-yet-wired provider normalization path (currently exercised by tests), so
-/// it carries a scoped `dead_code` allow instead of a module-wide suppression.
-#[allow(dead_code)] // reserved: provider message normalization namespace
-pub struct MessageNormalizer;
-
-impl MessageNormalizer {
-    /// Sanitize a tool ID for Anthropic (only alphanumeric, underscore, hyphen allowed).
-    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
-    pub fn sanitize_anthropic_tool_id(id: &str) -> String {
-        id.chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '_' || c == '-' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect()
-    }
-
-    /// Generate a Mistral-compatible tool ID (exactly 9 alphanumeric chars).
-    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
-    pub fn mistral_tool_id(index: usize) -> String {
-        format!("call{:05}", index)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -457,11 +352,11 @@ mod tests {
             .expect("embedded catalog must include an OpenAI text model")
     }
 
-    fn first_model_matching(provider: &str, predicate: impl Fn(&ModelInfo) -> bool) -> ModelInfo {
-        models_for_provider(provider)
+    fn catalog_models_for(provider: &str) -> Vec<ModelInfo> {
+        model_catalog()
             .into_iter()
-            .find(predicate)
-            .unwrap_or_else(|| panic!("embedded catalog lacks required {provider} model"))
+            .filter(|model| model.provider == provider)
+            .collect()
     }
 
     // ── model_catalog ──────────────────────────────────────────
@@ -514,18 +409,6 @@ mod tests {
             original_len,
             "Catalog contains duplicate model IDs"
         );
-    }
-
-    #[test]
-    fn test_ollama_models_are_free() {
-        for model in models_for_provider("ollama") {
-            assert_eq!(model.input_price_per_1m, 0.0, "{} should be free", model.id);
-            assert_eq!(
-                model.output_price_per_1m, 0.0,
-                "{} should be free",
-                model.id
-            );
-        }
     }
 
     // ── capability matrix fields ──────────────────────────────
@@ -598,21 +481,12 @@ mod tests {
 
     #[test]
     fn test_reasoning_models_flagged() {
-        let catalog = model_catalog();
-        assert!(catalog.iter().any(|model| model.supports_reasoning));
-        for model in catalog {
-            assert_eq!(
-                supports_reasoning(&model.id),
-                model.supports_reasoning,
-                "{}",
-                model.id
-            );
-        }
+        assert!(model_catalog().iter().any(|model| model.supports_reasoning));
     }
 
     #[test]
     fn test_google_catalog_includes_a_reasoning_model() {
-        assert!(models_for_provider("google")
+        assert!(catalog_models_for("google")
             .iter()
             .any(|model| model.supports_reasoning));
     }
@@ -745,33 +619,10 @@ mod tests {
         }
     }
 
-    // ── models_for_provider ────────────────────────────────────
-
-    #[test]
-    fn test_models_for_provider() {
-        let anthropic = models_for_provider("anthropic");
-        assert!(anthropic.len() >= 3);
-        assert!(anthropic.iter().all(|m| m.provider == "anthropic"));
-    }
-
-    #[test]
-    fn test_models_for_provider_ollama_is_live_discovery_only() {
-        let ollama = models_for_provider("ollama");
-        assert!(
-            ollama.is_empty(),
-            "local Ollama models are discovered live by local_models.rs, not hardcoded in the cloud catalog"
-        );
-    }
-
-    #[test]
-    fn test_models_for_provider_unknown() {
-        assert!(models_for_provider("nonexistent_provider").is_empty());
-    }
-
     // ── provider_for_model ─────────────────────────────────────
 
     fn first_model_id_for(provider: &str) -> String {
-        models_for_provider(provider)
+        catalog_models_for(provider)
             .first()
             .unwrap_or_else(|| panic!("expected at least one {provider} model"))
             .id
@@ -841,126 +692,6 @@ mod tests {
         assert_eq!(provider_for_model("totally-unknown-model"), None);
     }
 
-    // ── supports_tool_use ──────────────────────────────────────
-
-    #[test]
-    fn test_supports_tool_use_true() {
-        let tool_models: Vec<ModelInfo> = model_catalog()
-            .into_iter()
-            .filter(|model| model.supports_tools)
-            .collect();
-        assert!(!tool_models.is_empty());
-        assert!(tool_models.iter().all(|model| supports_tool_use(&model.id)));
-    }
-
-    #[test]
-    fn test_supports_tool_use_false() {
-        assert!(!supports_tool_use("fixture-local-model:latest"));
-        assert!(!supports_tool_use("ollama:fixture-model"));
-    }
-
-    #[test]
-    fn test_supports_tool_use_unknown_returns_false() {
-        assert!(!supports_tool_use("nonexistent-model"));
-    }
-
-    // ── default_temperature ────────────────────────────────────
-
-    #[test]
-    fn test_default_temperature_reasoning_models() {
-        let reasoning_model = first_model_matching("deepseek", |model| model.supports_reasoning);
-        assert_eq!(default_temperature(&reasoning_model.id), Some(0.0));
-        assert_eq!(default_temperature("fixture-reasoning-model"), None);
-    }
-
-    #[test]
-    fn test_default_temperature_gemini() {
-        // No Gemini model currently carries reasoning.rejectsSamplingParameters,
-        // so every one of them takes the family default. If a Gemini release
-        // starts rejecting temperature, set the flag in models.curation.json.
-        // do not add an ID back here. The flag is enforced in
-        // `models::streaming::effective_temperature`, which is what the request
-        // body actually reads.
-        for model in models_for_provider("google") {
-            assert_eq!(
-                default_temperature(&model.id),
-                Some(1.0),
-                "{} must take the Google family default, per-model sampling \
-                 exclusions belong in models.json, not in an ID arm here",
-                model.id
-            );
-        }
-    }
-
-    #[test]
-    fn test_default_temperature_anthropic_none() {
-        for model in models_for_provider("anthropic") {
-            assert_eq!(default_temperature(&model.id), None);
-        }
-    }
-
-    #[test]
-    fn test_default_temperature_openai_non_reasoning_none() {
-        for model in openai_catalog_models() {
-            assert_eq!(default_temperature(&model.id), None);
-        }
-    }
-
-    #[test]
-    fn test_default_temperature_ollama_none() {
-        assert_eq!(default_temperature("fixture-local-model:latest"), None);
-        assert_eq!(default_temperature("ollama:fixture-model"), None);
-    }
-
-    #[test]
-    fn test_default_temperature_unknown_none() {
-        assert_eq!(default_temperature("nonexistent-model"), None);
-    }
-
-    // ── supports_reasoning ─────────────────────────────────────
-
-    #[test]
-    fn test_supports_reasoning_true() {
-        let reasoning_models: Vec<ModelInfo> = model_catalog()
-            .into_iter()
-            .filter(|model| model.supports_reasoning)
-            .collect();
-        assert!(!reasoning_models.is_empty());
-        assert!(reasoning_models
-            .iter()
-            .all(|model| supports_reasoning(&model.id)));
-    }
-
-    #[test]
-    fn test_supports_reasoning_false() {
-        for model in model_catalog()
-            .into_iter()
-            .filter(|model| !model.supports_reasoning)
-        {
-            assert!(!supports_reasoning(&model.id));
-        }
-        assert!(!supports_reasoning("fixture-local-model:latest"));
-    }
-
-    #[test]
-    fn test_supports_reasoning_unknown_false() {
-        assert!(!supports_reasoning("nonexistent-model"));
-    }
-
-    // ── is_deprecated ──────────────────────────────────────────
-
-    #[test]
-    fn test_is_deprecated_false() {
-        for model in model_catalog() {
-            assert_eq!(is_deprecated(&model.id), model.status == "deprecated");
-        }
-    }
-
-    #[test]
-    fn test_is_deprecated_unknown_false() {
-        assert!(!is_deprecated("nonexistent-model"));
-    }
-
     // ── format_model_detail ────────────────────────────────────
 
     #[test]
@@ -1012,7 +743,7 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_deepseek_capable_tier() {
-        let model = models_for_provider("deepseek")
+        let model = catalog_models_for("deepseek")
             .into_iter()
             .filter(|model| {
                 model.supports_tools && model.supports_vision && model.supports_reasoning
@@ -1099,27 +830,6 @@ mod tests {
         assert_eq!(format_context_size(128_000), "128K");
         assert_eq!(format_context_size(1_000_000), "1M");
         assert_eq!(format_context_size(2_000_000), "2M");
-    }
-
-    // ── MessageNormalizer ──────────────────────────────────────
-
-    #[test]
-    fn test_sanitize_anthropic_tool_id() {
-        assert_eq!(
-            MessageNormalizer::sanitize_anthropic_tool_id("tool-123_abc"),
-            "tool-123_abc"
-        );
-        assert_eq!(
-            MessageNormalizer::sanitize_anthropic_tool_id("tool@#$"),
-            "tool___"
-        );
-    }
-
-    #[test]
-    fn test_mistral_tool_id() {
-        assert_eq!(MessageNormalizer::mistral_tool_id(0), "call00000");
-        assert_eq!(MessageNormalizer::mistral_tool_id(42), "call00042");
-        assert_eq!(MessageNormalizer::mistral_tool_id(0).len(), 9);
     }
 
     /// The built-in catalog is authored as JSON Schema and several tools carry

@@ -67,7 +67,6 @@
 /feedback [bug]
 /help [h, ?]
 /exit [quit, q]
-/focus
 /advisor
 /team-onboarding [onboarding]
 /terminal-setup [shell-setup]

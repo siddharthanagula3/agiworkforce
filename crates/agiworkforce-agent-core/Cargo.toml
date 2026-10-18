@@ -16,17 +16,6 @@ path = "src/lib.rs"
 # The engine drives the shared LLM layer's assembled outcome + stream events and
 # reuses its tool-call type. Pinned transitively to the CLI's reqwest line via
 # agiworkforce-llm; this crate itself performs no HTTP.
-#
-# NOTE (ToolDispatch reuse, stage e2): the plan sketched a
-# `dispatch() -> &dyn agiworkforce_app_server::ToolDispatch` on TurnHost. In the
-# real tree the CLI's agentic dispatch mutates session state (update_plan/MCP/
-# subagents) and needs an approval channel, which app-server's read-only, `&self`
-# `ToolDispatch` cannot serve (`CliToolDispatch` explicitly rejects every
-# mutating/MCP/team/task tool). Forcing it into the loop would break the loop, and
-# depending on `agiworkforce-app-server` (axum/tower) purely for an unused
-# re-export would bloat this lean crate. The e1 dispatch seam is therefore
-# TurnHost's execute methods; app-server/desktop ToolDispatch convergence lands in
-# stage e2.
 agiworkforce-llm = { path = "../agiworkforce-llm" }
 anyhow = "1"
 async-trait = "0.1.89"
