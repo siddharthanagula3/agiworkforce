@@ -118,6 +118,7 @@ async function postToTokenEndpoint(
 
   const deadline = createDeadline(TOKEN_REQUEST_TIMEOUT_MS);
   let response: Response;
+  let rawBody: unknown;
   try {
     const outcome = await credentialedFetch(endpoint, {
       deadline,
@@ -128,11 +129,10 @@ async function postToTokenEndpoint(
     });
     if (!outcome.ok) throw tokenTransportError(outcome.refusal, endpoint);
     response = outcome.response;
+    rawBody = await response.json().catch(() => null);
   } finally {
     deadline.release();
   }
-
-  const rawBody: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
     const parsedError = tokenErrorSchema.safeParse(rawBody);
