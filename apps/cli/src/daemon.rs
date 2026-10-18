@@ -308,7 +308,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     // Validate triggers up-front
     validate_triggers(&enabled)?;
 
-    let hooks_config = hooks::load_hooks().unwrap_or_default();
+    let hooks_config = hooks::load_hooks_or_default();
 
     // Ensure log directory exists
     let log_dir = CliConfig::config_dir()?.join("daemon-logs");
@@ -479,7 +479,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     .await;
 
     // Fire DaemonStopped hook
-    let hooks_config_final = hooks::load_hooks().unwrap_or_default();
+    let hooks_config_final = hooks::load_hooks_or_default();
     fire_daemon_hook(
         &hooks_config_final,
         HookEvent::DaemonStopped,

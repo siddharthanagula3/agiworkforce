@@ -255,7 +255,7 @@ pub(super) async fn handle_slash_command(
             output::print_block(&crate::agents::render_agents_command(arg));
         }
         "/hooks" => {
-            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            let hcfg = crate::hooks::load_hooks_or_default();
             output::print_block(&crate::hooks::format_hooks_list(&hcfg));
         }
         "/subagents" => {

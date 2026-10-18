@@ -599,7 +599,7 @@ impl AgentSession {
         custom_system_prompt: Option<&str>,
         provider: Provider,
     ) -> Self {
-        let hooks_config = hooks::load_hooks().unwrap_or_default();
+        let hooks_config = hooks::load_hooks_or_default();
 
         let instructions = std::env::current_dir()
             .ok()

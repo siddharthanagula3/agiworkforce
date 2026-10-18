@@ -1011,7 +1011,7 @@ pub async fn run_onboarding() -> Result<bool> {
         eprintln!("  Warning: could not write setup marker: {}", e);
     }
 
-    let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+    let hcfg = crate::hooks::load_hooks_or_default();
     crate::hooks::run_hooks(
         &hcfg,
         crate::hooks::HookEvent::Setup,

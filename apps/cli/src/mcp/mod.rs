@@ -871,7 +871,7 @@ impl ElicitationHandler for HookFiringElicitationHandler {
         Box::pin(async move {
             // Load hooks per invocation (matches the original firing inside the
             // read loop, not at construction).
-            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            let hcfg = crate::hooks::load_hooks_or_default();
             crate::hooks::run_hooks(
                 &hcfg,
                 crate::hooks::HookEvent::Elicitation,

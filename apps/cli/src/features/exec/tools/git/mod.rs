@@ -157,7 +157,7 @@ pub(super) async fn execute_enter_worktree(
     };
     match crate::runtime::worktree::enter_worktree(&repo, opts).await {
         Ok(wt) => {
-            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            let hcfg = crate::hooks::load_hooks_or_default();
             crate::hooks::run_hooks(
                 &hcfg,
                 crate::hooks::HookEvent::WorktreeCreate,
@@ -221,7 +221,7 @@ pub(super) async fn execute_exit_worktree(
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     match crate::runtime::worktree::exit_worktree(&repo, &path).await {
         Ok(()) => {
-            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            let hcfg = crate::hooks::load_hooks_or_default();
             crate::hooks::run_hooks(
                 &hcfg,
                 crate::hooks::HookEvent::WorktreeRemove,
