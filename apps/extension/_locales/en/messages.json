@@ -4289,5 +4289,65 @@
   "spMathUnavailable": {
     "message": "Maths could not be displayed, so its source is shown.",
     "description": "Tooltip on maths shown as source text because the renderer failed to load"
+  },
+  "spImageFrom": {
+    "message": "Image from $HOST$",
+    "description": "Notice for an answer image that has not been loaded yet",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spImageLoad": {
+    "message": "Load image",
+    "description": "Button that loads an answer image from another site"
+  },
+  "spImageLoadLabel": {
+    "message": "Load image from $HOST$",
+    "description": "Accessible name of the button that loads an answer image",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spImageFailed": {
+    "message": "Image failed to load",
+    "description": "Shown in place of an answer image that could not be loaded"
+  },
+  "spImageFailedLabel": {
+    "message": "Image failed to load: $ALT$",
+    "description": "Accessible name of a failed answer image with alt text",
+    "placeholders": {
+      "alt": {
+        "content": "$1",
+        "example": "Sales chart"
+      }
+    }
+  },
+  "spImageRetry": {
+    "message": "Retry",
+    "description": "Button that tries to load a failed answer image again"
+  },
+  "spImageDownload": {
+    "message": "Download image",
+    "description": "Link to download an answer image that failed to load"
+  },
+  "spImageOpen": {
+    "message": "Open image in a new tab",
+    "description": "Accessible name of a loaded answer image"
+  },
+  "spImageOpenLabel": {
+    "message": "Open image in a new tab: $ALT$",
+    "description": "Accessible name of a loaded answer image with alt text",
+    "placeholders": {
+      "alt": {
+        "content": "$1",
+        "example": "Sales chart"
+      }
+    }
   }
 }

@@ -217,14 +217,74 @@ describe('footnotes', () => {
 });
 
 describe('markdown images', () => {
-  it('stay links, because the extension CSP only loads images from the extension itself', async () => {
-    const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8')) as {
-      content_security_policy: { extension_pages: string };
-    };
-    expect(manifest.content_security_policy.extension_pages).toContain("img-src 'self' data:;");
-    const root = await render('![chart](https://example.com/chart.png)');
+  const loadButton = (root: HTMLElement): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>('.sp-md-image-notice button');
+
+  it('stays a link until the user loads it from that host', async () => {
+    const root = await render('![Sales chart](https://img.example.com/blocked.png)');
     expect(root.querySelector('img')).toBeNull();
-    expect(root.querySelector('a')?.getAttribute('href')).toBe('https://example.com/chart.png');
+    const link = root.querySelector<HTMLAnchorElement>('.sp-md-image-notice a');
+    expect(link?.getAttribute('href')).toBe('https://img.example.com/blocked.png');
+    expect(link?.textContent).toBe('Sales chart');
+    expect(root.querySelector('.sp-md-image-notice')?.textContent).toContain(
+      'Image from img.example.com',
+    );
+    expect(loadButton(root)?.getAttribute('aria-label')).toBe('Load image from img.example.com');
+  });
+
+  it('loads an approved image without a referrer and remembers the approval', async () => {
+    const root = await render('![Sales chart](https://img.example.com/approved.png "Q3")');
+    document.body.appendChild(root);
+    loadButton(root)?.click();
+    const img = root.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://img.example.com/approved.png');
+    expect(img?.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(img?.alt).toBe('Sales chart');
+    expect(root.querySelector('a.sp-md-image')?.getAttribute('aria-label')).toBe(
+      'Open image in a new tab: Sales chart',
+    );
+    expect(document.activeElement).toBe(root.querySelector('a.sp-md-image'));
+    root.remove();
+
+    const again = await render('![Sales chart](https://img.example.com/approved.png#frag)');
+    expect(again.querySelector('img')).not.toBeNull();
+    const other = await render('![x](https://img.example.com/other.png)');
+    expect(other.querySelector('img')).toBeNull();
+  });
+
+  it('offers two retries and a download link when the image fails', async () => {
+    const root = await render('![Sales chart](https://img.example.com/broken.png)');
+    loadButton(root)?.click();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      root.querySelector('img')?.dispatchEvent(new Event('error'));
+      const failed = root.querySelector('.sp-md-image-notice');
+      expect(failed?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
+        'Image failed to load: Sales chart',
+      );
+      const download = failed?.querySelector<HTMLAnchorElement>('a[download]');
+      expect(download?.getAttribute('href')).toBe('https://img.example.com/broken.png');
+      expect(download?.textContent).toBe('Download image');
+      const retry = failed?.querySelector<HTMLButtonElement>('button');
+      expect(retry?.textContent).toBe('Retry');
+      retry?.click();
+      expect(root.querySelector('img')).not.toBeNull();
+    }
+    root.querySelector('img')?.dispatchEvent(new Event('error'));
+    expect(root.querySelector('.sp-md-image-notice button')).toBeNull();
+    expect(root.querySelector('.sp-md-image-notice a[download]')).not.toBeNull();
+  });
+
+  it('offers no load button for an image inside a link', async () => {
+    const root = await render('[![badge](https://img.example.com/badge.png)](https://example.com)');
+    expect(loadButton(root)).toBeNull();
+    expect(root.querySelector('img')).toBeNull();
+    expect(root.querySelector('a')?.getAttribute('href')).toBe('https://example.com');
+    expect(root.querySelector('a')?.textContent).toBe('badge');
+  });
+
+  it('keeps a non-web image source as text', async () => {
+    const root = await render('![x](javascript:alert(1))');
+    expect(root.querySelector('img, a')).toBeNull();
   });
 });
 

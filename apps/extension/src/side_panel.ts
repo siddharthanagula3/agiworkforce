@@ -2533,6 +2533,58 @@ function injectStyles(): void {
     .sp-code-block__copy[data-state="failed"] { color: var(--agi-ext-danger-text); }
     .sp-code-block__bar:has([data-state="failed"]) .sp-code-block__status { color: var(--agi-ext-danger-text); }
     .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+    .sp-md-image-notice {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      max-width: 100%;
+      margin: 6px 0;
+      padding: 6px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-md-image-notice__label { min-width: 0; color: var(--agi-ext-text); }
+    .sp-md-image-button {
+      min-height: 24px;
+      padding: 0 8px;
+      border: 1px solid var(--agi-ext-border-control);
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .sp-md-image-button:hover { background: var(--agi-ext-hover); }
+    .sp-md-image-button:focus-visible,
+    .sp-md-image:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-md-image {
+      display: inline-block;
+      max-width: 100%;
+      margin: 6px 0;
+      vertical-align: top;
+      cursor: zoom-in;
+    }
+    .sp-md-image--loading {
+      width: 100%;
+      max-width: 384px;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-hover);
+    }
+    .sp-md-image img {
+      display: block;
+      max-width: 100%;
+      max-height: 512px;
+      object-fit: contain;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+    }
     .sp-bubble-assistant section {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);

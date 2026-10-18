@@ -91,6 +91,18 @@ The extension executes no remote code. All scripts are bundled in the package;
 the extension-pages CSP is `script-src 'self'` with no `unsafe-eval` and no
 `unsafe-inline` for scripts.
 
+### Images in answers
+
+The extension-pages CSP allows `img-src 'self' data: https:`. An answer can
+include a markdown image hosted anywhere on the web, and the side panel shows it
+the way the AGI web chat does: nothing is fetched until the user clicks "Load
+image" for that image, the request is sent with no referrer, and a failed image
+offers two retries and a download link. `https:` applies to images only; scripts,
+fonts, frames and media stay limited to files packaged with the extension.
+Dashboard text: "Answers can contain images hosted on the web. The side panel
+loads one only after the user chooses to load it, without sending a referrer;
+no remote image can run code."
+
 ## Data use disclosures
 
 Tick these in the Dashboard's Privacy tab, and nothing else.
