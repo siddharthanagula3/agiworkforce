@@ -30,11 +30,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 
 import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce/types';
 
-import { calculateCacheSavings, shouldEnablePromptCache } from './prompt-cache-helper';
-
-const largeSystemRequest = {
-  messages: [{ role: 'system', content: 'x'.repeat(5_000) }],
-};
+import { calculateCacheSavings } from './prompt-cache-helper';
 
 function requireCatalogFixture(
   predicate: (model: ReturnType<typeof listCanonicalModels>[number]) => boolean,
@@ -45,17 +41,6 @@ function requireCatalogFixture(
   return model;
 }
 
-const CACHING_MODEL = requireCatalogFixture(
-  (model) => model.capabilities.caching === true,
-  'caching-model',
-);
-const ANTHROPIC_CACHING_MODEL = requireCatalogFixture(
-  (model) =>
-    model.provider === 'anthropic' &&
-    model.capabilities.caching === true &&
-    model.promptCacheMinimumTokens === 512,
-  'Anthropic provider-minimum caching model',
-);
 const CACHE_PRICED_MODEL = requireCatalogFixture(
   (model) =>
     typeof model.inputCost === 'number' &&
@@ -77,25 +62,6 @@ const FULL_RATE_CACHE_MODEL = requireCatalogFixture(
     model.cached_input === undefined,
   'full-rate cache-read model',
 );
-
-describe('shouldEnablePromptCache model ownership', () => {
-  it('uses canonical catalog capability metadata for a known caching model', () => {
-    expect(shouldEnablePromptCache(largeSystemRequest, CACHING_MODEL.id)).toBe(true);
-  });
-
-  it('does not infer caching from the name of an unregistered model', () => {
-    expect(shouldEnablePromptCache(largeSystemRequest, 'fixture-unknown-one')).toBe(false);
-    expect(shouldEnablePromptCache(largeSystemRequest, 'fixture-unknown-two')).toBe(false);
-  });
-
-  it('uses the catalog provider minimum of 512 tokens', () => {
-    const exactly512Tokens = {
-      messages: [{ role: 'system', content: 'x'.repeat(512 * 4) }],
-    };
-
-    expect(shouldEnablePromptCache(exactly512Tokens, ANTHROPIC_CACHING_MODEL.id)).toBe(true);
-  });
-});
 
 describe('calculateCacheSavings cache-write reporting', () => {
   const response = {

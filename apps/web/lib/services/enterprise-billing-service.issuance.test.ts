@@ -16,12 +16,8 @@ vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
 
-import { buildEnterpriseInvoiceRun } from '@/lib/billing/enterprise-invoice-lines';
-import { commercialContractView } from '@agiworkforce/types';
-
 import {
   issueEnterpriseInvoice,
-  issueEnterpriseInvoiceForRun,
   recordEnterpriseInvoiceEvent,
   syncEnterpriseContractFromSubscription,
 } from './enterprise-billing-service';
@@ -523,86 +519,6 @@ describe('an enterprise invoice is issued only when the signed agreement permits
       }),
     ).rejects.toThrow();
     expect(created).toHaveLength(0);
-  });
-});
-
-describe('a billing run reaches the customer as the lines the ledger produced', () => {
-  const RUN_PERIOD = { start: '2026-04-01T00:00:00.000Z', end: '2026-07-01T00:00:00.000Z' };
-
-  it('issues seats at the negotiated rate and late usage as its own line', async () => {
-    const { db } = contractDb(
-      agreementRow({ contractTermStart: '2020-01-01', contractTermEnd: '2099-12-31' }),
-    );
-    const { stripe, items } = fakeStripe();
-    const run = buildEnterpriseInvoiceRun({
-      contract: commercialContractView({
-        identity: {
-          organizationId: ORGANIZATION_ID,
-          version: 3,
-          state: 'executed',
-          changeKind: 'initial',
-          orderFormReference: 'OF-2026-001',
-          signedAt: '2026-01-02T00:00:00.000Z',
-          supersedesVersion: null,
-        },
-        window: { termStart: '2020-01-01', termEnd: '2099-12-31', expiryGraceDays: 0 },
-        commercials: {
-          committedSeats: 250,
-          seatUnitPriceCents: 4_200,
-          includedUsageCentsPerPeriod: 0,
-          committedUsageBlockCents: 0,
-          minimumAnnualSpendCents: 0,
-          meteredUsage: true,
-          billingCurrency: 'usd',
-        },
-        procurement: {
-          paymentTermDays: 45,
-          purchaseOrderRequired: false,
-          purchaseOrderNumber: 'PO-SIGNED-7',
-          invoiceRecipientEmails: ['ap@example.com'],
-          permittedPaymentMethods: ['send_invoice'],
-        },
-        asOfDate: '2026-07-01',
-      }),
-      period: RUN_PERIOD,
-      seats: {
-        committedSeats: 250,
-        assignedSeats: 250,
-        seatUnitPriceCents: 4_200,
-        daysRemainingInTerm: 180,
-        daysInTerm: 365,
-      },
-      usage: [
-        {
-          sourceRef: 'late-1',
-          occurredAt: '2026-02-01T00:00:00.000Z',
-          settledAt: '2026-05-01T00:00:00.000Z',
-          amountCents: 3_300,
-        },
-      ],
-      prepaidBalanceCents: 0,
-      recognizedTermSpendCents: 0,
-      isFinalPeriodOfTerm: false,
-      settlementCutOff: '2026-07-02T00:00:00.000Z',
-    });
-
-    await issueEnterpriseInvoiceForRun(db, stripe, {
-      organizationId: ORGANIZATION_ID,
-      run,
-      period: RUN_PERIOD,
-    });
-
-    expect(items).toHaveLength(2);
-    expect(items[0]?.amount).toBe(250 * 4_200);
-    expect(items[0]?.description).toContain('(x250)');
-    expect(items[1]?.amount).toBe(3_300);
-    expect(items[1]?.description).toContain('earlier period');
-    for (const item of items) {
-      expect(item.period).toEqual({
-        start: Math.floor(Date.parse(RUN_PERIOD.start) / 1_000),
-        end: Math.floor(Date.parse(RUN_PERIOD.end) / 1_000),
-      });
-    }
   });
 });
 

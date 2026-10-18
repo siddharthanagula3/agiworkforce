@@ -140,30 +140,6 @@ export function verifyReleaseChain(events: readonly ReleaseEvent[]): ReleaseChai
   return { intact: true, brokenAt: null };
 }
 
-export async function recordReleaseEvent(input: ReleaseEventInput): Promise<ReleaseEvent> {
-  const rows = await getNeonDb().query<ReleaseEventRow>(
-    `select ${SELECTED_COLUMNS}
-       from public.append_release_event($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
-    [
-      input.event,
-      input.surface,
-      input.environment,
-      input.outcome,
-      input.actor,
-      input.source,
-      input.commitSha ?? null,
-      input.deploymentId ?? null,
-      input.previousDeploymentId ?? null,
-      input.reason ?? null,
-      input.runUrl ?? null,
-      JSON.stringify(input.detail ?? {}),
-    ],
-  );
-  const row = rows[0];
-  if (!row) throw new Error('The release event was not appended');
-  return toReleaseEvent(row);
-}
-
 export interface ReleaseEventQuery {
   surface?: ReleaseSurface;
   environment?: ReleaseEnvironment;

@@ -7,12 +7,8 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: (...args: unknown[]) => mocks.fetchPreferenceNamespace(...args),
 }));
 
-const {
-  isMemoryCapabilityEnabled,
-  isPastChatSearchEnabled,
-  resetMemoryCapabilityCache,
-  subscribeMemoryCapability,
-} = await import('../memory-capability');
+const { isMemoryCapabilityEnabled, resetMemoryCapabilityCache, subscribeMemoryCapability } =
+  await import('../memory-capability');
 
 function savedEvent(namespace: string): CustomEvent {
   return new CustomEvent('agi:preference-namespace-saved', {
@@ -30,7 +26,7 @@ describe('memory capability cache', () => {
     mocks.fetchPreferenceNamespace.mockResolvedValue({ memory: true, searchPastChats: true });
 
     await expect(isMemoryCapabilityEnabled()).resolves.toBe(true);
-    await expect(isPastChatSearchEnabled()).resolves.toBe(true);
+    await expect(isMemoryCapabilityEnabled()).resolves.toBe(true);
 
     expect(mocks.fetchPreferenceNamespace).toHaveBeenCalledTimes(1);
   });

@@ -35,6 +35,9 @@ const PROVIDER_ENDPOINTS: Record<ManagedProviderId, ProviderEndpointConvention> 
   },
 };
 
+export const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
+export const RUNWAY_API_VERSION = '2024-11-06';
+
 export type GoogleVideoOutputHostDisposition = 'api' | 'redirect' | null;
 
 export function googleVideoOutputHostDisposition(

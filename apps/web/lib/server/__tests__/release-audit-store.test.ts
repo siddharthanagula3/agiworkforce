@@ -12,7 +12,6 @@ import {
   GENESIS_HASH,
   RELEASE_AUDIT_RETENTION_DAYS,
   readReleaseEvents,
-  recordReleaseEvent,
   verifyReleaseChain,
   type ReleaseEvent,
 } from '../release-audit-store';
@@ -65,58 +64,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('appending a release event', () => {
-  it('writes through the chaining function rather than inserting a row', async () => {
-    mocks.query.mockResolvedValue([row()]);
-
-    await recordReleaseEvent({
-      event: 'rolled_back',
-      surface: 'web',
-      environment: 'production',
-      outcome: 'succeeded',
-      actor: 'operator',
-      source: 'rollback_workflow',
-      reason: 'verification failed',
-    });
-
-    const [sql, values] = mocks.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('public.append_release_event');
-    expect(sql).not.toContain('insert into');
-    expect(values[0]).toBe('rolled_back');
-    expect(values[11]).toBe('{}');
-  });
-
-  it('refuses to report success when nothing came back', async () => {
-    mocks.query.mockResolvedValue([]);
-
-    await expect(
-      recordReleaseEvent({
-        event: 'promoted',
-        surface: 'web',
-        environment: 'production',
-        outcome: 'succeeded',
-        actor: 'ci',
-        source: 'deploy_workflow',
-      }),
-    ).rejects.toThrow('not appended');
-  });
-
+describe('mapping a release event row', () => {
   it('carries the row back as camel case with an iso timestamp', async () => {
     mocks.query.mockResolvedValue([row()]);
 
-    const appended = await recordReleaseEvent({
-      event: 'rolled_back',
-      surface: 'web',
-      environment: 'production',
-      outcome: 'succeeded',
-      actor: 'operator',
-      source: 'rollback_workflow',
-      reason: 'verification failed',
-    });
+    const [read] = await readReleaseEvents();
 
-    expect(appended.previousDeploymentId).toBe('dpl_bad');
-    expect(appended.recordedAt).toBe('2026-09-18T10:00:00.000Z');
-    expect(appended.detail).toEqual({ requested: null });
+    expect(read?.previousDeploymentId).toBe('dpl_bad');
+    expect(read?.recordedAt).toBe('2026-09-18T10:00:00.000Z');
+    expect(read?.detail).toEqual({ requested: null });
   });
 
   it('reads a detail column the driver handed back as text', async () => {

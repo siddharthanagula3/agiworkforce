@@ -19,7 +19,6 @@ import {
   claimCloudAgentApprovalCheckpoint,
   claimCloudAgentInputCheckpoint,
   completeCloudAgentApprovalCheckpoint,
-  completeCloudAgentInputCheckpoint,
   saveCloudAgentInputCheckpoint,
   createCloudAgentRun,
   findActiveCloudAgentRunForConversation,
@@ -1297,7 +1296,7 @@ describe('cloud agent run service', () => {
     it('settles the input checkpoint lease as failed when the run is cancelled', async () => {
       vi.mocked(db.query).mockResolvedValueOnce([{ ...INPUT_CHECKPOINT_ROW, state: 'failed' }]);
 
-      const checkpoint = await completeCloudAgentInputCheckpoint(db, {
+      const checkpoint = await completeCloudAgentApprovalCheckpoint(db, {
         userId: 'user-1',
         checkpointId: INPUT_CHECKPOINT_ROW.id,
         leaseToken: '0190a000-0000-7000-8000-000000000003',

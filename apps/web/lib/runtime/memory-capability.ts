@@ -6,12 +6,11 @@ import {
 
 interface CapabilityFlags {
   memory: boolean;
-  searchPastChats: boolean;
 }
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
 
-const ALL_DISABLED: CapabilityFlags = { memory: false, searchPastChats: false };
+const ALL_DISABLED: CapabilityFlags = { memory: false };
 
 let cached: Promise<CapabilityFlags> | null = null;
 const listeners = new Set<() => void>();
@@ -22,10 +21,7 @@ function capabilityFlags(): Promise<CapabilityFlags> {
       CAPABILITIES_NAMESPACE,
       ALL_DISABLED,
     )
-      .then((settings) => ({
-        memory: settings.memory === true,
-        searchPastChats: settings.searchPastChats === true,
-      }))
+      .then((settings) => ({ memory: settings.memory === true }))
       .catch(() => {
         // A read that failed is not an answer. Caching it would keep every later
         // caller on the disabled fallback for the life of the tab.
@@ -39,10 +35,6 @@ function capabilityFlags(): Promise<CapabilityFlags> {
 
 export function isMemoryCapabilityEnabled(): Promise<boolean> {
   return capabilityFlags().then((flags) => flags.memory);
-}
-
-export function isPastChatSearchEnabled(): Promise<boolean> {
-  return capabilityFlags().then((flags) => flags.searchPastChats);
 }
 
 export function resetMemoryCapabilityCache(): void {

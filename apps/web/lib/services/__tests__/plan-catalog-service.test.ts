@@ -7,7 +7,6 @@ import { BILLING_PLAN_CATALOG_VERSION, BILLING_PLAN_PRICING } from '@agiworkforc
 import {
   catalogOffer,
   listCatalogOffers,
-  listPurchasableOffers,
   resolveCheckoutPlan,
   resolveSubscriberPlan,
 } from '../plan-catalog-service';
@@ -27,12 +26,6 @@ describe('catalog offers', () => {
     expect(offer.catalog.sellability).toBe('self_serve');
     expect(offer.plans.length).toBeGreaterThan(0);
     expect(offer.entitlement.productId).toBe('pro');
-  });
-
-  it('leaves the contract-priced plan out of what can be bought without sales', () => {
-    const purchasable = listPurchasableOffers().map((offer) => offer.product.id);
-    expect(purchasable).not.toContain('enterprise');
-    expect(purchasable).toContain('pro');
   });
 });
 

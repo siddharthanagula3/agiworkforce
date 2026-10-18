@@ -11,19 +11,6 @@ import {
   resolveCacheRates,
 } from '@/lib/services/llm-cost-calculator';
 
-export interface PromptCacheRequest {
-  messages: Array<{
-    role: string;
-    content: string;
-  }>;
-}
-
-function getCachingModel(model: string) {
-  const meta = getModelMetadataById(model);
-  if (!meta || (meta.capabilities?.caching !== true && meta.cached_input == null)) return null;
-  return meta;
-}
-
 function getDeclaredCacheReadPerMtok(
   model: string | undefined,
   pricedAt: Date,
@@ -42,38 +29,6 @@ function getDeclaredCacheReadPerMtok(
     tierInputTokens,
   ).cached_input;
   return typeof cachedInput === 'number' ? cachedInput : undefined;
-}
-
-export function shouldEnablePromptCache(request: PromptCacheRequest, model: string): boolean {
-  const metadata = getCachingModel(model);
-  if (!metadata) {
-    return false;
-  }
-
-  const systemMessage = request.messages.find((msg) => msg.role === 'system');
-  if (!systemMessage) {
-    return false;
-  }
-
-  const estimatedTokens = Math.ceil(systemMessage.content.length / 4);
-  const providerMinimumTokens = metadata.promptCacheMinimumTokens ?? 1000;
-
-  if (estimatedTokens >= providerMinimumTokens) {
-    return true;
-  }
-
-  const isDocumentQuery =
-    systemMessage.content.includes('document') ||
-    systemMessage.content.includes('context:') ||
-    systemMessage.content.includes('passage') ||
-    systemMessage.content.includes('excerpt') ||
-    systemMessage.content.toLowerCase().includes('rag');
-
-  if (isDocumentQuery && estimatedTokens >= Math.max(500, providerMinimumTokens)) {
-    return true;
-  }
-
-  return false;
 }
 
 export function calculateCacheSavings(

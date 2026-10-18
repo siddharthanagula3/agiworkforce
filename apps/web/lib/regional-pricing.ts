@@ -93,18 +93,3 @@ export function resolveLocalizedPlanPrice(
 
   return publishedUsd;
 }
-
-export function formatLocalizedPrice(
-  amountMinor: number,
-  currency: string,
-  locale?: string,
-): string {
-  const normalizedCurrency = currency.trim().toUpperCase();
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: normalizedCurrency,
-    currencyDisplay: 'narrowSymbol',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amountMinor / 10 ** currencyMinorUnitDigits(normalizedCurrency));
-}

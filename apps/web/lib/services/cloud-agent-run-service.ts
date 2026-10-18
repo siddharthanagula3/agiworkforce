@@ -1859,20 +1859,9 @@ export async function claimCloudAgentInputCheckpoint(
   });
 }
 
-// The lease lifecycle is kind-agnostic: an input checkpoint completes and
-// releases through the same versioned lease machinery as an approval one.
-export function completeCloudAgentInputCheckpoint(
-  db: DatabaseAdapter,
-  input: {
-    userId: string;
-    checkpointId: string;
-    leaseToken: string;
-    outcome?: 'resolved' | 'failed';
-  },
-): Promise<CloudAgentApprovalCheckpoint> {
-  return completeCloudAgentApprovalCheckpoint(db, input);
-}
-
+// The lease lifecycle is kind-agnostic: an input checkpoint releases through the
+// same versioned lease machinery as an approval one, and the resumed turn
+// completes it through completeCloudAgentApprovalCheckpoint.
 export function releaseCloudAgentInputCheckpoint(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
@@ -2238,20 +2227,9 @@ async function claimDeviceCheckpoint(
   });
 }
 
-// The lease lifecycle is kind-agnostic: a device checkpoint completes and
-// releases through the same versioned lease machinery as an approval one.
-export function completeCloudAgentDeviceCheckpoint(
-  db: DatabaseAdapter,
-  input: {
-    userId: string;
-    checkpointId: string;
-    leaseToken: string;
-    outcome?: 'resolved' | 'failed';
-  },
-): Promise<CloudAgentApprovalCheckpoint> {
-  return completeCloudAgentApprovalCheckpoint(db, input);
-}
-
+// The lease lifecycle is kind-agnostic: a device checkpoint releases through the
+// same versioned lease machinery as an approval one, and the resumed turn
+// completes it through completeCloudAgentApprovalCheckpoint.
 export function releaseCloudAgentDeviceCheckpoint(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; checkpointId: string; leaseToken: string },

@@ -2,7 +2,6 @@ import 'server-only';
 
 import {
   BILLING_PLAN_CATALOG_VERSION,
-  isPlanOnSale,
   listPlanCatalog,
   listPlansForProduct,
   normalizeBillingPlanTier,
@@ -52,10 +51,6 @@ export function catalogOffer(tier: string | null | undefined): CatalogOffer {
 
 export function listCatalogOffers(): CatalogOffer[] {
   return listPlanCatalog().map((entry) => catalogOffer(entry.tier));
-}
-
-export function listPurchasableOffers(): CatalogOffer[] {
-  return listCatalogOffers().filter((offer) => isPlanOnSale(offer.catalog.tier));
 }
 
 /**

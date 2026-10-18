@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getPublishedMonthlyPriceCents } from '@agiworkforce/types';
-import {
-  formatLocalizedPrice,
-  getCurrencyForCountry,
-  resolveLocalizedPlanPrice,
-} from '../regional-pricing';
+import { getCurrencyForCountry, resolveLocalizedPlanPrice } from '../regional-pricing';
 
 const proStripePrice = {
   currency: 'usd',
@@ -78,10 +74,5 @@ describe('regional pricing', () => {
       localized: false,
       taxIncluded: false,
     });
-  });
-
-  it('formats currencies with their locale-aware symbols and minor units', () => {
-    expect(formatLocalizedPrice(199_900, 'inr', 'en-IN')).toBe('₹1,999');
-    expect(formatLocalizedPrice(1_799, 'gbp', 'en-GB')).toBe('£17.99');
   });
 });

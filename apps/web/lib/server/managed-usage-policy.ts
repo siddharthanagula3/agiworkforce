@@ -65,10 +65,6 @@ export function getPlanWeeklyUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.weeklyCredits ?? 0;
 }
 
-export function getPlanDailyUsageCredits(plan: PlanAllowanceSubject): number {
-  return getLimit(plan)?.dailyCredits ?? 0;
-}
-
 export function getPlanFiveHourUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.fiveHourCredits ?? 0;
 }

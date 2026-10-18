@@ -5,7 +5,6 @@ vi.mock('server-only', () => ({}));
 
 import {
   MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS,
-  getPlanDailyUsageCredits,
   getPlanFiveHourUsageBudgetMicrousd,
   getPlanFiveHourUsageCredits,
   getPlanFlagshipWeeklyUsageBudgetCents,
@@ -41,12 +40,10 @@ describe('managed usage policy', () => {
     }
   });
 
-  it('meters Free on its own windows in microUSD, with no daily cap', () => {
+  it('meters Free on its own windows in microUSD', () => {
     expect(getPlanMonthlyUsageBudgetMicrousd('free')).toBe(20 * MICROUSD_PER_CREDIT);
     expect(getPlanWeeklyUsageBudgetMicrousd('free')).toBe(15 * MICROUSD_PER_CREDIT);
     expect(getPlanFiveHourUsageBudgetMicrousd('free')).toBe(2 * MICROUSD_PER_CREDIT);
-    expect(getPlanDailyUsageCredits('free')).toBe(0);
-    expect(getPlanDailyUsageCredits('pro')).toBe(0);
   });
 
   it('converts paid allowances to the cents ledger at two credits a cent', () => {

@@ -38,11 +38,6 @@ import {
   CONTRACT_METADATA_KEY_PROCUREMENT_REFERENCE,
   CONTRACT_METADATA_KEY_SUPPORT_TIER,
 } from '@/lib/services/enterprise-contracts/stripe-metadata';
-import {
-  invoiceRunToStripeLines,
-  type EnterpriseBillingPeriod,
-  type EnterpriseInvoiceRun,
-} from '@/lib/billing/enterprise-invoice-lines';
 import type {
   BillingCadence,
   OrganizationBillingContractRow,
@@ -854,30 +849,6 @@ export async function issueEnterpriseInvoice(
   );
   await recordEnterpriseInvoiceEvent(db, finalized);
   return finalized;
-}
-
-/**
- * Issues the invoice one billing run produced. The lines come from the settled
- * ledger and the commitment the contract carries, so nothing on the document
- * is an estimate and nothing on it was priced here.
- */
-export async function issueEnterpriseInvoiceForRun(
-  db: DatabaseAdapter,
-  stripe: Stripe,
-  input: {
-    organizationId: string;
-    run: EnterpriseInvoiceRun;
-    period: EnterpriseBillingPeriod;
-    collectionMethod?: EnterpriseCollectionMethod;
-    asOfDate?: string;
-  },
-): Promise<Stripe.Invoice> {
-  return issueEnterpriseInvoice(db, stripe, {
-    organizationId: input.organizationId,
-    lines: invoiceRunToStripeLines(input.run, input.period),
-    ...(input.collectionMethod ? { collectionMethod: input.collectionMethod } : {}),
-    ...(input.asOfDate ? { asOfDate: input.asOfDate } : {}),
-  });
 }
 
 export async function recordEnterpriseInvoiceEvent(
