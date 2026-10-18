@@ -1142,6 +1142,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.signOut', async () => {
       await signOutOfAgiCloud(context.secrets);
+      const cliSignOut = await cliCapabilities.logout();
+      if (cliSignOut.status === 'failed') {
+        vscode.window.showWarningMessage(
+          `AGI Workforce: The AGI CLI on this machine is still signed in, ${cliSignOut.reason}`,
+        );
+      }
       await clearAccountTierCache(context);
       sidebarProvider.refreshAccountPresentation();
       ChatEditorPanel.refreshAccountPresentation();

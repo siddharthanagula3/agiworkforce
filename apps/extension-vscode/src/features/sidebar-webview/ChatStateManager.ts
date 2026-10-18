@@ -2638,9 +2638,9 @@ export class ChatStateManager {
     this._pendingApprovals.clear();
   }
 
-  private _expirePendingApprovals(turnId: string): void {
+  private _expirePendingApprovals(scope: string | LocalRuntimeClient): void {
     for (const [requestId, pending] of [...this._pendingApprovals]) {
-      if (pending.turnId !== turnId) continue;
+      if ((typeof scope === 'string' ? pending.turnId : pending.runtime) !== scope) continue;
       if (pending.proposed !== undefined) void discardProposedChange(requestId);
       this._pendingApprovals.delete(requestId);
       this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
@@ -4139,6 +4139,7 @@ export class ChatStateManager {
     complete: () => void,
   ): Promise<void> {
     if (event.type === 'runtime_disconnected') {
+      this._expirePendingApprovals(runtime);
       this._postError(event.error, RUNTIME_REFUSAL);
       complete();
       return;
