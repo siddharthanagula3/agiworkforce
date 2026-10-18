@@ -70,10 +70,6 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
         signInButton.disabled = false;
       });
   });
-  window.addEventListener('focus', () => {
-    void dependencies.isSignedIn().then(renderSignedIn);
-  });
-
   const pin = card('wl-pin', t('welcomePinTitle'));
   const pinStatus = el('p', { class: 'wl-text', role: 'status', 'aria-live': 'polite' });
   pin.body.append(el('p', { class: 'wl-text' }, t('welcomePinBody')), pinStatus);
@@ -146,13 +142,18 @@ export function buildWelcomePage(dependencies: WelcomeDependencies): WelcomePage
   });
   settingsButton.addEventListener('click', () => dependencies.openSettings());
 
-  const loaded = Promise.all([
-    dependencies.isSignedIn().catch(() => false),
-    dependencies.isPinned().catch(() => null),
-  ]).then(([signedIn, pinned]) => {
-    renderSignedIn(signedIn);
-    pinStatus.textContent = pinned === true ? t('welcomePinned') : '';
+  const refresh = (): Promise<void> =>
+    Promise.all([
+      dependencies.isSignedIn().catch(() => false),
+      dependencies.isPinned().catch(() => null),
+    ]).then(([signedIn, pinned]) => {
+      renderSignedIn(signedIn);
+      pinStatus.textContent = pinned === true ? t('welcomePinned') : '';
+    });
+  window.addEventListener('focus', () => {
+    void refresh();
   });
+  const loaded = refresh();
 
   return { element, loaded };
 }

@@ -58,3 +58,7 @@ export function hasOneTimeSiteGrant(origin: string, nowMs = Date.now()): boolean
 export function expiredOneTimeSiteGrants(nowMs = Date.now()): OneTimeSiteGrant[] {
   return [...grants.values()].filter((grant) => grant.expiresAtMs <= nowMs);
 }
+
+export function listOneTimeSiteGrants(): OneTimeSiteGrant[] {
+  return [...grants.values()];
+}

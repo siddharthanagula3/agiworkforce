@@ -78,3 +78,51 @@ export function readToolHandoff(
   }
   return readCompleteToolCalls(calls, (marker as Record<string, unknown>)['tool_call_ids'], tools);
 }
+
+/**
+ * A durable run replays canonical events only. The gateway journals a caller
+ * tool handoff as tool-use start, delta and end events per call, closed by a
+ * stop with reason tool-use, so a reader that reattaches rebuilds the same
+ * snapshot the live stream carried. Calls this turn did not offer are ignored.
+ */
+export function createToolUseJournal(tools: readonly ToolDefinition[]) {
+  const pending = new Map<string, { name: string; args: string; ended: boolean }>();
+  return {
+    observe(event: { type: string }): ToolCall[] | null {
+      const record = event as Record<string, unknown>;
+      const toolUseId = record['toolUseId'];
+      if (event.type === 'tool-use-start') {
+        if (typeof toolUseId !== 'string' || typeof record['name'] !== 'string') return null;
+        pending.set(toolUseId, { name: record['name'], args: '', ended: false });
+        return null;
+      }
+      if (event.type === 'tool-use-delta') {
+        const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
+        if (entry && typeof record['deltaJson'] === 'string') entry.args += record['deltaJson'];
+        return null;
+      }
+      if (event.type === 'tool-use-end') {
+        const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
+        if (entry) entry.ended = true;
+        return null;
+      }
+      if (event.type !== 'stop') return null;
+      const entries = [...pending.entries()].filter(
+        ([, entry]) => entry.ended && tools.some((tool) => tool.function.name === entry.name),
+      );
+      pending.clear();
+      if (record['reason'] !== 'tool-use' || entries.length === 0) return null;
+      const calls = readCompleteToolCalls(
+        entries.map(([id, entry], index) => ({
+          index,
+          id,
+          type: 'function',
+          function: { name: entry.name, arguments: entry.args },
+        })),
+        entries.map(([id]) => id),
+        tools,
+      );
+      return calls;
+    },
+  };
+}

@@ -1378,7 +1378,9 @@ export function buildSiteGrantCard(options: {
   actions.className = 'sp-agent-approval__actions';
   const choices: Array<[SiteGrantChoice, string, boolean]> = [
     ['once', t('spBrowserAccessOnce'), true],
-    ['always', t('spBrowserAccessAlways'), false],
+    ...(options.scope === 'act'
+      ? [['always', t('spBrowserAccessAlways'), false] as [SiteGrantChoice, string, boolean]]
+      : []),
     ['decline', t('spBrowserAccessDecline'), false],
   ];
   for (const [choice, label, primary] of choices) {
@@ -1393,6 +1395,43 @@ export function buildSiteGrantCard(options: {
     actions.appendChild(button);
   }
   card.append(title, body, actions);
+  return card;
+}
+
+export function buildBrowserTaskStartCard(options: {
+  goal: string;
+  onDecide: (start: boolean) => void;
+}): HTMLElement {
+  const titleId = `sp-browser-task-start-${crypto.randomUUID()}`;
+  const card = document.createElement('div');
+  card.className = 'sp-agent-approval sp-browser-grant';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-labelledby', titleId);
+  const title = document.createElement('div');
+  title.className = 'sp-agent-approval__summary';
+  title.id = titleId;
+  title.textContent = t('spBrowserTaskStartTitle');
+  const goal = document.createElement('div');
+  goal.className = 'sp-browser-grant__goal';
+  goal.textContent = options.goal;
+  const actions = document.createElement('div');
+  actions.className = 'sp-agent-approval__actions';
+  const choices: Array<[boolean, string]> = [
+    [true, t('spBrowserTaskStartAction')],
+    [false, t('spBrowserAccessDecline')],
+  ];
+  for (const [start, label] of choices) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sp-agent-approval__button${start ? ' sp-agent-approval__button--approve' : ''}`;
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      for (const peer of actions.querySelectorAll('button')) peer.disabled = true;
+      options.onDecide(start);
+    });
+    actions.appendChild(button);
+  }
+  card.append(title, goal, actions);
   return card;
 }
 

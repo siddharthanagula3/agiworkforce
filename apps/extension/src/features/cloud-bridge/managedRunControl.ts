@@ -25,6 +25,8 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { chatBrowserToolDefinitions } from '../computer-use/chatBrowserTools';
+import { createToolUseJournal } from '../computer-use/toolHandoff';
 
 const UNCONFIRMED_CANCELLATION_MESSAGE =
   'Cancellation has not been confirmed. The run may still be working.';
@@ -187,11 +189,15 @@ export async function resumeChromeManagedRun(
     await resolvedDependencies.onRunReference?.({ ...latestRun });
   };
 
+  const toolUseJournal = createToolUseJournal(chatBrowserToolDefinitions('act'));
+  let askedForBrowserTool = false;
+
   try {
     const followed = await resolvedDependencies.createClient(token).followRun(run.runId, {
       afterSequence: -1,
       signal: request.signal,
       onEvent: async (envelope) => {
+        if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
         if (envelope.event.type === 'text-delta') {
           const reconciled = reconcileManagedCloudPublicText(
             pendingPublicText,
@@ -227,6 +233,13 @@ export async function resumeChromeManagedRun(
     }
     if (followed.run.state === 'cancelled') {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
+    }
+    if (askedForBrowserTool) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: 'This resumed AGI Cloud run asked for a browser tool. Send the request again.',
+      };
     }
     return { status: 'success' };
   } catch (error) {

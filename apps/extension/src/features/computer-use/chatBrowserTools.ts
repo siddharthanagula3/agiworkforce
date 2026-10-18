@@ -4,6 +4,9 @@ export const CHAT_READ_PAGE_TOOL = 'browser_read_page';
 export const CHAT_BROWSER_TASK_TOOL = 'browser_task';
 export const MAX_CHAT_BROWSER_TASK_GOAL_CHARS = 4_096;
 export const MAX_CHAT_TOOL_RESULT_CHARS = 64_000;
+export const CHAT_TOOL_FENCE_RESERVE_CHARS = 1_000;
+export const MAX_CHAT_TOOL_CALLS_PER_HANDOFF = 4;
+export const CHAT_TOOL_HANDOFF_TIMEOUT_MS = 15 * 60_000;
 
 export type ChatBrowserToolTier = 'read' | 'act';
 

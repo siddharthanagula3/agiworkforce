@@ -57,7 +57,7 @@ import { platformRequestHeaders } from '../../platformHeaders';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
-import { readToolHandoff, type ToolCall } from '../computer-use/toolHandoff';
+import { createToolUseJournal, readToolHandoff, type ToolCall } from '../computer-use/toolHandoff';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 import {
   ThinkingTagSplitter,
@@ -1655,6 +1655,7 @@ export async function* streamFreeChat(
         getAuthToken: async () => token,
       });
       const replayed: FreeTrialChunk[] = [];
+      const toolUseJournal = createToolUseJournal(options.tools ?? []);
       let wakeConsumer: (() => void) | undefined;
       let followed: Awaited<ReturnType<typeof client.followRun>> | undefined;
       let followError: unknown;
@@ -1688,6 +1689,11 @@ export async function* streamFreeChat(
               }
             }
             publish({ type: 'agent-event', envelope, durableReplay: true });
+            const replayedHandoff = toolUseJournal.observe(envelope.event);
+            if (replayedHandoff && !handedOff) {
+              handedOff = true;
+              publish({ type: 'tool-handoff', calls: replayedHandoff });
+            }
             const runChunk = publishRunReference({ lastSequence: envelope.sequence });
             if (runChunk) publish(runChunk);
           },

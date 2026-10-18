@@ -158,6 +158,8 @@ import {
 import {
   chatBrowserToolDefinitions,
   isChatBrowserToolTier,
+  CHAT_TOOL_HANDOFF_TIMEOUT_MS,
+  MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
 } from './features/computer-use/chatBrowserTools';
 import type { ToolCall } from './features/computer-use/toolHandoff';
@@ -165,9 +167,15 @@ import {
   addOneTimeSiteGrant,
   expiredOneTimeSiteGrants,
   isOneTimeSiteGrantId,
+  listOneTimeSiteGrants,
   oneTimeGrantedOrigins,
   removeOneTimeSiteGrant,
 } from './features/computer-use/oneTimeSiteGrants';
+import {
+  forgetTransientHostPermissions,
+  listTransientHostPermissions,
+  planTransientSweep,
+} from './features/computer-use/transientHostPermissions';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import {
   isPermanentNativeDisconnect,
@@ -332,8 +340,6 @@ function resolveChatStreamKey(streamKey: string): string {
   return adoptedChatStreamKeys.get(streamKey) ?? streamKey;
 }
 
-const CHAT_TOOL_HANDOFF_TIMEOUT_MS = 15 * 60_000;
-
 interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
@@ -355,6 +361,12 @@ function requestChatToolHandoff(
 ): Promise<ChromeManagedToolHandoffOutcome> {
   const handoffId = `handoff_${crypto.randomUUID()}`;
   const signal = active.controller.signal;
+  if (calls.length > MAX_CHAT_TOOL_CALLS_PER_HANDOFF) {
+    return Promise.resolve({
+      status: 'resolved',
+      results: unansweredToolResults(calls, 'Too many browser tool calls in one step; none ran.'),
+    });
+  }
   return new Promise((resolve) => {
     let settled = false;
     const finish = (outcome: ChromeManagedToolHandoffOutcome): void => {
@@ -450,18 +462,50 @@ function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessa
 
 const oneTimeSiteGrantTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+async function isHostPermissionKeptForever(origin: string): Promise<boolean> {
+  await siteAllowlistReady;
+  return (
+    siteAllowlistCache.has(origin) &&
+    (await readBrowserControlConsent().catch(() => [] as string[])).includes(origin)
+  );
+}
+
 async function revokeOneTimeSiteGrant(grantId: string): Promise<void> {
   clearTimeout(oneTimeSiteGrantTimers.get(grantId));
   oneTimeSiteGrantTimers.delete(grantId);
   const grant = removeOneTimeSiteGrant(grantId);
-  if (!grant) return;
-  if (grant.hostPermissionAdded && !oneTimeGrantedOrigins().includes(grant.origin)) {
-    const keptForever =
-      siteAllowlistCache.has(grant.origin) &&
-      (await readBrowserControlConsent().catch(() => [] as string[])).includes(grant.origin);
-    if (!keptForever) await removeBrowserControlHostPermission(grant.origin);
+  const [recorded] = await forgetTransientHostPermissions([grantId]).catch(() => []);
+  const origin = grant?.origin ?? recorded?.origin;
+  if (!origin) return;
+  const hostPermissionAdded = grant ? grant.hostPermissionAdded : true;
+  if (hostPermissionAdded && !oneTimeGrantedOrigins().includes(origin)) {
+    if (!(await isHostPermissionKeptForever(origin))) {
+      await removeBrowserControlHostPermission(origin);
+    }
   }
   cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+}
+
+async function revokeAllOneTimeSiteGrants(): Promise<void> {
+  for (const grant of listOneTimeSiteGrants()) await revokeOneTimeSiteGrant(grant.grantId);
+  await sweepTransientHostPermissions(false);
+}
+
+async function sweepTransientHostPermissions(expiredOnly: boolean): Promise<void> {
+  const entries = await listTransientHostPermissions().catch(() => []);
+  if (entries.length === 0) return;
+  await siteAllowlistReady;
+  const plan = planTransientSweep({
+    entries,
+    keptOrigins: new Set(
+      entries.map((entry) => entry.origin).filter((origin) => siteAllowlistCache.has(origin)),
+    ),
+    heldOrigins: new Set(oneTimeGrantedOrigins()),
+    nowMs: Date.now(),
+    expiredOnly,
+  });
+  await forgetTransientHostPermissions(plan.forgetIds).catch(() => []);
+  for (const origin of plan.removeOrigins) await removeBrowserControlHostPermission(origin);
 }
 
 function grantSiteOnce(message: import('./types').GrantSiteOnceMessage): boolean {
@@ -1089,6 +1133,7 @@ function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
   chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
+  void sweepTransientHostPermissions(false);
   void initializeSyncedPreferences(chrome.storage, (error) => {
     logger.warn('Failed to mirror a cross-device preference', error);
   }).catch((error) => {
@@ -1166,6 +1211,7 @@ function handleSidePanelPresencePort(port: chrome.runtime.Port): void {
     if (remaining > 0) openSidePanelWindows.set(registeredWindow, remaining);
     else openSidePanelWindows.delete(registeredWindow);
     publishSidePanelPresence(registeredWindow);
+    if (openSidePanelWindows.size === 0) void sweepTransientHostPermissions(false);
   });
 }
 
@@ -3842,6 +3888,7 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
       }
       retireManagedCloudOwner(previousOwner);
+      await revokeAllOneTimeSiteGrants();
       if (computerUseStarts.getPending()) {
         computerUseStartGeneration += 1;
         clearPendingComputerUseStart();

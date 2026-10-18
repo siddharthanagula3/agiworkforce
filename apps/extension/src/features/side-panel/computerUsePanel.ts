@@ -625,6 +625,13 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-browser-turn__error { color: var(--agi-ext-danger-text); }
   .sp-browser-turn__error:empty { display: none; }
   .sp-browser-grant__body { color: var(--agi-ext-text-muted); }
+  .sp-browser-grant__goal {
+    color: var(--agi-ext-text);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 9em;
+    overflow-y: auto;
+  }
   @media (pointer: coarse) {
     .sp-browser-turn .sp-cu-takeover-btn,
     .sp-browser-grant .sp-agent-approval__button {

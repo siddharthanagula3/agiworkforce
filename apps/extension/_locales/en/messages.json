@@ -3906,6 +3906,18 @@
     "message": "Decline",
     "description": "Button that refuses site access"
   },
+  "spBrowserTaskStartTitle": {
+    "message": "AGI wants to start a browser task",
+    "description": "Heading of the card that asks before a model-started browser task begins; the task goal is shown beneath it."
+  },
+  "spBrowserTaskStartAction": {
+    "message": "Start task",
+    "description": "Button that lets the browser task shown in the card begin."
+  },
+  "spBrowserTaskStartDeclined": {
+    "message": "The user declined to start this browser task. Do not ask again in this answer; answer without it or say what the user can do.",
+    "description": "Result handed back to the model when the user declines a browser task it proposed."
+  },
   "spBrowserAccessWaiting": {
     "message": "Waiting for access to $HOST$",
     "description": "Activity step while the site access card is open",
