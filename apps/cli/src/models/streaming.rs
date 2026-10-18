@@ -967,7 +967,7 @@ pub async fn stream_completion(
         Provider::Ollama(OllamaMode::Cloud) => {
             let base_url = config
                 .base_url("ollama-cloud")
-                .unwrap_or_else(|| "https://api.ollama.com/v1".to_string());
+                .unwrap_or_else(|| "https://ollama.com/v1".to_string());
             let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
             run_spec(
                 &client,

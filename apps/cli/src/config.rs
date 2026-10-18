@@ -350,7 +350,7 @@ impl Default for CliConfig {
             "ollama-cloud".to_string(),
             ProviderConfig {
                 api_key_env: Some("OLLAMA_API_KEY".to_string()),
-                base_url: Some("https://api.ollama.com/v1".to_string()),
+                base_url: Some("https://ollama.com/v1".to_string()),
             },
         );
 

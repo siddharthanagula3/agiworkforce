@@ -491,7 +491,7 @@ pub fn default_base_url(provider: Provider) -> Option<&'static str> {
         Provider::Sambanova => Some("https://api.sambanova.ai/v1"),
         Provider::NvidiaNim => Some("https://integrate.api.nvidia.com/v1"),
         Provider::OpenRouter => Some("https://openrouter.ai/api/v1"),
-        Provider::OllamaCloud => Some("https://api.ollama.com/v1"),
+        Provider::OllamaCloud => Some("https://ollama.com/v1"),
         // Local OpenAI-compatible runtimes. HTTP-on-loopback is explicitly allowed for
         // these ports by `ALLOWED_LOOPBACK_PORTS` above.
         Provider::LmStudio => Some("http://localhost:1234/v1"),

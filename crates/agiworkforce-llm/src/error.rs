@@ -285,7 +285,7 @@ pub fn provider_name_from_url(url: &str) -> &'static str {
         "groq"
     } else if url.contains("openrouter") {
         "openrouter"
-    } else if url.contains("api.ollama.com") {
+    } else if url.contains("ollama.com") {
         "ollama-cloud"
     } else if url.contains("localhost") || url.contains("127.0.0.1") {
         "local"
@@ -703,7 +703,7 @@ mod tests {
         );
         assert_eq!(provider_name_from_url("http://localhost:1234/v1"), "local");
         assert_eq!(
-            provider_name_from_url("https://api.ollama.com/v1"),
+            provider_name_from_url("https://ollama.com/v1"),
             "ollama-cloud"
         );
         assert_eq!(provider_name_from_url("https://example.com"), "unknown");
