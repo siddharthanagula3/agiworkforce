@@ -74,6 +74,12 @@ import {
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
+function epochSeconds(value: string | Date | null | undefined): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms / 1000;
+}
+
 /**
  * The switches holding something closed right now, each with the sentence the
  * operator left on it. The handshake can only name the platform subset, so
@@ -309,8 +315,8 @@ async function handleGetMe(request: NextRequest) {
         work_description: identity.workDescription,
       },
       avatar_url: profile?.avatar_url ?? null,
-      created_at: null,
-      updated_at: Date.now() / 1000,
+      created_at: epochSeconds(profile?.created_at),
+      updated_at: epochSeconds(profile?.updated_at) ?? Date.now() / 1000,
       plan,
       feature_flags,
       feature_flag_variants: rolloutFlags.variants,

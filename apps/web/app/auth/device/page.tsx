@@ -13,6 +13,8 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { apiErrorMessage } from '@shared/utils/api-error';
 import { buildLoginUrl, buildSignupUrl, type AuthRouteContext } from '@/features/auth/authRoutes';
 import {
+  DEVICE_AUTHORIZATION_APPROVE_PATH,
+  DEVICE_AUTHORIZATION_CODE_PATH,
   DeviceAuthorizationLookupResponseSchema,
   type DeviceAuthorizationLookupResponse,
 } from '@agiworkforce/cloud-contracts';
@@ -87,7 +89,7 @@ function DeviceForm() {
     setDetails(null);
     setLookupError(null);
     setLookupState('loading');
-    void fetch(`/api/auth/device/code?user_code=${encodeURIComponent(code)}`, {
+    void fetch(`${DEVICE_AUTHORIZATION_CODE_PATH}?user_code=${encodeURIComponent(code)}`, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
@@ -143,7 +145,7 @@ function DeviceForm() {
         throw new Error(t('auth:device.csrfFailed'));
       }
 
-      const res = await fetch('/api/auth/device/approve', {
+      const res = await fetch(DEVICE_AUTHORIZATION_APPROVE_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfJson.token },
         credentials: 'include',
