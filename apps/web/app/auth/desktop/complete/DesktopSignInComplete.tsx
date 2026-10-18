@@ -58,7 +58,7 @@ export function DesktopSignInComplete({
   loginUrl: string;
 }) {
   const { ready, signInWithTicket } = useIdentityTicketSignIn();
-  const [failure, setFailure] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -73,10 +73,10 @@ export function DesktopSignInComplete({
         return cause instanceof Error && cause.message ? cause.message : REDEEM_FAILED;
       }
     };
-    void finish().then(setFailure);
+    void finish().then(setErrorMessage);
   }, [ready, signInWithTicket, completeUrl]);
 
-  if (failure === null) {
+  if (errorMessage === null) {
     return (
       <AuthStepFrame heading={SIGNING_IN}>
         <p role="status" className="flex items-center justify-center">
@@ -89,7 +89,7 @@ export function DesktopSignInComplete({
   return (
     <AuthStepFrame heading={FAILED_HEADING}>
       <p role="alert" className={AUTH_ERROR_CLASS}>
-        {failure}
+        {errorMessage}
       </p>
       <button
         type="button"

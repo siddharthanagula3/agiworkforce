@@ -22,4 +22,16 @@ test.describe('workspace console pages that ship with their own route', () => {
     await expect(page.getByRole('heading', { name: 'MCP servers' })).toBeVisible();
     await expect(page.getByRole('main')).not.toBeEmpty();
   });
+
+  test('/workspace/roles answers inside the console frame', async ({ page }) => {
+    const response = await page.goto('/workspace/roles');
+    expect(response?.status()).toBe(200);
+    await expect(
+      page.getByRole('heading', {
+        level: 1,
+        name: /^(Roles|No workspace selected|You do not administer this workspace|Workspace administration is temporarily unavailable)$/,
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole('main')).not.toBeEmpty();
+  });
 });

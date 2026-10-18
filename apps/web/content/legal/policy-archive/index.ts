@@ -27,6 +27,7 @@ import accessibility_2026_08_05 from './accessibility/2026-08-05.json';
 import accessibility_2026_09_27 from './accessibility/2026-09-27.json';
 import trust_2026_09_12 from './trust/2026-09-12.json';
 import trust_2026_09_21 from './trust/2026-09-21.json';
+import trust_2026_10_08 from './trust/2026-10-08.json';
 import euRepresentative_2026_08_05 from './euRepresentative/2026-08-05.json';
 import mobile_2026_08_13 from './mobile/2026-08-13.json';
 import mobile_2026_09_21 from './mobile/2026-09-21.json';
@@ -97,6 +98,7 @@ export const ARCHIVED_POLICY_TEXT = {
   trust: {
     '2026-09-12': trust_2026_09_12,
     '2026-09-21': trust_2026_09_21,
+    '2026-10-08': trust_2026_10_08,
   },
   euRepresentative: {
     '2026-08-05': euRepresentative_2026_08_05,

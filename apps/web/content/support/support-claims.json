@@ -6519,7 +6519,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/schedules/components/ScheduleTriggersPanel.tsx",
-          "text": "confirmText: 'Delete trigger',"
+          "text": "confirmLabel: 'Delete trigger',"
         }
       ]
     },

@@ -390,6 +390,11 @@ export default function TrustPage() {
                     caption="Change record"
                     rows={[
                       {
+                        label: '2026-10-18',
+                        value:
+                          'One row corrected, with no review of the rest of the page. Desktop credential storage said Electron Desktop refuses to store account credentials unless operating-system encryption is available; the secret store that made that true was removed when Desktop moved to loading only the hosted web app. Desktop now writes no account credential of its own, and the sign-in session lives in a persistent browser profile that belongs to the app alone.',
+                      },
+                      {
                         label: '2026-10-08',
                         value:
                           'Four rows corrected, with no review of the rest of the page. Artifact sandboxing said no network egress; the policy blocks fetch, XHR and WebSocket calls and still lets scripts, styles, images and fonts load from pinned CDN hosts. The Local mode and CLI key rows called the CLI released, and it has no published release. The CLI key row now says the keys go to owner-only files on Linux or when the keyring is turned off. The DPDP parental consent row said the web surface has no age gate; web sign-up now asks for an age, which is self-declared and not stored, and no parental permission is verified.',

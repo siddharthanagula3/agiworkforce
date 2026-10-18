@@ -78,7 +78,7 @@ export const POLICY_LAST_UPDATED = {
   cookies: '2026-10-08',
   subprocessors: '2026-10-15',
   security: '2026-10-08',
-  trust: '2026-10-08',
+  trust: '2026-10-18',
   sla: '2026-10-08',
   refunds: '2026-10-08',
   referralTerms: '2026-10-08',

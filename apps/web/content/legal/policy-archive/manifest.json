@@ -317,13 +317,19 @@
     "trust": {
       "route": "/trust",
       "slug": "trust",
-      "current": "2026-10-08",
+      "current": "2026-10-18",
       "versions": [
+        {
+          "date": "2026-10-18",
+          "summary": "Corrects the Desktop credential storage row. Electron Desktop no longer keeps its own encrypted credential store; it writes no account credential of its own, and the sign-in session lives in a persistent browser profile that belongs to the app alone.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-08",
           "summary": "Corrects three rows. Artifact sandboxing blocks fetch, XHR and WebSocket calls but is not full network isolation: scripts, styles, images and fonts can still load from four pinned CDN hosts. The CLI is no longer described as released. The CLI keeps provider keys in owner-only files on Linux or when the keyring is turned off. The DPDP parental consent row is corrected for the new age rule: web sign-up now asks for an age and refuses anyone under 13, but the age is self-declared and no parental permission is verified, so the row still reads Not implemented. The date at the top is now labelled Last updated, not Last reviewed. The next review date is unchanged.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-21",

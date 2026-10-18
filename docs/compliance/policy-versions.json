@@ -303,6 +303,11 @@
           "date": "2026-10-08",
           "digest": "1f6168821c5b4e50",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Section 03 and its contents label read Two common misconceptions, where they said Two things people usually get told wrong. No cookie, storage key or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "b39a81c346b9c340",
+          "note": "The storage table drops the rows for agi-user-profile-store, agi-notification-store, agi-company-hub-store and agent-metrics-storage, and tool-storage from the interface preferences row, because the stores that wrote them were deleted and the app no longer writes those keys. Nothing new is stored, no cookie or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -584,6 +589,11 @@
           "date": "2026-10-08",
           "digest": "f7e357e17c8e5006",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Two sentences said a reported barrier is treated as a P0, an internal priority label; they now say it is treated as a top priority. How to report a barrier is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "c078897241b22fbe",
+          "note": "The live transcripts gap drops Tracking it as a P1, an internal priority label, and the contact address is read from CONTACT_EMAIL, which prints the same contact@agiworkforce.com. How to report a barrier is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
@@ -666,6 +676,12 @@
           "date": "2026-10-08",
           "digest": "e5c18c477b8d328e",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The page title and description read Trust and compliance status instead of a dated posture ledger, the lede drops A posture ledger, not a badge wall, the section and contents label Do not take our word for it read Checks you can run yourself, and two sentences of commentary on certification claims and on the tables being wrong are shortened. No row, date, change record entry or the statement that no SOC 2 report, ISO 27001 certificate or third-party penetration test is held changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-18",
+          "digest": "7c1b91383ab852b7",
+          "note": "Date moved to 2026-10-18, the day the corrected row went live in production. The Desktop credential storage row said Electron Desktop refuses to store account credentials unless operating-system encryption is available; the secret store behind that was removed when Desktop moved to loading only the hosted web app, so the row now says Desktop writes no account credential of its own and the sign-in session lives in a persistent browser profile that belongs to the app alone. The page's change record gains a 2026-10-18 entry. No other row changed and the next review date is unchanged.",
+          "summary": "Corrects the Desktop credential storage row. Electron Desktop no longer keeps its own encrypted credential store; it writes no account credential of its own, and the sign-in session lives in a persistent browser profile that belongs to the app alone."
         }
       ]
     },

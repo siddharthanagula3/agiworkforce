@@ -1,11 +1,4 @@
 {
-  "$comment": "Outbound calls scripts/check-dependency-deadlines.mjs found with no deadline. The four provider clients recorded here on 2026-09-20 were fixed the same day and their entries deleted; what remains is browser and shell code the tab or the host bounds. The recorded count per file only shrinks.",
-  "known": [
-    {
-      "file": "apps/web/lib/tauri-bridge.ts",
-      "calls": 1,
-      "reason": "a desktop shell bridge that reaches the local host process, bounded by the shell rather than by a server request",
-      "fix": "none needed while it stays a shell module; the desktop lane owns its transport ceiling"
-    }
-  ]
+  "$comment": "Outbound calls scripts/check-dependency-deadlines.mjs found with no deadline. The four provider clients recorded here on 2026-09-20 were fixed the same day and their entries deleted, and the web shell bridge left with its module on 2026-10-18. The recorded count per file only shrinks.",
+  "known": []
 }
