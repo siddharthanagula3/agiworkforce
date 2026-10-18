@@ -579,15 +579,15 @@
     },
     {
       "file": "app/gallery/GalleryClient.tsx",
-      "line": 333,
+      "line": 329,
       "rule": "hex",
-      "literal": "#f8f5ee"
+      "literal": "#ffffff"
     },
     {
       "file": "app/gallery/GalleryClient.tsx",
-      "line": 333,
+      "line": 329,
       "rule": "hex",
-      "literal": "#39362e"
+      "literal": "#0d0d0d"
     },
     {
       "file": "app/gallery/GalleryClient.tsx",

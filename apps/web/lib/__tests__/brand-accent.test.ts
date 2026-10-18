@@ -28,12 +28,10 @@ function baseThemeBlocks(css: string): { light: string; dark: string } {
   return { light: match[1], dark: match[2] };
 }
 
-// foundation.css owns --background, --foreground, --border and
-// --destructive-text; globals.css owns the rest of the shadcn set.
-function foundationBlock(selector: string): string {
-  const css = read('packages/ui/design-tokens/src/foundation.css');
+function tokenBlock(file: string, selector: string): string {
+  const css = read(`packages/ui/design-tokens/src/${file}`);
   const start = css.indexOf(`${selector} {`);
-  if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
+  if (start === -1) throw new Error(`${file} has no ${selector} block`);
   const open = css.indexOf('{', start);
   let depth = 0;
   for (let i = open; i < css.length; i++) {
@@ -43,11 +41,17 @@ function foundationBlock(selector: string): string {
   throw new Error(`unbalanced ${selector} block`);
 }
 
+// foundation.css owns --background, --foreground, --border and
+// --destructive-text; globals.css owns the rest of the shadcn set.
+function foundationBlock(selector: string): string {
+  return tokenBlock('foundation.css', selector);
+}
+
 function webThemeBlocks(): { light: string; dark: string } {
   const { light, dark } = baseThemeBlocks(read('apps/web/app/globals.css'));
   return {
-    light: `${foundationBlock(':root')}\n${light}`,
-    dark: `${foundationBlock('.dark')}\n${dark}`,
+    light: `${foundationBlock(':root')}\n${light}\n${tokenBlock('chat.css', ':root')}`,
+    dark: `${foundationBlock('.dark')}\n${dark}\n${tokenBlock('chat.css', '.dark')}`,
   };
 }
 

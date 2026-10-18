@@ -23,7 +23,8 @@ describe('focus ring ownership', () => {
     expect(globalsCss).not.toMatch(/^\s*--ring:/m);
     expect(globalsCss).not.toMatch(/^\s*--chat-accent-secondary:/m);
     expect(globalsCss.match(/^\s*--chat-focus-ring:\s*var\(--focus-ring\);/gm)).toHaveLength(2);
-    expect(chatCss.match(/^\s*--chat-focus-ring:\s*var\(--focus-ring\);/gm)).toHaveLength(3);
+    expect(chatCss.match(/^\s*--chat-focus-ring:\s*var\(--focus-ring\);/gm)).toHaveLength(2);
+    expect(chatCss.match(/^\s*--chat-focus-ring:/gm)).toHaveLength(2);
   });
 
   it('keeps component focus states off accent and legacy ring roles', () => {

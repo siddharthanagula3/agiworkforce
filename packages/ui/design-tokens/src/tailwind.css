@@ -103,7 +103,6 @@
 [data-theme='light'] body:has([data-public-palette='flagship']) [data-design='agi'],
 body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi'] {
   --public-label-ink: #6b3700;
-  --public-caption-ink: #4b4235;
 }
 
 [data-design='agi'].dx {

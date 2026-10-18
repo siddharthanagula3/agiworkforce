@@ -515,8 +515,8 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar - #f5f4f1 ≈ hsl(45 17% 95%) matches desktop light sidebar */
-    --sidebar-background: 45 17% 95%;
+    /* Sidebar - #f9f9f9, the --chat-sidebar-bg light value */
+    --sidebar-background: 0 0% 97.6%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 221.2 83.2% 53.3%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -525,26 +525,11 @@
     --sidebar-border: 214.3 31.8% 91.4%;
     --sidebar-ring: 221.2 83.2% 53.3%;
 
-    /* Chat surface tokens - light mode (#faf9f7 main, #f5f4f1 sidebar) */
-    --chat-bg: #faf9f7;
+    /* Chat surfaces and text come from design-tokens/chat.css, the same
+       neutral light palette the desktop renders. */
     --chat-bg-elevated: #f9fafb;
-    --chat-sidebar-bg: #f5f4f1;
-    --chat-border-strong: #d1ccc5;
-    --chat-border-subtle: rgba(0, 0, 0, 0.06);
     --chat-glass: rgba(0, 0, 0, 0.03);
     --chat-glass-border: rgba(0, 0, 0, 0.08);
-    --chat-input-bg: #ffffff;
-    --chat-code-bg: #f6f8fa;
-    /* Web overrides the shared warm ladder in chat.css with neutral greys.
-       All four steps are declared together: overriding only primary and
-       secondary left muted and placeholder resolving from chat.css, which
-       inverted the prominence order (muted read darker than secondary).
-       Worst-case ratios across --chat-bg, --chat-sidebar-bg, --chat-input-bg,
-       --chat-code-bg and --chat-bg-elevated: 15.82 / 5.46 / 5.07 / 4.64. */
-    --chat-text-primary: #1a1a1a;
-    --chat-text-secondary: #636363;
-    --chat-text-muted: #686868;
-    --chat-text-placeholder: #6e6e6e;
     --chat-accent: #21808d;
     --chat-accent-text: #1c6d78;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
@@ -560,9 +545,9 @@
     --chat-focus-ring: var(--focus-ring);
     /* Accent-picker swatches: the solid fill each choice paints.
        Measured as text against the three light surfaces these actually render
-       on - --chat-bg #f9f8f6, elevated #ffffff and the tinted #f8f1e5 - the
-       fills do not all clear 4.5:1: rose is 4.18:1 on the tint and 4.43:1 on
-       --chat-bg itself, and blue and green pass by under 0.25. A fill and a
+       on - --chat-bg and elevated, both #ffffff, and the tinted #f8f1e5 - the
+       fills do not all clear 4.5:1: rose is 4.18:1 on the tint, and blue and
+       green pass by under 0.25. A fill and a
        text colour are different roles, so each choice now carries its own
        text value below rather than reusing the fill. */
     --accent-swatch-default: #c8892a;
@@ -1602,94 +1587,30 @@ html[data-contrast='more'] *:focus-visible {
   --agi-amber-soft: rgba(16, 18, 22, 0.08);
 }
 
-/* The landing keeps the flagship palette. Its light block restates every light value,
-   because the flagship dark block outranks the neutral light block. */
+/* The landing keeps the flagship amber accent on the neutral grounds and inks
+   above. Its light block restates the accent because the flagship dark block
+   outranks the neutral light block. */
 body:has([data-public-palette='flagship']) [data-design='agi'] {
-  --agi-ground: #0b0a08;
-  --agi-ground-2: #13110d;
-  --agi-ground-3: #1c1913;
-  --agi-card: #131109;
-  --agi-ink: #f5f0e6;
-  --agi-ink-2: #c4bcac;
-  --agi-ink-3: #8a8174;
-  --agi-ink-quiet: #948b79;
-  --agi-ink-faint: #948b79;
-  --agi-rule: rgba(245, 240, 230, 0.09);
-  --agi-rule-strong: rgba(245, 240, 230, 0.17);
-  --agi-frame: rgba(241, 235, 225, 0.16);
   --agi-accent: #f0a84a;
   --agi-accent-hover: #f4b866;
   --agi-accent-ink: #1a1300;
   --agi-accent-text: #f0a84a;
   --agi-accent-soft: rgba(240, 168, 74, 0.16);
-  --agi-surface-wash: rgba(245, 240, 230, 0.035);
-  --agi-line-soft: rgba(245, 240, 230, 0.05);
   --agi-glow-soft: rgba(240, 168, 74, 0.13);
-  --agi-console-tint: rgba(19, 17, 9, 0.62);
-  --agi-console-tint-strong: rgba(19, 17, 9, 0.82);
-  --agi-header-sheen: rgba(245, 240, 230, 0.02);
-  --agi-code-bg: rgba(245, 240, 230, 0.06);
   --agi-selection-bg: rgba(240, 168, 74, 0.32);
-  --agi-terminal: #060503;
-  --agi-terminal-ink: #d9d2c5;
   --agi-amber: #f0a84a;
   --agi-amber-soft: rgba(240, 168, 74, 0.16);
 }
 
 [data-theme='light'] body:has([data-public-palette='flagship']) [data-design='agi'],
 body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi'] {
-  color-scheme: light;
-  --agi-ground: #ffffff;
-  --agi-ground-2: #f7f7f7;
-  --agi-ground-3: #efefef;
-  --agi-bg: var(--agi-ground);
-  --agi-bg-2: var(--agi-ground-2);
-  --agi-bg-3: var(--agi-ground-3);
-  --agi-card: #ffffff;
-  --agi-ink: #1c150b;
-  --agi-ink-2: #524839;
-  --agi-ink-3: #665a47;
-  --agi-ink-quiet: #665a47;
-  --agi-ink-faint: #665a47;
-  --agi-rule: rgba(30, 22, 10, 0.1);
-  --agi-rule-strong: rgba(30, 22, 10, 0.17);
-  --agi-frame: rgba(15, 23, 42, 0.14);
-
   --agi-accent: #854500;
   --agi-accent-hover: #6b3700;
   --agi-accent-ink: #ffffff;
   --agi-accent-text: #854500;
   --agi-accent-soft: rgba(133, 69, 0, 0.12);
-
-  --agi-lane-local: #0e6f47;
-  --agi-lane-local-text: #0e6f47;
-  --agi-lane-local-on-primary: #ffffff;
-  --agi-lane-byok: #6234c4;
-  --agi-lane-byok-text: #6234c4;
-  --agi-lane-byok-on-primary: #ffffff;
-  --agi-lane-cloud: #12609e;
-  --agi-lane-cloud-text: #12609e;
-  --agi-lane-cloud-on-primary: #ffffff;
-
-  --agi-surface-wash: rgba(30, 22, 10, 0.025);
-  --agi-line-soft: rgba(30, 22, 10, 0.05);
   --agi-glow-soft: rgba(156, 84, 7, 0.1);
-  --agi-console-tint: rgba(247, 247, 247, 0.85);
-  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
-  --agi-error: #c23a2c;
-  --agi-success: #1f6b43;
-  --agi-shadow: rgba(30, 22, 10, 0.14);
-  --agi-shadow-lift: 0 30px 80px -40px rgba(15, 23, 42, 0.35);
-  --agi-shadow-window: none;
-  --agi-header-sheen: rgba(156, 84, 7, 0.05);
-  --agi-code-bg: rgba(30, 22, 10, 0.05);
-  --agi-code-function: #245b96;
-  --agi-code-type: #176555;
   --agi-selection-bg: rgba(240, 168, 74, 0.28);
-  --agi-selection-text: var(--agi-ink);
-  --agi-terminal: #0e1013;
-  --agi-terminal-ink: #d7dbe2;
-  --agi-terminal-dim: #9aa3b0;
   --agi-amber: #854500;
   --agi-amber-soft: rgba(133, 69, 0, 0.12);
 }

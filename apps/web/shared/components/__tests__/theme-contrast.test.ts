@@ -762,10 +762,15 @@ describe('the marketing design-system palette clears AA in both themes', () => {
   const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
   const LANES = ['local', 'byok', 'cloud'] as const;
 
+  // The landing overrides only the accent; grounds and inks resolve from the
+  // neutral blocks. `token` reads the first declaration, so the override leads.
   const FLAGSHIP_SCOPE = "body:has([data-public-palette='flagship'])";
   const FLAGSHIP_THEMES = {
-    dark: designBlock(`${FLAGSHIP_SCOPE} [data-design='agi']`, '--agi-ground'),
-    light: designBlock(`${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`, '--agi-ground'),
+    dark: `${designBlock(`${FLAGSHIP_SCOPE} [data-design='agi']`, '--agi-accent')}\n${THEMES.dark}`,
+    light: `${designBlock(
+      `${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`,
+      '--agi-accent',
+    )}\n${THEMES.light}`,
   };
 
   for (const [theme, block] of Object.entries(FLAGSHIP_THEMES)) {
@@ -1619,7 +1624,6 @@ describe('status colour has no role-less legacy token', () => {
 });
 
 describe('chat status text roles clear AA on every chat surface and on their own tints', () => {
-  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
   const SURFACES = [
     '--chat-bg',
     '--chat-surface-elevated',
@@ -1633,10 +1637,7 @@ describe('chat status text roles clear AA on every chat surface and on their own
   const grounds = {
     light: [
       ...SURFACES.map((name) => colorToken(chat.light, name)),
-      ...SURFACES.map((name) => colorToken(coolLight, name)),
-      ...['--chat-bg-elevated', '--chat-sidebar-bg', '--chat-input-bg', '--chat-code-bg'].map(
-        (name) => colorToken(webBase.light, name),
-      ),
+      colorToken(webBase.light, '--chat-bg-elevated'),
     ],
     dark: SURFACES.map((name) => colorToken(chat.dark, name)),
   };
@@ -1675,13 +1676,8 @@ describe('chat status text roles clear AA on every chat surface and on their own
 });
 
 describe('code syntax colours clear AA on every code ground', () => {
-  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
   const grounds = {
-    light: [
-      colorToken(chat.light, '--chat-code-bg'),
-      colorToken(coolLight, '--chat-code-bg'),
-      colorToken(webBase.light, '--chat-code-bg'),
-    ],
+    light: [colorToken(chat.light, '--chat-code-bg')],
     dark: [colorToken(chat.dark, '--chat-code-bg'), colorToken(webBase.dark, '--chat-code-bg')],
   };
   const SYNTAX = ['keyword', 'string', 'comment', 'number', 'function', 'type'];
@@ -1913,11 +1909,8 @@ describe('the mobile palette clears AA in every theme', () => {
 });
 
 describe('plain source text clears AA on the code surface it is drawn on', () => {
-  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
-
   for (const [theme, text, grounds] of [
-    ['light', chat.light, [chat.light, webBase.light]],
-    ['cool light', coolLight, [coolLight]],
+    ['light', chat.light, [chat.light]],
     ['dark', chat.dark, [chat.dark, webBase.dark]],
   ] as const) {
     it(`${theme}: --chat-code-text >= 4.5:1 on --chat-code-bg`, () => {

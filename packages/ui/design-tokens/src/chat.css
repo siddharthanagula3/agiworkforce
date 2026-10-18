@@ -40,50 +40,48 @@
     --chat-font-mono:
       var(--font-jetbrains, 'JetBrains Mono'), 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace,
       'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --chat-bg: #faf9f7;
-    --chat-fg: #1a1915;
-    --chat-surface-base: #faf9f7;
+    --chat-bg: #ffffff;
+    --chat-fg: #0d0d0d;
+    --chat-surface-base: #ffffff;
     --chat-surface-elevated: #ffffff;
     /* Popovers, menus and modals float above the surface, which is the third
        elevation rung. Resolved rather than restated, so it follows the theme
        and .dark needs no counterpart. */
     --chat-shadow-lg: var(--elevation-3);
     --chat-surface-overlay: #ffffff;
-    --chat-surface-hover: #f0eeeb;
-    --chat-sidebar-bg: #f5f4f1;
+    --chat-surface-hover: #f0f0f0;
+    --chat-sidebar-bg: #f9f9f9;
     --chat-input-bg: #ffffff;
-    --chat-code-bg: #f6f8fa;
-    --chat-code-header-bg: #ececf1;
-    --chat-code-border: rgba(31, 41, 55, 0.15);
-    --chat-code-text: #24292f;
-    --chat-code-lang-label: #4b5563;
-    --chat-code-copy-hover-bg: rgba(31, 41, 55, 0.08);
-    --chat-code-copy-hover-fg: #111827;
+    --chat-code-bg: #f7f7f8;
+    --chat-code-header-bg: #ececec;
+    --chat-code-border: rgba(0, 0, 0, 0.1);
+    --chat-code-text: #0d0d0d;
+    --chat-code-lang-label: #5d5d5d;
+    --chat-code-copy-hover-bg: rgba(0, 0, 0, 0.06);
+    --chat-code-copy-hover-fg: #0d0d0d;
     --chat-code-syntax-keyword: #cf222e;
     --chat-code-syntax-string: #0a3069;
     --chat-code-syntax-comment: #57606a;
     --chat-code-syntax-number: #0550ae;
     --chat-code-syntax-function: #8250df;
     --chat-code-syntax-type: #953800;
-    --chat-text-primary: #1a1915;
+    --chat-text-primary: #0d0d0d;
     /* Used at 11-12px, where WCAG AA requires 4.5:1. Ratios below are the
        WORST case across every light surface a --chat-text-* can land on, not
-       just --chat-bg: sidebar #f5f4f1 and hover #f0eeeb are darker than the
-       page ground and were what the earlier GOV-34 pass missed.
-         secondary   #595450  6.46:1
-         muted       #65615b  5.33:1
-         placeholder #6f6a65  4.61:1
-       The ladder is spaced rather than packed against the floor so the four
-       prominence steps stay visually distinguishable. packages/ui/design-tokens
+       just --chat-bg: sidebar #f9f9f9, code #f7f7f8 and hover #f0f0f0 are
+       darker than the page ground and were what the earlier GOV-34 pass missed.
+         secondary          #5d5d5d  5.78:1
+         muted, placeholder #6a6a6a  4.75:1
+       packages/ui/design-tokens
        /src/index.ts emits this same --chat-* contract for the extension, mobile
        and VS Code surfaces and MUST carry identical values; they are asserted
        together in apps/web/shared/components/__tests__/theme-contrast.test.ts. */
-    --chat-text-secondary: #595450;
-    --chat-text-muted: #65615b;
-    --chat-text-placeholder: #6f6a65;
-    --chat-border: rgba(26, 25, 21, 0.08);
-    --chat-border-strong: rgba(26, 25, 21, 0.15);
-    --chat-border-subtle: rgba(26, 25, 21, 0.08);
+    --chat-text-secondary: #5d5d5d;
+    --chat-text-muted: #6a6a6a;
+    --chat-text-placeholder: #6a6a6a;
+    --chat-border: rgba(0, 0, 0, 0.1);
+    --chat-border-strong: rgba(0, 0, 0, 0.16);
+    --chat-border-subtle: rgba(0, 0, 0, 0.08);
     --chat-accent-primary: #da7756;
     --chat-accent-on-primary: #1c150b;
     /* the fill reads 3.11:1 as text on this light surface; 5.45:1 here. */
@@ -97,15 +95,15 @@
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
     --chat-focus-ring: var(--focus-ring);
-    --chat-user-bubble-bg: #f0eeeb;
-    --chat-thinking-text: #6b6560;
-    --chat-thinking-line: rgba(26, 25, 21, 0.08);
-    --chat-badge-neutral: #65615b;
-    --chat-loading-placeholder: #f0eeeb;
-    --chat-loading-indicator: #65615b;
+    --chat-user-bubble-bg: #f4f4f4;
+    --chat-thinking-text: #5d5d5d;
+    --chat-thinking-line: rgba(0, 0, 0, 0.08);
+    --chat-badge-neutral: #6a6a6a;
+    --chat-loading-placeholder: #f0f0f0;
+    --chat-loading-indicator: #6a6a6a;
     --chat-destructive: #dc2626;
-    /* The fill above measures 4.49:1 as a word on --chat-bg, just under the
-       4.5 AA needs, and its dark counterpart #ef4444 measures 4.28:1 on the
+    /* The fill above measures 4.24:1 as a word on --chat-surface-hover, under
+       the 4.5 AA needs, and its dark counterpart #ef4444 measures 4.28:1 on the
        panels it lands on. Text is the dominant use by 25 call sites to 3, so
        it gets the role rather than the fill being bent to serve both. */
     --chat-destructive-text: #b91c1c;
@@ -220,71 +218,25 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
-   ChatGPT-style "cool" palette, OPT-IN via [data-chat-theme='cool'] on the
-   chat root (or <html>). The default (warm / Claude-leaning) palette above is
-   left untouched; only the palette-bearing vars are overridden here so radii,
-   fonts and state colors continue to inherit from :root / .dark.
+   Blue accent, OPT-IN via [data-chat-theme='cool'] on the chat root (or
+   <html>). Surfaces and text are neutral by default, so the attribute only
+   swaps the light accent family; dark keeps the default accent.
    Selectors are written in both self- and descendant-forms so the attribute
-   works whether it sits on the same element as `.dark` (html) or on a nested
-   chat container.
+   works whether it sits on <html> or on a nested chat container.
    ─────────────────────────────────────────────────────────────────────────── */
 @layer base {
-  /* Cool · light (ChatGPT light).
-     Anchored to `html:not(.dark)`, not bare `:not(.dark)`: the theme class
-     lives on <html> while the attribute sits on a nested div, and bare
-     `:not(.dark)` matches <body> as an ancestor, so the light palette painted
-     straight over dark mode. Verified in the running app: /chat rendered a
-     white shell and a #f9f9f9 sidebar while every other route was black. */
+  /* Anchored to `html:not(.dark)`, not bare `:not(.dark)`: the theme class
+     lives on <html> while the attribute may sit on a nested div, and bare
+     `:not(.dark)` matches <body> as an ancestor, which painted the light
+     values straight over dark mode. */
   html:not(.dark) [data-chat-theme='cool'],
   html:not(.dark)[data-chat-theme='cool'] {
-    --chat-bg: #ffffff;
-    --chat-fg: #0d0d0d;
-    --chat-surface-base: #ffffff;
-    --chat-surface-elevated: #ffffff;
-    --chat-surface-overlay: #ffffff;
-    --chat-surface-hover: #f0f0f0;
-    --chat-sidebar-bg: #f9f9f9;
-    --chat-input-bg: #ffffff;
-    --chat-code-bg: #f7f7f8;
-    --chat-code-header-bg: #ececec;
-    --chat-code-border: rgba(0, 0, 0, 0.1);
-    --chat-code-text: #0d0d0d;
-    --chat-code-lang-label: #5d5d5d;
-    --chat-code-copy-hover-bg: rgba(0, 0, 0, 0.06);
-    --chat-code-copy-hover-fg: #0d0d0d;
-    --chat-text-primary: #0d0d0d;
-    /* AUDIT-FIX GOV-34: one #8e8e8e served as both muted and placeholder and
-       measured 3.28:1 on #ffffff, below AA at the 11-12px sizes in use.
-         secondary        #5d5d5d  6.58:1 on #ffffff (unchanged)
-         muted/placeholder #6a6a6a 5.41:1 on #ffffff, 5.14:1 on the
-                                   #f9f9f9 sidebar, 5.05:1 on the #f7f7f8 code
-                                   surface and 4.75:1 on the #f0f0f0 hover
-                                   surface, AA on every surface this theme
-                                   paints it against, not just the page bg. */
-    --chat-text-secondary: #5d5d5d;
-    --chat-text-muted: #6a6a6a;
-    --chat-text-placeholder: #6a6a6a;
-    --chat-border: rgba(0, 0, 0, 0.1);
-    --chat-border-strong: rgba(0, 0, 0, 0.16);
-    --chat-border-subtle: rgba(0, 0, 0, 0.08);
     --chat-accent-primary: #0b84ff;
     --chat-accent-on-primary: #1c150b;
     /* #0b84ff reads 3.65:1 as text on white; 6.11:1 here. */
     --chat-accent-primary-text: #0961bb;
-    /* Named for the accent it actually sits on. White clears AA on the
-       secondary accent (4.63:1 on #21808d, 5.04:1 on #0a6ed1) but not on
-       the primary one (3.11:1 on #da7756), which is what
-       --chat-accent-on-primary is for. */
-    --chat-accent-on-secondary: #ffffff;
-    --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #0a6ed1;
     --chat-accent-secondary-soft: rgba(11, 132, 255, 0.12);
-    --chat-focus-ring: var(--focus-ring);
-    --chat-user-bubble-bg: #f4f4f4;
-    --chat-thinking-text: #5d5d5d;
-    --chat-thinking-line: rgba(0, 0, 0, 0.08);
-    --chat-loading-placeholder: #f0f0f0;
-    --chat-loading-indicator: #6a6a6a;
   }
 }
 

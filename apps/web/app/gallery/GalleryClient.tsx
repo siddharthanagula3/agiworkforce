@@ -326,7 +326,7 @@ function thumbnailKind(
 }
 
 function thumbnailDocument(body: string): string {
-  return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${body}</body></html>`;
+  return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#ffffff;color:#0d0d0d}*{max-width:100%}</style></head><body>${body}</body></html>`;
 }
 
 function excerptMarkup(source: string): string {
