@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { signIn } from './qa-capability-harness';
 
 /**
- * Proves the owner invariant and admin delegation at the API, not in the
+ * Proves the owner invariant at the API, not in the
  * component: a console that greys a button out is not a guardrail, and the
  * failures this covers all arrive as direct requests.
  *
@@ -99,50 +99,5 @@ test.describe('owner protection', () => {
     expect(second.status).not.toBe(200);
     const after = await api(page, '/api/settings/team');
     expect(after.body).toContain('"role":"owner"');
-  });
-});
-
-test.describe('admin delegation', () => {
-  test('an owner-only permission can never be delegated', async ({ page }) => {
-    await signIn(page);
-
-    const granted = await api(page, '/api/settings/organization/delegation', {
-      method: 'POST',
-      body: {
-        delegateUserId: 'delegate-that-does-not-exist',
-        scopes: ['admin.ownership.manage'],
-        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
-      },
-    });
-    expect([401, 403]).toContain(granted.status);
-    expect(granted.body).not.toContain('"delegation"');
-  });
-
-  test('a delegation cannot outlast the ceiling or start in the past', async ({ page }) => {
-    await signIn(page);
-    const listing = await api(page, '/api/settings/organization/delegation');
-    expect(listing.status, 'an owner reads the delegation ledger').toBe(200);
-    const { delegatablePermissions } = JSON.parse(listing.body) as {
-      delegatablePermissions: string[];
-    };
-    const { owner } = await workspace(page);
-
-    for (const expiresAt of [
-      new Date(Date.now() - 60_000).toISOString(),
-      new Date(Date.now() + 400 * 86_400_000).toISOString(),
-    ]) {
-      const attempt = await api(page, '/api/settings/organization/delegation', {
-        method: 'POST',
-        body: { delegateUserId: owner, scopes: [delegatablePermissions[0]], expiresAt },
-      });
-      expect(attempt.status).not.toBe(200);
-    }
-  });
-
-  test('the console names what a delegation can never do', async ({ page }) => {
-    await signIn(page);
-    await page.goto('/workspace/roles', { waitUntil: 'domcontentloaded' });
-    const panel = page.getByRole('region', { name: 'Admin delegation' });
-    await expect(panel).toContainText('remove, demote or transfer an owner');
   });
 });

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { ConsolePage } from '@/features/workspace-console/components/ConsolePage';
-import { WorkspaceDelegation } from '@/features/workspace-console/components/WorkspaceDelegation';
 import { WorkspaceRoles } from '@/features/workspace-console/components/WorkspaceRoles';
 
 export const metadata: Metadata = {
@@ -15,7 +14,6 @@ export default function WorkspaceRolesPage() {
       description="What each role may do, who holds which roles, and which roles a directory group grants."
     >
       <WorkspaceRoles />
-      <WorkspaceDelegation />
     </ConsolePage>
   );
 }
