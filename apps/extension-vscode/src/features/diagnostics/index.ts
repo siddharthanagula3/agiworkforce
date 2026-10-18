@@ -1,3 +1,4 @@
+import { SUPPORT_DIAGNOSTICS_PATH } from '@agiworkforce/cloud-contracts/support';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
 /**
  * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. The server validates and
@@ -40,7 +41,6 @@ export interface DiagnosticsExportResult {
 }
 
 export const MAX_DIAGNOSTIC_EVENTS = 10;
-const DIAGNOSTICS_PATH = '/api/support/diagnostics';
 
 function readTimeZone(): string | null {
   try {
@@ -94,7 +94,7 @@ export async function exportVsCodeDiagnostics(request: {
     conversationId: request.conversationId ?? null,
   });
 
-  const response = await send(`${request.baseUrl}${DIAGNOSTICS_PATH}`, {
+  const response = await send(`${request.baseUrl}${SUPPORT_DIAGNOSTICS_PATH}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${request.token}`,
