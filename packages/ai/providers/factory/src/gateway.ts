@@ -1,8 +1,8 @@
 import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
-import { createOpenAIAdapter, createOpenAICompatAdapter } from '@agiworkforce/providers-openai';
+import { createOpenAICompatAdapter } from '@agiworkforce/providers-openai';
 import type { ModelInfo, Provider, ProviderAdapter } from '@agiworkforce/types';
 
-export type GatewayProtocol = 'openai_chat_completions' | 'openai_responses' | 'anthropic_messages';
+export type GatewayProtocol = 'openai_chat_completions' | 'anthropic_messages';
 
 export interface GatewayModelsSource {
   kind: 'static' | 'remote';
@@ -110,8 +110,6 @@ export function createGatewayAdapter(
           ...(extraBody ? { extraBody } : {}),
         },
       );
-    case 'openai_responses':
-      return createOpenAIAdapter({ apiKey, baseUrl });
     case 'anthropic_messages':
       return createAnthropicAdapter({
         apiKey,

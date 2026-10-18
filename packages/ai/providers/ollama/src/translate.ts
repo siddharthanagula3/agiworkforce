@@ -6,10 +6,12 @@ import type {
   TextBlock,
   ToolDef,
 } from '@agiworkforce/types';
-import { inlineFileBlockAsText } from '@agiworkforce/types';
+import { inlineFileBlockAsText, UnsupportedFileInputError } from '@agiworkforce/types';
 import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 
 import type { OllamaChatMessage, OllamaChatRequest, OllamaTool } from './types';
+
+const IMAGE_BY_URL_MEDIA_TYPE = 'image/*';
 
 function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
@@ -32,10 +34,14 @@ function inlineFileBlocks(blocks: ContentBlock[]): string[] {
 }
 
 function collectImageBase64s(blocks: ContentBlock[]): string[] {
-  return blocks
-    .filter(isImageBlock)
-    .map((b) => (b.source.type === 'base64' ? b.source.data : null))
-    .filter((s): s is string => s !== null);
+  return blocks.filter(isImageBlock).map((b) => {
+    if (b.source.type === 'base64') return b.source.data;
+    throw new UnsupportedFileInputError(
+      b.source.url,
+      IMAGE_BY_URL_MEDIA_TYPE,
+      'Ollama takes images as inline bytes, not by link',
+    );
+  });
 }
 
 function translateMessage(msg: ProviderMessage): OllamaChatMessage[] {

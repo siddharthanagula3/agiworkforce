@@ -373,7 +373,7 @@ export function listProtocolRoutes(): ProtocolRoute[] {
   });
 }
 
-export type GatewayProtocol = 'openai_chat_completions' | 'openai_responses' | 'anthropic_messages';
+export type GatewayProtocol = 'openai_chat_completions' | 'anthropic_messages';
 
 export interface GatewayRecord {
   id: string;

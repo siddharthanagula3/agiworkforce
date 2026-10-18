@@ -2,7 +2,7 @@ export interface GeminiPart {
   text?: string;
   inlineData?: { mimeType: string; data: string };
   fileData?: { mimeType: string; fileUri: string };
-  functionCall?: { name: string; args: Record<string, unknown> };
+  functionCall?: { id?: string; name: string; args: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
   thought?: boolean;
   thoughtSignature?: string;

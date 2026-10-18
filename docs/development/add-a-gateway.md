@@ -136,7 +136,7 @@ Add an object to the `gateways` map in
 
 Field reference:
 
-- `protocol`: `openai_chat_completions`, `openai_responses`, or
+- `protocol`: `openai_chat_completions` or
   `anthropic_messages`. Pick whichever wire dialect the gateway actually
   speaks; do not guess.
 - `baseUrlEnv` / `apiKeyEnv`: env var **names**, never a literal URL or key.

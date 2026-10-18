@@ -26,7 +26,7 @@ import type {
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
-import { CHAT_MODEL_TYPES } from '@agiworkforce/types';
+import { CHAT_MODEL_TYPES, getModelMetadataById } from '@agiworkforce/types';
 import {
   detectOpenAICompletionsCompat,
   resolveOpenAIResponsesPayloadPolicy,
@@ -90,6 +90,7 @@ export interface OpenAIResponsesRequestDiagnostics {
   reasoningSummary?: string;
   store?: boolean;
   serviceTier?: string;
+  droppedParameters?: string[];
 }
 
 export interface OpenAIResponsesDiagnostics {
@@ -193,20 +194,35 @@ function modelMetadataSupportsResponses(req: ChatRequest): boolean {
   );
 }
 
+const CHAT_COMPLETIONS_ENDPOINT = 'v1/chat/completions';
+
 /**
  * The Responses API has no stop, seed, penalty or logit-bias field, so a request
- * that sets one is only honoured on Chat Completions. Hosted tools exist only on
- * Responses, so a request carrying them stays there.
+ * that sets one is honoured only on Chat Completions.
+ */
+export function chatCompletionsOnlyParameters(req: ChatRequest): string[] {
+  return [
+    ...(req.stopSequences !== undefined && req.stopSequences.length > 0 ? ['stop'] : []),
+    ...(req.seed !== undefined ? ['seed'] : []),
+    ...(req.frequencyPenalty !== undefined ? ['frequency_penalty'] : []),
+    ...(req.presencePenalty !== undefined ? ['presence_penalty'] : []),
+    ...(req.logitBias !== undefined && Object.keys(req.logitBias).length > 0 ? ['logit_bias'] : []),
+  ];
+}
+
+function modelServesChatCompletions(modelId: string): boolean {
+  const endpoints = getModelMetadataById(modelId)?.endpoints;
+  return endpoints === undefined || endpoints.includes(CHAT_COMPLETIONS_ENDPOINT);
+}
+
+/**
+ * Hosted tools exist only on Responses, and a Responses-only model has no other
+ * route, so either keeps the request there and the parameters are dropped.
  */
 function requestNeedsChatCompletionsParameters(req: ChatRequest): boolean {
   if (req.rawVendorTools && req.rawVendorTools.length > 0) return false;
-  return (
-    (req.stopSequences !== undefined && req.stopSequences.length > 0) ||
-    req.seed !== undefined ||
-    req.frequencyPenalty !== undefined ||
-    req.presencePenalty !== undefined ||
-    (req.logitBias !== undefined && Object.keys(req.logitBias).length > 0)
-  );
+  if (!modelServesChatCompletions(req.model)) return false;
+  return chatCompletionsOnlyParameters(req).length > 0;
 }
 
 export function shouldUseOpenAIResponsesApi(
@@ -282,7 +298,11 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
             ...(config.responsesStore !== undefined ? { store: config.responsesStore } : {}),
             ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
           });
-          const requestDiagnostics = summarizeOpenAIResponsesRequest(responsesParams);
+          const droppedParameters = chatCompletionsOnlyParameters(req);
+          const requestDiagnostics = {
+            ...summarizeOpenAIResponsesRequest(responsesParams),
+            ...(droppedParameters.length > 0 ? { droppedParameters } : {}),
+          };
           const responsePromise = sdk.responses.create(
             responsesParams as unknown as Parameters<typeof sdk.responses.create>[0],
             { signal },

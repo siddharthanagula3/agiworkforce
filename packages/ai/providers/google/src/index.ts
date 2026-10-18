@@ -114,7 +114,20 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         return;
       }
 
-      const body = translateChatRequest(req);
+      let body: ReturnType<typeof translateChatRequest>;
+      try {
+        body = translateChatRequest(req);
+      } catch (err) {
+        const classified = classifyError(err);
+        yield {
+          type: 'error',
+          message: classified.message,
+          retryable: classified.retryable,
+          classification: toStreamErrorClassification(classified),
+        };
+        yield { type: 'stop', reason: 'error' };
+        return;
+      }
       const url = `${baseUrl}/${GEMINI_API_VERSION_SEGMENT}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
       const hasServerSideTools = (req.rawVendorTools?.length ?? 0) > 0;

@@ -8,6 +8,7 @@ import type {
 } from './types';
 
 const GEMINI_CITATION_BLOCK_INDEX = 0;
+const GEMINI_TOOL_ID_PREFIX = 'gemini-tool-';
 const GEMINI_URL_RETRIEVAL_STATUS_SUCCESS = 'URL_RETRIEVAL_STATUS_SUCCESS';
 const URL_CITATION_KIND = 'url_citation';
 
@@ -293,7 +294,11 @@ export async function* translateGeminiStream(
         continue;
       }
       if (part.functionCall) {
-        const id = `gemini-tool-${++toolCounter}`;
+        const vendorId = part.functionCall.id;
+        const id =
+          typeof vendorId === 'string' && vendorId.length > 0
+            ? vendorId
+            : `${GEMINI_TOOL_ID_PREFIX}${++toolCounter}`;
         yield { type: 'tool-use-start', toolUseId: id, name: part.functionCall.name };
         yield {
           type: 'tool-use-delta',

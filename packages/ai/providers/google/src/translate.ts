@@ -6,6 +6,7 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
+import { UnsupportedFileInputError } from '@agiworkforce/types';
 import {
   cleanSchemaForGemini,
   stripSystemPromptCacheBoundary,
@@ -21,23 +22,21 @@ import type {
 } from './types';
 
 const JSON_MIME_TYPE = 'application/json';
+const IMAGE_BY_URL_MEDIA_TYPE = 'image/*';
 
 function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
 }
 
-function buildToolUseNameMap(messages: ProviderMessage[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const msg of messages) {
-    if (msg.role !== 'assistant') continue;
-    if (typeof msg.content === 'string') continue;
-    for (const block of msg.content) {
-      if (block.type === 'tool_use') {
-        map.set(block.id, block.name);
-      }
-    }
+/**
+ * Gemini numbers tool calls per turn, so an id repeats across turns. A result
+ * is named after the latest call with its id that came before it.
+ */
+function recordToolUseNames(msg: ProviderMessage, toolUseNames: Map<string, string>): void {
+  if (msg.role !== 'assistant' || typeof msg.content === 'string') return;
+  for (const block of msg.content) {
+    if (block.type === 'tool_use') toolUseNames.set(block.id, block.name);
   }
-  return map;
 }
 
 function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): GeminiPart | null {
@@ -48,7 +47,11 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
       if (block.source.type === 'base64') {
         return { inlineData: { mimeType: block.source.mediaType, data: block.source.data } };
       }
-      return null;
+      throw new UnsupportedFileInputError(
+        block.source.url,
+        IMAGE_BY_URL_MEDIA_TYPE,
+        'Gemini takes images as inline bytes, not by link',
+      );
     case 'file':
       return {
         inlineData: { mimeType: block.source.mediaType, data: block.source.data },
@@ -137,10 +140,13 @@ function translateToolChoice(choice: ToolChoice | undefined): GeminiToolConfig |
 }
 
 export function translateChatRequest(req: ChatRequest): GeminiGenerateContentRequest {
-  const toolUseNames = buildToolUseNameMap(req.messages);
-  const contents = req.messages
-    .map((m) => translateMessage(m, toolUseNames))
-    .filter((c): c is GeminiContent => c !== null);
+  const toolUseNames = new Map<string, string>();
+  const contents: GeminiContent[] = [];
+  for (const msg of req.messages) {
+    recordToolUseNames(msg, toolUseNames);
+    const content = translateMessage(msg, toolUseNames);
+    if (content) contents.push(content);
+  }
   const systemInstruction = extractSystemInstruction(req.messages, req.system);
 
   const declarations =

@@ -10,11 +10,7 @@ const GATEWAYS_JSON = path.join(CATALOG_DIR, 'gateways.json');
 
 const ENV_VAR_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
-const GATEWAY_PROTOCOLS = new Set([
-  'openai_chat_completions',
-  'openai_responses',
-  'anthropic_messages',
-]);
+const GATEWAY_PROTOCOLS = new Set(['openai_chat_completions', 'anthropic_messages']);
 const SOURCE_KINDS = new Set(['static', 'remote']);
 const DATA_RETENTION_CLASSES = new Set([
   'zero_retention',

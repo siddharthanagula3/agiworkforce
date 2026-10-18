@@ -616,7 +616,7 @@
       }
     },
     "gatewayProtocol": {
-      "enum": ["openai_chat_completions", "openai_responses", "anthropic_messages"]
+      "enum": ["openai_chat_completions", "anthropic_messages"]
     },
     "gateway": {
       "type": "object",

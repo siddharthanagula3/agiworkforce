@@ -3,7 +3,7 @@ import type { ChatRequest } from '@agiworkforce/types';
 import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 
 import type { OpenAIAdapterConfig } from '../index';
-import { shouldUseOpenAIResponsesApi } from '../index';
+import { chatCompletionsOnlyParameters, shouldUseOpenAIResponsesApi } from '../index';
 import { OPENAI_DEFAULT_MODEL_ID, OPENAI_NON_TEXT_MODEL_IDS } from './model-fixtures';
 
 function request(model: string): ChatRequest {
@@ -71,5 +71,19 @@ describe('shouldUseOpenAIResponsesApi', () => {
       rawVendorTools: [{ type: 'web_search' }],
     };
     expect(shouldUseOpenAIResponsesApi(req, {}, detected())).toBe(true);
+  });
+
+  it('names every parameter Responses cannot carry', () => {
+    expect(
+      chatCompletionsOnlyParameters({
+        ...request(OPENAI_DEFAULT_MODEL_ID),
+        stopSequences: ['END'],
+        seed: 7,
+        frequencyPenalty: 0.1,
+        presencePenalty: 0.2,
+        logitBias: { '50256': -100 },
+      }),
+    ).toEqual(['stop', 'seed', 'frequency_penalty', 'presence_penalty', 'logit_bias']);
+    expect(chatCompletionsOnlyParameters(request(OPENAI_DEFAULT_MODEL_ID))).toEqual([]);
   });
 });

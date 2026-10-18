@@ -1,136 +1,40 @@
 /**
  * @agiworkforce/providers-xai
  *
- * xAI (Grok) provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. xAI ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.x.ai/v1`, so we reuse the OpenAI translate/stream
- * layer with `provider: 'xai'` so the compat detector returns
- * `endpointClass: 'xai-native'` defaults (no `service_tier`, no Responses API).
- *
- * The current catalog-selected xAI family exposes large-context variants and
- * `reasoning_content` deltas, both surfaced via the existing OpenAI
- * `translateOpenAIStream` (which already maps `reasoning_content` →
- * `thinking-delta`).
+ * xAI (Grok) provider adapter. xAI ships an OpenAI-compatible Chat Completions
+ * endpoint at `https://api.x.ai/v1`, which the compat detector classifies as
+ * `endpointClass: 'xai-native'` (no `service_tier`, no Responses API).
  *
  * @packageDocumentation
  */
 
-import OpenAI from 'openai';
-import type {
-  AuthMethod,
-  ChatRequest,
-  ModelInfo,
-  ProviderAdapter,
-  ProviderAdapterConfig,
-  ProviderAdapterFactory,
-  ProviderCatalogContext,
-  StreamChunk,
-} from '@agiworkforce/types';
-import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 import {
-  classifyError,
-  toStreamErrorClassification,
-  withStreamIdleWatchdog,
-} from '@agiworkforce/provider-runtime';
-import {
-  translateChatRequest,
-  translateOpenAIStream,
-  type OpenAIChatCompletionChunk,
+  createOpenAICompatAdapter,
+  type OpenAICompatAdapterConfig,
 } from '@agiworkforce/providers-openai';
+import type { ProviderAdapter, ProviderAdapterFactory } from '@agiworkforce/types';
 
 import { XAI_MODEL_CATALOG } from './catalog';
 
+const XAI_PROVIDER_ID = 'xai';
+const XAI_LABEL = 'xAI';
+const XAI_API_KEY_ENV_VAR = 'XAI_API_KEY';
 const XAI_DEFAULT_BASE_URL = 'https://api.x.ai/v1';
 
-const XAI_AUTH_METHODS: readonly AuthMethod[] = [
-  {
-    kind: 'api-key',
-    envVar: 'XAI_API_KEY',
-    required: true,
-    label: 'xAI API Key',
-  },
-];
-
-export interface XAIAdapterConfig extends ProviderAdapterConfig {
-  skipDiscovery?: boolean;
-}
+export type XAIAdapterConfig = OpenAICompatAdapterConfig;
 
 export function createXAIAdapter(config: XAIAdapterConfig = {}): ProviderAdapter {
-  const sdk = new OpenAI({
-    ...(config.apiKey ? { apiKey: config.apiKey } : {}),
-    baseURL: config.baseUrl ?? XAI_DEFAULT_BASE_URL,
-    ...(config.fetch ? { fetch: config.fetch } : {}),
-  });
-
-  return {
-    id: 'xai',
-    label: 'xAI',
-    auth: XAI_AUTH_METHODS,
+  return createOpenAICompatAdapter(
+    {
+      id: XAI_PROVIDER_ID,
+      label: XAI_LABEL,
+      apiKeyEnvVar: XAI_API_KEY_ENV_VAR,
+      apiKeyLabel: 'xAI API Key',
+      defaultBaseUrl: XAI_DEFAULT_BASE_URL,
+      catalog: XAI_MODEL_CATALOG,
+    },
     config,
-
-    async catalog(ctx?: ProviderCatalogContext): Promise<ModelInfo[]> {
-      if (config.skipDiscovery) {
-        return [...XAI_MODEL_CATALOG];
-      }
-      try {
-        const list = await sdk.models.list({ ...(ctx?.signal ? { signal: ctx.signal } : {}) });
-        const ids = new Set<string>();
-        for (const entry of list.data ?? []) {
-          if (typeof entry.id === 'string') ids.add(entry.id);
-        }
-        const out: ModelInfo[] = XAI_MODEL_CATALOG.filter(
-          (m) => ids.size === 0 || ids.has(m.id),
-        ).map((m) => ({ ...m }));
-        for (const id of ids) {
-          if (!out.some((m) => m.id === id)) {
-            out.push({ id, provider: 'xai' });
-          }
-        }
-        return out;
-      } catch {
-        return [...XAI_MODEL_CATALOG];
-      }
-    },
-
-    async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
-      const detected = detectOpenAICompletionsCompat({
-        provider: 'xai',
-        baseUrl: config.baseUrl ?? XAI_DEFAULT_BASE_URL,
-        id: req.model,
-      });
-
-      try {
-        const params = translateChatRequest(req, {
-          compat: detected.defaults,
-          provider: 'xai',
-        });
-
-        const sdkStream = await sdk.chat.completions.create(
-          params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
-          { signal },
-        );
-        const watched = withStreamIdleWatchdog(
-          translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
-        );
-        for await (const chunk of watched) {
-          yield chunk;
-        }
-      } catch (err) {
-        const classified = classifyError(err);
-        yield {
-          type: 'error',
-          message: classified.message,
-          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
-          retryable: classified.retryable,
-          ...(classified.retryAfterSeconds !== undefined
-            ? { retryAfterSeconds: classified.retryAfterSeconds }
-            : {}),
-          classification: toStreamErrorClassification(classified),
-        };
-        yield { type: 'stop', reason: 'error' };
-      }
-    },
-  };
+  );
 }
 
 export const xaiAdapterFactory: ProviderAdapterFactory = (config) =>
