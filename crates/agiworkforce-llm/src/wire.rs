@@ -1,7 +1,6 @@
 //! Chat wire types shared by every AGI Workforce Rust surface.
 //!
-//! Moved verbatim from `apps/cli/src/models/mod.rs` (stage c1). The serde
-//! shapes here are persisted in CLI session files, do not change field names,
+//! The serde shapes here are persisted in CLI session files, do not change field names,
 //! tags, or defaults without a migration plan.
 
 use serde::{Deserialize, Serialize};

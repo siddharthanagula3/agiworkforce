@@ -3,8 +3,8 @@
 //! The dialect runners in [`crate::stream`] emit a [`StreamEvent`] at every
 //! point where the legacy CLI implementation mutated its accumulation state,
 //! then return the authoritative [`ChatOutcome`]. Consumers that only render
-//! deltas (the CLI facade) listen for `TextDelta`; richer consumers (desktop
-//! IPC bridging, stage c2+) can mirror the full event stream.
+//! deltas (the CLI facade) listen for `TextDelta`; richer consumers (the desktop
+//! IPC bridge) can mirror the full event stream.
 
 use serde::{Deserialize, Serialize};
 

@@ -1923,7 +1923,7 @@ fn gemini_tool_result_divergence() {
         canonical_json(&new["contents"]),
         canonical_json(&json!([
             {"role": "user", "parts": [{"text": "Read Cargo.toml"}]},
-            {"role": "model", "parts": [{"functionCall": {"name": "read_file", "args": {"path": "Cargo.toml"}}}]},
+            {"role": "model", "parts": [{"functionCall": {"name": "read_file", "args": {"path": "Cargo.toml"}}, "thoughtSignature": "skip_thought_signature_validator"}]},
             {"role": "user", "parts": [{"functionResponse": {"name": "read_file", "response": {"result": "[package]"}}}]}
         ])),
         "crate gemini tool-result shape changed, re-derive this pin"

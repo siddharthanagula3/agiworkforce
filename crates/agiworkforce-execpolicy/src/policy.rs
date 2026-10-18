@@ -60,10 +60,6 @@ impl Policy {
         &self.network_rules
     }
 
-    pub fn host_executables(&self) -> &HashMap<String, Arc<[AbsolutePathBuf]>> {
-        &self.host_executables_by_name
-    }
-
     pub fn get_allowed_prefixes(&self) -> Vec<Vec<String>> {
         let mut prefixes = Vec::new();
 
@@ -134,10 +130,6 @@ impl Policy {
         Ok(())
     }
 
-    pub fn set_host_executable_paths(&mut self, name: String, paths: Vec<AbsolutePathBuf>) {
-        self.host_executables_by_name.insert(name, paths.into());
-    }
-
     pub fn merge_overlay(&self, overlay: &Policy) -> Policy {
         let mut combined_rules = self.rules_by_program.clone();
         for (program, rules) in overlay.rules_by_program.iter_all() {
@@ -164,27 +156,6 @@ impl Policy {
         )
     }
 
-    pub fn compiled_network_domains(&self) -> (Vec<String>, Vec<String>) {
-        let mut allowed = Vec::new();
-        let mut denied = Vec::new();
-
-        for rule in &self.network_rules {
-            match rule.decision {
-                Decision::Allow => {
-                    denied.retain(|entry| entry != &rule.host);
-                    upsert_domain(&mut allowed, &rule.host);
-                }
-                Decision::Forbidden => {
-                    allowed.retain(|entry| entry != &rule.host);
-                    upsert_domain(&mut denied, &rule.host);
-                }
-                Decision::Prompt => {}
-            }
-        }
-
-        (allowed, denied)
-    }
-
     pub fn check<F>(&self, cmd: &[String], heuristics_fallback: &F) -> Evaluation
     where
         F: Fn(&[String]) -> Decision,
@@ -197,59 +168,6 @@ impl Policy {
         Evaluation::from_matches(matched_rules)
     }
 
-    pub fn check_with_options<F>(
-        &self,
-        cmd: &[String],
-        heuristics_fallback: &F,
-        options: &MatchOptions,
-    ) -> Evaluation
-    where
-        F: Fn(&[String]) -> Decision,
-    {
-        let matched_rules =
-            self.matches_for_command_with_options(cmd, Some(heuristics_fallback), options);
-        Evaluation::from_matches(matched_rules)
-    }
-
-    /// Checks multiple commands and aggregates the results.
-    pub fn check_multiple<Commands, F>(
-        &self,
-        commands: Commands,
-        heuristics_fallback: &F,
-    ) -> Evaluation
-    where
-        Commands: IntoIterator,
-        Commands::Item: AsRef<[String]>,
-        F: Fn(&[String]) -> Decision,
-    {
-        self.check_multiple_with_options(commands, heuristics_fallback, &MatchOptions::default())
-    }
-
-    pub fn check_multiple_with_options<Commands, F>(
-        &self,
-        commands: Commands,
-        heuristics_fallback: &F,
-        options: &MatchOptions,
-    ) -> Evaluation
-    where
-        Commands: IntoIterator,
-        Commands::Item: AsRef<[String]>,
-        F: Fn(&[String]) -> Decision,
-    {
-        let matched_rules: Vec<RuleMatch> = commands
-            .into_iter()
-            .flat_map(|command| {
-                self.matches_for_command_with_options(
-                    command.as_ref(),
-                    Some(heuristics_fallback),
-                    options,
-                )
-            })
-            .collect();
-
-        Evaluation::from_matches(matched_rules)
-    }
-
     /// Returns matching rules for the given command. If no rules match and
     /// `heuristics_fallback` is provided, returns a single
     /// `HeuristicsRuleMatch` with the decision rendered by
@@ -257,14 +175,6 @@ impl Policy {
     ///
     /// If `heuristics_fallback.is_some()`, then the returned vector is
     /// guaranteed to be non-empty.
-    pub fn matches_for_command(
-        &self,
-        cmd: &[String],
-        heuristics_fallback: HeuristicsFallback<'_>,
-    ) -> Vec<RuleMatch> {
-        self.matches_for_command_with_options(cmd, heuristics_fallback, &MatchOptions::default())
-    }
-
     pub fn matches_for_command_with_options(
         &self,
         cmd: &[String],
@@ -334,11 +244,6 @@ impl Policy {
     }
 }
 
-fn upsert_domain(entries: &mut Vec<String>, host: &str) {
-    entries.retain(|entry| entry != host);
-    entries.push(host.to_string());
-}
-
 fn render_pattern_token(token: &PatternToken) -> String {
     match token {
         PatternToken::Single(value) => value.clone(),
@@ -364,10 +269,8 @@ impl Evaluation {
     /// Builds an `Evaluation` from the matched rules, taking the most-restrictive
     /// decision (`Allow < Prompt < Forbidden`).
     ///
-    /// An empty `matched_rules` set is reachable via `check_multiple` with an
-    /// empty `commands` batch, so we must not panic here. With nothing to
-    /// authorize there is nothing to allow, so the safe default is `Prompt`
-    /// (require explicit approval) rather than silently allowing or crashing.
+    /// With nothing matched there is nothing to allow, so the safe default is
+    /// `Prompt` (require explicit approval) rather than silently allowing.
     fn from_matches(matched_rules: Vec<RuleMatch>) -> Self {
         let decision = matched_rules
             .iter()

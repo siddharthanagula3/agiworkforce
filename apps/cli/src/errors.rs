@@ -1030,23 +1030,21 @@ fn turn_failure_code_for_gateway_code(code: &str) -> Option<TurnFailureCode> {
 /// Default retry delay when no explicit `retry_after` is available.
 const DEFAULT_RETRY_DELAY_SECS: u64 = 2;
 
-/// HTTP status codes that indicate a retryable server-side error.
-const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504];
-
 impl CliError {
     /// Returns `true` if the error is transient and the request can be retried.
     ///
     /// Retryable errors:
     /// - `RateLimited` (always)
     /// - `Network` (always, transient by nature)
-    /// - `Api` with status 429, 500, 502, 503, or 504
+    /// - `Api` with a status the shared LLM crate classifies retryable (429, 5xx
+    ///   gateway errors, Anthropic 529)
     /// - `StreamError` when `is_retryable` is set
     pub fn is_retryable(&self) -> bool {
         match self {
             CliError::RateLimited { .. }
             | CliError::Network { .. }
             | CliError::ModelUnavailable { .. } => true,
-            CliError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
+            CliError::Api { status, .. } => agiworkforce_llm::error::is_retryable_api_status(*status),
             CliError::StreamError { is_retryable, .. } => *is_retryable,
             // The protocol already decides which of these a caller may send
             // again; a second table here would let the two drift.

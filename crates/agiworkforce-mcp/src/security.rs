@@ -161,11 +161,9 @@ enum AddrClass {
 /// `http://127.0.0.1:9200/` and have this process fetch it. Loopback is
 /// unlocked only when `anchor` literally names the local machine, never by
 /// resolution, which a rebind could steer, and RFC 1918 / CGNAT / ULA targets
-/// only when `anchor` is itself reached at such an address.
+/// only when `anchor` is itself reached at such an address. A literal address
+/// in `url` is judged by the same rule as one a name resolved to.
 pub async fn resolve_validated_endpoint(url: &str, anchor: &str) -> Result<ValidatedEndpoint> {
-    validate_server_url(url)?;
-    enforce_https_for_remote(url)?;
-
     let parsed = reqwest::Url::parse(url).map_err(|e| anyhow!("Invalid MCP server URL: {e}"))?;
     let scheme = parsed.scheme().to_ascii_lowercase();
     if scheme != "http" && scheme != "https" {
@@ -181,10 +179,15 @@ pub async fn resolve_validated_endpoint(url: &str, anchor: &str) -> Result<Valid
         .ok_or_else(|| anyhow!("SSRF protection: URL '{url}' has no usable port"))?;
 
     let bare = bare_host(&host);
+    let literal = bare.parse::<IpAddr>().ok();
+    if let Some(ip) = literal {
+        ensure_addr_reachable(&bare, ip, anchor).await?;
+    }
+    enforce_https_for_remote(url)?;
 
-    let addrs: Vec<SocketAddr> = match bare.parse::<IpAddr>() {
-        Ok(ip) => vec![SocketAddr::new(ip, port)],
-        Err(_) => tokio::net::lookup_host((bare.as_str(), port))
+    let addrs: Vec<SocketAddr> = match literal {
+        Some(ip) => vec![SocketAddr::new(ip, port)],
+        None => tokio::net::lookup_host((bare.as_str(), port))
             .await
             .with_context(|| format!("resolve host '{bare}'"))?
             .collect(),
@@ -684,6 +687,20 @@ mod tests {
             .is_err(),
             "an on-prem server still may not reach this machine"
         );
+    }
+
+    #[tokio::test]
+    async fn a_literal_site_local_address_follows_the_same_rule_as_a_resolved_one() {
+        assert!(
+            resolve_validated_endpoint("https://10.1.2.4/token", "https://10.1.2.3/mcp")
+                .await
+                .is_ok(),
+            "an on-prem MCP server keeps an on-prem authorization server named by address"
+        );
+        let err = resolve_validated_endpoint("https://10.1.2.4/token", REMOTE_SERVER)
+            .await
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("private"), "{err:#}");
     }
 
     #[test]

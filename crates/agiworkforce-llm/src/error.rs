@@ -126,10 +126,9 @@ impl LlmError {
     /// Retry classification: rate limits and network errors always retry; API
     /// errors retry on 429/500/502/503/504 and Anthropic's 529 overload.
     pub fn is_retryable(&self) -> bool {
-        const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504, 529];
         match self {
             LlmError::RateLimited { .. } | LlmError::Network { .. } => true,
-            LlmError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
+            LlmError::Api { status, .. } => is_retryable_api_status(*status),
             LlmError::StreamError { retryable, .. } => *retryable,
             _ => false,
         }
@@ -144,6 +143,12 @@ impl LlmError {
             _ => None,
         }
     }
+}
+
+/// HTTP statuses a provider answers when a later attempt may succeed:
+/// 429/500/502/503/504 and Anthropic's 529 overload.
+pub fn is_retryable_api_status(status: u16) -> bool {
+    matches!(status, 429 | 500 | 502 | 503 | 504 | 529)
 }
 
 /// Render a duration the way the CLI's historical timeout message did:

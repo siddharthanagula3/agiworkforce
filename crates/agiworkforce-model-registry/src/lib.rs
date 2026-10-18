@@ -538,9 +538,7 @@ pub fn is_auto_routing_selection(selection: &str) -> bool {
         .contains_key(&selection.to_ascii_lowercase())
 }
 
-/// Return canonical model keys for a provider in registry-defined order.
-/// Provider membership is generated from model identities, so Rust consumers
-/// do not need to maintain provider-specific model tables.
+/// The family of a model named by registry key or provider model id.
 pub fn model_family(model: &str) -> Result<Option<String>, RegistryError> {
     let registry = registry()?;
     Ok(registry
@@ -552,6 +550,9 @@ pub fn model_family(model: &str) -> Result<Option<String>, RegistryError> {
         .and_then(|(_, entry)| entry.identity.family.clone()))
 }
 
+/// Return canonical model keys for a provider in registry-defined order.
+/// Provider membership is generated from model identities, so Rust consumers
+/// do not need to maintain provider-specific model tables.
 pub fn model_keys_for_provider(provider: &str) -> Result<Option<Vec<String>>, RegistryError> {
     let registry = registry()?;
     Ok(registry.provider_model_keys.get(provider).cloned())
@@ -1145,14 +1146,6 @@ fn selected_decision(
 
 const MAX_FALLBACK_ROUTES: usize = 4;
 
-/// Every slot a fallback may draw on, best first, one entry per slot: the
-/// request's own ordering, each slot followed by the backups the policy
-/// declares for it, then the task's slots at every other profile in
-/// policy order, then the policy fallback slot, then the tier's allowed slots
-/// in their authored order restricted to slots some task policy names. A slot
-/// no task lists is reachable only through a caller preference, and a failover
-/// must not open that door. Admission is unchanged; this only decides how far
-/// a failover may walk.
 /// The slot a request falls back to once its task's own slots are exhausted.
 ///
 /// Mirrors the TypeScript resolver's `resolveFallbackSlot`. `fallback_slot` is
@@ -1170,6 +1163,14 @@ fn tier_fallback_slot<'a>(policy: &'a AutoPolicy, tier_slot_order: &'a [String])
         .map_or(policy.fallback_slot.as_str(), String::as_str)
 }
 
+/// Every slot a fallback may draw on, best first, one entry per slot: the
+/// request's own ordering, each slot followed by the backups the policy
+/// declares for it, then the task's slots at every other profile in
+/// policy order, then the policy fallback slot, then the tier's allowed slots
+/// in their authored order restricted to slots some task policy names. A slot
+/// no task lists is reachable only through a caller preference, and a failover
+/// must not open that door. Admission is unchanged; this only decides how far
+/// a failover may walk.
 fn fallback_candidate_slots<'a>(
     policy: &'a AutoPolicy,
     task: &'a AutoTaskPolicy,

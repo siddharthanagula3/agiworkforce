@@ -15,10 +15,6 @@ path = "src/lib.rs"
 [dependencies]
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 anyhow = "1"
-# Pinned to the CLI's reqwest line (0.12, default TLS features) so adopting the
-# crate does not change the CLI's egress/TLS behavior. The workspace-wide
-# reqwest 0.13 + TLS-feature decision is the desktop-convergence PR0 concern
-# (docs/plans/rust-engine-extraction-2026-07-09.md), not this crate's.
 reqwest = { version = "0.13", features = ["stream", "json", "form"] }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }

@@ -359,6 +359,8 @@ pub fn build_gemini_tool_name_map(messages: &[Message]) -> HashMap<String, Strin
     map
 }
 
+pub const GEMINI_SKIP_THOUGHT_SIGNATURE: &str = "skip_thought_signature_validator";
+
 /// Convert an internal Message to Gemini API JSON format. `tool_names` maps
 /// `tool_use_id -> function name` so tool results carry the correct name.
 pub fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, String>) -> Value {
@@ -398,9 +400,13 @@ pub fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, Strin
                         |placeholder| serde_json::json!({ "text": placeholder["text"] }),
                     ),
                     ContentBlock::Unknown => serde_json::json!({ "text": UNKNOWN_BLOCK }),
+                    // Gemini 3 answers 400 when a replayed functionCall lacks
+                    // its thought signature. The wire types do not carry the
+                    // signature yet, so send Google's documented sentinel.
                     ContentBlock::ToolUse { name, input, .. } => {
                         serde_json::json!({
-                            "functionCall": { "name": name, "args": input }
+                            "functionCall": { "name": name, "args": input },
+                            "thoughtSignature": GEMINI_SKIP_THOUGHT_SIGNATURE,
                         })
                     }
                     ContentBlock::ToolResult {
@@ -1102,6 +1108,22 @@ mod tests {
         let parts = v["parts"].as_array().unwrap();
         assert_eq!(parts[0]["inlineData"]["mimeType"], "image/png");
         assert_eq!(parts[0]["inlineData"]["data"], "BASE64DATA");
+    }
+
+    #[test]
+    fn gemini_replayed_function_call_carries_a_thought_signature() {
+        let msg = Message::blocks(
+            "assistant",
+            vec![ContentBlock::ToolUse {
+                id: "call_0".to_string(),
+                name: "read_file".to_string(),
+                input: serde_json::json!({"path": "a.txt"}),
+            }],
+        );
+        let v = convert_message_to_gemini(&msg, &HashMap::new());
+        let part = &v["parts"][0];
+        assert_eq!(part["functionCall"]["name"], "read_file");
+        assert_eq!(part["thoughtSignature"], GEMINI_SKIP_THOUGHT_SIGNATURE);
     }
 
     #[test]

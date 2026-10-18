@@ -257,7 +257,7 @@ fn llm_byte_stream(resp: reqwest::Response) -> impl Stream<Item = Result<Bytes, 
 // ---------------------------------------------------------------------------
 
 /// Build the Anthropic Messages request body for `req`. Pure, exposed so
-/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// conformance/parity oracles can byte-compare request bodies
 /// without a socket.
 pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
@@ -739,7 +739,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Build the OpenAI-compatible Chat Completions request body for `req`. Pure.
-/// exposed so conformance/parity oracles (stage c2c) can byte-compare request
+/// exposed so conformance/parity oracles can byte-compare request
 /// bodies without a socket.
 pub fn build_openai_compat_request_body(req: &ChatRequest<'_>, opts: &OpenAiOpts) -> Value {
     let api_messages: Vec<Value> = req
@@ -1587,7 +1587,7 @@ where
 // ---------------------------------------------------------------------------
 
 /// Build the Gemini `generateContent` request body for `req`. Pure, exposed
-/// so conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// so conformance/parity oracles can byte-compare request bodies
 /// without a socket. (The model path/URL handling stays in the stream driver.)
 pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     // Gemini uses a different message format: contents with parts
@@ -1890,7 +1890,7 @@ where
 
 /// Build the Ollama-native `/api/chat` request body for `req` (message
 /// compaction + nativization + body shell). Pure, exposed so
-/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// conformance/parity oracles can byte-compare request bodies
 /// without a socket.
 pub fn build_ollama_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
@@ -1913,7 +1913,7 @@ pub fn build_ollama_request_body(req: &ChatRequest<'_>) -> Value {
             max_tokens: req.max_tokens,
             temperature: req.temperature,
             // `None` keeps this engine's legacy wire default (`think: false`)
-            // so pre-c2c callers' request bytes are unchanged.
+            // so existing callers' request bytes are unchanged.
             think: Some(req.ollama_think.unwrap_or(false)),
             num_ctx: req.num_ctx,
             stream: true,

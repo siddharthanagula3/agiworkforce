@@ -1,5 +1,4 @@
-//! Runaway/loop guard primitives, moved VERBATIM from the CLI's
-//! `apps/cli/src/agent/executor.rs` (Wave 5e1). These are pure, side-effect-free
+//! Runaway/loop guard primitives. These are pure, side-effect-free
 //! detectors plus the cross-turn [`RunawayTracker`] state the engine threads
 //! through the loop. The UI/hook RESPONSE to a detected runaway (strike prompts,
 //! dialoguer confirmation, hook fan-out) stays app-local in the host, only the
