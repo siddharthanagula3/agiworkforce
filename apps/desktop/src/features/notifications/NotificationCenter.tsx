@@ -248,7 +248,13 @@ function NotificationItem({
             {hasNotificationRoute(notification.actionUrl) && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleClick}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleClick}
+                    aria-label={notification.actionLabel ?? 'Go to context'}
+                  >
                     <ChevronRight className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
@@ -258,7 +264,13 @@ function NotificationItem({
             {!notification.read && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleMarkRead}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleMarkRead}
+                    aria-label="Mark as read"
+                  >
                     <Check className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
@@ -273,6 +285,7 @@ function NotificationItem({
                     size="icon"
                     className="h-6 w-6 text-muted-foreground hover:text-destructive"
                     onClick={handleDelete}
+                    aria-label="Dismiss"
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -431,6 +444,7 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                   className="h-7 w-7"
                   onClick={handleRefresh}
                   disabled={isLoading}
+                  aria-label="Refresh"
                 >
                   <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
                 </Button>
@@ -445,6 +459,7 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                     size="icon"
                     className="h-7 w-7"
                     onClick={handleMarkAllRead}
+                    aria-label="Mark all as read"
                   >
                     <CheckCheck className="h-3.5 w-3.5" />
                   </Button>
@@ -460,6 +475,7 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                     onClick={handleDeleteAllRead}
+                    aria-label="Clear read notifications"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

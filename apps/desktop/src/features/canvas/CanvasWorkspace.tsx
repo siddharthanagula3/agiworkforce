@@ -1,6 +1,7 @@
 import {
   Circle,
   Download,
+  Eraser,
   Hand,
   Minus,
   MousePointer,
@@ -775,6 +776,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
               size="icon"
               onClick={() => setActiveTool(tool)}
               className="h-9 w-9"
+              aria-label={label}
+              aria-pressed={activeTool === tool}
             >
               <Icon className="h-4 w-4" />
             </Button>
@@ -834,6 +837,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                     onClick={handleUndo}
                     disabled={!canUndo}
                     className="h-8 w-8"
+                    aria-label="Undo"
                   >
                     <Undo2 className="h-4 w-4" />
                   </Button>
@@ -848,6 +852,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                     onClick={handleRedo}
                     disabled={!canRedo}
                     className="h-8 w-8"
+                    aria-label="Redo"
                   >
                     <Redo2 className="h-4 w-4" />
                   </Button>
@@ -860,7 +865,13 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             <div className="flex items-center gap-1 border-r border-border pr-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleZoomOut} className="h-8 w-8">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleZoomOut}
+                    className="h-8 w-8"
+                    aria-label="Zoom out"
+                  >
                     <ZoomOut className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -871,7 +882,13 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
               </span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleZoomIn} className="h-8 w-8">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleZoomIn}
+                    className="h-8 w-8"
+                    aria-label="Zoom in"
+                  >
                     <ZoomIn className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -879,7 +896,13 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleResetView} className="h-8 w-8">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleResetView}
+                    className="h-8 w-8"
+                    aria-label="Reset view"
+                  >
                     <RotateCcw className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
@@ -897,6 +920,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                     onClick={handleDeleteSelected}
                     disabled={!state.selectedId}
                     className="h-8 w-8"
+                    aria-label="Delete selected"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -905,8 +929,14 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleClear} className="h-8 w-8">
-                    <RotateCcw className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClear}
+                    className="h-8 w-8"
+                    aria-label="Clear canvas"
+                  >
+                    <Eraser className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Clear Canvas</TooltipContent>
@@ -944,7 +974,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             {/* Stroke color */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Stroke color">
                   <div
                     className="h-5 w-5 rounded-sm border border-border"
                     style={{ backgroundColor: strokeColor }}
@@ -965,6 +995,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                         )}
                         style={{ backgroundColor: color }}
                         onClick={() => setStrokeColor(color)}
+                        aria-label={`Stroke ${color}`}
+                        aria-pressed={strokeColor === color}
                       />
                     ))}
                   </div>
@@ -975,7 +1007,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             {/* Fill color */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Fill color">
                   <div
                     className="h-5 w-5 rounded-sm border border-border"
                     style={{
@@ -1009,6 +1041,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                       }}
                       onClick={() => setFillColor('transparent')}
                       title="Transparent"
+                      aria-label="No fill"
+                      aria-pressed={fillColor === 'transparent'}
                     />
                     {COLOR_PRESETS.slice(0, 9).map((color) => (
                       <button
@@ -1020,6 +1054,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
                         )}
                         style={{ backgroundColor: color }}
                         onClick={() => setFillColor(color)}
+                        aria-label={`Fill ${color}`}
+                        aria-pressed={fillColor === color}
                       />
                     ))}
                   </div>
@@ -1030,7 +1066,7 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             {/* Stroke width */}
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Stroke width">
                   <div className="flex items-center justify-center">
                     <div
                       className="rounded-full bg-foreground"

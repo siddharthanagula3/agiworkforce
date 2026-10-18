@@ -267,6 +267,7 @@ function HistoryCard({ entry, onView, onDelete }: HistoryCardProps) {
               e.stopPropagation();
               onDelete(entry.id);
             }}
+            aria-label={`Remove “${entry.query}” from history`}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
