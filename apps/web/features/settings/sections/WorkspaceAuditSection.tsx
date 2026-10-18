@@ -221,7 +221,7 @@ export function WorkspaceAuditSection() {
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
             {filtered
-              ? 'Widen the range or clear the filters.'
+              ? 'Choose other filters or clear them.'
               : 'Administrative actions, policy changes, membership, identity, appear here as they happen.'}
           </div>
         </div>
@@ -327,7 +327,7 @@ export function WorkspaceAuditSection() {
         <div
           style={{ padding: 'var(--space-3) var(--space-5)', fontSize: 12, color: 'var(--text-3)' }}
         >
-          Showing the most recent {events.length}. Export for the full range.
+          Showing the most recent {events.length}. Export to get every matching event.
         </div>
       ) : null}
     </section>

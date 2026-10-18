@@ -5,9 +5,10 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { invalidatePreferencesSnapshot } from '@/app/settings/_lib/preferences-client';
+import { SITE_NAME } from '@/lib/seo/site';
 
 const TOTP_CONFIG = {
-  ISSUER: 'AGI Platform',
+  ISSUER: SITE_NAME,
   ALGORITHM: 'SHA1',
   DIGITS: 6,
   PERIOD: 30,

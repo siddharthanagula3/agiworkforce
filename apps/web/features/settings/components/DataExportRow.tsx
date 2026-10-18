@@ -59,6 +59,7 @@ export function DataExportRow() {
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
+  const [statusReadFailed, setStatusReadFailed] = useState(false);
   const [pollRound, setPollRound] = useState(0);
   const pollDelay = useRef(POLL_FIRST_DELAY_MS);
   const pollStartedAt = useRef<number | null>(null);
@@ -69,9 +70,13 @@ export function DataExportRow() {
     let cancelled = false;
     readArchive()
       .then((current) => {
-        if (!cancelled) setArchive(current);
+        if (cancelled) return;
+        setArchive(current);
+        setStatusReadFailed(false);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setStatusReadFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -94,9 +99,13 @@ export function DataExportRow() {
       }
       readArchive()
         .then((current) => {
-          if (!cancelled) setArchive(current);
+          if (cancelled) return;
+          setArchive(current);
+          setStatusReadFailed(false);
         })
-        .catch(() => undefined)
+        .catch(() => {
+          if (!cancelled) setStatusReadFailed(true);
+        })
         .finally(() => {
           if (!cancelled) setPollRound((round) => round + 1);
         });
@@ -186,6 +195,11 @@ export function DataExportRow() {
       ) : archive?.status === 'preparing' ? (
         <div role="status" style={blockStyle}>
           <p style={{ margin: 0 }}>{preparingMessage(archive)}</p>
+          {statusReadFailed ? (
+            <p style={{ margin: 'var(--space-2) 0 0' }}>
+              We couldn&apos;t check on it just now. We&apos;ll keep trying.
+            </p>
+          ) : null}
           {stalled ? (
             <p style={{ margin: 'var(--space-2) 0 0' }}>
               This is taking longer than usual. It will still appear here when it is ready.{' '}
@@ -238,6 +252,10 @@ export function DataExportRow() {
           The download link for your last export has expired. Request a new export to get a fresh
           link.
         </p>
+      ) : statusReadFailed ? (
+        <SaveStatusLine failed style={blockStyle}>
+          We couldn&apos;t check for an earlier export. Reload this page to try again.
+        </SaveStatusLine>
       ) : null}
     </div>
   );

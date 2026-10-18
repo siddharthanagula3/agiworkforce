@@ -1664,6 +1664,15 @@ describe('chat status text roles clear AA on every chat surface and on their own
       });
     }
 
+    it(`${theme}: --chat-accent-primary-text >= 4.5:1 on --chat-sidebar-bg`, () => {
+      expect(
+        contrastRatio(
+          colorToken(block, '--chat-accent-primary-text'),
+          colorToken(block, '--chat-sidebar-bg'),
+        ),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
     it(`${theme}: --chat-badge-neutral >= 4.5:1 on --chat-surface-hover`, () => {
       expect(
         contrastRatio(

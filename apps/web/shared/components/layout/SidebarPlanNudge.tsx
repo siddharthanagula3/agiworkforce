@@ -8,12 +8,12 @@
 export function SidebarFreePlanNudge({ onUpgrade }: { onUpgrade: () => void }) {
   return (
     <div className="px-3 pb-2">
-      <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between rounded-full border border-[var(--chat-border)] bg-[var(--chat-sidebar-bg)] px-3 py-1.5 text-xs text-muted-foreground">
         <span>Free plan</span>
         <button
           type="button"
           onClick={onUpgrade}
-          className="font-medium text-primary hover:underline"
+          className="font-medium text-[var(--chat-accent-primary-text)] hover:underline"
         >
           Upgrade
         </button>

@@ -823,7 +823,7 @@ describe('workspace console', () => {
     expect(audit.querySelectorAll('.agi-scene-audit > span')).toHaveLength(30);
     expect(texts(audit, '.agi-scene-outcome')).toEqual(['success', 'success', 'denied', 'failure']);
     expect(text(audit, '.agi-scene-sheet-foot')).toBe(
-      'Showing the most recent 4. Export for the full range.',
+      'Showing the most recent 4. Export to get every matching event.',
     );
     expect(audit.textContent).not.toContain('Clear filters');
   });
@@ -884,7 +884,7 @@ describe('workspace console', () => {
       "{s === '' ? 'All severities' : s}",
       "{['When', 'Actor', 'Action', 'Resource', 'Surface', 'Outcome'].map((h) => (",
       "{event.actorUserId ?? 'system'}",
-      'Showing the most recent {events.length}. Export for the full range.',
+      'Showing the most recent {events.length}. Export to get every matching event.',
       '{filtered ? (',
     ]);
   });

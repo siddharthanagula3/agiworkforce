@@ -137,6 +137,20 @@ describe('DataExportRow states', () => {
     expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled();
   });
 
+  it('says so when the earlier export cannot be checked, instead of showing nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({ error: { message: 'unavailable' } }, 503)),
+    );
+
+    render(<DataExportRow />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't check for an earlier export. Reload this page to try again.",
+    );
+    expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled();
+  });
+
   it('says an expired export needs a new request', async () => {
     installFetch({ reads: [archive({ status: 'expired' })] });
 

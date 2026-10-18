@@ -1230,7 +1230,7 @@ function ConsoleAudit() {
       </div>
       <div className="agi-scene-sheet-foot">
         <span className="agi-scene-sheet-note">
-          Showing the most recent {CONSOLE_AUDIT.length}. Export for the full range.
+          Showing the most recent {CONSOLE_AUDIT.length}. Export to get every matching event.
         </span>
       </div>
     </div>

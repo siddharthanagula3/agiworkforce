@@ -7,6 +7,7 @@ import {
   generateBackupCodes,
   TOTP_CONFIG,
 } from './user-preferences';
+import { SITE_NAME } from '@/lib/seo/site';
 
 describe('TOTP 2FA Implementation', () => {
   describe('generateTOTPSecret', () => {
@@ -38,7 +39,8 @@ describe('TOTP 2FA Implementation', () => {
 
       expect(url).toContain('otpauth://totp/');
       expect(url).toContain(`secret=${secret}`);
-      expect(url).toContain('issuer=AGI%20Platform');
+      expect(url).toContain(`otpauth://totp/${SITE_NAME}:`);
+      expect(url).toContain(`issuer=${SITE_NAME}&`);
       expect(url).toContain('algorithm=SHA1');
       expect(url).toContain('digits=6');
       expect(url).toContain('period=30');
