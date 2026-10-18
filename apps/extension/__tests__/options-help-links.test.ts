@@ -41,7 +41,9 @@ const chromeHarness = vi.hoisted(() => {
     return Promise.resolve();
   });
   (globalThis as Record<string, unknown>).chrome = {
+    i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
     runtime: {
+      sendMessage: () => Promise.resolve({ success: true, shortcuts: [] }),
       getManifest: () => ({ name: 'agiworkforce', version: '1.2.3' }),
       getURL: (path: string) => `chrome-extension://test/${path}`,
       lastError: undefined,
@@ -55,6 +57,10 @@ const chromeHarness = vi.hoisted(() => {
         set: storageSet,
         remove: () => Promise.resolve(),
       },
+      sync: {
+        get: () => Promise.resolve({}),
+        set: () => Promise.resolve(),
+      },
     },
     tabs: {
       query: (_q: unknown, cb?: (tabs: unknown[]) => void) => {
@@ -64,10 +70,8 @@ const chromeHarness = vi.hoisted(() => {
       create: () => Promise.resolve({}),
     },
     commands: {
-      getAll: (
-        cb: (commands: Array<{ name: string; description: string; shortcut?: string }>) => void,
-      ) =>
-        cb([
+      getAll: () =>
+        Promise.resolve([
           { name: '_execute_action', description: 'Open side panel', shortcut: 'Alt+Shift+G' },
           { name: 'capture_page', description: 'Capture page' },
         ]),
@@ -106,8 +110,21 @@ describe('options page, Help', () => {
     const targets = Array.from(document.querySelectorAll<HTMLButtonElement>('.opt-nav-item')).map(
       (button) => button.dataset.target,
     );
-    expect(targets).toEqual(['opt-appearance', 'opt-permissions', 'opt-account', 'opt-shortcuts']);
-    for (const section of ['opt-privacy', 'opt-preferences', 'opt-help']) {
+    expect(targets).toEqual([
+      'opt-permissions',
+      'opt-shortcuts',
+      'opt-options',
+      'opt-account',
+      'opt-help',
+    ]);
+    for (const section of [
+      'opt-privacy',
+      'opt-preferences',
+      'opt-help',
+      'opt-keyboard',
+      'opt-appearance',
+      'opt-desktop',
+    ]) {
       expect(document.getElementById(section)).not.toBeNull();
     }
     for (const target of targets) expect(document.getElementById(target!)).not.toBeNull();
@@ -115,7 +132,7 @@ describe('options page, Help', () => {
       [...document.querySelectorAll<HTMLElement>('.opt-section')]
         .filter((section) => !section.hidden)
         .map((section) => section.id),
-    ).toEqual(['opt-appearance']);
+    ).toEqual(['opt-permissions']);
     expect(document.querySelector<HTMLDetailsElement>('.opt-access-details')?.open).toBe(false);
     expect(document.querySelector('#opt-cloud-auth')).toBeNull();
   });
@@ -162,21 +179,25 @@ describe('options page, Help', () => {
     expect(document.getElementById('opt-shortcuts')?.hidden).toBe(true);
     expect(document.getElementById('opt-privacy')?.hidden).toBe(false);
     expect(document.getElementById('opt-preferences')?.hidden).toBe(false);
-    expect(document.getElementById('opt-help')?.hidden).toBe(false);
+    expect(document.getElementById('opt-desktop')?.hidden).toBe(false);
+    expect(document.getElementById('opt-help')?.hidden).toBe(true);
     expect(document.querySelector<HTMLDetailsElement>('#opt-preferences')?.open).toBe(false);
     expect(document.querySelector('.opt-nav-item.active')?.getAttribute('data-target')).toBe(
       'opt-account',
     );
   });
 
-  it('renders Chrome’s current command bindings instead of stale manifest defaults', () => {
-    const shortcutRows = Array.from(document.querySelectorAll('#opt-shortcuts tbody tr')).map(
+  it('renders Chrome’s current command bindings instead of stale manifest defaults', async () => {
+    await vi.waitFor(() =>
+      expect(document.querySelectorAll('#opt-keyboard [role=listitem]').length).toBe(2),
+    );
+    const shortcutRows = Array.from(document.querySelectorAll('#opt-keyboard [role=listitem]')).map(
       (row) => row.textContent?.replace(/[\s+]/g, ''),
     );
     expect(shortcutRows).toEqual(
       expect.arrayContaining([
         expect.stringContaining('AltShiftG'),
-        expect.stringContaining('Notassigned'),
+        expect.stringContaining('optShortcutNotAssigned'),
       ]),
     );
   });
