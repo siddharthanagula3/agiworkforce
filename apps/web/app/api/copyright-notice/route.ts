@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
@@ -110,15 +111,6 @@ const NOTICE_TYPE_COPY: Record<
       'Is the person or organisation impersonated, or authorised to act for them: affirmed',
   },
 };
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;');
-}
 
 async function alertOperators(input: {
   reference: string;

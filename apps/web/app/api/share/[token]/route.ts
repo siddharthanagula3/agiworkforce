@@ -26,6 +26,7 @@ import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-respo
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 
 import { shareRef } from '@/lib/share-ref';
+import { SITE_URL } from '@/lib/seo/site';
 import {
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
@@ -277,10 +278,9 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
       });
     }
 
-    const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
     const changed: ConversationShareAudienceResponse = {
       token: updated.token,
-      shareUrl: `${appUrl}/share/${updated.token}`,
+      shareUrl: `${SITE_URL}/share/${updated.token}`,
       visibility: updated.visibility,
       organizationId: visibility === 'organization' ? target.organizationId : null,
       expiresAt: updated.expiresAt,

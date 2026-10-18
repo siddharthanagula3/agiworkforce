@@ -14,9 +14,8 @@ import {
 } from '@/features/auth/authRoutes';
 import { redirect } from 'next/navigation';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
+import { SITE_URL } from '@/lib/seo/site';
 import { getRequestIdentity } from '@/lib/server/identity';
-
-const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 const LOGIN_FALLBACK_REDIRECT = '/';
 
@@ -41,7 +40,7 @@ export default async function LoginPage({
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(
     params.redirectTo ?? params.next,
-    getAppUrl(),
+    SITE_URL,
     LOGIN_FALLBACK_REDIRECT,
   );
   const context = readAuthRouteContext(params, redirectTo);

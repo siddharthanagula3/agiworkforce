@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import {
   DATA_RIGHTS_REQUEST_LABELS,
@@ -27,15 +28,6 @@ const CreateRequestSchema = z.object({
   contactEmail: z.string().email().max(254),
   details: z.string().max(MAX_REQUEST_DETAILS_LENGTH).optional(),
 });
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;');
-}
 
 async function alertOperators(input: {
   created: DataRightsRequest;

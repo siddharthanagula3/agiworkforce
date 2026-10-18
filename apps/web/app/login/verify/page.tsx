@@ -6,6 +6,7 @@ import { AccountSecurityVerify } from '@/features/account-security/components/Ac
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import { SITE_URL } from '@/lib/seo/site';
 import { subjectSessionPassesAccountSecurity } from '@/lib/server/account-security/gate';
 import { getRequestIdentity } from '@/lib/server/identity';
 
@@ -15,8 +16,6 @@ export const metadata: Metadata = {
   title: "Verify it's you",
   robots: { index: false, follow: false },
 };
-
-const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 const HANDOFF_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
@@ -45,7 +44,7 @@ export default async function AccountSecurityVerifyPage({
     );
   }
 
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/chat');
+  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, '/chat');
   const { subject, sessionId } = await getRequestIdentity();
   if (!subject) redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   if (await subjectSessionPassesAccountSecurity(subject, sessionId)) redirect(redirectTo);

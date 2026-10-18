@@ -63,6 +63,10 @@ import { isVideoStorageConfigured } from '@/lib/server/media-storage';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { isVideoProviderReleaseEnabled } from '@/lib/server/video-provider-release-policy';
 import {
+  hasServerProviderKey,
+  resolveServerProviderCredentials,
+} from '@/lib/services/provider-adapter-service';
+import {
   acquireVideoGenerationAdmission,
   beginVideoProviderSubmission,
   createVideoGenerationJob,
@@ -324,19 +328,9 @@ function managedUsageErrorResponse(
   );
 }
 
-const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
-
-function getGoogleApiKey(): string | undefined {
-  for (const key of GOOGLE_API_KEY_ENV_KEYS) {
-    const value = process.env[key]?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
-
 function videoProviderConfigured(provider: VideoProvider): boolean {
   return provider === 'google'
-    ? Boolean(getGoogleApiKey())
+    ? hasServerProviderKey('google')
     : provider === 'openrouter'
       ? Boolean(process.env['OPENROUTER_API_KEY']?.trim())
       : Boolean(process.env['RUNWAY_API_KEY']?.trim());
@@ -602,11 +596,9 @@ async function generateWithGoogleVeo(
   resolution: VideoResolution,
   model: ModelMetadata,
 ): Promise<{ taskId: string }> {
-  const apiKey = getGoogleApiKey();
+  const apiKey = resolveServerProviderCredentials('google')?.apiKey;
   if (!apiKey) {
-    throw createError.serviceUnavailable(
-      `Google Veo API not configured. Set one of: ${GOOGLE_API_KEY_ENV_KEYS.join(', ')}.`,
-    );
+    throw createError.serviceUnavailable('Google Veo API not configured');
   }
 
   const providerModelId = model.apiModelId ?? model.id;
@@ -631,10 +623,8 @@ async function generateWithGoogleVeo(
         aspectRatio: '16:9',
         durationSeconds: durationSecs,
         resolution,
-        // This catalog-selected REST endpoint returns one video. It rejects
-        // the SDK-only `numberOfVideos` option and the
-        // former preview-only `enhancePrompt` option, so the request carries
-        // only the documented provider-native output tuple.
+        // This REST endpoint returns one video and rejects the SDK-only
+        // `numberOfVideos` and `enhancePrompt` options.
       },
     }),
     signal: AbortSignal.timeout(30_000),
@@ -989,8 +979,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     return managedUsageErrorResponse(request, managedError);
   }
 
-  // Always-on platform safety floor before admission, billing reservation, or
-  // be the first control because Runway charges safety-moderated generations
+  // The platform safety floor runs before admission and billing reservation
+  // because Runway charges for generations its own moderation refuses.
   const moderation = moderateManagedPrompt({
     userId,
     segments: [prompt],

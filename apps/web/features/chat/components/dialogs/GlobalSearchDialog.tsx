@@ -11,6 +11,7 @@ import {
   Input,
   Button,
   ScrollArea,
+  SectionErrorBoundary,
   Spinner,
   useConfirmAction,
   useUiTranslation,
@@ -53,7 +54,6 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { safePlatform } from '@shared/utils/browser-utils';
 import { findShortcutDoc, formatShortcutKeys } from '../../hooks/use-keyboard-shortcuts';
 import { format } from 'date-fns';
-import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 
 interface GlobalSearchDialogProps {
@@ -331,7 +331,8 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   ].filter(Boolean).length;
 
   return (
-    <ErrorBoundary
+    <SectionErrorBoundary
+      sectionName="Search"
       fallback={
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogContent className="max-h-[80vh] max-w-3xl p-0">
@@ -714,7 +715,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
           {clearHistoryDialog}
         </DialogContent>
       </Dialog>
-    </ErrorBoundary>
+    </SectionErrorBoundary>
   );
 }
 

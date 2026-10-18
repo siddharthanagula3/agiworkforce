@@ -12,8 +12,7 @@ import {
 } from '@/features/auth/authRoutes';
 import { classifyProviderCallbackError } from '@/lib/auth/error-taxonomy';
 import { getSafeRedirectUrl } from '../../../lib/safe-redirect';
-
-const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
+import { SITE_URL } from '@/lib/seo/site';
 
 const CALLBACK_FALLBACK_REDIRECT = '/';
 
@@ -28,7 +27,7 @@ export default async function SsoCallbackPage({
   }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), CALLBACK_FALLBACK_REDIRECT);
+  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, CALLBACK_FALLBACK_REDIRECT);
   const context = readAuthRouteContext(params, redirectTo);
 
   // The provider answers a cancelled or failed consent by redirecting here with

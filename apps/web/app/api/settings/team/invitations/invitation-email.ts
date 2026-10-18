@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import {
   isNotificationEmailConfigured,
@@ -46,14 +47,6 @@ function inviteUrl(token: string): string | null {
   const configured = (process.env['NEXT_PUBLIC_APP_URL'] ?? '').trim().replace(/\/$/, '');
   if (!configured) return null;
   return `${configured}/invite#token=${encodeURIComponent(token)}`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 export async function readOrganizationName(

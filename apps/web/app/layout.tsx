@@ -17,7 +17,7 @@ import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetE
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
 import {
   organizationSchema,
   softwareApplicationSchema,
@@ -49,8 +49,6 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
-const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -59,7 +57,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(APP_URL),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: 'AGI | One AI workspace across models and tools.',
     template: '%s | AGI',
@@ -90,7 +88,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: APP_URL,
+    url: SITE_URL,
     siteName: 'AGI',
     title: 'AGI | One AI workspace across models and tools.',
     description:

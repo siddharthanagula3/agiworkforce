@@ -29,6 +29,10 @@ import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { readStoredMedia } from '@/lib/server/media-storage';
 import { IMAGE_GENERATION_PROVIDER_DEADLINE_MS } from '@/lib/deadline-policy';
+import {
+  hasServerProviderKey,
+  resolveServerProviderCredentials,
+} from '@/lib/services/provider-adapter-service';
 
 export type ImageProvider = ManagedMediaImageProvider;
 
@@ -369,18 +373,8 @@ export function estimateImageCostMicrousd(
   );
 }
 
-const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
-
-function getGoogleApiKey(): string | undefined {
-  for (const key of GOOGLE_API_KEY_ENV_KEYS) {
-    const value = getOptionalEnv(key);
-    if (value) return value;
-  }
-  return undefined;
-}
-
 export function getDefaultProvider(): ImageProvider {
-  if (getGoogleApiKey()) {
+  if (hasServerProviderKey('google')) {
     return 'google';
   }
   if (getOptionalEnv('OPENAI_API_KEY')) {
@@ -394,11 +388,9 @@ function getApiKey(provider: ImageProvider): string {
     case 'openai':
       return requireEnv('OPENAI_API_KEY');
     case 'google': {
-      const key = getGoogleApiKey();
+      const key = resolveServerProviderCredentials('google')?.apiKey;
       if (!key) {
-        throw new Error(
-          `Missing Google credential. Set one of: ${GOOGLE_API_KEY_ENV_KEYS.join(', ')}.`,
-        );
+        throw new Error('Missing Google credential');
       }
       return key;
     }
@@ -412,7 +404,7 @@ export function isProviderAvailable(provider: ImageProvider): boolean {
     case 'openai':
       return !!getOptionalEnv('OPENAI_API_KEY');
     case 'google':
-      return !!getGoogleApiKey();
+      return hasServerProviderKey('google');
     case 'stability':
       return false;
   }

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { deploymentEnvironment } from '@/lib/config/runtime-environment';
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -67,14 +68,6 @@ interface ReconcileSummary {
     adjustmentsRecorded: number;
     discountsRecorded: number;
   };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;');
 }
 
 function buildDriftAlert(summary: {

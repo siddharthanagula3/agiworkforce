@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { readJsonBody } from '@/lib/read-json-body';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -22,6 +23,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { TEMPORARY_CHAT_SHARE_REFUSAL } from '@/lib/temporary-chat-policy';
+import { SITE_URL } from '@/lib/seo/site';
 import {
   redactSecretsFromValue,
   SecretRedactionIncompleteError,
@@ -52,8 +54,8 @@ function shareExpiresAt(days: number): string {
   return new Date(Date.now() + days * DAY_MS).toISOString();
 }
 
-// A share body carried no bound of its own beyond the 4 MiB payload ceiling, so
-// the secret scanner's input was whatever the caller sent.
+// The secret scanner reads the whole share body, so it is bounded here rather
+// than by the 4 MiB payload ceiling alone.
 const MAX_SHARE_MESSAGES = 2_000;
 const MAX_SHARE_SERIALIZED_CHARS = 1_000_000;
 const SHARE_LIST_LIMIT = 200;
@@ -142,14 +144,6 @@ type SharedSessionRow = {
 };
 
 type ShareLinkEvent = 'share_link_created' | 'share_link_updated' | 'share_link_revoked';
-
-async function readJsonBody(request: NextRequest): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return {};
-  }
-}
 
 function requireConversationQuery(request: NextRequest, refusal: string): string {
   const query = ConversationShareListQuerySchema.required().safeParse({
@@ -436,8 +430,7 @@ async function handleCreateShare(request: NextRequest) {
     conversationId,
   );
 
-  const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-  const shareUrl = `${appUrl}/share/${data.token}`;
+  const shareUrl = `${SITE_URL}/share/${data.token}`;
 
   const created: ConversationShareCreated = {
     shareUrl,
@@ -587,14 +580,13 @@ async function handleListShares(request: NextRequest) {
     );
   }
 
-  const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
   const now = Date.now();
 
   const listed: ConversationShareListResponse = {
     shares: rows.map((row) => ({
       token: row.token,
       title: row.title ?? 'Shared Session',
-      shareUrl: `${appUrl}/share/${row.token}`,
+      shareUrl: `${SITE_URL}/share/${row.token}`,
       modelId: row.model_id,
       provider: row.provider,
       messageCount: row.total_messages,

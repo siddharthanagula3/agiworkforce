@@ -12,9 +12,8 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
+import { SITE_URL } from '@/lib/seo/site';
 import { getRequestIdentity } from '@/lib/server/identity';
-
-const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 const SIGNUP_FALLBACK_REDIRECT = '/chat';
 
@@ -34,7 +33,7 @@ export default async function SignupPage({
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(
     params.redirectTo ?? params.next,
-    getAppUrl(),
+    SITE_URL,
     SIGNUP_FALLBACK_REDIRECT,
   );
   const context = readAuthRouteContext(params, redirectTo);

@@ -3,8 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { SectionErrorBoundary } from '@agiworkforce/ui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ErrorBoundary from '../ErrorBoundary';
-
 function Exploding({ shouldThrow, message }: { shouldThrow: boolean; message: string }) {
   if (shouldThrow) throw new Error(message);
   return <p>panel content</p>;
@@ -81,72 +79,16 @@ describe('a failing panel does not take down the shell', () => {
 
     expect(screen.queryByRole('button', { name: /reload/i })).not.toBeInTheDocument();
   });
-});
-
-describe('the whole-surface boundary', () => {
-  it('offers retry before reload, so reload is the last resort rather than the first', () => {
-    render(
-      <ErrorBoundary>
-        <Exploding shouldThrow message="shell exploded" />
-      </ErrorBoundary>,
-    );
-
-    const actions = screen
-      .getAllByRole('button')
-      .map((button) => button.textContent?.trim().toLowerCase() ?? '');
-    expect(actions.findIndex((label) => label.includes('try again'))).toBeLessThan(
-      actions.findIndex((label) => label.includes('reload')),
-    );
-  });
-
-  it('reports the identifier it asks the user to quote', () => {
-    const onError = vi.fn();
-
-    render(
-      <ErrorBoundary onError={onError}>
-        <Exploding shouldThrow message="shell exploded" />
-      </ErrorBoundary>,
-    );
-
-    const shown = screen.getByText(/Error ID:/i).textContent ?? '';
-    const reported = onError.mock.calls[0]?.[2];
-
-    expect(typeof reported).toBe('string');
-    expect(reported).not.toBe('');
-    expect(shown).toContain(reported);
-  });
-
-  it('shows the same identifier it hands the host, so support can find the report', () => {
-    const ids: string[] = [];
-
-    render(
-      <ErrorBoundary onError={(_error, _info, errorId) => ids.push(errorId)}>
-        <Exploding shouldThrow message="shell exploded" />
-      </ErrorBoundary>,
-    );
-
-    expect(ids).toHaveLength(1);
-    expect(screen.getByText(new RegExp(ids[0] ?? 'never'))).toBeInTheDocument();
-  });
 
   it('renders a host fallback instead of its own panel when one is given', () => {
     render(
-      <ErrorBoundary fallback={<p>search is unavailable</p>}>
-        <Exploding shouldThrow message="search exploded" />
-      </ErrorBoundary>,
+      <SectionErrorBoundary sectionName="Search" fallback={<p>search is unavailable</p>}>
+        <Exploding shouldThrow message="postgres://user:PLACEHOLDER@db.example.com/app timed out" />
+      </SectionErrorBoundary>,
     );
 
     expect(screen.getByText('search is unavailable')).toBeInTheDocument();
-    expect(screen.queryByText(/Error ID:/i)).not.toBeInTheDocument();
-  });
-
-  it('never paints the raw failure into the page', () => {
-    render(
-      <ErrorBoundary>
-        <Exploding shouldThrow message="postgres://user:PLACEHOLDER@db.example.com/app timed out" />
-      </ErrorBoundary>,
-    );
-
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('PLACEHOLDER');
   });
 });

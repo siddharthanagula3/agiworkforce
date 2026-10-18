@@ -28,6 +28,7 @@ import {
   estimateEmbeddingCostMicrousd,
 } from '@/lib/services/retrieval-embedding-service';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
+import { resolveServerProviderCredentials } from '@/lib/services/provider-adapter-service';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
@@ -87,10 +88,7 @@ async function embedWithGoogle(
   inputs: readonly string[],
   model: ModelMetadata,
 ): Promise<number[][]> {
-  const apiKey =
-    process.env['GOOGLE_API_KEY'] ??
-    process.env['GOOGLE_AI_API_KEY'] ??
-    process.env['GEMINI_API_KEY'];
+  const apiKey = resolveServerProviderCredentials('google')?.apiKey;
   if (!apiKey) {
     throw createError.serviceUnavailable('Embeddings are not configured on this deployment.');
   }

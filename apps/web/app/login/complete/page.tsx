@@ -4,6 +4,7 @@ import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 import { logger } from '@/lib/logger';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import { SITE_URL } from '@/lib/seo/site';
 import { readLatestConsent } from '@/lib/server/consent-records';
 import { hasAcceptedAnyTerms, hasAcceptedCurrentTerms, mustAcceptTerms } from '@/lib/server/terms';
 import { TermsGate } from '../../signup/TermsGate';
@@ -21,8 +22,6 @@ import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { TermsReviewSignOut } from './TermsReviewSignOut';
-
-const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
 // An account that granted, refused or withdrew is never asked again, and a
 // ledger that cannot be read is not taken to mean nobody asked.
@@ -46,7 +45,7 @@ export default async function LoginCompletePage({
   }>;
 }) {
   const params = await searchParams;
-  const redirectTo = getSafeRedirectUrl(params.redirectTo, getAppUrl(), '/');
+  const redirectTo = getSafeRedirectUrl(params.redirectTo, SITE_URL, '/');
   const isDesktopSurface = params.surface === 'desktop';
   const { subject: userId } = await getRequestIdentity();
 

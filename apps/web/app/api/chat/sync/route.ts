@@ -20,6 +20,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
@@ -862,17 +863,6 @@ function isLegacyNoopPush(value: unknown): boolean {
   return ['conversations', 'messages', 'artifacts'].every(
     (key) => body[key] === undefined || (Array.isArray(body[key]) && body[key].length === 0),
   );
-}
-
-function withIsoTimestamps<T>(rows: T[]): T[] {
-  return rows.map((row) => {
-    const out = { ...(row as Record<string, unknown>) };
-    for (const key of ['created_at', 'updated_at', 'deleted_at'] as const) {
-      const value = out[key];
-      if (value instanceof Date) out[key] = value.toISOString();
-    }
-    return out as T;
-  });
 }
 
 /**
