@@ -63,10 +63,6 @@ export const LOCAL_SERVERS = {
     what: 'the agent-to-agent server',
     requires: [],
   },
-  'apps/cli/src/a2a_ws.rs': {
-    what: 'the agent-to-agent websocket',
-    requires: [],
-  },
 };
 
 function read(repoRoot, relativePath) {

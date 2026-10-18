@@ -300,19 +300,19 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
 
     #[cfg(target_os = "macos")]
     {
-        let available = crate::platform::policy::macos_sandbox::is_available();
+        let missing = detected == crate::sandbox::SandboxType::None;
         vec![check(
             "sandbox.os",
             "OS sandbox",
-            if available {
-                DoctorStatus::Pass
-            } else {
+            if missing {
                 DoctorStatus::Warn
-            },
-            if available {
-                "macOS Seatbelt is available"
             } else {
-                "sandbox-exec is unavailable; shell tools will need fallback policy"
+                DoctorStatus::Pass
+            },
+            if missing {
+                crate::sandbox::missing_sandbox_message("macos")
+            } else {
+                "macOS Seatbelt is available".to_string()
             },
             details,
         )]
@@ -320,13 +320,6 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
 
     #[cfg(target_os = "linux")]
     {
-        let mut details = details;
-        details.push(format!(
-            "in-process seccomp filter compiled in (never installed by exec): {}",
-            crate::platform::policy::linux_sandbox::compile_bpf_available()
-        ));
-        // Only bubblewrap backs sandboxed exec on Linux. The seccomp module
-        // installs no filter on any exec path, so its presence must never.
         let missing = detected == crate::sandbox::SandboxType::None;
         vec![check(
             "sandbox.os",

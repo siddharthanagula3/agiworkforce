@@ -59,15 +59,6 @@ pub const DESTRUCTIVE_VERBS: &[&str] = &[
     "New-PSDrive", // can map external drives
 ];
 
-/// Cmdlets that touch the Windows registry, warn even when not safe_mode.
-pub const REGISTRY_CMDLETS: &[&str] = &[
-    "Get-ItemProperty",
-    "Set-ItemProperty",
-    "New-ItemProperty",
-    "Remove-ItemProperty",
-    "Get-ChildItem", // when path starts with HKLM:/HKCU:
-];
-
 /// The commands `safe_mode` will run. Every entry reads state and has no
 /// parameter that invokes a name the command text does not spell out, so a
 /// payload cannot reach the interpreter by obfuscating itself into one.

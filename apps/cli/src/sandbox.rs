@@ -181,7 +181,6 @@ pub enum SandboxType {
     None,
     MacosSeatbelt,
     LinuxBubblewrap,
-    LinuxLandlock,
 }
 
 impl SandboxType {
@@ -213,7 +212,6 @@ impl SandboxType {
             Self::None => "none",
             Self::MacosSeatbelt => "seatbelt",
             Self::LinuxBubblewrap => "bubblewrap",
-            Self::LinuxLandlock => "landlock",
         }
     }
 }
@@ -225,16 +223,14 @@ pub fn status_word(sandbox_type: Option<SandboxType>) -> &'static str {
     match sandbox_type {
         Some(SandboxType::MacosSeatbelt) => "seatbelt",
         Some(SandboxType::LinuxBubblewrap) => "bwrap",
-        Some(SandboxType::LinuxLandlock) => "landlock",
         Some(SandboxType::None) | None => "no sandbox",
     }
 }
 
 /// Actionable diagnosis for a host where `SandboxType::detect()` found nothing.
-/// The Linux branch names bubblewrap as the hard runtime dependency it is: the
-/// in-process seccomp module (`platform::policy::linux_sandbox`) is not compiled
-/// into release builds and installs no filter on any exec path, so a missing
-/// `bwrap` leaves no sandbox at all.
+/// The Linux branch names bubblewrap as the hard runtime dependency it is:
+/// there is no in-process fallback, so a missing `bwrap` leaves no sandbox at
+/// all.
 pub fn missing_sandbox_message(os: &str) -> String {
     match os {
         "linux" => "Sandboxed exec requires bubblewrap (`bwrap`) on PATH and it was not found. \
@@ -937,12 +933,6 @@ pub fn sandboxed_program(
                 missing_sandbox_message(std::env::consts::OS)
             ))
         }
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
-                manager.sandbox_type.name()
-            ))
-        }
     };
     let scratch = match backend {
         agiworkforce_sandbox_policy::SandboxBackend::MacosSeatbelt => Some(program_scratch_dir()?),
@@ -1231,7 +1221,7 @@ pub fn full_read_program_guarding(
         SandboxType::None if !cfg!(any(target_os = "macos", target_os = "linux")) => {
             return Ok(None)
         }
-        SandboxType::None | SandboxType::LinuxLandlock => {
+        SandboxType::None => {
             return Err(anyhow::anyhow!(
                 "{}",
                 missing_sandbox_message(std::env::consts::OS)
@@ -1547,10 +1537,6 @@ pub(crate) fn background_command(
                 SandboxType::None => {
                     anyhow::bail!("{}", missing_sandbox_message(std::env::consts::OS))
                 }
-                _ => anyhow::bail!(
-                    "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
-                    manager.sandbox_type.name()
-                ),
             }
         }
     };
@@ -1640,12 +1626,6 @@ async fn execute_sandboxed_in_environment(
         SandboxType::None => Err(anyhow::anyhow!(
             "{}",
             missing_sandbox_message(std::env::consts::OS)
-        )),
-        // Only reachable if a SandboxType variant was added without an exec
-        // implementation, fail loud rather than silently bypass.
-        _ => Err(anyhow::anyhow!(
-            "Unhandled SandboxType variant {}, sandbox config is broken; refusing exec",
-            manager.sandbox_type.name()
         )),
     }
 }
@@ -2361,7 +2341,6 @@ mod tests {
     fn status_word_matches_the_backend() {
         assert_eq!(status_word(Some(SandboxType::MacosSeatbelt)), "seatbelt");
         assert_eq!(status_word(Some(SandboxType::LinuxBubblewrap)), "bwrap");
-        assert_eq!(status_word(Some(SandboxType::LinuxLandlock)), "landlock");
         assert_eq!(status_word(Some(SandboxType::None)), "no sandbox");
         assert_eq!(status_word(None), "no sandbox");
     }

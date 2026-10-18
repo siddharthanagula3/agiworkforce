@@ -47,9 +47,6 @@ pub mod mcp;
 pub mod memory;
 pub mod mentions;
 pub mod merge_conflicts;
-#[allow(dead_code)]
-// FOUNDATION: cross-surface send-pipeline contract; CLI integrations wire through Sprint B (REPL drain + SDK headless)
-pub mod message_queue;
 pub mod models;
 #[cfg(test)]
 pub(crate) mod native_process_test_fixture;
@@ -127,7 +124,6 @@ pub mod keybindings;
 pub mod local_models;
 pub mod model_catalog;
 pub mod model_reachability;
-pub mod models_cache;
 pub mod oauth;
 pub mod onboarding;
 pub mod subagent_audit;
@@ -167,22 +163,11 @@ pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
                 // policy lives at platform::policy; re-exported here so callers using
                 // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
-#[allow(dead_code)]
-// PHASE2: WS transport for a2a, wraps jsonrpc::handle_request over persistent WS connections
-pub mod a2a_ws;
 pub mod memory_pipeline; // used by agent/mod.rs + agent/chat.rs + agent/prompt.rs
 pub mod skill_learner; // used by agent/chat.rs session-end hook
 
-// A2A protocol, lives at features::a2a; re-exported here so 6 call-sites in
-// a2a_ws.rs, agent/mod.rs, and repl/mod.rs resolve unchanged.
-#[allow(dead_code)] // PHASE2: expose `agi a2a serve/discover/delegate`
 pub use features::a2a;
 
-// Phase 6 reorg, feature/platform/data layers.
-// features/ has a real mod.rs; submodules migrate here incrementally.
-// platform/ and data/ are layout anchors for future surface-specific code.
-#[allow(dead_code)]
-pub mod data;
 pub mod features;
 pub mod file_state;
 #[allow(dead_code)]

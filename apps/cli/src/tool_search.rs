@@ -72,17 +72,6 @@ pub fn search_tools(
         .collect()
 }
 
-pub fn format_search_results(results: &[ToolSearchResult]) -> String {
-    if results.is_empty() {
-        return "No matching tools.".into();
-    }
-    results
-        .iter()
-        .map(|r| format!("  {}, {}", r.name, r.description))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 // ---------------------------------------------------------------------------
 // Phase E: schema-rendering search over ToolDefinition catalog
 // ---------------------------------------------------------------------------

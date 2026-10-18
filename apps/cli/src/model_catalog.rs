@@ -1,11 +1,4 @@
-//! Shared-first model catalog: bundled shared catalog → disk cache → remote fetch.
-//!
-//! Architecture (inspired by Aider + models.dev):
-//!
-//! Tier 1, SHARED:   `packages/contracts/types/src/models.json`, compiled into binary.
-//! Tier 2, CACHE:    ~/.agiworkforce/cache/models.json (5-min TTL, version-aware)
-//! Tier 3, REMOTE:   models.dev/api.json (104 providers, free, open-source)
-//! Tier 4, USER:     config.toml [[models]] overrides (always win)
+//! Model catalog compiled from the shared `packages/contracts/types/src/models.json`.
 //!
 //! To add/update models: edit `packages/ai/model-registry/catalog/models.curation.json`, run
 //! `pnpm sync:models`, then the CLI picks up the generated shared
@@ -16,9 +9,7 @@
 #![allow(dead_code, unused_imports)]
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -30,10 +21,6 @@ use agiworkforce_model_registry::{
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
-const FETCH_TIMEOUT: Duration = Duration::from_secs(5); // never block startup
-const MODELS_DEV_URL: &str = "https://models.dev/api.json";
-const CACHE_FILE: &str = "cache/models.json";
 pub const SHARED_MODELS_JSON: &str =
     include_str!("../../../packages/contracts/types/src/models.json");
 const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
@@ -1106,339 +1093,10 @@ fn normalize_release_date(released: Option<&str>) -> String {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tier 2, DISK CACHE (version-aware, 5-min TTL)
+// Catalog
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize)]
-struct CacheEnvelope {
-    /// CLI version that wrote this cache (invalidate on upgrade).
-    version: String,
-    /// Unix timestamp when cache was written.
-    timestamp: u64,
-    /// The cached models.
-    models: Vec<Model>,
-}
-
-fn cache_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
-        .join(CACHE_FILE)
-}
-
-fn read_cache() -> Option<Vec<Model>> {
-    let path = cache_path();
-    let content = std::fs::read_to_string(&path).ok()?;
-    let envelope: CacheEnvelope = serde_json::from_str(&content).ok()?;
-
-    // Version check: invalidate if CLI was upgraded
-    if envelope.version != env!("CARGO_PKG_VERSION") {
-        return None;
-    }
-
-    // TTL check
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    if now.saturating_sub(envelope.timestamp) > CACHE_TTL.as_secs() {
-        return None;
-    }
-
-    Some(
-        envelope
-            .models
-            .into_iter()
-            .map(|mut model| {
-                model.provider = canonical_cli_provider(&model.provider).to_string();
-                model
-            })
-            .collect(),
-    )
-}
-
-fn write_cache(models: &[Model]) {
-    let path = cache_path();
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!("[model_catalog] cache dir error: {e}");
-            return;
-        }
-    }
-    let envelope = CacheEnvelope {
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        timestamp: SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-        models: models.to_vec(),
-    };
-    match serde_json::to_string(&envelope) {
-        Ok(json) => {
-            if let Err(e) = std::fs::write(&path, json) {
-                eprintln!("[model_catalog] cache write error: {e}");
-            } else {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-                }
-            }
-        }
-        Err(e) => eprintln!("[model_catalog] cache serialize error: {e}"),
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tier 3, REMOTE FETCH from models.dev (5s timeout, non-blocking)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Response shape from models.dev/api.json (simplified, we only take what we need).
-#[derive(Debug, Deserialize)]
-struct ModelsDevResponse {
-    #[serde(flatten)]
-    providers: HashMap<String, ModelsDevProvider>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevProvider {
-    #[serde(default)]
-    id: Option<String>,
-    #[serde(default)]
-    models: HashMap<String, ModelsDevModel>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevModel {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    tool_call: Option<bool>,
-    #[serde(default)]
-    reasoning: Option<bool>,
-    #[serde(default)]
-    attachment: Option<bool>,
-    #[serde(default)]
-    cost: Option<ModelsDevCost>,
-    #[serde(default)]
-    limit: Option<ModelsDevLimit>,
-    #[serde(default)]
-    release_date: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevCost {
-    #[serde(default)]
-    input: Option<f64>,
-    #[serde(default)]
-    output: Option<f64>,
-    #[serde(
-        default,
-        alias = "cache_read",
-        alias = "cacheRead",
-        alias = "cached_input",
-        alias = "cachedInput"
-    )]
-    cached_input: Option<f64>,
-    #[serde(
-        default,
-        alias = "cache_write",
-        alias = "cacheWrite",
-        alias = "cached_write",
-        alias = "cachedWrite",
-        alias = "cache_creation",
-        alias = "cacheCreation"
-    )]
-    cache_write: Option<f64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ModelsDevLimit {
-    #[serde(default)]
-    context: Option<usize>,
-    #[serde(default)]
-    output: Option<usize>,
-}
-
-/// Fetch models from models.dev. Returns None on any failure (timeout, parse error, etc.).
-async fn fetch_remote() -> Option<Vec<Model>> {
-    let client = reqwest::Client::builder()
-        .timeout(FETCH_TIMEOUT)
-        .build()
-        .ok()?;
-
-    let resp = client.get(MODELS_DEV_URL).send().await.ok()?;
-    let body = resp.text().await.ok()?;
-
-    // models.dev returns a flat object of providers, each with a models map
-    let raw: serde_json::Value = serde_json::from_str(&body).ok()?;
-    let providers = raw.as_object()?;
-
-    // Map provider names to our provider IDs
-    let provider_map: HashMap<&str, &str> = [
-        ("anthropic", "anthropic"),
-        ("openai", "openai"),
-        ("google", "google"),
-        ("mistral", "mistral"),
-        ("xai", "xai"),
-        ("deepseek", "deepseek"),
-        ("perplexity", "perplexity"),
-        ("qwen", "qwen"),
-        ("moonshot", "moonshot"),
-        ("zhipu", "zhipu"),
-        ("open_router", "openrouter"),
-        ("openrouter", "openrouter"),
-        ("nvidia_nim", "nvidia"),
-        ("nvidia", "nvidia"),
-        ("groq", "groq"),
-        ("cohere", "cohere"),
-        ("together", "together"),
-    ]
-    .into_iter()
-    .collect();
-
-    let mut models = Vec::new();
-
-    for (provider_key, provider_val) in providers {
-        let Some(provider_obj) = provider_val.as_object() else {
-            continue;
-        };
-        let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) else {
-            continue;
-        };
-        let our_provider = provider_map
-            .get(provider_key.as_str())
-            .copied()
-            .unwrap_or(provider_key.as_str());
-
-        for (model_id, model_val) in models_obj {
-            if let Ok(md) = serde_json::from_value::<ModelsDevModel>(model_val.clone()) {
-                let ctx = md
-                    .limit
-                    .as_ref()
-                    .and_then(|l| l.context)
-                    .unwrap_or(DEFAULT_CONTEXT_WINDOW);
-                let out = md
-                    .limit
-                    .as_ref()
-                    .and_then(|l| l.output)
-                    .unwrap_or(DEFAULT_MAX_OUTPUT);
-                let price_in = md
-                    .cost
-                    .as_ref()
-                    .and_then(|c| c.input)
-                    .unwrap_or(DEFAULT_PRICE);
-                let price_out = md
-                    .cost
-                    .as_ref()
-                    .and_then(|c| c.output)
-                    .unwrap_or(DEFAULT_PRICE);
-                let cache_read_price = cache_read_price(
-                    our_provider,
-                    price_in,
-                    md.cost.as_ref().and_then(|c| c.cached_input),
-                );
-                let cache_write_price = cache_write_price(
-                    our_provider,
-                    price_in,
-                    md.cost.as_ref().and_then(|c| c.cache_write),
-                );
-
-                models.push(Model {
-                    id: model_id.clone(),
-                    provider: canonical_cli_provider(our_provider).to_string(),
-                    display_name: md.name.unwrap_or_else(|| model_id.clone()),
-                    context_window: ctx,
-                    max_output_tokens: out,
-                    input_price_per_1m: price_in,
-                    output_price_per_1m: price_out,
-                    cache_read_price_per_1m: cache_read_price,
-                    cache_write_price_per_1m: cache_write_price,
-                    supports_tools: md.tool_call.unwrap_or(false),
-                    supports_vision: md.attachment.unwrap_or(false),
-                    supports_reasoning: md.reasoning.unwrap_or(false),
-                    supports_audio_input: false,
-                    supports_audio_output: false,
-                    supports_pdf: false,
-                    release_date: md.release_date.unwrap_or_default(),
-                    status: "active".into(),
-                    cloud_eligible: false, // only bundled models are cloud-eligible
-                    requires_environment: None, // models.dev has no env-gate concept
-                });
-            }
-        }
-    }
-
-    if models.is_empty() {
-        None
-    } else {
-        Some(models)
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tier 4, USER OVERRIDES from config.toml [[models]]
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// User-defined model override from config.toml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserModelOverride {
-    pub id: String,
-    pub provider: String,
-    #[serde(default)]
-    pub display_name: Option<String>,
-    #[serde(default)]
-    pub context_window: Option<usize>,
-    #[serde(default)]
-    pub max_output_tokens: Option<usize>,
-    #[serde(default)]
-    pub input_price_per_1m: Option<f64>,
-    #[serde(default)]
-    pub output_price_per_1m: Option<f64>,
-    #[serde(default)]
-    pub cache_read_price_per_1m: Option<f64>,
-    #[serde(default)]
-    pub cache_write_price_per_1m: Option<f64>,
-    #[serde(default)]
-    pub supports_tools: Option<bool>,
-    #[serde(default)]
-    pub supports_vision: Option<bool>,
-    #[serde(default)]
-    pub supports_reasoning: Option<bool>,
-}
-
-impl UserModelOverride {
-    /// Convert to a full Model with defaults for missing fields.
-    pub fn to_model(&self) -> Model {
-        Model {
-            id: self.id.clone(),
-            provider: self.provider.clone(),
-            display_name: self.display_name.clone().unwrap_or_else(|| self.id.clone()),
-            context_window: self.context_window.unwrap_or(DEFAULT_CONTEXT_WINDOW),
-            max_output_tokens: self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
-            input_price_per_1m: self.input_price_per_1m.unwrap_or(DEFAULT_PRICE),
-            output_price_per_1m: self.output_price_per_1m.unwrap_or(DEFAULT_PRICE),
-            cache_read_price_per_1m: self.cache_read_price_per_1m.unwrap_or(DEFAULT_PRICE),
-            cache_write_price_per_1m: self.cache_write_price_per_1m.unwrap_or(DEFAULT_PRICE),
-            supports_tools: self.supports_tools.unwrap_or(true),
-            supports_vision: self.supports_vision.unwrap_or(false),
-            supports_reasoning: self.supports_reasoning.unwrap_or(false),
-            supports_audio_input: false,
-            supports_audio_output: false,
-            supports_pdf: false,
-            release_date: String::new(),
-            status: "active".into(),
-            cloud_eligible: false,
-            requires_environment: None, // user overrides cannot declare env gates
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Catalog Manager, merges all 4 tiers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// The resolved model catalog. Call `load()` once at startup or `refresh()` to update.
+/// The model catalog built from the bundled shared catalog.
 pub struct Catalog {
     models: Vec<Model>,
     /// Index by model ID for O(1) lookup.
@@ -1452,73 +1110,6 @@ impl Catalog {
         Self::from_models(models)
     }
 
-    /// Load catalog: cache → bundled fallback. No network (sync).
-    pub fn load() -> Self {
-        // Try cache first
-        if let Some(cached) = read_cache() {
-            let mut catalog = Self::from_models(cached);
-            // Always overlay bundled cloud-eligible models (cache doesn't track cloud_eligible)
-            for bm in bundled_models() {
-                if bm.cloud_eligible {
-                    catalog.upsert(bm);
-                }
-            }
-            return catalog;
-        }
-        Self::bundled()
-    }
-
-    /// Load + background refresh from models.dev (non-blocking).
-    /// Returns the catalog immediately; spawns a task to fetch + update cache.
-    ///
-    /// Also checks `models_cache` (1h TTL) as an additional cache tier before
-    /// fetching from the network.
-    pub fn load_with_refresh() -> Self {
-        let catalog = Self::load();
-
-        // Spawn non-blocking background refresh
-        tokio::spawn(async {
-            // Check models_cache (separate from the model_catalog cache), if
-            // it has recent data, skip the network fetch entirely.
-            let home = crate::config::CliConfig::config_dir().ok();
-            if let Some(ref h) = home {
-                if crate::models_cache::ModelsCache::load(h).is_some() {
-                    // models_cache is fresh (within its own TTL), skip remote fetch
-                    return;
-                }
-            }
-
-            if let Some(remote_models) = fetch_remote().await {
-                // Merge: bundled models take priority, remote fills gaps
-                let mut merged = bundled_models();
-                let bundled_ids: Vec<String> = merged.iter().map(|m| m.id.clone()).collect();
-                for rm in &remote_models {
-                    if !bundled_ids.contains(&rm.id) {
-                        merged.push(rm.clone());
-                    }
-                }
-                write_cache(&merged);
-
-                // Also update models_cache with the raw JSON for cross-module use
-                if let Some(ref h) = home {
-                    let json_val = serde_json::to_value(&remote_models).unwrap_or_default();
-                    if let Err(e) = crate::models_cache::ModelsCache::save(h, &json_val) {
-                        eprintln!("[model_catalog] failed to update models_cache: {}", e);
-                    }
-                }
-            }
-        });
-
-        catalog
-    }
-
-    /// Apply user overrides (Tier 4). Call after load.
-    pub fn apply_overrides(&mut self, overrides: &[UserModelOverride]) {
-        for ov in overrides {
-            self.upsert(ov.to_model());
-        }
-    }
-
     fn from_models(models: Vec<Model>) -> Self {
         let mut index = HashMap::new();
         for (i, m) in models.iter().enumerate() {
@@ -1530,17 +1121,6 @@ impl Catalog {
             }
         }
         Self { models, index }
-    }
-
-    fn upsert(&mut self, model: Model) {
-        let key = model.id.to_lowercase();
-        if let Some(&idx) = self.index.get(&key) {
-            self.models[idx] = model;
-        } else {
-            let idx = self.models.len();
-            self.index.insert(key, idx);
-            self.models.push(model);
-        }
     }
 
     // ── Lookups ──────────────────────────────────────────────────
@@ -1609,7 +1189,7 @@ static GLOBAL_CATALOG: OnceLock<Catalog> = OnceLock::new();
 
 /// Get the global catalog (initialized on first call).
 pub fn catalog() -> &'static Catalog {
-    GLOBAL_CATALOG.get_or_init(Catalog::load)
+    GLOBAL_CATALOG.get_or_init(Catalog::bundled)
 }
 
 /// Convenience: find a model by ID.
@@ -2462,64 +2042,6 @@ mod tests {
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), count, "Duplicate model IDs");
-    }
-
-    #[test]
-    fn user_override_wins() {
-        let mut cat = Catalog::bundled();
-        let ov = UserModelOverride {
-            id: "fixture-custom-model".into(),
-            provider: "ollama".into(),
-            display_name: Some("My Model".into()),
-            context_window: Some(999_999),
-            max_output_tokens: None,
-            input_price_per_1m: None,
-            output_price_per_1m: None,
-            cache_read_price_per_1m: None,
-            cache_write_price_per_1m: None,
-            supports_tools: Some(true),
-            supports_vision: None,
-            supports_reasoning: None,
-        };
-        cat.apply_overrides(&[ov]);
-        let found = cat.find("fixture-custom-model").unwrap();
-        assert_eq!(found.context_window, 999_999);
-        assert_eq!(found.provider, "ollama");
-    }
-
-    #[test]
-    fn user_override_replaces_existing() {
-        let mut cat = Catalog::bundled();
-        let existing = cat
-            .all()
-            .first()
-            .expect("bundled catalog must contain a model")
-            .clone();
-        let ov = UserModelOverride {
-            id: existing.id.clone(),
-            provider: existing.provider,
-            display_name: Some("Fixture replacement".into()),
-            context_window: Some(500_000),
-            max_output_tokens: None,
-            input_price_per_1m: None,
-            output_price_per_1m: None,
-            cache_read_price_per_1m: None,
-            cache_write_price_per_1m: None,
-            supports_tools: None,
-            supports_vision: None,
-            supports_reasoning: None,
-        };
-        cat.apply_overrides(&[ov]);
-        let found = cat.find(&existing.id).unwrap();
-        assert_eq!(found.context_window, 500_000);
-        assert_eq!(found.display_name, "Fixture replacement");
-    }
-
-    #[test]
-    fn cache_path_is_valid() {
-        let path = cache_path();
-        assert!(path.to_string_lossy().contains(".agiworkforce"));
-        assert!(path.to_string_lossy().contains("models.json"));
     }
 
     /// rule-models-json: fast_completion_model must resolve to a model that exists

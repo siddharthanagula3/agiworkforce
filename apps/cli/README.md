@@ -75,8 +75,7 @@ agi auth-status      # confirm
 ### Runtime requirement: sandbox backend
 
 Sandboxed command execution shells out to an OS sandbox binary, and there is no
-in-process fallback, the `linux-seccomp` Cargo feature is not compiled into
-release builds and installs no filter on any exec path.
+in-process fallback.
 
 | Platform | Required binary           | Install                                                                                                            |
 | -------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |

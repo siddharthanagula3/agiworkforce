@@ -7,12 +7,6 @@
 pub mod engine;
 pub mod managed;
 
-#[cfg(target_os = "macos")]
-pub mod macos_sandbox;
-
-#[cfg(target_os = "linux")]
-pub mod linux_sandbox;
-
 #[allow(unused_imports)]
 pub use engine::{
     mcp_rule_target, remove_user_mcp_rule, set_user_mcp_rule, user_mcp_rules, PolicyDecision,

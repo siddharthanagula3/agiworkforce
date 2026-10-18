@@ -83,54 +83,6 @@ impl fmt::Display for RefreshError {
 impl std::error::Error for RefreshError {}
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Token Redaction
-// ──────────────────────────────────────────────────────────────────────────────
-
-/// Redact a token for safe display: shows first 8 + "..." + last 4 characters.
-/// Tokens shorter than 16 characters are fully redacted as "***".
-#[allow(dead_code)]
-pub fn redact_token(token: &str) -> String {
-    if token.len() < 16 {
-        return "***".to_string();
-    }
-    format!("{}...{}", &token[..8], &token[token.len() - 4..])
-}
-
-/// Wrapper for displaying an `AuthEntry` with redacted tokens.
-#[allow(dead_code)]
-pub struct RedactedAuthEntry<'a>(pub &'a AuthEntry);
-
-impl fmt::Display for RedactedAuthEntry<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            AuthEntry::OAuth {
-                refresh,
-                access,
-                expires,
-            } => {
-                write!(
-                    f,
-                    "OAuth(access={}, refresh={}, expires={})",
-                    redact_token(access),
-                    redact_token(refresh),
-                    expires,
-                )
-            }
-            AuthEntry::ApiKey { key } => {
-                write!(f, "ApiKey({})", redact_token(key))
-            }
-        }
-    }
-}
-
-impl fmt::Debug for RedactedAuthEntry<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Delegate to Display so Debug output is also redacted
-        fmt::Display::fmt(self, f)
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
 // File Permission Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -615,24 +567,6 @@ fn format_duration_ms(ms: i64) -> String {
         format!("{}s", total_secs)
     };
     format!("{}{}{}", prefix, duration, suffix)
-}
-
-/// Format duration for backward-compatible contexts that only want the short form.
-#[allow(dead_code)]
-fn format_duration_short(ms: i64) -> String {
-    if ms <= 0 {
-        return "expired".to_string();
-    }
-    let total_secs = ms / 1000;
-    let hours = total_secs / 3600;
-    let mins = (total_secs % 3600) / 60;
-    if hours > 0 {
-        format!("{}h {}m", hours, mins)
-    } else if mins > 0 {
-        format!("{}m", mins)
-    } else {
-        format!("{}s", total_secs)
-    }
 }
 
 /// Returns the current auth status for all configured providers.
@@ -1517,76 +1451,6 @@ mod tests {
         assert_eq!(format_duration_ms(-5_000), "expired 5s ago");
         assert_eq!(format_duration_ms(-300_000), "expired 5m ago");
         assert_eq!(format_duration_ms(-3_660_000), "expired 1h 1m ago");
-    }
-
-    #[test]
-    fn test_format_duration_short() {
-        assert_eq!(format_duration_short(0), "expired");
-        assert_eq!(format_duration_short(-1000), "expired");
-        assert_eq!(format_duration_short(5_000), "5s");
-        assert_eq!(format_duration_short(120_000), "2m");
-        assert_eq!(format_duration_short(8_100_000), "2h 15m");
-    }
-
-    // ── Token redaction ──
-
-    #[test]
-    fn test_redact_token_long() {
-        let token = "sk-proj-abcdefghijklmnopqrstuvwxyz1234";
-        let redacted = redact_token(token);
-        assert_eq!(redacted, "sk-proj-...1234");
-        // Must not contain the full token
-        assert!(!redacted.contains("abcdefghijklmnopqrstuvwxyz"));
-    }
-
-    #[test]
-    fn test_redact_token_short() {
-        assert_eq!(redact_token("abc"), "***");
-        assert_eq!(redact_token(""), "***");
-        assert_eq!(redact_token("0123456789abcde"), "***"); // 15 chars, below 16
-    }
-
-    #[test]
-    fn test_redact_token_exactly_16() {
-        let token = "0123456789abcdef"; // exactly 16 chars
-        let redacted = redact_token(token);
-        assert_eq!(redacted, "01234567...cdef");
-    }
-
-    #[test]
-    fn test_redacted_auth_entry_display_oauth() {
-        let entry = AuthEntry::OAuth {
-            refresh: "refresh_token_abcdef1234567890".into(),
-            access: "access_token_abcdef1234567890".into(),
-            expires: 1700000000000,
-        };
-        let display = format!("{}", RedactedAuthEntry(&entry));
-        // Must show redacted tokens
-        assert!(display.contains("access_t...7890"));
-        assert!(display.contains("refresh_...7890"));
-        // Must NOT contain full tokens
-        assert!(!display.contains("access_token_abcdef1234567890"));
-        assert!(!display.contains("refresh_token_abcdef1234567890"));
-    }
-
-    #[test]
-    fn test_redacted_auth_entry_display_api_key() {
-        let entry = AuthEntry::ApiKey {
-            key: "sk-abcdefghij1234567890".into(),
-        };
-        let display = format!("{}", RedactedAuthEntry(&entry));
-        assert!(display.contains("sk-abcde...7890"));
-        assert!(!display.contains("sk-abcdefghij1234567890"));
-    }
-
-    #[test]
-    fn test_redacted_auth_entry_debug_also_redacted() {
-        let entry = AuthEntry::ApiKey {
-            key: "sk-abcdefghij1234567890".into(),
-        };
-        let debug = format!("{:?}", RedactedAuthEntry(&entry));
-        // Debug delegates to Display, so should also be redacted
-        assert!(!debug.contains("sk-abcdefghij1234567890"));
     }
 
     #[test]

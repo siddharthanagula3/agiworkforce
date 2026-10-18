@@ -38,7 +38,6 @@ fn start() {
 function healthyTree(extra = {}) {
   return tree({
     'apps/cli/src/daemon.rs': DAEMON,
-    'apps/cli/src/a2a_ws.rs': 'fn serve() {}\n',
     'apps/cli/src/features/a2a/server.rs': 'fn serve() {}\n',
     'apps/cli/src/browser_bridge.rs':
       'pub const LOCAL_CLIENT_TOKEN_HEADER: &str = "x-local-client-token";\n',
@@ -139,8 +138,8 @@ test('dropping the daemon constant-time comparison fails', () => {
 
 test('a local server that leaves the tree fails', () => {
   const root = healthyTree();
-  rmSync(path.join(root, 'apps/cli/src/a2a_ws.rs'));
-  assert.ok(checkCliLocalSecret(root).some((failure) => /agent-to-agent websocket/.test(failure)));
+  rmSync(path.join(root, 'apps/cli/src/features/a2a/server.rs'));
+  assert.ok(checkCliLocalSecret(root).some((failure) => /agent-to-agent server/.test(failure)));
   rmSync(root, { recursive: true, force: true });
 });
 

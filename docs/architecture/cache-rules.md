@@ -104,7 +104,7 @@ correctness matters within one TTL of a change.
 ## 5. What this document does not cover
 
 Desktop and CLI local caches (`apps/desktop/src-tauri/src/data/cache/`,
-`apps/cli/src/models_cache.rs`, `apps/cli/src/tier_cache.rs`) live on the user's
+`apps/cli/src/tier_cache.rs`) live on the user's
 own machine, hold only that user's data, and are covered by
 `docs/architecture/desktop-local-runtime.md`. Provider-side prompt caching is a
 billing and latency concern rather than a store this product owns; see
