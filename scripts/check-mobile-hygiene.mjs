@@ -36,7 +36,6 @@ const allowedRootLibModules = new Set([
   'models',
   'pinning',
   'safeOpenURL',
-  'secureStorage',
   'sendQueue',
   'tagUtils',
   'v1FeatureFlags',

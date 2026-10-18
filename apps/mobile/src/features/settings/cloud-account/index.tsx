@@ -48,6 +48,7 @@ import {
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
@@ -55,7 +56,7 @@ import { useCloudProfileStore } from './cloudProfileStore';
 
 const ACCOUNT_DELETE_FAILED =
   'We could not delete your account. Check your connection and try again, ' +
-  'or contact support@agiworkforce.com.';
+  `or contact ${SUPPORT_EMAIL}.`;
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();

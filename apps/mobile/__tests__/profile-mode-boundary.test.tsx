@@ -59,14 +59,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('../lib/secureStorage', () => ({
-  secureStorage: {
-    getItem: jest.fn(async () => null),
-    setItem: jest.fn(async () => undefined),
-    removeItem: jest.fn(async () => undefined),
-  },
-}));
-
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),

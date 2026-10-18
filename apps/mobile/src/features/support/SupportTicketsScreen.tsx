@@ -21,9 +21,8 @@ import {
   TICKET_STATUS_LABEL,
 } from '@agiworkforce/cloud-contracts/support';
 import { listSupportTickets, openSupportTicket, type SupportTicketView } from './service';
+import { SUPPORT_EMAIL } from './contact';
 import { toUserMessage } from '@/services/userMessage';
-
-const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 
 function formatDate(iso: string): string {
   const at = new Date(iso);

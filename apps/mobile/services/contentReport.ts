@@ -30,6 +30,7 @@
 import { Linking } from 'react-native';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
+import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 
 export type ReportCategory =
   'harmful' | 'inaccurate' | 'offensive' | 'misinformation' | 'privacy' | 'other';
@@ -62,7 +63,6 @@ export type SaveContentReportResult = {
 };
 
 const MMKV_KEY = 'content-reports:v1';
-const SUPPORT_EMAIL = 'support@agiworkforce.com';
 const MAX_EXCERPT_LEN = 500;
 const MAX_STORED_REPORTS = 100;
 

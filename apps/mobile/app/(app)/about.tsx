@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 import pkg from '../../package.json';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
@@ -300,7 +301,7 @@ export default function AboutScreen() {
           <LinkRow
             icon={Mail}
             label="Email Support"
-            onPress={() => void openMail('mailto:contact@agiworkforce.com')}
+            onPress={() => void openMail(`mailto:${SUPPORT_EMAIL}`)}
           />
         </Card>
 

@@ -73,6 +73,7 @@ jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
 }));
 
 jest.mock('@agiworkforce/compliance', () => ({
+  ...jest.requireActual('@agiworkforce/compliance'),
   composeFirstRunDisclosure: jest.fn().mockReturnValue({
     title: 'Before you continue',
     summary: 'This app processes your data on-device.',

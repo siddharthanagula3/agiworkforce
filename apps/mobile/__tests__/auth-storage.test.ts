@@ -242,13 +242,10 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { secureStorage } from '../lib/secureStorage';
 import { useAuthStore } from '../src/features/auth/store';
 import { act } from '@testing-library/react-native';
 import { FEATURES } from '../lib/v1FeatureFlags';
 import { revokeAskIntentForSignOut } from '../src/features/siri/askIntentToken';
-
-let consoleErrorSpy: jest.SpyInstance;
 
 function getState() {
   return useAuthStore.getState();
@@ -262,150 +259,6 @@ function resetAuthStore() {
     clerkUserId: null,
   });
 }
-
-describe('secureStorage adapter', () => {
-  beforeEach(() => {
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    jest.clearAllMocks();
-  });
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-  });
-
-  describe('getItem', () => {
-    it('calls SecureStore.getItemAsync with the sanitized key', async () => {
-      mockGetItemAsync.mockResolvedValue('{"foo":"bar"}');
-
-      const result = secureStorage.getItem('auth-store');
-
-      expect(mockGetItemAsync).toHaveBeenCalledWith('auth-store');
-      await expect(result as Promise<string | null>).resolves.toBe('{"foo":"bar"}');
-    });
-
-    it('returns null when the key does not exist in secure store', async () => {
-      mockGetItemAsync.mockResolvedValue(null);
-
-      const result = secureStorage.getItem('auth-store');
-
-      await expect(result as Promise<string | null>).resolves.toBeNull();
-    });
-
-    it('sanitizes keys with special characters before calling SecureStore', async () => {
-      mockGetItemAsync.mockResolvedValue(null);
-
-      secureStorage.getItem('auth store/v2');
-
-      expect(mockGetItemAsync).toHaveBeenCalledWith('auth_store_v2');
-    });
-
-    it('passes through keys already matching [A-Za-z0-9._-] unchanged', async () => {
-      mockGetItemAsync.mockResolvedValue(null);
-
-      secureStorage.getItem('auth-store.v2_test');
-
-      expect(mockGetItemAsync).toHaveBeenCalledWith('auth-store.v2_test');
-    });
-  });
-
-  describe('setItem', () => {
-    it('calls SecureStore.setItemAsync with the sanitized key and value', async () => {
-      mockSetItemAsync.mockResolvedValue(undefined);
-
-      secureStorage.setItem('auth-store', '{"session":null}');
-
-      await Promise.resolve();
-
-      expect(mockSetItemAsync).toHaveBeenCalledWith('auth-store', '{"session":null}', {
-        keychainAccessible: WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-    });
-
-    it('sanitizes the key before writing', async () => {
-      mockSetItemAsync.mockResolvedValue(undefined);
-
-      secureStorage.setItem('auth store/v2', 'value');
-
-      await Promise.resolve();
-
-      expect(mockSetItemAsync).toHaveBeenCalledWith('auth_store_v2', 'value', expect.any(Object));
-    });
-
-    it('propagates the rejection when SecureStore.setItemAsync fails', async () => {
-      mockSetItemAsync.mockRejectedValue(new Error('Keychain unavailable'));
-
-      await expect(secureStorage.setItem('auth-store', 'value')).rejects.toThrow(
-        'Keychain unavailable',
-      );
-    });
-
-    it('persists large serialized values (>2 KB) without truncation', async () => {
-      let capturedValue: string | undefined;
-      mockSetItemAsync.mockImplementation(async (_key, value) => {
-        capturedValue = value;
-      });
-
-      const largeToken = 'x'.repeat(2500);
-      const largePayload = JSON.stringify({ session: { access_token: largeToken } });
-
-      secureStorage.setItem('auth-store', largePayload);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(capturedValue).toBe(largePayload);
-      expect((capturedValue as string).length).toBeGreaterThan(2048);
-    });
-  });
-
-  describe('removeItem', () => {
-    it('calls SecureStore.deleteItemAsync with the sanitized key', async () => {
-      mockDeleteItemAsync.mockResolvedValue(undefined);
-
-      secureStorage.removeItem('auth-store');
-
-      await Promise.resolve();
-
-      expect(mockDeleteItemAsync).toHaveBeenCalledWith('auth-store');
-    });
-
-    it('sanitizes the key before deletion', async () => {
-      mockDeleteItemAsync.mockResolvedValue(undefined);
-
-      secureStorage.removeItem('auth store/v2');
-
-      await Promise.resolve();
-
-      expect(mockDeleteItemAsync).toHaveBeenCalledWith('auth_store_v2');
-    });
-
-    it('does not throw when SecureStore.deleteItemAsync rejects (fire-and-forget)', async () => {
-      mockDeleteItemAsync.mockRejectedValue(new Error('Keychain locked'));
-
-      expect(() => secureStorage.removeItem('auth-store')).not.toThrow();
-
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  });
-
-  describe('round-trip (set then get)', () => {
-    it('retrieves exactly what was stored', async () => {
-      const stored: Record<string, string> = {};
-
-      mockSetItemAsync.mockImplementation(async (key, value) => {
-        stored[key] = value;
-      });
-      mockGetItemAsync.mockImplementation(async (key) => stored[key] ?? null);
-
-      const payload = JSON.stringify({ session: { access_token: 'test-access-token' } });
-
-      secureStorage.setItem('auth-store', payload);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      const result = await (secureStorage.getItem('auth-store') as Promise<string | null>);
-
-      expect(result).toBe(payload);
-    });
-  });
-});
 
 describe('authStore, secure storage persistence', () => {
   beforeEach(() => {
@@ -559,31 +412,5 @@ describe('authStore, secure storage persistence', () => {
     expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(
       mockClearAuthSession.mock.invocationCallOrder[0],
     );
-  });
-});
-
-describe('secureStorage key sanitization', () => {
-  const cases: Array<{ input: string; expected: string }> = [
-    { input: 'auth-store', expected: 'auth-store' },
-    { input: 'auth_store', expected: 'auth_store' },
-    { input: 'auth.store', expected: 'auth.store' },
-    { input: 'auth store', expected: 'auth_store' },
-    { input: 'auth/store', expected: 'auth_store' },
-    { input: 'auth@store!', expected: 'auth_store_' },
-    { input: 'auth:store', expected: 'auth_store' },
-    { input: '', expected: '' },
-    { input: '   ', expected: '___' },
-    { input: 'CamelCaseKey123', expected: 'CamelCaseKey123' },
-    { input: 'key-with.dots_ok', expected: 'key-with.dots_ok' },
-  ];
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGetItemAsync.mockResolvedValue(null);
-  });
-
-  test.each(cases)('sanitizeKey("$input") → "$expected"', async ({ input, expected }) => {
-    secureStorage.getItem(input);
-    expect(mockGetItemAsync).toHaveBeenCalledWith(expected);
   });
 });

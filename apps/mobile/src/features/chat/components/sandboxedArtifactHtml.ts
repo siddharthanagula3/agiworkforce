@@ -28,7 +28,7 @@ const PREVIEW_SURFACE = lightColors.background;
 const PREVIEW_TEXT = lightColors.textPrimary;
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net';
-const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11/dist/mermaid.min.js`;
+const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11.17.2/dist/mermaid.min.js`;
 
 export function buildMermaidPreviewHtml(source: string, appearance?: MermaidAppearance): string {
   const encoded = JSON.stringify(source).replace(/</g, '\\u003c');

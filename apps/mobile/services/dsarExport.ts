@@ -15,29 +15,9 @@ import { listMemoryFacts } from '@/storage/memory';
 import { listCustomInstructions } from '@/storage/customInstructions';
 import { getAllSettings } from '@/storage/settingsDb';
 import { listInstalledModels } from '@/storage/installedModels';
+import { CHINESE_HQ_PROVIDER_IDS, wrapTextExportWithMarker } from '@agiworkforce/compliance';
 import { mmkvDisclosureLedger, mmkvConsentLedger } from '@/services/complianceLedger';
 import type { Conversation, Message, MemoryFact, InstalledModel } from '@/storage/types';
-
-type WrapMarkerFn = (opts: {
-  text: string;
-  provider: string;
-  model: string;
-  generatedAt?: string;
-  contentHashSha256?: string;
-}) => string;
-
-type ComplianceModule = {
-  wrapTextExportWithMarker?: WrapMarkerFn;
-  CHINESE_HQ_PROVIDER_IDS?: string[];
-};
-
-let _compliance: ComplianceModule = {};
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  _compliance = require('@agiworkforce/compliance') as ComplianceModule;
-} catch (err) {
-  void err;
-}
 
 export function buildMarkedTranscript(
   messages: Array<{
@@ -55,13 +35,11 @@ export function buildMarkedTranscript(
   });
   const transcript = lines.join('\n\n');
 
-  if (typeof _compliance.wrapTextExportWithMarker !== 'function') return transcript;
-
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
   const provider = lastAssistant?.provider ?? 'unknown';
   const model = lastAssistant?.model ?? 'unknown';
 
-  return _compliance.wrapTextExportWithMarker({ text: transcript, provider, model });
+  return wrapTextExportWithMarker({ text: transcript, provider, model });
 }
 
 const DSAR_SCHEMA_VERSION = 1;
@@ -300,12 +278,8 @@ async function collectInstalledModels(): Promise<DsarInstalledModel[]> {
 function collectComplianceLedger(): DsarComplianceLedger {
   const disclosure = mmkvDisclosureLedger.read();
 
-  const chineseHqIds: string[] = Array.isArray(_compliance.CHINESE_HQ_PROVIDER_IDS)
-    ? _compliance.CHINESE_HQ_PROVIDER_IDS
-    : [];
-
   const consents: Record<string, unknown> = {};
-  for (const providerId of chineseHqIds) {
+  for (const providerId of CHINESE_HQ_PROVIDER_IDS) {
     const consent = mmkvConsentLedger.getNamedProviderConsent(providerId);
     consents[providerId] = consent ?? null;
   }

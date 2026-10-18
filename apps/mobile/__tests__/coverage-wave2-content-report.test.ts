@@ -184,7 +184,7 @@ describe('saveContentReport, sendEmail=true', () => {
 
     expect(openUrlSpy).toHaveBeenCalledTimes(1);
     const calledUrl: string = openUrlSpy.mock.calls[0][0] as string;
-    expect(calledUrl.startsWith('mailto:support@agiworkforce.com')).toBe(true);
+    expect(calledUrl.startsWith('mailto:contact@agiworkforce.com')).toBe(true);
     expect(calledUrl).toContain('subject=');
     expect(calledUrl).toContain('body=');
   });
@@ -297,7 +297,7 @@ describe('openSupportEmail', () => {
     await expect(openSupportEmail(report)).resolves.toBe(true);
 
     const calledUrl: string = openUrlSpy.mock.calls[0][0] as string;
-    expect(calledUrl.startsWith('mailto:support@agiworkforce.com')).toBe(true);
+    expect(calledUrl.startsWith('mailto:contact@agiworkforce.com')).toBe(true);
     expect(getContentReports()[0]?.emailHandoffOpened).toBe(true);
   });
 

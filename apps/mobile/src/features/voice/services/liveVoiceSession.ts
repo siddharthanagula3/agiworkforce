@@ -257,9 +257,7 @@ export class LiveVoiceSession {
       throw microphoneError(error);
     }
 
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
+    const peer = new RTCPeerConnection();
     const channel = peer.createDataChannel(EVENTS_CHANNEL);
     const inbox: string[] = [];
     let session: LiveVoiceSession | null = null;
