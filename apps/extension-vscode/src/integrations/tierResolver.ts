@@ -35,7 +35,7 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
 /** Re-export of the canonical {@link tierAtLeast} comparator. */
 export { tierAtLeast };
 
-function coerceTier(raw: string | undefined): Tier | undefined {
+export function coerceTier(raw: string | undefined): Tier | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.toLowerCase().replace(/-/g, '_');
   const remapped =

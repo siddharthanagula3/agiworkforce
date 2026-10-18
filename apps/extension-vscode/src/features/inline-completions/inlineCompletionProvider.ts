@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import {
-  AgiWorkforceApiError,
   AgiWorkforcePaywallError,
   AgiWorkforceUsageLimitError,
   chatCompletion,
@@ -234,12 +233,6 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
           const resetMs = resetAt === null ? Number.NaN : Date.parse(resetAt);
           if (Number.isFinite(resetMs)) this.limitPausedUntilMs = resetMs;
         }
-        return [];
-      }
-      if (error instanceof AgiWorkforceApiError && error.code === 'NO_API_KEY') {
-        return [];
-      }
-      if (error instanceof AgiWorkforceApiError && error.code === 'CANCELLED') {
         return [];
       }
       return [];

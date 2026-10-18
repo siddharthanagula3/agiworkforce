@@ -19,6 +19,7 @@ import {
   registryEffortLevels,
   supportedEffort,
   buildGroupedQuickPickItems,
+  isManagedModelAccessBlocked,
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
   providerDisplayLabel,
@@ -1546,35 +1547,15 @@ export class ChatStateManager {
             }
           | undefined;
 
+        const manualGroups: Array<{ group: (typeof groups)[number]; heading: string }> = [];
+
         for (const item of allItems) {
           if (item.modelId !== undefined && isAutoPickerModelId(item.modelId)) continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
-              const reachableOnBoundary =
-                tier === 'byok'
-                  ? 'byok'
-                  : tier === 'local' || tier === 'free' || tier === 'basic'
-                    ? 'unavailable'
-                    : 'cloud';
-              currentGroup = {
-                label:
-                  reachableOnBoundary === 'byok'
-                    ? `Your providers · ${item.label}`
-                    : reachableOnBoundary === 'cloud'
-                      ? `Managed Cloud · ${item.label}`
-                      : `Unavailable · ${item.label}`,
-                description:
-                  reachableOnBoundary === 'byok'
-                    ? 'Requests go directly to this provider using your key'
-                    : reachableOnBoundary === 'cloud'
-                      ? 'Prompts are sent to AGI infrastructure under your plan'
-                      : tier === 'free' || tier === 'basic'
-                        ? manualModelUnlockText()
-                        : 'Sign in or add a provider key to unlock these models',
-                boundary: reachableOnBoundary,
-                models: [],
-              };
+              currentGroup = { label: '', description: '', boundary: 'unavailable', models: [] };
               groups.push(currentGroup);
+              manualGroups.push({ group: currentGroup, heading: item.label });
             }
           } else if (item.modelId !== undefined) {
             if (currentGroup === undefined) {
@@ -1593,6 +1574,28 @@ export class ChatStateManager {
               ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
             });
           }
+        }
+
+        for (const { group, heading } of manualGroups) {
+          group.boundary = isManagedModelAccessBlocked(tier)
+            ? 'unavailable'
+            : tier === 'byok'
+              ? 'byok'
+              : 'cloud';
+          group.label =
+            group.boundary === 'byok'
+              ? `Your providers · ${heading}`
+              : group.boundary === 'cloud'
+                ? `Managed Cloud · ${heading}`
+                : `Unavailable · ${heading}`;
+          group.description =
+            group.boundary === 'byok'
+              ? 'Requests go directly to this provider using your key'
+              : group.boundary === 'cloud'
+                ? 'Prompts are sent to AGI infrastructure under your plan'
+                : tier === 'local'
+                  ? 'Sign in or add a provider key to unlock these models'
+                  : manualModelUnlockText();
         }
 
         this._post({ type: 'modelPickerData', payload: { groups, currentModel } });

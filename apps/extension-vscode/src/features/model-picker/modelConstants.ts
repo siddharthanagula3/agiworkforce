@@ -90,11 +90,15 @@ function manualModelOptions(
     : getSurfaceManualModelOptions(MANAGED_RUNTIME_PROFILE);
 }
 
+export function isManagedModelAccessBlocked(tier: string | undefined): boolean {
+  if (tier === undefined || tier === 'byok') return false;
+  return tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces');
+}
+
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
   if (isAutoPickerModelId(modelId)) return isAutoReachableForTier(modelId, tier);
-  if (tier === undefined) return true;
-  if (tier === 'byok') return true;
-  if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;
+  if (tier === undefined || tier === 'byok') return true;
+  if (isManagedModelAccessBlocked(tier)) return false;
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 

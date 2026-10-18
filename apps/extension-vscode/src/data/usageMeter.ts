@@ -14,36 +14,12 @@ import {
 } from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 import { Config } from '../platform/config';
+import { coerceTier } from '../integrations/tierResolver';
 
 const LOCAL_PREFIXES = ['ollama/', 'lmstudio/', 'lms/', 'local/'];
-const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
-  'local',
-  'byok',
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-  'team',
-  'team_premium',
-  'enterprise',
-]);
-
 function isLocalModel(modelId: string): boolean {
   const lower = modelId.toLowerCase();
   return LOCAL_PREFIXES.some((prefix) => lower.startsWith(prefix));
-}
-
-function coercePlanTier(raw: string | undefined): UIPlanTier | undefined {
-  if (raw === undefined) return undefined;
-  const normalized = raw.toLowerCase().replace(/-/g, '_');
-  const remapped =
-    normalized === 'hobby'
-      ? 'basic'
-      : normalized === 'pro+' || normalized === 'pro_plus'
-        ? 'max'
-        : normalized;
-  return VALID_TIERS.has(remapped) ? (remapped as UIPlanTier) : undefined;
 }
 
 export type ExtensionUsageMeter = UsageMeter & {
@@ -77,9 +53,9 @@ function bucketResetTimestamp(reading: ManagedUsageBucketReading): string | null
 }
 
 function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
-  const tier = coercePlanTier(tierInfo.tier);
+  const tier = coerceTier(tierInfo.tier);
   if (tier === undefined || tier === 'local' || tier === 'byok') return null;
-  const accountPlanTier = coercePlanTier(tierInfo.accountPlanTier) ?? tier;
+  const accountPlanTier = coerceTier(tierInfo.accountPlanTier) ?? tier;
 
   if (!canUseBillingPlanCapability(tier, 'developer_surfaces')) {
     return {
@@ -176,7 +152,7 @@ export async function resolvePlanTier(
   if (resolveActiveModel(context).isLocal) return 'local';
 
   const tierInfo = await fetchTierInfo(secrets);
-  const tier = coercePlanTier(tierInfo?.tier);
+  const tier = coerceTier(tierInfo?.tier);
   if (tier !== undefined) return tier;
 
   return 'byok';
