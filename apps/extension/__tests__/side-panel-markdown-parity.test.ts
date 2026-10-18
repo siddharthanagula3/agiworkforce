@@ -25,9 +25,9 @@ function getMessage(key: string, substitutions: string[] = []): string {
   );
 }
 
-function render(text: string): HTMLElement {
+async function render(text: string): Promise<HTMLElement> {
   const root = document.createElement('div');
-  renderMarkdownInto(root, text);
+  await renderMarkdownInto(root, text);
   return root;
 }
 
@@ -47,17 +47,30 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('lazy maths', () => {
+  it('loads the maths renderer only once an answer contains maths', async () => {
+    const styles = (): number => document.head.querySelectorAll('style').length;
+    const before = styles();
+    await render('Plain answer with `code`, a $ sign and $5 to $10.');
+    expect(styles()).toBe(before);
+    await render('Now $x^2$.');
+    expect(styles()).toBe(before + 1);
+    await render('And $y$.');
+    expect(styles()).toBe(before + 1);
+  });
+});
+
 describe('bubble width', () => {
   const sidePanel = readFileSync(join(APP_ROOT, 'src', 'side_panel.ts'), 'utf8');
 
-  it('lets every bubble shrink to the column and break an unbroken token', () => {
+  it('lets every bubble shrink to the column and break an unbroken token', async () => {
     const bubble = cssRule(sidePanel, '.sp-bubble');
     expect(bubble).toContain('min-width: 0;');
     expect(bubble).toContain('max-width: 100%;');
     expect(bubble).toContain('overflow-wrap: anywhere;');
   });
 
-  it('still scrolls fenced code sideways instead of wrapping it', () => {
+  it('still scrolls fenced code sideways instead of wrapping it', async () => {
     const pre = cssRule(sidePanel, '.sp-bubble-assistant pre');
     expect(pre).toContain('overflow-x: auto;');
     expect(pre).toContain('white-space: pre;');
@@ -65,82 +78,107 @@ describe('bubble width', () => {
 });
 
 describe('display maths', () => {
-  it('lifts a one-line $$ expression into display maths', () => {
-    const root = render('Energy:\n\n$$E = mc^2$$\n\nDone.');
+  it('lifts a one-line $$ expression into display maths', async () => {
+    const root = await render('Energy:\n\n$$E = mc^2$$\n\nDone.');
     expect(root.querySelector('.katex-display')).not.toBeNull();
     expect(root.querySelector('annotation')?.textContent).toBe('E = mc^2');
   });
 
-  it('leaves a one-line $$ inside a fenced block as code', () => {
-    const root = render('```\n$$E = mc^2$$\nsecond line\n```');
+  it('leaves a one-line $$ inside a fenced block as code', async () => {
+    const root = await render('```\n$$E = mc^2$$\nsecond line\n```');
     expect(root.querySelector('pre')?.textContent).toBe('$$E = mc^2$$\nsecond line');
     expect(root.querySelector('.katex')).toBeNull();
   });
 
-  it('leaves $$ inside inline code as code', () => {
-    const root = render('Write `$$E = mc^2$$` to get display maths.');
+  it('leaves $$ inside inline code as code', async () => {
+    const root = await render('Write `$$E = mc^2$$` to get display maths.');
     expect(root.querySelector('code')?.textContent).toBe('$$E = mc^2$$');
     expect(root.querySelector('.katex')).toBeNull();
   });
 
-  it('renders \\[ \\] as display and \\( \\) as inline maths', () => {
-    const root = render('Inline \\(a+b\\) and block:\n\n\\[\\frac{1}{2}\\]');
+  it('renders a multiline $$ block', async () => {
+    const root = await render('$$\na = b\n+ c\n$$');
+    expect(root.querySelector('.katex-display')).not.toBeNull();
+    expect(root.querySelector('annotation')?.textContent).toBe('a = b\n+ c');
+  });
+
+  it('keeps an unclosed $$ as text while the answer streams', async () => {
+    const root = await render('$$\na = b');
+    expect(root.querySelector('[data-math]')).toBeNull();
+    expect(root.textContent).toContain('$$');
+  });
+
+  it('keeps $$ inside a sentence in the paragraph', async () => {
+    const root = await render('So $$x^2$$ holds.');
+    expect(root.querySelector('p [data-math="display"] .katex-display')).not.toBeNull();
+  });
+
+  it('renders \\[ \\] as display and \\( \\) as inline maths', async () => {
+    const root = await render('Inline \\(a+b\\) and block:\n\n\\[\\frac{1}{2}\\]');
     expect(root.querySelectorAll('.katex')).toHaveLength(2);
     expect(root.querySelectorAll('.katex-display')).toHaveLength(1);
   });
 });
 
 describe('inline maths', () => {
-  it('renders $...$ with MathML for screen readers', () => {
-    const root = render('The area is $\\pi r^2$ here.');
+  it('renders $...$ with MathML for screen readers', async () => {
+    const root = await render('The area is $\\pi r^2$ here.');
     const katex = root.querySelector('p > span > .katex');
     expect(katex).not.toBeNull();
     expect(katex?.querySelector('math')).not.toBeNull();
   });
 
-  it('keeps currency as text', () => {
-    const root = render('It costs $5 to $10 a month.');
+  it('ignores a dollar glued to a word', async () => {
+    const root = await render('Use a$b$c or $HOME and $PATH.');
+    expect(root.querySelector('[data-math]')).toBeNull();
+  });
+
+  it('keeps currency as text', async () => {
+    const root = await render('It costs $5 to $10 a month.');
     expect(root.querySelector('.katex')).toBeNull();
     expect(root.textContent?.trim()).toBe('It costs $5 to $10 a month.');
   });
 
-  it('shows invalid TeX as an error span instead of throwing', () => {
-    const root = render('Broken $\\frac{1}{$ maths');
+  it('shows invalid TeX as an error span instead of throwing', async () => {
+    const root = await render('Broken $\\frac{1}{$ maths');
     expect(root.querySelector('.katex-error')).not.toBeNull();
   });
 
-  it('cannot be reached through raw html in the answer', () => {
-    const root = render('<span data-math="inline">x</span>');
+  it('cannot be reached through raw html in the answer', async () => {
+    const root = await render('<span data-math="inline">x</span>');
     expect(root.querySelector('[data-math]')).toBeNull();
     expect(root.textContent).toContain('<span data-math="inline">x</span>');
   });
 
   it('does not decorate citation markers inside maths', async () => {
     const { decorateCitations } = await import('../src/features/side-panel/sources');
-    const root = render('Index $x_{[1]}$ here');
+    const root = await render('Index $x_{[1]}$ here');
     decorateCitations(root, [{ url: 'https://example.com', title: 'Example' }]);
     expect(root.querySelector('.sp-citation')).toBeNull();
   });
 });
 
 describe('code fences', () => {
-  it('renders an unlabeled multiline fence as a code block', () => {
-    const root = render('```\nfirst\nsecond\n```');
+  it('renders an unlabeled multiline fence as a code block', async () => {
+    const root = await render('```\nfirst\nsecond\n```');
     expect(root.querySelector('.sp-code-block > pre > code')?.textContent).toBe('first\nsecond');
   });
 
-  it.each(['shell-session', 'c++', 'c#'])('reads %s as the whole language token', (language) => {
-    const html = renderMarkdown(`\`\`\`${language}\n$ make\nok\n\`\`\``);
-    expect(html).toContain('<pre><code>$ make\nok</code></pre>');
-    expect(html).not.toContain(language);
-  });
+  it.each(['shell-session', 'c++', 'c#'])(
+    'reads %s as the whole language token',
+    async (language) => {
+      const html = renderMarkdown(`\`\`\`${language}\n$ make\nok\n\`\`\``);
+      expect(html).toContain('<pre><code>$ make\nok</code></pre>');
+      expect(html).not.toContain(language);
+    },
+  );
 });
 
 describe('footnotes', () => {
   const answer = 'Water boils at 100 C.[^1] See [the method](#method).\n\n[^1]: At sea level.';
 
-  it('links each reference to its note and back, through the sanitizer id prefix', () => {
-    const root = render(answer);
+  it('links each reference to its note and back, through the sanitizer id prefix', async () => {
+    const root = await render(answer);
     const ref = root.querySelector<HTMLAnchorElement>('sup > a');
     const note = root.querySelector('section li');
     expect(ref?.textContent).toBe('[1]');
@@ -154,39 +192,74 @@ describe('footnotes', () => {
     expect(ref?.hasAttribute('target')).toBe(false);
   });
 
-  it('keeps other in-page links as written', () => {
-    const root = render(answer);
+  it('keeps other in-page links as written', async () => {
+    const root = await render(answer);
     const method = [...root.querySelectorAll('a')].find((a) => a.textContent === 'the method');
     expect(method?.getAttribute('href')).toBe('#method');
     expect(method?.hasAttribute('target')).toBe(false);
   });
 
-  it('still opens external links in a new tab', () => {
-    const root = render('[docs](https://example.com/docs)');
+  it('still opens external links in a new tab', async () => {
+    const root = await render('[docs](https://example.com/docs)');
     expect(root.querySelector('a')?.getAttribute('target')).toBe('_blank');
   });
 
-  it('gives each rendered answer its own footnote ids', () => {
-    const first = render(answer).querySelector('section li')?.id;
-    const second = render(answer).querySelector('section li')?.id;
+  it('gives each rendered answer its own footnote ids', async () => {
+    const first = (await render(answer)).querySelector('section li')?.id;
+    const second = (await render(answer)).querySelector('section li')?.id;
     expect(first).not.toBe(second);
   });
 
-  it('prefixes a raw id the sanitizer sees', () => {
+  it('prefixes a raw id the sanitizer sees', async () => {
     const clean = sanitizeHtml('<p id="location">x</p>');
     expect(clean).toContain('id="user-content-location"');
   });
 });
 
 describe('markdown images', () => {
-  it('stay links, because the extension CSP only loads images from the extension itself', () => {
+  it('stay links, because the extension CSP only loads images from the extension itself', async () => {
     const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8')) as {
       content_security_policy: { extension_pages: string };
     };
     expect(manifest.content_security_policy.extension_pages).toContain("img-src 'self' data:;");
-    const root = render('![chart](https://example.com/chart.png)');
+    const root = await render('![chart](https://example.com/chart.png)');
     expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('a')?.getAttribute('href')).toBe('https://example.com/chart.png');
+  });
+});
+
+describe('message copy', () => {
+  it('says a failed copy failed, offers a retry, and copies on the retry', async () => {
+    const { buildBubbleWithTools } = await import('../src/features/side-panel/bubbles');
+    const writeText = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('denied'))
+      .mockResolvedValueOnce(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const node = buildBubbleWithTools({
+      id: 'm1',
+      role: 'assistant',
+      content: 'the answer is 42',
+      timestamp: 0,
+    });
+    const button = node.querySelector<HTMLButtonElement>('.sp-bubble-actions .sp-copy-btn');
+    const status = node.querySelector('.sp-bubble-actions .sp-copy-status');
+    expect(button?.getAttribute('aria-label')).toBe('Copy response');
+    expect(status?.getAttribute('role')).toBe('status');
+
+    button?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(writeText).toHaveBeenCalledWith('the answer is 42');
+    expect(status?.textContent).toBe('Could not copy. Try again.');
+    expect(button?.getAttribute('aria-label')).toBe('Retry copy');
+
+    button?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(status?.textContent).toBe('');
+    expect(button?.getAttribute('aria-label')).toBe('Copy response');
+    expect(button?.classList.contains('copied')).toBe(true);
   });
 });
 
@@ -210,7 +283,7 @@ describe('code copy', () => {
       .mockResolvedValueOnce(undefined);
     stubClipboard(writeText);
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-    const root = render('```\nnpm test\n```');
+    const root = await render('```\nnpm test\n```');
     const button = root.querySelector<HTMLButtonElement>('.sp-code-block__copy');
     const status = root.querySelector('.sp-code-block__status');
     expect(button?.getAttribute('aria-label')).toBe('Copy code');
@@ -232,9 +305,9 @@ describe('code copy', () => {
     expect(root.querySelector('a[href^="mailto:"]')).toBeNull();
   });
 
-  it('reports a failure when the clipboard is unavailable', () => {
+  it('reports a failure when the clipboard is unavailable', async () => {
     stubClipboard(undefined);
-    const root = render('```\nnpm test\n```');
+    const root = await render('```\nnpm test\n```');
     root.querySelector<HTMLButtonElement>('.sp-code-block__copy')?.click();
     expect(root.querySelector('.sp-code-block__status')?.textContent).toBe(
       'The code could not be copied. Try again.',
@@ -244,7 +317,7 @@ describe('code copy', () => {
   it('clears the copied status after a moment', async () => {
     vi.useFakeTimers();
     stubClipboard(() => Promise.resolve());
-    const root = render('```\nnpm test\n```');
+    const root = await render('```\nnpm test\n```');
     root.querySelector<HTMLButtonElement>('.sp-code-block__copy')?.click();
     await settle();
     expect(root.querySelector('.sp-code-block__status')?.textContent).toBe('Copied');

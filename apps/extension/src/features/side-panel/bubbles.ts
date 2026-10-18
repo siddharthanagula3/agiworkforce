@@ -421,16 +421,30 @@ function buildCopyButton(label: string, text: () => string): HTMLElement {
     'aria-label': label,
   });
   copyBtn.appendChild(renderIcon(Copy, 11));
+  const status = el('span', { class: 'sp-copy-status', role: 'status' });
+  const setFailed = (failed: boolean): void => {
+    const current = failed ? t('spCopyRetry') : label;
+    copyBtn.title = current;
+    copyBtn.setAttribute('aria-label', current);
+    copyBtn.classList.toggle('failed', failed);
+    status.textContent = failed ? t('spCopyFailed') : '';
+  };
   copyBtn.addEventListener('click', () => {
-    navigator.clipboard
-      .writeText(text())
-      .then(() => {
+    const write = navigator.clipboard?.writeText(text());
+    if (!write) {
+      setFailed(true);
+      return;
+    }
+    write.then(
+      () => {
+        setFailed(false);
         copyBtn.classList.add('copied');
         setTimeout(() => copyBtn.classList.remove('copied'), 1500);
-      })
-      .catch(() => {});
+      },
+      () => setFailed(true),
+    );
   });
-  return copyBtn;
+  return el('span', { class: 'sp-copy-control' }, copyBtn, status);
 }
 
 function buildRegenerateControl(

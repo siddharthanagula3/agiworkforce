@@ -4277,5 +4277,17 @@
         "example": "1"
       }
     }
+  },
+  "spCopyFailed": {
+    "message": "Could not copy. Try again.",
+    "description": "Status after copying a message or response failed"
+  },
+  "spCopyRetry": {
+    "message": "Retry copy",
+    "description": "Message copy button after a failed copy"
+  },
+  "spMathUnavailable": {
+    "message": "Maths could not be displayed, so its source is shown.",
+    "description": "Tooltip on maths shown as source text because the renderer failed to load"
   }
 }
