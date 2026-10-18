@@ -18,7 +18,7 @@ import {
 
 export type ImageJobProvider = 'openai' | 'google';
 export type ImageJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
-export type ImageJobSourceSurface = 'web' | 'mobile' | 'desktop' | 'cli';
+export type ImageJobSourceSurface = 'web' | 'mobile' | 'desktop' | 'cli' | 'chrome';
 
 export interface ImageGenerationPlan {
   aspectRatio: ManagedMediaImageAspectRatio;

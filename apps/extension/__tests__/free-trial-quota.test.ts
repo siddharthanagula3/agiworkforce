@@ -1201,7 +1201,13 @@ describe('streamFreeChat, SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(fetchOpts.body as string) as Record<string, unknown>;
     expect(body[INTERACTIVE_CARD_REQUEST_KEY]).toEqual({
-      supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+      supported: [
+        'clarify.v1',
+        'image.v1',
+        'itinerary.v1',
+        'map-search.v1',
+        'product-comparison.v1',
+      ],
       canRespond: true,
     });
   });

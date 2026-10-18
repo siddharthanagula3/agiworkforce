@@ -1,4 +1,4 @@
-export type ManagedMediaSurface = 'web' | 'mobile' | 'desktop' | 'cli';
+export type ManagedMediaSurface = 'web' | 'mobile' | 'desktop' | 'cli' | 'chrome';
 export type ManagedMediaOperation = 'image' | 'video';
 
 export interface ManagedMediaIdempotencyIdentity {
@@ -8,7 +8,8 @@ export interface ManagedMediaIdempotencyIdentity {
 }
 
 const OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{8,72}$/;
-const KEY_PATTERN = /^agi\.media\.(web|mobile|desktop|cli)\.(image|video)\.([A-Za-z0-9_-]{8,72})$/;
+const KEY_PATTERN =
+  /^agi\.media\.(web|mobile|desktop|cli|chrome)\.(image|video)\.([A-Za-z0-9_-]{8,72})$/;
 const MAX_KEY_LENGTH = 128;
 
 export function createManagedMediaIdempotencyKey(

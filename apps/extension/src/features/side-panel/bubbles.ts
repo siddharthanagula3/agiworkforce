@@ -21,6 +21,7 @@ import {
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
+  type ImageCardBody,
   type InteractiveCardResponsePayload,
   type MapSearchCardBody,
 } from '@agiworkforce/types';
@@ -98,6 +99,18 @@ export interface BubbleInteractionOptions {
   imagePreviews?: readonly string[];
   fileAccess?: AnswerFileAccess;
   onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
+  artifacts?: MessageArtifactsBinding;
+}
+
+export interface MessageArtifactsBinding {
+  prose: (text: string) => string;
+  cards: HTMLElement | null;
+}
+
+function hidesEmptyAnswer(msg: ChatMessage, prose: string, artifacts?: MessageArtifactsBinding) {
+  return (
+    !prose.trim() && !msg.error && !msg.interrupted && (Boolean(artifacts?.cards) || !msg.streaming)
+  );
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -181,11 +194,39 @@ function buildMapSearchCard(
   return section;
 }
 
+function buildImageCard(
+  card: InteractiveCard,
+  body: ImageCardBody,
+  access: AnswerFileAccess | undefined,
+): HTMLElement {
+  const section = el('section', {
+    class: 'sp-interactive-card sp-interactive-card--image',
+    'aria-label': card.fallback.headline,
+    'data-card-kind': 'image.v1',
+  });
+  section.appendChild(
+    el('div', { class: 'sp-interactive-card__headline' }, card.fallback.headline),
+  );
+  const images = buildAnswerFiles(
+    body.images.map((image, index) => ({
+      key: image.assetId,
+      name: t('spImageCardFileName', [String(index + 1)]),
+      mimeType: 'image/png',
+      uri: image.url,
+      surface: 'file' as const,
+    })),
+    access,
+  );
+  if (images) section.appendChild(images);
+  return section;
+}
+
 function interactiveCardRegistry(
   access: AnswerFileAccess | undefined,
 ): InteractiveCardRegistry<HTMLElement> {
   return {
     'clarify.v1': ({ card, body, ctx }) => buildClarifyCard(card, body, ctx),
+    'image.v1': ({ card, body }) => buildImageCard(card, body, access),
     'itinerary.v1': ({ body }) => buildItineraryCard(body, access),
     'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx, access),
     'product-comparison.v1': ({ body }) => buildProductComparisonCard(body),
@@ -604,11 +645,19 @@ function appendAnswerExtras(
   if (transient) wrapper.appendChild(transient);
   const codeRun = buildCodeExecution(msg);
   if (codeRun) wrapper.appendChild(codeRun);
-  const files = buildAnswerFiles(
-    answerFiles(msg.generatedFiles, msg.agentActivity),
-    options.fileAccess,
-  );
+  const produced = answerFiles(msg.generatedFiles, msg.agentActivity);
+  const files = buildAnswerFiles(produced, options.fileAccess);
   if (files) wrapper.appendChild(files);
+  if (msg.videoTaskId && !msg.error && !produced.some((file) => file.key === msg.videoTaskId)) {
+    const progress = el('div', {
+      class: 'sp-video-progress',
+      id: `sp-video-progress-${msg.id}`,
+      role: 'status',
+    });
+    progress.appendChild(renderIcon(Loader2, 14));
+    progress.appendChild(el('span', {}, t('spVideoCreating')));
+    wrapper.appendChild(progress);
+  }
   const cards = buildInteractiveCardStack(msg, options, false);
   if (cards) wrapper.appendChild(cards);
   if (!msg.streaming) {
@@ -635,11 +684,14 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   if (isUser) {
     bubble.textContent = msg.content;
   } else {
-    fillAnswerBubble(bubble, msg.content, markers);
+    const prose = options.artifacts ? options.artifacts.prose(msg.content) : msg.content;
+    fillAnswerBubble(bubble, prose, markers);
+    bubble.hidden = hidesEmptyAnswer(msg, prose, options.artifacts);
   }
   const leadingCards = buildInteractiveCardStack(msg, options, true);
   if (leadingCards) wrapper.appendChild(leadingCards);
   wrapper.appendChild(bubble);
+  if (!isUser && options.artifacts?.cards) wrapper.appendChild(options.artifacts.cards);
 
   const errorFooter = buildErrorFooter(
     msg,
@@ -1188,16 +1240,22 @@ export function buildBubbleWithTools(
   if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
 
+  const text = textParts.join('');
+  const prose = options.artifacts ? options.artifacts.prose(text) : text;
   if (
     shouldRenderTextBubble({
-      text: textParts.join(''),
+      text: prose,
       streaming: Boolean(msg.streaming),
       interrupted: Boolean(msg.interrupted),
     })
   ) {
     const bubble = el('div', { class: bubbleClass(msg), id: `sp-bubble-${msg.id}` });
-    fillAnswerBubble(bubble, textParts.join(''), markers);
+    fillAnswerBubble(bubble, prose, markers);
+    bubble.hidden = hidesEmptyAnswer(msg, prose, options.artifacts);
     wrapper.appendChild(bubble);
+  }
+  if (msg.role === 'assistant' && options.artifacts?.cards) {
+    wrapper.appendChild(options.artifacts.cards);
   }
 
   if (toolBlocks.length > 0) {

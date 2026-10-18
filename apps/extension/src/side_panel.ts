@@ -23,7 +23,7 @@ import {
 } from '@agiworkforce/utils/composer-paste';
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
-import { agiWebUrl } from './lib/webOrigin';
+import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
@@ -139,6 +139,7 @@ import {
   buildBubbleWithTools,
   fillAnswerBubble,
   resolveManagedArtifactUrl,
+  type MessageArtifactsBinding,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
 import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
@@ -274,6 +275,19 @@ import {
   ARTIFACTS_DRAWER_CSS,
   type ArtifactsDrawerAPI,
 } from './features/side-panel/artifactsDrawer';
+import {
+  ARTIFACT_PANEL_CSS,
+  artifactProse,
+  createArtifactOutputs,
+} from './features/side-panel/artifactPanel';
+import { chromeArtifactConversationUrl } from './features/cloud-bridge/artifactsClient';
+import {
+  ChromeVideoError,
+  readChromeVideoStatus,
+  startChromeVideo,
+  VIDEO_POLL_INTERVAL_MS,
+  VIDEO_POLL_TIMEOUT_MS,
+} from './features/cloud-bridge/videoGenerationClient';
 import {
   buildCommandPalette,
   COMMAND_PALETTE_CSS,
@@ -1216,6 +1230,9 @@ function serializeMessagesForHistory() {
       : {}),
     ...(message.role === 'assistant' && message.codeExecution
       ? { codeExecution: message.codeExecution }
+      : {}),
+    ...(message.role === 'assistant' && message.videoTaskId
+      ? { videoTaskId: message.videoTaskId }
       : {}),
     ...(message.role === 'assistant' && message.sources ? { sources: message.sources } : {}),
     ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
@@ -2394,6 +2411,9 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
     }
     .sp-answer-image__frame img { display: block; max-width: 100%; height: auto; }
+    .sp-answer-video__player { display: block; width: 100%; height: auto; background: var(--agi-ext-bg); }
+    .sp-video-progress { display: inline-flex; align-items: center; gap: 8px; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-video-progress svg { animation: sp-spin var(--duration-spin) linear infinite; }
     .sp-answer-image__status {
       display: inline-flex;
       align-items: center;
@@ -6501,6 +6521,8 @@ function injectStyles(): void {
         '\n' +
         ARTIFACTS_DRAWER_CSS +
         '\n' +
+        ARTIFACT_PANEL_CSS +
+        '\n' +
         COMMAND_PALETTE_CSS +
         '\n' +
         AGIWORK_PLAN_REVIEW_CSS +
@@ -6950,7 +6972,9 @@ function renderMessages(): void {
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
     if (msg) {
+      const videoTurn = isVideoTurn(msg) || isVideoTurn(_ctx.messages[i + 1]);
       const regenerable =
+        !videoTurn &&
         lastUserIndex >= 0 &&
         (msg.role === 'user' ? i === lastUserIndex : i === _ctx.messages.length - 1) &&
         i >= lastUserIndex;
@@ -6978,7 +7002,9 @@ function renderMessages(): void {
           onRetry:
             msg.streamCancellation === 'pending'
               ? undefined
-              : (messageId) => retryFailedMessage(messageId),
+              : videoTurn
+                ? (messageId) => retryVideoTurn(messageId)
+                : (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
           quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
           ...(regenerable
@@ -6995,7 +7021,10 @@ function renderMessages(): void {
                 imagePreviews:
                   turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
               }
-            : { fileAccess: answerFileAccess }),
+            : {
+                fileAccess: answerFileAccess,
+                artifacts: messageArtifactsBinding(msg),
+              }),
           ...(msg.role === 'assistant' && i === _ctx.messages.length - 1 && !_ctx.isStreaming
             ? {
                 onRespondToCard: (cardId: string, payload: InteractiveCardResponsePayload) =>
@@ -7007,6 +7036,8 @@ function renderMessages(): void {
     }
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
+  artifactOutputs.sync(_ctx.messages);
+  resumeVideoPolling();
   renderTemporaryChatState();
 
   scrollToBottom();
@@ -7067,6 +7098,192 @@ const answerFileAccess: AnswerFileAccess = {
   },
 };
 
+const artifactOutputs = createArtifactOutputs({
+  fileAccess: answerFileAccess,
+  sandboxOrigin: ARTIFACT_SANDBOX_ORIGIN,
+  conversationId: () => _ctx.conversationId,
+  webConversationUrl: () => {
+    if (_ctx.temporaryChat) return null;
+    const conversationId = activePersistenceEntry?.cloudSync?.conversationId;
+    return conversationId && OUTBOUND_UUID_PATTERN.test(conversationId)
+      ? chromeArtifactConversationUrl(conversationId)
+      : null;
+  },
+});
+
+let composerVideoMode = false;
+const videoTurnIds = new Set<string>();
+const videoPolls = new Set<string>();
+const VIDEO_POLL_MAX_FAILURES = 3;
+const VIDEO_UPGRADE_RECOVERY: ManagedQuotaRecovery = { action: 'upgrade', href: '/pricing' };
+
+function canCreateVideos(): boolean {
+  return (
+    managedModelAccess !== null &&
+    canUseBillingPlanCapability(managedModelAccess.subscriptionTier, 'video_generation')
+  );
+}
+
+function isVideoTurn(msg: ChatMessage | undefined): boolean {
+  return Boolean(msg && (msg.videoTaskId || videoTurnIds.has(msg.id)));
+}
+
+function hasProducedVideo(msg: ChatMessage): boolean {
+  return Boolean(msg.generatedFiles?.some((file) => file.id === msg.videoTaskId));
+}
+
+function failVideoTurn(msg: ChatMessage, error: unknown): void {
+  msg.error = true;
+  if (error instanceof ChromeVideoError && error.upgradeRequired) {
+    msg.errorText = error.message;
+    msg.errorRecovery = VIDEO_UPGRADE_RECOVERY;
+  } else {
+    msg.errorText = error instanceof Error && error.message ? error.message : t('spVideoFailed');
+  }
+}
+
+function setVideoProgress(messageId: string, label: string): void {
+  const status = document.querySelector(`#sp-video-progress-${CSS.escape(messageId)} span`);
+  if (status) status.textContent = label;
+}
+
+function finishVideoTurn(): void {
+  saveMessages();
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
+}
+
+async function pollVideoTurn(msg: ChatMessage, generation: number): Promise<void> {
+  const taskId = msg.videoTaskId;
+  if (!taskId || videoPolls.has(msg.id)) return;
+  videoPolls.add(msg.id);
+  const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS;
+  const stillHere = (): boolean =>
+    _ctx.conversationGeneration === generation && _ctx.messages.includes(msg);
+  let failures = 0;
+  try {
+    while (stillHere() && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, VIDEO_POLL_INTERVAL_MS));
+      if (!stillHere()) return;
+      let task;
+      try {
+        task = await readChromeVideoStatus(taskId);
+        failures = 0;
+      } catch (error) {
+        failures += 1;
+        if (failures < VIDEO_POLL_MAX_FAILURES) continue;
+        failVideoTurn(msg, error);
+        finishVideoTurn();
+        return;
+      }
+      if (!stillHere()) return;
+      if (task.status === 'completed' && task.videoUrl) {
+        msg.generatedFiles = [
+          ...(msg.generatedFiles ?? []),
+          {
+            id: taskId,
+            file_name: t('spVideoFileName'),
+            mime_type: 'video/mp4',
+            uri: task.videoUrl,
+            byte_count: 0,
+            kind: 'video',
+            surface: 'file',
+            previewable: true,
+          },
+        ];
+        finishVideoTurn();
+        return;
+      }
+      if (task.status === 'failed' || task.status === 'timeout' || task.status === 'completed') {
+        failVideoTurn(msg, new Error(task.error ?? t('spVideoFailed')));
+        finishVideoTurn();
+        return;
+      }
+      setVideoProgress(
+        msg.id,
+        task.progress === undefined
+          ? t('spVideoCreating')
+          : t('spVideoCreatingProgress', [String(Math.round(task.progress))]),
+      );
+    }
+    if (stillHere()) setVideoProgress(msg.id, t('spVideoStillRunning'));
+  } finally {
+    videoPolls.delete(msg.id);
+  }
+}
+
+function resumeVideoPolling(): void {
+  for (const msg of _ctx.messages) {
+    if (msg.role !== 'assistant' || !msg.videoTaskId || msg.error || hasProducedVideo(msg))
+      continue;
+    void pollVideoTurn(msg, _ctx.conversationGeneration);
+  }
+}
+
+async function runVideoTurn(assistant: ChatMessage, prompt: string): Promise<void> {
+  const generation = _ctx.conversationGeneration;
+  showThinking(t('spVideoStarting'));
+  try {
+    const task = await startChromeVideo(prompt);
+    if (_ctx.conversationGeneration !== generation) return;
+    assistant.videoTaskId = task.taskId;
+  } catch (error) {
+    if (_ctx.conversationGeneration !== generation) return;
+    failVideoTurn(assistant, error);
+  } finally {
+    removeThinking();
+  }
+  finishVideoTurn();
+}
+
+function startVideoTurn(prompt: string): void {
+  advanceConversationGeneration();
+  const userMsg: ChatMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user',
+    content: prompt,
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  };
+  const assistant: ChatMessage = {
+    id: `v-${crypto.randomUUID()}`,
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+    runtime: 'managed-cloud',
+  };
+  videoTurnIds.add(assistant.id);
+  _ctx.messages.push(userMsg, assistant);
+  trimLiveMessages();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  void runVideoTurn(assistant, prompt);
+}
+
+function retryVideoTurn(messageId: string): void {
+  const index = _ctx.messages.findIndex((message) => message.id === messageId);
+  const assistant = _ctx.messages[index];
+  const userMsg = _ctx.messages[index - 1];
+  if (!assistant || userMsg?.role !== 'user') return;
+  delete assistant.error;
+  delete assistant.errorText;
+  delete assistant.errorRecovery;
+  delete assistant.videoTaskId;
+  videoTurnIds.add(assistant.id);
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
+  void runVideoTurn(assistant, userMsg.content);
+}
+
+function messageArtifactsBinding(msg: ChatMessage): MessageArtifactsBinding {
+  const view = artifactOutputs.viewFor(msg);
+  return {
+    prose: (text) => artifactProse(text, view),
+    cards: artifactOutputs.buildCards(msg),
+  };
+}
+
 function showThinking(label = t('spThinkingPreparing')): void {
   const container = document.getElementById('sp-messages')!;
 
@@ -7098,7 +7315,24 @@ function updateStreamingBubble(id: string, fullText: string): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
   const message = _ctx.messages.find((candidate) => candidate.id === id);
-  fillAnswerBubble(bubble, fullText, message ? answerSourceLists(message).markers : []);
+  if (!message) {
+    fillAnswerBubble(bubble, fullText, []);
+    scrollToBottom();
+    return;
+  }
+  const view = artifactOutputs.viewFor(message);
+  const prose = artifactProse(fullText, view);
+  fillAnswerBubble(bubble, prose, answerSourceLists(message).markers);
+  const previousCards = document.getElementById(`sp-artifact-cards-${id}`);
+  const cards = artifactOutputs.updateCards(message, previousCards);
+  if (cards && cards !== previousCards) {
+    if (previousCards) previousCards.replaceWith(cards);
+    else bubble.insertAdjacentElement('afterend', cards);
+  } else if (!cards) {
+    previousCards?.remove();
+  }
+  bubble.hidden = Boolean(cards) && !prose.trim() && !message.error;
+  artifactOutputs.sync(_ctx.messages);
   scrollToBottom();
 }
 
@@ -7997,6 +8231,20 @@ function returnFollowUpsToComposer(): void {
 
 function sendMessage(text: string, displayText?: string): void {
   if (!canAdmitComposerMessage(text)) return;
+  if (composerVideoMode) {
+    if (pendingAttachmentCount() > 0 || _ctx.pendingPageContext !== null) {
+      composerAttachmentNotices = [t('spVideoModeNoAttachments')];
+      updateAttachmentPreview();
+      return;
+    }
+    if (!canCreateVideos()) {
+      composerVideoMode = false;
+      updateAttachmentPreview();
+      return;
+    }
+    startVideoTurn(text.trim());
+    return;
+  }
   const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount());
   if (imageLimitNotice) {
     composerAttachmentNotices = [imageLimitNotice];
@@ -9202,6 +9450,37 @@ function renderComposerDocumentChip(entry: ComposerDocument): HTMLElement {
   return chip;
 }
 
+let renderVideoModeItem: () => void = () => undefined;
+
+function renderVideoModeChip(bar: HTMLElement): void {
+  if (!composerVideoMode) return;
+  const chip = el('div', { class: 'sp-attachment-chip sp-attachment-doc' });
+  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+  icon.appendChild(renderIcon(Play, 16));
+  chip.appendChild(icon);
+  const copy = el('div', { class: 'sp-attachment-doc-copy' });
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, t('spVideoModeChip')));
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, t('spVideoModeChipHint')));
+  chip.appendChild(copy);
+  const removeBtn = el(
+    'button',
+    {
+      class: 'sp-attachment-remove',
+      type: 'button',
+      title: t('spVideoModeLeave'),
+      'aria-label': t('spVideoModeLeave'),
+    },
+    '×',
+  );
+  removeBtn.addEventListener('click', () => {
+    composerVideoMode = false;
+    updateAttachmentPreview();
+    document.getElementById('sp-input')?.focus();
+  });
+  chip.appendChild(removeBtn);
+  bar.appendChild(chip);
+}
+
 function renderPendingPageChip(bar: HTMLElement): void {
   const source = _ctx.pendingPageContextSource;
   if (!_ctx.pendingPageContext || !source) return;
@@ -9242,12 +9521,14 @@ function updateAttachmentPreview(): void {
   if (!bar) return;
   clearChildren(bar);
   const pageAttached = _ctx.pendingPageContext !== null && _ctx.pendingPageContextSource !== null;
+  renderVideoModeItem();
   if (
     pendingAttachments.length === 0 &&
     pendingDocuments.length === 0 &&
     composerAttachmentNotices.length === 0 &&
     !composerContextNotice &&
     !pageAttached &&
+    !composerVideoMode &&
     composerAttachmentIntakes.size === 0
   ) {
     bar.style.display = 'none';
@@ -9255,6 +9536,7 @@ function updateAttachmentPreview(): void {
     return;
   }
   bar.style.display = 'flex';
+  renderVideoModeChip(bar);
   renderPendingPageChip(bar);
   pendingAttachments.forEach((image, index) => {
     const chip = el('div', { class: 'sp-attachment-chip', title: image.name });
@@ -10641,6 +10923,7 @@ function buildUI(): void {
   modelSelectorWrap.appendChild(modelDropdownEl);
 
   const headerRight = el('div', { id: 'sp-header-right' });
+  headerRight.appendChild(artifactOutputs.outputsEl);
 
   const historyBtn = el('button', {
     class: 'sp-icon-btn',
@@ -14724,6 +15007,7 @@ function buildUI(): void {
   );
   msgsArea.appendChild(blockedState);
 
+  chatPanel.appendChild(artifactOutputs.panelEl);
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 
@@ -16587,12 +16871,48 @@ function buildUI(): void {
     }
   });
 
+  const videoItem = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-video-item',
+    type: 'button',
+    role: 'menuitemcheckbox',
+    'aria-checked': 'false',
+  }) as HTMLButtonElement;
+  videoItem.appendChild(renderIcon(Play, 16));
+  const videoItemLabel = el('span', { class: 'sp-attach-menu-label' }, t('spVideoModeItem'));
+  videoItem.appendChild(videoItemLabel);
+  const videoItemCheck = el('span', { class: 'sp-attach-menu-check' });
+  videoItem.appendChild(videoItemCheck);
+  renderVideoModeItem = () => {
+    videoItem.hidden = managedModelAccess === null;
+    const allowed = canCreateVideos();
+    if (!allowed) composerVideoMode = false;
+    videoItem.setAttribute('role', allowed ? 'menuitemcheckbox' : 'menuitem');
+    if (allowed) videoItem.setAttribute('aria-checked', String(composerVideoMode));
+    else videoItem.removeAttribute('aria-checked');
+    videoItemLabel.textContent = allowed ? t('spVideoModeItem') : t('spVideoModeUpgrade');
+    clearChildren(videoItemCheck);
+    if (composerVideoMode) videoItemCheck.appendChild(renderIcon(Check, 14));
+  };
+  videoItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    if (!canCreateVideos()) {
+      openQuotaRecovery(VIDEO_UPGRADE_RECOVERY);
+      return;
+    }
+    composerVideoMode = !composerVideoMode;
+    updateAttachmentPreview();
+    document.getElementById('sp-input')?.focus();
+  });
+
   const attachMenuItems = [
     fileItem,
     screenshotItem,
     contextBtn,
     tabsItem,
     linkItem,
+    videoItem,
     connectorsItem,
     temporaryItem,
   ];
@@ -16609,6 +16929,7 @@ function buildUI(): void {
 
   attachBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    renderVideoModeItem();
     const isOpen = attachMenu.classList.toggle('open');
     attachBtn.setAttribute('aria-expanded', String(isOpen));
     if (isOpen) fileItem.focus();

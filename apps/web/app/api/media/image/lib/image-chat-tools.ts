@@ -43,6 +43,7 @@ const IMAGE_TOOL_SURFACES: Readonly<Record<string, ManagedMediaSurface>> = {
   web: 'web',
   desktop: 'desktop',
   mobile: 'mobile',
+  chrome: 'chrome',
 };
 const EDIT_PROVIDER: ImageProvider = 'openai';
 const MEDIA_ASSET_URL_PATTERN =

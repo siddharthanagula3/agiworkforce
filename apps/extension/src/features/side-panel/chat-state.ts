@@ -62,6 +62,7 @@ export interface SidePanelChatMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
+  videoTaskId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -100,6 +101,7 @@ export interface StoredSidePanelChatMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
+  videoTaskId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -213,6 +215,7 @@ export function hydrateStoredChatMessage(
       ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
       : {}),
     ...(message.codeExecution ? { codeExecution: { ...message.codeExecution } } : {}),
+    ...(message.videoTaskId ? { videoTaskId: message.videoTaskId } : {}),
     ...(message.attachments
       ? { attachments: message.attachments.map((attachment) => ({ ...attachment })) }
       : {}),
@@ -306,7 +309,7 @@ export function isEmptyAssistantTurn(message: SidePanelChatMessage): boolean {
   if (message.role !== 'assistant' || message.error || message.interrupted) return false;
   if (message.content.trim().length > 0) return false;
   if (message.generatedFiles?.length || message.interactiveCards?.length) return false;
-  if (message.codeExecution) return false;
+  if (message.codeExecution || message.videoTaskId) return false;
   const activity = message.agentActivity;
   if (activity?.status === 'cancelled' || activity?.status === 'paused') return false;
   return !activity?.entries.some(

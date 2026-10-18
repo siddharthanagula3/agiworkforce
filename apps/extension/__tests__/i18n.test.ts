@@ -21,6 +21,7 @@ const LOCALIZED_SOURCES = [
   'src/background.ts',
   'src/features/side-panel/projectsDrawer.ts',
   'src/features/side-panel/artifactsDrawer.ts',
+  'src/features/side-panel/artifactPanel.ts',
   'src/features/side-panel/schedulesSection.ts',
   'src/features/side-panel/planComparison.ts',
   'src/features/side-panel/voice.ts',
@@ -181,6 +182,7 @@ function withoutIdentifiers(expression: string): string {
   return (
     expression
       .replace(/\bt\(\s*'[A-Za-z0-9_]+'/g, 't(')
+      .replace(/\btPlural\(\s*'[A-Za-z0-9_]+'/g, 'tPlural(')
       .replace(/[=!]==?\s*(['"])(?:\\.|(?!\1).)*\1/g, '')
       .replace(/\bsetAttribute\(\s*'[a-z-]+'/g, 'setAttribute(')
       .replace(/\bsetManagedCloudChatState\(\s*'[a-z_]+'/g, 'setManagedCloudChatState(')

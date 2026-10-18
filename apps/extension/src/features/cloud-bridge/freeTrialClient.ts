@@ -31,6 +31,7 @@ import {
   classifyManagedQuotaErrorCode,
   effectivePlanTier,
   getDefaultModelFor,
+  IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
   normalizeBillingPlanTier,
@@ -1345,7 +1346,13 @@ export async function* streamFreeChat(
             messages: cappedMessages,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+              supported: [
+                'clarify.v1',
+                IMAGE_CARD_KIND,
+                'itinerary.v1',
+                'map-search.v1',
+                'product-comparison.v1',
+              ],
               canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
