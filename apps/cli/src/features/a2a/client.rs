@@ -4,8 +4,6 @@ use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 
-use crate::models::Message;
-
 use super::protocol::{AgentCard, TaskRequest, TaskResponse, TaskResponseStatus};
 use super::security::a2a_pinned_client;
 use super::server::DEFAULT_TASK_TIMEOUT_SECONDS;
@@ -141,16 +139,3 @@ pub async fn delegate_task(
     }
 }
 
-/// Hand off a conversation to another agent.
-#[allow(dead_code)]
-pub async fn handoff_conversation(
-    target: &AgentCard,
-    messages: Vec<Message>,
-    instructions: Option<String>,
-    auth_token: Option<&str>,
-) -> Result<()> {
-    let _ = (target, messages, instructions, auth_token);
-    bail!(
-        "A2A conversation handoff is not supported in this CLI build; use task delegation instead"
-    )
-}

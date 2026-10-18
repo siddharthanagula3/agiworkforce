@@ -790,15 +790,6 @@ impl PermissionStore {
         })
     }
 
-    /// Add a rule scoped to the current workspace.
-    #[allow(dead_code)]
-    pub fn allow_workspace(&mut self, pattern: &str) {
-        let rule = PermissionRule::new(pattern);
-        if !self.workspace_rules.contains(&rule) {
-            self.workspace_rules.push(rule);
-        }
-    }
-
     /// Reset all permissions.
     pub fn reset(&mut self) {
         self.always_allow.clear();
@@ -1514,7 +1505,7 @@ mod tests {
         store.allow_always("npm");
         store.deny_always("rm");
         store.ask_always("curl");
-        store.allow_workspace("cargo");
+        store.workspace_rules.push(PermissionRule::new("cargo"));
         store.reset();
         assert!(store.always_allow.is_empty());
         assert!(store.always_deny.is_empty());

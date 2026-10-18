@@ -16,7 +16,7 @@ pub mod security;
 pub mod server;
 
 // Re-export the public surface that callers outside this module depend on.
-pub use client::{delegate_task, fetch_agent_card, handoff_conversation};
+pub use client::{delegate_task, fetch_agent_card};
 pub use protocol::{
     A2aState, AgentCard, HandoffRequest, InFlightTask, TaskPriority, TaskRequest, TaskResponse,
     TaskResponseStatus,

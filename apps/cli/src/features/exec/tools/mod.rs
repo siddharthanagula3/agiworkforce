@@ -78,15 +78,6 @@ pub struct ToolResult {
 }
 
 impl ToolResult {
-    // AUDIT-FIX: H-8, marker accessor for callers; web_fetch wraps output in <web_fetch_result untrusted="true" ...>.
-    #[allow(dead_code)]
-    pub fn is_untrusted(&self) -> bool {
-        let output = self.output.trim_start();
-        output.starts_with("<web_fetch_result untrusted=\"true\"")
-            || output.starts_with("<skill_result untrusted=\"true\"")
-            || output.starts_with("<document_result untrusted=\"true\"")
-    }
-
     /// This result expressed as the cross-surface tool primitive (decision
     /// D-P0-5, `agiworkforce_protocol::tool_primitive`).
     ///
@@ -2882,18 +2873,6 @@ mod tests {
         });
         assert_eq!(name, "network");
         assert_eq!(args["destination"], "the network");
-    }
-
-    #[test]
-    fn skill_results_are_marked_untrusted() {
-        let result = ToolResult {
-            tool_name: "skill".to_string(),
-            success: true,
-            output: "<skill_result untrusted=\"true\" name=\"docs\">body</skill_result>"
-                .to_string(),
-        };
-
-        assert!(result.is_untrusted());
     }
 
     #[tokio::test]

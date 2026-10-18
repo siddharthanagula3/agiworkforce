@@ -140,24 +140,6 @@ pub fn format_duration_ms(ms: u64) -> String {
 // Progress bar
 // ---------------------------------------------------------------------------
 
-/// Create a progress bar with the shared terminal progress style.
-///
-/// Useful for file downloads, bulk operations, or any task with a known total.
-#[allow(dead_code)]
-pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
-    if plain_output() {
-        return announced_once(message);
-    }
-    let pb = ProgressBar::new(total);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template(ts::PROGRESS_BAR_TEMPLATE)
-            .expect("valid bar template"),
-    );
-    pb.set_message(message.to_string());
-    pb
-}
-
 // ---------------------------------------------------------------------------
 // Table formatting
 // ---------------------------------------------------------------------------
@@ -1228,7 +1210,6 @@ mod tests {
             create_spinner("Thinking").is_hidden(),
             "a spinner repainting eight frames a second is read out eight times a second"
         );
-        assert!(create_progress_bar(10, "Downloading").is_hidden());
         set_plain_output(false);
 
         assert_eq!(detect_color_level(), ColorLevel::TrueColor);

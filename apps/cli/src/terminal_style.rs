@@ -12,7 +12,6 @@ use colored::{ColoredString, Colorize};
 
 use crate::terminal_text::sanitize_terminal_text;
 
-pub const PROGRESS_BAR_TEMPLATE: &str = "{msg} [{bar:30.cyan/dim}] {pos}/{len}";
 pub const SPINNER_TEMPLATE: &str = "{spinner:.cyan} {msg}";
 
 fn clean(text: impl Into<String>) -> String {

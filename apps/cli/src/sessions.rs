@@ -653,21 +653,6 @@ pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>>
     Ok(session.messages)
 }
 
-/// Delete a managed session and its metadata.
-#[allow(dead_code)]
-pub fn delete_session(conn: &Connection, session_id: &str) -> Result<()> {
-    let path = resolve_reference_path(&conn.base_dir, session_id)?;
-    let session = load_managed_session_from_path(&path)?;
-    fs::remove_file(&path)
-        .with_context(|| format!("Failed to delete session file {}", path.display()))?;
-    let metadata = metadata_path(&conn.base_dir, &session.session_id);
-    if metadata.exists() {
-        fs::remove_file(&metadata)
-            .with_context(|| format!("Failed to delete session metadata {}", metadata.display()))?;
-    }
-    Ok(())
-}
-
 /// Rename a session, in both places a title is kept.
 ///
 /// The sidecar is what this command has always written and what the terminal's
@@ -1038,13 +1023,11 @@ mod tests {
     }
 
     #[test]
-    fn rename_and_delete_session() {
+    fn rename_session_retitles_the_listing() {
         let (_tempdir, conn) = temp_connection();
         save_session(&conn, "s2", "Old", "claude", "/", "").unwrap();
         rename_session(&conn, "s2", "New").unwrap();
         assert_eq!(list_sessions(&conn, 10).unwrap()[0].title, "New");
-        delete_session(&conn, "s2").unwrap();
-        assert!(list_sessions(&conn, 10).unwrap().is_empty());
     }
 
     #[test]
