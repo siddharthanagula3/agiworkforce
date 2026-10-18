@@ -119,7 +119,6 @@ async function respond(content: string, finishReason: string) {
     },
     jsonObjectRequest(),
     'user-1',
-    'token',
   );
   return {
     status: response.status,

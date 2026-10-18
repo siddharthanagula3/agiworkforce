@@ -420,7 +420,6 @@ export async function buildAdapterStreamResponse(
   chunks: AsyncIterable<StreamChunk>,
   processed: ProcessedRequest,
   userId: string,
-  _token: string,
   streamStartedAt: number,
   wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
   onSuccessfulTurn?: () => Promise<void>,

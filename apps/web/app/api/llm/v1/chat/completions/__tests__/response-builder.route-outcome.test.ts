@@ -162,7 +162,6 @@ describe('buildNonStreamResponse, route outcome recording', () => {
       },
       makeProcessed(),
       'user-non-stream',
-      'token-non-stream',
     );
 
     expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
@@ -185,7 +184,6 @@ describe('buildNonStreamResponse, route outcome recording', () => {
       },
       makeProcessed({ conversationId: 'conversation-non-stream' }),
       'user-non-stream',
-      'token-non-stream',
     );
 
     expect(mockRecordServedRouteAffinity).toHaveBeenCalledWith(
@@ -210,7 +208,6 @@ describe('buildNonStreamResponse, route outcome recording', () => {
       },
       makeProcessed(),
       'user-non-stream',
-      'token-non-stream',
     );
 
     expect(mockRecordServedRouteAffinity).not.toHaveBeenCalled();

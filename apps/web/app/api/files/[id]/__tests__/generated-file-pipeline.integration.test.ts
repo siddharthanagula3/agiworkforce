@@ -284,7 +284,6 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
       chunksOf(chunks),
       makeProcessed(),
       'user-gen',
-      'token',
       Date.now(),
     );
     const sse = await readAllText(response as unknown as Response);
@@ -350,7 +349,6 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
       chunksOf(chunks),
       makeProcessed(),
       'user-gen',
-      'token',
       Date.now(),
     );
     const sse = await readAllText(response as unknown as Response);
@@ -403,7 +401,6 @@ describe('generated-file byte pipeline (adapter stream → persist → serve)', 
       chunksOf(chunks),
       makeProcessed(),
       'user-gen',
-      'token',
       Date.now(),
     );
     const sse = await readAllText(response as unknown as Response);

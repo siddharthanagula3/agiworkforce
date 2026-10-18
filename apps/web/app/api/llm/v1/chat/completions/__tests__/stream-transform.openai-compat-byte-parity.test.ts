@@ -180,7 +180,6 @@ describe.each(COMPAT_PROVIDERS)(
         translateOpenAIStream(asChunks(fixture)) as AsyncIterable<StreamChunk>,
         makeProcessed(provider, model),
         'user-parity',
-        'token-parity',
         Date.now(),
         'openai-passthrough',
       );

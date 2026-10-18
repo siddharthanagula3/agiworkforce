@@ -1240,7 +1240,6 @@ async function dispatchChatCompletions(
           chunks,
           attemptProcessed,
           userId,
-          token,
           streamStartedAt,
           attemptAdapterProvider.wireMode,
           () =>
@@ -1338,7 +1337,7 @@ async function dispatchChatCompletions(
         );
       }
 
-      return buildNonStreamResponse(request, llmResponse, attemptProcessed, userId, token, () =>
+      return buildNonStreamResponse(request, llmResponse, attemptProcessed, userId, () =>
         recordManagedAutoMemoryTurn({
           request,
           userId,

@@ -117,7 +117,6 @@ async function persistedTurn(
     },
     makeProcessed(),
     'user-1',
-    'token',
   );
   return mockPersist.mock.calls[0]?.[0].snapshot as { truncated: boolean };
 }

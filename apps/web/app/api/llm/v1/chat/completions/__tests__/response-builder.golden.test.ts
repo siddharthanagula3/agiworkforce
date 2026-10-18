@@ -129,7 +129,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed({ estimatedCostCents: 100 }),
       'user-memory',
-      'token-memory',
       onSuccessfulTurn,
     );
 
@@ -149,7 +148,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed({ estimatedCostCents: 100 }),
       'user-durable',
-      'token-durable',
     );
 
     expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
@@ -188,7 +186,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-001',
-      'token-001',
     );
 
     const json = await (response as any).json();
@@ -240,7 +237,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed({ secretRedactionCount: 2 }),
       'user-001',
-      'token-001',
     );
 
     const json = await (response as any).json();
@@ -263,7 +259,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-001',
-      'token-001',
     );
 
     const json = await (response as any).json();
@@ -291,7 +286,6 @@ describe('buildNonStreamResponse golden fixture', () => {
         },
       } as any),
       'user-free',
-      'token-free',
     );
 
     expect(mockSettleFreeTrialRequest).toHaveBeenCalledWith({
@@ -342,7 +336,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-002',
-      'token-002',
     );
 
     const json = await (response as any).json();
@@ -371,7 +364,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-003',
-      'token-003',
     );
 
     const json = await (response as any).json();
@@ -399,7 +391,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-004',
-      'token-004',
     );
 
     const json = await (response as any).json();
@@ -425,7 +416,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed(),
       'user-005',
-      'token-005',
     );
 
     const json = await (response as any).json();
@@ -457,7 +447,6 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
         classifierConfidence: 0.8,
       }),
       'user-cpst',
-      'token-cpst',
     );
 
     const usage = finalizedUsage();
@@ -483,7 +472,6 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
       },
       makeProcessed(),
       'user-cpst-absent',
-      'token-cpst-absent',
     );
 
     const usage = finalizedUsage();
@@ -508,7 +496,6 @@ describe('buildNonStreamResponse CPST usage telemetry', () => {
         retries: 2,
       }),
       'user-cpst-fallback',
-      'token-cpst-fallback',
     );
 
     const usage = finalizedUsage();

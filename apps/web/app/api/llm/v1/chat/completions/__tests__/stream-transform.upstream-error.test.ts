@@ -106,7 +106,6 @@ async function wireFrames(chunks: StreamChunk[]): Promise<{ text: string; events
     chunksOf(chunks),
     makeProcessed(),
     'user-upstream',
-    'token-upstream',
     1_700_000_000_000,
     'legacy-web',
   );

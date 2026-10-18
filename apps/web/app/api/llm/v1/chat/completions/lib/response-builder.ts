@@ -71,7 +71,6 @@ export async function buildNonStreamResponse(
   },
   processed: ProcessedRequest,
   userId: string,
-  _token: string,
   onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
   const {

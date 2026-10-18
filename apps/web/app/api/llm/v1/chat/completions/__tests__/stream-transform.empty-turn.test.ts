@@ -117,7 +117,6 @@ async function run(
     chunksOf(chunks),
     makeProcessed(),
     'user-1',
-    'token',
     Date.now(),
     'legacy-web',
     async () => {

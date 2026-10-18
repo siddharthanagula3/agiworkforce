@@ -137,7 +137,6 @@ function runGroundedTurn(): Promise<Response> {
     chunksOf(groundedChunks()),
     makeProcessed(),
     'user-grounded',
-    'token-grounded',
     1_700_000_000_000,
     'legacy-web',
   ) as unknown as Promise<Response>;
@@ -267,7 +266,6 @@ describe('buildAdapterStreamResponse · text on both sides of a native search', 
       chunksOf(nativeSearchChunks()),
       { ...makeProcessed(), provider: 'anthropic' } as ProcessedRequest,
       'user-tool-step',
-      'token-tool-step',
       1_700_000_000_000,
       'legacy-web',
     )) as unknown as Response;

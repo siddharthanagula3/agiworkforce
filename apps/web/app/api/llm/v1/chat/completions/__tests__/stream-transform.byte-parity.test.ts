@@ -188,7 +188,6 @@ describe('buildAdapterStreamResponse, rich text/web_search/thinking/tool_use gol
       translateAnthropicStream(asAnthropicEvents(richEvents)),
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
     );
     const adapterBody = await collectBody(adapterResponse as any);

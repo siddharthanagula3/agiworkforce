@@ -155,7 +155,6 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
       chunksOf(SUCCESSFUL_CHUNKS),
       makeProcessed(),
       'user-direct',
-      'token-direct',
       1_700_000_000_000,
     );
     await drainResponse(response as any);
@@ -177,7 +176,6 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
       chunksOf(SUCCESSFUL_CHUNKS),
       makeProcessed({ conversationId: 'conversation-route-outcome' }),
       'user-direct',
-      'token-direct',
       1_700_000_000_000,
     );
     await drainResponse(response as any);
@@ -198,7 +196,6 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
       chunksOf(SUCCESSFUL_CHUNKS),
       makeProcessed(),
       'user-direct',
-      'token-direct',
       1_700_000_000_000,
     );
     await drainResponse(response as any);
@@ -212,7 +209,6 @@ describe('buildAdapterStreamResponse, route outcome recording', () => {
       chunksOf([{ type: 'error', code: '503', message: 'upstream failed', retryable: true }]),
       makeProcessed(),
       'user-direct',
-      'token-direct',
       1_700_000_000_000,
     );
     await drainResponse(response as any);

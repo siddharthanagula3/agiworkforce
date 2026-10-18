@@ -262,7 +262,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(toolCallFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -287,7 +286,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -317,7 +315,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -343,7 +340,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -357,7 +353,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -427,7 +422,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(logprobsFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -446,7 +440,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       chunksWithoutMeta(),
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );
@@ -464,7 +457,6 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
       translateOpenAIStream(asChunks(textFixture)) as AsyncIterable<StreamChunk>,
       makeProcessed(),
       'user-parity',
-      'token-parity',
       Date.now(),
       'openai-passthrough',
     );

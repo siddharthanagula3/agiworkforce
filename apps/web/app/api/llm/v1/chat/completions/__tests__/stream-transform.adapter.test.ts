@@ -137,7 +137,6 @@ describe('buildAdapterStreamResponse · secret redaction header', () => {
       ]),
       makeProcessed({ secretRedactionCount: 1 }),
       'user-redacted',
-      'token-redacted',
       1_700_000_000_000,
       'legacy-web',
     );
@@ -154,7 +153,6 @@ describe('buildAdapterStreamResponse · secret redaction header', () => {
       ]),
       makeProcessed(),
       'user-clean',
-      'token-clean',
       1_700_000_000_000,
       'legacy-web',
     );
@@ -175,7 +173,6 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
       ]),
       makeProcessed(),
       'user-memory',
-      'token-memory',
       1_700_000_000_000,
       'legacy-web',
       onSuccessfulTurn,
@@ -190,7 +187,6 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
       chunksOf([{ type: 'error', code: '503', message: 'upstream failed', retryable: true }]),
       makeProcessed(),
       'user-memory',
-      'token-memory',
       1_700_000_000_000,
       'legacy-web',
       failedOwner,
@@ -212,7 +208,6 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
       chunksOf(chunks),
       makeProcessed(),
       'user-001',
-      'token-001',
       1_700_000_000_000,
     );
 
@@ -251,7 +246,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ estimatedCostCents: 5 }),
       'user-002',
-      'token-002',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -304,7 +298,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
       'user-002b',
-      'token-002b',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -330,7 +323,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
       'user-002c',
-      'token-002c',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -355,7 +347,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
       'user-002d',
-      'token-002d',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -380,7 +371,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ provider: 'openrouter', estimatedCostCents: 5 }),
       'user-002e',
-      'token-002e',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -406,7 +396,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({ estimatedCostCents: 5 }),
       'user-003',
-      'token-003',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -436,7 +425,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         } as any,
       }),
       'user-004',
-      'token-004',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -483,7 +471,6 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed(),
       'user-005',
-      'token-005',
       1_700_000_000_000,
     );
     await readAllText(response as any);
@@ -522,7 +509,6 @@ describe('buildAdapterStreamResponse · TTFT timing', () => {
         chunksOf(chunks),
         makeProcessed(),
         'user-006',
-        'token-006',
         start,
       );
       await readAllText(response as any);
