@@ -162,6 +162,14 @@ function hasProvider(candidates: readonly string[] | null | undefined, value: st
   return list(candidates).some((entry) => canonicalProvider(entry) === value);
 }
 
+function providerBlocked(label: string | null | undefined): ModelAccessDecision {
+  return {
+    allowed: false,
+    code: 'provider_blocked',
+    reason: `Your workspace administrator has blocked the provider "${label}". Choose a model from an approved provider.`,
+  };
+}
+
 /**
  * Decides whether one workspace may run one model.
  *
@@ -170,12 +178,13 @@ function hasProvider(candidates: readonly string[] | null | undefined, value: st
  *   1. An explicit model block wins over everything. An administrator who names
  *      a model has said something more specific than any provider rule, and a
  *      deny is the direction that must never be overridden by accident.
- *   2. An explicit model allow beats a provider block, for the same reason in
- *      the other direction: "no Provider X except this one model" is a real
- *      policy an enterprise writes, and it cannot be expressed if the provider
- *      block swallows it.
- *   3. Provider blocks.
- *   4. Allowlists, model then provider.
+ *   2. A transport block. An aggregator the administrator blocked carries
+ *      nothing, an allowlisted model included.
+ *   3. An explicit model allow beats a vendor block: "no Provider X except this
+ *      one model" is a real policy an enterprise writes, and it cannot be
+ *      expressed if the vendor block swallows it.
+ *   4. Vendor blocks.
+ *   5. Allowlists, model then provider.
  *
  * TWO PROVIDER IDENTITIES, ASYMMETRICALLY HONOURED. A model has a VENDOR (who
  * built it) and a TRANSPORT (who carries the bytes), and when an aggregator is
@@ -233,22 +242,18 @@ export function evaluateModelAccess(
     };
   }
 
+  // A model allow excepts its vendor from a vendor block, never the transport:
+  // the administrator who blocked the aggregator did not approve this model
+  // travelling through it. The message names the identity the rule was written
+  // about, since "minimax" for a rule that said "open_router" is unactionable.
+  if (transport !== vendor && hasProvider(policy.blockedProviders, transport)) {
+    return providerBlocked(ask.transportProvider);
+  }
+
   if (has(policy.allowedModels, model)) return ALLOWED;
 
-  // Either identity denies, and the message names the one the administrator
-  // actually wrote down, telling someone their MiniMax model was refused
-  // because of "minimax" when the rule said "open_router" is unactionable.
-  const blockedLabel = hasProvider(policy.blockedProviders, vendor)
-    ? ask.provider
-    : transport !== vendor && hasProvider(policy.blockedProviders, transport)
-      ? ask.transportProvider
-      : null;
-  if (blockedLabel !== null && blockedLabel !== undefined) {
-    return {
-      allowed: false,
-      code: 'provider_blocked',
-      reason: `Your workspace administrator has blocked the provider "${blockedLabel}". Choose a model from an approved provider.`,
-    };
+  if (hasProvider(policy.blockedProviders, vendor)) {
+    return providerBlocked(ask.provider);
   }
 
   if (list(policy.allowedModels).length > 0) {
