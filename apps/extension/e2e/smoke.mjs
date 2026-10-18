@@ -603,125 +603,41 @@ try {
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
-      () =>
-        document.getElementById('sp-onboarding-overlay')?.classList.contains('visible') === true,
+      () => document.getElementById('sp-onboarding-prompt')?.classList.contains('visible') === true,
     );
-    const onboardingTitles = [
-      'This is a beta feature',
-      'Your account',
-      'Choose a default model',
-      'Memory',
-      'AGI has tab group access',
-      'Pin AGI for quick access',
-    ];
-    const initialOnboarding = await page.evaluate(() => {
-      const overlay = document.getElementById('sp-onboarding-overlay');
-      const progress = overlay?.querySelector('[role="progressbar"]');
+    const prompt = await page.evaluate(() => {
+      const element = document.getElementById('sp-onboarding-prompt');
+      const buttons = [...(element?.querySelectorAll('button') ?? [])].filter((b) => !b.hidden);
       return {
-        role: overlay?.getAttribute('role'),
-        modal: overlay?.getAttribute('aria-modal'),
-        hidden: overlay?.getAttribute('aria-hidden'),
-        inert: overlay?.hasAttribute('inert'),
-        fakeTabs: overlay?.querySelectorAll('[role="tab"], [role="tablist"]').length ?? -1,
-        progressNow: progress?.getAttribute('aria-valuenow'),
-        progressMax: progress?.getAttribute('aria-valuemax'),
-        progressText: progress?.getAttribute('aria-valuetext'),
-        groups: [...(overlay?.querySelectorAll('.sp-ob-step') ?? [])].map((group) => ({
-          step: group.getAttribute('data-step'),
-          title: group.querySelector('.sp-ob-title')?.textContent,
-          role: group.getAttribute('role'),
-          label: group.getAttribute('aria-label'),
-          hidden: group.getAttribute('aria-hidden'),
-        })),
-        accountName: Boolean(overlay?.querySelector('[data-step="1"] #sp-ob-name')),
-        modelChoices: Boolean(overlay?.querySelector('[data-step="2"] [role="radiogroup"]')),
-        memoryChoices: [
-          overlay?.querySelector('[data-step="3"] #sp-ob-memory-remember'),
-          overlay?.querySelector('[data-step="3"] #sp-ob-memory-search'),
-        ].every((input) => input?.getAttribute('type') === 'checkbox'),
+        role: element?.getAttribute('role'),
+        kind: element?.dataset['kind'],
+        label: element?.getAttribute('aria-label'),
+        actions: buttons.map((b) => b.textContent?.trim()),
+        legacyOverlay: Boolean(document.getElementById('sp-onboarding-overlay')),
       };
     });
     if (
-      initialOnboarding.role !== 'dialog' ||
-      initialOnboarding.modal !== 'true' ||
-      initialOnboarding.hidden !== 'false' ||
-      initialOnboarding.inert ||
-      initialOnboarding.fakeTabs !== 0 ||
-      initialOnboarding.progressNow !== '1' ||
-      initialOnboarding.progressMax !== String(onboardingTitles.length) ||
-      initialOnboarding.progressText !== `Step 1 of ${onboardingTitles.length}` ||
-      initialOnboarding.groups.length !== onboardingTitles.length ||
-      initialOnboarding.groups.some(
-        (group, index) =>
-          group.step !== String(index) ||
-          group.title !== onboardingTitles[index] ||
-          group.role !== 'group' ||
-          group.label !== `Step ${index + 1} of ${onboardingTitles.length}` ||
-          group.hidden !== String(index !== 0),
-      ) ||
-      !initialOnboarding.accountName ||
-      !initialOnboarding.modelChoices ||
-      !initialOnboarding.memoryChoices
+      prompt.role !== 'note' ||
+      prompt.kind !== 'review' ||
+      !prompt.label ||
+      prompt.actions.length !== 1 ||
+      prompt.legacyOverlay
     ) {
-      fail(`onboarding: invalid initial semantics ${JSON.stringify(initialOnboarding)}`);
+      fail(`onboarding: review prompt contract failed ${JSON.stringify(prompt)}`);
     }
-    await page.click('.sp-ob-btn-next');
-    await page.locator('#sp-onboarding-skip').focus();
-    await page.keyboard.press('Shift+Tab');
-    const wrappedBackward = await page.evaluate(
-      () => document.activeElement?.classList.contains('sp-ob-btn-next') === true,
+    const welcome = context.waitForEvent('page', { timeout: 8000 });
+    await page.locator('#sp-onboarding-prompt button:not([hidden])').click();
+    const welcomePage = await welcome;
+    await welcomePage.waitForLoadState('domcontentloaded');
+    if (!welcomePage.url().endsWith('/src/welcome.html')) {
+      fail(`onboarding: Review opened ${welcomePage.url()} instead of the welcome page`);
+    }
+    const closed = await page.evaluate(
+      () => document.getElementById('sp-onboarding-prompt')?.classList.contains('visible') ?? false,
     );
-    await page.keyboard.press('Tab');
-    const wrappedForward = await page.evaluate(
-      () => document.activeElement?.id === 'sp-onboarding-skip',
-    );
-    const progressed = await page.getAttribute('.sp-ob-dots', 'aria-valuenow');
-    if (!wrappedBackward || !wrappedForward || progressed !== '2') {
-      fail(
-        `onboarding: focus/progress contract failed ${JSON.stringify({ wrappedBackward, wrappedForward, progressed })}`,
-      );
-    }
-    for (let index = 1; index < onboardingTitles.length; index++) {
-      if (index > 1) await page.click('.sp-ob-btn-next');
-      const stepState = await page.evaluate(() => {
-        const active = document.querySelector('.sp-ob-step.active');
-        const progress = document.querySelector('.sp-ob-dots');
-        return {
-          title: active?.querySelector('.sp-ob-title')?.textContent,
-          step: active?.getAttribute('data-step'),
-          exposed: document.querySelectorAll('.sp-ob-step[aria-hidden="false"]').length,
-          progressNow: progress?.getAttribute('aria-valuenow'),
-          progressText: progress?.getAttribute('aria-valuetext'),
-          memoryChoices: [
-            active?.querySelector('#sp-ob-memory-remember'),
-            active?.querySelector('#sp-ob-memory-search'),
-          ].every((input) => input?.disabled === true && input.checked === false),
-        };
-      });
-      if (
-        stepState.title !== onboardingTitles[index] ||
-        stepState.step !== String(index) ||
-        stepState.exposed !== 1 ||
-        stepState.progressNow !== String(index + 1) ||
-        stepState.progressText !== `Step ${index + 1} of ${onboardingTitles.length}` ||
-        (index === 3 && !stepState.memoryChoices)
-      ) {
-        fail(`onboarding: step navigation contract failed ${JSON.stringify(stepState)}`);
-      }
-    }
-    await page.keyboard.press('Escape');
-    const dismissed = await page.evaluate(() => {
-      const overlay = document.getElementById('sp-onboarding-overlay');
-      return {
-        visible: overlay?.classList.contains('visible'),
-        hidden: overlay?.getAttribute('aria-hidden'),
-        inert: overlay?.hasAttribute('inert'),
-      };
-    });
-    if (dismissed.visible || dismissed.hidden !== 'true' || !dismissed.inert) {
-      fail(`onboarding: dismiss did not restore inert state ${JSON.stringify(dismissed)}`);
-    }
-    console.log('\n[onboarding] progress=real focusTrap=ok escapeDismiss=ok');
+    if (closed) fail('onboarding: review prompt stayed visible after Review');
+    console.log('\n[onboarding] reviewPrompt=note welcomePage=opened promptClosed=ok');
+    await welcomePage.close();
     await page.close();
   }
 
@@ -1162,7 +1078,7 @@ try {
       );
     }
     console.log(
-      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} quickMode=${composerModes.quickModePresent} authBridge=${usesNonRoutableAuthFixture ? 'fixture-failed-closed' : authBridge.success === true}`,
+      `\n[interactions] composer=ok moreMenu=${moreState.open} modelPicker=${modelOpen} quickMode=${composerModes.quickModePresent} authBridge=${usesNonRoutableAuthFixture ? 'fixture-failed-closed' : authBridge.success === true}`,
     );
     await page.close();
   }
