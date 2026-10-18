@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const { reportRefusedRoleGrant } = vi.hoisted(() => ({
+  reportRefusedRoleGrant: vi.fn(async () => {}),
+}));
+vi.mock('@/lib/services/role-grant-escalation-alert', () => ({ reportRefusedRoleGrant }));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { BUILT_IN_ORGANIZATION_ROLES } from '@agiworkforce/types';
 import {
@@ -126,6 +131,14 @@ describe('setMemberRoles', () => {
       }),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(query.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+    expect(reportRefusedRoleGrant).toHaveBeenCalledWith(
+      adapter,
+      expect.objectContaining({
+        organizationId: ORG,
+        granterUserId: 'admin-1',
+        subjectUserId: 'member-1',
+      }),
+    );
   });
 
   it('also refuses removing a role the granter could not have granted', async () => {

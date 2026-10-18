@@ -12,8 +12,7 @@ interface SecurityEvent {
   details: Record<string, unknown>;
 }
 const logSecurityEvent = vi.fn(async (_event: SecurityEvent) => {});
-const logAuthorizationFailure = vi.fn(async (..._args: unknown[]) => {});
-vi.mock('@/lib/security-audit', () => ({ logSecurityEvent, logAuthorizationFailure }));
+vi.mock('@/lib/security-audit', () => ({ logSecurityEvent }));
 
 interface SupportEmail {
   to: string;
@@ -37,6 +36,8 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
+const OWNERS_ROLE = '33333333-3333-4333-8333-333333333333';
+const READER_ROLE = '44444444-4444-4444-8444-444444444444';
 
 interface Member {
   role: 'owner' | 'admin' | 'member' | 'viewer';
@@ -47,82 +48,65 @@ interface Member {
 const world = {
   activeOrganizationId: ORG as string | null,
   members: new Map<string, Member>(),
-  policyRow: null as Record<string, unknown> | null,
-  overrides: [] as Array<Record<string, unknown>>,
   ownerEmail: 'owner@example.test' as string | null,
+  roles: [
+    { id: OWNERS_ROLE, organization_id: ORG, key: 'custom_owners', permissions: ['owners.manage'] },
+    { id: READER_ROLE, organization_id: ORG, key: 'custom_reader', permissions: ['content.read'] },
+  ],
 };
 
 function key(organizationId: string, userId: string): string {
   return `${organizationId}:${userId}`;
 }
 
-const db = {
-  query: vi.fn(async (sql: string, params: unknown[] = []) => {
-    const statement = String(sql);
-    const [first, second] = params as [string, string];
+const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+  const statement = String(sql);
+  const [first, second] = params as [string, string];
 
-    if (statement.includes("'membership:'")) {
-      return world.members.get(key(first, second))?.grants ?? [];
-    }
-    // The layered-policy read names both tables, so it must be matched first.
-    if (statement.includes('organization_admin_policies')) {
-      return world.policyRow ? [world.policyRow] : [];
-    }
-    if (statement.includes('organization_policy_overrides')) {
-      return world.overrides;
-    }
-    if (statement.includes('public.profiles')) {
-      return world.ownerEmail ? [{ email: world.ownerEmail }] : [];
-    }
-    if (statement.includes('organization_member_permissions')) {
-      const found = world.members.get(key(first, second));
-      return statement.includes('(select role')
-        ? [{ role: found?.role ?? null, permissions: found?.permissions ?? [] }]
-        : [{ permissions: found?.permissions ?? [] }];
-    }
-    if (statement.includes('from public.organization_members')) {
-      const found = world.members.get(key(first, second));
-      return found ? [{ role: found.role }] : [];
-    }
-    return [];
-  }),
+  if (statement.includes("'membership:'")) {
+    return world.members.get(key(first, second))?.grants ?? [];
+  }
+  if (statement.includes('organization_admin_policies')) return [];
+  if (statement.includes('organization_policy_overrides')) return [];
+  if (statement.includes('public.profiles')) {
+    return world.ownerEmail ? [{ email: world.ownerEmail }] : [];
+  }
+  if (statement.includes('organization_member_permissions')) {
+    const found = world.members.get(key(first, second));
+    return statement.includes('(select role')
+      ? [{ role: found?.role ?? null, permissions: found?.permissions ?? [] }]
+      : [{ permissions: found?.permissions ?? [] }];
+  }
+  if (statement.includes('from public.organization_roles')) {
+    const ids = params[0] as string[];
+    return world.roles.filter((role) => ids.includes(role.id));
+  }
+  if (statement.includes('from public.organization_members')) {
+    const found = world.members.get(key(first, second));
+    return found ? [{ role: found.role, user_id: second }] : [];
+  }
+  return [];
+});
+
+const db = {
+  query,
+  execute: vi.fn(async () => undefined),
+  transaction: async <T>(work: (tx: unknown) => Promise<T>) => work(db),
 };
 
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 
-const { authorize, authorizeInWorkspace, explainMemberAuthorization } =
-  await import('@/lib/authorization/authorize');
-const { assertNoPermissionEscalation } = await import('@/lib/authorization/escalation');
+const { explainMemberAuthorization } = await import('@/lib/authorization/authorize');
 const { isEnterpriseDenialError } = await import('@/lib/authorization/denial');
 const { requireMemberPermission, requirePermission } =
   await import('@/lib/services/organization-permission-service');
+const { setMemberRoles } = await import('@/lib/services/organization-role-service');
 
 function member(role: Member['role'], permissions: string[], grantSource: string): Member {
   return { role, permissions, grants: [{ source: grantSource, permissions }] };
 }
 
-function policyRow(controls: Record<string, unknown>, revision = 4, overrideCount = 0) {
-  return {
-    organization_id: ORG,
-    default_privacy_mode: 'byok',
-    allowed_privacy_modes: ['local', 'byok'],
-    allow_managed_compute: false,
-    require_local_to_byok_preview: true,
-    chat_sync_surfaces: ['web'],
-    allow_cli_cloud_sync: false,
-    allow_vscode_cloud_sync: false,
-    allow_chrome_cloud_sync: false,
-    audit_export_enabled: true,
-    retention_days: 365,
-    retention_enforced: false,
-    external_sharing_enabled: true,
-    allow_memory: false,
-    metadata: { controls },
-    updated_at: '2026-09-17T00:00:00.000Z',
-    revision,
-    override_count: overrideCount,
-  };
-}
+const DENIED = 'Your workspace role does not allow that.';
 
 async function denialOf(work: Promise<unknown>): Promise<Record<string, unknown>> {
   try {
@@ -141,8 +125,6 @@ async function denialOf(work: Promise<unknown>): Promise<Record<string, unknown>
 beforeEach(() => {
   vi.clearAllMocks();
   world.activeOrganizationId = ORG;
-  world.policyRow = null;
-  world.overrides = [];
   world.ownerEmail = 'owner@example.test';
   world.members = new Map([
     [key(ORG, 'u-owner'), member('owner', [...ALL_PERMISSIONS], 'membership:primary_owner')],
@@ -185,34 +167,29 @@ const ALL_PERMISSIONS = [
 
 describe('L1 Security - direct API bypass', () => {
   test('SECURITY: a viewer calling the API directly is refused the permission the UI hides', async () => {
-    const denial = await denialOf(authorize('u-viewer', { permission: 'policy.manage' }));
+    const denial = await denialOf(
+      requireMemberPermission(ORG, 'u-viewer', 'policy.manage', DENIED),
+    );
     expect(denial['status']).toBe(403);
     expect(denial['code']).toBe('permission_denied');
     expect(denial['stage']).toBe('permission');
     expect(denial['requiredPermission']).toBe('policy.manage');
+    expect(denial['message']).toBe(DENIED);
   });
 
   test('SECURITY: naming another workspace in the request is refused, not honoured', async () => {
     const denial = await denialOf(
-      authorizeInWorkspace('u-outsider', ORG, { permission: 'policy.manage' }),
+      requireMemberPermission(ORG, 'u-outsider', 'policy.manage', DENIED),
     );
     expect(denial['code']).toBe('not_a_member');
     expect(denial['stage']).toBe('membership');
   });
 
   test('SECURITY: being the creator of a workspace is not itself authorization', async () => {
-    world.members.delete(key(ORG, 'u-creator'));
-    const denial = await denialOf(authorize('u-creator', { permission: 'content.read' }));
-    expect(denial['code']).toBe('not_a_member');
-  });
-
-  test('SECURITY: the route helper and the library refuse on the same facts', async () => {
-    const viaService = await denialOf(
-      requireMemberPermission(ORG, 'u-viewer', 'policy.manage', 'Your workspace role does not.'),
+    const denial = await denialOf(
+      requireMemberPermission(ORG, 'u-creator', 'content.read', DENIED),
     );
-    expect(viaService['status']).toBe(403);
-    expect(viaService['code']).toBe('permission_denied');
-    expect(viaService['message']).toBe('Your workspace role does not.');
+    expect(denial['code']).toBe('not_a_member');
   });
 
   test('SECURITY: an ownership permission is refused to a non-Primary-Owner who was granted it', async () => {
@@ -221,20 +198,22 @@ describe('L1 Security - direct API bypass', () => {
       permissions: ['content.read', 'workspace.delete'],
       grants: [{ source: 'role:custom', permissions: ['content.read', 'workspace.delete'] }],
     });
-    const denial = await denialOf(authorize('u-escalated', { permission: 'workspace.delete' }));
+    const denial = await denialOf(
+      requireMemberPermission(ORG, 'u-escalated', 'workspace.delete', DENIED),
+    );
     expect(denial['code']).toBe('primary_owner_only');
   });
 
   test('HAPPY_PATH: the Primary Owner keeps the three ownership permissions', async () => {
-    const facts = await authorize('u-owner', { permission: 'workspace.delete' });
-    expect(facts.isPrimaryOwner).toBe(true);
+    const permissions = await requireMemberPermission(ORG, 'u-owner', 'workspace.delete', DENIED);
+    expect(permissions.has('workspace.delete')).toBe(true);
   });
 });
 
 describe('L1 Security - Analytics Viewer content-access leakage', () => {
   test('SECURITY: a viewer added for analytics cannot share, govern or export', async () => {
     for (const permission of ['content.share', 'content.govern', 'sharing.manage'] as const) {
-      const denial = await denialOf(authorize('u-viewer', { permission }));
+      const denial = await denialOf(requireMemberPermission(ORG, 'u-viewer', permission, DENIED));
       expect(denial['code'], permission).toBe('permission_denied');
     }
   });
@@ -245,7 +224,9 @@ describe('L1 Security - Analytics Viewer content-access leakage', () => {
       permissions: ['audit.read'],
       grants: [{ source: 'role:analytics_viewer', permissions: ['audit.read'] }],
     });
-    const denial = await denialOf(authorize('u-analytics', { permission: 'content.read' }));
+    const denial = await denialOf(
+      requireMemberPermission(ORG, 'u-analytics', 'content.read', DENIED),
+    );
     expect(denial['code']).toBe('permission_denied');
     const explanation = await explainMemberAuthorization(db as never, ORG, 'u-analytics');
     expect(explanation.permissions).toEqual(['audit.read']);
@@ -276,80 +257,49 @@ describe('L1 Security - Analytics Viewer content-access leakage', () => {
   });
 });
 
-describe('L1 Security - policy outranks the permission grid', () => {
-  test('SECURITY: an organization-wide feature deny survives a user exception that lifts it', async () => {
-    world.policyRow = policyRow({ featureAccess: { browser: false } }, 9, 1);
-    world.overrides = [
-      {
-        id: 'o-1',
-        organization_id: ORG,
-        subject_type: 'user',
-        subject_id: 'u-admin',
-        layer: { featureAccess: { browser: true } },
-        updated_at: '2026-09-17T00:00:00.000Z',
-      },
-    ];
+describe('L1 Security - self escalation through the role-assignment path', () => {
+  const ADMIN_HOLDS = new Set(['content.read', 'members.manage']);
 
-    const denial = await denialOf(authorize('u-admin', { feature: 'browser' }));
-    expect(denial['code']).toBe('feature_disabled');
-    expect(denial['stage']).toBe('policy');
-    expect(denial['policyRevision']).toBe(9);
-  });
+  function assign(subjectUserId: string, roleIds: string[]) {
+    return setMemberRoles(db as never, {
+      organizationId: ORG,
+      userId: subjectUserId,
+      roleIds,
+      actorUserId: 'u-admin',
+      actorPermissions: ADMIN_HOLDS,
+    });
+  }
 
-  test('SECURITY: the rule version travels with the decision', async () => {
-    world.policyRow = policyRow({ maxReasoningEffort: 'low' }, 12);
-    const facts = await authorize('u-admin');
-    expect(facts.policyRevision).toBe(12);
-    expect(facts.controls.revision).toBe(12);
-    expect(facts.controls.blockingRules.some((rule) => rule.scope === 'workspace')).toBe(true);
-  });
-});
+  function inserts(): number {
+    return query.mock.calls.filter(([sql]) => String(sql).includes('insert into')).length;
+  }
 
-describe('L1 Security - self escalation', () => {
-  const escalation = {
-    db: db as never,
-    organizationId: ORG,
-    granterUserId: 'u-admin',
-    subjectUserId: 'u-admin',
-    granterPermissions: ['content.read', 'members.manage'] as const,
-    requestedPermissions: ['owners.manage'] as const,
-  };
-
-  test('SECURITY: granting yourself a permission you lack is refused', async () => {
-    const denial = await denialOf(assertNoPermissionEscalation({ ...escalation }));
-    expect(denial['code']).toBe('self_escalation_denied');
-    expect(denial['blockingRule']).toBe('owners.manage');
+  test('SECURITY: granting yourself a permission you lack is refused and nothing is written', async () => {
+    await expect(assign('u-admin', [OWNERS_ROLE])).rejects.toMatchObject({ statusCode: 403 });
+    expect(inserts()).toBe(0);
   });
 
   test('SECURITY: the attempt raises a critical security event and alerts the workspace', async () => {
-    await expect(assertNoPermissionEscalation({ ...escalation })).rejects.toThrow();
+    await expect(assign('u-admin', [OWNERS_ROLE])).rejects.toThrow();
     expect(logSecurityEvent).toHaveBeenCalledTimes(1);
-    const event = logSecurityEvent.mock.calls[0]?.[0] as {
-      severity: string;
-      details: Record<string, unknown>;
-    };
+    const event = logSecurityEvent.mock.calls[0]?.[0] as SecurityEvent;
     expect(event.severity).toBe('critical');
     expect(event.details['escalatedPermissions']).toEqual(['owners.manage']);
     expect(sendSupportEmail).toHaveBeenCalledTimes(1);
-    const mail = sendSupportEmail.mock.calls[0]?.[0] as { to: string; text: string };
+    const mail = sendSupportEmail.mock.calls[0]?.[0] as SupportEmail;
     expect(mail.to).toBe('owner@example.test');
     expect(mail.text).toContain('owners.manage');
   });
 
   test('SECURITY: a grant inside the permissions the granter holds is allowed through', async () => {
-    const allowed = await assertNoPermissionEscalation({
-      ...escalation,
-      subjectUserId: 'u-viewer',
-      requestedPermissions: ['content.read'] as const,
-    });
-    expect(allowed).toBeNull();
+    const change = await assign('u-viewer', [READER_ROLE]);
+    expect(change).toEqual({ added: [READER_ROLE], removed: [] });
+    expect(logSecurityEvent).not.toHaveBeenCalled();
     expect(sendSupportEmail).not.toHaveBeenCalled();
   });
 
   test('SECURITY: granting somebody else more than you hold is refused without the self-grant alert', async () => {
-    await expect(
-      assertNoPermissionEscalation({ ...escalation, subjectUserId: 'u-viewer' }),
-    ).rejects.toThrow();
+    await expect(assign('u-viewer', [OWNERS_ROLE])).rejects.toMatchObject({ statusCode: 403 });
     expect(logSecurityEvent).toHaveBeenCalledTimes(1);
     expect(sendSupportEmail).not.toHaveBeenCalled();
   });

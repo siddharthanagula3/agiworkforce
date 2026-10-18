@@ -2,51 +2,17 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  evaluateAuthorization,
   explainAuthorization,
   isOrganizationPermission,
   resolveEffectivePermissions,
-  type AuthorizationAsk,
   type AuthorizationExplanation,
   type OrganizationPermission,
   type PermissionGrant,
 } from '@agiworkforce/types';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { EnterpriseDenialError } from '@/lib/authorization/denial';
 import {
   resolveAuthorizationFacts,
-  type AuthorizationFacts,
   type AuthorizationSubjectOptions,
 } from '@/lib/authorization/subject';
-
-export interface AuthorizeOptions extends AuthorizationSubjectOptions {
-  db?: DatabaseAdapter;
-}
-
-// The single authorization call. Nothing else may re-derive an answer from a
-// role name, a membership row or an isAdmin boolean.
-export async function authorize(
-  userId: string,
-  ask: AuthorizationAsk = {},
-  options: AuthorizeOptions = {},
-): Promise<AuthorizationFacts> {
-  const db = options.db ?? getNeonDb();
-  const facts = await resolveAuthorizationFacts(db, userId, options);
-  const decision = evaluateAuthorization(facts, ask);
-  if (!decision.allowed) throw new EnterpriseDenialError(decision.denial);
-  return facts;
-}
-
-// For routes that name an organization in their path or body. Naming a
-// workspace you do not belong to is refused exactly as selecting it would be.
-export async function authorizeInWorkspace(
-  userId: string,
-  organizationId: string,
-  ask: AuthorizationAsk = {},
-  options: AuthorizeOptions = {},
-): Promise<AuthorizationFacts> {
-  return authorize(userId, ask, { ...options, organizationId });
-}
 
 const GRANT_SOURCES = `
   with membership as (

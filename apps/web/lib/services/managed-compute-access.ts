@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { WorkspaceFeature } from '@agiworkforce/types';
+import { isEnterprisePlanTier, type WorkspaceFeature } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
@@ -26,8 +26,6 @@ import {
   type EnterpriseCollectionAccessState,
 } from '@/lib/services/subscription-access-policy';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
-
-const ENTERPRISE_PLAN_TIER = 'enterprise';
 
 interface ScopedRequest {
   headers: { get(name: string): string | null };
@@ -75,10 +73,9 @@ export async function evaluateManagedComputeSubscriptionAccess(
 ): Promise<ManagedComputeAccessDecision> {
   if (!subscription || isFreePlanTier(subscription.plan_tier)) return SUBSCRIPTION_ALLOWED;
 
-  const enterpriseCollection =
-    subscription.plan_tier?.toLowerCase() === ENTERPRISE_PLAN_TIER
-      ? await resolveEnterpriseCollectionAccessState(db, userId)
-      : undefined;
+  const enterpriseCollection = isEnterprisePlanTier(subscription.plan_tier?.toLowerCase())
+    ? await resolveEnterpriseCollectionAccessState(db, userId)
+    : undefined;
 
   const access = resolveSubscriptionAccess(
     subscription.status,

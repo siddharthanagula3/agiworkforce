@@ -9,6 +9,7 @@ import {
   type OrganizationPermission,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { reportRefusedRoleGrant } from '@/lib/services/role-grant-escalation-alert';
 
 export interface OrganizationRoleSummary {
   id: string;
@@ -323,24 +324,49 @@ async function readGrantableRoles(
   return rows;
 }
 
-function assertRoleChangesWithinActor(
+interface RoleChangeCheck {
+  added: string[];
+  removed: string[];
+  missing: string[];
+  escalated: string[];
+}
+
+function roleChangesWithinActor(
   current: readonly string[],
   next: readonly string[],
   roles: ReadonlyMap<string, RoleRow>,
   actorPermissions: ReadonlySet<string>,
-): { added: string[]; removed: string[] } {
+): RoleChangeCheck {
   const added = next.filter((id) => !current.includes(id));
   const removed = current.filter((id) => !next.includes(id));
-  const touched = [...added, ...removed].flatMap((id) => roles.get(id)?.permissions ?? []);
-  const missing = missingOrganizationPermissions(actorPermissions, touched);
-  if (missing.length > 0) {
-    throw createError
-      .forbidden(
-        `You cannot grant or remove a role carrying permissions you do not hold: ${missing.join(', ')}.`,
-      )
-      .asUserSafe();
+  const permissionsOf = (ids: readonly string[]) =>
+    ids.flatMap((id) => roles.get(id)?.permissions ?? []);
+  return {
+    added,
+    removed,
+    missing: missingOrganizationPermissions(
+      actorPermissions,
+      permissionsOf([...added, ...removed]),
+    ),
+    escalated: missingOrganizationPermissions(actorPermissions, permissionsOf(added)),
+  };
+}
+
+// The refusal is decided inside the transaction and raised after it, so the
+// attempt is reported without holding the member row lock.
+async function refuseRoleChange(
+  db: DatabaseAdapter,
+  check: RoleChangeCheck,
+  grant: { organizationId: string; granterUserId: string; subjectUserId: string | null },
+): Promise<never> {
+  if (check.escalated.length > 0) {
+    await reportRefusedRoleGrant(db, { ...grant, escalatedPermissions: check.escalated });
   }
-  return { added, removed };
+  throw createError
+    .forbidden(
+      `You cannot grant or remove a role carrying permissions you do not hold: ${check.missing.join(', ')}.`,
+    )
+    .asUserSafe();
 }
 
 export async function listMemberRoleGrants(
@@ -372,7 +398,7 @@ export async function setMemberRoles(
   },
 ): Promise<{ added: string[]; removed: string[] }> {
   const nextIds = [...new Set(input.roleIds)];
-  return db.transaction(async (tx) => {
+  const check = await db.transaction(async (tx) => {
     const [member] = await tx.query<{ user_id: string }>(
       `select user_id from public.organization_members
         where organization_id = $1 and user_id = $2
@@ -391,12 +417,13 @@ export async function setMemberRoles(
     const roles = await readGrantableRoles(tx, input.organizationId, [
       ...new Set([...nextIds, ...currentIds]),
     ]);
-    const change = assertRoleChangesWithinActor(
+    const change = roleChangesWithinActor(
       currentIds,
       nextIds,
       new Map(roles.map((role) => [role.id, role])),
       input.actorPermissions,
     );
+    if (change.missing.length > 0) return change;
     if (change.removed.length > 0) {
       await tx.query(
         `delete from public.organization_member_roles
@@ -415,6 +442,14 @@ export async function setMemberRoles(
     }
     return change;
   });
+  if (check.missing.length > 0) {
+    return refuseRoleChange(db, check, {
+      organizationId: input.organizationId,
+      granterUserId: input.actorUserId,
+      subjectUserId: input.userId,
+    });
+  }
+  return { added: check.added, removed: check.removed };
 }
 
 export interface DirectoryGroupRoleSummary {
@@ -674,7 +709,7 @@ export async function setDirectoryGroupRoles(
   },
 ): Promise<{ added: string[]; removed: string[] }> {
   const nextIds = [...new Set(input.roleIds)];
-  return db.transaction(async (tx) => {
+  const check = await db.transaction(async (tx) => {
     await requireDirectoryGroup(tx, input.organizationId, input.groupId);
     const currentRows = await tx.query<{ role_id: string }>(
       `select role_id from public.organization_group_roles
@@ -685,12 +720,13 @@ export async function setDirectoryGroupRoles(
     const roles = await readGrantableRoles(tx, input.organizationId, [
       ...new Set([...nextIds, ...currentIds]),
     ]);
-    const change = assertRoleChangesWithinActor(
+    const change = roleChangesWithinActor(
       currentIds,
       nextIds,
       new Map(roles.map((role) => [role.id, role])),
       input.actorPermissions,
     );
+    if (change.missing.length > 0) return change;
     if (change.removed.length > 0) {
       await tx.query(
         `delete from public.organization_group_roles
@@ -709,6 +745,14 @@ export async function setDirectoryGroupRoles(
     }
     return change;
   });
+  if (check.missing.length > 0) {
+    return refuseRoleChange(db, check, {
+      organizationId: input.organizationId,
+      granterUserId: input.actorUserId,
+      subjectUserId: null,
+    });
+  }
+  return { added: check.added, removed: check.removed };
 }
 
 export async function setDirectoryGroupManagers(

@@ -1,9 +1,8 @@
 import {
+  isEnterprisePlanTier,
   isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
 } from '@agiworkforce/types';
-
-const ENTERPRISE_PLAN_TIER = 'enterprise';
 
 export const CHARGEBACK_STORED_STATUS = 'past_due';
 
@@ -61,7 +60,7 @@ export function resolveSubscriptionAccess(
   const normalized = normalize(status);
   const normalizedTier = normalize(planTier);
   const entitled =
-    normalizedTier === ENTERPRISE_PLAN_TIER && enterpriseCollection
+    isEnterprisePlanTier(normalizedTier) && enterpriseCollection
       ? isEntitledSubscriptionStatusForTier(
           normalizedTier,
           normalized,
