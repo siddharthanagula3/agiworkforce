@@ -41,7 +41,6 @@ import {
   classifyManagedQuotaErrorCode,
   formatCredits,
   formatUsageResetIn,
-  getBillingPlanPricing,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -10995,9 +10994,6 @@ function buildUI(): void {
   });
   headerRight.appendChild(newChatBtn);
 
-  const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
-  headerRight.appendChild(quotaBadgeSlot);
-
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-menu-btn',
@@ -14182,19 +14178,6 @@ function buildUI(): void {
     drawerMenu.appendChild(row);
   }
 
-  const quotaBadgeEl = el('button', {
-    id: 'sp-quota-badge',
-    type: 'button',
-    title: 'AGI Cloud plan',
-    'aria-label': 'AGI Cloud plan and usage, open menu',
-  });
-  quotaBadgeEl.addEventListener('click', () => {
-    openDrawer(quotaBadgeEl);
-  });
-  const quotaSlot = document.getElementById('sp-quota-badge-slot');
-  if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
-  else document.body.appendChild(quotaBadgeEl);
-
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearUsageResetTimer(): void {
@@ -14297,7 +14280,6 @@ function buildUI(): void {
     const views = usageWindowViews(usage);
     const purchased = purchasedCreditsView(usage);
     const recovery = planQuotaRecovery(managedPlanTier(access));
-    const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
     const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier));
     quotaWrap.dataset['upgradeOnly'] = String(upgradeOnly);
     clearChildren(quotaWindowsEl);
@@ -14308,14 +14290,10 @@ function buildUI(): void {
     renderPlanComparison(access.subscriptionTier);
     planCompareEl.hidden = upgradeOnly;
     quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
-    quotaBadgeEl.classList.toggle('visible', !upgradeOnly);
 
     if (usage.usage_allocation === 'pending') {
       setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
       quotaUpgradeRow.style.display = 'none';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('unavailable', {
         message: t('spQuotaAllocationPending'),
         action: 'retry',
@@ -14335,9 +14313,6 @@ function buildUI(): void {
       quotaUpgradeBtn.dataset['destination'] = 'recovery';
       quotaUpgradeBtn.dataset['href'] = recovery.href;
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spQuotaManageUsage');
       setManagedCloudChatState('unavailable', {
         message,
         action: 'recovery',
@@ -14369,9 +14344,6 @@ function buildUI(): void {
         : null;
     setQuotaNotice(banner?.text ?? '', banner?.severity ?? null);
     quotaUpgradeRow.style.display = 'none';
-    quotaBadgeEl.classList.add('has-prompts');
-    quotaBadgeEl.classList.remove('exhausted');
-    quotaBadgeEl.textContent = planLabel;
     setManagedCloudChatState('ready');
     renderUsageBanner(banner);
   }
@@ -14391,7 +14363,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
         message: t('spGateVerifyFailed'),
@@ -14426,7 +14397,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
         message: isClerkExtensionAuthConfigured()
@@ -14468,7 +14438,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof AccountUnavailableError) {
         signinPrompt.style.display = 'none';
@@ -14564,9 +14533,6 @@ function buildUI(): void {
       quotaUpgradeBtn.textContent = t('spBillingManage');
       quotaUpgradeBtn.dataset['destination'] = 'billing';
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('visible', 'exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spBillingBadge');
       setManagedCloudChatState('unavailable', {
         message:
           access.subscriptionStatus === 'past_due'
@@ -14618,10 +14584,6 @@ function buildUI(): void {
     quotaUpgradeBtn.dataset['destination'] = 'pricing';
     quotaUpgradeRow.style.display = '';
 
-    quotaBadgeEl.classList.add('visible');
-    quotaBadgeEl.classList.remove('has-prompts');
-    quotaBadgeEl.classList.add('exhausted');
-    quotaBadgeEl.textContent = t('spQuotaUpgrade');
     setManagedCloudChatState('unavailable', {
       message: t('spQuotaProRequired'),
       action: 'upgrade',

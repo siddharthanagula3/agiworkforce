@@ -230,7 +230,7 @@ describe('a Free account in the side panel', () => {
     await refreshAs({ tier: 'free', sessionUsedPercent: 80, hasUsageRemaining: true });
 
     expect(usageMeters()).toHaveLength(0);
-    expect(byId('sp-quota-badge').classList.contains('visible')).toBe(false);
+    expect(document.getElementById('sp-quota-badge')).toBeNull();
     expect(byId('sp-plan-compare').hidden).toBe(true);
     expect(byId('sp-quota-label').textContent).toBe('Upgrade for higher capacity');
     expect(byId('sp-quota-upgrade-btn').textContent).toBe('Upgrade');
@@ -243,7 +243,7 @@ describe('a Free account in the side panel', () => {
     await refreshAs({ tier: 'free', sessionUsedPercent: 100, hasUsageRemaining: false });
 
     expect(usageMeters()).toHaveLength(0);
-    expect(byId('sp-quota-badge').classList.contains('visible')).toBe(false);
+    expect(document.getElementById('sp-quota-badge')).toBeNull();
     expect(byId('sp-cloud-gate-message').textContent).toMatch(
       /^You've reached the Free limit for now\. Resets in /,
     );
@@ -263,6 +263,7 @@ describe('a Free account in the side panel', () => {
     await refreshAs({ tier: 'pro', sessionUsedPercent: 80, hasUsageRemaining: true });
 
     expect(usageMeters().length).toBeGreaterThan(0);
+    expect(document.getElementById('sp-quota-badge')).toBeNull();
     expect(byId('sp-plan-compare').hidden).toBe(false);
     expect(byId('sp-usage-warning-text').textContent).toContain('80%');
   });

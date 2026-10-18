@@ -265,10 +265,6 @@
     "message": "Manage billing",
     "description": "Quota button that opens the billing settings page"
   },
-  "spBillingBadge": {
-    "message": "Billing",
-    "description": "Header badge while a paid subscription needs attention"
-  },
   "spQuotaPaidPlanRequired": {
     "message": "Checking your shared AGI plan and usage…",
     "description": "Quota row before entitlements are read"
@@ -4601,5 +4597,9 @@
   "spVideoModeNoAttachments": {
     "message": "Videos are made from your words only. Remove the attachments or the page, or stop creating a video.",
     "description": "Composer notice when video mode has attachments"
+  },
+  "spQuotaFreeUpgrade": {
+    "message": "Upgrade",
+    "description": "Single action a Free account sees on its usage card and when it reaches the Free limit; matches the web Free branch."
   }
 }
