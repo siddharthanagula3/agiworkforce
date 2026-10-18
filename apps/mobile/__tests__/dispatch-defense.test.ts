@@ -288,7 +288,6 @@ jest.mock('lucide-react-native', () => {
 
 import {
   isValidPairingCode,
-  extractPairingCode,
   sendApprovalResponse,
   requestAgentRefresh,
   sendAgentCommand,
@@ -297,8 +296,6 @@ import {
   sendHeartbeatPing,
   sendEmergencyStop,
   manualReconnect,
-  getConnectionQualityLabel,
-  getRiskColor,
   getRiskBadgeColor,
   startHealthChecks,
   stopHealthChecks,
@@ -478,47 +475,6 @@ describe('QR Pairing, isValidPairingCode', () => {
 
   it('rejects a QR payload with malformed role token', () => {
     expect(isValidPairingCode('agiw:ABCDEF123456:not-a-token')).toBe(false);
-  });
-});
-
-describe('QR Pairing, extractPairingCode', () => {
-  it('strips the agiw: prefix and returns the raw code', () => {
-    expect(extractPairingCode('agiw:ABC123')).toBe('ABC123');
-  });
-
-  it('strips the role token from secure QR payloads', () => {
-    const token = 'f'.repeat(64);
-    expect(extractPairingCode(`agiw:ABCDEF123456:${token}`)).toBe('ABCDEF123456');
-  });
-
-  it('strips the out-of-band secret from the current QR payload', () => {
-    const secret = '9f'.repeat(32);
-    expect(extractPairingCode(`agiw3:ABCDEF123456:${secret}`)).toBe('ABCDEF123456');
-  });
-
-  it('returns the raw code unchanged when no prefix is present', () => {
-    expect(extractPairingCode('ABC12345')).toBe('ABC12345');
-  });
-
-  it('trims whitespace from full QR strings', () => {
-    expect(extractPairingCode('  agiw:ABC123  ')).toBe('ABC123');
-  });
-
-  it('trims whitespace from raw codes', () => {
-    expect(extractPairingCode('  ABC123  ')).toBe('ABC123');
-  });
-
-  it('removes Desktop display separators from a manual code', () => {
-    expect(extractPairingCode('ABCD EFGH IJKL')).toBe('ABCDEFGHIJKL');
-    expect(extractPairingCode('ABCD-EFGH-IJKL')).toBe('ABCDEFGHIJKL');
-  });
-
-  it('handles empty string without throwing', () => {
-    expect(extractPairingCode('')).toBe('');
-  });
-
-  it('handles the prefix appearing in the middle without stripping it', () => {
-    expect(extractPairingCode('noprefix')).toBe('noprefix');
   });
 });
 
@@ -1198,45 +1154,6 @@ describe('AgentDashboard, estimateTimeRemaining', () => {
   });
 });
 
-describe('getConnectionQualityLabel', () => {
-  it('returns "Strong" with green color for strong quality', () => {
-    const result = getConnectionQualityLabel('strong');
-    expect(result.label).toBe('Strong');
-    expect(result.color).toBe('#10b981');
-  });
-
-  it('returns "Weak" with amber color for weak quality', () => {
-    const result = getConnectionQualityLabel('weak');
-    expect(result.label).toBe('Weak');
-    expect(result.color).toBe('#f59e0b');
-  });
-
-  it('returns "Disconnected" with red color for disconnected quality', () => {
-    const result = getConnectionQualityLabel('disconnected');
-    expect(result.label).toBe('Disconnected');
-    expect(result.color).toBe('#ef4444');
-  });
-});
-
-describe('getRiskColor', () => {
-  it('returns emerald hex for low risk', () => {
-    expect(getRiskColor('low')).toBe('#10b981');
-  });
-
-  it('returns amber hex for medium risk', () => {
-    expect(getRiskColor('medium')).toBe('#f59e0b');
-  });
-
-  it('returns red hex for high risk', () => {
-    expect(getRiskColor('high')).toBe('#ef4444');
-  });
-
-  it('returns gray hex for unknown risk levels', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(getRiskColor('unknown' as any)).toBe('#6b7280');
-  });
-});
-
 describe('getRiskBadgeColor', () => {
   it('returns "green" for low risk', () => {
     expect(getRiskBadgeColor('low')).toBe('green');
@@ -1566,12 +1483,6 @@ describe('Cross-device thread persistence, queueControl', () => {
 });
 
 describe('QR Pairing, edge cases and boundary conditions', () => {
-  it('extractPairingCode handles multiple agiw: occurrences, only strips first prefix', () => {
-    const result = extractPairingCode('agiw:ABC123');
-    expect(result).toBe('ABC123');
-    expect(result).not.toContain('agiw:');
-  });
-
   it('isValidPairingCode allows mixed-case alphanumeric', () => {
     expect(isValidPairingCode('aGiW1234EfGh')).toBe(true);
   });
@@ -1594,10 +1505,6 @@ describe('QR Pairing, edge cases and boundary conditions', () => {
 
   it('isValidPairingCode rejects the string "undefined"', () => {
     expect(isValidPairingCode('undefined')).toBe(false);
-  });
-
-  it('extractPairingCode with only whitespace returns empty string', () => {
-    expect(extractPairingCode('   ')).toBe('');
   });
 });
 

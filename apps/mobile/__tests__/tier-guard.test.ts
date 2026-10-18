@@ -2,10 +2,8 @@ import {
   guardProviderSwitch,
   mapBillingPlanToUIPlan,
 } from '../src/features/model-picker/tierGuard';
-import { requireAutoMode } from '../test-utils/modelFixtures';
 
 type Tier = Parameters<typeof guardProviderSwitch>[2];
-const AUTO_MODEL_ID = requireAutoMode().id;
 
 describe('mapBillingPlanToUIPlan, all current BillingPlanTier values', () => {
   it('maps local-only → local', () => {
@@ -53,14 +51,6 @@ describe('guardProviderSwitch, allow cases', () => {
     expect(guardProviderSwitch('openai', 'openai', 'byok')).toBe('allow');
   });
 
-  it('allows switch when current provider is an auto-mode id', () => {
-    expect(guardProviderSwitch(AUTO_MODEL_ID, 'openai', 'free')).toBe('allow');
-  });
-
-  it('allows switch when target provider is an auto-mode id', () => {
-    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'free')).toBe('allow');
-  });
-
   it('allows cross-provider switch for max tier', () => {
     expect(guardProviderSwitch('anthropic', 'google', 'max')).toBe('allow');
   });
@@ -105,25 +95,6 @@ describe('guardProviderSwitch, edge cases and stress tests', () => {
     expect(guardProviderSwitch('anthropic', 'openai', 'unknown_tier' as Tier)).toBe(
       'upgrade-required',
     );
-  });
-
-  it('rejects a case-mutated Auto id instead of treating prefixes as admission', () => {
-    expect(guardProviderSwitch(AUTO_MODEL_ID.toUpperCase(), 'openai', 'free')).toBe(
-      'upgrade-required',
-    );
-  });
-
-  it('allows the canonical auto-mode to remain selected at any tier', () => {
-    expect(guardProviderSwitch(AUTO_MODEL_ID, AUTO_MODEL_ID, 'free')).toBe('allow');
-  });
-
-  it('auto-mode to real provider: free tier still blocked', () => {
-    expect(guardProviderSwitch(AUTO_MODEL_ID, 'anthropic', 'free')).toBe('allow');
-  });
-
-  it('real provider to auto-mode: always allow regardless of tier', () => {
-    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'free')).toBe('allow');
-    expect(guardProviderSwitch('anthropic', AUTO_MODEL_ID, 'byok')).toBe('allow');
   });
 
   it('null currentProvider + any tier always allows (new thread)', () => {

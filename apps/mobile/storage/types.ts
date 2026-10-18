@@ -75,11 +75,3 @@ export interface CustomInstruction {
   active: boolean;
   created_at: number;
 }
-
-export interface TelemetryEvent {
-  id: number;
-  event_type: string;
-  payload: Record<string, unknown>;
-  created_at: number;
-  sent_at: number | null;
-}

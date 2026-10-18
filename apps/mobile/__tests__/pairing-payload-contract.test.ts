@@ -9,7 +9,7 @@ jest.mock('@/stores/dispatchTaskStore', () => ({
   useDispatchTaskStore: { getState: jest.fn(() => ({})) },
 }));
 
-import { extractPairingCode, isValidPairingCode } from '../services/companion';
+import { isValidPairingCode } from '../services/companion';
 import { parsePairingPayload } from '../services/manualPairing';
 
 const PAIRING_CODE = 'ABCD1234WXYZ';
@@ -43,7 +43,7 @@ describe('Desktop pairing payload against the scanner gate that admits it', () =
   });
 
   it('still resolves to the pairing code the desktop prints under the QR', () => {
-    expect(extractPairingCode(DESKTOP_PAIRING_PAYLOAD)).toBe(PAIRING_CODE);
+    expect(parsePairingPayload(DESKTOP_PAIRING_PAYLOAD).code).toBe(PAIRING_CODE);
   });
 
   it('carries the out-of-band secret through to the key derivation inputs', () => {

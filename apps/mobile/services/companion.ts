@@ -40,14 +40,6 @@ export function isValidPairingCode(code: string): boolean {
   return secret === undefined || PAIRING_SECRET_PATTERN.test(secret);
 }
 
-export function extractPairingCode(raw: string): string {
-  const normalized = normalizePairingInput(raw);
-  if (normalized.startsWith('agiw:')) {
-    return normalized.slice(5).split(':')[0] ?? '';
-  }
-  return normalized;
-}
-
 export type ApprovalResponsePayload = Omit<CompanionApprovalResponse, 'action'>;
 
 export function buildApprovalResponsePayload(
@@ -241,7 +233,7 @@ export function startHealthChecks(): void {
 
     if (elapsed > HEARTBEAT_INTERVAL_MS * (MISSED_HEARTBEAT_STALE_THRESHOLD + 0.5)) {
       store.markStale();
-      if (store.status === 'stale') {
+      if (useConnectionStore.getState().status === 'stale') {
         store.beginReconnecting(RECONNECT_COUNTDOWN_SECONDS);
         startReconnectCountdown();
       }
@@ -317,20 +309,6 @@ export function manualReconnect(): void {
   }
 }
 
-export function getConnectionQualityLabel(quality: ConnectionQuality): {
-  label: string;
-  color: string;
-} {
-  switch (quality) {
-    case 'strong':
-      return { label: 'Strong', color: '#10b981' };
-    case 'weak':
-      return { label: 'Weak', color: '#f59e0b' };
-    case 'disconnected':
-      return { label: 'Disconnected', color: '#ef4444' };
-  }
-}
-
 export type { ConnectionQuality };
 
 export function sendEmergencyStop(): void {
@@ -341,19 +319,6 @@ export function sendEmergencyStop(): void {
     scope: 'all',
     sentAt: new Date().toISOString(),
   });
-}
-
-export function getRiskColor(level: RiskLevel): string {
-  switch (level) {
-    case 'low':
-      return '#10b981';
-    case 'medium':
-      return '#f59e0b';
-    case 'high':
-      return '#ef4444';
-    default:
-      return '#6b7280';
-  }
 }
 
 export function getRiskBadgeColor(level: RiskLevel): 'green' | 'yellow' | 'red' {
