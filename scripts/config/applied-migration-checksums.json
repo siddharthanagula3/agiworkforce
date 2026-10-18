@@ -364,5 +364,6 @@
   "0363_beta_invite_update_time.sql": "4ad54c38977aab2f5089ac06ed4a53d603b88254cd9524e49c6c0c55e5854b43",
   "0364_connector_tool_session_grants.sql": "6a83cd1937cdf7374cde12a52b8b52f764555ff6b5b9f683877eb93296929a76",
   "0365_upgrade_waitlist_notice_delivery.sql": "a53c8c22fb63bb4ff9ae260c8462d3dda08cf71a88c5e879f037a0fcd9f0738c",
-  "0366_media_jobs_chrome_source_surface.sql": "a8f40e75b0b40dbc2699a8ad9231944f263af97dd03d3dcf3105a05ad7f5af34"
+  "0366_media_jobs_chrome_source_surface.sql": "a8f40e75b0b40dbc2699a8ad9231944f263af97dd03d3dcf3105a05ad7f5af34",
+  "0367_stripe_reconciliation_cursors_and_overage_pending.sql": "6878598b7f14e5e7c500eda8d42e0e231409b827898da0158653919d1b05fbd7"
 }

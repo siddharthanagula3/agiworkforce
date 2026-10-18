@@ -1,20 +1,4 @@
 {
   "schemaVersion": 1,
-  "entries": [
-    {
-      "file": "apps/web/lib/services/billing-reconciliation.ts",
-      "migration": 367,
-      "reason": "Pages subscriptions by stripe_price_reconciled_at, a column 0367 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0367 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/enterprise-usage-metering.ts",
-      "migration": 367,
-      "reason": "Claims, sends and commits the pending overage report in the overage columns 0367 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0367 is applied."
-    },
-    {
-      "file": "apps/web/lib/services/stripe-settlement-reconciliation-service.ts",
-      "migration": 367,
-      "reason": "Pages subscriptions by stripe_state_reconciled_at, a column 0367 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0367 is applied."
-    }
-  ]
+  "entries": []
 }
