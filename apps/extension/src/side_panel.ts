@@ -139,6 +139,7 @@ import {
   buildBubbleWithTools,
   fillAnswerBubble,
   resolveManagedArtifactUrl,
+  type MessageArtifactsBinding,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
 import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
@@ -268,6 +269,12 @@ import {
   ARTIFACTS_DRAWER_CSS,
   type ArtifactsDrawerAPI,
 } from './features/side-panel/artifactsDrawer';
+import {
+  ARTIFACT_PANEL_CSS,
+  artifactProse,
+  createArtifactOutputs,
+} from './features/side-panel/artifactPanel';
+import { chromeArtifactConversationUrl } from './features/cloud-bridge/artifactsClient';
 import {
   buildCommandPalette,
   COMMAND_PALETTE_CSS,
@@ -6345,6 +6352,8 @@ function injectStyles(): void {
         '\n' +
         ARTIFACTS_DRAWER_CSS +
         '\n' +
+        ARTIFACT_PANEL_CSS +
+        '\n' +
         COMMAND_PALETTE_CSS +
         '\n' +
         AGIWORK_PLAN_REVIEW_CSS +
@@ -6839,7 +6848,10 @@ function renderMessages(): void {
                 imagePreviews:
                   turnPayloadByMessageId.get(msg.id)?.images.map((image) => image.dataUrl) ?? [],
               }
-            : { fileAccess: answerFileAccess }),
+            : {
+                fileAccess: answerFileAccess,
+                artifacts: messageArtifactsBinding(msg),
+              }),
           ...(msg.role === 'assistant' && i === _ctx.messages.length - 1 && !_ctx.isStreaming
             ? {
                 onRespondToCard: (cardId: string, payload: InteractiveCardResponsePayload) =>
@@ -6851,6 +6863,7 @@ function renderMessages(): void {
     }
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
+  artifactOutputs.sync(_ctx.messages);
   renderTemporaryChatState();
 
   scrollToBottom();
@@ -6911,6 +6924,26 @@ const answerFileAccess: AnswerFileAccess = {
   },
 };
 
+const artifactOutputs = createArtifactOutputs({
+  fileAccess: answerFileAccess,
+  conversationId: () => _ctx.conversationId,
+  webConversationUrl: () => {
+    if (_ctx.temporaryChat) return null;
+    const conversationId = activePersistenceEntry?.cloudSync?.conversationId;
+    return conversationId && OUTBOUND_UUID_PATTERN.test(conversationId)
+      ? chromeArtifactConversationUrl(conversationId)
+      : null;
+  },
+});
+
+function messageArtifactsBinding(msg: ChatMessage): MessageArtifactsBinding {
+  const view = artifactOutputs.viewFor(msg);
+  return {
+    prose: (text) => artifactProse(text, view),
+    cards: artifactOutputs.buildCards(msg),
+  };
+}
+
 function showThinking(label = t('spThinkingPreparing')): void {
   const container = document.getElementById('sp-messages')!;
 
@@ -6942,7 +6975,24 @@ function updateStreamingBubble(id: string, fullText: string): void {
   const bubble = document.getElementById(`sp-bubble-${id}`);
   if (!bubble) return;
   const message = _ctx.messages.find((candidate) => candidate.id === id);
-  fillAnswerBubble(bubble, fullText, message ? answerSourceLists(message).markers : []);
+  if (!message) {
+    fillAnswerBubble(bubble, fullText, []);
+    scrollToBottom();
+    return;
+  }
+  const view = artifactOutputs.viewFor(message);
+  const prose = artifactProse(fullText, view);
+  fillAnswerBubble(bubble, prose, answerSourceLists(message).markers);
+  const previousCards = document.getElementById(`sp-artifact-cards-${id}`);
+  const cards = artifactOutputs.updateCards(message, previousCards);
+  if (cards && cards !== previousCards) {
+    if (previousCards) previousCards.replaceWith(cards);
+    else bubble.insertAdjacentElement('afterend', cards);
+  } else if (!cards) {
+    previousCards?.remove();
+  }
+  bubble.hidden = Boolean(cards) && !prose.trim() && !message.error;
+  artifactOutputs.sync(_ctx.messages);
   scrollToBottom();
 }
 
@@ -10482,6 +10532,7 @@ function buildUI(): void {
   modelSelectorWrap.appendChild(modelDropdownEl);
 
   const headerRight = el('div', { id: 'sp-header-right' });
+  headerRight.appendChild(artifactOutputs.outputsEl);
 
   const historyBtn = el('button', {
     class: 'sp-icon-btn',
@@ -14557,6 +14608,7 @@ function buildUI(): void {
   );
   msgsArea.appendChild(blockedState);
 
+  chatPanel.appendChild(artifactOutputs.panelEl);
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 

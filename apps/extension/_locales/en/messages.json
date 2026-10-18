@@ -4247,5 +4247,139 @@
   "spExtensionSettings": {
     "message": "Extension settings",
     "description": "Main menu entry for user-facing extension settings"
+  },
+  "spArtifactCardsLabel": {
+    "message": "Artifacts in this reply",
+    "description": "Accessible name of the list of artifact cards under an answer"
+  },
+  "spArtifactCardMeta": {
+    "message": "Artifact · $FORMAT$",
+    "description": "Second line of an artifact card naming its format",
+    "placeholders": {
+      "format": {
+        "content": "$1",
+        "example": "HTML"
+      }
+    }
+  },
+  "spArtifactCreating": {
+    "message": "Creating $TITLE$",
+    "description": "Artifact card and panel title while the answer is still writing the artifact",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Desk calculator"
+      }
+    }
+  },
+  "spArtifactLines_one": {
+    "message": "$COUNT$ line",
+    "description": "Line count of an artifact being written, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spArtifactLines_other": {
+    "message": "$COUNT$ lines",
+    "description": "Line count of an artifact being written, other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "42"
+      }
+    }
+  },
+  "spArtifactOpen": {
+    "message": "Open",
+    "description": "Artifact card button that shows the artifact in the panel"
+  },
+  "spArtifactHide": {
+    "message": "Hide",
+    "description": "Artifact card button that closes the panel showing this artifact"
+  },
+  "spArtifactOpenLabel": {
+    "message": "Open artifact: $TITLE$",
+    "description": "Accessible name of the artifact card Open button",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Desk calculator"
+      }
+    }
+  },
+  "spArtifactHideLabel": {
+    "message": "Hide artifact: $TITLE$",
+    "description": "Accessible name of the artifact card Hide button",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Desk calculator"
+      }
+    }
+  },
+  "spArtifactPanelLabel": {
+    "message": "Artifact",
+    "description": "Accessible name of the panel that shows the open artifact"
+  },
+  "spArtifactPanelClose": {
+    "message": "Close artifact",
+    "description": "Button that closes the artifact panel"
+  },
+  "spArtifactCopyLabel": {
+    "message": "Copy the source of $TITLE$",
+    "description": "Artifact panel button that copies the artifact's source",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Desk calculator"
+      }
+    }
+  },
+  "spArtifactCopied": {
+    "message": "Copied.",
+    "description": "Status after the artifact source was copied"
+  },
+  "spArtifactCopyFailed": {
+    "message": "The artifact could not be copied. Try again.",
+    "description": "Status after copying the artifact source failed"
+  },
+  "spArtifactOpenOnWebLabel": {
+    "message": "Run $TITLE$ in this chat on the web",
+    "description": "Artifact panel button that opens this chat in the AGI web app, where the artifact runs",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Desk calculator"
+      }
+    }
+  },
+  "spArtifactSourceNote": {
+    "message": "The side panel shows the artifact's source.",
+    "description": "Note under an artifact the side panel cannot run"
+  },
+  "spArtifactSourceNoteWeb": {
+    "message": "The side panel shows the artifact's source. Open this chat on the web to run it.",
+    "description": "Note under an artifact the side panel cannot run, when the chat is on the account"
+  },
+  "spArtifactFileStem": {
+    "message": "artifact",
+    "description": "File name used when an artifact's title gives no usable name"
+  },
+  "spOutputsTitle": {
+    "message": "Outputs",
+    "description": "Heading and tooltip of the list of everything this chat produced"
+  },
+  "spOutputsButtonLabel": {
+    "message": "Outputs, $COUNT$",
+    "description": "Accessible name of the header button that lists this chat's outputs",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   }
 }

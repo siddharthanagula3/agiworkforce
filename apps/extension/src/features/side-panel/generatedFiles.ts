@@ -85,7 +85,7 @@ function fileTypeLabel(file: AnswerFile): string {
   return subtype ? subtype.toUpperCase() : t('spAnswerFileGenericType');
 }
 
-function fileMetaLabel(file: AnswerFile): string {
+export function fileMetaLabel(file: AnswerFile): string {
   const type = fileTypeLabel(file);
   return file.byteCount !== undefined ? `${type} · ${formatBytes(file.byteCount, 1)}` : type;
 }
@@ -124,8 +124,7 @@ export function loadImageDataUrl(url: string, access: AnswerFileAccess): Promise
   return pending;
 }
 
-async function saveFile(url: string, name: string, access: AnswerFileAccess): Promise<void> {
-  const blob = await access.fetchFile(url);
+export function saveBlob(name: string, blob: Blob): void {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = el('a', { href: objectUrl, download: name });
   anchor.style.display = 'none';
@@ -133,6 +132,14 @@ async function saveFile(url: string, name: string, access: AnswerFileAccess): Pr
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+export async function saveAnswerFile(
+  url: string,
+  name: string,
+  access: AnswerFileAccess,
+): Promise<void> {
+  saveBlob(name, await access.fetchFile(url));
 }
 
 function buildFileActions(
@@ -161,7 +168,7 @@ function buildFileActions(
     download.disabled = true;
     download.setAttribute('aria-busy', 'true');
     status.textContent = t('spAnswerFileDownloading', [file.name]);
-    saveFile(url, file.name, access)
+    saveAnswerFile(url, file.name, access)
       .then(() => {
         status.textContent = '';
       })

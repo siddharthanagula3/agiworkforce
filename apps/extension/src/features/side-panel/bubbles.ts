@@ -98,6 +98,16 @@ export interface BubbleInteractionOptions {
   imagePreviews?: readonly string[];
   fileAccess?: AnswerFileAccess;
   onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
+  artifacts?: MessageArtifactsBinding;
+}
+
+export interface MessageArtifactsBinding {
+  prose: (text: string) => string;
+  cards: HTMLElement | null;
+}
+
+function hidesEmptyAnswer(msg: ChatMessage, prose: string, artifacts?: MessageArtifactsBinding) {
+  return Boolean(artifacts?.cards) && !prose.trim() && !msg.error && !msg.interrupted;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -621,11 +631,14 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   if (isUser) {
     bubble.textContent = msg.content;
   } else {
-    fillAnswerBubble(bubble, msg.content, markers);
+    const prose = options.artifacts ? options.artifacts.prose(msg.content) : msg.content;
+    fillAnswerBubble(bubble, prose, markers);
+    bubble.hidden = hidesEmptyAnswer(msg, prose, options.artifacts);
   }
   const leadingCards = buildInteractiveCardStack(msg, options, true);
   if (leadingCards) wrapper.appendChild(leadingCards);
   wrapper.appendChild(bubble);
+  if (!isUser && options.artifacts?.cards) wrapper.appendChild(options.artifacts.cards);
 
   const errorFooter = buildErrorFooter(
     msg,
@@ -1174,16 +1187,22 @@ export function buildBubbleWithTools(
   if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
 
+  const text = textParts.join('');
+  const prose = options.artifacts ? options.artifacts.prose(text) : text;
   if (
     shouldRenderTextBubble({
-      text: textParts.join(''),
+      text: prose,
       streaming: Boolean(msg.streaming),
       interrupted: Boolean(msg.interrupted),
     })
   ) {
     const bubble = el('div', { class: bubbleClass(msg), id: `sp-bubble-${msg.id}` });
-    fillAnswerBubble(bubble, textParts.join(''), markers);
+    fillAnswerBubble(bubble, prose, markers);
+    bubble.hidden = hidesEmptyAnswer(msg, prose, options.artifacts);
     wrapper.appendChild(bubble);
+  }
+  if (msg.role === 'assistant' && options.artifacts?.cards) {
+    wrapper.appendChild(options.artifacts.cards);
   }
 
   if (toolBlocks.length > 0) {
