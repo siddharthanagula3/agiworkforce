@@ -216,14 +216,33 @@ export const useStyleStore = create<StyleState>()(
         },
 
         hydrateFromServer: async () => {
+          let stored: Partial<StylePreferencesPayload>;
           try {
-            const stored = await fetchStoredPreferenceNamespace<StylePreferencesPayload>(
+            stored = await fetchStoredPreferenceNamespace<StylePreferencesPayload>(
               RESPONSE_STYLE_PREFERENCES_NAMESPACE,
             );
-            if (!Array.isArray(stored.customStyles)) return;
-            set({ customStyles: stored.customStyles });
           } catch {
-            // Offline or unauthenticated: the localStorage cache is still valid.
+            // Offline or unauthenticated: the localStorage cache still renders,
+            // but it is not written over an account copy this tab never read.
+            return;
+          }
+          serverStylesRead = true;
+          const serverStyles = Array.isArray(stored.customStyles) ? stored.customStyles : null;
+          if (serverStyles) {
+            set((state) => ({
+              customStyles: localWriteHeld
+                ? [
+                    ...serverStyles,
+                    ...state.customStyles.filter(
+                      (local) => !serverStyles.some((remote) => remote.id === local.id),
+                    ),
+                  ]
+                : serverStyles,
+            }));
+          }
+          if (localWriteHeld) {
+            localWriteHeld = false;
+            syncToServer();
           }
         },
       };
@@ -259,8 +278,14 @@ export const useStyleStore = create<StyleState>()(
 );
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let serverStylesRead = false;
+let localWriteHeld = false;
 function syncToServer(): void {
   if (typeof window === 'undefined') return;
+  if (!serverStylesRead) {
+    localWriteHeld = true;
+    return;
+  }
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     const { customStyles } = useStyleStore.getState();
