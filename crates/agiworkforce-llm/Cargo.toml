@@ -13,6 +13,7 @@ name = "agiworkforce_llm"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = "0.23"
 bytes = { version = "1", default-features = false }
 futures-util = "0.3"
 reqwest = { version = "0.13", features = ["stream", "json"] }
@@ -23,6 +24,5 @@ tokio = { version = "1", features = ["time"] }
 tracing = "0.1"
 
 [dev-dependencies]
-base64 = "0.23"
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

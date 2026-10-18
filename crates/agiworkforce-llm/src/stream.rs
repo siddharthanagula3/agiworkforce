@@ -26,9 +26,9 @@ use crate::error::{
 };
 use crate::events::{ChatOutcome, StreamEvent, Usage};
 use crate::serialize::{
-    add_message_cache_breakpoint, anthropic_tools_json, build_gemini_tool_name_map,
-    compact_ollama_message_values, convert_message_to_anthropic, convert_message_to_gemini,
-    convert_message_to_openai, convert_message_to_openai_responses,
+    add_message_cache_breakpoint, anthropic_tools_json, anthropic_unsupported_document,
+    build_gemini_tool_name_map, compact_ollama_message_values, convert_message_to_anthropic,
+    convert_message_to_gemini, convert_message_to_openai, convert_message_to_openai_responses,
     gemini_function_declarations_json, ollama_chat_request_body, ollama_nativize_message_values,
     openai_function_tools_json, openai_responses_function_tools_json, set_openai_max_tokens,
 };
@@ -420,6 +420,12 @@ async fn stream_anthropic(
     req: &ChatRequest<'_>,
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError> {
+    if let Some(message) = anthropic_unsupported_document(req.messages) {
+        return Err(LlmError::UnsupportedInput {
+            provider: provider_label(spec).to_string(),
+            message,
+        });
+    }
     let body = build_anthropic_request_body(req);
     let use_thinking = matches!(
         resolved_anthropic_thinking(req),
@@ -1872,9 +1878,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    // Gemini says STOP for a turn that ends in function calls; it has no
+    // tool-use reason of its own.
     let stop = stop_reason
         .as_deref()
-        .map(GenerationStop::gemini_finish_reason);
+        .map(GenerationStop::gemini_finish_reason)
+        .map(|stop| match stop {
+            GenerationStop::EndOfTurn if !tool_calls.is_empty() => GenerationStop::ToolUse,
+            other => other,
+        });
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,

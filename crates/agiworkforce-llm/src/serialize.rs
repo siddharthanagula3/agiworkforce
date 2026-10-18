@@ -27,6 +27,84 @@ fn inline_document(name: &str, data_b64: &str) -> Option<Value> {
     })
 }
 
+const ANTHROPIC_PDF_MIME: &str = "application/pdf";
+
+/// Text-like documents Anthropic takes as a plain-text document source.
+fn is_text_like_mime(mime: &str) -> bool {
+    let essence = mime
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    essence.starts_with("text/")
+        || matches!(
+            essence.as_str(),
+            "application/json"
+                | "application/xml"
+                | "application/yaml"
+                | "application/x-yaml"
+                | "application/toml"
+                | "application/javascript"
+                | "application/x-sh"
+        )
+}
+
+/// Anthropic's base64 document source accepts only PDF; plain text goes in a
+/// `text` source. Anything else is refused before the request is built, so
+/// the provider never answers with a 400.
+fn anthropic_document(name: &str, mime: &str, data_b64: &str) -> Result<Value, String> {
+    if let Some(placeholder) = inline_document(name, data_b64) {
+        return Ok(placeholder);
+    }
+    if mime.eq_ignore_ascii_case(ANTHROPIC_PDF_MIME) {
+        return Ok(serde_json::json!({
+            "type": "document",
+            "title": name,
+            "source": {
+                "type": "base64",
+                "media_type": ANTHROPIC_PDF_MIME,
+                "data": data_b64
+            }
+        }));
+    }
+    if is_text_like_mime(mime) {
+        use base64::Engine as _;
+        let text = base64::engine::general_purpose::STANDARD
+            .decode(data_b64.as_bytes())
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .ok_or_else(|| format!("{name} is not UTF-8 text, so Anthropic cannot read it"))?;
+        return Ok(serde_json::json!({
+            "type": "document",
+            "title": name,
+            "source": {
+                "type": "text",
+                "media_type": "text/plain",
+                "data": text
+            }
+        }));
+    }
+    Err(format!("Anthropic reads PDF and plain-text documents only; {name} is {mime}"))
+}
+
+/// The first document in `messages` Anthropic cannot accept, as a sentence
+/// naming it.
+pub fn anthropic_unsupported_document(messages: &[Message]) -> Option<String> {
+    messages.iter().find_map(|message| match &message.content {
+        MessageContent::Blocks(blocks) => blocks.iter().find_map(|block| match block {
+            ContentBlock::Document {
+                name,
+                mime,
+                data_b64,
+                ..
+            } => anthropic_document(name, mime, data_b64).err(),
+            _ => None,
+        }),
+        MessageContent::Text(_) => None,
+    })
+}
+
 /// Convert an internal Message to Anthropic API JSON format.
 pub fn convert_message_to_anthropic(m: &Message) -> Value {
     match &m.content {
@@ -55,18 +133,9 @@ pub fn convert_message_to_anthropic(m: &Message) -> Value {
                         mime,
                         data_b64,
                         ..
-                    } => match inline_document(name, data_b64) {
-                        Some(placeholder) => placeholder,
-                        None => serde_json::json!({
-                            "type": "document",
-                            "title": name,
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime,
-                                "data": data_b64
-                            }
-                        }),
-                    },
+                    } => anthropic_document(name, mime, data_b64).unwrap_or_else(|refusal| {
+                        serde_json::json!({ "type": "text", "text": format!("[{refusal}]") })
+                    }),
                     ContentBlock::Unknown => serde_json::json!({
                         "type": "text", "text": UNKNOWN_BLOCK
                     }),
@@ -1114,6 +1183,46 @@ mod tests {
         let parts = v["parts"].as_array().unwrap();
         assert_eq!(parts[0]["inlineData"]["mimeType"], "image/png");
         assert_eq!(parts[0]["inlineData"]["data"], "BASE64DATA");
+    }
+
+    fn document(mime: &str, data_b64: &str) -> Message {
+        Message::blocks(
+            "user",
+            vec![ContentBlock::Document {
+                name: "notes".to_string(),
+                mime: mime.to_string(),
+                data_b64: data_b64.to_string(),
+                asset_id: None,
+            }],
+        )
+    }
+
+    #[test]
+    fn anthropic_documents_are_pdf_or_plain_text_and_nothing_else() {
+        let pdf = convert_message_to_anthropic(&document("application/pdf", "JVBERi0="));
+        assert_eq!(pdf["content"][0]["source"]["type"], "base64");
+        assert_eq!(pdf["content"][0]["source"]["media_type"], "application/pdf");
+
+        let text = convert_message_to_anthropic(&document("text/markdown", "IyBIaQ=="));
+        assert_eq!(text["content"][0]["source"]["type"], "text");
+        assert_eq!(text["content"][0]["source"]["media_type"], "text/plain");
+        assert_eq!(text["content"][0]["source"]["data"], "# Hi");
+        assert_eq!(
+            anthropic_unsupported_document(&[document("text/markdown", "IyBIaQ==")]),
+            None
+        );
+
+        let docx = document(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "UEsDBA==",
+        );
+        let refusal = anthropic_unsupported_document(std::slice::from_ref(&docx))
+            .expect("a docx is not an Anthropic document");
+        assert!(refusal.contains("notes"), "{refusal}");
+        assert!(
+            anthropic_unsupported_document(&[document("text/plain", "/w==")]).is_some(),
+            "text that is not UTF-8 is refused too"
+        );
     }
 
     #[test]

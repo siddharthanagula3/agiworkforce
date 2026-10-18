@@ -103,6 +103,10 @@ pub enum LlmError {
     /// Mid-stream read failure (connection dropped, TLS error, …).
     #[error("Error reading stream: {message}")]
     Read { message: String },
+    /// The conversation carries content this provider cannot accept, so the
+    /// request was never sent.
+    #[error("[{provider}] {message}")]
+    UnsupportedInput { provider: String, message: String },
 }
 
 impl LlmError {
@@ -120,6 +124,7 @@ impl LlmError {
             LlmError::IdleTimeout { .. } => "idle_timeout",
             LlmError::Read { .. } => "read",
             LlmError::StreamError { .. } => "stream_error",
+            LlmError::UnsupportedInput { .. } => "unsupported_input",
         }
     }
 

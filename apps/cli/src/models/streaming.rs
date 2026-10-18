@@ -307,6 +307,16 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             retry_after,
             ..
         } => CliError::usage_limit(code, message, recovery_href, retry_after).into(),
+        LlmError::UnsupportedInput { provider, message } => CliError::stream_failure(
+            provider,
+            message,
+            false,
+            agiworkforce_llm::StreamFailureDetail {
+                code: Some("unsupported_attachment".to_string()),
+                ..agiworkforce_llm::StreamFailureDetail::default()
+            },
+        )
+        .into(),
         // "Streaming timed out: no data received for 5 minutes" for the CLI's
         // 300s window, same text as the historical `bail!`.
         err @ LlmError::IdleTimeout { .. } => anyhow::anyhow!("{err}"),
