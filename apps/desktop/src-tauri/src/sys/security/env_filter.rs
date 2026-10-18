@@ -1,20 +1,8 @@
 //! Centralized blocklist of dangerous environment variables.
 //!
-//! Three separate `BLOCKED_ENV_VARS` lists used to
-//! live in:
-//!   - `sys/commands/code_execution.rs:14` (9 vars)
-//!   - `core/agi/sandbox.rs:282` (28 vars)
-//!   - `core/mcp/transport.rs:441` (22 vars)
-//!
-//! They drifted: the MCP transport list was the most complete (added LD_AUDIT,
-//! NODE_EXTRA_CA_CERTS, ELECTRON_RUN_AS_NODE, JAVA_TOOL_OPTIONS, ZDOTDIR,
-//! RUST_LOG) while the code-execution list was the thinnest (missing every
-//! language-specific injector and BASH_FUNC_*). A user who pivoted through
-//! `execute_code` could bypass restrictions enforced for `terminal_execute`.
-//!
-//! This module is now the single source of truth, a strict superset of every
-//! prior list so consolidation never weakens security. Each consumer calls
-//! [`is_blocked_env_var`].
+//! The one list every process launch checks, so code execution, the terminal
+//! and MCP servers cannot drift apart and a call cannot pivot through the
+//! thinnest list. Each consumer calls [`is_blocked_env_var`].
 
 /// Environment variables that must never be set on child processes spawned by
 /// the desktop app. Covers:

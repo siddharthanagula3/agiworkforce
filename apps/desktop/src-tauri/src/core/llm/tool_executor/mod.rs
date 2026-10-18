@@ -64,115 +64,6 @@ use uuid::Uuid;
 /// Default timeout for tool confirmation dialogs (in seconds)
 const TOOL_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 
-/// Per-tool timeout configuration in milliseconds
-/// Different tool types have different timeout requirements:
-/// - Fast tools (search, web): 10-30 seconds
-/// - Medium tools (file ops, git): 30-60 seconds
-/// - Slow tools (browser, media, code): 60-300 seconds
-pub struct ToolTimeoutConfig {
-    /// Default timeout for all tools (ms)
-    pub default: u64,
-    /// Fast tools: search, web fetch, API calls (ms)
-    pub fast: u64,
-    /// Medium tools: file operations, git, database (ms)
-    pub medium: u64,
-    /// Slow tools: browser automation, media generation, code execution (ms)
-    pub slow: u64,
-    /// Very slow tools: video generation, large downloads (ms)
-    pub very_slow: u64,
-}
-
-impl Default for ToolTimeoutConfig {
-    fn default() -> Self {
-        Self {
-            default: 60_000,    // 60 seconds
-            fast: 15_000,       // 15 seconds - search, web, API
-            medium: 60_000,     // 60 seconds - file ops, git, db
-            slow: 180_000,      // 3 minutes - browser, media, code
-            very_slow: 300_000, // 5 minutes - video, large uploads
-        }
-    }
-}
-
-impl ToolTimeoutConfig {
-    /// Get timeout for a specific tool
-    pub fn get_timeout(&self, tool_id: &str) -> u64 {
-        match tool_id {
-            // Fast tools (15s)
-            "search_web"
-            | "api_call"
-            | "web_fetch"
-            | "code_search"
-            | "grep_search"
-            | "glob_search"
-            | "conversation_search"
-            | "recent_chats"
-            | "background_agent_get"
-            | "create_artifact" => self.fast,
-
-            // Medium tools (60s)
-            "file_read"
-            | "file_read_binary"
-            | "file_write"
-            | "file_delete"
-            | "file_list"
-            | "git_status"
-            | "git_diff"
-            | "git_log"
-            | "git_list_branches"
-            | "git_init"
-            | "git_add"
-            | "git_commit"
-            | "git_clone"
-            | "multi_edit"
-            | "apply_patch"
-            | "edit_exact_replace"
-            | "undo_get_summary"
-            | "undo_get_changes"
-            | "undo_last"
-            | "undo_change"
-            | "coding_checkpoint_create"
-            | "coding_checkpoint_list"
-            | "coding_checkpoint_rewind"
-            | "background_agent_start"
-            | "background_agent_cancel" => self.medium,
-
-            // Slow tools (180s)
-            "terminal_execute"
-            | "code_execute"
-            | "browser_navigate"
-            | "browser_click"
-            | "browser_type"
-            | "browser_screenshot"
-            | "browser_extract"
-            | "browser_autofill_job_application"
-            | "image_generate"
-            | "image_ocr"
-            | "image_analyze"
-            | "media_generate_image"
-            | "git_push"
-            | "github_create_repo"
-            | "cloud_upload"
-            | "cloud_download"
-            | "productivity_create_task"
-            | "document_read"
-            | "document_search"
-            | "document_create_word"
-            | "document_create_excel"
-            | "document_edit_excel"
-            | "document_create_pdf" => self.slow,
-
-            // Very slow tools (300s)
-            "video_generate" | "media_generate_video" | "api_upload" | "api_download" => {
-                self.very_slow
-            }
-
-            // Default
-            _ => self.default,
-        }
-    }
-}
-
 const DANGEROUS_TOOLS: &[&str] = &[
     "file_write",
     "file_delete",
@@ -217,7 +108,6 @@ fn is_dangerous_tool(tool_id: &str) -> bool {
 }
 
 /// How long a dangerous tool waits on the user before failing closed.
-/// Mirrors `core/agent/autonomous.rs`'s task-level approval timeout.
 const TOOL_APPROVAL_TIMEOUT_SECS: u64 = 300;
 
 /// Map a dangerous tool call onto the approval payload the controller and the
@@ -273,8 +163,6 @@ pub struct ToolExecutor {
     conversation_mode: Option<String>,
     /// Optional project folder path to use as default working directory
     project_folder: Option<String>,
-    /// Per-tool timeout configuration
-    timeout_config: ToolTimeoutConfig,
     /// Backend conversation ID for the live chat turn this executor is
     /// running under (when known). Used by tools that need to associate
     /// created resources with the conversation, e.g. `create_artifact`
@@ -533,7 +421,6 @@ impl ToolExecutor {
             app_handle: None,
             conversation_mode: None,
             project_folder: None,
-            timeout_config: ToolTimeoutConfig::default(),
             conversation_id: None,
             frontend_message_id: None,
             persist_internal_resources: true,
@@ -548,7 +435,6 @@ impl ToolExecutor {
             app_handle: Some(app_handle),
             conversation_mode: None,
             project_folder: None,
-            timeout_config: ToolTimeoutConfig::default(),
             conversation_id: None,
             frontend_message_id: None,
             persist_internal_resources: true,
@@ -2098,21 +1984,9 @@ impl ToolExecutor {
                 tool_call.name
             );
 
-            // Ask the user and WAIT for the answer.
-            //
-            // This used to be a fire-and-forget `emit("approval:request", …)`
-            // followed immediately by a failed `ToolResult` a few lines below,
-            // which made the whole prompt theatre: the tool call had already
-            // been refused before the user saw anything, and answering it hit
-            // `agent_resolve_approval` -> "Approval {id} not pending", because
-            // nothing had ever registered with the controller.
-            //
-            // `ApprovalController::request_approval` is the mechanism that
-            // actually works (see `core/agent/autonomous.rs`): it emits, parks
-            // on a oneshot channel, consults the trust store, and returns the
-            // user's decision. It is managed Tauri state, so it can be pulled
-            // off the app handle this executor already holds, no constructor
-            // change needed.
+            // Ask the user and wait for the answer:
+            // `ApprovalController::request_approval` emits, parks on a oneshot
+            // channel, consults the trust store and returns the decision.
             if let Some(app_handle) = &self.app_handle {
                 if let Err(e) = app_handle.emit(
                     "agent:status:update",
@@ -2250,28 +2124,7 @@ impl ToolExecutor {
             }
         }
 
-        // Get per-tool timeout
-        let timeout_ms = self.timeout_config.get_timeout(&tool_call.name);
-        let timeout_duration = TokioDuration::from_millis(timeout_ms);
-
-        // Execute with per-tool timeout
-        let result = match timeout(
-            timeout_duration,
-            self.execute_tool_impl(&tool, args, &action_id),
-        )
-        .await
-        {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(e)) => Err(e),
-            Err(_) => {
-                tracing::warn!("Tool '{}' timed out after {}ms", tool_call.name, timeout_ms);
-                Err(anyhow!(
-                    "Tool '{}' timed out after {} seconds",
-                    tool_call.name,
-                    timeout_ms / 1000
-                ))
-            }
-        };
+        let result = self.execute_tool_impl(&tool, args, &action_id).await;
 
         self.finalize_tool_result(
             &action_id,

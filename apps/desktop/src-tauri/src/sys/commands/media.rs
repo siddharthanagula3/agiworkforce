@@ -104,9 +104,9 @@ fn managed_media_denial_reason(managed_boundary_active: bool) -> Option<&'static
 /// that THIS execution is a Managed Cloud one: `cloudAccountAuth` persists the
 /// token natively for any live session, including one that has since returned to
 /// the Local workspace. The single native signal that a caller explicitly declared
-/// Managed Cloud is the auth boundary a `TrustMode::ManagedCloud` goal scopes
-/// around its work (`core/agi/core.rs`). Local and BYOK never scope one, so an
-/// absent boundary fails closed.
+/// Managed Cloud is the auth boundary a Managed Cloud background run scopes
+/// around its turn (`core/agent/background_agent.rs`). Local and BYOK never
+/// scope one, so an absent boundary fails closed.
 fn ensure_managed_media_boundary() -> Result<(), String> {
     match managed_media_denial_reason(current_managed_auth_boundary().is_some()) {
         Some(reason) => Err(reason.to_string()),

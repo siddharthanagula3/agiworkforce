@@ -274,9 +274,8 @@ impl SessionManager {
 /// This is best-effort. It cannot recognise a bare pasted token, and it cannot
 /// recognise a password typed at an interactive prompt at all -- `send_input`
 /// logs every line the user enters and a typed password has no shape to match.
-/// The scrubber is therefore not the containment boundary: keeping
-/// `command_history` off the LLM db_query allowlist
-/// (core/llm/tool_executor/db_tools.rs) is what stops this text reaching a
+/// The scrubber is therefore not the containment boundary: no tool reads
+/// `command_history` back to a model, and that is what keeps this text from a
 /// provider.
 pub(crate) fn scrub_secrets(command: &str) -> String {
     use once_cell::sync::Lazy;

@@ -4,10 +4,10 @@ use agiworkforce_sandbox_policy::{
     sandboxed_program, NetworkPolicy, SandboxBackend, SandboxPolicy, SandboxSpec,
 };
 
-/// Maximum code length allowed for execution (1MB), mirrors core/agi/executors/code_executor.rs.
+/// Maximum code length allowed for execution (1MB).
 const MAX_CODE_LENGTH: usize = 1024 * 1024;
 
-/// Maximum code length allowed for analysis (500KB), mirrors core/agi/executors/code_executor.rs.
+/// Maximum code length allowed for analysis (500KB).
 const MAX_ANALYSIS_CODE_LENGTH: usize = 512 * 1024;
 
 const TERMINAL_DEFAULT_TIMEOUT_MS: u64 = 60_000;
