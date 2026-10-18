@@ -297,7 +297,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
       if (deleted === 0) return { deleted, storageUris: [] as string[] };
       return {
         deleted,
-        storageUris: await releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: true }),
+        storageUris: await releaseDeletedProjectContents(tx, scope),
       };
     });
   } catch (error) {

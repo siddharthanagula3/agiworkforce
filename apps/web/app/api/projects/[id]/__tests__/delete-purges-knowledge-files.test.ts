@@ -73,11 +73,15 @@ beforeEach(() => {
   mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   mocks.execute.mockResolvedValue(1);
-  mocks.query.mockResolvedValue([
-    { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
-    { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
-    { storage_uri: null },
-  ]);
+  mocks.query.mockImplementation(async (sql: string) =>
+    sql.includes('select distinct storage_uri')
+      ? []
+      : [
+          { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
+          { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
+          { storage_uri: null },
+        ],
+  );
   mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 });
 
@@ -87,7 +91,9 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
 
     expect(res.status).toBe(200);
 
-    const purge = knowledgeFileCalls();
+    const purge = knowledgeFileCalls().filter(([sql]) =>
+      sql.includes('update project_knowledge_files'),
+    );
     expect(purge).toHaveLength(1);
     const [sql, params] = purge[0]!;
     expect(sql).toContain('update project_knowledge_files');
@@ -105,6 +111,23 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     expect(deletedKeys).toEqual([
       'knowledge-files/projects/proj-1/notes.txt',
       'knowledge-files/projects/proj-1/spec.pdf',
+    ]);
+  });
+
+  it('keeps an object a duplicated project still points at', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('select distinct storage_uri')
+        ? [{ storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' }]
+        : [
+            { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
+            { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
+          ],
+    );
+
+    await callDelete();
+
+    expect(mocks.deleteProjectKnowledgeObject.mock.calls).toEqual([
+      ['knowledge-files/projects/proj-1/notes.txt'],
     ]);
   });
 

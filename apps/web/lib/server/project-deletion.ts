@@ -11,10 +11,14 @@ export interface DeletedProjectScope {
   organizationId: string | null;
 }
 
+/**
+ * Returns the storage URIs whose objects may now be deleted. A duplicated
+ * project copies `storage_uri` rather than the object, so a URI another live
+ * source still points at is kept.
+ */
 export async function releaseDeletedProjectContents(
   tx: Pick<DatabaseAdapter, 'execute' | 'query'>,
   scope: DeletedProjectScope,
-  options: { purgeKnowledgeFiles: boolean },
 ): Promise<string[]> {
   await tx.execute(
     `update web_conversations
@@ -25,7 +29,6 @@ export async function releaseDeletedProjectContents(
         and deleted_at is null`,
     [scope.projectId, scope.userId, scope.organizationId],
   );
-  if (!options.purgeKnowledgeFiles) return [];
   const purged = await tx.query<{ storage_uri: string | null }>(
     `update project_knowledge_files k
         set deleted_at = now(), updated_at = now()
@@ -38,9 +41,23 @@ export async function releaseDeletedProjectContents(
     returning k.storage_uri`,
     [scope.projectId, scope.userId, scope.organizationId],
   );
-  return purged
-    .map((row) => row.storage_uri)
-    .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0);
+  const released = [
+    ...new Set(
+      purged
+        .map((row) => row.storage_uri)
+        .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0),
+    ),
+  ];
+  if (released.length === 0) return [];
+  const stillReferenced = await tx.query<{ storage_uri: string }>(
+    `select distinct storage_uri
+       from project_knowledge_files
+      where storage_uri = any($1::text[])
+        and deleted_at is null`,
+    [released],
+  );
+  const shared = new Set(stillReferenced.map((row) => row.storage_uri));
+  return released.filter((uri) => !shared.has(uri));
 }
 
 export async function deleteDeletedProjectObjects(
@@ -65,8 +82,6 @@ export async function releaseTombstonedProject(
   db: Pick<DatabaseAdapter, 'transaction'>,
   scope: DeletedProjectScope,
 ): Promise<void> {
-  const storageUris = await db.transaction((tx) =>
-    releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: true }),
-  );
+  const storageUris = await db.transaction((tx) => releaseDeletedProjectContents(tx, scope));
   await deleteDeletedProjectObjects(storageUris, scope);
 }
