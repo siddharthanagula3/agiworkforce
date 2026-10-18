@@ -7,6 +7,8 @@ export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
 export const CLOUD_CODE_LIMITS = {
   title: 120,
   task: 8000,
+  command: 2000,
+  commitMessage: 2000,
 } as const;
 
 /**
