@@ -13,15 +13,9 @@ import {
   resolveRouteHealthConfigForScope,
   routeBreakerState,
   routeBreakerStateWithDegradeBand,
-  buildRouteQualitySnapshot,
-  healthyRouteQualitySnapshot,
-  isRouteQualityDegraded,
-  resolveRouteQualityConfig,
   resolveRouteReliabilityConfig,
   routeFallbackReading,
   routeHealthEventsKey,
-  routeServingState,
-  ROUTE_QUALITY_MIN_SAMPLES_ENV,
   ROUTE_RELIABILITY_FLOOR_ENV,
   ROUTE_RELIABILITY_MIN_SAMPLES_ENV,
   ROUTE_BREAKER_CONSECUTIVE_FAILURES_ENV,
@@ -37,8 +31,6 @@ import {
   type RouteHealthKeyValueStore,
   type RouteHealthStoreFailureEvent,
   type RouteOutcomeEvent,
-  type RouteQualityEvent,
-  type RouteQualityFault,
 } from '../route-health-store';
 import type { RouteOutcomeClass } from '../runtime-state';
 
@@ -467,109 +459,6 @@ describe('store over the key-value port', () => {
   });
 });
 
-describe('route quality, scored from answers rather than responses', () => {
-  const QUALITY_CONFIG = {
-    observationWindowMs: 3_600_000,
-    minSamples: 5,
-    qualityFloor: 0.8,
-  };
-
-  function answers(
-    count: number,
-    observation: { faults?: readonly RouteQualityFault[]; score?: number } = {},
-  ): RouteQualityEvent[] {
-    return [...Array(count).keys()].map((index) => ({ nowMs: NOW - index, ...observation }));
-  }
-
-  it('reads perfect with nothing observed, so an unmeasured route is never punished', () => {
-    expect(buildRouteQualitySnapshot([], NOW, QUALITY_CONFIG)).toEqual(
-      healthyRouteQualitySnapshot(),
-    );
-  });
-
-  it('marks a route degraded whose endpoint is healthy but whose answers are not', () => {
-    const healthyEndpoint = buildRouteHealthSnapshot(
-      events(['success', 'success', 'success']),
-      NOW,
-    );
-    const quality = buildRouteQualitySnapshot(
-      [...answers(8, { faults: ['refused'] }), ...answers(2)],
-      NOW,
-      QUALITY_CONFIG,
-    );
-
-    expect(routeBreakerState(healthyEndpoint)).toBe('closed');
-    expect(quality.qualityScore).toBeLessThan(QUALITY_CONFIG.qualityFloor);
-    expect(isRouteQualityDegraded(quality)).toBe(true);
-    expect(routeServingState(healthyEndpoint, quality, 3)).toBe('degraded');
-  });
-
-  it('refuses to act below the minimum sample size, however bad the sample looks', () => {
-    const quality = buildRouteQualitySnapshot(answers(4, { faults: ['empty'] }), NOW, {
-      ...QUALITY_CONFIG,
-    });
-
-    expect(quality.belowFloor).toBe(true);
-    expect(quality.degraded).toBe(false);
-    expect(routeServingState(undefined, quality, 3)).toBe('closed');
-  });
-
-  it('counts each fault kind separately and takes a grader score over a fault guess', () => {
-    const quality = buildRouteQualitySnapshot(
-      [
-        ...answers(2, { faults: ['truncated'] }),
-        ...answers(2, { faults: ['schema_invalid'] }),
-        ...answers(1, { faults: ['refused'], score: 1 }),
-        ...answers(5),
-      ],
-      NOW,
-      QUALITY_CONFIG,
-    );
-
-    expect(quality.sampleCount).toBe(10);
-    expect(quality.truncationRate).toBeCloseTo(0.2);
-    expect(quality.schemaFailureRate).toBeCloseTo(0.2);
-    expect(quality.refusalRate).toBeCloseTo(0.1);
-    expect(quality.qualityScore).toBeCloseTo(0.6);
-  });
-
-  it('never lets a quality drop reopen a breaker that endpoint health already opened', () => {
-    const open = buildRouteHealthSnapshot(events(['timeout', 'timeout', 'timeout']), NOW);
-    expect(routeServingState(open, healthyRouteQualitySnapshot(), 3)).toBe('open');
-  });
-
-  it('records and reads a quality observation through the store', async () => {
-    const { health } = store({ qualityConfig: QUALITY_CONFIG });
-    for (let index = 0; index < 6; index += 1) {
-      await health.recordQuality(ROUTE_ID, { faults: ['empty'] }, NOW - index);
-    }
-
-    const snapshots = await health.qualitySnapshots([ROUTE_ID], NOW);
-
-    expect(snapshots[ROUTE_ID]?.sampleCount).toBe(6);
-    expect(snapshots[ROUTE_ID]?.emptyRate).toBe(1);
-    expect(snapshots[ROUTE_ID]?.degraded).toBe(true);
-  });
-
-  it('fails open on a missing store, so a route is never degraded by a dead keyspace', async () => {
-    const failures: RouteHealthStoreFailureEvent[] = [];
-    const health = createRouteHealthStore({
-      store: null,
-      onFailure: (event) => failures.push(event),
-    });
-
-    const snapshots = await health.qualitySnapshots([ROUTE_ID], NOW);
-
-    expect(snapshots[ROUTE_ID]).toEqual(healthyRouteQualitySnapshot());
-    expect(failures.map((failure) => failure.scope)).toEqual(['quality']);
-  });
-
-  it('keeps the quality keyspace out of the scopes a breaker reads', () => {
-    expect(routeHealthEventsKey('quality', ROUTE_ID)).toBe(`agi-rhealth:quality:${ROUTE_ID}`);
-    expect(routeHealthEventsKey('route', ROUTE_ID)).not.toContain('quality');
-  });
-});
-
 describe('fallback rate and the reliability floor', () => {
   const CONFIG = { reliabilityFloor: 0.9, minSamples: 10 };
 
@@ -607,6 +496,5 @@ describe('fallback rate and the reliability floor', () => {
         [ROUTE_RELIABILITY_MIN_SAMPLES_ENV]: '3',
       }),
     ).toEqual({ reliabilityFloor: 0.5, minSamples: 3 });
-    expect(resolveRouteQualityConfig({ [ROUTE_QUALITY_MIN_SAMPLES_ENV]: '7' }).minSamples).toBe(7);
   });
 });
