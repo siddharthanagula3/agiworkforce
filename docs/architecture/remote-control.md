@@ -70,8 +70,9 @@ pairing secret.
 ## What the relay allows through
 
 `services/signaling-server/src/control-payload.ts` holds the closed list.
-`ALLOWED_CONTROL_ACTIONS` covers pairing, approvals, sync, dispatch, heartbeat,
-cancellation and control receipts. `CODE_SESSION_CONTROL_ACTIONS` covers the
+`ALLOWED_CONTROL_ACTIONS` covers pairing, approvals and their snapshots, the
+agent list, sync, dispatch, heartbeat, cancellation, emergency stop and control
+receipts. `CODE_SESSION_CONTROL_ACTIONS` covers the
 coding session verbs: list, attach, detach, steer, interrupt, respond to an
 approval, and the snapshot and event streams back. An action outside both lists
 is rejected at the relay, and payload size is capped separately for code session

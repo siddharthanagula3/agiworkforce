@@ -4,6 +4,10 @@ import { MAX_CODE_CONTROL_PAYLOAD_SIZE, MAX_CONTROL_PAYLOAD_SIZE } from './const
 export const ALLOWED_CONTROL_ACTIONS = [
   'approval_request',
   'approval_response',
+  'approval_snapshot',
+  'approval_closed',
+  'agents_update',
+  'emergency_stop',
   'sync_request',
   'sync_response',
   'dispatch_request',
@@ -43,6 +47,8 @@ export const DISPATCH_TASK_CONTROL_ACTIONS = [
 ] as const;
 
 const LARGE_ACTION_SET = new Set<string>([
+  'agents_update',
+  'approval_snapshot',
   ...CODE_SESSION_CONTROL_ACTIONS,
   ...DISPATCH_TASK_CONTROL_ACTIONS,
 ]);
