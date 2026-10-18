@@ -43,6 +43,8 @@ import {
   formatUsageResetIn,
   getBillingPlanPricing,
   getModelMetadataById,
+  isFreeBillingPlanTier,
+  normalizeBillingPlanTier,
   getModelReasoning,
   isAutoModeModelId,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
@@ -98,7 +100,7 @@ import {
   type ConversationEntryChanges,
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
-import { wirePopupMenu } from './features/side-panel/menu';
+import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import {
   refreshManagedCloudRecentHistory,
   refreshManagedCloudConversationHistory,
@@ -2256,9 +2258,10 @@ function injectStyles(): void {
     .sp-regenerate__menu {
       position: absolute;
       bottom: calc(100% + 4px);
-      left: 0;
+      right: 0;
       z-index: var(--z-dropdown);
       min-width: 210px;
+      max-width: calc(100vw - 24px);
       max-height: 280px;
       overflow-y: auto;
       padding: 4px;
@@ -4031,6 +4034,7 @@ function injectStyles(): void {
       padding: 0;
       transition: background var(--duration-instant), color var(--duration-instant);
     }
+    .sp-attachment-remove::after { content: ''; position: absolute; inset: -4px; }
     .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-attachment-doc {
       align-items: center;
@@ -4603,6 +4607,11 @@ function injectStyles(): void {
       line-height: 1;
       cursor: pointer;
       padding: 2px 6px;
+      min-width: var(--control-md);
+      min-height: var(--control-md);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border-radius: var(--corner-compact);
       transition: color var(--duration-instant), background var(--duration-instant);
     }
@@ -5294,6 +5303,7 @@ function injectStyles(): void {
     }
     .sp-cloud-name-edit {
       padding: 0;
+      min-height: 24px;
       border: none;
       background: none;
       color: var(--agi-ext-accent-text);
@@ -5334,6 +5344,10 @@ function injectStyles(): void {
       flex-direction: column;
       gap: 4px;
     }
+    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-windows,
+    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-models,
+    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-notice,
+    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-help-link { display: none; }
     .sp-quota-bar-row {
       display: flex;
       align-items: center;
@@ -5367,6 +5381,7 @@ function injectStyles(): void {
       gap: 8px;
     }
     .sp-quota-exhausted-label { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-exhausted-label { color: var(--agi-ext-text-muted); }
     .sp-quota-upgrade-btn {
       font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
@@ -5424,6 +5439,7 @@ function injectStyles(): void {
       font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
       color: var(--agi-ext-text);
+      padding: 4px 0;
       cursor: pointer;
     }
     .sp-plan-compare-list {
@@ -7160,7 +7176,9 @@ function failVideoTurn(msg: ChatMessage, error: unknown): void {
 }
 
 function setVideoProgress(messageId: string, label: string): void {
-  const status = document.querySelector(`#sp-video-progress-${CSS.escape(messageId)} span`);
+  const status = document.querySelector(
+    `#sp-video-progress-${CSS.escape(messageId)} .sp-video-progress__label`,
+  );
   if (status) status.textContent = label;
 }
 
@@ -11311,6 +11329,7 @@ function buildUI(): void {
   const drawerBody = el('div', { id: 'sp-drawer-body' });
   const drawerMenu = el('div', { id: 'sp-drawer-menu', role: 'menu' });
   drawerMenu.setAttribute('aria-label', t('spMenuTitle'));
+  wireMenuArrowKeys(drawerMenu);
   const drawerPage = el('div', { id: 'sp-drawer-page', hidden: '' });
   drawerBody.appendChild(drawerMenu);
   drawerBody.appendChild(drawerPage);
@@ -14247,7 +14266,11 @@ function buildUI(): void {
     const generation = ++usageHistoryGeneration;
     const accountGeneration = cloudAccountRefreshGeneration;
     const access = managedModelAccess;
-    if (!access || !canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
+    if (
+      !access ||
+      isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier)) ||
+      !canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')
+    ) {
       clearChildren(quotaModelsEl);
       return;
     }
@@ -14274,11 +14297,15 @@ function buildUI(): void {
     const purchased = purchasedCreditsView(usage);
     const recovery = planQuotaRecovery(managedPlanTier(access));
     const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
+    const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier));
+    quotaWrap.dataset['upgradeOnly'] = String(upgradeOnly);
     clearChildren(quotaWindowsEl);
-    for (const view of views) quotaWindowsEl.appendChild(buildQuotaWindowRow(view));
-    if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
+    if (!upgradeOnly) {
+      for (const view of views) quotaWindowsEl.appendChild(buildQuotaWindowRow(view));
+      if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
+    }
     renderPlanComparison(access.subscriptionTier);
-    quotaLabelEl.textContent = t('spQuotaHeading');
+    quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
     quotaBadgeEl.classList.add('visible');
 
     if (usage.usage_allocation === 'pending') {
@@ -14316,6 +14343,21 @@ function buildUI(): void {
         href: recovery.href,
       });
       scheduleUsageResetRefresh(blocking?.resetAt ?? null);
+      return;
+    }
+
+    if (upgradeOnly) {
+      setQuotaNotice('', null);
+      quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
+      quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
+      delete quotaUpgradeBtn.dataset['destination'];
+      delete quotaUpgradeBtn.dataset['href'];
+      quotaUpgradeRow.style.display = '';
+      quotaBadgeEl.classList.add('has-prompts');
+      quotaBadgeEl.classList.remove('exhausted');
+      quotaBadgeEl.textContent = planLabel;
+      setManagedCloudChatState('ready');
+      renderUsageBanner(null);
       return;
     }
 
@@ -16957,7 +16999,7 @@ function buildUI(): void {
     renderVideoModeItem();
     const isOpen = attachMenu.classList.toggle('open');
     attachBtn.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) fileItem.focus();
+    if (isOpen) attachMenuItems.find((item) => !item.hidden && !item.disabled)?.focus();
   });
   attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
     const items = attachMenuItems.filter((item) => !item.hidden && !item.disabled);

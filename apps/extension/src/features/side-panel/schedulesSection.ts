@@ -63,6 +63,9 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedules-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
   .sp-schedules-status-action {
     margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     padding: 0;
     font: inherit;
     color: var(--agi-ext-accent-text);
@@ -143,6 +146,7 @@ export const SCHEDULES_SECTION_CSS = `
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 8px;
+    min-height: 24px;
     cursor: pointer;
     transition: color var(--duration-instant), border-color var(--duration-instant);
   }

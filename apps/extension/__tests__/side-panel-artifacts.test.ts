@@ -6,6 +6,7 @@ import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import {
   artifactDownload,
   artifactFileName,
+  ARTIFACT_PANEL_CSS,
   artifactProse,
   createArtifactOutputs,
   messageArtifactView,
@@ -518,5 +519,13 @@ describe('live preview through the artifact sandbox', () => {
     vi.advanceTimersByTime(30_000);
     expect(live.panelEl.querySelector('iframe')).not.toBeNull();
     expect(live.panelEl.querySelector('.sp-artifact-panel__status')?.textContent).toBe('');
+  });
+});
+
+describe('outputs popover placement', () => {
+  it('anchors to the header edge so it stays inside a narrow panel', () => {
+    expect(ARTIFACT_PANEL_CSS).toMatch(/#sp-header \{ position: relative; \}/);
+    expect(ARTIFACT_PANEL_CSS).not.toMatch(/\.sp-outputs \{[^}]*position: relative/);
+    expect(ARTIFACT_PANEL_CSS).toMatch(/\.sp-outputs__popover \{[^}]*right: 12px;/);
   });
 });

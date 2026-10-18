@@ -62,6 +62,9 @@ export const ARTIFACTS_DRAWER_CSS = `
   .sp-drawer-artifacts-status[hidden] { display: none; }
   .sp-drawer-artifacts-status-action {
     margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     padding: 0;
     font: inherit;
     color: var(--agi-ext-accent-text);

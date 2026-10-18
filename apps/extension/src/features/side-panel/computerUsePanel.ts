@@ -110,7 +110,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-controls-label {
     font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    flex: 1;
+    flex: 1 0 auto;
   }
 
   .sp-cu-ask-toggle {
@@ -137,6 +137,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 10px;
+    min-height: 24px;
     cursor: pointer;
     transition: border-color var(--duration-instant), color var(--duration-instant);
   }
@@ -154,6 +155,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-text);
     font-size: var(--type-label-size);
     padding: 3px 10px;
+    min-height: 24px;
     cursor: pointer;
   }
 
@@ -198,6 +200,7 @@ export const COMPUTER_USE_PANEL_CSS = `
     font-size: var(--type-label-size);
     font-weight: 600;
     padding: 3px 11px;
+    min-height: 24px;
     cursor: pointer;
     flex-shrink: 0;
   }

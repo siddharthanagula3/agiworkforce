@@ -181,6 +181,21 @@ describe('produced media in an answer', () => {
     expect(bubble.querySelector<HTMLElement>('.sp-bubble')!.hidden).toBe(true);
   });
 
+  it('keeps the spinner when the video progress label changes', () => {
+    const msg: SidePanelChatMessage = {
+      id: 'v-2',
+      role: 'assistant',
+      content: '',
+      timestamp: 0,
+      videoTaskId: 'vid_123',
+    };
+    const bubble = buildBubbleWithTools(msg, { fileAccess: access });
+    const label = bubble.querySelector('#sp-video-progress-v-2 .sp-video-progress__label');
+    expect(label?.textContent).toContain('Creating your video');
+    expect(bubble.querySelector('#sp-video-progress-v-2 svg')).not.toBeNull();
+    expect(bubble.querySelector('#sp-video-progress-v-2 .agi-icon')?.textContent).toBe('');
+  });
+
   it('renders an image card from a chat turn with each image downloadable', async () => {
     const card = {
       schemaVersion: 1,
