@@ -2138,6 +2138,16 @@ function injectStyles(): void {
     }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     .sp-copy-btn.copied { color: var(--agi-ext-success-text); opacity: 1; }
+    .sp-copy-btn.failed { color: var(--agi-ext-danger-text); opacity: 1; }
+    .sp-copy-control { display: inline-flex; align-items: center; min-width: 0; }
+    .sp-copy-status {
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-copy-status:not(:empty) { margin-left: 4px; }
+    [data-math-source] { font-family: var(--type-code-family); }
     .sp-answer-meta {
       padding: 0 3px;
       color: var(--agi-ext-text-muted);

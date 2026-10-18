@@ -2,7 +2,6 @@ import { defineConfig, loadEnv } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import {
   configureChromeManifest,
   resolveChromeBuildConfiguration,
@@ -52,18 +51,6 @@ export default defineConfig(({ mode }) => {
       'process.env.CLERK_SYNC_HOST': JSON.stringify(clerkSyncHost),
     },
     publicDir: false,
-    resolve: {
-      // @vscode/markdown-it-katex require()s katex, which resolves to the CJS
-      // build while our import resolves to the ESM one: two 270 kB copies.
-      alias: [
-        {
-          find: /^katex$/,
-          replacement: createRequire(import.meta.url)
-            .resolve('katex')
-            .replace(/katex\.js$/, 'katex.mjs'),
-        },
-      ],
-    },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
