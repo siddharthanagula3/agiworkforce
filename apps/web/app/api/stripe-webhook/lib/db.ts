@@ -198,7 +198,7 @@ export async function ensureProfileExists(
     });
 
   if (existing.length === 0) {
-    logger.info({ userId, email }, 'Creating missing profile for user in webhook');
+    logger.info({ userId }, 'Creating missing profile for user in webhook');
     await db
       .execute('insert into profiles (id, email) values ($1, $2) on conflict (id) do nothing', [
         userId,
@@ -212,7 +212,7 @@ export async function ensureProfileExists(
         }
         logger.info({ userId }, 'Profile already exists (concurrent creation)');
       });
-    logger.info({ userId, email }, 'Profile created successfully in webhook');
+    logger.info({ userId }, 'Profile created successfully in webhook');
   }
 }
 
@@ -515,7 +515,6 @@ export async function upsertSubscriptionFromSession(
                 logger.error(
                   {
                     sessionId: session.id,
-                    email: customer.email,
                     count: duplicateCheck.length,
                   },
                   'SECURITY: Multiple profiles found with same email - cannot safely assign subscription',
@@ -525,7 +524,7 @@ export async function upsertSubscriptionFromSession(
 
               resolvedUserId = matchingUser.id;
               logger.warn(
-                { sessionId: session.id, email: customer.email, userId: resolvedUserId },
+                { sessionId: session.id, userId: resolvedUserId },
                 'FALLBACK: Resolved user_id from email - storing customer_id for future',
               );
 
@@ -542,7 +541,7 @@ export async function upsertSubscriptionFromSession(
               );
             } else {
               logger.error(
-                { sessionId: session.id, email: customer.email },
+                { sessionId: session.id, customerId: stripeCustomerId },
                 'No auth user found matching customer email',
               );
             }
@@ -620,8 +619,6 @@ export async function upsertSubscriptionFromSession(
       logger.warn(
         {
           resolvedUserId,
-          profileEmail: storedProfile.email,
-          stripeCustomerEmail: customerEmail,
           sessionId: session.id,
         },
         'WARNING: Stripe customer email does not match Neon profile email - subscription will be created for the logged-in user but emails differ',
@@ -1378,7 +1375,10 @@ export async function updateSubscriptionFromStripeSubscription(
             const customer = await stripe.customers.retrieve(stripeCustomerId);
             if (typeof customer !== 'string' && !customer.deleted && customer.email) {
               const customerEmail = customer.email;
-              logger.warn({ customerEmail }, 'FALLBACK: Attempting to find user by customer email');
+              logger.warn(
+                { stripeCustomerId },
+                'FALLBACK: Attempting to find user by customer email',
+              );
 
               const emailProfiles = await db.query<{ id: string }>(
                 'select id from profiles where email = $1 limit 1',
@@ -1388,7 +1388,7 @@ export async function updateSubscriptionFromStripeSubscription(
 
               if (emailProfile?.id) {
                 logger.warn(
-                  { userId: emailProfile.id, email: customerEmail },
+                  { userId: emailProfile.id, customerId: stripeCustomerId },
                   'FALLBACK: Found user by email (will store customer_id for future)',
                 );
                 resolvedUserId = emailProfile.id;
@@ -1401,7 +1401,7 @@ export async function updateSubscriptionFromStripeSubscription(
                   .catch(() => undefined);
               } else {
                 logger.error(
-                  { email: customerEmail, stripeSubId },
+                  { stripeCustomerId, stripeSubId },
                   'CRITICAL: No existing profile found for customer - cannot create subscription',
                 );
               }

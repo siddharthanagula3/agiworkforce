@@ -278,7 +278,6 @@ async function handlePortal(request: NextRequest) {
         logger.warn(
           {
             userId: userId,
-            email: userEmail,
             deprecationNotice: 'Email-based Stripe lookup is deprecated and will be removed',
           },
           'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (DEPRECATED)',
@@ -292,7 +291,7 @@ async function handlePortal(request: NextRequest) {
 
         if (customers.data.length > 1) {
           logger.warn(
-            { userId: userId, email: userEmail, count: customers.data.length },
+            { userId: userId, count: customers.data.length },
             'SECURITY WARNING: Multiple Stripe customers found with same email',
           );
         }
@@ -304,7 +303,6 @@ async function handlePortal(request: NextRequest) {
           logger.error(
             {
               userId,
-              email: userEmail,
               candidateCount: customers.data.length,
             },
             'IDOR blocked: Stripe customer email matched but ownership could not be verified',
@@ -335,7 +333,7 @@ async function handlePortal(request: NextRequest) {
         }
 
         logger.info(
-          { userId: userId, customerId, email: userEmail },
+          { userId: userId, customerId },
           'Stored stripe_customer_id in profile (migration from email fallback)',
         );
       }

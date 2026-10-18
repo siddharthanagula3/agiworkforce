@@ -98,7 +98,14 @@ async function findLiveStripeSubscription(
   stripe: Stripe,
   customerId: string,
 ): Promise<Stripe.Subscription | null> {
-  const statuses: Stripe.SubscriptionListParams['status'][] = ['active', 'trialing', 'past_due'];
+  const statuses: Stripe.SubscriptionListParams['status'][] = [
+    'active',
+    'trialing',
+    'past_due',
+    'unpaid',
+    'incomplete',
+    'paused',
+  ];
   const pages = await Promise.all(
     statuses.map((status) => stripe.subscriptions.list({ customer: customerId, status, limit: 1 })),
   );
