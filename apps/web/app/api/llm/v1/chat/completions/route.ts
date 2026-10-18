@@ -38,7 +38,6 @@ import {
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from './lib/request-surface';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
-// GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
 import { withManagedTurnSlot } from './lib/turn-slot';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import {
@@ -48,8 +47,6 @@ import {
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
-// GOV-7: the catalog form reports which connectors the per-plan ceiling
-// truncated, so the client can say so instead of the tools just vanishing.
 import {
   loadUserConnectorToolCatalog,
   makeUserConnectorExecutor,
@@ -369,7 +366,7 @@ function recordResilienceObservation(observation: {
 }
 
 /**
- * GOV-3: the request-scoped turn body, entered only once a concurrency slot
+ * The request-scoped turn body, entered only once a concurrency slot
  * has been admitted by `handleChatCompletions` below. Split out so the slot's
  * acquire/release can wrap EVERY exit (return, throw, client abort) in one
  * place instead of being repeated at each of this function's ~10 returns.
@@ -888,7 +885,7 @@ async function dispatchChatCompletions(
         addAttachmentTruncationHeader(headers, processed);
         addProjectSourcesHeader(headers, processed);
         addRouteLaneHeader(headers, processed);
-        // GOV-7: name the connectors whose tools did not fit under this plan's
+        // Name the connectors whose tools did not fit under this plan's
         // ceiling so the client can surface it. Header-encoded because this is
         // decided before the first SSE frame and applies to the whole turn.
         if (connectorCatalog.dropped.length > 0) {
@@ -1159,11 +1156,11 @@ async function dispatchChatCompletions(
       // See buildAdapterStreamResponse's docstring.
       const streamStartedAt = Date.now();
 
-      // Managed failover (AUTO-ROUTER-MIGRATION-01, web twin): the rotation
-      // point is startProviderStream's first-chunk peek, a rotated attempt
-      // has BY CONSTRUCTION delivered nothing to the client (the peek either
-      // throws before any chunk is consumable, or the attempt is committed
-      // and later failures keep today's mid-stream behavior). One managed-
+      // Managed failover: the rotation point is startProviderStream's
+      // first-chunk peek, so a rotated attempt has BY CONSTRUCTION delivered
+      // nothing to the client (the peek either throws before any chunk is
+      // consumable, or the attempt is committed and later failures surface
+      // mid-stream). One managed-
       // usage reservation spans all attempts; the attempt view swaps the
       // serving model so attribution and settlement follow it.
       const failover = createFailoverPlan(processed, {
@@ -1365,13 +1362,11 @@ async function dispatchChatCompletions(
 }
 
 /**
- * GOV-3: bound CONCURRENT managed turns per plan.
- *
- * `maxConcurrentTurns` existed in the billing catalog but nothing enforced it:
- * the only limits on this route were requests-per-minute (`llm-completion`) and
- * spend. Neither bounds concurrency, 30 simultaneous 10-minute streams pass a
- * per-minute limiter cleanly, so this was the single control standing between
- * a plan's advertised ceiling and unbounded parallel provider spend.
+ * Bound CONCURRENT managed turns per plan, to the billing catalog's
+ * `maxConcurrentTurns`. The requests-per-minute limiter (`llm-completion`) and
+ * spend do not bound concurrency: 30 simultaneous 10-minute streams pass a
+ * per-minute limiter cleanly, so this stands between a plan's advertised
+ * ceiling and unbounded parallel provider spend.
  *
  * Acquired after the auth gate, the first point with a userId AND a plan tier.
  * The acquire-and-attach pair lives in lib/turn-slot.ts so that the approve and

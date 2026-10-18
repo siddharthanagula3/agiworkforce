@@ -241,13 +241,11 @@ import { MediaGenerationPlaceholder } from './MediaGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
 
 /**
- * Inline user-message editing (CLR-05).
+ * Inline user-message editing.
  *
  * ChatGPT parity: clicking Edit on a sent message turns THAT bubble into a
- * pre-filled textarea with Cancel/Save. Web used to prefill the composer at the
- * bottom of the page instead, leaving the original message sitting untouched in
- * the transcript above while you typed somewhere else, and `EditableMessage`,
- * a complete inline editor, sat in this folder with zero importers.
+ * pre-filled textarea with Cancel/Save, rather than prefilling the composer at
+ * the bottom of the page while the original sits untouched above.
  *
  * Wired the same way tool approval is: a context the chat page mounts, read here
  * via `useContext`, so MessageBubble stays provider-independent and renderable
@@ -441,13 +439,12 @@ const PROVIDER_MODE_BY_PRIVACY_MODE = {
 >;
 
 /**
- * SECURITY-FIX F3 (CWE-863): generated-file descriptors used to be stamped
- * `managed`/`ManagedGateway` unconditionally, so a file produced in a Local or
- * BYOK turn rendered a "Managed" privacy chip, the label the user relies on to
- * know where the bytes went, and the Artifacts panel then read that fabricated
- * label back as the artifact's origin. Only the Local→BYOK handoff writes
- * `metadata.privacyMode`, so the boundary is derived from every signal the turn
- * really carries: its declared labels, then the model that served it. `managed`
+ * The privacy chip on a generated file is the label the user relies on to know
+ * where the bytes went, and the Artifacts panel reads it back as the artifact's
+ * origin, so a Local or BYOK turn must never be stamped `managed`. Only the
+ * Local→BYOK handoff writes `metadata.privacyMode`, so the boundary is derived
+ * from every signal the turn really carries: its declared labels, then the
+ * model that served it. `managed`
  * survives only as the display fallback for a turn with no signal at all;
  * `resolveArtifactOriginPrivacyMode` refuses to treat it as origin evidence.
  */
@@ -645,7 +642,7 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
   /**
-   * Re-run a Deep Research turn that errored or was stopped (CAP-045 slice 4).
+   * Re-run a Deep Research turn that errored or was stopped.
    * Absent when the surface cannot send, so no dead Retry control is rendered.
    */
   onRetryResearch?: (messageId: string) => void;
@@ -851,7 +848,7 @@ const MessageBubbleComponent = function MessageBubble({
     });
   }, [confirmDestructive, countVariantFollowers, message.id, onDeleteVariant, variantInfo]);
 
-  // ---- Inline edit (CLR-05) -------------------------------------------------
+  // ---- Inline edit -----------------------------------------------------------
   // `beginEdit` runs the surface's guards and answers whether the editor may
   // open; `submitEdit` performs the replacing resend. Absent provider => the
   // legacy `onEdit` (composer prefill) still runs, so no surface loses Edit.
@@ -1196,9 +1193,8 @@ const MessageBubbleComponent = function MessageBubble({
   /*
    * One verdict per answer. The persisted reaction on message metadata is the
    * source of truth when the host wires `onReact`; `ratingState` only stands in
-   * for hosts that do not. Both sinks are fed from this single control, a
-   * second pair of thumbs used to render beside it, so an answer showed four
-   * thumb icons and two independent verdicts.
+   * for hosts that do not. Both sinks are fed from this single control, so an
+   * answer never shows two pairs of thumbs and two independent verdicts.
    */
   const responseRating =
     reactionRating(message.metadata?.reaction) ?? (ratingState === 'idle' ? null : ratingState);
@@ -2449,7 +2445,7 @@ const MessageBubbleComponent = function MessageBubble({
               />
             )}
 
-          {/* Inline edit (CLR-05): the bubble ITSELF becomes the editor, so the
+          {/* Inline edit: the bubble ITSELF becomes the editor, so the
               message being revised never sits stale above a composer at the far
               end of the page. Replaces the rendered body rather than sitting
               beside it, two copies of the same message is the bug, not the fix. */}
@@ -3869,7 +3865,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;
   if (prev.branchNavigation !== next.branchNavigation) return false;
-  // BUG-27/BUG-28 class: a comparator that does not name a prop swallows every
+  // A comparator that does not name a prop swallows every
   // update to it. Regenerating turns a 1/1 into a 2/2 without touching the
   // message, so the pager would keep reporting the count it first rendered.
   if (prev.variantInfo !== next.variantInfo) return false;

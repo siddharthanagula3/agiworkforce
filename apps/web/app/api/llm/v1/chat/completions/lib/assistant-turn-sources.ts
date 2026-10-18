@@ -1,11 +1,10 @@
 /**
  * @file The evidence a turn emitted, collected from the wire it already sent.
  *
- * Citations were written to the database by the client alone, after the stream
- * ended, by `saveMessageToDb`. Its failure handler is `console.error`. A
- * non-retryable failure therefore left an answer whose text survived a reload
- * while every source chip vanished, with nothing anywhere saying so, which is
- * the part of an answer a reader most needs in order to trust it.
+ * The client writes citations with `saveMessageToDb` after the stream ends, and
+ * its failure handler only logs. A non-retryable failure there would leave an
+ * answer whose text survives a reload while every source chip vanishes, which
+ * is the part of an answer a reader most needs in order to trust it.
  *
  * The server already has the evidence: it emits the `x_search_results` frames
  * the client builds those chips from. Collecting them here costs one pass over
@@ -237,8 +236,8 @@ export class AssistantTurnSourceCollector {
   /**
    * The pages the model actually cited are a different list from the pages the
    * provider searched, and on a native-search turn they only partly overlap.
-   * Collecting only the searched list left a reloaded answer whose `[n]`
-   * markers pointed at outlets the row never recorded.
+   * Both are collected so a reloaded answer's `[n]` markers point at outlets
+   * the row recorded.
    */
   private ingestCitation(event: unknown): void {
     if (this.citationsById.size >= MAX_PERSISTED_TURN_SOURCES) return;

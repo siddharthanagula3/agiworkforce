@@ -1032,10 +1032,9 @@ export function applyManagedOfficeFileCreation(
 }
 
 /**
- * Offer the model a way to ask a real question. The clarify card's renderer,
- * contract and answer path were all built and nothing produced one, so an
- * ambiguous request came back as prose asking the reader to describe their
- * choice in words. Offered, never forced: unlike the map tool this sets no
+ * Offer the model a way to ask a real question, so an ambiguous request gets
+ * the clarify card instead of prose asking the reader to describe their choice
+ * in words. Offered, never forced: unlike the map tool this sets no
  * tool_choice, because most turns should just be answered.
  *
  * The tool's own description could not reliably keep a fast model from
@@ -1312,9 +1311,9 @@ export type ProcessedRequest = {
    * itself: memory facts, more than one user turn, a non-text part. A scheduled
    * run has none of those, because it is built as exactly one system message
    * and one user message, and yet `loadProjectContext` may have folded the
-   * project's private context into that system prompt. The gate therefore saw
-   * no sensitive source on precisely the runs where it matters most: an
-   * unattended run has nobody to ask, so the gate's choice is allow or deny.
+   * project's private context into that system prompt. This flag carries that
+   * fact to the gate, which matters most on an unattended run: nobody is there
+   * to ask, so the gate's choice is allow or deny.
    */
   sensitiveContextPresent?: boolean;
   untrustedContextPresent?: boolean;
@@ -1350,10 +1349,9 @@ export type ProcessedRequest = {
    * answers to the same row.
    *
    * `managed-failover.ts`'s OpenRouter route-retry is not drawn from
-   * `fallbackModels`, so the policy filtering applied to that plan never
-   * governed it; it needs the snapshot itself. Without this field there was
-   * nowhere for `route.ts` to get one, and its `createFailoverPlan` calls
-   * passed nothing, leaving that enforcement permanently ungoverned.
+   * `fallbackModels`, so the policy filtering applied to that plan does not
+   * govern it; it needs the snapshot itself, which `route.ts` passes to
+   * `createFailoverPlan` from here.
    *
    * `null` means UNGOVERNED, matching the evaluator's contract: personal
    * scope or no policy row.
@@ -2011,9 +2009,7 @@ export function applyResearchMode(
  * `generic_web_search` feature flag), the composer offers web search via
  * `isWebSearchAvailable`, and the request routes through the generic fallback tool
  * (`shouldOfferGenericWebSearchTool` → `webSearchToolDef`, executed in the tool loop)
- * rather than this native injection. The old failure mode (a lit toggle producing no
- * search tool, so the model answered "I can't browse the internet") only applied to
- * the retired inline block; the two-path design above closes it for every provider.
+ * rather than this native injection, so a lit toggle always yields a search tool.
  *
  * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS` in
  * `@agiworkforce/search`):
@@ -2120,18 +2116,18 @@ export function resolveWebFetchTools({
 }
 
 /**
- * WP4: should the generic platform-executed `web_search` function tool be offered
+ * Should the generic platform-executed `web_search` function tool be offered
  * for this request? Pure and exported (same reason as `appendWebSearchTool`: unit
  * testable without invoking the rest of `processRequest`).
  *
  * True when: the provider has no working native search path on this route
  * (`webSearchNeedsGenericTool` reports that fallback requirement), the
- * resolved model is tools-capable (unknown models
- * default to allowed), the request is streaming (offer ⊆ run, only that path
- * enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
- * a search backend is actually configured (`backendConfigured`.
- * `webSearchBackendConfigured()` in production, so the tool is never offered as a
- * promise the server can't back up).
+ * resolved model is tools-capable (unknown models default to allowed), the
+ * request is streaming (offer ⊆ run, only that path enters the tool loop in
+ * route.ts, mirrors url_fetch/E2B below), and a search backend is actually
+ * configured (`backendConfigured`, which is `webSearchBackendConfigured()` in
+ * production, so the tool is never offered as a promise the server can't back
+ * up).
  */
 export function shouldOfferGenericWebSearchTool({
   providerLower,
@@ -2213,8 +2209,8 @@ export function buildTaskFamilySignals(
  * An exact model selection scopes to that model's own routes
  * (`getRoutePricingForModel`). An alias (`auto`, `auto-economy`, ...) cannot
  * be resolved to one model without duplicating the policy's slot/profile/task
- * logic, so it gets the full set of routes any Auto slot could ever reach.
- * a safe superset a ranker only ever reads by exact route id.
+ * logic, so it gets the full set of routes any Auto slot could ever reach: a
+ * safe superset, because a ranker only ever reads it by exact route id.
  */
 const AUTO_POLICY_ROUTE_IDS: readonly string[] = [
   ...new Set(
@@ -2364,14 +2360,9 @@ export function buildWebCloudAutoRoutingRequest(
    */
   organizationPolicy?: ModelAccessPolicy | null,
   /**
-   * The user's own saved routing preferences.
-   *
-   * `usOnly` is enforced by both resolvers and covered by tests in both
-   * languages, and `/api/me/routing-preferences` has always persisted it. This
-   * function never set it, so the preference reached the database and stopped
-   * there. Threaded exactly like `zeroDataRetentionOnly` above, which is its
-   * structurally identical sibling and the strongest evidence the omission was
-   * an oversight rather than a decision.
+   * The user's own saved routing preferences, as `/api/me/routing-preferences`
+   * stores them. `usOnly` is enforced by both resolvers and is threaded here
+   * the same way as `zeroDataRetentionOnly`.
    */
   userRoutingPreferences?: UserRoutingPreferences | null,
   rollout?: WebCloudRolloutInputs,
@@ -2657,18 +2648,17 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
  * `resolveProviderFromModel` answers a DISPATCH question, which adapter will
  * carry this request, and for the aggregator-routed vendors (MiniMax, Qwen,
  * Zhipu; see lib/services/aggregator-routing.ts) it collapses the vendor away
- * and returns `"openrouter"` the moment `OPENROUTER_API_KEY` is set. Feeding
- * that alone to a policy written about VENDORS broke the gate in both
- * directions at once: `blockedProviders: ['minimax']` matched nothing and
- * MiniMax kept running, while `allowedProviders: ['minimax']` matched nothing
- * and MiniMax was refused. Normalization cannot repair that, the two strings
- * name different things, not the same thing spelled twice.
+ * and returns `"openrouter"` the moment `OPENROUTER_API_KEY` is set. A policy
+ * written about VENDORS cannot be answered with that alone: neither
+ * `blockedProviders: ['minimax']` nor `allowedProviders: ['minimax']` would
+ * match it. The two strings name different things, so normalization cannot
+ * reconcile them.
  *
  * So the ask carries both, sourced from the two places that actually know:
  * the VENDOR from the canonical catalog (`getModelMetadataById(...).provider`,
  * the same field a policy row is written against), the TRANSPORT from the
- * dispatch layer. The evaluator's documented rule decides what each one may do
- *, a block matches either, an allowlist is about the vendor.
+ * dispatch layer. The evaluator's documented rule decides what each one may
+ * do: a block matches either, an allowlist is about the vendor.
  *
  * A model the catalog cannot resolve is asked about with a null vendor rather
  * than skipped: a model rule still decides, and an allowlisted-provider policy
@@ -3432,9 +3422,8 @@ async function processAdmittedRequest(
     [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
   );
 
-  // Every message the request will dispatch, not a role subset: prohibited text
-  // placed in an assistant or tool message was dispatched to the provider
-  // unexamined while the moderation gate reported the turn clean.
+  // Every message the request will dispatch, not a role subset, so prohibited
+  // text placed in an assistant or tool message is examined too.
   const clientAuthoredPromptSegments = chatRequest.messages
     .map((message) => extractTextContent(message.content))
     .filter((text) => text.length > 0);
@@ -4377,7 +4366,7 @@ async function processAdmittedRequest(
   const freeLaneMode = freeLane.mode;
   // The slot preference rides this branch and no other, so it reaches the
   // resolver only for an exact-`free` plan with the lane switched on. The base
-  // decision above never receives it, which is what keeps every other tier.
+  // decision above never receives it, which is what keeps every other tier,
   // including the ones `normalizeTier` folds into `free`, byte-identical.
   const freeLaneRouteDecision = freeLaneObserves(freeLaneMode)
     ? resolveWebCloudModelRoute(
@@ -4603,9 +4592,9 @@ async function processAdmittedRequest(
   // resolved. Checking the requested model instead would let a blocked model be
   // reached by asking for `auto` and having the router pick it, a bypass that
   // no amount of picker filtering closes.
-  // The scoped handle resolved the active workspace back at line ~1300,
-  // including the x-agi-organization-id override. Re-resolving here would add a
-  // second round trip to the hot path for an answer already in hand.
+  // The scoped handle already resolved the active workspace, including the
+  // x-agi-organization-id override. Re-resolving here would add a second round
+  // trip to the hot path for an answer already in hand.
   // Both provider identities, spelled out at the call site: the VENDOR the
   // catalog says owns this model and, separately, the TRANSPORT the dispatch
   // layer resolved. See `resolveProviderIdentities` for why one string was not
@@ -4853,11 +4842,8 @@ async function processAdmittedRequest(
   }
   const webSearchDomainPolicy = narrowedDomainPolicy.policy;
   // The user asked for Deep Research and the routed model cannot do it, so the
-  // research loop will not run. Previously this was silent: the toggle stayed
-  // lit, `runResearchLoop` never executed, and the user received an ordinary
-  // answer with no header, no SSE status frame and nothing in the text to say
-  // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
-  // shape of degradation.
+  // research loop will not run and the turn says so, as
+  // `codeExecutionUnavailable` does for code execution.
   const researchUnavailable = chatRequest.research === true && !researchMode;
   let accountLockdownRead: Promise<boolean | null> | undefined;
   const readAccountLockdown = (): Promise<boolean | null> =>
@@ -5912,8 +5898,8 @@ async function processAdmittedRequest(
 
   // Asking the model to disclose the downgrade is not the same as disclosing
   // it: the preamble below tells the model to say Deep Research did not run,
-  // and the observed turn instead produced a confident answer with its own
-  // bibliography. The header does not depend on the model complying.
+  // but a model can still answer as if it had. The header does not depend on
+  // the model complying.
   if (researchUnavailable && !fallbackReason) {
     fallbackReason = 'research_unsupported_model';
   }
@@ -6283,7 +6269,7 @@ async function processAdmittedRequest(
   // request served by the primary model.
   // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
   // stage's ranked tail, every member already verified zero-cost, so rotation
-  // cannot leave the lane. The trial path stays rotation-free as before.
+  // cannot leave the lane. The trial path is rotation-free.
   const failoverRoutes = (
     freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks)
   ).filter(

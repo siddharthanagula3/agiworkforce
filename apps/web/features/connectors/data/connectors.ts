@@ -69,8 +69,8 @@ export const RISK_CLASS_COPY: Record<ConnectorRiskClass, string> = {
 
 /**
  * What to show where a static tool list would otherwise be. The
- * `runtime-discovered` line is the one that matters: an empty list used to read
- * as "this connector has no tools" when it meant "nobody has asked the server".
+ * `runtime-discovered` line is the one that matters: an empty list there means
+ * "nobody has asked the server", not "this connector has no tools".
  */
 export const ACTION_SOURCE_COPY: Record<ConnectorActionSource, string> = {
   declared: 'These tools ship with the product, so this list is complete before you connect.',

@@ -255,9 +255,9 @@ interface MessageGroup {
  * meaning keeps a height that describes the message it used to show. Retry and
  * variant paging only ever rewrite a SUFFIX of the transcript, and this returns
  * where that suffix starts so the rows above keep their measurements. Throwing
- * the whole cache away instead (AGI-20) put every row back on the default
- * estimate, and `scrollToRow` then resolved the bottom of a long thread
- * hundreds of rows too high, landing the reader on an unrelated message.
+ * the whole cache away would put every row back on the default estimate, and
+ * `scrollToRow` would then resolve the bottom of a long thread hundreds of rows
+ * too high, landing the reader on an unrelated message.
  *
  * A group that only grew, which is what a streamed turn does, is not a change:
  * its stale height is a far better estimate than the default, and the resize
@@ -969,8 +969,8 @@ const MessageGroupRow = memo(
       prev.branchingMessageId === next.branchingMessageId &&
       prev.onBranch === next.onBranch &&
       prev.onSwitchBranch === next.onSwitchBranch &&
-      // BUG-27/BUG-28 class: an omitted prop is an update this comparator
-      // silently swallows. The page holds the map's identity stable while only
+      // An omitted prop is an update this comparator silently swallows. The
+      // page holds the map's identity stable while only
       // its content is unchanged, so comparing by reference is enough here and
       // still catches the regenerate that turns 1/1 into 2/2.
       prev.variantInfoByMessageId === next.variantInfoByMessageId &&

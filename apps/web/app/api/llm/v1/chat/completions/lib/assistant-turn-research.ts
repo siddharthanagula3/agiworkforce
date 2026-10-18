@@ -3,13 +3,10 @@
  *
  * The run's report is already durable in `research_reports`, keyed by the same
  * `request_id` the assistant turn's metadata carries, so the row and the report
- * were always two halves of one turn. What the message row never held was the
- * state the activity header renders from, and the client save that carried it
- * is the one write a research turn is most likely to lose: its metadata is the
- * largest of any turn (plan steps, sources and reasoning together), so it is
- * the one that trips the metadata size limit and answers 400. The turn then
- * reloaded as plain prose with no header, no phase and no step list, while the
- * report sat untouched in its own table.
+ * are two halves of one turn. The state the activity header renders from
+ * cannot rely on the client save: a research turn's metadata is the largest of
+ * any turn (plan steps, sources and reasoning together), so that save is the
+ * one most likely to trip the metadata size limit and answer 400.
  *
  * So the state is projected here from the stored report rather than re-derived
  * from the wire: the report is what the loop persisted, and a second derivation

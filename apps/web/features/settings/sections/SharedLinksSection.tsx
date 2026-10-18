@@ -289,9 +289,6 @@ export function SharedLinksSection() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* CAP-015 slice 4: the other thing a user can make public from chat.
-          Kept on this screen so "what of mine is public?" has one answer
-          instead of two screens that each tell half of it. */}
       <PublishedArtifactsSection />
     </div>
   );

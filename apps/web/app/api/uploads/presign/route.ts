@@ -134,13 +134,10 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   const localKnowledgeUpload = kind === 'knowledge-file' && !isPrivateObjectStorageConfigured();
   const proxyChatAttachmentUpload =
     kind === 'chat-attachment' && uploadNeedsSameOriginRelay(request);
-  // Same reasoning as the chat-attachment proxy above: a direct browser PUT to
-  // R2's presigned URL needs the bucket's own CORS config to allow this
-  // origin, and that allowlist is Cloudflare-side infrastructure this route
-  // cannot reach. Chat attachments already route around it locally; knowledge
-  // files did not, so every non-CORS-safe local origin (any port but 3000)
-  // hit a same silent "Failed to fetch" the presign response itself looked
-  // fine for.
+  // A direct browser PUT to R2's presigned URL needs the bucket's CORS
+  // allowlist, which this route cannot configure, to include this origin. An
+  // origin that is not on it relays through the same-origin put route instead,
+  // as chat attachments do.
   const proxyKnowledgeFileUpload =
     kind === 'knowledge-file' && !localKnowledgeUpload && uploadNeedsSameOriginRelay(request);
   const upload = localKnowledgeUpload

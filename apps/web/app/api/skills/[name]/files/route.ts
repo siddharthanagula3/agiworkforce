@@ -8,18 +8,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { findSelectableSkillWithFiles } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
+import { requireSkillName } from '../../skill-name-param';
 
 export const runtime = 'nodejs';
 
-const SKILL_NAME_MAX_LENGTH = 200;
 const SKILL_ENTRY_FILE = 'SKILL.md';
-
-function requireSkillName(name: string | undefined): string {
-  if (!name || name.length > SKILL_NAME_MAX_LENGTH) {
-    throw createError.validation(`skill name is required (1–${SKILL_NAME_MAX_LENGTH} chars)`);
-  }
-  return name;
-}
 
 async function handleListFiles(
   request: NextRequest,

@@ -39,9 +39,8 @@ export interface UpstreamErrorShape {
 /**
  * The shape a mid-stream failure travels to the client in.
  *
- * Built here rather than at each emitter because the three that exist were
- * each assembling their own `{ message, code, retryable }` literal, and a
- * field added for one of them reached the client from one code path only.
+ * Built here rather than at each emitter, so a field added to the frame reaches
+ * the client from every code path that emits one.
  */
 export interface StreamErrorFrame {
   message: string;
@@ -217,8 +216,8 @@ export function toolFailureMessage(toolName: string, error: unknown): string {
  *
  * Every caller that reports a failure to the client goes through here, because
  * an upstream SDK's `message` is not copy: at least one provider formats it as
- * the HTTP status followed by the verbatim JSON error body, and emitting that
- * put a provider's raw payload in the transcript. A failure that is not an
+ * the HTTP status followed by the verbatim JSON error body, which must not
+ * reach the transcript. A failure that is not an
  * upstream refusal classifies as `unknown` and still gets taxonomy copy rather
  * than an exception's internals.
  */
@@ -466,9 +465,8 @@ function upstreamCopy(
     // The quota WINDOW is spent, as opposed to a momentary rate limit. Same
     // user-facing shape as a rate limit, different routing consequence upstream
     // (the pool is taken out of service until it resets rather than retried).
-    // A free pool is one every reader on the Free plan shares, so
-    // the copy says whose limit it is: naming it "your" limit sent readers to
-    // check an account that had nothing wrong with it.
+    // A free pool is one every reader on the Free plan shares, so the copy says
+    // whose limit it is rather than sending readers to check their own account.
     case 'quota_exhausted': {
       const clause = retryClause(retryAfterSeconds, 'Try again later');
       const message =

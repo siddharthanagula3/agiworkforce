@@ -14,15 +14,13 @@ import {
   updatePluginInstallationSettings,
 } from '@/lib/services/plugin-installation-service';
 import { PluginInstallationSettingsPatchSchema } from '@agiworkforce/cloud-contracts';
+import { isPluginId } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ParamsSchema = z.object({
-  id: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+  id: z.string().trim().refine(isPluginId),
 });
 
 type RouteContext = { params: Promise<{ id: string }> };

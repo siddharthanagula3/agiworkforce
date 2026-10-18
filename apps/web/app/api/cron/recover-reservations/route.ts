@@ -30,9 +30,9 @@ export const maxDuration = 300;
  * gets their quota back, which is why this sits with the other reapers rather
  * than with the ledger.
  *
- * Ordering: this only became safe once the lease renewed while a turn was
- * running (AGI-1, migration 0178). Before that, raising the cadence would have
- * turned a once-daily misfire on live turns into a frequent one.
+ * Ordering: this is safe at a high cadence only because the lease renews while
+ * a turn is running (migration 0178); without that, every sweep would misfire
+ * on live turns.
  *
  * `processPendingSettlements` is the single call that does both halves:
  * `process_credit_settlement_queue` invokes recovery first, then drains the

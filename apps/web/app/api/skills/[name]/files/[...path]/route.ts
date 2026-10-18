@@ -14,23 +14,16 @@ import {
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { hashSkillContent } from '@agiworkforce/skills';
+import { requireSkillName } from '../../../skill-name-param';
 
 export const runtime = 'nodejs';
 
-const SKILL_NAME_MAX_LENGTH = 200;
 const UNSUPPORTED_MEDIA_TYPE_STATUS = 415;
 const DOWNLOAD_PARAM = 'download';
 const DOWNLOAD_PARAM_VALUE = '1';
 const DOWNLOAD_CONTENT_TYPE = 'application/octet-stream';
 const FALLBACK_DOWNLOAD_FILENAME = 'skill-file';
 const NON_ASCII_FILENAME_CHARACTERS = /[^\w.-]+/g;
-
-function requireSkillName(name: string | undefined): string {
-  if (!name || name.length > SKILL_NAME_MAX_LENGTH) {
-    throw createError.validation(`skill name is required (1–${SKILL_NAME_MAX_LENGTH} chars)`);
-  }
-  return name;
-}
 
 function contentDisposition(path: string): string {
   const name = basename(path);

@@ -147,8 +147,7 @@ export async function applySecretHandlingToRequest(
 
     // Redacted one span at a time. Joining the spans, redacting the join and
     // splitting it apart again loses the mapping whenever a replacement eats a
-    // boundary, and the fallback for a short split was the caller's own
-    // unredacted text.
+    // boundary.
     const redactedTexts = spans.map((span) => redactAuditedSecrets(span.text, highConfidenceNames));
 
     const residue = scanForSecrets(redactedTexts.join(MESSAGE_SCAN_BOUNDARY)).filter((detection) =>

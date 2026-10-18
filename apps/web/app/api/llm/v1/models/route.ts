@@ -42,9 +42,8 @@ type OpenAiCompatibleModel = {
   parent: null;
   /**
    * The lowest plan that can actually run this model. `'free'` is reported for
-   * the models a free account may run; before, every economy model reported
-   * `'basic'`, so a caller on the free plan was told that a model it could run
-   * right now required an upgrade.
+   * the models a free account may run, so a caller on the free plan is never
+   * told that a model it can run right now requires an upgrade.
    */
   tier: 'free' | 'basic' | 'pro' | 'max';
   context_window: number;

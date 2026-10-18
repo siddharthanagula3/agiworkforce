@@ -163,8 +163,8 @@ export interface MessageResearchState {
   /** Honest error summary when the run failed mid-way. */
   error?: string;
   /**
-   * The run's research plan (additive `x_research_plan` SSE event, CAP-045
-   * slice 2): the queries the planning turn committed to, plus the follow-up
+   * The run's research plan (additive `x_research_plan` SSE event): the
+   * queries the planning turn committed to, plus the follow-up
    * and synthesis steps the loop really executed, each with live status.
    * Absent for a run that predates the event or whose plan could not be parsed.
    */
@@ -173,7 +173,7 @@ export interface MessageResearchState {
   /**
    * Sources this run gathered, carried forward when the user retries an
    * errored/interrupted run so the retry does not re-search what already
-   * succeeded (CAP-045 slice 4).
+   * succeeded.
    */
   sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
   runConfig?: ResearchRunConfig;
@@ -366,7 +366,7 @@ export interface MessageMetadata {
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
   /**
-   * AGI Work plan queue (additive `x_agiwork_plan` SSE event, CAP-048): the
+   * AGI Work plan queue (additive `x_agiwork_plan` SSE event): the
    * steps the planning turn committed to, with live status as execution
    * proceeds. Whole-plan, last-write-wins. Absent for a run that predates the
    * event or whose plan could not be parsed.

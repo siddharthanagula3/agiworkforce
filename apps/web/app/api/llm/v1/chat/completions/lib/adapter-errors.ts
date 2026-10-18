@@ -22,9 +22,9 @@ export interface UpstreamError extends Error {
    * that text can be chosen by whoever sent the request: the refusal raised for
    * an attachment a route cannot read names the file. Every routing decision
    * downstream, retry, failover, and the copy the reader sees, comes out of
-   * `classifyError`, and with nothing structured to read it had to re-parse
+   * `classifyError`, and with nothing structured to read it would re-parse
    * that string, so a file named `timeout.pdf` or `insufficient_quota.pdf`
-   * picked the failure class for the turn.
+   * could pick the failure class for the turn.
    *
    * `classifyError` reads this field first and only falls back to matching the
    * text when it is absent, which is what an adapter with nothing structured to
@@ -57,8 +57,8 @@ function providerUpstreamError(
   }
   const error = new Error(message) as UpstreamError;
   if (Number.isFinite(status)) error.status = status;
-  // Preserve the provider's own Retry-After. Dropping it here is what made
-  // `retryAfterSeconds` unrecoverable for every downstream consumer.
+  // Preserve the provider's own Retry-After: no downstream consumer can recover
+  // `retryAfterSeconds` once it is dropped here.
   if (typeof chunk.retryAfterSeconds === 'number' && Number.isFinite(chunk.retryAfterSeconds)) {
     error.retryAfterSeconds = chunk.retryAfterSeconds;
   }

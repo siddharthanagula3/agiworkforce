@@ -243,12 +243,9 @@ function managedUsageErrorResponse(
 }
 
 /**
- * Fixed copy per status rather than the upstream body.
- *
- * The provider's own error text was relayed verbatim, which is how a request id,
- * an account or organization identifier, or a quota message meant for the key's
- * owner reached the caller. The image and video routes already map failures this
- * way.
+ * Fixed copy per status rather than the upstream body, which can carry a
+ * request id, an account or organization identifier, or a quota message meant
+ * for the key's owner. The image and video routes map failures the same way.
  */
 function describeTranscriptionFailure(status: number): string {
   if (status === 400) return 'That audio could not be transcribed. Try a different recording.';

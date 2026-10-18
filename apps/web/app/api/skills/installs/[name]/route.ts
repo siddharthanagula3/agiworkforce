@@ -18,19 +18,9 @@ import {
 import { listPermittedPluginIds } from '@/lib/services/workspace-plugin-access';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
+import { requireSkillName } from '../../skill-name-param';
 
 export const runtime = 'nodejs';
-
-const SKILL_INSTALL_NAME_MAX_LENGTH = 200;
-
-function requireSkillName(name: string | undefined): string {
-  if (!name || name.length > SKILL_INSTALL_NAME_MAX_LENGTH) {
-    throw createError.validation(
-      `skill name is required (1–${SKILL_INSTALL_NAME_MAX_LENGTH} chars)`,
-    );
-  }
-  return name;
-}
 
 async function handleUninstallSkill(
   request: NextRequest,

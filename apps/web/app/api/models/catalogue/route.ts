@@ -26,7 +26,6 @@ import {
 
 export const runtime = 'nodejs';
 
-export { buildCatalogueEntries };
 export type {
   CatalogueEntry,
   ModelCatalogueCapabilities,

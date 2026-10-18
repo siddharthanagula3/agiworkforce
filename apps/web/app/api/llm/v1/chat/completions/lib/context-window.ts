@@ -159,9 +159,8 @@ export function planContextTrim(
  * for compaction. A null `replacementText` drops the span silently, which
  * only ever makes sense when the caller already knows nothing was dropped.
  *
- * Mutates `messages` in place (matching the pre-refactor `trimMessagesToContextWindow`
- * contract every existing caller relies on) and returns the same
- * `ContextTrimResult` shape either path produces.
+ * Mutates `messages` in place, as `trimMessagesToContextWindow` does, and
+ * returns the same `ContextTrimResult` shape either path produces.
  */
 export function applyDroppedSpanReplacement(
   messages: TrimmableMessage[],

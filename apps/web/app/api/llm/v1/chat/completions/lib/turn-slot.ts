@@ -6,7 +6,7 @@ import { getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 
 /**
- * GOV-3: the plan's concurrent-turn ceiling is already occupied.
+ * The plan's concurrent-turn ceiling is already occupied.
  *
  * Actionable rather than generic: the user's own other turns are the cause and
  * stopping one is the immediate fix, so say that and name the ceiling.
@@ -53,7 +53,7 @@ function isEventStreamResponse(response: NextResponse | Response): boolean {
 }
 
 /**
- * GOV-3: hand slot ownership to a streaming response.
+ * Hand slot ownership to a streaming response.
  *
  * A streaming turn OUTLIVES its handler: the route returns as soon as the SSE
  * body exists, while the provider keeps producing for minutes afterwards.
@@ -96,11 +96,11 @@ function attachTurnSlotToStream(
 /**
  * The one way to start a managed turn.
  *
- * Every entry point that dispatches an agent turn has to take a slot, and the
- * approve and resume-input routes did not: a paused run could be resumed past
- * the plan's ceiling as many times as it had checkpoints. Wrapping the dispatch
- * here rather than repeating the acquire-and-attach pair means the next entry
- * point inherits the ceiling instead of having to remember it.
+ * Every entry point that dispatches an agent turn has to take a slot, the
+ * approve and resume-input routes included, or a paused run could be resumed
+ * past the plan's ceiling once per checkpoint. Wrapping the dispatch here
+ * rather than repeating the acquire-and-attach pair means the next entry point
+ * inherits the ceiling instead of having to remember it.
  */
 export interface ManagedTurnSlotHold {
   holdUntil: (settled: Promise<unknown>) => void;
@@ -124,7 +124,7 @@ export async function withManagedTurnSlot(
         limit: turnSlot.limit,
         active: turnSlot.active,
       },
-      'GOV-3: concurrent-turn ceiling reached; rejecting turn',
+      'Concurrent-turn ceiling reached; rejecting turn',
     );
     return managedTurnSlotExhaustedResponse(turnSlot);
   }

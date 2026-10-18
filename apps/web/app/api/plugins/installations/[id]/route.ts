@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isPluginId } from '@agiworkforce/types';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -23,10 +24,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ParamsSchema = z.object({
-  id: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+  id: z.string().trim().refine(isPluginId),
 });
 const PatchBodySchema = z
   .object({ enabled: z.boolean(), withDependents: z.boolean().optional() })

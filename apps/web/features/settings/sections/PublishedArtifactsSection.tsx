@@ -22,7 +22,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 
 /**
- * Published artifacts management (CAP-015 slice 4).
+ * Published artifacts management.
  *
  * Mirrors {@link SharedLinksSection} deliberately, same list/copy/revoke
  * shape, same styling tokens, because it solves the same problem for the other

@@ -376,7 +376,7 @@ export interface ComposerSendMeta {
   skillName?: string;
   /** Explicit user-selected MCP Prompt/Resources for this one turn. */
   mcpContext?: McpContextSelection;
-  /** CAP-048: structured AGI Work goal captured by the composer. */
+  /** Structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
@@ -823,7 +823,7 @@ const ChatComposerNewComponent = ({
   );
   // Reset per message so each new draft gets its own warning.
   const secretWarningAcknowledgedRef = useRef(false);
-  // CAP-048: optional AGI Work scope fields. Lightweight inline inputs shown
+  // Optional AGI Work scope fields. Lightweight inline inputs shown
   // only in AGI Work mode; the composed message is the objective itself.
   const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
   const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
@@ -1514,9 +1514,8 @@ const ChatComposerNewComponent = ({
   // (selectedModelCaps.codeExecution, curated per-model in models.curation.json),
   // never a provider-name allowlist: request-processor.ts gates the server turn
   // on `resolvedModelCaps?.codeExecution === true` alone, and the catalog
-  // marks codeExecution true for at least one live model outside the
-  // previously hardcoded three-provider list, so that allowlist here hid the
-  // control for a model the server would have honored.
+  // marks codeExecution true for live models across providers, so a provider
+  // allowlist here would hide the control for a model the server honors.
   const modelSupportsCodeExecution =
     !promotionalTextOnlyChat &&
     (isAutoSelected ||
@@ -1771,7 +1770,7 @@ const ChatComposerNewComponent = ({
   const [composerWrapsLines, setComposerWrapsLines] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
-  // The "+" trigger and its portaled menu. The menu is no longer a DOM
+  // The "+" trigger and its portaled menu. The menu is not a DOM
   // descendant of `overflowRef` (see AnchoredComposerMenu), so the
   // outside-click handler has to consult both or every click inside the menu
   // would read as a click outside it and close the menu mid-interaction.
@@ -2166,7 +2165,7 @@ const ChatComposerNewComponent = ({
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       if (disabled || trialExhausted) return;
-      // COMPOSER-002/UI-81: the paste decision itself is shared, so the same
+      // The paste decision itself is shared, so the same
       // clipboard produces the same attachment on web, the unified composer and
       // the extension. `text` leaves the event alone so ordinary text still
       // inserts as text.
@@ -3536,7 +3535,7 @@ const ChatComposerNewComponent = ({
                   (connector) => !disabledConnectorIds.includes(connector.toolId),
                 ),
           memoryEnabled: memoryEnabledForChat,
-          // CAP-048: attach the structured goal on an AGI Work send. The objective
+          // Attach the structured goal on an AGI Work send. The objective
           // is the composed message; the optional scope fields ride alongside.
           agiWorkGoal:
             canUseAgiWork && workMode === 'agiwork'
@@ -6556,7 +6555,7 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
-      {/* CAP-048 AGI Work goal intake. The composed message is the objective;
+      {/* AGI Work goal intake. The composed message is the objective;
           these optional inline fields let the user pin down scope + deliverable
           without a modal wall. Shown only in paid AGI Work mode. */}
       {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && agiWorkFieldsOpen && (

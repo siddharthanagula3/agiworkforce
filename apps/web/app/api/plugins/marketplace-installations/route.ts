@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isPluginId } from '@agiworkforce/types';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -38,11 +39,9 @@ import type {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-
 const InstallBodySchema = z.union([
   z.object({ entryId: z.string().uuid() }).strict(),
-  z.object({ pluginId: z.string().trim().regex(PLUGIN_ID_PATTERN) }).strict(),
+  z.object({ pluginId: z.string().trim().refine(isPluginId) }).strict(),
 ]);
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {

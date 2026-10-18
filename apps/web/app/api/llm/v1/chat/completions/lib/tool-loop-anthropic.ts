@@ -114,11 +114,6 @@ export async function buildToolLoopStream(
  * `wireMode` matches the provider's `ADAPTER_PROVIDERS` entry -- Anthropic/
  * Google use `'legacy-web'`, OpenAI + the 9 compat providers use
  * `'openai-passthrough'` (see adapter-providers.ts's docstring).
- *
- * Exported (not module-private) so another surface can normalize its own
- * per-provider stream onto the same v1 wire shape without duplicating this
- * assembler-wrapping logic. The original such caller, /api/agents/execute,
- * has since been retired.
  */
 export function chunksToOpenAiSse(
   chunks: AsyncIterable<StreamChunk>,

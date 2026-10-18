@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { isPluginSemver } from '@agiworkforce/types';
+import { isPluginId, isPluginSemver } from '@agiworkforce/types';
 
 import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -24,7 +24,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PluginIdSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/);
+const PluginIdSchema = z.string().refine(isPluginId);
 const VersionSchema = z.string().refine(isPluginSemver, 'Invalid semantic version');
 const ReasonSchema = z.string().trim().min(1).max(2000);
 

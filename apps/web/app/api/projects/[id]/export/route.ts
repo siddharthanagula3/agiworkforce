@@ -102,7 +102,6 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleExportProject));
-// not satisfy Next 16's typed-route constraint when exported directly.
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }

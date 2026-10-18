@@ -1,7 +1,7 @@
 import 'server-only';
 
 /**
- * Managed provider failover for the Web twin (AUTO-ROUTER-MIGRATION-01).
+ * Managed provider failover for the Web twin.
  *
  * Mirrors the gateway's landed semantics (services/api-gateway/src/routes/
  * llm.ts failover section): rotate to the resolver's next candidate ONLY
@@ -46,8 +46,8 @@ import 'server-only';
  * A request carrying any provider-native search tool, exempt or not, still
  * gets at most `MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST` candidates on
  * the provider it started with before a same-provider candidate is skipped in
- * favour of a different one: a rate-limited grounding project otherwise
- * served the whole candidate ladder on the same key, turning one 429 into a
+ * favour of a different one: a rate-limited grounding project would otherwise
+ * serve the whole candidate ladder on the same key, turning one 429 into a
  * run of them.
  *
  * Billing: rotation happens INSIDE one managed-usage lifecycle, the single
@@ -224,7 +224,7 @@ export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): b
   if (classified.code === TIER_RESTRICTED_CODE) return true;
   // Deliberately does NOT consult `classified.fallbackable`. That flag answers
   // "should the caller swap models?" and is computed as `status >= 502 && <= 504`
-  // for server errors, so honouring it here stopped rotation on a plain 500, on
+  // for server errors, so honouring it here would stop rotation on a plain 500, on
   // ECONNRESET, and on a timeout - the exact failures cross-provider failover
   // exists to absorb. Rotation is decided by category alone.
   return FAILOVER_ELIGIBLE_CATEGORIES.has(classified.category);
@@ -252,8 +252,8 @@ export interface FailoverAttempt {
  *
  * `fallbackRoutes` names the provider and harness the resolver admitted, so a
  * plan of same-model routes reaches a second route. A caller carrying only
- * model keys (the cloud-agent workflow) still gets today's behaviour: the
- * dispatch layer resolves the provider from the model.
+ * model keys (the cloud-agent workflow) has the dispatch layer resolve the
+ * provider from the model.
  */
 type PlannedCandidate = Partial<FailoverRoute> & { modelKey: string };
 
@@ -281,9 +281,8 @@ function requestCarriesFunctionTools(processed: ProcessedRequest): boolean {
  * A function tool binds a turn to the provider that minted its tool-call ids,
  * but only once one has been minted.
  *
- * `3bb332c19` set the rule this narrows, and stated the invariant while doing
- * it: a request whose only tool is a provider-native search marker "carries no
- * state to lose", because `appendWebSearchTool` rebuilds whichever native shape
+ * A request whose only tool is a provider-native search marker carries no
+ * state to lose, because `appendWebSearchTool` rebuilds whichever native shape
  * the next provider needs. A real function tool does carry state, and the state
  * is the `tool_call` ids in the transcript, which the next provider would have
  * to accept as its own.
@@ -300,11 +299,10 @@ function requestCarriesFunctionTools(processed: ProcessedRequest): boolean {
  * the pin too: the safe reading of an unknown step is the later one.
  *
  * A step BELOW the first one is the AGI Work planning turn, which runs before
- * any tool is offered and therefore before any id is minted. Reading it as the
- * later case pinned every Work run to its primary provider, and because an
- * inadmissible candidate is dropped from the plan rather than deferred, the
- * planning turn spent the whole ladder on skips: the work step that followed
- * had nothing left to rotate onto and an overloaded flagship ended the run.
+ * any tool is offered and therefore before any id is minted, so it is not
+ * pinned. Pinning it would spend the whole ladder on skips, because an
+ * inadmissible candidate is dropped from the plan rather than deferred, and
+ * leave the work step that follows nothing to rotate onto.
  */
 function toolStateBindsProvider(
   processed: ProcessedRequest,
@@ -383,9 +381,9 @@ export function createFailoverPlan(
      * It is a SNAPSHOT, deliberately: this plan runs inside a live stream's
      * failure path, and a database read there would put policy availability on
      * the critical path of every upstream hiccup. The request processor reads
-     * the row once, before the first attempt, and every hop in the request.
-     * primary gate, cheaper-model downgrade, plan filtering, and now the
-     * route-retry, answers to that same one snapshot.
+     * the row once, before the first attempt, and every hop in the request
+     * (primary gate, cheaper-model downgrade, plan filtering and the
+     * route-retry) answers to that same one snapshot.
      *
      * `null` or omitted means UNGOVERNED, matching the evaluator's contract: no
      * policy row, personal scope, or a read that deliberately failed open. It
@@ -576,9 +574,9 @@ export function createFailoverPlan(
   /**
    * Rotation for a free-lane request: re-enter the stage, never the paid plan.
    *
-   * `free-auto.ts` documents `excludeRouteIds` as the mechanism for exactly this
-   *, pick the next eligible $0 route without handing back one that already
-   * failed, and re-running the stage rather than walking a precomputed list is
+   * `free-auto.ts` documents `excludeRouteIds` as the mechanism for exactly this:
+   * pick the next eligible $0 route without handing back one that already
+   * failed. Re-running the stage rather than walking a precomputed list is
    * what lets a route parked by THIS request's failures drop out of the running.
    *
    * When it returns null the request ends. It does not fall through to the paid
@@ -586,7 +584,7 @@ export function createFailoverPlan(
    * never spend, and in `prefer` the fall-through is the INITIAL decision, taken
    * before dispatch. Rotating a half-served free request onto paid capacity
    * would spend money on a turn the user was told was free, and the subsidized
-   * trial path it would be falling back to is itself rotation-free today.
+   * trial path it would be falling back to is itself rotation-free.
    */
   const nextFreeLaneCandidate = (): FailoverAttempt | null => {
     if (!freeLane) return null;
@@ -731,10 +729,10 @@ export function createFailoverPlan(
     if (hasVendorNativeTools) return null;
     // The workspace may forbid OpenRouter outright. `next()` consults this
     // route-retry BEFORE the candidate plan, and the retry does not draw from
-    // that plan, so filtering `fallbackModels` upstream never reached here: a
-    // workspace pinned to `allowedProviders: ['anthropic']` was still served
-    // through OpenRouter on any availability-class failure. Same pure evaluator
-    // the primary gate uses, against the snapshot already in hand.
+    // that plan, so filtering `fallbackModels` upstream does not govern it: a
+    // workspace pinned to `allowedProviders: ['anthropic']` is checked here.
+    // Same pure evaluator the primary gate uses, against the snapshot already
+    // in hand.
     //
     // Note this asks about the SAME model on a DIFFERENT provider, which is the
     // whole point of the route-retry, so an explicit model allow can still

@@ -30,11 +30,10 @@ const CloseLiveSessionSchema = z.object({
   reason: z.string().max(64).optional(),
   lastTurnId: z.string().min(1).max(128).optional(),
   /**
-   * What the delegated backend responses model spent during the session. The
-   * provider bills it separately from the per-minute session rate, and nothing
-   * reported it, so that spend never reached the COGS ledger. Optional, because
-   * a session that never delegated has none, and a client that does not send it
-   * still settles the session itself correctly.
+   * What the delegated backend responses model spent during the session, which
+   * the provider bills separately from the per-minute session rate. Optional,
+   * because a session that never delegated has none, and a client that does not
+   * send it still settles the session itself correctly.
    */
   backend: z
     .object({
@@ -92,9 +91,8 @@ async function handleCloseLiveSession(
   }
 
   // The canonical record is read before anything settles: a tab that dropped
-  // its connection reports the last usage event it saw, which is none at all
-  // when the drop came first, and that report alone billed the session at zero
-  // and left the plan's voice allowance untouched for the minutes it ran.
+  // its connection reports only the last usage event it saw, possibly none, so
+  // its report alone would bill the session at zero.
   let record: VoiceSessionRecord | null;
   try {
     record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);

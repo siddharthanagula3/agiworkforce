@@ -6,11 +6,10 @@ import { ChevronRight } from 'lucide-react';
 /**
  * Administration lives at `/workspace`, not here.
  *
- * Policy, sharing, and the audit trail used to stack into this one settings
- * panel, which put roughly eighty kilobytes of administrative UI behind a
- * single scroll with no addressable sections. Keeping a copy here as well would
- * give two places to change the same setting; this points at the one place, as
- * a plain row rather than a promotional card.
+ * Policy, sharing, and the audit trail have addressable sections there.
+ * Keeping a copy here as well would give two places to change the same
+ * setting; this points at the one place, as a plain row rather than a
+ * promotional card.
  */
 export function WorkspaceConsolePointer() {
   return (

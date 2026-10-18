@@ -266,7 +266,7 @@ export interface ResearchLoopOptions {
    */
   failover?: ToolLoopFailoverPlan;
   /**
-   * CAP-045 slice 1: durable report persistence. Injected rather than imported
+   * Durable report persistence. Injected rather than imported
    * so the loop keeps no database handle of its own (the route owns the
    * RLS-scoped adapter and the run's identity). Called at most once per run, on
    * every terminal path, completed, failed, and interrupted, so a retry
@@ -274,7 +274,7 @@ export interface ResearchLoopOptions {
    */
   persistReport?: ResearchReportSink;
   /**
-   * CAP-045 slice 4: sources carried forward from a previous attempt at the
+   * Sources carried forward from a previous attempt at the
    * SAME question. Pre-seeded into the aggregator so a retry keeps their stable
    * citation numbers and the model is told not to re-run those searches.
    */
@@ -485,7 +485,7 @@ export function researchStatusEvent(
 }
 
 /**
- * Build the additive `x_research_plan` SSE event (CAP-045 slice 2).
+ * Build the additive `x_research_plan` SSE event.
  *
  * Carries the WHOLE plan every time (last-write-wins, exactly like
  * `x_search_results`), so a client that joins late or drops an event still
@@ -1638,11 +1638,10 @@ export async function* runResearchLoop(
     options.budgetMs ??
     envInt('AGI_RESEARCH_BUDGET_MS', DEFAULT_RESEARCH_BUDGET_MS, 30_000, 10 * 60_000);
   /**
-   * CAP-045 slice 2: a REAL planning turn now backs the `planning` phase, which
-   * previously emitted a label while doing no work at all. It costs one model
-   * call, so the gathering budget shrinks by one and the run's total provider
-   * calls stay within `maxIterations` exactly as before. Budgets too small to
-   * afford it (< 3 iterations) keep the original plan-free shape.
+   * A real planning turn backs the `planning` phase. It costs one model call,
+   * so the gathering budget shrinks by one and the run's total provider calls
+   * stay within `maxIterations`. Budgets too small to afford it (< 3
+   * iterations) run without a plan.
    */
   const planningTurnEnabled = maxIterations >= MIN_ITERATIONS_FOR_PLANNING_TURN;
   const maxGatherRounds = planningTurnEnabled
@@ -1706,7 +1705,7 @@ export async function* runResearchLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
   let cancellationEmitted = false;
 
-  // CAP-045 slice 4: a retry carries the previous attempt's sources forward so
+  // A retry carries the previous attempt's sources forward so
   // their citation numbers stay stable and the model is told not to redo the
   // searches that already succeeded. Seeded FIRST so prior sources keep the
   // lowest positions.
@@ -1724,7 +1723,7 @@ export async function* runResearchLoop(
     .slice(0, PLAN_MAX_STEPS);
 
   /**
-   * The live research plan (CAP-045 slice 2). Completed steps carried in from a
+   * The live research plan. Completed steps carried in from a
    * retry are restored verbatim; new steps come from this run's planning turn.
    */
   const deliverable: ResearchDeliverableSpec = options.deliverable ?? DEFAULT_RESEARCH_DELIVERABLE;
@@ -1823,7 +1822,7 @@ export async function* runResearchLoop(
     }
   };
 
-  // ── Durable report persistence (CAP-045 slice 1) ──
+  // ── Durable report persistence ──
   let reportPersisted = false;
   /** A run paused for approval gathered nothing; a stored empty report would be noise. */
   let awaitingApproval = false;
@@ -2316,8 +2315,7 @@ export async function* runResearchLoop(
     turnMessages: ProcessedRequest['llmRequest']['messages'],
     roundCounts: { fetches: number; searches: number; queries: string[] },
   ): AsyncGenerator<Uint8Array, boolean> {
-    // Anthropic extended-thinking continuity (known-flaw
-    // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01), mirroring runToolLoop: when
+    // Anthropic extended-thinking continuity, mirroring runToolLoop: when
     // this turn produced signed thinking blocks, replay them ahead of the
     // tool_use blocks and use the TAG-FREE text, so the follow-up request
     // neither drops the signature nor double-represents reasoning as literal
@@ -2764,7 +2762,7 @@ export async function* runResearchLoop(
         if (yield* flushCancellationIfRequested()) return;
       }
 
-      // ── Planning turn (CAP-045 slice 2) ──
+      // ── Planning turn ──
       // One tool-free model call that commits to the searches this run will make.
       // Its output becomes the `x_research_plan` queue the user watches. A failed
       // or unparseable plan is NEVER fatal and is never guessed at: the run falls
@@ -2815,11 +2813,11 @@ export async function* runResearchLoop(
       // run stops here and the client re-sends the approved steps as
       // `research_resume`.
       //
-      // This gate must not fail open. It used to also require a parsed plan, so
-      // two paths reached the network with approval still outstanding: a budget
-      // too small to afford a planning turn at all, and a planning turn whose
-      // output did not parse into steps. Both spent the user's budget on searches
-      // they never saw, which is the decision the gate exists to protect.
+      // This gate must not fail open, so it does not require a parsed plan: a
+      // budget too small to afford a planning turn, or a planning turn whose
+      // output did not parse into steps, would otherwise reach the network with
+      // approval still outstanding and spend the user's budget on searches they
+      // never saw.
       //
       // When there is nothing to show, the run still stops and says so. The user
       // decides whether to proceed blind; the loop does not decide for them.
@@ -2846,15 +2844,12 @@ export async function* runResearchLoop(
     /**
      * The real provider error from the last gathering round that threw.
      *
-     * A round-1 failure reports the upstream message verbatim and stops, but a
-     * failure in round 2+ used to be logged and then dropped: the loop kept the
-     * partial material, ran synthesis anyway, and, when synthesis also came
-     * back empty, blamed "the model returned an empty report" and told the user
-     * to retry. Observed locally with an Anthropic key at $0: every upstream
-     * call was rejected with "Your credit balance is too low to access the
-     * Anthropic API", the user was told the model had gone quiet, and the
-     * suggested retry could never have succeeded. Keep the cause so the failure
-     * branch can name it instead of guessing.
+     * A round-1 failure reports the upstream message verbatim and stops. A
+     * failure in round 2+ lets the loop keep the partial material and run
+     * synthesis anyway, so the cause is kept here: when synthesis also comes
+     * back empty, the failure branch names the real error (a credit balance too
+     * low to call the provider, say) instead of blaming an empty report and
+     * suggesting a retry that cannot succeed.
      */
     let lastTurnError: string | null = resume?.lastTurnError ?? null;
 

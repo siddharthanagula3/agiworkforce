@@ -19,13 +19,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { excludedMemoryMessage, partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
   AUTO_MEMORY_SOURCE,
+  activeMemoryPredicate,
   loadMemoryWritePolicies,
   memoryWriteAdmission,
-  type ManagedMemoryContextDb,
-} from '@/lib/services/managed-memory-context-service';
-import {
-  activeMemoryPredicate,
   workspaceMemoryPredicate,
+  type ManagedMemoryContextDb,
 } from '@/lib/services/managed-memory-context-service';
 
 const MAX_MEMORIES_PULL = 1000;
@@ -359,8 +357,6 @@ function assertReadableSyncProtocol(value: unknown): void {
  * element, since rows are ordered `by server_version asc`). When the page saturates,
  * `hasMore` tells the client to pull again from this cursor; the re-request is
  * UPSERTed idempotently. Empty page → no progress (stay at `since`).
- *
- * Exported for direct unit testing.
  */
 export function computeMemoryPullCursor(
   since: string,

@@ -57,7 +57,6 @@ import {
   type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
 import { takeConversationSend } from '@/features/chat/lib/conversation-send-handoff';
-// GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
   readManagedUsageBuckets,
@@ -70,8 +69,6 @@ import {
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
   requireImageMessagePersistence,
-  // PER-29/PER-30: metadata builders that MERGE rather than replace, so a
-  // failure or a pending regeneration cannot discard the retry parameters.
   imageGenerationFailureMetadata,
   imageRegenerationPendingMetadata,
   mergeImageGenerationMetadata,
@@ -442,7 +439,7 @@ type SendMeta = {
   mcpContext?: McpContextSelection;
   disabledConnectorIds?: string[];
   connectorToolsEnabled?: boolean;
-  /** CAP-048: structured AGI Work goal captured by the composer. */
+  /** Structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
@@ -1179,8 +1176,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const subscriptionTier = billingSubscription?.tier ?? 'free';
   // Never temporarily downgrade a signed-in paid user while /api/me is still
-  // hydrating. That race used to replace a persisted Auto/paid selection with
-  // the Free workhorse, so the model unexpectedly changed after reload.
+  // hydrating, or a persisted Auto/paid selection would be replaced with the
+  // Free workhorse after reload.
   const isWebsiteFreeTrial = billingPolicyReady && isFreeBillingPlanTier(subscriptionTier);
   const freeTrialModelId = getBestAutoModeForTier('free');
   const { ready: freeModelPromotionReady, promotion: freeModelPromotion } =
@@ -1623,9 +1620,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { usage: managedUsageSummary, refresh: refreshManagedUsageSummary } =
     useManagedUsageSummary();
   /*
-   * The one limit worth warning about, named in prose above the composer.
-   * Usage was previously visible only in Settings, so the first signal a user
-   * got was a refused message mid-task. `selectUsageWarning` picks the BINDING
+   * The one limit worth warning about, named in prose above the composer, so
+   * the first signal a user gets is not a refused message mid-task.
+   * `selectUsageWarning` picks the BINDING
    * bucket rather than the worst percentage with no name attached, which is
    * what `getWorstUsagePercent` (used by the sidebar widget) has to discard.
    */
@@ -1648,9 +1645,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       {...(isFreeBillingPlanTier(managedUsageSummary?.plan_tier)
         ? { upgradeLabel: 'Upgrade' }
         : {})}
-      // CRIT-008: `/settings/usage` renders a SettingsModalRedirect that
-      // replaces back to /chat, so pushing it unmounted and remounted this
-      // page one tick after leaving it. Open the modal in place instead.
+      // `/settings/usage` renders a SettingsModalRedirect that replaces back to
+      // /chat, so pushing it would unmount and remount this page one tick after
+      // leaving it. The modal opens in place instead.
       onUpgrade={() => openSettings('usage')}
       onDismiss={() => setUsageWarningDismissed(true)}
     />
@@ -3174,7 +3171,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
         throw generationError;
       } finally {
-        // PER-29: the spinner is cleared on EVERY exit, success or failure.
+        // The spinner is cleared on EVERY exit, success or failure.
         updateMessage(messageId, { isStreaming: false }, ownerConversationId);
         releaseImageTranscriptMutation([messageId]);
       }
@@ -5065,7 +5062,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   /**
-   * CLR-05: inline edit, wired to the bubble instead of the composer.
+   * Inline edit, wired to the bubble instead of the composer.
    *
    * `beginEdit` runs the guards and answers whether the editor may open.
    * `submitEdit` resubmits the revised text as a SIBLING of the original, so
@@ -5857,7 +5854,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   // Pin/unpin a message (persists messages.metadata.isPinned; renders as the
-  // pin badge and syncs cross-device). Completes the previously-stubbed onPin.
+  // pin badge and syncs cross-device).
   const handlePinMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId) return;
@@ -6204,9 +6201,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // the user's name, work profile, and cross-chat instructions are edited.
   //
   // The rail itself is defined ONCE in `app-nav-items.ts` and shared with
-  // WebAppShell. This file used to keep its own copy, which drifted (it was
-  // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
-  // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
+  // WebAppShell. Add or reorder destinations there.
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
   const healthSpaceAvailable = useHealthSpaceAvailable();
 
@@ -6373,7 +6368,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     footerSlot: sidebarFooterSlot,
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
     getSessionHref: (session: SidebarSession) => conversationHref(session.id),
-    // GOV-19: the two props the shared Sidebar's usage widget needs.
+    // The two props the shared Sidebar's usage widget needs.
     showUsageWidget:
       currentTier !== undefined &&
       !isFreeBillingPlanTier(currentTier) &&
@@ -6693,11 +6688,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             </header>
           )}
 
-          {/* A render failure inside the transcript used to reach the route
-              boundary, which replaces the page and takes the sidebar and the
-              header with it: the user lost every other conversation and every
-              way to navigate along with the one that broke. The shell is
-              rendered outside this boundary, so a failure below costs only the
+          {/* The route boundary replaces the page, taking the sidebar and the
+              header with it. The shell is rendered outside this boundary, so a
+              render failure in the transcript costs only the
               conversation column, and the same two recovery actions stay in
               reach. A throw from this page's own hooks still reaches
               app/chat/error.tsx, which renders the identical notice. */}

@@ -1122,12 +1122,10 @@ function DefaultModelRow() {
 const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /**
- * CAP-020. The composer's effort picker has always split levels by entitlement
- * (ComposerFooter, via splitEffortsByEntitlement) and this one offered all five
- * unconditionally, the same setting, two pickers, one of them lying. The
- * server clamps anything above the plan's cap in resolveRequestEffort, so
- * picking "Max" on a tier without manual model selection silently produced the
- * default while Settings kept displaying Max.
+ * Split by entitlement exactly as the composer's effort picker is
+ * (ComposerFooter, via splitEffortsByEntitlement). The server clamps anything
+ * above the plan's cap in resolveRequestEffort, so an ungated "Max" would
+ * silently produce the default while Settings kept displaying Max.
  *
  * Gated levels stay VISIBLE and disabled rather than being hidden: a level that
  * vanishes reads as unsupported by the product, which is a different and wrong

@@ -107,8 +107,8 @@ class ConnectorLoadError extends Error {
 }
 
 // GET /api/github/installations is fetched independently from the other two
-// connector sources (known-flaws WEB-CONNECTORS-PANEL-ALL-OR-NOTHING-01): its
-// failure means GitHub's connected state can't be confirmed right now, not
+// connector sources: its failure means GitHub's connected state can't be
+// confirmed right now, not
 // that the whole directory is unreachable, so it degrades to this scoped
 // notice instead of the global connectorsError.
 const GITHUB_INSTALLATIONS_NOTICE =

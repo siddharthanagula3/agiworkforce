@@ -23,11 +23,10 @@ const LABELS: Record<Exclude<CardType, null>, string> = {
  * The answer itself is always what the model wrote. A card is a second way to
  * look at the same content, offered underneath it.
  *
- * It used to be the other way round: the card replaced the answer by default
- * and the markdown was one click away. Because the card is chosen by a text
- * heuristic, a response carrying two display-math blocks and an equals sign was
- * shown as a "Calculation" and its headings, emphasis, links, nesting, code and
- * tables never rendered at all.
+ * The card never replaces the answer: it is chosen by a text heuristic, so a
+ * response carrying two display-math blocks and an equals sign could read as a
+ * "Calculation" and lose its headings, emphasis, links, nesting, code and
+ * tables.
  */
 export function MessageFormatCard({
   content,

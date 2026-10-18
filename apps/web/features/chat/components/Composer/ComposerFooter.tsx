@@ -290,12 +290,11 @@ function isHighUsageRateModel(model: AIModel): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Deprecation advance-warning (CLR-01 / mqp-08). `model.deprecationDate`
-// (model-store.ts) is only ever set to a date still in the future, the
-// picker already drops a model outright once its deprecation_date has
-// passed (isCurrentModel). This renders the advance notice for the window
-// leading up to that deadline, matching ChatGPT's in-picker "Leaving on
-// <date>" countdown instead of letting the model vanish with zero warning.
+// Deprecation advance-warning. `model.deprecationDate` (model-store.ts) is only
+// ever set to a date still in the future, because the picker drops a model
+// outright once its deprecation_date has passed (isCurrentModel). This renders
+// the advance notice for the window leading up to that deadline, matching
+// ChatGPT's in-picker "Leaving on <date>" countdown.
 // ---------------------------------------------------------------------------
 
 /** How many days ahead of the scheduled retirement the picker starts warning. */

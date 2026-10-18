@@ -222,7 +222,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       request,
       503,
       'live_voice_not_configured',
-      `${OPENAI_KEY_ENV} is not set on the server, so live voice cannot start.`,
+      'Live voice is not configured on this server.',
     );
   }
 

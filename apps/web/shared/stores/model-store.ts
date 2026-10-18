@@ -53,8 +53,7 @@ export interface AIModel {
    * entirely once its `deprecation_date` has passed, so a defined value here
    * always describes a still-selectable model with a scheduled end date.
    * Consumers (ComposerFooter's ModelRow) use this to render an advance
-   * "Leaving on <date>" warning instead of letting the model vanish with no
-   * notice on the deadline (CLR-01 / mqp-08).
+   * "Leaving on <date>" warning.
    */
   deprecationDate?: string;
 }
@@ -126,9 +125,8 @@ function lifecycleFields(metadata: ModelMetadata): {
  * The model's scheduled retirement date, IFF it is still in the future.
  * Callers only ever reach this after `isCurrentModel()` has already admitted
  * the model, so in practice this always returns either undefined (nothing
- * scheduled) or a future date, never a date that has already passed. Exists
- * so the picker can render an advance "Leaving on <date>" warning (CLR-01 /
- * mqp-08) instead of the model just vanishing the instant the deadline hits.
+ * scheduled) or a future date, never a date that has already passed, so the
+ * picker can render an advance "Leaving on <date>" warning.
  */
 function futureDeprecationDate(metadata: ModelMetadata): string | undefined {
   const { deprecation_date } = lifecycleFields(metadata);
@@ -178,10 +176,6 @@ function buildAvailableModels(): AIModel[] {
         ...(metadata.requiresEnvironment !== undefined
           ? { requiresEnvironment: metadata.requiresEnvironment }
           : {}),
-        // Propagate a scheduled-but-not-yet-passed retirement date so the
-        // picker can warn ahead of time (CLR-01 / mqp-08). Absent on every
-        // model today (no non-null deprecation_date in the catalog yet), so
-        // this is a no-op until the catalog schedules one.
         ...(deprecationDate ? { deprecationDate } : {}),
       };
     });
@@ -285,7 +279,7 @@ export interface ModelSubstitution {
  * Non-null exactly when `resolveSelectableModelId` would swap the given id for
  * something else, the conversation's saved model was retired, dropped from the
  * catalog, or is display-only. Callers use it to tell the user the swap
- * happened instead of letting the model change under them (AI-49).
+ * happened instead of letting the model change under them.
  */
 export function describeModelSubstitution(
   modelId: string | null | undefined,

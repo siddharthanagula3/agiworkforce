@@ -3,10 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getOptionalEnv } from '@shared/utils/env';
 import {
   DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestDesktopRelease,
+  resolveDesktopCloudReleaseRepository,
 } from '@/lib/releases/github-desktop-releases';
 import { DESKTOP_UPDATE_VARY_HEADER, desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
 
@@ -27,8 +27,7 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
 
   const release = await fetchLatestDesktopRelease('stable', {
     tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
-    owner: getOptionalEnv('DESKTOP_CLOUD_GITHUB_OWNER') ?? 'siddharthanagula3',
-    repo: getOptionalEnv('DESKTOP_CLOUD_GITHUB_REPO') ?? 'agiworkforce',
+    ...resolveDesktopCloudReleaseRepository(),
   });
 
   const arm64Installer = release?.assets.find(

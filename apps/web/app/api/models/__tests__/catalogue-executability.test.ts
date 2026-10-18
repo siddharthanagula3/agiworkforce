@@ -27,7 +27,8 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
-const { GET, buildCatalogueEntries } = await import('@/app/api/models/catalogue/route');
+const { GET } = await import('@/app/api/models/catalogue/route');
+const { buildCatalogueEntries } = await import('@/lib/server/model-catalogue');
 
 type CatalogueModel = Awaited<ReturnType<typeof buildCatalogueEntries>>[number];
 interface CatalogueBody {

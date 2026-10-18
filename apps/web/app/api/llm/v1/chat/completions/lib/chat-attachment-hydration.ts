@@ -63,17 +63,16 @@ export class ChatAttachmentHydrationError extends Error {
 
 /**
  * A file the request cannot read is one file, not the whole turn. Rejecting
- * the request threw away the user's question and every other attachment with
- * it, and named none of them - so the reader could not tell which file to
- * remove or re-attach. Each failure becomes a note the model can answer around.
+ * the request would throw away the user's question and every other attachment
+ * with it, and name none of them, so each failure becomes a note the model can
+ * answer around.
  *
  * A file attached on an earlier turn is weaker still: the reader cannot act on
- * it at all, because the message carrying it has already been sent. Once one
- * stored blob rotted, every later turn re-resolved it and died the same way,
- * and the only way out was abandoning the conversation. So a historical failure
- * never reaches the reader as an error - it degrades to this note and the turn
- * proceeds. Only the turn being sent right now can still fail, because that is
- * the only one whose files the reader can still change.
+ * it at all, because the message carrying it has already been sent, and a
+ * stored blob that rotted would fail every later turn the same way. So a
+ * historical failure never reaches the reader as an error - it degrades to this
+ * note and the turn proceeds. Only the turn being sent right now can still fail,
+ * because that is the only one whose files the reader can still change.
  */
 
 /**
@@ -91,9 +90,9 @@ function filenameFromMetadata(metadata: Record<string, unknown>, fallback: strin
 
 /**
  * A provider's native file/image block carries the filename as metadata on the
- * part, not in text the model necessarily reads back to the user - the CSV vs
- * TXT gap this closes was a model that could describe both files' contents but
- * not name the one whose part-level filename it never surfaced. Every resolved
+ * part, not in text the model necessarily reads back to the user, so a model
+ * can describe two files' contents and still not name the one whose part-level
+ * filename it never surfaced. Every resolved
  * attachment gets this same plain-text line first, so the model always has the
  * name and type in the context it actually reads, independent of how any given
  * provider exposes (or drops) file-part metadata.
@@ -246,9 +245,8 @@ type AttachmentFetchOutcome =
 
 /**
  * The DB row and the stored bytes are two round trips with nothing between
- * them a caller can use, so they run one after another here - but this whole
- * function runs concurrently across slots, which is where the serial cost
- * actually was.
+ * them a caller can use, so they run one after another here, while this whole
+ * function runs concurrently across slots.
  */
 async function fetchAttachmentPayload(
   assetId: string,
@@ -322,8 +320,8 @@ export async function hydrateChatAttachments(
 
   /**
    * The turn being sent goes first so that history cannot spend the budget it
-   * needs. Charging in message order let a long conversation starve the file
-   * the reader just attached, and reported it as that file being too large.
+   * needs: charging in message order would let a long conversation starve the
+   * file the reader just attached and report that file as too large.
    */
   const ordered = [
     ...slots.filter((slot) => slot.fromCurrentTurn),
@@ -358,9 +356,9 @@ export async function hydrateChatAttachments(
 
   /**
    * Fetching is independent per slot, so it runs concurrently under a small
-   * cap; the budget and ordering rules below still apply afterward, in the
-   * same `ordered` sequence the serial loop used, so the outcome does not
-   * depend on which fetch happens to land first.
+   * cap; the budget and ordering rules below apply afterward, in `ordered`
+   * sequence, so the outcome does not depend on which fetch happens to land
+   * first.
    */
   const outcomes = await mapWithConcurrency(pending, MAX_PARALLEL_ATTACHMENT_FETCHES, (slot) =>
     fetchAttachmentPayload(slot.assetId, userId),

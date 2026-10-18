@@ -12,10 +12,9 @@ export function getItem<T>(key: string, defaultValue: T): T {
 /**
  * Write a JSON value to localStorage.
  *
- * STB-26: this returned `void` and swallowed every failure, so a
- * `QuotaExceededError` (or a Safari private-mode write rejection) was
- * indistinguishable from a successful save. It now reports whether the write
- * actually landed; callers that persist user data MUST check the result.
+ * Reports whether the write actually landed, so a `QuotaExceededError` (or a
+ * Safari private-mode write rejection) is distinguishable from a successful
+ * save; callers that persist user data MUST check the result.
  *
  * @returns `true` when the value was written, `false` when it was not (no
  *   `window`, quota exceeded, storage disabled, serialization failure).

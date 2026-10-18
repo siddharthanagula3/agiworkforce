@@ -362,11 +362,7 @@ function readDeleteAccountError(data: unknown, fallback: string, status: number)
 
 /**
  * Delete-account mutation: the single implementation behind the account
- * deletion flow (AccountSection is the only caller; PrivacySection used to
- * duplicate this with its own fetch and has been collapsed onto this hook).
- *
- * Owns everything the duplicate PrivacySection implementation used to get
- * wrong on its own:
+ * deletion flow (AccountSection is the only caller). It owns:
  *   - CSRF headers on the DELETE call
  *   - parsing the server's real `{ message, scheduledFor }` body instead of
  *     rendering a hardcoded "24 hours" string that can drift from server

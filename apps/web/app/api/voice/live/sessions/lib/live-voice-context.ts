@@ -316,14 +316,14 @@ function compose(sections: readonly (string | null)[], maxChars: number): string
   return truncate(joined, maxChars);
 }
 
-/**
- * The speech layer gets the conversation and the project's own instructions;
- * knowledge-file passages stay with the delegated turn that can cite them.
- */
 export function formatLiveVoiceLanguage(language: string | null): string | null {
   return language ? liveVoiceLanguageInstruction(language) : null;
 }
 
+/**
+ * The speech layer gets the conversation and the project's own instructions;
+ * knowledge-file passages stay with the delegated turn that can cite them.
+ */
 export function buildLiveVoiceInstructions(
   base: string,
   bundle: LiveVoiceContextBundle,

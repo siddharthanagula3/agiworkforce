@@ -54,14 +54,14 @@ function errorResponse(err: AppError): NextResponse {
   );
 }
 
+const FEEDBACK_SCREENSHOT_PREFIX = 'feedback';
+
 /**
  * Every response from this route is the platform's own books, so the gate is
  * the allowlist rather than the organisation-role check the enterprise console
  * uses. Both the read and the write path go through here, so there is one place
  * to audit rather than two that can drift.
  */
-const FEEDBACK_SCREENSHOT_PREFIX = 'feedback';
-
 async function requirePlatformAdmin(): Promise<string> {
   const { subject: userId, sessionId } = await getRequestIdentity();
   if (!userId) throw createError.unauthorized('Sign in required.');
@@ -119,17 +119,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export const BULK_RESET_CONFIRMATION = 'RESET ALL USAGE';
+const MAX_GRANT_CENTS = 50_000;
+
 /**
- * POST /api/admin/operator  { action: 'reset-usage', userId }
- *
  * Resetting usage rewrites live billing state, so it is a POST behind CSRF and
  * it writes a security-audit entry naming the operator who did it. A reset that
  * cannot be attributed afterwards is indistinguishable from usage that was
  * never recorded.
  */
-export const BULK_RESET_CONFIRMATION = 'RESET ALL USAGE';
-const MAX_GRANT_CENTS = 50_000;
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'admin-operator');
   if (limited) return limited;

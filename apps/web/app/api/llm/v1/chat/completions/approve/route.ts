@@ -512,12 +512,12 @@ async function handleToolApproval(
     genericBackendConfigured: webSearchBackendConfigured(),
   });
 
-  // Transport, not authorization. Every gate above still stands, auth, managed
+  // Transport, not authorization. Every gate above still stands (auth, managed
   // compute, organization policy, spend limit, the tenant-scoped checkpoint
-  // claim, and the connector-permission override applied to `enforcedApprovals`
-  //, and none of them are reachable from here. What changed (AGI-39) is that a
+  // claim, and the connector-permission override applied to
+  // `enforcedApprovals`), and none of them are reachable from here. A
   // Workflow-platform outage, or an engaged AGI_DURABLE_INITIAL_TURNS
-  // kill-switch, no longer turns an authorized approval into a 503: the same
+  // kill-switch, does not turn an authorized approval into a 503: the same
   // resume runs request-scoped instead, and only detachability is lost.
   let turn;
   try {

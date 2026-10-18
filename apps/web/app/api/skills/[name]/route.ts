@@ -7,6 +7,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { SkillDraftBodySchema } from '../skill-draft-schema';
+import { requireSkillName } from '../skill-name-param';
 import {
   findManagedDirectorySkillByName,
   findSelectableSkillByName,
@@ -22,15 +23,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
-
-const SKILL_NAME_MAX_LENGTH = 200;
-
-function requireSkillName(name: string | undefined): string {
-  if (!name || name.length > SKILL_NAME_MAX_LENGTH) {
-    throw createError.validation(`skill name is required (1–${SKILL_NAME_MAX_LENGTH} chars)`);
-  }
-  return name;
-}
 
 async function handleGetBody(request: NextRequest, context: { params: Promise<{ name: string }> }) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');

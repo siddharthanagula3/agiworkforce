@@ -766,11 +766,9 @@ class ExportCompletenessLedger {
   }
 
   /**
-   * A capped section that came back full.
-   *
-   * Without this the export reported 'complete' while holding only the most
-   * recent rows of the highest-cardinality tables, which on an access request
-   * is the one claim that must not be made loosely.
+   * A capped section that came back full. Recording it keeps the export from
+   * claiming 'complete' while it holds only the most recent rows, the one claim
+   * an access request must not make loosely.
    */
   sectionTruncated(section: string, limit: number): void {
     this.truncated.set(section, limit);

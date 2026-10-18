@@ -9,16 +9,13 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getPluginRegistryEntry } from '@/lib/services/plugin-registry-service';
 import { getManagedSkillPluginOwners } from '@/lib/services/skill-catalog-service';
 import { findDirectoryEntry } from '@/features/plugins/server/directory/catalog';
-import type { PluginRegistryEntryResponse } from '@agiworkforce/types';
+import { isPluginId, type PluginRegistryEntryResponse } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ParamsSchema = z.object({
-  id: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+  id: z.string().trim().refine(isPluginId),
 });
 
 export async function GET(

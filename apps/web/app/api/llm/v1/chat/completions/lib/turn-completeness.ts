@@ -58,8 +58,8 @@ export interface TurnTruncationInput {
 
 /**
  * A turn is truncated unless it ran to a terminal signal with something to
- * show. Persisting `truncated: false` on an empty turn is what put a blank
- * assistant bubble in the transcript on reload, with nothing to say why.
+ * show, so an empty turn never reloads as a blank assistant bubble with nothing
+ * to say why.
  */
 export function isTurnTruncated(input: TurnTruncationInput): boolean {
   if (input.reportedFailure) return true;
@@ -95,9 +95,9 @@ export interface EmptyTurnClassificationInput {
 
 /**
  * Why the turn came back with nothing, in the taxonomy the copy layer already
- * speaks. Synthesising `empty_response` for every one of these told a reader
- * whose answer hit the output cap, whose connection dropped and whose request
- * was refused the same uninformative thing.
+ * speaks, so a reader whose answer hit the output cap, whose connection dropped
+ * or whose request was refused is not told the same uninformative
+ * `empty_response`.
  */
 export function classifyEmptyTurn(input: EmptyTurnClassificationInput): ClassifiedError {
   if (isBlockedFinishReason(input.finishReason)) {

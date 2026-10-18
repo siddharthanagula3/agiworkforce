@@ -77,7 +77,7 @@ function parseComparison(content: string): ParsedComparison {
     const isHeadingLine = /^#{1,6}\s+/.test(trimmed);
     // Only a heading or a bare label opens an item's section. Prose that merely
     // starts with the item's name ("Postgres is the older engine…") is content,
-    // and matching it here used to swallow the sentence whole.
+    // and matching it here would swallow the sentence whole.
     const opensItemSection = (name: string): boolean =>
       Boolean(name) &&
       (isHeadingLine

@@ -3063,13 +3063,12 @@ function deviceStepAddress(input: Record<string, unknown>): string | null {
  * is allow or deny.
  *
  * Every signal here except `sensitiveContextPresent` is read off the shape of
- * the conversation, which is why a scheduled run defeated it: built as exactly
- * one system message and one user message, it looks like a first turn with
- * nothing private in it even when the project's context was folded into that
- * system prompt. `WEB-SEC-SCAN-2026-09-09-F39`.
+ * the conversation, which a scheduled run would defeat: built as exactly one
+ * system message and one user message, it looks like a first turn with nothing
+ * private in it even when the project's context was folded into that system
+ * prompt.
  *
- * Named rather than inlined so the gate has a seam a test can reach; it had
- * none.
+ * Named rather than inlined so the gate has a seam a test can reach.
  */
 export function hasPrivateContext(
   processed: Pick<ProcessedRequest, 'autoMemoryFacts' | 'sensitiveContextPresent'>,

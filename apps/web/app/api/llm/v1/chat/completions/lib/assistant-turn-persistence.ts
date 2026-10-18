@@ -133,22 +133,22 @@ export interface AssistantTurnSnapshot {
   citations?: readonly PersistedTurnCitation[];
   /**
    * What a code-execution run printed, under the same `codeExecutionResult` key
-   * the client uses. Without it a reloaded answer that said "the script prints
-   * 42" showed no result panel at all, so the claim had nothing behind it.
+   * the client uses. Without it a reloaded answer that says "the script prints
+   * 42" shows no result panel at all, so the claim has nothing behind it.
    */
   codeExecutionResult?: PersistedTurnCodeExecution;
   /**
    * The files the turn attached, under the same `generatedFiles` key the client
-   * uses. The bytes were already persisted and downloadable; only the row that
-   * points at them was lost, so a reload dropped every chart and download chip
-   * off an answer whose text still referred to them.
+   * uses. The bytes are persisted on their own; this is the row that points at
+   * them, so a reload keeps the charts and download chips the answer's text
+   * refers to.
    */
   generatedFiles?: readonly PersistedTurnGeneratedFile[];
   interactiveCards?: readonly InteractiveCard[];
   /**
    * The Deep Research run's activity, under the same `research` key the client
    * uses, projected from the report the loop already stored. Without it a
-   * reloaded research turn rendered as plain prose: no phase, no elapsed time,
+   * reloaded research turn renders as plain prose: no phase, no elapsed time,
    * no plan steps, and no way to tell a completed run from an interrupted one.
    */
   research?: PersistedTurnResearch;

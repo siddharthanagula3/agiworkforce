@@ -18,17 +18,14 @@ import {
   listPluginInstallations,
   planWebPluginInstall,
 } from '@/lib/services/plugin-installation-service';
-import type { PluginInstallationsResponse } from '@agiworkforce/types';
+import { isPluginId, type PluginInstallationsResponse } from '@agiworkforce/types';
 import type { PluginInstalledDependency } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const InstallPluginBodySchema = z.object({
-  pluginId: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+  pluginId: z.string().trim().refine(isPluginId),
 });
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {

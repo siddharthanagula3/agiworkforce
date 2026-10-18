@@ -104,12 +104,11 @@ function streamBillingUsage(usage: UsageAccumulator, streamStartedAt: number): S
  * the cancel path deliberately keeps the partial answer
  * (`persistAssistantTurnSnapshot(true)`), so the user keeps what they received.
  *
- * Settling that as `failed` zeroes the charge, `finalizeManagedUsageRequest`
- * forces `actualCostCents` to 0 on failure regardless of what is passed, which
- * turned "ask for something long, press Stop at 95%" into unlimited free
- * inference on the managed path. It was unbounded rather than merely cheap: a
- * zero settle records no cost, so neither the monthly allowance nor the rolling
- * 5h/weekly caps could observe it, and it repeated indefinitely on any tier.
+ * Settling that as `failed` would zero the charge, because
+ * `finalizeManagedUsageRequest` forces `actualCostCents` to 0 on failure
+ * regardless of what is passed, and turn "ask for something long, press Stop at
+ * 95%" into unlimited free inference: a zero settle records no cost, so neither
+ * the monthly allowance nor the rolling 5h/weekly caps could observe it.
  *
  * Only an attempt that produced NO tokens is still refunded in full, the
  * genuine-failure case the zeroing rule exists for. A provider error before any
@@ -130,9 +129,9 @@ export function resolveBilledOutcome(input: {
 }
 
 /**
- * A provider-reported figure enters the ledger in its own unit. The one-cent
- * floor this replaced turned a reported $0.0009 into $0.01 and made a hundred
- * such turns cost more than one call of the same total.
+ * A provider-reported figure enters the ledger in its own unit, so a reported
+ * $0.0009 is not rounded up to a cent and a hundred such turns cost what one
+ * call of the same total would.
  */
 function reportedCostMicrousdFromUsd(reportedCostUsd: number): number {
   const costMicrousd = reportedCostUsd * MICROUSD_PER_USD;

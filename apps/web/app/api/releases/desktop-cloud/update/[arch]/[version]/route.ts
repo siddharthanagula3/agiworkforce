@@ -3,13 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getOptionalEnv } from '@shared/utils/env';
 import {
-  DEFAULT_DESKTOP_RELEASE_OWNER,
-  DEFAULT_DESKTOP_RELEASE_REPO,
   DESKTOP_CLOUD_TAG_PREFIX,
   compareSemanticVersions,
   fetchLatestDesktopRelease,
+  resolveDesktopCloudReleaseRepository,
 } from '@/lib/releases/github-desktop-releases';
 import { desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
 
@@ -41,8 +39,7 @@ async function handleCloudDesktopUpdateFeed(
 
   const release = await fetchLatestDesktopRelease('stable', {
     tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
-    owner: getOptionalEnv('DESKTOP_CLOUD_GITHUB_OWNER') ?? DEFAULT_DESKTOP_RELEASE_OWNER,
-    repo: getOptionalEnv('DESKTOP_CLOUD_GITHUB_REPO') ?? DEFAULT_DESKTOP_RELEASE_REPO,
+    ...resolveDesktopCloudReleaseRepository(),
   });
   if (!release || compareSemanticVersions(release.version, version) !== 1) {
     return noUpdateResponse();

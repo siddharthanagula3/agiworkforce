@@ -23,10 +23,7 @@ import { logger } from '@/lib/logger';
 import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { embedTextsWithGoogle, GoogleEmbeddingError } from '@/lib/server/google-embeddings';
-import {
-  estimateEmbeddingCostCents,
-  estimateEmbeddingCostMicrousd,
-} from '@/lib/services/retrieval-embedding-service';
+import { estimateEmbeddingCostMicrousd } from '@/lib/services/retrieval-embedding-service';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import { resolveServerProviderCredentials } from '@/lib/services/provider-adapter-service';
 import {
@@ -59,8 +56,6 @@ function managedUsageErrorResponse(
     },
   );
 }
-
-export { estimateEmbeddingCostCents, estimateEmbeddingCostMicrousd };
 
 function estimateTokens(inputs: readonly string[]): number {
   const characters = inputs.reduce((total, input) => total + input.length, 0);

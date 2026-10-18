@@ -205,10 +205,6 @@ function AccountRow({
 }
 
 export function AccountSection() {
-  // Reads the Clerk-backed auth store. PER-3: `useBillingStore.user` used to be
-  // structurally null (its only writer, `_setUser`, had zero call sites); that
-  // is fixed and `_setUser` is gone, but this section wants the auth store's
-  // `logout()` anyway, so it keeps reading the user from the same store.
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);

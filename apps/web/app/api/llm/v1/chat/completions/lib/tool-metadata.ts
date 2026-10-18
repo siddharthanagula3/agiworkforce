@@ -1,19 +1,12 @@
 /**
- * @file Server-owned tool metadata model (finding CON-10).
+ * @file Server-owned tool metadata model.
  *
- * WHY THIS EXISTS: destructiveness used to be a five-substring guess
- * (`name.includes('delete') || includes('write') || includes('create') ||
- * includes('update') || includes('remove')`) duplicated in
- * `apps/desktop/src/features/connectors/ConnectorGallery.tsx` and
- * `apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs`. That guess
- * classifies `send_email`, `post_message`, `post_issue_comment`,
- * `share_document`, `publish`, `deploy`, `revoke` and `invite` as
- * NON-destructive: including two of the three shipped GitHub connector tools.
- * A published comment cannot be un-published, so treating it as harmless is a
- * real safety defect, not a cosmetic one.
- *
- * This module replaces the guess with an explicit, declared model. Every tool
- * the platform ships declares four properties:
+ * Destructiveness is declared, not guessed from the tool name: a substring
+ * guess (`delete`, `write`, `create`, `update`, `remove`) classifies
+ * `send_email`, `post_message`, `post_issue_comment`, `share_document`,
+ * `publish`, `deploy`, `revoke` and `invite` as non-destructive, and a
+ * published comment cannot be un-published. Every tool the platform ships
+ * declares four properties:
  *
  *   - `actionClass`, what the call DOES:
  *       'read'           observes state, changes nothing
@@ -37,7 +30,7 @@
  *
  * NOT `server-only`: this is a pure lookup table with no I/O, imported by the
  * agentic tool loop AND by `/api/connectors/permissions` (which derives the
- * persisted `destructive` column from it, finding CON-9, instead of trusting
+ * persisted `destructive` column from it instead of trusting
  * a client-supplied boolean the live web client never even sends).
  */
 
@@ -971,10 +964,10 @@ export function isDestructiveConnectorTool(
 }
 
 /**
- * Parallel-safety (finding SYS-25). Only DECLARED read-class tools may run
- * concurrently: they observe state and cannot race each other. Everything else
- *, writes, deletes, executions, external sends, and every undeclared MCP tool
- *, serializes, preserving the loop's "mutating tools are serial" guarantee.
+ * Parallel-safety. Only DECLARED read-class tools may run concurrently: they
+ * observe state and cannot race each other. Everything else (writes, deletes,
+ * executions, external sends, and every undeclared MCP tool) serializes,
+ * preserving the loop's "mutating tools are serial" guarantee.
  */
 export function isParallelSafeTool(name: string): boolean {
   return isParallelSafeContractTool(resolveToolMetadata(name));

@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getBundledSkillDownloadForPlugins } from '@/lib/services/skill-catalog-service';
 import { listPermittedPluginIds } from '@/lib/services/workspace-plugin-access';
+import { requireSkillName } from '../../skill-name-param';
 
 export const runtime = 'nodejs';
 
@@ -18,10 +19,7 @@ async function handleDownload(
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  const { name } = await context.params;
-  if (!name || name.length > 200) {
-    throw createError.validation('skill name is required (1–200 chars)');
-  }
+  const name = requireSkillName((await context.params).name);
 
   const enabledPluginIds = await listPermittedPluginIds(db, userId);
   const download = await getBundledSkillDownloadForPlugins(enabledPluginIds, name);

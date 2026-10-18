@@ -454,7 +454,7 @@ export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {
   return buildPermissions(
-    new Map(entries.map((entry) => [entry.connectorId + ' ' + entry.toolName, entry.level])),
+    new Map(entries.map((entry) => [levelKey(entry.connectorId, entry.toolName), entry.level])),
   );
 }
 

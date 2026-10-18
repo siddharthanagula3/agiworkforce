@@ -957,14 +957,10 @@ export function PrivacySection() {
         </div>
       </div>
 
-      {/* Delete account, cross-link only. This used to be a second, independent
-          delete-account implementation (its own fetch, its own hardcoded
-          "within 24 hours" string, and, unlike Account settings, no sign-out
-          afterward, which left a live client session against an account
-          scheduled for erasure). Deletion now has exactly one implementation,
-          on Account settings, via useDeleteAccount. Same pattern as
-          SecuritySection's session-management cross-link: point at the owning
-          surface instead of re-implementing it here. */}
+      {/* Delete account, cross-link only. Deletion has exactly one
+          implementation, on Account settings, via useDeleteAccount. Same
+          pattern as SecuritySection's session-management cross-link: point at
+          the owning surface instead of re-implementing it here. */}
       <div aria-label="Account deletion availability">
         <p
           style={{
