@@ -3,8 +3,6 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { revokeMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
 
-const PG_UNDEFINED_COLUMN = '42703';
-
 export const REFRESH_FAMILY_COMPROMISE_REASONS = [
   'replayed',
   'device_lost',
@@ -60,14 +58,6 @@ const COMPROMISE = `
        or family_id::text = $3
      )`;
 
-function isCompromiseColumnMissing(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  if (record['code'] === PG_UNDEFINED_COLUMN) return true;
-  const message = String(record['message'] ?? '');
-  return /compromised_at|compromised_reason/.test(message) && /does not exist/.test(message);
-}
-
 const REVOKE_FAMILY = `
   update device_refresh_tokens
      set revoked_at = coalesce(revoked_at, $3)
@@ -105,15 +95,8 @@ export async function finishFamilyAsCompromised(
   const scope = [input.familyId, input.userId, input.at];
   const revoked = await db.query<{ id: string }>(REVOKE_FAMILY, scope);
 
-  try {
-    await db.execute(COMPROMISE_FAMILY, [...scope, input.reason]);
-    return { revoked: revoked.length, compromiseRecorded: true };
-  } catch (error) {
-    if (isCompromiseColumnMissing(error)) {
-      return { revoked: revoked.length, compromiseRecorded: false };
-    }
-    throw error;
-  }
+  await db.execute(COMPROMISE_FAMILY, [...scope, input.reason]);
+  return { revoked: revoked.length, compromiseRecorded: true };
 }
 
 const REVOKE_EVERY = `
@@ -152,15 +135,6 @@ export async function revokeDeviceRefreshCredentials(
     return { revoked: revoked.length, compromiseRecorded: false };
   }
 
-  try {
-    await db.execute(COMPROMISE, [...params, input.compromisedAs]);
-    return { revoked: revoked.length, compromiseRecorded: true };
-  } catch (error) {
-    // 0233 not applied yet: the family is still revoked, only the record of
-    // why is missing, and that must not fail a revocation the user asked for.
-    if (isCompromiseColumnMissing(error)) {
-      return { revoked: revoked.length, compromiseRecorded: false };
-    }
-    throw error;
-  }
+  await db.execute(COMPROMISE, [...params, input.compromisedAs]);
+  return { revoked: revoked.length, compromiseRecorded: true };
 }

@@ -15,10 +15,3 @@ export const ORGANIZATION_DELETION_COOLING_PERIOD_MS =
 export function organizationDeletionScheduledFor(from: Date = new Date()): Date {
   return new Date(from.getTime() + ORGANIZATION_DELETION_COOLING_PERIOD_MS);
 }
-
-const PG_UNDEFINED_COLUMN = '42703';
-
-export function isMissingOrganizationDeletionColumns(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
-}

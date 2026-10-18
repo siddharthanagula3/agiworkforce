@@ -33,17 +33,6 @@ export interface UserIdentity {
 
 export const MAX_PRIMARY_USE_CASE_LENGTH = 40;
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isUndefinedTable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  return (
-    record['code'] === PG_UNDEFINED_TABLE ||
-    String(record['message'] ?? '').includes('does not exist')
-  );
-}
-
 function normalizeText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -67,9 +56,7 @@ async function readSettingsNamespace(
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     return value as Record<string, unknown>;
   } catch (error) {
-    if (!isUndefinedTable(error)) {
-      logger.warn({ userId, namespace, error }, 'Failed to read settings namespace');
-    }
+    logger.warn({ userId, namespace, error }, 'Failed to read settings namespace');
     return {};
   }
 }
@@ -89,9 +76,7 @@ async function readIdentityNamespace(
     if (!namespace || typeof namespace !== 'object' || Array.isArray(namespace)) return {};
     return namespace as Record<string, unknown>;
   } catch (error) {
-    if (!isUndefinedTable(error)) {
-      logger.warn({ userId, error }, 'Failed to read profile identity settings');
-    }
+    logger.warn({ userId, error }, 'Failed to read profile identity settings');
     return {};
   }
 }

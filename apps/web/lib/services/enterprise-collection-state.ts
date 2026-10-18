@@ -25,7 +25,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1_000;
 const PAST_DUE_30_MAX_DAYS = 30;
 const PAST_DUE_60_MAX_DAYS = 60;
 const PAST_DUE_90_MAX_DAYS = 90;
-const PG_UNDEFINED_TABLE = '42P01';
 
 function stageForDaysPastDue(daysPastDue: number): CollectionStage {
   if (daysPastDue <= 0) return 'current';
@@ -62,32 +61,18 @@ export function deriveCollectionState(
 
 export const CURRENT_COLLECTION_STATE: CollectionState = deriveCollectionState(0, null);
 
-function isMissingContractSchema(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === PG_UNDEFINED_TABLE
-  );
-}
-
 export async function readOrganizationCollectionState(
   db: Pick<DatabaseAdapter, 'query'>,
   organizationId: string,
   nowMs: number = Date.now(),
 ): Promise<CollectionState> {
-  try {
-    const [row] = await db.query<{ oldest_open_invoice_due_at: string | null }>(
-      `select oldest_open_invoice_due_at
-         from public.organization_billing_contracts
-        where organization_id = $1
-          and ended_at is null
-        limit 1`,
-      [organizationId],
-    );
-    return deriveCollectionState(nowMs, row?.oldest_open_invoice_due_at ?? null);
-  } catch (error) {
-    if (isMissingContractSchema(error)) return CURRENT_COLLECTION_STATE;
-    throw error;
-  }
+  const [row] = await db.query<{ oldest_open_invoice_due_at: string | null }>(
+    `select oldest_open_invoice_due_at
+       from public.organization_billing_contracts
+      where organization_id = $1
+        and ended_at is null
+      limit 1`,
+    [organizationId],
+  );
+  return deriveCollectionState(nowMs, row?.oldest_open_invoice_due_at ?? null);
 }

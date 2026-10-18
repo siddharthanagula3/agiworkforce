@@ -31,16 +31,6 @@ interface TokenRow {
   expires_at: string;
 }
 
-const PG_UNDEFINED_COLUMN = '42703';
-
-class UndefinedColumn extends Error {
-  readonly code = PG_UNDEFINED_COLUMN;
-
-  constructor(column: string) {
-    super(`column "${column}" does not exist`);
-  }
-}
-
 function row(overrides: Partial<TokenRow> & Pick<TokenRow, 'id' | 'family_id'>): TokenRow {
   return {
     user_id: 'user-1',
@@ -55,15 +45,10 @@ function row(overrides: Partial<TokenRow> & Pick<TokenRow, 'id' | 'family_id'>):
 }
 
 /**
- * Answers the two statements the way Postgres does: the same predicates, the
- * same coalesce, the same refusal when the compromise columns are not there.
+ * Answers the two statements the way Postgres does: the same predicates and
+ * the same coalesce.
  */
-function fakeDeviceRefreshTokens(
-  rows: TokenRow[],
-  options: { compromiseColumns?: boolean } = {},
-): DatabaseAdapter {
-  const compromiseColumns = options.compromiseColumns ?? true;
-
+function fakeDeviceRefreshTokens(rows: TokenRow[]): DatabaseAdapter {
   const scoped = (sql: string, params: unknown[]): TokenRow[] => {
     const byFamilyText = /family_id::text = \$1/.test(sql);
     const byEveryRow = /where user_id = \$1/.test(sql);
@@ -87,7 +72,6 @@ function fakeDeviceRefreshTokens(
 
   const run = (sql: string, params: unknown[]): TokenRow[] => {
     if (/set compromised_at/.test(sql)) {
-      if (!compromiseColumns) throw new UndefinedColumn('compromised_at');
       const at = typeof params[2] === 'string' ? params[2] : new Date().toISOString();
       const reason = String(params[params.length - 1]);
       const touched = scoped(sql, params);
@@ -111,7 +95,7 @@ function fakeDeviceRefreshTokens(
       run(sql, params).map(({ id }) => ({ id }))) as DatabaseAdapter['query'],
     execute: async (sql: string, params: unknown[] = []) => run(sql, params).length,
     transaction: (async (callback: (tx: DatabaseAdapter) => unknown) =>
-      callback(fakeDeviceRefreshTokens(rows, options))) as DatabaseAdapter['transaction'],
+      callback(fakeDeviceRefreshTokens(rows))) as DatabaseAdapter['transaction'],
     withUser: () => {
       throw new Error('not used');
     },
@@ -188,16 +172,6 @@ describe('finishing a refresh-token family that is known to be compromised', () 
     );
 
     expect(issuable).toEqual([]);
-  });
-
-  it('keeps the revocation when the compromise columns are not there yet', async () => {
-    const outcome = await finishFamilyAsCompromised(
-      fakeDeviceRefreshTokens(rows, { compromiseColumns: false }),
-      { familyId: 'family-a', userId: 'user-1', reason: 'replayed', at: AT },
-    );
-
-    expect(outcome).toEqual({ revoked: 2, compromiseRecorded: false });
-    expect(rows[1]?.revoked_at).toBe(AT);
   });
 
   it('never revokes another account holding the same family id', async () => {

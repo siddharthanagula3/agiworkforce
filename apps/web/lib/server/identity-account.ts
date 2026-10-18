@@ -62,20 +62,6 @@ const TOUCH = `
      set last_authenticated_at = now(), updated_at = now()
    where provider = $1 and subject = $2`;
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-/**
- * Only a missing table degrades: any other failure is a database this cannot
- * read, and authenticating through one is what must not happen.
- */
-function isBridgeMissing(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  if (record['code'] === PG_UNDEFINED_TABLE) return true;
-  const message = String(record['message'] ?? '');
-  return /identities|erasure_tombstones/.test(message) && /does not exist/.test(message);
-}
-
 function cacheKey(provider: string, subject: string): string {
   return `${CACHE_KEY_PREFIX}:${provider}:${subject}`;
 }
@@ -207,19 +193,7 @@ export async function resolveAuthenticatedAccount(subject: string): Promise<Iden
     };
   }
 
-  let rows: ResolutionRow[];
-  try {
-    rows = await getNeonDb().query<ResolutionRow>(RESOLVE, [provider, subject, fallback]);
-  } catch (err) {
-    if (!isBridgeMissing(err)) throw err;
-    logger.error({ err, provider }, 'Identity bridge is not provisioned; resolving without it');
-    return fallback === null
-      ? { outcome: 'unknown' }
-      : {
-          outcome: 'resolved',
-          account: { accountId: fallback, identityId: null, provider, subject },
-        };
-  }
+  const rows = await getNeonDb().query<ResolutionRow>(RESOLVE, [provider, subject, fallback]);
 
   const row = rows[0];
   const accountId = row?.account_id ?? null;

@@ -87,11 +87,11 @@ describe('readOrganizationCollectionState', () => {
     );
   });
 
-  it('is current when the contract schema is absent', async () => {
+  it('surfaces a missing contract table instead of reading it as current', async () => {
     const db = dbThrowing(Object.assign(new Error('relation does not exist'), { code: '42P01' }));
-    expect(await readOrganizationCollectionState(db, 'org-1', NOW)).toEqual(
-      CURRENT_COLLECTION_STATE,
-    );
+    await expect(readOrganizationCollectionState(db, 'org-1', NOW)).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 
   it('rethrows any other database error', async () => {

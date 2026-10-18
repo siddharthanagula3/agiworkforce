@@ -13,22 +13,12 @@ import {
   type WorkspacePolicyOverride,
   type WorkspacePolicyOverrideSubject,
 } from '@agiworkforce/types';
-import { logger } from '@/lib/logger';
 import {
   parseWorkspaceControlsLayer,
   readLayeredOrganizationPolicy,
 } from '@/lib/services/organization-policy-service';
 import { readApplicablePolicyOverrides } from '@/lib/services/organization-policy-override-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
-
-const MISSING_RELATION = '42P01';
-
-// The layering tables ship as forward migrations that may not be applied. A
-// workspace without them is ungoverned, not unreadable.
-function isMissingRelation(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null)?.code;
-  return code === MISSING_RELATION;
-}
 
 export interface PolicyScopeSelectors {
   projectId?: string | null;
@@ -90,20 +80,11 @@ export async function readScopedPolicyOverrides(
   userId: string,
   selectors: PolicyScopeSelectors = {},
 ): Promise<WorkspacePolicyOverride[]> {
-  try {
-    const [subjectOverrides, contextOverrides] = await Promise.all([
-      readApplicablePolicyOverrides(db, organizationId, userId),
-      readProjectAndDeviceOverrides(db, organizationId, selectors),
-    ]);
-    return [...subjectOverrides, ...contextOverrides];
-  } catch (error) {
-    if (!isMissingRelation(error)) throw error;
-    logger.warn(
-      { organizationId },
-      '[authorization] policy layer tables are not present; workspace treated as unlayered',
-    );
-    return [];
-  }
+  const [subjectOverrides, contextOverrides] = await Promise.all([
+    readApplicablePolicyOverrides(db, organizationId, userId),
+    readProjectAndDeviceOverrides(db, organizationId, selectors),
+  ]);
+  return [...subjectOverrides, ...contextOverrides];
 }
 
 export interface AuthorizationFacts extends AuthorizationSubject {
@@ -196,10 +177,7 @@ export async function resolveAuthorizationFacts(
 
   const [permissions, layered] = await Promise.all([
     readPermissions(db, organizationId, userId),
-    readLayeredOrganizationPolicy(db, organizationId).catch((error: unknown) => {
-      if (!isMissingRelation(error)) throw error;
-      return null;
-    }),
+    readLayeredOrganizationPolicy(db, organizationId),
   ]);
 
   const overrides = layered?.hasOverrides

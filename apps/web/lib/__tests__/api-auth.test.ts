@@ -1255,13 +1255,13 @@ describe('tenant lockdown at the auth boundary', () => {
   });
 });
 
-describe('getClerkAuthUser · a database without the identity bridge', () => {
+describe('getClerkAuthUser · an identity bridge that cannot be read', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearIpAllowListCacheForTests();
   });
 
-  it('resolves the account it always did rather than failing every request', async () => {
+  it('fails closed when the bridge table is missing instead of resolving without it', async () => {
     makeFakeDb();
     mockNeonQuery.mockImplementation(async (sql: string) => {
       if (String(sql).includes('public.identities')) {
@@ -1277,10 +1277,10 @@ describe('getClerkAuthUser · a database without the identity bridge', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'pre-bridge-user' });
+    ).rejects.toThrow();
   });
 
-  it('fails closed on a database error that is not a missing bridge', async () => {
+  it('fails closed on any other database error', async () => {
     makeFakeDb();
     mockNeonQuery.mockImplementation(async (sql: string) => {
       if (String(sql).includes('public.identities')) throw new Error('connection terminated');
