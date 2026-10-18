@@ -720,6 +720,28 @@ const ALLOWLIST = [
       'scoping the read to one of them.',
   },
   {
+    match: /lib\/services\/billing-reconciliation\.ts$/,
+    tables: ['subscriptions'],
+    reason:
+      'the billed plan reconciliation sweep, reached only from api/cron/reconcile-billed-plans: ' +
+      'it reads the least recently compared Stripe-billed subscriptions across every account, ' +
+      'then stamps stripe_price_reconciled_at on exactly the stripe_subscription_id list that ' +
+      'read returned. The id list IS the owner constraint; there is no request subject, and the ' +
+      'stamp writes only the cursor column, never a plan, status or entitlement field. Both ' +
+      'statements are module constants issued only by reconcileBilledPlans.',
+  },
+  {
+    match: /lib\/services\/stripe-settlement-reconciliation-service\.ts$/,
+    tables: ['subscriptions'],
+    reason:
+      'the Stripe subscription state reconciliation sweep, reached only from ' +
+      'api/cron/reconcile-credits: it reads the least recently compared Stripe-billed ' +
+      'subscriptions across every account, then stamps stripe_state_reconciled_at on exactly the ' +
+      'stripe_subscription_id list that read returned. The id list IS the owner constraint; there ' +
+      'is no request subject, and the stamp writes only the cursor column. Both statements are ' +
+      'module constants issued only by reconcileStripeSettlement.',
+  },
+  {
     match: /lib\/server\/copyright-notices\.ts$/,
     tables: ['copyright_notices'],
     functions: ['recordCopyrightNotice'],

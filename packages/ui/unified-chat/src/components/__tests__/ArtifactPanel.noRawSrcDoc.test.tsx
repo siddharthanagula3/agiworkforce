@@ -6,6 +6,7 @@ import { ArtifactPanel } from '../ArtifactPanel';
 import type { Artifact } from '../../lib/types';
 
 vi.mock('../artifact-components/ReactPreview', () => ({
+  REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE: 'stub sandbox notice',
   ReactPreview: () => <div data-testid="stub-react-preview" />,
 }));
 

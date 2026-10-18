@@ -5,6 +5,7 @@ import { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from '../../lib/artifact-sa
 import type { Artifact } from '../../lib/types';
 
 vi.mock('../artifact-components/ReactPreview', () => ({
+  REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE: 'stub sandbox notice',
   ReactPreview: ({ code }: { code: string }) => (
     <div data-testid="stub-react-preview" data-code-length={code.length} />
   ),

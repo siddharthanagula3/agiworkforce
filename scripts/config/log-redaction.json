@@ -14,30 +14,6 @@
       "fix": "replace { body: responseText } with { bodyBytes: responseText.length, providerErrorCode } read from the parsed provider error"
     },
     {
-      "file": "apps/web/app/api/portal/route.ts",
-      "field": "email",
-      "reason": "the billing portal logs the signed-in address on the deprecated Stripe lookup path; userId is already on the same line",
-      "fix": "replace email: userEmail with emailPseudonym: pseudonymizeEmail(userEmail) from @/lib/server/email-pseudonym, or drop the field since userId identifies the account"
-    },
-    {
-      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "field": "email",
-      "reason": "four webhook reconciliation lines log the Stripe customer address, including two marked SECURITY and CRITICAL",
-      "fix": "replace email: customer.email with emailPseudonym: pseudonymizeEmail(customer.email) from @/lib/server/email-pseudonym; the pseudonym is stable, so the duplicate-account case is still visible"
-    },
-    {
-      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "field": "stripeCustomerEmail",
-      "reason": "the profile mismatch line logs both the stored address and the Stripe one",
-      "fix": "log emailPseudonym for each, or a single emailsMatch boolean, which is the whole question the line asks"
-    },
-    {
-      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "field": "customerEmail",
-      "reason": "the fallback lookup logs the address it is searching by",
-      "fix": "replace with emailPseudonym: pseudonymizeEmail(customerEmail)"
-    },
-    {
       "file": "apps/web/lib/connectors/oauth-registry.ts",
       "field": "describedButUncredentialed",
       "reason": "the name contains \"credential\" so the count of connectors described without credentials is redacted at startup, which is the one number that line exists to report",
@@ -90,12 +66,6 @@
       "field": "credentialRejectedProviders",
       "reason": "the name contains credential, so the list of providers that rejected their credential is redacted on both failover lines",
       "fix": "rename to rejectedProviders"
-    },
-    {
-      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
-      "field": "profileEmail",
-      "reason": "the profile mismatch line logs the stored address beside the Stripe one",
-      "fix": "replace with emailsMatch: pseudonymizeEmail(storedProfile.email) === pseudonymizeEmail(customerEmail), which is the whole question the line asks"
     },
     {
       "file": "apps/web/app/api/voice/live/sessions/route.ts",

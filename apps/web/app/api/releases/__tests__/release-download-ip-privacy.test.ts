@@ -1,6 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+type RateLimitModule = typeof import('@/lib/rate-limit');
+
 const { executeMock, getOptionalEnvMock, queryMock, withRateLimitMock } = vi.hoisted(() => ({
   executeMock: vi.fn(),
   getOptionalEnvMock: vi.fn(),
@@ -10,7 +12,7 @@ const { executeMock, getOptionalEnvMock, queryMock, withRateLimitMock } = vi.hoi
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: withRateLimitMock,
 }));
 vi.mock('@shared/utils/env', () => ({ getOptionalEnv: getOptionalEnvMock }));

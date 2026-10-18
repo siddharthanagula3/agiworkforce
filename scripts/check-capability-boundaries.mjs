@@ -226,7 +226,6 @@ export const PROVIDER_BRANCH_ALLOWLIST = new Map([
   ],
   ['apps/web/app/api/media/video/generate/route.ts', 'video vendor branching in the route'],
   ['apps/web/app/api/media/video/cancel/route.ts', 'video vendor branching in the route'],
-  ['apps/web/app/api/media/video/status/route.ts', 'video vendor branching in the route'],
   [
     'apps/web/lib/hooks/useMediaGeneration.ts',
     'the client narrows providers by name before calling the media route',

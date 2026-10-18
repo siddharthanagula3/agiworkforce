@@ -79,13 +79,13 @@ async function handleChangePassword(request: NextRequest) {
   }
 
   const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);
-  const deviceCredentialsRevoked = await revokeEveryDeviceRefreshCredential(db, userId);
+  const revokedDeviceSessionCount = await revokeEveryDeviceRefreshCredential(db, userId);
   logger.info(
     {
       userId,
       endedCount: signOut.ended.length,
       failedCount: signOut.failed.length,
-      deviceCredentialsRevoked,
+      revokedDeviceSessionCount,
     },
     'Password changed; other sessions and device credentials ended',
   );
@@ -110,7 +110,7 @@ async function handleChangePassword(request: NextRequest) {
     success: true,
     otherSessionsEnded: signOut.ended.length,
     otherSessionsRemaining: signOut.failed.length,
-    deviceCredentialsRevoked,
+    deviceCredentialsRevoked: revokedDeviceSessionCount,
   });
 }
 

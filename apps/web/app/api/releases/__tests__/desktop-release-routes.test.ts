@@ -10,7 +10,10 @@ const { fetchMock, getOptionalEnvMock, withRateLimitMock, neonQueryMock, neonExe
   }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: withRateLimitMock }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: withRateLimitMock,
+  getClientIpForRateLimit: vi.fn(() => 'unknown'),
+}));
 vi.mock('@shared/utils/env', () => ({ getOptionalEnv: getOptionalEnvMock }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },

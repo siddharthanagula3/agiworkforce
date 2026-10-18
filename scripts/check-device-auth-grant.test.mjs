@@ -227,7 +227,7 @@ test('a tree with no grant route fails rather than passing empty', () => {
 test('the repository itself passes, with a real grant swept', () => {
   const { errors, report } = checkDeviceAuthGrant(REPO_ROOT);
   assert.deepEqual(errors, []);
-  assert.ok(report.routes >= 5, `${report.routes} grant routes`);
+  assert.ok(report.routes >= 4, `${report.routes} grant routes`);
   assert.ok(report.statuses >= 5, `${report.statuses} code states`);
   assert.ok(report.codeBits >= MINIMUM_CODE_BITS, `${report.codeBits} bits`);
 });

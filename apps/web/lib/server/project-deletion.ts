@@ -53,8 +53,14 @@ export async function releaseDeletedProjectContents(
     `select distinct storage_uri
        from project_knowledge_files
       where storage_uri = any($1::text[])
-        and deleted_at is null`,
-    [released],
+        and deleted_at is null
+        and project_id in (
+          select id
+            from user_projects
+           where user_id = $2
+             and organization_id is not distinct from $3::uuid
+        )`,
+    [released, scope.userId, scope.organizationId],
   );
   const shared = new Set(stillReferenced.map((row) => row.storage_uri));
   return released.filter((uri) => !shared.has(uri));

@@ -21,7 +21,6 @@ const MAX_VIDEO_BYTES = 256 * 1024 * 1024;
 const MAX_INLINE_VIDEO_BYTES = 32 * 1024 * 1024;
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
 
-const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
 const GOOGLE_RESOURCE_SEGMENT_PATTERN = /^[A-Za-z0-9_.-]{1,200}$/;
 
 function isSafeGoogleResourceSegment(segment: string): boolean {
@@ -29,8 +28,13 @@ function isSafeGoogleResourceSegment(segment: string): boolean {
 }
 
 function googleApiKey(): string | undefined {
-  for (const name of GOOGLE_API_KEY_ENV_KEYS) {
-    const value = process.env[name]?.trim();
+  const candidates = [
+    process.env['GOOGLE_API_KEY'],
+    process.env['GOOGLE_AI_API_KEY'],
+    process.env['GEMINI_API_KEY'],
+  ];
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
     if (value) return value;
   }
   return undefined;
