@@ -1,4 +1,3 @@
-// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { getSimpleErrorMessage } from '../lib/errorMessages';

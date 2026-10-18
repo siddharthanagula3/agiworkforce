@@ -14,9 +14,8 @@
  * coexist: the bundled employees ship with the desktop binary, while user
  * skills live on disk and merge in via precedence (highest wins).
  *
- * @deprecated The bundled-only `loadSkills()` API will be retired once
- * the `appStateStore` slice for skill catalogs lands. New consumers should
- * prefer `loadFilesystemSkills()` for layered loading.
+ * @deprecated New consumers should prefer `loadFilesystemSkills()` for
+ * layered loading over the bundled-only `loadSkills()`.
  */
 
 import type { SkillSource, Skill, FormatSkillsOptions } from '@agiworkforce/skills';

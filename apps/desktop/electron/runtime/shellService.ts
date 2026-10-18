@@ -186,7 +186,7 @@ function loginPath(): Promise<string | null> {
 }
 
 /**
- * Starts from `INHERITED_ENV_ALLOWLIST` in `crates/agiworkforce-mcp/src/client.rs`
+ * Starts from `INHERITED_ENV_ALLOWLIST` in `crates/agiworkforce-mcp/src/transport/stdio.rs`
  * and adds what a developer's own commands need that an MCP server does not:
  * the SSH agent for git over ssh, the proxy a corporate network requires, and
  * the locations toolchain managers point compilers and interpreters at.

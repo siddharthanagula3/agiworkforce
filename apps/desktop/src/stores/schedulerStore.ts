@@ -1,4 +1,3 @@
-// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';

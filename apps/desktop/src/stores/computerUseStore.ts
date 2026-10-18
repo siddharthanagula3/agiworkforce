@@ -1,4 +1,3 @@
-// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import type { ToolApprovalRequest } from '@agiworkforce/types';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
