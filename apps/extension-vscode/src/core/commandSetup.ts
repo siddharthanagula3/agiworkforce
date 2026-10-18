@@ -152,7 +152,6 @@ import {
   newSessionInWorktree,
 } from '../features/surfaces/sessionWorktrees';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
-import { showOriginalContext } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
@@ -1019,16 +1018,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
       vscode.window.showInformationMessage(describeDiffScope(restored, 'restored'));
     }),
-    register('agi-workforce.showOriginalContext', async (sessionId: string) => {
-      const session = diffDecorationProvider.getSession(sessionId);
-      if (session === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Diff session not found.');
-        return;
-      }
-      const filePath = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
-      await showOriginalContext(session.originalText, session.newText, filePath);
-    }),
-
     register('agi-workforce.chat', async () => {
       if (!nativeChatAvailable) {
         await revealFirstPartyChat();

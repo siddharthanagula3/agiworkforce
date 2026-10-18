@@ -387,11 +387,6 @@
         "icon": "$(discard)"
       },
       {
-        "command": "agi-workforce.showOriginalContext",
-        "title": "AGI Workforce: Show Original Context (Patch Expected vs Actual)",
-        "icon": "$(diff)"
-      },
-      {
         "command": "agi-workforce.addToContext",
         "title": "AGI Workforce: Add File to Context",
         "icon": "$(pin)"
@@ -1025,10 +1020,6 @@
         },
         {
           "command": "agi-workforce.rejectBatch",
-          "when": "false"
-        },
-        {
-          "command": "agi-workforce.showOriginalContext",
           "when": "false"
         },
         {

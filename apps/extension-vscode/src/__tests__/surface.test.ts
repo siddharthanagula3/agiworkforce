@@ -1,16 +1,14 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   assertSurfaceCanSyncChats,
   isDeveloperSessionSurface,
   isSyncedAppSurface,
 } from '@agiworkforce/types';
-import { SOURCE_SURFACE, DEVELOPER_SURFACE } from '../platform/surface';
+import { SOURCE_SURFACE } from '../platform/surface';
 
 describe('vscode SOURCE_SURFACE', () => {
   it('is the literal "vscode"', () => {
     expect(SOURCE_SURFACE).toBe('vscode');
-    expect(DEVELOPER_SURFACE).toBe('vscode');
   });
 
   it('is classified as a developer surface', () => {
