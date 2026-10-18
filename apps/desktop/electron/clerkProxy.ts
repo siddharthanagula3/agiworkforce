@@ -1,4 +1,3 @@
-
 const CLERK_API_VERSION = '2026-05-12';
 const CLERK_JS_VERSION = '6.25.3';
 
@@ -114,8 +113,14 @@ function clerkQueryParams(extra: string | null | undefined): URLSearchParams {
 
 export async function executeClerkNativeRequest(
   request: ClerkNativeRequest,
+  isAllowedFrontendApi: (host: string) => boolean,
 ): Promise<ClerkNativeResponse> {
   const frontendApi = frontendApiFromPublishableKey(request.publishableKey);
+  if (!isAllowedFrontendApi(frontendApi)) {
+    throw new Error(
+      'Refusing a Clerk publishable key for an account service this app does not use.',
+    );
+  }
   validateClerkPath(request.path);
 
   const method = request.method.toUpperCase();

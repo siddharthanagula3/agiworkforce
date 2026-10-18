@@ -112,6 +112,22 @@ export function clerkDevelopmentHost(publishableKey: string | undefined): string
 export const CLERK_DEVELOPMENT_HOST = clerkDevelopmentHost(process.env[CLERK_PUBLISHABLE_KEY_ENV]);
 
 /**
+ * The Clerk frontend API hosts this shell will send a client credential to.
+ * The renderer names the host through the publishable key it passes, so the
+ * host is checked here rather than trusted: our own domain, where a production
+ * instance answers, or the one development tenant this build's key names.
+ */
+export function isAllowedClerkFrontendApi(
+  host: string,
+  developmentHost: string | null = CLERK_DEVELOPMENT_HOST,
+): boolean {
+  const normalized = host.toLowerCase();
+  return (
+    isFirstPartyHost(normalized) || (developmentHost !== null && normalized === developmentHost)
+  );
+}
+
+/**
  * The page hands over the relay address it got from the pairing API, and the
  * page is not trusted to choose it: a relay of its own would carry the phone's
  * end of the session. An unencrypted local relay is accepted only when the app

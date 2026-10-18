@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { platformRequestHeaders } from '../src/lib/platformHeaders';
-import { CLOUD_APP_ORIGIN, isAllowedApiBaseUrl } from './config';
+import { CLOUD_APP_ORIGIN, isAllowedApiBaseUrl, isAllowedClerkFrontendApi } from './config';
 import { executeClerkNativeRequest } from './clerkProxy';
 import { clearSecrets, getSecret, isSecretKey, setSecret } from './secretStore';
 
@@ -322,15 +322,18 @@ export async function handleBridgeCommand(
 ): Promise<unknown> {
   switch (command) {
     case 'account_clerk_native_request': {
-      return executeClerkNativeRequest({
-        publishableKey: requireString(args, 'publishableKey'),
-        method: requireString(args, 'method'),
-        path: requireString(args, 'path'),
-        body: typeof args?.['body'] === 'string' ? (args['body'] as string) : null,
-        clientToken:
-          typeof args?.['clientToken'] === 'string' ? (args['clientToken'] as string) : null,
-        search: typeof args?.['search'] === 'string' ? (args['search'] as string) : null,
-      });
+      return executeClerkNativeRequest(
+        {
+          publishableKey: requireString(args, 'publishableKey'),
+          method: requireString(args, 'method'),
+          path: requireString(args, 'path'),
+          body: typeof args?.['body'] === 'string' ? (args['body'] as string) : null,
+          clientToken:
+            typeof args?.['clientToken'] === 'string' ? (args['clientToken'] as string) : null,
+          search: typeof args?.['search'] === 'string' ? (args['search'] as string) : null,
+        },
+        isAllowedClerkFrontendApi,
+      );
     }
 
     case 'account_start_device_authorization':

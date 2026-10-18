@@ -7,6 +7,7 @@ vi.mock('electron', () => ({ app: { getVersion: () => '1.2.3' } }));
 vi.mock('../config', () => ({
   CLOUD_APP_ORIGIN: 'https://cloud.test',
   isAllowedApiBaseUrl: () => true,
+  isAllowedClerkFrontendApi: () => true,
 }));
 vi.mock('../clerkProxy', () => ({ executeClerkNativeRequest: vi.fn() }));
 vi.mock('../secretStore', () => ({
