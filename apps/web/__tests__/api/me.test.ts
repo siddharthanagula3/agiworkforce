@@ -283,7 +283,7 @@ describe('Me API', () => {
         expect(data.routing_preferences).toEqual({ us_only: true });
       });
 
-      it('should return empty routing_preferences when DB query fails', async () => {
+      it('fails the request rather than answer with an empty profile when the profile read fails', async () => {
         mockNeonQuery.mockRejectedValueOnce(new Error('DB error'));
 
         const request = new NextRequest('http://localhost/api/me', {
@@ -293,7 +293,8 @@ describe('Me API', () => {
         const response = await GET(request);
         const data = await response.json();
 
-        expect(data.routing_preferences).toEqual({});
+        expect(response.status).toBe(500);
+        expect(data.routing_preferences).toBeUndefined();
       });
     });
   });

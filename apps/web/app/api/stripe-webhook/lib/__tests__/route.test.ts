@@ -292,7 +292,7 @@ describe('a completed checkout provisions the entitlement it paid for', () => {
     const response = await deliver(checkoutCompleted({ eventId: 'evt_checkout_credits' }));
 
     expect(response.status).toBe(500);
-    expect(allocateCreditsForPeriod).toHaveBeenCalledTimes(3);
+    expect(allocateCreditsForPeriod).toHaveBeenCalledTimes(1);
     expect(calls.some((call) => call.sql.includes('mark_stripe_event_succeeded'))).toBe(false);
     expect(calls.some((call) => call.sql.includes('mark_stripe_event_failed'))).toBe(true);
   });

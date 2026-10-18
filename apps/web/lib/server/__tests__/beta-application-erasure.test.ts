@@ -60,7 +60,9 @@ import { USER_SCOPED_TABLES, eraseUserAccountData } from '../account-erasure';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.query.mockResolvedValue([]);
+  mocks.query.mockImplementation(async (sql: string) =>
+    sql.includes('update public.profiles') ? [{ id: 'user-1' }] : [],
+  );
   mocks.execute.mockResolvedValue(1);
   mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failed: 0 });
   mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 0 });

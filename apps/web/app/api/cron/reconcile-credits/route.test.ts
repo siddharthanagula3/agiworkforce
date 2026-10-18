@@ -170,7 +170,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     processPending.mockRejectedValueOnce(new Error('database unavailable'));
     const response = await GET(cronRequest('cron-secret') as never);
     expect(response.status).toBe(500);
-    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything(), 20);
+    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything());
   });
 
   it('still drains video incident alerts when the generic credit queue is unhealthy', async () => {
@@ -194,7 +194,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     const response = await GET(cronRequest('cron-secret') as never);
 
     expect(response.status).toBe(200);
-    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything(), 20);
+    expect(deliverVideoAlerts).toHaveBeenCalledWith(expect.anything());
   });
 
   it('fails observably while a video incident alert remains undelivered', async () => {

@@ -29,11 +29,6 @@ const LOOKUPS: Record<string, { count: number; reason: string }> = {
     reason:
       'Runs only after organizationOwnsEmailDomain accepts the address, and the refusal before it is word for word the same whether or not an account uses the address.',
   },
-  'app/api/stripe-webhook/lib/db.ts': {
-    count: 3,
-    reason:
-      'Driven by a Stripe-signed webhook with the customer email Stripe holds; the result links a subscription and is never returned to an HTTP caller.',
-  },
   'lib/server/scim/scim-provisioning-service.ts': {
     count: 1,
     reason:

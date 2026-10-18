@@ -49,11 +49,14 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
+vi.mock('@/lib/server/neon-db', () => {
+  const db = {
     query: (...args: unknown[]) => mockNeonQuery(...args),
-  })),
-}));
+    execute: async () => 0,
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(db),
+  };
+  return { getNeonDb: vi.fn(() => db) };
+});
 
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },

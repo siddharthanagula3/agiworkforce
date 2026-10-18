@@ -82,6 +82,7 @@ const imageJobs = vi.hoisted(() => {
   };
   return {
     store,
+    maxAttempts: 3,
     create: async (input: Record<string, unknown>): Promise<Job> => {
       const now = new Date().toISOString();
       const job: Job = {
@@ -105,7 +106,7 @@ const imageJobs = vi.hoisted(() => {
         actualCostMicrousd: null,
         status: 'queued',
         attempts: 0,
-        maxAttempts: 3,
+        maxAttempts: imageJobs.maxAttempts,
         attemptStartedAt: null,
         retryable: false,
         publicError: null,
@@ -250,6 +251,7 @@ describe('Article 50(2), generated image provenance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     imageJobs.store.clear();
+    imageJobs.maxAttempts = 3;
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
     rlsMocks.getUserScopedDb.mockResolvedValue({
@@ -412,7 +414,26 @@ describe('Article 50(2), generated image provenance', () => {
     expect(providerCalls()).toEqual([]);
   });
 
-  it('removes every staged sibling and refunds when a multi-image batch cannot persist', async () => {
+  it('holds the reservation for a retry when an earlier attempt cannot persist the batch', async () => {
+    queuedProviderResponses.push({
+      ok: true,
+      json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
+    });
+    storageMocks.store
+      .mockResolvedValueOnce({ pathname: 'users/u/first.png', byteSize: 12 })
+      .mockRejectedValueOnce(new Error('second object write failed'));
+
+    const response = await POST(authedRequest({ prompt: 'two cats', n: 2 }));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({ success: false, images: [], persisted: false, retryable: true });
+    expect(storageMocks.del).toHaveBeenCalledWith('users/u/first.png');
+    expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+  });
+
+  it('removes every staged sibling and refunds when the last attempt cannot persist the batch', async () => {
+    imageJobs.maxAttempts = 1;
     queuedProviderResponses.push({
       ok: true,
       json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
@@ -433,7 +454,8 @@ describe('Article 50(2), generated image provenance', () => {
     );
   });
 
-  it('rolls back all staged objects when the atomic media catalog transaction fails', async () => {
+  it('rolls back all staged objects and refunds when the catalog transaction fails on the last attempt', async () => {
+    imageJobs.maxAttempts = 1;
     queuedProviderResponses.push({
       ok: true,
       json: async () => ({ data: [{ b64_json: PNG_B64 }, { b64_json: PNG_B64 }] }),
@@ -512,6 +534,7 @@ describe('Article 50(2), the mark survives to the download', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     imageJobs.store.clear();
+    imageJobs.maxAttempts = 3;
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: {},

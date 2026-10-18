@@ -43,9 +43,14 @@ vi.mock('@/lib/server/sso/jit-provisioning', () => ({ provisionEnterpriseSignIn:
 vi.mock('@/lib/server/scim/scim-sign-in-linking', () => ({
   linkPendingScimUsersAtSignIn: mockLinkPendingScimUsers,
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({ query: vi.fn(async () => []) })),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const db = {
+    query: vi.fn(async () => []),
+    execute: async () => 0,
+    transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(db),
+  };
+  return { getNeonDb: vi.fn(() => db) };
+});
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => null) },
 }));

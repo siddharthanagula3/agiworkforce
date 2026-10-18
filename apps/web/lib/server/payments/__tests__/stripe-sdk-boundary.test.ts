@@ -35,7 +35,6 @@ const STRIPE_INTEGRATION_LAYER: ReadonlySet<string> = new Set([
   'lib/services/enterprise-billing-service.ts',
   'lib/services/enterprise-usage-metering.ts',
   'lib/services/stripe-settlement-reconciliation-service.ts',
-  'lib/services/subscription-service.ts',
   'lib/stripe-config.ts',
   'lib/stripe-types.ts',
 ]);

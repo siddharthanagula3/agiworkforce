@@ -60,7 +60,11 @@ describe('readUserIdentity', () => {
   it('reads profiles on the caller connection and constrains by the owner', async () => {
     query.mockClear();
     query.mockImplementation(async (sql: string) => {
-      if (sql.includes('select id, email, display_name, avatar_url, routing_preferences')) {
+      if (
+        sql.includes(
+          'select id, email, display_name, avatar_url, stripe_customer_id, routing_preferences',
+        )
+      ) {
         return [
           {
             id: 'user-42',
@@ -78,7 +82,9 @@ describe('readUserIdentity', () => {
 
     expect(identity.displayName).toBe('Ada Lovelace');
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('select id, email, display_name, avatar_url, routing_preferences'),
+      expect.stringContaining(
+        'select id, email, display_name, avatar_url, stripe_customer_id, routing_preferences',
+      ),
       ['user-42'],
     );
   });

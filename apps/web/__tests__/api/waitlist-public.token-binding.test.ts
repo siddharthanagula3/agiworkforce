@@ -130,6 +130,17 @@ async function mintFor(cookie?: string): Promise<{ token: string; cookie: string
   return { token, cookie: [cookie, anonCookie].filter(Boolean).join('; ') };
 }
 
+function waitlistWrites() {
+  return db.executes.filter(({ sql }) => !sql.includes('security_audit_logs'));
+}
+
+function csrfRefusalsRecorded() {
+  return db.executes.filter(
+    ({ sql, params }) =>
+      sql.includes('security_audit_logs') && params[1] === 'csrf_validation_failed',
+  ).length;
+}
+
 beforeEach(() => {
   db.executes.length = 0;
   rateLimit.keys.length = 0;
@@ -215,7 +226,8 @@ describe('the public waitlist still checks the token', () => {
 
     expect(response.status).toBe(403);
     expect(((await response.json()) as { code: string }).code).toBe('CSRF_VALIDATION_FAILED');
-    expect(db.executes).toHaveLength(0);
+    expect(waitlistWrites()).toHaveLength(0);
+    expect(csrfRefusalsRecorded()).toBe(1);
   });
 
   it('refuses a request with no token, and a token minted for another anonymous session', async () => {
@@ -227,7 +239,8 @@ describe('the public waitlist still checks the token', () => {
     const cookieless = await POST(joinRequest({ token: mine.token }));
 
     expect([missing.status, crossed.status, cookieless.status]).toEqual([403, 403, 403]);
-    expect(db.executes).toHaveLength(0);
+    expect(waitlistWrites()).toHaveLength(0);
+    expect(csrfRefusalsRecorded()).toBe(3);
   });
 });
 

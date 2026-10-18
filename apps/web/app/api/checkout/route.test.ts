@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { SITE_URL } from '@/lib/seo/site';
 type ScanModule0 = typeof import('@/lib/server/billing-waitlist-access');
 
 const stripeMocks = vi.hoisted(() => ({
@@ -232,8 +233,7 @@ describe('POST /api/checkout', () => {
     expect(response.status).toBe(200);
     expect(stripeMocks.createCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        success_url:
-          'https://agiworkforce.com/billing?success=true&session_id={CHECKOUT_SESSION_ID}',
+        success_url: `${SITE_URL}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       }),
     );
   });

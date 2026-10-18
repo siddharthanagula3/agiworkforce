@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { SITE_URL } from '@/lib/seo/site';
 import { resolveCheckoutReturnOrigin } from '../checkout-return-origin';
 
 const CONFIGURED = 'https://agiworkforce.com';
@@ -15,7 +16,6 @@ describe('resolveCheckoutReturnOrigin', () => {
   const previous = { ...process.env };
 
   beforeEach(() => {
-    process.env['NEXT_PUBLIC_APP_URL'] = CONFIGURED;
     process.env['ALLOWED_ORIGINS'] = 'https://agiworkforce.com,http://localhost:3000';
   });
 
@@ -36,16 +36,16 @@ describe('resolveCheckoutReturnOrigin', () => {
   });
 
   it('refuses an origin the allowlist does not vouch for', () => {
-    expect(resolveCheckoutReturnOrigin(requestFrom('https://evil.example'))).toBe(CONFIGURED);
+    expect(resolveCheckoutReturnOrigin(requestFrom('https://evil.example'))).toBe(SITE_URL);
   });
 
   it('refuses a look-alike suffix of an allowed host', () => {
     expect(resolveCheckoutReturnOrigin(requestFrom('https://agiworkforce.com.evil.test'))).toBe(
-      CONFIGURED,
+      SITE_URL,
     );
   });
 
   it('falls back to the configured origin when no Origin header is sent', () => {
-    expect(resolveCheckoutReturnOrigin(requestFrom(null))).toBe(CONFIGURED);
+    expect(resolveCheckoutReturnOrigin(requestFrom(null))).toBe(SITE_URL);
   });
 });

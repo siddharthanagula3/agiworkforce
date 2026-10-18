@@ -413,33 +413,44 @@ const DURABLE_IMAGE_JOB = {
   terminalAt: null,
 };
 
+// A retryable failure on an earlier attempt defers the job and keeps its
+// reservation for the retry; only the last attempt settles the refund.
+let jobMaxAttempts = DURABLE_IMAGE_JOB.maxAttempts;
+
 describe('POST /api/media/image/generate', () => {
   beforeEach(() => {
+    jobMaxAttempts = DURABLE_IMAGE_JOB.maxAttempts;
     vi.clearAllMocks();
     afterCallbacks.length = 0;
     jobQueueMocks.enqueue.mockResolvedValue({ id: 'bg-1', status: 'queued', created: true });
-    imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+    let currentJob: typeof DURABLE_IMAGE_JOB = DURABLE_IMAGE_JOB;
+    imageJobMocks.create.mockImplementation(
+      async ({ db: _db, ...input }: { db: unknown } & Partial<typeof DURABLE_IMAGE_JOB>) => {
+        currentJob = { ...DURABLE_IMAGE_JOB, ...input, maxAttempts: jobMaxAttempts };
+        return currentJob;
+      },
+    );
     imageJobMocks.defer.mockImplementation(async (input: { publicError: string }) => ({
-      ...DURABLE_IMAGE_JOB,
+      ...currentJob,
       status: 'failed' as const,
       attempts: 1,
       retryable: true,
       publicError: input.publicError,
     }));
     imageJobMocks.claim.mockImplementation(async () => ({
-      ...DURABLE_IMAGE_JOB,
+      ...currentJob,
       status: 'processing' as const,
       attempts: 1,
     }));
     imageJobMocks.complete.mockImplementation(async () => ({
-      ...DURABLE_IMAGE_JOB,
+      ...currentJob,
       status: 'completed' as const,
       attempts: 1,
       actualCostMicrousd: 8000,
       terminalAt: '2026-09-17T00:01:00.000Z',
     }));
     imageJobMocks.fail.mockImplementation(async (input: { publicError: string }) => ({
-      ...DURABLE_IMAGE_JOB,
+      ...currentJob,
       status: 'failed' as const,
       attempts: 1,
       retryable: false,
@@ -918,6 +929,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('settles failed provider work at zero actual cost', async () => {
+      jobMaxAttempts = 1;
       mockFetch.mockRejectedValueOnce(new Error('Provider connection refused'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a storm', provider: 'openai' }));
@@ -951,6 +963,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('treats a provider response with zero usable images as failed work', async () => {
+      jobMaxAttempts = 1;
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: [] }),
@@ -1272,6 +1285,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('fails and refunds when Google returns bytes under a different MIME contract', async () => {
+      jobMaxAttempts = 1;
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -1328,6 +1342,7 @@ describe('POST /api/media/image/generate', () => {
     it.each(['%%not-base64%%', 'Z2VtaW5pYmFzZTY0PT0=', '/9j/4A=='])(
       'fails and refunds malformed or non-image Google bytes: %s',
       async (data) => {
+        jobMaxAttempts = 1;
         mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({
@@ -1351,6 +1366,7 @@ describe('POST /api/media/image/generate', () => {
     );
 
     it('fails and refunds two distinct image blocks instead of double-charging one request', async () => {
+      jobMaxAttempts = 1;
       const secondImageBytes = Buffer.from(VALID_JPEG_BASE64, 'base64');
       const lastEntropyByte = secondImageBytes.length - 3;
       secondImageBytes[lastEntropyByte] = (secondImageBytes[lastEntropyByte] ?? 0) ^ 1;
@@ -1436,7 +1452,26 @@ describe('POST /api/media/image/generate', () => {
   });
 
   describe('Provider errors', () => {
+    it('holds the reservation for a retry when an earlier attempt meets a provider 5xx', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        json: async () => ({ error: { message: 'Provider internal error' } }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+      const data = await response.json();
+
+      expect(data.success).toBe(false);
+      expect(data.retryable).toBe(true);
+      expect(imageJobMocks.defer).toHaveBeenCalledOnce();
+      expect(imageJobMocks.fail).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+    });
+
     it('does not replay an ambiguous 5xx response even when provider selection is automatic', async () => {
+      jobMaxAttempts = 1;
       mockFetch
         .mockResolvedValueOnce({
           ok: false,
@@ -1482,6 +1517,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('never replays a direct provider 429 and preserves bounded Retry-After structurally', async () => {
+      jobMaxAttempts = 1;
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
       mockFetch
         .mockResolvedValueOnce({
@@ -1800,6 +1836,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('meters an image the library could not keep, and charges the account nothing', async () => {
+      jobMaxAttempts = 1;
       mediaAssetReadinessMocks.insertAtomically.mockResolvedValue([]);
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1821,6 +1858,7 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('meters nothing when the provider produced no output to pay for', async () => {
+      jobMaxAttempts = 1;
       mockFetch.mockRejectedValueOnce(new Error('Provider connection refused'));
 
       await POST(makeAuthedRequest({ prompt: 'a benign ask', provider: 'openai' }));

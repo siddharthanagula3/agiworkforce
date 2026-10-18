@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { SITE_URL } from '@/lib/seo/site';
 type ScanModule0 = typeof import('@/lib/server/billing-waitlist-access');
 
 const stripeMocks = vi.hoisted(() => ({
@@ -238,8 +239,8 @@ describe('checkout binds price, plan and customer on the server', () => {
       await POST(request({ plan: 'pro', billingInterval: 'monthly' }, { origin }));
       const session = createdSession();
       for (const url of [session.success_url, session.cancel_url]) {
-        expect(new URL(String(url)).origin).toBe(APP_ORIGIN);
-        expect(String(url).startsWith(`${APP_ORIGIN}/`)).toBe(true);
+        expect(new URL(String(url)).origin).toBe(SITE_URL);
+        expect(String(url).startsWith(`${SITE_URL}/`)).toBe(true);
       }
     },
   );
