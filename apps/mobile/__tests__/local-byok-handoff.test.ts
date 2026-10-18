@@ -136,6 +136,17 @@ describe('mobile local conversation forks', () => {
     expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
   });
 
+  it('branches from a message with only the turns up to and including it', async () => {
+    const forkId = await useChatStore.getState().forkConversation('local-conv', {
+      forkPointMessageId: 'msg-user',
+      title: 'Local chat (branch)',
+    });
+
+    const forkMessages = useChatStore.getState().messages[forkId] ?? [];
+    expect(forkMessages.map((message) => message.content)).toEqual(['Local-only prompt']);
+    expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
+  });
+
   it('keeps a local fork local even when the visible app mode is cloud', async () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
 

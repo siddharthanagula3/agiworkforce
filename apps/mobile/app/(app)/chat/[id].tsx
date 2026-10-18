@@ -171,10 +171,12 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { toUserMessage } from '@/services/userMessage';
+import { showToast } from '@/src/shared/components/Toast';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
+const MESSAGE_LOAD_FAILED = 'Messages could not be loaded. Check your connection and retry.';
 
 interface ConversationUiActionScope {
   conversationId: string;
@@ -245,6 +247,11 @@ export default function ChatScreen() {
   const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const setConversationModel = useChatStore((s) => s.setConversationModel);
+  const forkConversation = useChatStore((s) => s.forkConversation);
+  const messageLoadFailed = useChatStore(
+    (s) => id !== undefined && s.messageLoadErrorConversationId === id,
+  );
+  const clearMessageLoadError = useChatStore((s) => s.clearMessageLoadError);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
@@ -907,6 +914,30 @@ export default function ChatScreen() {
       retryWithModelRef.current = messageId;
     },
     [conversationExecutionMode],
+  );
+
+  const branchingRef = useRef(false);
+  const handleBranchFromMessage = useCallback(
+    async (messageId: string) => {
+      if (!id || branchingRef.current) return;
+      branchingRef.current = true;
+      try {
+        const branchId = await forkConversation(id, {
+          forkPointMessageId: messageId,
+          title: `${title} (branch)`,
+        });
+        showToast('Conversation branch created');
+        router.push(`/(app)/chat/${branchId}` as Parameters<typeof router.push>[0]);
+      } catch (error) {
+        Alert.alert(
+          'Could not create conversation branch',
+          toUserMessage(error, 'Check your connection and try again.'),
+        );
+      } finally {
+        branchingRef.current = false;
+      }
+    },
+    [forkConversation, id, router, title],
   );
 
   const handleModelSelect = useCallback(
@@ -1822,6 +1853,14 @@ export default function ChatScreen() {
 
         <TemporaryChatBanner />
 
+        <SendErrorBanner
+          error={messageLoadFailed ? MESSAGE_LOAD_FAILED : null}
+          onRetry={() => {
+            if (id) void loadMessages(id);
+          }}
+          onDismiss={clearMessageLoadError}
+        />
+
         {isLoadingMessages && conversationMessages.length === 0 ? (
           <MessageSkeleton />
         ) : (
@@ -1831,6 +1870,7 @@ export default function ChatScreen() {
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}
             onRetryWithModel={handleRetryWithModel}
+            onBranch={conversation?.temporary ? undefined : handleBranchFromMessage}
             onEditImageArea={canEditImages ? handleEditImageArea : undefined}
             onDeleteImageConversation={handleDeleteImageConversation}
             variantInfoByMessageId={variantInfo}

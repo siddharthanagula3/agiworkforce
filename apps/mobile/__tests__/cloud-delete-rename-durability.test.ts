@@ -406,6 +406,45 @@ describe('cloud conversation message-load durability', () => {
 
     expect(useChatCloudMessageStore.getState().messages['c1']).toEqual(optimisticMessages);
   });
+
+  it('keeps cached messages and flags the chat when a Cloud load fails, then clears on success', async () => {
+    seedCloud('c1');
+    const cached: ChatMessage[] = [
+      {
+        id: 'm-cached',
+        conversationId: 'c1',
+        role: 'user',
+        content: 'Cached question',
+        createdAt: '2026-06-20T00:00:01.000Z',
+      },
+    ];
+    useChatCloudMessageStore.getState().setCloudMessages('c1', cached);
+    mockGet.mockRejectedValueOnce(new Error('HTTP 503'));
+
+    await useChatMessageStore.getState().loadMessages('c1');
+
+    expect(useChatMessageStore.getState().messageLoadErrorConversationId).toBe('c1');
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual(cached);
+
+    mockGet.mockResolvedValueOnce({
+      conversation: {
+        id: 'c1',
+        title: 'Chat c1',
+        model: null,
+        projectId: null,
+        pinned: false,
+        createdAt: T,
+        updatedAt: T,
+      },
+      messages: [],
+      total: 0,
+      hasMore: false,
+    } as never);
+
+    await useChatMessageStore.getState().loadMessages('c1');
+
+    expect(useChatMessageStore.getState().messageLoadErrorConversationId).toBeNull();
+  });
 });
 
 describe('cloud sync payload persistence', () => {

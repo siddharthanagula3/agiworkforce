@@ -455,6 +455,7 @@ interface MessageBubbleProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  onBranch?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
   onDeleteImageConversation?: () => void;
   variant?: VariantInfo;
@@ -507,6 +508,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditImageArea,
   onDeleteImageConversation,
   onRetryWithModel,
+  onBranch,
   variant,
   onSelectVariant,
   onSwitchModel,
@@ -918,6 +920,13 @@ export const MessageBubble = memo(function MessageBubble({
         run: () => onRetryWithModel(message.id),
       });
     }
+    if (onBranch && !message.isStreaming) {
+      actions.push({
+        key: 'branch',
+        label: 'Branch Conversation from Here',
+        run: () => onBranch(message.id),
+      });
+    }
     actions.push({
       key: 'copy',
       label: 'Copy Message',
@@ -947,11 +956,13 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant,
     message.id,
     message.content,
+    message.isStreaming,
     displayContent,
     copy,
     onEditMessage,
     onRetryMessage,
     onRetryWithModel,
+    onBranch,
     onDeleteMessage,
     handleOpenEditModal,
     handleShowExport,
@@ -994,6 +1005,9 @@ export const MessageBubble = memo(function MessageBubble({
     if (isAssistant && onRetryWithModel) {
       actions.push({ name: 'retry-model', label: 'Retry with another model' });
     }
+    if (onBranch && !message.isStreaming) {
+      actions.push({ name: 'branch', label: 'Branch conversation from here' });
+    }
     actions.push({ name: 'copy', label: 'Copy message' });
     if (displayContent.trim()) actions.push({ name: 'select-text', label: 'Select text' });
     if (isAssistant && message.content.trim()) {
@@ -1015,8 +1029,10 @@ export const MessageBubble = memo(function MessageBubble({
     onEditMessage,
     onRetryMessage,
     onRetryWithModel,
+    onBranch,
     onDeleteMessage,
     message.content,
+    message.isStreaming,
     message.toolCalls,
     canonicalActivity,
     displayContent,
@@ -1047,6 +1063,9 @@ export const MessageBubble = memo(function MessageBubble({
         case 'retry-model':
           onRetryWithModel?.(message.id);
           break;
+        case 'branch':
+          onBranch?.(message.id);
+          break;
         case 'edit':
           handleOpenEditModal();
           break;
@@ -1068,6 +1087,7 @@ export const MessageBubble = memo(function MessageBubble({
       setAccessibilityTool,
       onRetryMessage,
       onRetryWithModel,
+      onBranch,
       confirmDeleteMessage,
       handleOpenEditModal,
       handleShowExport,

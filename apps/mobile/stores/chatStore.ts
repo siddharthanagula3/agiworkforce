@@ -35,6 +35,8 @@ export interface CombinedChatState {
   hasMoreCloudConversations: boolean;
   conversationLoadError: string | null;
   isLoadingMessages: boolean;
+  messageLoadErrorConversationId: string | null;
+  clearMessageLoadError: () => void;
   isStreaming: boolean;
   streamingConversationIds: string[];
   streamingContent: string;
@@ -193,6 +195,8 @@ function buildCombinedState(
     hasMoreCloudConversations: msg.hasMoreCloudConversations,
     conversationLoadError: msg.conversationLoadError,
     isLoadingMessages: msg.isLoadingMessages,
+    messageLoadErrorConversationId: msg.messageLoadErrorConversationId,
+    clearMessageLoadError: msg.clearMessageLoadError,
     setCurrentConversationId: msg.setCurrentConversationId,
     loadConversations: msg.loadConversations,
     loadMoreConversations: msg.loadMoreConversations,

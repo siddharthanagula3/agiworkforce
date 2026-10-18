@@ -110,6 +110,8 @@ interface MessageState {
   hasMoreCloudConversations: boolean;
   conversationLoadError: string | null;
   isLoadingMessages: boolean;
+  messageLoadErrorConversationId: string | null;
+  clearMessageLoadError: () => void;
 
   setCurrentConversationId: (id: string | null) => void;
   clearCloudConversationSelection: (cloudConversationIds: string[]) => void;
@@ -230,6 +232,9 @@ export const useChatMessageStore = create<MessageState>()(
       hasMoreCloudConversations: false,
       conversationLoadError: null,
       isLoadingMessages: false,
+      messageLoadErrorConversationId: null,
+
+      clearMessageLoadError: () => set({ messageLoadErrorConversationId: null }),
 
       setCurrentConversationId: (id) => {
         set({ currentConversationId: id });
@@ -432,10 +437,15 @@ export const useChatMessageStore = create<MessageState>()(
           forkModel,
           sourceMode,
         );
+        const forkIndex = options?.forkPointMessageId
+          ? sourceMessages.findIndex((message) => message.id === options.forkPointMessageId)
+          : -1;
+        const branchedMessages =
+          forkIndex >= 0 ? sourceMessages.slice(0, forkIndex + 1) : sourceMessages;
         const forkPointMessageId =
           options?.forkPointMessageId ?? sourceMessages[sourceMessages.length - 1]?.id;
         const now = Date.now();
-        const forkedMessages = sourceMessages.map((message, index) => {
+        const forkedMessages = branchedMessages.map((message, index) => {
           const {
             isStreaming: _isStreaming,
             isQueued: _isQueued,
@@ -620,9 +630,16 @@ export const useChatMessageStore = create<MessageState>()(
             conversation?.title ?? '',
             cloudConversation ? 'cloud' : 'local',
           );
+          set((state) =>
+            state.messageLoadErrorConversationId === conversationId
+              ? { messageLoadErrorConversationId: null }
+              : state,
+          );
         } catch (error) {
           console.warn('[chatMessageStore] Messages could not be loaded:', error);
-          if (!cloudConversation) {
+          if (cloudConversation) {
+            set({ messageLoadErrorConversationId: conversationId });
+          } else {
             set((state) => ({
               messages: {
                 ...state.messages,
@@ -1464,6 +1481,7 @@ export function clearCloudConversationPagination(): void {
     isLoadingMoreConversations: false,
     hasMoreCloudConversations: false,
     conversationLoadError: null,
+    messageLoadErrorConversationId: null,
   });
 }
 
