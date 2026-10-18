@@ -464,7 +464,9 @@ export function Sidebar(props: SidebarProps) {
           style={{ width: COLLAPSED_RAIL_WIDTH }}
         >
           <div data-sidebar-region="rail" className="flex flex-col items-center gap-0 py-2">
-            <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
+            {onToggleCollapse && (
+              <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
+            )}
             <RailButton
               label={t('sidebar.newChatAction', 'New chat')}
               icon={SquarePen}
@@ -526,18 +528,20 @@ export function Sidebar(props: SidebarProps) {
             data-sidebar-region={headerSlot ? undefined : 'header-first-row'}
             className="mb-3 flex items-center justify-between"
           >
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
-              className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
-                FOCUS_RING,
-              )}
-            >
-              <PanelLeft className="h-4 w-4" />
-            </button>
-            <div className="flex items-center gap-1.5">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
+                  FOCUS_RING,
+                )}
+              >
+                <PanelLeft className="h-4 w-4" />
+              </button>
+            )}
+            <div className="ms-auto flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={onNewChat}
