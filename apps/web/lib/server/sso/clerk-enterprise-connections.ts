@@ -79,8 +79,21 @@ export interface ClerkConnectionParams {
   };
 }
 
+export type ClerkConnectionProvider = 'saml_custom' | 'oidc_custom';
+
+export interface ClerkCreateConnectionParams extends Omit<
+  ClerkConnectionParams,
+  'name' | 'domains' | 'syncUserAttributes'
+> {
+  name: string;
+  domains: string[];
+  provider: ClerkConnectionProvider;
+}
+
 export interface ClerkEnterpriseConnectionClient {
-  createEnterpriseConnection(params: ClerkConnectionParams): Promise<ClerkEnterpriseConnectionLike>;
+  createEnterpriseConnection(
+    params: ClerkCreateConnectionParams,
+  ): Promise<ClerkEnterpriseConnectionLike>;
   updateEnterpriseConnection(
     id: string,
     params: ClerkConnectionParams,
@@ -164,13 +177,30 @@ export function buildParams(input: ProvisionInput, active: boolean): ClerkConnec
   };
 }
 
+// Clerk requires the provider on create and ignores syncUserAttributes there, so
+// the flag reaches the connection only through an update.
+export function buildCreateParams(
+  input: ProvisionInput,
+  active: boolean,
+): ClerkCreateConnectionParams {
+  const { syncUserAttributes: _ignoredOnCreate, ...params } = buildParams(input, active);
+  return {
+    ...params,
+    name: input.name,
+    domains: [input.domain],
+    provider: input.providerType === 'saml' ? 'saml_custom' : 'oidc_custom',
+  };
+}
+
 export async function provisionConnection(
   input: ProvisionInput,
   options: { active: boolean; client?: ClerkEnterpriseConnectionClient },
 ): Promise<ProvisionedConnection> {
   const client = options.client ?? (await defaultClient());
   try {
-    const connection = await client.createEnterpriseConnection(buildParams(input, options.active));
+    const connection = await client.createEnterpriseConnection(
+      buildCreateParams(input, options.active),
+    );
     return toProvisioned(connection);
   } catch (error) {
     rethrowClerkError(error, 'provisioning');
