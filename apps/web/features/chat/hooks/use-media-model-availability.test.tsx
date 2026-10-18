@@ -17,8 +17,6 @@ const validResponse = {
   catalog_version: '1',
   image_storage_configured: true,
   video_storage_configured: true,
-  image_schema_configured: true,
-  video_schema_configured: true,
   checked_at: '2026-08-09T12:00:00.000Z',
   models: [
     {

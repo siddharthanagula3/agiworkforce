@@ -13,7 +13,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.authUser }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/services/media-model-availability-service', () => ({
-  resolveDeploymentMediaModelAvailability: mocks.resolveAvailability,
+  resolveMediaModelAvailability: mocks.resolveAvailability,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -27,8 +27,6 @@ const validAvailability = {
   catalog_version: 'fixture-v1',
   image_storage_configured: true,
   video_storage_configured: true,
-  image_schema_configured: true,
-  video_schema_configured: true,
   checked_at: '2026-08-09T12:00:00.000Z',
   models: [
     {
@@ -60,7 +58,7 @@ describe('GET /api/media/availability', () => {
     vi.stubEnv('ALLOWED_ORIGINS', CLIENT_ORIGIN);
     mocks.authUser.mockResolvedValue({ userId: 'user-fixture' });
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.resolveAvailability.mockResolvedValue(validAvailability);
+    mocks.resolveAvailability.mockReturnValue(validAvailability);
   });
 
   afterEach(() => {
@@ -97,9 +95,9 @@ describe('GET /api/media/availability', () => {
   });
 
   it('keeps service failures readable by Mobile/Electron and uncached', async () => {
-    mocks.resolveAvailability.mockRejectedValue(
-      createError.serviceUnavailable('availability fixture failed'),
-    );
+    mocks.resolveAvailability.mockImplementation(() => {
+      throw createError.serviceUnavailable('availability fixture failed');
+    });
 
     const response = await GET(request());
 

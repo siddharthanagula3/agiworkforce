@@ -6,7 +6,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getSecurityHeaders, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { resolveDeploymentMediaModelAvailability } from '@/lib/services/media-model-availability-service';
+import { resolveMediaModelAvailability } from '@/lib/services/media-model-availability-service';
 
 export const runtime = 'nodejs';
 
@@ -19,8 +19,7 @@ async function handleGetAvailability(request: NextRequest): Promise<NextResponse
 
   await getClerkAuthUser(request);
 
-  const availability: ManagedMediaModelAvailabilityReply =
-    await resolveDeploymentMediaModelAvailability();
+  const availability: ManagedMediaModelAvailabilityReply = resolveMediaModelAvailability();
   return NextResponse.json(availability);
 }
 

@@ -48,7 +48,6 @@ vi.mock('@/lib/server/media-assets', () => ({
   getMediaAssetByStoragePathname: vi.fn(),
   insertMediaAsset: vi.fn(),
   insertMediaAssetsAtomically: vi.fn(),
-  isMediaAssetStoreReady: vi.fn(),
   latestConversationImageAssetId: vi.fn(),
   listLibraryAssets: vi.fn(),
   listMediaAssets: vi.fn(),

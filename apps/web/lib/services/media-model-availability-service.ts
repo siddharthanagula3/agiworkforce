@@ -10,7 +10,6 @@ import {
   type ManagedMediaModelAvailabilityResponse,
   type ManagedMediaVideoOutputSize,
 } from '@agiworkforce/cloud-contracts';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   getModels,
   isExecutableImageModel,
@@ -23,12 +22,7 @@ import {
   IMAGE_ASPECT_RATIOS_BY_API,
   maxImagesPerRequest,
 } from '@/app/api/media/image/lib/image-generation-provider';
-import { createError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { isImageStorageConfigured, isVideoStorageConfigured } from '@/lib/server/media-storage';
-import { isVideoJobStoreReady } from '@/lib/server/video-job-store-readiness';
 import { isVideoProviderReleaseEnabled } from '@/lib/server/video-provider-release-policy';
 
 type MediaKind = ManagedMediaModelAdmission['kind'];
@@ -51,8 +45,6 @@ export interface MediaModelAvailabilityEvidence {
   getEnv?: (name: string) => string | undefined;
   imageStorageConfigured?: boolean;
   videoStorageConfigured?: boolean;
-  imageSchemaConfigured?: boolean;
-  videoSchemaConfigured?: boolean;
   checkedAt?: string;
 }
 
@@ -91,12 +83,10 @@ function adapterProvider(model: ModelMetadata, kind: MediaKind): string | null {
 function admissionState(input: {
   provider: string | null;
   storageConfigured: boolean;
-  schemaConfigured: boolean;
   getEnv: (name: string) => string | undefined;
 }): ManagedMediaModelAdmissionState {
   if (!input.provider) return 'adapter_not_supported';
   if (!input.storageConfigured) return 'storage_not_configured';
-  if (!input.schemaConfigured) return 'schema_not_configured';
   if (
     (input.provider === 'google' ||
       input.provider === 'runway' ||
@@ -169,8 +159,6 @@ export function resolveMediaModelAvailability(
   const getEnv = evidence.getEnv ?? defaultGetEnv;
   const imageStorageConfigured = evidence.imageStorageConfigured ?? isImageStorageConfigured();
   const videoStorageConfigured = evidence.videoStorageConfigured ?? isVideoStorageConfigured();
-  const imageSchemaConfigured = evidence.imageSchemaConfigured ?? false;
-  const videoSchemaConfigured = evidence.videoSchemaConfigured ?? false;
   const models: ManagedMediaModelAdmission[] = [];
 
   for (const kind of ['image', 'video'] as const) {
@@ -182,13 +170,12 @@ export function resolveMediaModelAvailability(
     for (const model of candidates) {
       const provider = adapterProvider(model, kind);
       const storageConfigured = kind === 'image' ? imageStorageConfigured : videoStorageConfigured;
-      const schemaConfigured = kind === 'image' ? imageSchemaConfigured : videoSchemaConfigured;
       models.push({
         model_id: model.id,
         name: model.name,
         kind,
         provider: provider ?? model.provider,
-        state: admissionState({ provider, storageConfigured, schemaConfigured, getEnv }),
+        state: admissionState({ provider, storageConfigured, getEnv }),
         ...(kind === 'image' ? imageShape(model) : videoShape(model)),
       });
     }
@@ -198,33 +185,7 @@ export function resolveMediaModelAvailability(
     catalog_version: String(modelsCatalog.version),
     image_storage_configured: imageStorageConfigured,
     video_storage_configured: videoStorageConfigured,
-    image_schema_configured: imageSchemaConfigured,
-    video_schema_configured: videoSchemaConfigured,
     checked_at: evidence.checkedAt ?? new Date().toISOString(),
     models,
   };
-}
-
-export async function resolveDeploymentMediaModelAvailability(
-  db: DatabaseAdapter = getNeonDb(),
-  evidence: Omit<
-    MediaModelAvailabilityEvidence,
-    'imageSchemaConfigured' | 'videoSchemaConfigured'
-  > = {},
-): Promise<ManagedMediaModelAvailabilityResponse> {
-  let imageSchemaConfigured: boolean;
-  try {
-    imageSchemaConfigured = await isMediaAssetStoreReady(db);
-  } catch (error) {
-    logger.warn({ error }, 'Managed media schema readiness could not be verified');
-    throw createError.serviceUnavailable('Managed media availability could not be verified.');
-  }
-
-  const videoSchemaConfigured = imageSchemaConfigured && (await isVideoJobStoreReady(db));
-
-  return resolveMediaModelAvailability({
-    ...evidence,
-    imageSchemaConfigured,
-    videoSchemaConfigured,
-  });
 }

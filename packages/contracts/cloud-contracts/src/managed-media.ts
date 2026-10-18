@@ -181,7 +181,6 @@ export const ManagedMediaModelAdmissionStateSchema = z.enum([
   'enabled',
   'provider_not_configured',
   'storage_not_configured',
-  'schema_not_configured',
   'adapter_not_supported',
 ]);
 
@@ -229,8 +228,6 @@ export const ManagedMediaModelAvailabilityResponseSchema = z
     catalog_version: z.string().trim().min(1).max(80),
     image_storage_configured: z.boolean(),
     video_storage_configured: z.boolean(),
-    image_schema_configured: z.boolean(),
-    video_schema_configured: z.boolean(),
     checked_at: z.string().datetime(),
     models: z.array(ManagedMediaModelAdmissionSchema),
   })

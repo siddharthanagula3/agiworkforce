@@ -2690,14 +2690,14 @@ describe('ChatComposerNew', () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
-    it('explains that the deployment is not ready when the durable video schema is absent', () => {
+    it('explains that the deployment is not ready when video storage is not configured', () => {
       useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
       chatComposerMocks.mediaAvailability.admissionFor.mockImplementation((modelId: string) => ({
         model_id: modelId,
         name: modelId,
         kind: 'video',
         provider: 'google',
-        state: 'schema_not_configured',
+        state: 'storage_not_configured',
       }));
 
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={vi.fn()} />);

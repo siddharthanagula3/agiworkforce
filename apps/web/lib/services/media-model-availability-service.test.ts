@@ -1,20 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   ManagedMediaModelAvailabilityResponseSchema,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getModelMetadataById, isModelLive } from '@agiworkforce/types';
-import {
-  resolveDeploymentMediaModelAvailability,
-  resolveMediaModelAvailability,
-} from './media-model-availability-service';
+import { resolveMediaModelAvailability } from './media-model-availability-service';
 
 const CHECKED_AT = '2026-08-09T12:00:00.000Z';
-
-const READY_MEDIA_SCHEMA = {
-  ready: true,
-} as const;
 
 function envWith(values: Record<string, string>) {
   return (name: string) => values[name];
@@ -26,8 +18,6 @@ describe('resolveMediaModelAvailability', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({ GEMINI_API_KEY: 'google-test-key' }),
     });
 
@@ -52,16 +42,12 @@ describe('resolveMediaModelAvailability', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({ GOOGLE_API_KEY: 'google-test-key' }),
     });
     const withKey = resolveMediaModelAvailability({
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({
         GOOGLE_API_KEY: 'google-test-key',
         OPENROUTER_API_KEY: 'openrouter-test-key',
@@ -85,8 +71,6 @@ describe('resolveMediaModelAvailability', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: false,
       videoStorageConfigured: false,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({
         GOOGLE_API_KEY: 'google-test-key',
         OPENAI_API_KEY: 'openai-test-key',
@@ -103,8 +87,6 @@ describe('resolveMediaModelAvailability', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: () => 'configured-test-key',
     });
 
@@ -139,8 +121,6 @@ describe('resolveMediaModelAvailability', () => {
         checkedAt: CHECKED_AT,
         imageStorageConfigured,
         videoStorageConfigured,
-        imageSchemaConfigured: true,
-        videoSchemaConfigured: true,
         getEnv: envWith({
           GOOGLE_API_KEY: 'google-test-key',
           OPENAI_API_KEY: 'openai-test-key',
@@ -159,104 +139,6 @@ describe('resolveMediaModelAvailability', () => {
       ).toBe(true);
     },
   );
-
-  it('keeps images available while a missing durable-video schema disables every video model', () => {
-    const result = resolveMediaModelAvailability({
-      checkedAt: CHECKED_AT,
-      imageStorageConfigured: true,
-      videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: false,
-      getEnv: envWith({ GOOGLE_API_KEY: 'google-test-key' }),
-    });
-
-    expect(
-      result.models
-        .filter((model) => model.kind === 'image' && model.provider === 'google')
-        .every((model) => model.state === 'enabled'),
-    ).toBe(true);
-    const videos = result.models.filter((model) => model.kind === 'video');
-    expect(videos.length).toBeGreaterThan(0);
-    expect(videos.every((model) => model.state === 'schema_not_configured')).toBe(true);
-  });
-
-  it('proves the media table and every essential 0105 transition before admitting video', async () => {
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce([READY_MEDIA_SCHEMA])
-      .mockResolvedValueOnce([{ ready: true }]);
-    const result = await resolveDeploymentMediaModelAvailability(
-      { query } as unknown as DatabaseAdapter,
-      {
-        checkedAt: CHECKED_AT,
-        imageStorageConfigured: true,
-        videoStorageConfigured: true,
-        getEnv: envWith({ GOOGLE_API_KEY: 'google-test-key' }),
-      },
-    );
-
-    expect(result.image_schema_configured).toBe(true);
-    expect(result.video_schema_configured).toBe(true);
-    expect(
-      result.models
-        .filter((model) => model.kind === 'video' && model.provider === 'google')
-        .every((model) => model.state === 'enabled'),
-    ).toBe(true);
-  });
-
-  it.each([
-    { label: 'media asset table', mediaReady: false, videoReady: true },
-    { label: 'complete durable-video schema', mediaReady: true, videoReady: false },
-  ] as const)(
-    'fails video admission closed when $label evidence is missing',
-    async ({ mediaReady, videoReady }) => {
-      const query = vi
-        .fn()
-        .mockResolvedValueOnce([{ ready: mediaReady }])
-        .mockResolvedValueOnce([{ ready: videoReady }]);
-
-      const result = await resolveDeploymentMediaModelAvailability(
-        { query } as unknown as DatabaseAdapter,
-        {
-          checkedAt: CHECKED_AT,
-          imageStorageConfigured: true,
-          videoStorageConfigured: true,
-          getEnv: envWith({ GOOGLE_API_KEY: 'google-test-key' }),
-        },
-      );
-
-      const videos = result.models.filter((model) => model.kind === 'video');
-      expect(videos.length).toBeGreaterThan(0);
-      expect(result.video_schema_configured).toBe(false);
-      expect(videos.every((model) => model.state === 'schema_not_configured')).toBe(true);
-    },
-  );
-
-  it('fails schema admission closed when the readiness query returns no row', async () => {
-    const query = vi.fn().mockResolvedValue([]);
-
-    const result = await resolveDeploymentMediaModelAvailability(
-      { query } as unknown as DatabaseAdapter,
-      {
-        checkedAt: CHECKED_AT,
-        imageStorageConfigured: true,
-        videoStorageConfigured: true,
-        getEnv: envWith({ GOOGLE_API_KEY: 'google-test-key' }),
-      },
-    );
-
-    expect(result.image_schema_configured).toBe(false);
-    expect(result.video_schema_configured).toBe(false);
-    expect(result.models.every((model) => model.state === 'schema_not_configured')).toBe(true);
-  });
-
-  it('returns a service failure instead of guessing when schema readiness cannot be read', async () => {
-    const query = vi.fn().mockRejectedValue(new Error('schema lookup unavailable'));
-
-    await expect(
-      resolveDeploymentMediaModelAvailability({ query } as unknown as DatabaseAdapter),
-    ).rejects.toMatchObject({ statusCode: 503 });
-  });
 });
 
 describe('image edit support', () => {
@@ -265,8 +147,6 @@ describe('image edit support', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({ GEMINI_API_KEY: 'google-test-key', OPENAI_API_KEY: 'openai-test-key' }),
     });
 
@@ -284,8 +164,6 @@ describe('image edit support', () => {
       checkedAt: CHECKED_AT,
       imageStorageConfigured: true,
       videoStorageConfigured: true,
-      imageSchemaConfigured: true,
-      videoSchemaConfigured: true,
       getEnv: envWith({ GEMINI_API_KEY: 'google-test-key' }),
     });
 

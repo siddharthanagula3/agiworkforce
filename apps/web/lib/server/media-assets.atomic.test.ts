@@ -20,11 +20,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: dbMocks.resolveActiveOrganizationId,
 }));
 
-import {
-  insertMediaAssetsAtomically,
-  isMediaAssetStoreReady,
-  type InsertMediaAssetParams,
-} from './media-assets';
+import { insertMediaAssetsAtomically, type InsertMediaAssetParams } from './media-assets';
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 
 const callerDb = createDatabaseAdapterFake({
@@ -95,61 +91,5 @@ describe('insertMediaAssetsAtomically', () => {
       insertMediaAssetsAtomically([image('media/first.png'), image('media/second.png')], callerDb),
     ).rejects.toThrow('second insert failed');
     expect(dbMocks.transaction).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('isMediaAssetStoreReady', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('requires the complete current image and video catalog columns', async () => {
-    dbMocks.query.mockResolvedValueOnce([{ ready: true }]);
-
-    await expect(isMediaAssetStoreReady(dbMocks)).resolves.toBe(true);
-    const requiredColumns = JSON.parse(String(dbMocks.query.mock.calls[0]?.[1]?.[0])) as Array<{
-      column_name: string;
-      udt_name: string;
-      is_nullable: string;
-      default_policy: 'required' | 'forbidden';
-    }>;
-    expect(requiredColumns).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ column_name: 'storage_pathname', udt_name: 'text' }),
-        expect.objectContaining({
-          column_name: 'organization_id',
-          udt_name: 'uuid',
-          is_nullable: 'YES',
-          default_policy: 'forbidden',
-        }),
-        expect.objectContaining({
-          column_name: 'conversation_id',
-          udt_name: 'uuid',
-          is_nullable: 'YES',
-          default_policy: 'forbidden',
-        }),
-      ]),
-    );
-    const readinessSql = String(dbMocks.query.mock.calls[0]?.[0]);
-    expect(readinessSql).toContain('actual.udt_name = required.udt_name');
-    expect(readinessSql).toContain('actual.is_nullable = required.is_nullable');
-    expect(readinessSql).toContain("when 'forbidden' then actual.column_default is null");
-    expect(readinessSql).toContain("fk.confrelid = to_regclass('public.web_conversations')");
-    expect(readinessSql).toContain("target_column.attname = 'id'");
-    expect(readinessSql).toContain("fk.confdeltype = 'n'");
-    expect(readinessSql).toContain('fk.convalidated');
-    expect(readinessSql).toContain('and 1 = (');
-    expect(readinessSql).toContain('select count(*)');
-  });
-
-  it('fails closed for a partially migrated media catalog', async () => {
-    dbMocks.query.mockResolvedValueOnce([{ ready: false }]);
-
-    await expect(isMediaAssetStoreReady(dbMocks)).resolves.toBe(false);
-  });
-
-  it('surfaces a failed readiness query instead of reporting the catalog absent', async () => {
-    dbMocks.query.mockRejectedValueOnce(new Error('database unavailable'));
-    await expect(isMediaAssetStoreReady(dbMocks)).rejects.toThrow('database unavailable');
   });
 });
