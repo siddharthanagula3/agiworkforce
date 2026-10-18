@@ -17,15 +17,11 @@ import {
 } from '../lib/rollout/channels.mjs';
 
 function existingTags(surface) {
-  try {
-    return execFileSync('git', ['tag', '--list', `${surfaceTagPrefix(surface)}*`], {
-      encoding: 'utf8',
-    })
-      .split('\n')
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
+  return execFileSync('git', ['tag', '--list', `${surfaceTagPrefix(surface)}*`], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean);
 }
 
 function main() {
