@@ -114,9 +114,31 @@ describe('researchDomainDirective', () => {
 
 describe('research file sources', () => {
   it('points each kind at where a reader can open it', () => {
-    expect(researchFileSourceUrl('conversation', 'c1')).toBe('/chat/c1');
-    expect(researchFileSourceUrl('library_file', 'f1')).toBe('/api/files/f1');
-    expect(researchFileSourceUrl('research_report', 'r1')).toBe('/chat/research/r1');
+    expect(researchFileSourceUrl(hit({ sourceKind: 'conversation', sourceId: 'c1' }))).toBe(
+      '/chat/c1',
+    );
+    expect(researchFileSourceUrl(hit({ sourceKind: 'library_file', sourceId: 'f1' }))).toBe(
+      '/api/files/f1',
+    );
+    expect(
+      researchFileSourceUrl(
+        hit({ sourceKind: 'research_report', sourceId: 'r1', metadata: { conversationId: 'c1' } }),
+      ),
+    ).toBe('/chat/c1');
+    expect(
+      researchFileSourceUrl(
+        hit({ sourceKind: 'project_knowledge', sourceId: 'k1', metadata: { projectId: 'p1' } }),
+      ),
+    ).toBe('/chat/projects/p1');
+  });
+
+  it('keeps two files of one project as two sources', () => {
+    const sources = researchFileSourcesFromHits([
+      hit({ sourceKind: 'project_knowledge', sourceId: 'k1', metadata: { projectId: 'p1' } }),
+      hit({ sourceKind: 'project_knowledge', sourceId: 'k2', metadata: { projectId: 'p1' } }),
+    ]);
+
+    expect(sources).toHaveLength(2);
   });
 
   it('keeps one entry per document rather than one per chunk', () => {

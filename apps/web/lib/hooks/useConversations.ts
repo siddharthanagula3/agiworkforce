@@ -63,6 +63,17 @@ function conversationLoadErrorMessage(err: unknown): string {
     : CONVERSATION_LOAD_RETRY_MESSAGE;
 }
 
+function extendedCachedTranscript(
+  cached: readonly Message[],
+  loaded: readonly Message[],
+): Message[] | null {
+  if (loaded.length <= cached.length) return null;
+  const loadedIds = new Set(loaded.map((message) => message.id));
+  if (!cached.every((message) => loadedIds.has(message.id))) return null;
+  const cachedById = new Map(cached.map((message) => [message.id, message]));
+  return loaded.map((message) => cachedById.get(message.id) ?? message);
+}
+
 function parseRetryAfterMs(header: string | null): number | null {
   if (!header) return null;
   const seconds = Number(header);
@@ -589,15 +600,30 @@ export function useConversations(): UseConversationsReturn {
 
         const state = useChatStore.getState();
         const cachedMessages = state.messagesByConversation[id] ?? [];
-        // A cached transcript keeps its own leaf: the local one reflects a
-        // variant the reader picked since this response was issued, and the
-        // server's is only authoritative for a transcript loaded fresh. A
+        // A cached transcript keeps its own rows and leaf: the local leaf
+        // reflects a variant the reader picked since this response was issued,
+        // and a live turn here is newer than any snapshot. Only when the server
+        // holds every cached row plus newer ones (a turn finished on another
+        // device or after this tab cached it) does the transcript take them and
+        // the server's leaf, which is the one pointing at those rows. A
         // conversation still marked streaming with nothing cached (a durable
         // run whose local reader stalled) has nothing to show from the local
         // state, so it still takes the fresh fetch below rather than leaving
         // the route with no transcript to render.
         if (cachedMessages.length > 0) {
-          setActiveConversation(id);
+          const turnInFlight =
+            state.streamingConversationIds.includes(id) ||
+            state.loadingConversationIds.includes(id);
+          const extended = turnInFlight ? null : extendedCachedTranscript(cachedMessages, messages);
+          if (!extended) {
+            setActiveConversation(id);
+            return true;
+          }
+          setActiveConversationWithMessages(
+            id,
+            extended,
+            loadedConversationWire.active_leaf_message_id ?? null,
+          );
           return true;
         }
 

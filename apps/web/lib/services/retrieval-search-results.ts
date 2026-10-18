@@ -19,7 +19,7 @@ function metadataString(hit: SearchHit, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function hrefFor(hit: SearchHit): string {
+export function searchHitHref(hit: SearchHit): string {
   const id = encodeURIComponent(hit.sourceId);
   switch (hit.sourceKind) {
     case 'conversation': {
@@ -70,7 +70,7 @@ export function toSearchDocumentResults(hits: readonly SearchHit[]): SearchDocum
       type: hit.sourceKind,
       sourceId: hit.sourceId,
       title: hit.title,
-      href: hrefFor(hit),
+      href: searchHitHref(hit),
       snippet: snippetFor(hit),
       matchedTerms: hit.matchedTerms,
       score: hit.score,

@@ -1,7 +1,9 @@
 import 'server-only';
 
 import { normalizeWebDomain, webDomainAllowed } from '@agiworkforce/cloud-contracts';
-import type { SearchHit, SearchSourceKind } from '@agiworkforce/data-layer/search';
+import type { SearchHit } from '@agiworkforce/data-layer/search';
+
+import { searchHitHref } from '@/lib/services/retrieval-search-results';
 
 /**
  * What a research run is allowed to read, and what it is allowed to read it
@@ -107,18 +109,10 @@ export function researchDomainDirective(policy: ResearchDomainPolicy | null | un
 }
 
 /** The in-app location a reader opens to see the document a hit came from. */
-export function researchFileSourceUrl(kind: SearchSourceKind, sourceId: string): string {
-  const id = encodeURIComponent(sourceId);
-  switch (kind) {
-    case 'conversation':
-      return `/chat/${id}`;
-    case 'library_file':
-      return `/api/files/${id}`;
-    case 'research_report':
-      return `/chat/research/${id}`;
-    default:
-      return `/api/projects/knowledge/${id}`;
-  }
+export function researchFileSourceUrl(hit: SearchHit): string {
+  return hit.sourceKind === 'library_file'
+    ? `/api/files/${encodeURIComponent(hit.sourceId)}`
+    : searchHitHref(hit);
 }
 
 export interface ResearchFileSource {
@@ -140,9 +134,10 @@ export function researchFileSourcesFromHits(
   const byDocument = new Map<string, ResearchFileSource>();
   for (const hit of hits) {
     if (byDocument.size >= limit) break;
-    const url = researchFileSourceUrl(hit.sourceKind, hit.sourceId);
-    if (byDocument.has(url)) continue;
-    byDocument.set(url, {
+    const documentKey = `${hit.sourceKind}:${hit.sourceId}`;
+    if (byDocument.has(documentKey)) continue;
+    const url = researchFileSourceUrl(hit);
+    byDocument.set(documentKey, {
       url,
       title: hit.title || 'Untitled',
       snippet: hit.text.trim().slice(0, 1_200),

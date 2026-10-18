@@ -570,6 +570,90 @@ describe('useConversations.loadConversation pagination races', () => {
     ]);
   });
 
+  describe('reopening a cached transcript', () => {
+    const cachedId = '10000000-0000-4000-8000-000000000011';
+    const newerId = '10000000-0000-4000-8000-000000000012';
+    const wireMessage = (id: string, content: string, parentId: string | null) => ({
+      id,
+      role: 'assistant' as const,
+      content,
+      model: null,
+      provider: null,
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: '2026-07-16T00:02:00.000Z',
+      parent_id: parentId,
+      metadata: null,
+    });
+
+    beforeEach(() => {
+      useChatStore.getState().setActiveConversationWithMessages(
+        DEEP_LINK_CONVERSATION.id,
+        [
+          {
+            id: cachedId,
+            role: 'assistant',
+            content: 'cached locally',
+            createdAt: '2026-07-16T00:02:00.000Z',
+            parentId: null,
+          },
+        ],
+        null,
+      );
+      useChatStore.getState().setActiveConversation(null);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) =>
+          String(input).includes(DEEP_LINK_CONVERSATION.id)
+            ? new Response(
+                JSON.stringify({
+                  conversation: { ...DEEP_LINK_CONVERSATION, active_leaf_message_id: newerId },
+                  messages: [
+                    wireMessage(cachedId, 'server copy', null),
+                    wireMessage(newerId, 'persisted elsewhere', cachedId),
+                  ],
+                  total: 2,
+                  hasMore: false,
+                }),
+                { status: 200 },
+              )
+            : conversationListResponse([WIRE_CONVERSATION]),
+        ),
+      );
+    });
+
+    it('takes newer persisted messages while keeping the cached rows', async () => {
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+      });
+
+      const state = useChatStore.getState();
+      expect(state.activeConversationId).toBe(DEEP_LINK_CONVERSATION.id);
+      expect(state.messages.map(({ content }) => content)).toEqual([
+        'cached locally',
+        'persisted elsewhere',
+      ]);
+      expect(state.activeLeafByConversation[DEEP_LINK_CONVERSATION.id]).toBe(newerId);
+    });
+
+    it('keeps the cached transcript while a turn is streaming in it', async () => {
+      useChatStore.setState({ streamingConversationIds: [DEEP_LINK_CONVERSATION.id] });
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+      });
+
+      expect(
+        useChatStore
+          .getState()
+          .messagesByConversation[DEEP_LINK_CONVERSATION.id]?.map(({ content }) => content),
+      ).toEqual(['cached locally']);
+    });
+  });
+
   it('preserves a deep-linked detail when the first sidebar page resolves later', async () => {
     const list = deferredResponse();
     vi.stubGlobal(
