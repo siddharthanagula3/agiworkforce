@@ -101,8 +101,8 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
   },
   plaid: {
     connectorId: 'plaid',
-    url: 'https://api.dashboard.plaid.com/mcp/sse',
-    transport: 'sse',
+    url: 'https://api.dashboard.plaid.com/mcp/',
+    transport: 'streamable-http',
     clientRegistration: 'dynamic',
   },
   stripe: {
@@ -168,8 +168,8 @@ export const MCP_ENDPOINTS: Readonly<Record<string, McpEndpointRecord>> = {
   },
   square: {
     connectorId: 'square',
-    url: 'https://mcp.squareup.com/sse',
-    transport: 'sse',
+    url: 'https://mcp.squareup.com/mcp',
+    transport: 'streamable-http',
     clientRegistration: 'preregistered',
   },
   vercel: {
