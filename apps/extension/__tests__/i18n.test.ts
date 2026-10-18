@@ -38,6 +38,14 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/cloudRunsPanel.ts',
   'src/features/side-panel/freePlanNotices.ts',
   'src/features/side-panel/markdown.ts',
+  'src/features/options/destinations.ts',
+  'src/features/options/desktop-pairing-rows.ts',
+  'src/features/options/keyboard-shortcut-rows.ts',
+  'src/features/options/microphone-section.ts',
+  'src/features/options/notifications-row.ts',
+  'src/features/options/preference-rows.ts',
+  'src/features/options/read-aloud-row.ts',
+  'src/features/options/shortcuts-section.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
