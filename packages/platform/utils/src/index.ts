@@ -154,6 +154,18 @@ export {
 } from './fence';
 
 export {
+  formatPastChatContext,
+  pastChatQueryTerms,
+  selectRelevantPastChatExcerpts,
+  truncatePastChatText,
+  PAST_CHAT_MAX_EXCERPT_CHARS,
+  PAST_CHAT_MAX_EXCERPTS,
+  PAST_CHAT_MAX_TOTAL_CHARS,
+  PAST_CHAT_MIN_MATCH_TERMS,
+  type PastChatExcerpt,
+} from './pastChatContext';
+
+export {
   DEFAULT_IMAGE_ORIENTATION,
   IMAGE_METADATA_FORMATS,
   detectImageFormat,
