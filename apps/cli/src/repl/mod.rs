@@ -205,7 +205,7 @@ pub async fn run_repl(
         crate::hooks::HookEvent::SessionStart,
         &crate::hooks::HookInput {
             event: "SessionStart".to_string(),
-            session_id: None,
+            session_id: Some(session.runtime_session_id.clone()),
             model: Some(model.to_string()),
             tool_name: None,
             tool_args: None,
@@ -585,7 +585,7 @@ pub async fn run_repl(
                     crate::hooks::HookEvent::UserPromptSubmit,
                     &crate::hooks::HookInput {
                         event: "UserPromptSubmit".to_string(),
-                        session_id: None,
+                        session_id: Some(session.runtime_session_id.clone()),
                         model: Some(session.model.clone()),
                         tool_name: None,
                         tool_args: None,
@@ -619,7 +619,7 @@ pub async fn run_repl(
                     crate::hooks::HookEvent::Stop,
                     &crate::hooks::HookInput {
                         event: "Stop".to_string(),
-                        session_id: None,
+                        session_id: Some(session.runtime_session_id.clone()),
                         model: Some(session.model.clone()),
                         tool_name: None,
                         tool_args: None,
@@ -657,7 +657,7 @@ pub async fn run_repl(
         crate::hooks::HookEvent::SessionEnd,
         &crate::hooks::HookInput {
             event: "SessionEnd".to_string(),
-            session_id: None,
+            session_id: Some(session.runtime_session_id.clone()),
             model: Some(session.model.clone()),
             tool_name: None,
             tool_args: None,

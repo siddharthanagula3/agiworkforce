@@ -279,6 +279,7 @@ enum PreToolUseOutcome {
 
 async fn run_pre_tool_use_hooks(
     hooks_config: &hooks::HooksConfig,
+    session_id: &str,
     model: &str,
     tool_call: &ToolCallResponse,
 ) -> PreToolUseOutcome {
@@ -287,7 +288,7 @@ async fn run_pre_tool_use_hooks(
         hooks::HookEvent::PreToolUse,
         &hooks::HookInput {
             event: "PreToolUse".to_string(),
-            session_id: None,
+            session_id: Some(session_id.to_string()),
             model: Some(model.to_string()),
             tool_name: Some(tool_call.name.clone()),
             tool_args: Some(tool_call.arguments.clone()),
@@ -490,7 +491,7 @@ impl AgentSession {
             event,
             &hooks::HookInput {
                 event: event.to_string(),
-                session_id: self.session_name.clone(),
+                session_id: Some(self.runtime_session_id.clone()),
                 model: Some(self.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -1143,7 +1144,7 @@ impl AgentSession {
                 hooks::HookEvent::PreCompact,
                 &hooks::HookInput {
                     event: "PreCompact".to_string(),
-                    session_id: None,
+                    session_id: Some(self.runtime_session_id.clone()),
                     model: Some(self.model.clone()),
                     tool_name: None,
                     tool_args: None,
@@ -1183,7 +1184,7 @@ impl AgentSession {
                 hooks::HookEvent::PostCompact,
                 &hooks::HookInput {
                     event: "PostCompact".to_string(),
-                    session_id: None,
+                    session_id: Some(self.runtime_session_id.clone()),
                     model: Some(self.model.clone()),
                     tool_name: None,
                     tool_args: None,
@@ -1264,7 +1265,7 @@ message -- revise and call `update_plan` again.\n\n",
                 hooks::HookEvent::UserPromptExpansion,
                 &hooks::HookInput {
                     event: "UserPromptExpansion".to_string(),
-                    session_id: None,
+                    session_id: Some(self.runtime_session_id.clone()),
                     model: Some(self.model.clone()),
                     tool_name: None,
                     tool_args: None,
@@ -1339,7 +1340,7 @@ message -- revise and call `update_plan` again.\n\n",
             hooks::HookEvent::BeforePromptBuild,
             &hooks::HookInput {
                 event: "BeforePromptBuild".to_string(),
-                session_id: None,
+                session_id: Some(self.runtime_session_id.clone()),
                 model: Some(self.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -1358,7 +1359,7 @@ message -- revise and call `update_plan` again.\n\n",
             hooks::HookEvent::BeforeModelResolve,
             &hooks::HookInput {
                 event: "BeforeModelResolve".to_string(),
-                session_id: None,
+                session_id: Some(self.runtime_session_id.clone()),
                 model: Some(self.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -1557,7 +1558,7 @@ message -- revise and call `update_plan` again.\n\n",
             hooks::HookEvent::AfterMessage,
             &hooks::HookInput {
                 event: "AfterMessage".to_string(),
-                session_id: None,
+                session_id: Some(self.runtime_session_id.clone()),
                 model: Some(self.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -2236,7 +2237,14 @@ impl TurnHostAdapter<'_> {
         }
 
         let hcfg = self.session.hooks_config.clone();
-        let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, call).await {
+        let effective_args = match run_pre_tool_use_hooks(
+            &hcfg,
+            &self.session.runtime_session_id,
+            &self.session.model,
+            call,
+        )
+        .await
+        {
             PreToolUseOutcome::Proceed(args) => args,
             PreToolUseOutcome::Blocked(reason_text) => {
                 if !self.session.quiet {
@@ -2589,7 +2597,13 @@ impl TurnHost for TurnHostAdapter<'_> {
                 continue;
             }
 
-            let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, tc).await
+            let effective_args = match run_pre_tool_use_hooks(
+                &hcfg,
+                &self.session.runtime_session_id,
+                &self.session.model,
+                tc,
+            )
+            .await
             {
                 PreToolUseOutcome::Proceed(args) => args,
                 PreToolUseOutcome::Blocked(reason_text) => {
@@ -2765,7 +2779,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::SubagentStart,
                 &hooks::HookInput {
                     event: "SubagentStart".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: Some(tc.name.clone()),
                     tool_args: Some(tc.arguments.clone()),
@@ -2813,7 +2827,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::SubagentStop,
                 &hooks::HookInput {
                     event: "SubagentStop".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: Some(tc.name.clone()),
                     tool_args: Some(tc.arguments.clone()),
@@ -2937,7 +2951,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::PostToolUse,
                 &hooks::HookInput {
                     event: "PostToolUse".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: Some(tool_name.clone()),
                     tool_args: Some(tool_args.clone()),
@@ -2953,7 +2967,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::ToolResultPersist,
                 &hooks::HookInput {
                     event: "ToolResultPersist".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: Some(tool_name),
                     tool_args: Some(tool_args),
@@ -3031,7 +3045,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::PostToolUse,
             &hooks::HookInput {
                 event: "PostToolUse".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(prepared.name.clone()),
                 tool_args: Some(prepared.args.clone()),
@@ -3047,7 +3061,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::ToolResultPersist,
             &hooks::HookInput {
                 event: "ToolResultPersist".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(prepared.name),
                 tool_args: Some(prepared.args),
@@ -3090,7 +3104,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::PostToolUse,
             &hooks::HookInput {
                 event: "PostToolUse".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(call.name.clone()),
                 tool_args: Some(args.clone()),
@@ -3112,7 +3126,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::ToolResultPersist,
             &hooks::HookInput {
                 event: "ToolResultPersist".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(call.name.clone()),
                 tool_args: Some(args.clone()),
@@ -3148,7 +3162,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::PostToolBatch,
             &hooks::HookInput {
                 event: "PostToolBatch".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -3200,7 +3214,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::StopFailure,
                 &hooks::HookInput {
                     event: "StopFailure".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: None,
                     tool_args: None,
@@ -3228,7 +3242,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             hooks::HookEvent::Notification,
             &hooks::HookInput {
                 event: "Notification".to_string(),
-                session_id: None,
+                session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: None,
                 tool_args: None,
@@ -3254,7 +3268,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 hooks::HookEvent::PermissionDenied,
                 &hooks::HookInput {
                     event: "PermissionDenied".to_string(),
-                    session_id: None,
+                    session_id: Some(self.session.runtime_session_id.clone()),
                     model: Some(self.session.model.clone()),
                     tool_name: calls.first().map(|tc| tc.name.clone()),
                     tool_args: calls.first().map(|tc| tc.arguments.clone()),
@@ -4182,6 +4196,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"decision\":\"block\",\"reason\":\"policy\"}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
+            "fixture-session",
             "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
@@ -4195,6 +4210,7 @@ mod tests {
         let config = pre_tool_hook_config("printf '%s' '{\"continue\":false}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
+            "fixture-session",
             "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
@@ -4209,6 +4225,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"updated_input\":{\"path\":\"TODO.md\"}}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
+            "fixture-session",
             "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
