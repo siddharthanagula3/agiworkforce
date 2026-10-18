@@ -21,7 +21,6 @@ interface DeviceIntegration {
   name: string;
   description: string;
   status: IntegrationStatus;
-  lastSync?: string;
 }
 
 function permissionToStatus(p: PermissionStatus): IntegrationStatus {
@@ -95,7 +94,6 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
       accessibilityLabel={`${integration.name}: ${statusLabel(integration.status)}`}
       accessibilityRole={onPress ? 'button' : 'none'}
     >
-      {/* Icon */}
       <View
         className="w-9 h-9 rounded-lg items-center justify-center"
         style={{ backgroundColor: colors.neutralSurface }}
@@ -103,7 +101,6 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
         {icon}
       </View>
 
-      {/* Name + description */}
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
           <Text
@@ -123,14 +120,8 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
         >
           {integration.description}
         </Text>
-        {integration.lastSync && integration.status === 'active' ? (
-          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
-            Last sync: {integration.lastSync}
-          </Text>
-        ) : null}
       </View>
 
-      {/* Badge */}
       <Badge label={statusLabel(integration.status)} color={statusBadgeColor(integration.status)} />
     </PressableBox>
   );
@@ -142,8 +133,6 @@ function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
     notifications: <Bell size={18} color={colors.teal} />,
   };
 }
-
-// Main exported component
 
 export function DeviceIntegrationStatus() {
   const colors = useThemeColors();
@@ -160,15 +149,12 @@ export function DeviceIntegrationStatus() {
 
     const notifPerm = notifResult.status as Notifications.PermissionStatus;
 
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     const next: DeviceIntegration[] = [
       {
         id: 'calendar',
         name: Platform.OS === 'ios' ? 'Apple Calendar' : 'Google Calendar',
         description: 'Schedule context for AI suggestions and reminders',
         status: permissionToStatus(calStat),
-        lastSync: calStat === 'granted' ? now : undefined,
       },
       {
         id: 'notifications',
@@ -230,7 +216,6 @@ export function DeviceIntegrationStatus() {
 
   return (
     <Card>
-      {/* Section header */}
       <View className="flex-row items-center justify-between mb-1">
         <Text
           style={{

@@ -148,7 +148,7 @@ export async function createIOSReminder({ title, due }: CreateIOSReminderInput):
     throw new ReminderCreationError('permission-denied');
   }
 
-  return Calendar.createReminderAsync(null as unknown as string, {
+  return Calendar.createReminderAsync(null, {
     title: normalizedTitle,
     ...(due
       ? {

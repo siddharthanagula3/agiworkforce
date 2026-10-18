@@ -58,7 +58,7 @@ export function useAgentActivityPushSync(): AgentActivityPushSync {
         storedNamespace.current = stored;
         setEnabledState(stored[AGENT_ACTIVITY_PUSH_PREFERENCE_KEY] !== false);
         setStatus('synced');
-      } catch (caught) {
+      } catch {
         if (cancelled) return;
         setStatus('error');
         setError('Could not load agent run notifications. Check your connection and try again.');
@@ -72,23 +72,29 @@ export function useAgentActivityPushSync(): AgentActivityPushSync {
 
   const setEnabled = useCallback(
     (value: boolean) => {
+      const previousEnabled = enabled;
       setEnabledState(value);
       if (!isCloud) return;
 
       // The namespace is replaced wholesale by the settings route, so the
       // sibling keys web owns have to be written back with it.
-      const next = { ...storedNamespace.current, [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: value };
+      const previousNamespace = storedNamespace.current;
+      const next = { ...previousNamespace, [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: value };
       storedNamespace.current = next;
       setStatus('saving');
       setError(null);
       void savePreferenceNamespace(ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, next)
         .then(() => setStatus('synced'))
-        .catch((caught: unknown) => {
+        .catch(() => {
+          if (storedNamespace.current === next) {
+            storedNamespace.current = previousNamespace;
+            setEnabledState(previousEnabled);
+          }
           setStatus('error');
           setError('Could not save agent run notifications. Check your connection and try again.');
         });
     },
-    [isCloud],
+    [enabled, isCloud],
   );
 
   return { enabled, status, error, setEnabled };

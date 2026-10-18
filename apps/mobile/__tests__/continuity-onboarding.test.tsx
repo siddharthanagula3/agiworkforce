@@ -134,16 +134,13 @@ describe('Mobile cross-device continuity onboarding', () => {
 
   it('shows the verifiable benefits and starts in the Managed Cloud composer', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
-    const { getByText, getByLabelText, getByTestId } = render(<ContinuityOnboardingScreen />);
+    const { getByText, getByLabelText } = render(<ContinuityOnboardingScreen />);
 
     expect(getByText('Beta')).toBeTruthy();
     expect(getByText("Keep Cloud work going when you're on the go")).toBeTruthy();
     expect(getByText('Start and steer tasks from your phone')).toBeTruthy();
     expect(getByText('Check in from any signed-in surface')).toBeTruthy();
     expect(getByText('Work continues when the app is closed')).toBeTruthy();
-    expect(getByTestId('continuity-notification-contract').props.children.join('')).toContain(
-      'task_completed',
-    );
 
     fireEvent.press(getByLabelText('Start a Managed Cloud task'));
 

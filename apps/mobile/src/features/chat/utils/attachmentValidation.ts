@@ -40,12 +40,6 @@ export interface AttachmentValidationResult<T> {
   rejected: AttachmentRejection[];
 }
 
-/**
- * @param destination where the send will put this file, pass the live
- * `appMode`. Defaults to the stricter `'cloud'` ceiling so that a caller which
- * has not resolved its destination is never the reason an unsendable file gets
- * staged. The production caller (ChatInput) always passes it.
- */
 function isOfficeDocument(a: ValidatableAttachment): boolean {
   const extension = a.fileName.split('.').pop()?.toLowerCase() ?? '';
   return (
@@ -54,6 +48,12 @@ function isOfficeDocument(a: ValidatableAttachment): boolean {
   );
 }
 
+/**
+ * @param destination where the send will put this file, pass the live
+ * `appMode`. Defaults to the stricter `'cloud'` ceiling so that a caller which
+ * has not resolved its destination is never the reason an unsendable file gets
+ * staged. The production caller (ChatInput) always passes it.
+ */
 export function isAcceptableAttachment(
   a: ValidatableAttachment,
   destination: AttachmentDestination = 'cloud',

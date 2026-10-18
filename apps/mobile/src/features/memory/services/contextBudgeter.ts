@@ -38,13 +38,6 @@ function getContextWindow(modelId: string): number {
   return fallback?.contextWindow ?? 4096;
 }
 
-/**
- * Compute the context budget for the given model and message history.
- *
- * @param modelId  - The model being used (looked up via getModelById)
- * @param messages - Current conversation messages
- * @param systemPromptTokens - Estimated tokens for any system prompt (default 0)
- */
 export interface ContextBreakdownRow {
   key: 'user' | 'assistant' | 'attachments';
   label: string;
@@ -70,6 +63,13 @@ export function summarizeContext(messages: ChatMessage[]): ContextBreakdownRow[]
   return [rows.user, rows.assistant, rows.attachments];
 }
 
+/**
+ * Compute the context budget for the given model and message history.
+ *
+ * @param modelId  - The model being used (looked up via getModelById)
+ * @param messages - Current conversation messages
+ * @param systemPromptTokens - Estimated tokens for any system prompt (default 0)
+ */
 export function computeContextBudget(
   modelId: string,
   messages: ChatMessage[],

@@ -10,10 +10,7 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import {
-  acknowledgeContinuityOnboarding,
-  CONTINUITY_COMPLETION_NOTIFICATION_TYPE,
-} from './continuity-onboarding';
+import { acknowledgeContinuityOnboarding } from './continuity-onboarding';
 
 interface ContinuityBenefit {
   icon: LucideIcon;
@@ -217,18 +214,6 @@ export default function ContinuityOnboardingScreen() {
               Not now
             </Text>
           </Pressable>
-          <Text
-            testID="continuity-notification-contract"
-            style={{
-              color: colors.textMuted,
-              fontSize: typeScale.caption,
-              lineHeight: 16,
-              textAlign: 'center',
-            }}
-          >
-            Completion alerts use the existing {CONTINUITY_COMPLETION_NOTIFICATION_TYPE} Cloud
-            notification route.
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

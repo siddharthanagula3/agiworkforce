@@ -240,7 +240,9 @@ export function useConversationActions(): ConversationActions {
           run: guard(() =>
             Alert.alert(
               'Delete chat?',
-              'This chat and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.',
+              isCloudConversation
+                ? 'This chat and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.'
+                : 'This chat and its messages are deleted from this device. It was never sent to AGI Cloud, so it cannot be restored.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
