@@ -200,11 +200,15 @@ impl McpClient {
         tool_name: &str,
         arguments: Value,
     ) -> McpResult<Value> {
+        let argument_keys: Vec<&str> = arguments
+            .as_object()
+            .map(|object| object.keys().map(String::as_str).collect())
+            .unwrap_or_default();
         tracing::debug!(
-            "[MCP Client] Calling tool '{}' on server '{}' with args: {:?}",
+            "[MCP Client] Calling tool '{}' on server '{}' with argument keys {:?}",
             tool_name,
             server_name,
-            arguments
+            argument_keys
         );
 
         let session_arc = {

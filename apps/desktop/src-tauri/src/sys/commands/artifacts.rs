@@ -4,8 +4,7 @@
 
 use crate::core::artifacts::{
     create_shared_store, create_shared_store_with_db, Artifact, ArtifactFilter, ArtifactMetadata,
-    ArtifactSummary, ArtifactType, ArtifactVersion, CreateArtifactRequest, SharedArtifactStore,
-    UpdateArtifactRequest,
+    ArtifactSummary, ArtifactVersion, SharedArtifactStore, UpdateArtifactRequest,
 };
 use crate::data::db::repository;
 use crate::sys::commands::chat::AppDatabase;
@@ -65,35 +64,6 @@ impl<T> ArtifactResponse<T> {
             data: None,
             error: Some(error),
         }
-    }
-}
-
-/// Create a new artifact
-#[tauri::command]
-pub async fn artifact_create(
-    state: State<'_, ArtifactState>,
-    title: String,
-    artifact_type: ArtifactType,
-    content: String,
-    metadata: Option<ArtifactMetadata>,
-    conversation_id: Option<i64>,
-    message_id: Option<i64>,
-    tags: Option<Vec<String>>,
-) -> Result<ArtifactResponse<Artifact>, String> {
-    let request = CreateArtifactRequest {
-        title,
-        artifact_type,
-        render_type: Some(artifact_type.to_string()),
-        content,
-        metadata,
-        conversation_id,
-        message_id,
-        tags,
-    };
-
-    match state.0.create(request) {
-        Ok(artifact) => Ok(ArtifactResponse::ok(artifact)),
-        Err(e) => Ok(ArtifactResponse::err(e)),
     }
 }
 

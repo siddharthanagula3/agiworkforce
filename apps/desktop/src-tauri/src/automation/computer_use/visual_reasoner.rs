@@ -169,8 +169,7 @@ impl VisualReasoner {
     /// cannot be attributed to either app and is not used.
     async fn capture_frame_of_front_app(&self) -> Result<(CapturedImage, TargetApp)> {
         let before = self.ensure_front_app_may_be_captured().await?;
-        let frame = capture_display(super::control::target_display())
-            .context("Failed to capture screen")?;
+        let frame = capture_display(None).context("Failed to capture screen")?;
         let after = self.ensure_front_app_may_be_captured().await?;
         if !super::target_app::same_app(&before, &after) {
             return Err(anyhow::Error::new(CaptureRefused(format!(

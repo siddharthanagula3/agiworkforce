@@ -6,7 +6,6 @@
 use crate::core::agent::change_tracker::{ChangeTracker, NamedFileCheckpoint};
 use crate::core::agent::undo_manager::{UndoManager, UndoResult};
 use crate::sys::commands::file_ops::{require_granted_path, FileOperation};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 
@@ -62,39 +61,6 @@ pub async fn undo_can_undo(
 // Named File Checkpoint Commands
 // ============================================================================
 
-/// Create a named checkpoint by snapshotting the current contents of the given files.
-///
-/// Returns the checkpoint ID that can later be used with `coding_checkpoint_rewind`.
-/// A maximum of 50 checkpoints are retained; the oldest is evicted when exceeded.
-///
-/// A snapshot holds the files' contents and `coding_checkpoint_list` returns
-/// them, so each path must lie in a folder the person granted: the test
-/// `file_read` applies. Without it this pair read any file on the disk.
-#[tauri::command]
-pub async fn coding_checkpoint_create(
-    name: String,
-    paths: Vec<String>,
-    app: tauri::AppHandle,
-    undo_state: State<'_, UndoState>,
-) -> Result<String, String> {
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err("Checkpoint name cannot be empty".to_string());
-    }
-    if paths.is_empty() {
-        return Err("At least one path must be provided".to_string());
-    }
-    let mut pathbufs: Vec<PathBuf> = Vec::new();
-    for path in paths.iter().filter(|p| !p.trim().is_empty()) {
-        pathbufs.push(require_granted_path(&app, path, FileOperation::Read).await?);
-    }
-    if pathbufs.is_empty() {
-        return Err("No valid paths provided".to_string());
-    }
-    let tracker = &undo_state.change_tracker;
-    tracker.create_named_checkpoint(name, pathbufs).await
-}
-
 /// List all named file checkpoints in chronological order.
 #[tauri::command]
 pub async fn coding_checkpoint_list(
@@ -142,29 +108,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_checkpoint_reads_and_writes_only_inside_the_granted_folders() {
+    fn a_checkpoint_rewind_writes_only_inside_the_granted_folders() {
         let source = include_str!("undo.rs");
         let production = source.split("#[cfg(test)]").next().unwrap_or(source);
-        for (command, operation) in [
-            (
-                "pub async fn coding_checkpoint_create(",
-                "FileOperation::Read",
-            ),
-            (
-                "pub async fn coding_checkpoint_rewind(",
-                "FileOperation::Write",
-            ),
-        ] {
-            let body = production
-                .split(command)
-                .nth(1)
-                .unwrap_or_else(|| panic!("{command} is missing"));
-            let body = body.split("\n}\n").next().unwrap_or(body);
-            assert!(
-                body.contains("require_granted_path(&app, ") && body.contains(operation),
-                "{command} takes a path from the page without the granted-folder check"
-            );
-        }
+        let body = production
+            .split("pub async fn coding_checkpoint_rewind(")
+            .nth(1)
+            .expect("coding_checkpoint_rewind is missing");
+        let body = body.split("\n}\n").next().unwrap_or(body);
+        assert!(
+            body.contains("require_granted_path(&app, ") && body.contains("FileOperation::Write"),
+            "coding_checkpoint_rewind takes a path from the page without the granted-folder check"
+        );
     }
 
     #[tokio::test]

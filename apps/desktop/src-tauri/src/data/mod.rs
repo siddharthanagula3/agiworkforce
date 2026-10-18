@@ -1,4 +1,3 @@
-pub mod analytics;
 pub mod cache;
 pub mod database;
 pub mod db;

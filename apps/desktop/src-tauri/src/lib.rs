@@ -20,7 +20,6 @@ compile_error!(
 use crate::core::agent::approval::ApprovalController;
 use crate::data::db::migrations;
 use crate::data::settings::SettingsService;
-use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::{
     master_password::MasterPasswordState,
     mcp_extensions::McpExtensionsState,
@@ -551,19 +550,16 @@ pub fn run() {
             }
 
             use crate::sys::commands::analytics::TelemetryState;
-            use crate::sys::telemetry::{AnalyticsMetricsCollector, CollectorConfig, TelemetryCollector};
+            use crate::sys::telemetry::{CollectorConfig, TelemetryCollector};
 
-            let telemetry_data_dir = app.path().app_data_dir().ok();
             let telemetry_config = CollectorConfig {
                 enabled: true,
                 batch_size: 50,
                 flush_interval_secs: 30,
-                app_data_dir: telemetry_data_dir,
                 privacy_mode: Some("local".to_string()),
             };
             let telemetry_collector = TelemetryCollector::new(telemetry_config);
-            let analytics_metrics = AnalyticsMetricsCollector::new();
-            app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
+            app.manage(TelemetryState::new(telemetry_collector));
 
             {
                 let granted = db_conn_arc
@@ -613,6 +609,7 @@ pub fn run() {
                 }
             };
             app.manage(browser_state);
+            app.manage(crate::sys::commands::NativeMessagingStateWrapper::new());
 
             app.manage(crate::sys::commands::dispatch_hmac::DispatchHmacState::new());
 
@@ -934,8 +931,6 @@ pub fn run() {
 
             app.manage(Arc::new(TokioMutex::new(ShortcutsState::with_defaults())));
 
-            app.manage(BillingStateWrapper::new());
-
             // The extension bridge only needs somewhere to keep presence rows,
             // so a main-database connection that will not open must not take
             // the bridge down with it.
@@ -1135,7 +1130,6 @@ pub fn run() {
             crate::sys::commands::get_system_resources,
 
             crate::sys::commands::agent_resolve_approval,
-            crate::sys::commands::agent_set_workflow_hash,
 
             // Completion / Ghost Text
 
@@ -1191,22 +1185,6 @@ pub fn run() {
 
 
 
-            crate::sys::commands::productivity_connect,
-            crate::sys::commands::productivity_list_tasks,
-            crate::sys::commands::productivity_create_task,
-            crate::sys::commands::productivity_notion_list_pages,
-            crate::sys::commands::productivity_notion_query_database,
-            crate::sys::commands::productivity_notion_create_database_row,
-            crate::sys::commands::productivity_trello_list_boards,
-            crate::sys::commands::productivity_trello_list_cards,
-            crate::sys::commands::productivity_trello_create_card,
-            crate::sys::commands::productivity_trello_move_card,
-            crate::sys::commands::productivity_trello_add_comment,
-            crate::sys::commands::productivity_asana_list_projects,
-            crate::sys::commands::productivity_asana_list_project_tasks,
-            crate::sys::commands::productivity_asana_create_task,
-            crate::sys::commands::productivity_asana_assign_task,
-            crate::sys::commands::productivity_asana_mark_complete,
 
             crate::sys::commands::automation_audit_outbox_list,
             crate::sys::commands::automation_audit_outbox_ack,
@@ -1353,22 +1331,13 @@ pub fn run() {
             crate::sys::commands::terminal_kill,
             crate::sys::commands::terminal_get_history,
             crate::sys::commands::terminal_ai_suggest_command,
-            crate::sys::commands::terminal_ai_explain_error,
             crate::sys::commands::terminal_smart_commit,
             crate::sys::commands::terminal_ai_suggest_improvements,
             crate::sys::commands::terminal_clear_history,
 
 
-            crate::sys::commands::document_read,
             crate::sys::commands::document_extract_text,
-            crate::sys::commands::document_get_metadata,
-            crate::sys::commands::document_search,
-            crate::sys::commands::document_detect_type,
-            crate::sys::commands::document_create_word_simple_manifest,
-            crate::sys::commands::document_create_excel_simple_manifest,
-            crate::sys::commands::document_create_excel_numbers_manifest,
             crate::sys::commands::document_create_pdf_simple_manifest,
-            crate::sys::commands::document_create_powerpoint_simple_manifest,
             // Memory commands (persistent cross-session memory)
             crate::sys::commands::memory_forget_topic,
             // Frontend compatibility aliases
@@ -1442,6 +1411,7 @@ pub fn run() {
             crate::sys::commands::mcp_server_stop,
             crate::sys::commands::mcp_server_status,
             crate::sys::commands::mcp_server_get_config,
+            crate::sys::commands::mcp_server_reveal_token,
             crate::sys::commands::mcp_server_update_config,
             crate::sys::commands::mcp_server_list_tools,
 
@@ -1527,7 +1497,6 @@ pub fn run() {
             crate::sys::commands::project_list,
             crate::sys::commands::project_update,
             crate::sys::commands::project_delete,
-            crate::sys::commands::project_update_settings,
 
             // Project Context (active folder selection)
             crate::sys::commands::project_context_set_folder,
@@ -1539,18 +1508,8 @@ pub fn run() {
             crate::sys::commands::analytics_flush_events,
             crate::sys::commands::analytics_get_session_id,
             crate::sys::commands::analytics_set_user_property,
-            crate::sys::commands::metrics_get_system,
-            crate::sys::commands::metrics_get_app,
             crate::sys::commands::analytics_delete_all_data,
-            crate::sys::commands::analytics_calculate_roi,
-            crate::sys::commands::analytics_get_process_metrics,
-            crate::sys::commands::analytics_get_user_metrics,
-            crate::sys::commands::analytics_get_tool_metrics,
-            crate::sys::commands::analytics_get_metric_trends,
-            crate::sys::commands::analytics_export_report,
 
-            crate::sys::commands::analytics_get_usage_stats,
-            crate::sys::commands::analytics_get_feature_usage,
 
             crate::sys::commands::error_report,
             crate::sys::commands::error_report_batch,
@@ -1620,12 +1579,10 @@ pub fn run() {
             crate::sys::commands::undo_can_undo,
 
             // Coding checkpoints (named file snapshots for rewind)
-            crate::sys::commands::coding_checkpoint_create,
             crate::sys::commands::coding_checkpoint_list,
             crate::sys::commands::coding_checkpoint_rewind,
 
             // Artifacts (live previews and versioned documents)
-            crate::sys::commands::artifacts::artifact_create,
             crate::sys::commands::artifacts::artifact_get,
             crate::sys::commands::artifacts::artifact_update,
             crate::sys::commands::artifacts::artifact_rollback,
@@ -1663,7 +1620,6 @@ pub fn run() {
             // ============================================================
             // Newly registered commands (batch registration)
             // ============================================================
-            crate::sys::commands::approve_operation,
             crate::sys::commands::get_local_user_id,
             crate::sys::commands::background_agent_cancel,
             crate::sys::commands::background_agent_start,
@@ -1687,17 +1643,7 @@ pub fn run() {
             crate::sys::commands::error_get_logs,
             crate::sys::commands::llm_list_ollama_models,
             crate::sys::commands::memory_import_json_string,
-            crate::sys::commands::metrics_increment_automations,
-            crate::sys::commands::metrics_increment_goals,
-            crate::sys::commands::metrics_set_cache_hit_rate,
-            crate::sys::commands::metrics_set_mcp_servers,
             crate::sys::commands::notification_unread_count,
-            crate::sys::commands::project_context_get_folder,
-            crate::sys::commands::project_context_get_summary,
-            crate::sys::commands::project_context_list_files,
-            crate::sys::commands::project_context_validate_path,
-            crate::sys::commands::reject_operation,
-            crate::sys::commands::reset_session_cost,
             crate::sys::commands::project_memory::save_architectural_decision,
             crate::sys::commands::computer_use_revoke_consent,
             crate::sys::commands::shortcuts_apply_quick_query_preferences,
@@ -1712,7 +1658,6 @@ pub fn run() {
             crate::sys::commands::shortcuts_update,
             crate::sys::commands::skill_get_instructions,
             crate::sys::commands::skill_match_for_message,
-            crate::sys::commands::track_workflow_view,
             crate::sys::commands::voice_check_piper_binary,
             crate::sys::commands::voice_download_piper_binary,
             crate::sys::commands::voice_download_piper_voice,

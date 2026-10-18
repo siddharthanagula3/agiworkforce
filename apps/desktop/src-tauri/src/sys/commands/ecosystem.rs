@@ -341,7 +341,7 @@ fn imported_server_to_mcp_config(
 
 /// Import MCP server configurations from detected ecosystem tools.
 ///
-/// AUDIT-FIX (sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01): this
+/// This
 /// used to be a pure scan-and-return function, the frontend showed
 /// "Imported N MCP server(s)" on success, but nothing was ever written
 /// anywhere and the live MCP client never learned about the scanned servers.

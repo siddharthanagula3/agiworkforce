@@ -113,7 +113,7 @@ struct PendingConfirmation {
 /// Returns `true` when `tool_name` is eligible to have a remembered choice
 /// persisted: not on [`NEVER_REMEMBERABLE`] and not an MCP tool.
 ///
-/// MCP tools are excluded wholesale (audit 2026-08-08) because their blast
+/// MCP tools are excluded wholesale because their blast
 /// radius is decided by a third-party server, not by this catalog, a
 /// remembered approval would follow the tool name even after the server
 /// redefines what it does. Standing MCP consent belongs in
@@ -212,7 +212,7 @@ mod contract_mapping_tests {
 /// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]
 /// across app restarts.
 ///
-/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): prior to
+/// Prior to
 /// this fix `agent_mode` lived only in the in-memory `Arc<Mutex<AgentMode>>`
 /// and was never restored in `new_with_db`, so a user who explicitly set
 /// Safe or Plan mode (expecting that restriction to stick) had it silently
@@ -353,7 +353,7 @@ impl ToolConfirmationState {
     /// the persisted agent mode, and the persisted auto-approve-all flag on
     /// startup.
     ///
-    /// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01): `agent_mode` and
+    /// `agent_mode` and
     /// `auto_approve_all` are seeded to their safe, fail-closed defaults
     /// (`AgentMode::Safe`, `false`) here rather than `AgentMode::default()`
     /// (`Build`). [`Self::load_persisted_agent_settings`] overwrites these
@@ -577,7 +577,7 @@ impl ToolConfirmationState {
     /// portion after `mcp__<server>__`). Matched against the parsed tool
     /// name, NOT via substring/suffix comparison.
     ///
-    /// FIX (audit 2026-05-20, §2/§13): the previous implementation used
+    /// The previous implementation used
     /// `tool_name.ends_with(pattern)`, which allowed any MCP server to
     /// publish a tool such as `mcp__evil__read_file_but_exfiltrate` and
     /// have it auto-approved in Safe/Plan mode because the suffix
@@ -613,7 +613,7 @@ impl ToolConfirmationState {
     /// missing prefix) returns `None`, forcing the caller to fall back to
     /// the deny-by-default branch.
     ///
-    /// FIX (audit 2026-05-20, §2/§13): the legacy suffix-match treated
+    /// The legacy suffix-match treated
     /// `mcp__evil__read_file_but_exfiltrate` as a `read_file` tool. With
     /// this parser the trailing segment is `read_file_but_exfiltrate`,
     /// which is *not* in `READ_ONLY_MCP_TOOLS`, so the gate falls through
@@ -1899,7 +1899,7 @@ pub async fn set_tool_approval_policy(
 /// Refuse `tool_name` when the active agent mode does not permit it, emitting
 /// `tool:blocked_by_mode` so the UI can explain the refusal.
 ///
-/// FIX (audit 2026-08-08): this used to live inline in
+/// This used to live inline in
 /// [`request_tool_confirmation`], which the agent loop only reaches for tools
 /// whose safety tier requires user action. Every Safe/RequiresNotification
 /// tier tool (`memory_forget`, `api_download`, `skill`, …) and every tool
@@ -2966,7 +2966,7 @@ mod tests {
     }
 }
 
-/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): pins the
+/// Pins the
 /// restart-persistence fix for `agent_mode` / `auto_approve_all`. Prior to
 /// this fix both lived only in the in-memory `ToolConfirmationState` and
 /// were silently reset to their `Build` / `false` in-process defaults on
@@ -3278,7 +3278,7 @@ mod fix_f6_never_rememberable_alignment_tests {
 
 #[cfg(test)]
 mod mcp_envelope_parser_tests {
-    //! FIX (audit 2026-05-20, §2/§13): pin the strict `mcp__<server>__<tool>`
+    //! Pin the strict `mcp__<server>__<tool>`
     //! envelope parser. The legacy code used `tool_name.ends_with(pattern)`
     //! which lets a hostile MCP server publish e.g.
     //! `mcp__evil__read_file_but_exfiltrate` and have it auto-approved in

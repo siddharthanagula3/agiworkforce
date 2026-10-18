@@ -167,7 +167,7 @@ impl TrelloClient {
         })
     }
 
-    /// Build URL without credentials (SEC-002 fix)
+    /// Build URL without credentials
     fn build_url(&self, endpoint: &str) -> String {
         format!("{}{}", TRELLO_BASE_URL, endpoint)
     }
@@ -183,7 +183,7 @@ impl TrelloClient {
     }
 
     /// Get the Authorization header value for Trello API
-    /// Uses OAuth format as supported by Trello's API (SEC-002 fix)
+    /// Uses OAuth format as supported by Trello's API
     fn auth_header(&self) -> String {
         format!(
             "OAuth oauth_consumer_key=\"{}\", oauth_token=\"{}\"",
@@ -295,7 +295,7 @@ impl TrelloClient {
         self.rate_limiter.acquire().await;
         let url = self.build_url("/cards");
 
-        // Use JSON body instead of URL params for security (SEC-002 fix)
+        // Use JSON body instead of URL params for security
         let mut body = serde_json::json!({
             "idList": list_id,
             "name": name
@@ -336,7 +336,7 @@ impl TrelloClient {
         self.rate_limiter.acquire().await;
         let url = self.build_url_with_id("/cards/{id}", card_id);
 
-        // Use JSON body instead of URL params for security (SEC-002 fix)
+        // Use JSON body instead of URL params for security
         let body = serde_json::json!({
             "idList": list_id
         });
@@ -365,7 +365,7 @@ impl TrelloClient {
         self.rate_limiter.acquire().await;
         let url = self.build_url_with_id("/cards/{id}/actions/comments", card_id);
 
-        // Use JSON body instead of URL params for security (SEC-002 fix)
+        // Use JSON body instead of URL params for security
         let body = serde_json::json!({
             "text": text
         });

@@ -1,6 +1,6 @@
 //! Centralized blocklist of dangerous environment variables.
 //!
-//! BATCH-5 (audit 2026-05-19): three separate `BLOCKED_ENV_VARS` lists used to
+//! Three separate `BLOCKED_ENV_VARS` lists used to
 //! live in:
 //!   - `sys/commands/code_execution.rs:14` (9 vars)
 //!   - `core/agi/sandbox.rs:282` (28 vars)

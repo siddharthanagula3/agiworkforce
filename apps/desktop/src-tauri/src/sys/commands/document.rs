@@ -3,10 +3,10 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::features::document::{
-    build_generated_document_manifest, DocumentContent, DocumentManager, DocumentMetadata,
-    ExcelDocumentCreator, ExcelEdit, ExcelEditor, GeneratedDocumentArtifactManifest,
-    GeneratedDocumentComputeSession, GeneratedDocumentFile, GeneratedDocumentKind,
-    PdfDocumentCreator, PresentationCreator, SearchResult, WordDocumentCreator,
+    build_generated_document_manifest, DocumentContent, DocumentManager, ExcelDocumentCreator,
+    ExcelEdit, ExcelEditor, GeneratedDocumentArtifactManifest, GeneratedDocumentComputeSession,
+    GeneratedDocumentFile, GeneratedDocumentKind, PdfDocumentCreator, PresentationCreator,
+    SearchResult, WordDocumentCreator,
 };
 use crate::sys::commands::file_ops::FileOperation;
 use crate::sys::error::{Error, Result};
@@ -68,16 +68,6 @@ impl DocumentState {
 }
 
 #[tauri::command]
-pub async fn document_read(
-    file_path: String,
-    app: tauri::AppHandle,
-    state: State<'_, DocumentState>,
-) -> Result<DocumentContent> {
-    granted_document(&app, &file_path, FileOperation::Read).await?;
-    state.manager.read_document(&file_path).await
-}
-
-#[tauri::command]
 pub async fn document_extract_text(
     file_path: String,
     app: tauri::AppHandle,
@@ -87,17 +77,15 @@ pub async fn document_extract_text(
     state.manager.extract_text(&file_path).await
 }
 
-#[tauri::command]
-pub async fn document_get_metadata(
+pub async fn document_read(
     file_path: String,
     app: tauri::AppHandle,
     state: State<'_, DocumentState>,
-) -> Result<DocumentMetadata> {
+) -> Result<DocumentContent> {
     granted_document(&app, &file_path, FileOperation::Read).await?;
-    state.manager.get_metadata(&file_path).await
+    state.manager.read_document(&file_path).await
 }
 
-#[tauri::command]
 pub async fn document_search(
     file_path: String,
     query: String,
@@ -106,13 +94,6 @@ pub async fn document_search(
 ) -> Result<Vec<SearchResult>> {
     granted_document(&app, &file_path, FileOperation::Read).await?;
     state.manager.search(&file_path, &query).await
-}
-
-#[tauri::command]
-pub async fn document_detect_type(file_path: String, app: tauri::AppHandle) -> Result<String> {
-    granted_document(&app, &file_path, FileOperation::Read).await?;
-    let doc_type = DocumentManager::detect_type(&file_path)?;
-    Ok(format!("{:?}", doc_type))
 }
 
 /// Edit an existing spreadsheet, preserving the data already in it.
@@ -148,19 +129,6 @@ pub async fn document_create_word_simple(
     Ok(resolved_path)
 }
 
-#[tauri::command]
-pub async fn document_create_word_simple_manifest(
-    output_path: String,
-    title: Option<String>,
-    author: Option<String>,
-    paragraphs: Vec<String>,
-    app: tauri::AppHandle,
-) -> Result<DocumentCreationResult> {
-    let output_path = granted_output_path(&app, &output_path).await?;
-    let path = document_create_word_simple(output_path, title, author, paragraphs).await?;
-    document_creation_result(path, "docx", GeneratedDocumentKind::Docx)
-}
-
 pub async fn document_create_excel_simple(
     output_path: String,
     sheet_name: String,
@@ -173,19 +141,6 @@ pub async fn document_create_excel_simple(
     Ok(resolved_path)
 }
 
-#[tauri::command]
-pub async fn document_create_excel_simple_manifest(
-    output_path: String,
-    sheet_name: String,
-    headers: Vec<String>,
-    rows: Vec<Vec<String>>,
-    app: tauri::AppHandle,
-) -> Result<DocumentCreationResult> {
-    let output_path = granted_output_path(&app, &output_path).await?;
-    let path = document_create_excel_simple(output_path, sheet_name, headers, rows).await?;
-    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
-}
-
 pub async fn document_create_excel_numbers(
     output_path: String,
     sheet_name: String,
@@ -196,19 +151,6 @@ pub async fn document_create_excel_numbers(
     let creator = ExcelDocumentCreator::new();
     creator.create_with_numbers(&resolved_path, &sheet_name, headers, rows)?;
     Ok(resolved_path)
-}
-
-#[tauri::command]
-pub async fn document_create_excel_numbers_manifest(
-    output_path: String,
-    sheet_name: String,
-    headers: Vec<String>,
-    rows: Vec<Vec<f64>>,
-    app: tauri::AppHandle,
-) -> Result<DocumentCreationResult> {
-    let output_path = granted_output_path(&app, &output_path).await?;
-    let path = document_create_excel_numbers(output_path, sheet_name, headers, rows).await?;
-    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
 }
 
 pub async fn document_create_pdf_simple(
@@ -246,19 +188,6 @@ pub async fn document_create_powerpoint_simple(
     let creator = PresentationCreator::new();
     creator.create_simple(&title, &author, slides, &resolved_path)?;
     Ok(resolved_path)
-}
-
-#[tauri::command]
-pub async fn document_create_powerpoint_simple_manifest(
-    output_path: String,
-    title: String,
-    author: String,
-    slides: Vec<(String, Vec<String>)>,
-    app: tauri::AppHandle,
-) -> Result<DocumentCreationResult> {
-    let output_path = granted_output_path(&app, &output_path).await?;
-    let path = document_create_powerpoint_simple(output_path, title, author, slides).await?;
-    document_creation_result(path, "pptx", GeneratedDocumentKind::Pptx)
 }
 
 fn document_creation_result(
@@ -388,7 +317,7 @@ mod tests {
         let production = source.split("#[cfg(test)]").next().unwrap_or(source);
         let attribute = ["#[tauri", "::command]"].concat();
         let commands: Vec<&str> = production.split(attribute.as_str()).skip(1).collect();
-        assert!(commands.len() >= 10, "found {} commands", commands.len());
+        assert_eq!(commands.len(), 2, "found {} commands", commands.len());
         for command in commands {
             let body = command.split("\n}\n").next().unwrap_or(command);
             let name = body

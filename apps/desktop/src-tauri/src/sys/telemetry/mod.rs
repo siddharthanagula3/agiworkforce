@@ -1,4 +1,3 @@
-pub mod analytics_metrics;
 pub mod collector;
 pub mod consent;
 pub mod correlation;
@@ -7,7 +6,6 @@ pub mod metrics;
 pub mod redaction;
 pub mod tracing;
 
-pub use analytics_metrics::{AnalyticsMetricsCollector, AppMetrics, SystemMetrics};
 pub use collector::{CollectorConfig, EventBatch, TelemetryCollector, TelemetryEvent};
 pub use consent::{process_consent, ConsentDecision, TelemetryConsent};
 pub use correlation::{

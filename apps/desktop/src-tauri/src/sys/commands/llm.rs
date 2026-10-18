@@ -544,6 +544,45 @@ fn provider_name(provider: Provider) -> &'static str {
     local_runtime_label(provider).unwrap_or_else(|| provider.as_string())
 }
 
+/// The `settings_v2` row holding the custom base URL a BYOK provider was
+/// connected with, so a restart restores the same endpoint.
+fn provider_base_url_setting(provider: Provider) -> String {
+    format!("provider_base_url_{}", provider.as_string())
+}
+
+fn saved_provider_base_url(conn: &rusqlite::Connection, provider: Provider) -> Option<String> {
+    conn.query_row(
+        "SELECT value FROM settings_v2 WHERE key = ?1",
+        [provider_base_url_setting(provider)],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .filter(|url| !url.trim().is_empty())
+}
+
+fn store_provider_base_url(
+    conn: &rusqlite::Connection,
+    provider: Provider,
+    base_url: Option<&str>,
+) -> Result<(), String> {
+    match base_url.map(str::trim).filter(|url| !url.is_empty()) {
+        Some(url) => crate::core::mcp::config::upsert_settings_v2_value(
+            conn,
+            &provider_base_url_setting(provider),
+            url,
+            "llm",
+            false,
+        ),
+        None => conn
+            .execute(
+                "DELETE FROM settings_v2 WHERE key = ?1",
+                [provider_base_url_setting(provider)],
+            )
+            .map(|_| ())
+            .map_err(|e| format!("Failed to clear the saved base URL: {e}")),
+    }
+}
+
 fn saved_key_destination_entry(provider: Provider, destination: &str) -> String {
     format!("{} {}", provider.as_string(), destination)
 }
@@ -873,8 +912,10 @@ pub async fn llm_configure_provider(
                 }
             };
 
-            let direct = DirectApiProvider::new(provider_enum, resolved_key, base_url)
+            let direct = DirectApiProvider::new(provider_enum, resolved_key, base_url.clone())
                 .map_err(|e| format!("Failed to create {} provider: {}", provider, e))?;
+            let conn = crate::core::mcp::config::open_mcp_settings_db()?;
+            store_provider_base_url(&conn, provider_enum, base_url.as_deref())?;
             state
                 .router
                 .write()
@@ -926,7 +967,33 @@ pub async fn rehydrate_byok_providers(
             _ => continue,
         };
 
-        match DirectApiProvider::new(provider_enum, api_key, None) {
+        let (base_url, remembered) = match crate::core::mcp::config::open_mcp_settings_db() {
+            Ok(conn) => (
+                saved_provider_base_url(&conn, provider_enum),
+                remembered_saved_key_destinations(&conn),
+            ),
+            Err(e) => {
+                tracing::warn!("BYOK rehydration: settings are unreadable ({e})");
+                continue;
+            }
+        };
+        match saved_key_destination(provider_enum, base_url.as_deref(), &remembered) {
+            Ok(SavedKeyDestination::Allowed) => {}
+            Ok(SavedKeyDestination::NeedsConfirmation(destination)) => {
+                awaiting_confirmation().insert(provider_enum.as_string().to_string(), destination);
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "BYOK rehydration: '{}' has an unusable saved base URL ({})",
+                    provider_enum.as_string(),
+                    e
+                );
+                continue;
+            }
+        }
+
+        match DirectApiProvider::new(provider_enum, api_key, base_url) {
             Ok(direct) => {
                 router
                     .write()
@@ -1117,6 +1184,7 @@ pub async fn llm_delete_api_key(
             })?;
         }
         forget_saved_key_destinations(&conn, provider_enum)?;
+        store_provider_base_url(&conn, provider_enum, None)?;
     }
     awaiting_confirmation().remove(provider_enum.as_string());
     state.router.write().await.remove_provider(provider_enum);
@@ -2161,20 +2229,6 @@ pub async fn router_suggestions(
         model: suggestion.model,
         reason: suggestion.reason,
     })
-}
-
-/// Reset the session cost accumulator to zero.
-///
-/// The LLM router tracks cumulative cost across all invocations in a session.
-/// Once it hits `SESSION_COST_SAFETY_CAP` it refuses new requests. This command
-/// lets the frontend (or user) reset the counter, e.g. at conversation start or
-/// when the user explicitly acknowledges the spend.
-#[tauri::command]
-pub async fn reset_session_cost(state: State<'_, LLMState>) -> Result<(), String> {
-    let router = state.router.read().await;
-    router.reset_cumulative_cost();
-    tracing::info!("Session cost accumulator reset to zero");
-    Ok(())
 }
 
 #[cfg(test)]

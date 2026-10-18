@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex};
 pub mod endpoint;
 pub mod host;
 pub mod manifest;
-pub mod messages;
 
 /// Native messaging message types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,122 +29,6 @@ pub enum NativeMessage {
     Ping,
     Pong,
 
-    // Browser automation commands
-    Click {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    Type {
-        selector: String,
-        text: String,
-        tab_id: Option<i32>,
-    },
-    Navigate {
-        url: String,
-        tab_id: Option<i32>,
-    },
-    Screenshot {
-        tab_id: Option<i32>,
-        format: Option<String>,
-    },
-    Hover {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    WaitForSelector {
-        selector: String,
-        timeout_ms: Option<u64>,
-        tab_id: Option<i32>,
-    },
-    SelectOption {
-        selector: String,
-        value: String,
-        tab_id: Option<i32>,
-    },
-    SetChecked {
-        selector: String,
-        checked: bool,
-        tab_id: Option<i32>,
-    },
-    Focus {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    ScrollIntoView {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-
-    // DOM operations
-    GetElement {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    GetElements {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    GetText {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    GetAttribute {
-        selector: String,
-        attribute: String,
-        tab_id: Option<i32>,
-    },
-    SetAttribute {
-        selector: String,
-        attribute: String,
-        value: String,
-        tab_id: Option<i32>,
-    },
-
-    // Accessibility tree
-    GetAccessibilityTree {
-        tab_id: Option<i32>,
-    },
-    GetFocusableElements {
-        tab_id: Option<i32>,
-    },
-
-    // Tab management
-    GetTabs,
-    GetActiveTab,
-    CreateTab {
-        url: String,
-    },
-    CloseTab {
-        tab_id: i32,
-    },
-    SwitchTab {
-        tab_id: i32,
-    },
-
-    // Cookies and storage
-    GetCookies {
-        url: Option<String>,
-    },
-    SetCookie {
-        cookie: CookieData,
-    },
-    GetLocalStorage {
-        key: Option<String>,
-        tab_id: Option<i32>,
-    },
-    SetLocalStorage {
-        key: String,
-        value: String,
-        tab_id: Option<i32>,
-    },
-
-    // Page info
-    GetPageInfo {
-        tab_id: Option<i32>,
-    },
-    GetPageContent {
-        tab_id: Option<i32>,
-    },
     PageContext {
         url: String,
         title: String,
@@ -166,12 +49,6 @@ pub enum NativeMessage {
 
     /// Explicitly approved selected-context handoff from the Chrome side panel.
     SelectedTextQuery(SelectedTextQueryPayload),
-
-    // Script execution (controlled)
-    ExecuteScript {
-        script: String,
-        tab_id: Option<i32>,
-    },
 
     // Response messages
     Response {
@@ -337,17 +214,6 @@ pub fn stage_selected_context_handoff(
         .map_err(|_| anyhow!("Selected context staging lock is unavailable"))?;
     *guard = Some(staged.clone());
     Ok(staged)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CookieData {
-    pub name: String,
-    pub value: String,
-    pub domain: Option<String>,
-    pub path: Option<String>,
-    pub secure: Option<bool>,
-    pub http_only: Option<bool>,
-    pub expires: Option<i64>,
 }
 
 /// Native messaging request wrapper

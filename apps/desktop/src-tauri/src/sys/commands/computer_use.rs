@@ -129,7 +129,7 @@ impl ConsentPrompt {
     }
 }
 
-/// F20 (audit 2026-08-21): the consent screen is a product precondition for any
+/// The consent screen is a product precondition for any
 /// computer-use action, but it was enforced only by a renderer-side Zustand
 /// flag, so anything that could reach `invoke()` could take over the desktop.
 ///
@@ -340,7 +340,7 @@ where
     write_consent(scope, settings, &ComputerUseConsent::accept())
 }
 
-/// F20 (audit 2026-08-21, recovery): refusing synthetic input command by
+/// Refusing synthetic input command by
 /// command only holds while every emitter is a command. The autonomous agent
 /// loop and the LLM UI tools both reach `MouseSimulator` without one, so the
 /// prompt instead takes the process-wide OS-automation lock
@@ -1316,7 +1316,7 @@ mod tests {
         );
     }
 
-    /// F20 (audit 2026-08-21): `settings_v2_set` writes any key the renderer
+    /// `settings_v2_set` writes any key the renderer
     /// names, so the same caller that can invoke a computer-use command can
     /// write this row first. Only a grant bound to the per-install secret
     /// opens the gate; the forged row is ignored and the user is still asked.
@@ -1401,7 +1401,7 @@ mod tests {
         );
     }
 
-    /// F20 (audit 2026-08-21, recovery): the refusal above is blind to every
+    /// The refusal above is blind to every
     /// caller that never passes through a command, the autonomous agent loop
     /// and the LLM UI tools, and each of them can drive a real click at the
     /// dialog's "Allow" button. Both have to take the process-wide OS-automation lock

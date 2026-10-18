@@ -352,65 +352,26 @@ mod windows_compat_tests {
     fn test_secret_manager_store_retrieve_on_windows() {
         let manager = make_secret_manager();
 
-        // A fresh manager should have no JWT secret.
-        let _ = manager.delete_jwt_secret(); // ensure clean state
-
-        // get_or_create generates and stores a new secret.
-        let secret1 = manager
-            .get_or_create_jwt_secret()
-            .expect("get_or_create_jwt_secret failed");
-        assert!(!secret1.is_empty(), "Generated secret should not be empty");
-
-        // A second call must return the identical persisted secret.
-        let secret2 = manager
-            .get_or_create_jwt_secret()
-            .expect("second get_or_create_jwt_secret failed");
+        manager
+            .set_secret("perplexity_api_key", "windows-secret")
+            .expect("set_secret failed");
         assert_eq!(
-            secret1, secret2,
-            "Persisted secret must be stable across calls"
-        );
-    }
-
-    #[test]
-    fn test_secret_manager_rotation_on_windows() {
-        let manager = make_secret_manager();
-        let _ = manager.delete_jwt_secret();
-
-        let original = manager
-            .get_or_create_jwt_secret()
-            .expect("initial create failed");
-        let rotated = manager
-            .rotate_jwt_secret()
-            .expect("rotate_jwt_secret failed");
-
-        assert_ne!(
-            original, rotated,
-            "Rotated secret must differ from original"
+            manager
+                .get_secret("perplexity_api_key")
+                .expect("get_secret failed"),
+            "windows-secret",
+            "A stored secret must read back unchanged"
         );
 
-        // After rotation, retrieval should return the new secret.
-        let after = manager
-            .get_or_create_jwt_secret()
-            .expect("retrieve after rotation failed");
-        assert_eq!(
-            rotated, after,
-            "Post-rotation retrieval must match rotated value"
+        manager
+            .delete_secret("perplexity_api_key")
+            .expect("delete_secret failed");
+        assert!(
+            !manager
+                .has_secret("perplexity_api_key")
+                .expect("has_secret failed"),
+            "A deleted secret must be gone"
         );
-    }
-
-    #[test]
-    fn test_secret_manager_secondary_key_on_windows() {
-        let manager = make_secret_manager();
-
-        let key1 = manager
-            .get_or_create_secondary_key()
-            .expect("first secondary key failed");
-        assert_eq!(key1.len(), 32, "Secondary key must be 32 bytes");
-
-        let key2 = manager
-            .get_or_create_secondary_key()
-            .expect("second secondary key failed");
-        assert_eq!(key1, key2, "Secondary key must be stable across calls");
     }
 
     // ===================================================================

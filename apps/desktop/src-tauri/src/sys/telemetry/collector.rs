@@ -3,13 +3,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-
-const LOCAL_EVENTS_FILE: &str = "analytics_events.json";
-const LOCAL_EVENTS_MAX: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TelemetryEvent {
@@ -34,10 +30,6 @@ pub struct CollectorConfig {
     pub enabled: bool,
     pub batch_size: usize,
     pub flush_interval_secs: u64,
-    /// When set, failed or unconfigured HTTP flushes fall back to appending
-    /// events to `analytics_events.json` inside this directory (the Tauri
-    /// app-data directory). When `None` the local-file fallback is skipped.
-    pub app_data_dir: Option<PathBuf>,
     /// TRUST-BOUNDARY: the collector emits only while this is `Some("cloud")`
     /// or `Some("managed")`. Every other value, including `None` before the
     /// renderer has reported the app mode, is a Local boundary in which all
@@ -51,7 +43,6 @@ impl Default for CollectorConfig {
             enabled: false,
             batch_size: 50,
             flush_interval_secs: 30,
-            app_data_dir: None,
             privacy_mode: Some("local".to_string()),
         }
     }
@@ -148,6 +139,7 @@ impl TelemetryCollector {
             session_id: self.session_id.clone(),
             user_id: self.user_id.read().await.clone(),
         };
+        drop(events);
 
         tracing::debug!(
             batch_id = %batch.batch_id,
@@ -155,84 +147,17 @@ impl TelemetryCollector {
             "Flushing analytics batch"
         );
 
-        // Attempt HTTP delivery when TELEMETRY_ENDPOINT is configured.
-        let http_succeeded = if let Ok(endpoint) = std::env::var("TELEMETRY_ENDPOINT") {
-            if !endpoint.is_empty() {
-                match Self::send_batch_to_backend(&endpoint, &batch).await {
-                    Ok(_) => {
-                        tracing::debug!("Successfully sent analytics batch {}", batch.batch_id);
-                        true
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Failed to send analytics batch {}: {}. \
-                                 Falling back to local file.",
-                            batch.batch_id,
-                            e
-                        );
-                        false
-                    }
-                }
-            } else {
-                // Endpoint var is set but empty, treat as not configured.
-                false
-            }
-        } else {
-            // TELEMETRY_ENDPOINT not set.
-            false
+        // Without a configured endpoint the batch has nowhere to go and is
+        // dropped; nothing is kept on disk.
+        let Some(endpoint) = std::env::var("TELEMETRY_ENDPOINT")
+            .ok()
+            .filter(|endpoint| !endpoint.is_empty())
+        else {
+            return Ok(());
         };
-
-        // Persist to local file when HTTP delivery was not available or failed.
-        if !http_succeeded {
-            if let Some(ref app_data_dir) = self.config.app_data_dir {
-                if let Err(e) = Self::append_batch_to_local_file(app_data_dir, &batch) {
-                    tracing::warn!(
-                        "Failed to persist analytics batch {} to local file: {}",
-                        batch.batch_id,
-                        e
-                    );
-                } else {
-                    tracing::debug!("Persisted analytics batch {} to local file", batch.batch_id);
-                }
-            }
-            // If app_data_dir is None, events are intentionally dropped (collector
-            // not fully configured yet, same behavior as before this change).
+        if let Err(e) = Self::send_batch_to_backend(&endpoint, &batch).await {
+            tracing::warn!("Failed to send analytics batch {}: {}", batch.batch_id, e);
         }
-
-        Ok(())
-    }
-
-    /// Append all events from `batch` to `analytics_events.json` inside
-    /// `app_data_dir`, creating the file if it does not exist.  Trims the
-    /// stored list to at most `LOCAL_EVENTS_MAX` entries (oldest first).
-    fn append_batch_to_local_file(app_data_dir: &PathBuf, batch: &EventBatch) -> Result<()> {
-        use std::fs;
-
-        if !app_data_dir.exists() {
-            fs::create_dir_all(app_data_dir)?;
-        }
-
-        let file_path = app_data_dir.join(LOCAL_EVENTS_FILE);
-
-        // Load existing events (ignore parse errors, treat corrupt file as empty).
-        let mut stored: Vec<TelemetryEvent> = if file_path.exists() {
-            let raw = fs::read_to_string(&file_path)?;
-            serde_json::from_str(&raw).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        // Append new events from the batch.
-        stored.extend(batch.events.clone());
-
-        // Trim to the maximum allowed size, keeping the most recent events.
-        if stored.len() > LOCAL_EVENTS_MAX {
-            let drop_count = stored.len() - LOCAL_EVENTS_MAX;
-            stored.drain(..drop_count);
-        }
-
-        let content = serde_json::to_string_pretty(&stored)?;
-        fs::write(&file_path, content)?;
 
         Ok(())
     }
@@ -324,14 +249,12 @@ impl Default for TelemetryCollector {
 mod tests {
     use super::*;
     use crate::sys::telemetry::consent::ConsentDecision;
-    use tempfile::TempDir;
 
     fn config(enabled: bool, batch_size: usize) -> CollectorConfig {
         CollectorConfig {
             enabled,
             batch_size,
             flush_interval_secs: 30,
-            app_data_dir: None,
             privacy_mode: Some("cloud".to_string()),
         }
     }
@@ -500,10 +423,7 @@ mod tests {
 
     #[tokio::test]
     async fn withdrawn_consent_stops_emitting_and_drops_pending_events() {
-        let dir = TempDir::new().unwrap();
-        let mut cfg = config(true, 100);
-        cfg.app_data_dir = Some(dir.path().to_path_buf());
-        let collector = consented(cfg);
+        let collector = consented(config(true, 100));
 
         for i in 0..3 {
             collector
@@ -524,26 +444,6 @@ mod tests {
 
         assert!(!collector.is_enabled());
         assert_eq!(collector.get_event_count().await, 0);
-        assert!(
-            !dir.path().join(LOCAL_EVENTS_FILE).exists(),
-            "CONSENT: nothing may be written after consent is withdrawn"
-        );
-    }
-
-    #[tokio::test]
-    async fn granted_consent_still_writes_the_local_events_file() {
-        let dir = TempDir::new().unwrap();
-        let mut cfg = config(true, 100);
-        cfg.app_data_dir = Some(dir.path().to_path_buf());
-        let collector = consented(cfg);
-
-        collector
-            .track(event("event", collector.get_session_id()))
-            .await
-            .unwrap();
-        collector.flush().await.unwrap();
-
-        assert!(dir.path().join(LOCAL_EVENTS_FILE).exists());
     }
 
     #[tokio::test]

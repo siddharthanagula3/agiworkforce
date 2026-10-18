@@ -1100,11 +1100,6 @@ impl LLMRouter {
         self.set_provider(Provider::ManagedCloud, provider);
     }
 
-    /// Reset the cumulative cost counter to zero.
-    pub fn reset_cumulative_cost(&self) {
-        *self.cumulative_cost.lock() = 0.0;
-    }
-
     pub fn has_provider(&self, provider: Provider) -> bool {
         self.providers
             .get(&provider)

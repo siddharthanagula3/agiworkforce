@@ -145,7 +145,7 @@ fn get_injection_patterns() -> &'static Vec<(Regex, &'static str, f64)> {
                 0.65,
             ),
 
-            // SECSYS-008 fix: Additional jailbreak patterns
+            // Additional jailbreak patterns
             (
                 Regex::new(r"(?i)(evil\s*mode|chaos\s*mode|unrestricted\s*mode)")
                     .expect("prompt injection regex: jailbreak mode activation pattern"),
@@ -177,7 +177,7 @@ fn get_injection_patterns() -> &'static Vec<(Regex, &'static str, f64)> {
                 0.85,
             ),
 
-            // SECSYS-008 fix: Delimiter injection patterns
+            // Delimiter injection patterns
             (
                 Regex::new(r"```+\s*system|```+\s*assistant")
                     .expect("prompt injection regex: role delimiter injection pattern"),
@@ -197,7 +197,7 @@ fn get_injection_patterns() -> &'static Vec<(Regex, &'static str, f64)> {
                 0.85,
             ),
 
-            // SECSYS-008 fix: Invisible/special character patterns
+            // Invisible/special character patterns
             (
                 Regex::new(r"[\u200B-\u200D\uFEFF]")
                     .expect("prompt injection regex: zero-width character pattern"),
@@ -231,7 +231,7 @@ impl PromptInjectionDetector {
         }
     }
 
-    /// SECSYS-008 fix: Normalize Unicode lookalikes to detect evasion
+    /// Normalize Unicode lookalikes to detect evasion
     fn normalize_unicode(&self, input: &str) -> String {
         input
             .chars()
@@ -260,7 +260,7 @@ impl PromptInjectionDetector {
             .collect()
     }
 
-    /// SECSYS-008 fix: Normalize spacing variations for detection
+    /// Normalize spacing variations for detection
     fn normalize_spacing(&self, input: &str) -> String {
         static WHITESPACE_REGEX: OnceLock<Regex> = OnceLock::new();
         let re = WHITESPACE_REGEX.get_or_init(|| {
@@ -276,10 +276,10 @@ impl PromptInjectionDetector {
             input.len()
         );
 
-        // SECSYS-008 fix: Check both original and normalized versions
+        // Check both original and normalized versions
         let (pattern_score, mut detected) = self.check_patterns(input);
 
-        // SECSYS-008 fix: Also check normalized version to catch evasion attempts
+        // Also check normalized version to catch evasion attempts
         let normalized = self.normalize_unicode(&self.normalize_spacing(input));
         if normalized != input {
             let (norm_score, norm_detected) = self.check_patterns(&normalized);
@@ -295,7 +295,7 @@ impl PromptInjectionDetector {
 
         let structure_score = self.check_structure(input);
 
-        // SECSYS-008 fix: Include normalization evasion in score
+        // Include normalization evasion in score
         let pattern_score_final = {
             let (norm_score, _) = self.check_patterns(&normalized);
             pattern_score.max(norm_score)

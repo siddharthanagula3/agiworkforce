@@ -48,16 +48,6 @@ pub struct Project {
     pub knowledge_base_files: Option<serde_json::Value>,
 }
 
-/// Project settings that can be customized per project
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ProjectSettings {
-    pub default_model: Option<String>,
-    pub default_provider: Option<String>,
-    pub context_window_size: Option<u32>,
-    pub auto_archive_after_days: Option<u32>,
-}
-
 /// Partial update for a project
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -326,37 +316,6 @@ pub async fn project_delete(id: String, db: State<'_, AppDatabase>) -> Result<()
     // Also delete associated settings
     conn.execute("DELETE FROM project_settings WHERE project_id = ?1", [&id])
         .ok(); // Ignore if table doesn't exist
-
-    Ok(())
-}
-
-/// Update project settings
-#[tauri::command]
-pub async fn project_update_settings(
-    project_id: String,
-    settings: ProjectSettings,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    conn.execute(
-        "INSERT INTO project_settings (
-            project_id, default_model, default_provider, context_window_size, auto_archive_after_days
-        ) VALUES (?1, ?2, ?3, ?4, ?5)
-        ON CONFLICT(project_id) DO UPDATE SET
-            default_model = excluded.default_model,
-            default_provider = excluded.default_provider,
-            context_window_size = excluded.context_window_size,
-            auto_archive_after_days = excluded.auto_archive_after_days",
-        params![
-            project_id,
-            settings.default_model,
-            settings.default_provider,
-            settings.context_window_size,
-            settings.auto_archive_after_days,
-        ],
-    )
-    .map_err(|e| format!("Failed to update project settings: {}", e))?;
 
     Ok(())
 }

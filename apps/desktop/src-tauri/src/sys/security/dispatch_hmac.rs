@@ -94,7 +94,7 @@ pub const NONCE_CACHE_TTL_MS: i64 = 60_000;
 /// `apps/desktop/src/services/dispatch.ts` import from there). All four
 /// surfaces must move together.
 ///
-/// FIX-F-DISPATCH-DESYNC (audit 2026-05-19): the previous value had
+/// The previous value had
 /// string="2026-06-05" but ms=1_780_185_600_000 which actually maps to
 /// 2026-05-31, a 5-day silent desync where the real cutoff was earlier
 /// than the documented one. The string and ms are now both 2026-05-26,
@@ -861,7 +861,7 @@ mod tests {
 
 #[cfg(test)]
 mod fix_dispatch_hmac_cutoff_alignment_tests {
-    //! FIX-F-DISPATCH-DESYNC (audit 2026-05-19): pin that the
+    //! Pin that the
     //! `DISPATCH_HMAC_REQUIRED_AFTER` ISO 8601 string and the
     //! `DISPATCH_HMAC_REQUIRED_AFTER_MS` integer constant agree on the same
     //! point in time. A previous version had string="2026-06-05" but

@@ -15,9 +15,10 @@
 //!    REQUEST header, and read the rotated client JWT back from the
 //!    `authorization` RESPONSE header. A cookie-based webview fetch cannot do
 //!    that.
-//! 3. **Blast radius.** The path allowlist below means this command can only
-//!    ever reach the sign-in and session-token routes of the one Clerk
-//!    instance named by our own publishable key. It is not a general proxy.
+//! 3. **Blast radius.** The host is pinned to the one Clerk instance named by
+//!    the publishable key this build was compiled with, and the path allowlist
+//!    below limits it to the sign-in and session-token routes. It is not a
+//!    general proxy.
 //!
 //! Credentials (password, email code, MFA code, client JWT, session JWT) are
 //! never logged here and never persisted here. `ApiClient::execute` logs the
@@ -110,6 +111,16 @@ fn frontend_api_from_publishable_key(publishable_key: &str) -> Result<String, St
     }
 
     Ok(host.to_string())
+}
+
+/// The Clerk frontend API this build signs in to, from the publishable key the
+/// desktop build was compiled with. The page sends a key too, but the page can
+/// be scripted, so only a key naming this same host is honoured.
+fn pinned_frontend_api() -> Result<String, String> {
+    let key = option_env!("VITE_CLERK_PUBLISHABLE_KEY")
+        .filter(|key| !key.trim().is_empty())
+        .ok_or_else(|| "In-app sign-in is not configured in this build.".to_string())?;
+    frontend_api_from_publishable_key(key)
 }
 
 /// Allowlist the exact Clerk routes native Desktop sign-in needs.
@@ -223,6 +234,9 @@ pub async fn account_clerk_native_request(
     state: State<'_, ApiState>,
 ) -> Result<ClerkNativeHttpResponse, String> {
     let frontend_api = frontend_api_from_publishable_key(&publishableKey)?;
+    if frontend_api != pinned_frontend_api()? {
+        return Err("Refusing a Clerk instance this build was not made for.".to_string());
+    }
     validate_clerk_path(&path)?;
 
     let http_method = match method.to_ascii_uppercase().as_str() {

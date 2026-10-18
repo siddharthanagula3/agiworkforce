@@ -3561,7 +3561,7 @@ impl ToolExecutionGuard {
 
         let path_buf = PathBuf::from(&expanded_path);
 
-        // SECSYS-004 fix: Block network paths (UNC paths on Windows, NFS/SMB mounts)
+        // Block network paths (UNC paths on Windows, NFS/SMB mounts)
         #[cfg(target_os = "windows")]
         {
             if expanded_path.starts_with("\\\\") || expanded_path.starts_with("//") {
@@ -3572,7 +3572,7 @@ impl ToolExecutionGuard {
             }
         }
 
-        // SECSYS-004 fix: Block common network mount points
+        // Block common network mount points
         let blocked_mount_prefixes = vec![
             "/mnt/",      // Linux mount points
             "/media/",    // Linux removable media
@@ -3602,7 +3602,7 @@ impl ToolExecutionGuard {
             }
         }
 
-        // SECSYS-004 fix: Block device files
+        // Block device files
         #[cfg(not(target_os = "windows"))]
         {
             if expanded_path.starts_with("/dev/") {
@@ -3646,7 +3646,7 @@ impl ToolExecutionGuard {
                 }
             }
 
-            // SECSYS-004 fix: Expanded list of allowed prefixes with more specific patterns
+            // Expanded list of allowed prefixes with more specific patterns
             let allowed_prefixes = vec![
                 "/home/",        // Linux home directories
                 "/Users/",       // macOS home directories
@@ -3663,7 +3663,7 @@ impl ToolExecutionGuard {
                 }
             }
 
-            // SECSYS-004 fix: On Windows, check for drive letters but block system drives
+            // On Windows, check for drive letters but block system drives
             #[cfg(target_os = "windows")]
             {
                 if let Some(first_char) = expanded_path.chars().next() {
@@ -3701,7 +3701,7 @@ impl ToolExecutionGuard {
             )));
         }
 
-        // SECSYS-004 fix: Canonicalize and re-validate to catch symlink attacks
+        // Canonicalize and re-validate to catch symlink attacks
         if path_buf.exists() {
             match path_buf.canonicalize() {
                 Ok(canonical) => {
@@ -3713,7 +3713,7 @@ impl ToolExecutionGuard {
                         return Err(SecurityError::PathTraversal(expanded_path.to_string()));
                     }
 
-                    // SECSYS-004 fix: Re-validate the canonical path against blocked prefixes
+                    // Re-validate the canonical path against blocked prefixes
                     for prefix in &blocked_mount_prefixes {
                         if canonical_str.starts_with(prefix) {
                             warn!(
@@ -4138,7 +4138,7 @@ impl ToolExecutionGuard {
             }
         }
 
-        // SECSYS-005 fix: Expanded SQL injection patterns to catch more bypass attempts
+        // Expanded SQL injection patterns to catch more bypass attempts
         let injection_patterns = vec![
             // Classic injection patterns
             "'; --",
@@ -4194,7 +4194,7 @@ impl ToolExecutionGuard {
             }
         }
 
-        // SECSYS-005 fix: Additional check for encoded/obfuscated patterns
+        // Additional check for encoded/obfuscated patterns
         // Check for URL-encoded quotes
         if query.contains("%27") || query.contains("%22") {
             warn!("URL-encoded SQL injection pattern detected");

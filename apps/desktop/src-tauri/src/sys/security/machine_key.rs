@@ -16,11 +16,6 @@
 //! Those keys are still reproducible through [`legacy_machine_only_keys`], but
 //! only so data written by those builds can be read once and re-wrapped under
 //! the current key. They must never encrypt anything new.
-//!
-//! # Password-Based Derivation (SECSYS-001)
-//! [`derive_key_with_password`] combines the user's master password with the
-//! machine identity and remains the preferred path wherever a master password
-//! exists.
 
 use crate::core::sync_utils::RwLockExt;
 use base64::{engine::general_purpose, Engine as _};
@@ -747,38 +742,6 @@ fn macos_platform_uuid() -> Option<String> {
             .to_string();
         (!value.is_empty()).then_some(value)
     }
-}
-
-/// Derive an encryption key using a password combined with machine ID (SECSYS-001)
-///
-/// This function provides enhanced security by combining:
-/// 1. User-provided password (hashed with Argon2id)
-/// 2. Machine-specific identifiers
-/// 3. Purpose-specific HKDF derivation
-///
-/// # Arguments
-/// * `password_key` - The Argon2id-derived key from the user's password
-/// * `purpose` - The purpose for which the key will be used
-///
-/// # Returns
-/// A 32-byte encryption key derived from both password and machine identity
-///
-/// # Security Note
-/// This is the preferred method wherever a master password exists: its secret
-/// input is the password, which never leaves the user.
-pub fn derive_key_with_password(password_key: &[u8], purpose: KeyPurpose) -> Vec<u8> {
-    let install_id = MACHINE_KEY_MANAGER.get_install_id();
-
-    // Combine password key with machine identifiers
-    let mut combined = password_key.to_vec();
-    combined.extend_from_slice(MACHINE_KEY_MANAGER.machine_id.as_bytes());
-    combined.extend_from_slice(install_id.as_bytes());
-    combined.extend_from_slice(APP_BUNDLE_ID.as_bytes());
-
-    let info = format!("agiworkforce:password_derived:{}:v1", purpose.as_str());
-    let salt = b"com.agiworkforce.desktop:password_key:v1";
-
-    hkdf_sha256(salt, &combined, info.as_bytes()).to_vec()
 }
 
 /// A payload read back through [`open_with_key_rotation`].

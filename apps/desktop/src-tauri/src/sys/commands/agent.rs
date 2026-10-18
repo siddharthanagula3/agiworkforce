@@ -72,12 +72,3 @@ pub async fn agent_resolve_approval(
 
     Ok(())
 }
-
-#[tauri::command]
-pub async fn agent_set_workflow_hash(
-    approval_state: State<'_, ApprovalController>,
-    workflow_hash: Option<String>,
-) -> Result<(), String> {
-    approval_state.set_current_hash(workflow_hash).await;
-    Ok(())
-}

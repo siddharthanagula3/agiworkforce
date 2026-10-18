@@ -7,7 +7,6 @@
 pub mod aead_nonce;
 pub mod approval_workflow;
 pub mod audit_logger;
-pub mod auth;
 pub mod blocked_paths;
 pub mod command_validator;
 pub mod dispatch_hmac;
@@ -38,10 +37,6 @@ pub use audit_logger::{
     create_tool_execution_event, create_workflow_execution_event, AuditEvent, AuditEventType,
     AuditFilters, AuditIntegrityReport, AuditLogger, AuditStatus,
 };
-pub use auth::{
-    sign_jwt_with_secret, verify_jwt_signature_with_secret, AuthManager, AuthToken, Session, User,
-    UserRole,
-};
 pub use command_validator::{
     requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
     ValidationConfig,
@@ -50,10 +45,10 @@ pub use encryption::{
     decrypt_secret, decrypt_secret_with_key, encrypt_secret, EncryptedSecret, SecretStore,
 };
 pub use machine_key::{
-    derive_key, derive_key_base64, derive_key_with_password, get_machine_id_hash,
-    has_install_secret, has_machine_only_secrets, load_or_create_install_secret,
-    machine_only_payloads, set_install_id, set_install_secret, try_derive_key, InstallSecretError,
-    InstallSecretStore, KeyDerivationError, KeyPurpose, OsInstallSecretStore, INSTALL_SECRET_BYTES,
+    derive_key, derive_key_base64, get_machine_id_hash, has_install_secret,
+    has_machine_only_secrets, load_or_create_install_secret, machine_only_payloads, set_install_id,
+    set_install_secret, try_derive_key, InstallSecretError, InstallSecretStore, KeyDerivationError,
+    KeyPurpose, OsInstallSecretStore, INSTALL_SECRET_BYTES,
 };
 pub use machine_key_rewrap::{
     rewrap_legacy_machine_only_files, spawn_legacy_machine_only_file_rewrap,

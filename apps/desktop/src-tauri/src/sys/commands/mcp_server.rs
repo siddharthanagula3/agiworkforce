@@ -4,6 +4,7 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::core::mcp::server::McpHttpServer;
+use crate::sys::native_confirm::{ConfirmGate, NativeConfirm};
 
 pub struct McpServerState {
     pub server: Arc<Mutex<McpHttpServer>>,
@@ -60,6 +61,35 @@ pub async fn mcp_server_get_config(
         "enabled_tools": *server.enabled_tools.lock(),
         "running": server.is_running(),
     }))
+}
+
+/// One reveal question at a time, with a growing wait after each no.
+static TOKEN_REVEALS: ConfirmGate = ConfirmGate::new();
+
+/// The full auth token, for a client the person is setting up by hand. Anyone
+/// holding it can call the enabled tools, so it leaves Rust only after a yes in
+/// a native dialog the page cannot answer for itself.
+#[tauri::command]
+pub async fn mcp_server_reveal_token(
+    app: tauri::AppHandle,
+    state: State<'_, McpServerState>,
+) -> Result<String, String> {
+    let confirmed = TOKEN_REVEALS
+        .confirm(
+            &app,
+            "reveal-mcp-server-token",
+            NativeConfirm {
+                title: "Copy the MCP server token?".to_string(),
+                body: "Any program on this computer that has this token can use the tools you enabled for the MCP server, as you, until the app restarts.".to_string(),
+                confirm_label: "Copy Token".to_string(),
+            },
+        )
+        .await
+        .map_err(|held| held.message())?;
+    if !confirmed {
+        return Err("The token was not revealed.".to_string());
+    }
+    Ok(state.server.lock().await.auth.token().to_string())
 }
 
 #[tauri::command]

@@ -138,7 +138,7 @@ pub fn dispatch_hmac_verify(
         .map(VerifyOutcome::from)
         .map_err(verify_error_to_string)?;
 
-    // DESK-DISPATCH-HMAC-SILENT (audit 2026-05-06): the security module
+    // The security module
     // documents that callers must warn on UnsignedTransitional, but no
     // caller did. Emit the warning here at the Tauri command layer so it
     // appears in every deployment log regardless of frontend behaviour.

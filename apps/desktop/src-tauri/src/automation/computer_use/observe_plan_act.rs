@@ -1874,10 +1874,7 @@ Only include actions you're confident will make progress."#,
                         .ensure_front_app_may_be_captured()
                         .await?;
                     super::session::capture_to_disk("screenshot", || {
-                        Ok(crate::automation::screen::capture_display(
-                            super::control::target_display(),
-                        )?
-                        .pixels)
+                        Ok(crate::automation::screen::capture_display(None)?.pixels)
                     })?;
                 }
             }
@@ -2073,7 +2070,7 @@ fn translate_capture_point(x: i32, y: i32, display: &ScreenInfo) -> (i32, i32) {
 }
 
 fn resolve_primary_display() -> Result<ScreenInfo> {
-    super::control::resolve_target_display()
+    super::control::resolve_primary_display()
 }
 
 #[cfg(test)]

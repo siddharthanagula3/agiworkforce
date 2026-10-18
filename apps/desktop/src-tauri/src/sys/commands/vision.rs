@@ -205,6 +205,7 @@ pub async fn vision_send_message(
 pub async fn vision_answer_question(
     image_path: String,
     question: String,
+    detail: String,
     provider: Option<String>,
     model: Option<String>,
     state: State<'_, LLMState>,
@@ -217,13 +218,13 @@ pub async fn vision_answer_question(
         images: vec![VisionImage {
             source_type: "path".to_string(),
             source: image_path,
-            detail: Some("auto".to_string()),
+            detail: Some(detail.clone()),
         }],
         provider,
         model,
         temperature: Some(0.5),
         max_tokens: Some(500),
-        detail_level: Some("auto".to_string()),
+        detail_level: Some(detail),
     };
 
     vision_send_message(request, state, db).await

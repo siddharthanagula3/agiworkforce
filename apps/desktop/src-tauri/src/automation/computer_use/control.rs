@@ -1,13 +1,10 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::automation::screen::{list_displays, ScreenInfo};
 
-const PRIMARY_DISPLAY: i64 = -1;
-
-static TARGET_DISPLAY: AtomicI64 = AtomicI64::new(PRIMARY_DISPLAY);
 static TAKEN_OVER: AtomicBool = AtomicBool::new(false);
 
 /// Bumped by every takeover and every hand-back, so an observation carries the
@@ -36,30 +33,19 @@ pub enum DialogResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlState {
     pub taken_over: bool,
-    pub target_display: Option<u32>,
     pub epoch: u64,
 }
 
 pub fn control_state() -> ControlState {
     ControlState {
         taken_over: is_taken_over(),
-        target_display: target_display(),
         epoch: control_epoch(),
     }
 }
 
-pub fn target_display() -> Option<u32> {
-    u32::try_from(TARGET_DISPLAY.load(Ordering::SeqCst)).ok()
-}
-
-pub fn select_display(displays: &[ScreenInfo], target: Option<u32>) -> Result<ScreenInfo> {
-    if let Some(id) = target {
-        return displays
-            .iter()
-            .find(|display| display.id == id)
-            .cloned()
-            .ok_or_else(|| anyhow!("Display {id} is not connected"));
-    }
+/// Desktop control acts on the primary display, or the first one when none is
+/// marked primary.
+pub fn primary_display(displays: &[ScreenInfo]) -> Result<ScreenInfo> {
     displays
         .iter()
         .find(|display| display.is_primary)
@@ -68,8 +54,8 @@ pub fn select_display(displays: &[ScreenInfo], target: Option<u32>) -> Result<Sc
         .ok_or_else(|| anyhow!("No display available for coordinate translation"))
 }
 
-pub fn resolve_target_display() -> Result<ScreenInfo> {
-    select_display(&list_displays()?, target_display())
+pub fn resolve_primary_display() -> Result<ScreenInfo> {
+    primary_display(&list_displays()?)
 }
 
 pub fn is_taken_over() -> bool {
@@ -292,25 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn selects_the_primary_display_when_none_is_chosen() {
+    fn selects_the_primary_display() {
         let displays = vec![display(0, false, 1.0), display(1, true, 2.0)];
-        assert_eq!(select_display(&displays, None).unwrap().id, 1);
-    }
-
-    #[test]
-    fn selects_the_chosen_display_with_its_own_scale_factor() {
-        let displays = vec![display(0, true, 2.0), display(1, false, 1.0)];
-        let chosen = select_display(&displays, Some(1)).unwrap();
-        assert_eq!(chosen.id, 1);
-        assert_eq!(chosen.x, 1512);
-        assert!((chosen.scale_factor - 1.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn refuses_a_display_that_is_not_connected() {
-        let displays = vec![display(0, true, 2.0)];
-        let error = select_display(&displays, Some(3)).unwrap_err().to_string();
-        assert!(error.contains("Display 3 is not connected"));
+        assert_eq!(primary_display(&displays).unwrap().id, 1);
     }
 
     #[test]

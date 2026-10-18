@@ -1,4 +1,4 @@
-//! Tauri commands for master password management (SECSYS-001)
+//! Tauri commands for master password management
 //!
 //! These commands expose the master password functionality to the frontend,
 //! allowing users to set up, verify, and manage their master password.

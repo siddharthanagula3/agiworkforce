@@ -217,7 +217,7 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .unwrap_or("Describe this image in detail")
             .to_string();
-        let _detail = args
+        let detail = args
             .get("detail")
             .and_then(|v| v.as_str())
             .unwrap_or("auto")
@@ -234,6 +234,7 @@ impl ToolExecutor {
             match vision_answer_question(
                 image_path.clone(),
                 question.clone(),
+                detail,
                 None,
                 None,
                 llm_state,

@@ -1824,7 +1824,7 @@ impl AnthropicAdapter {
     ///   `ToolDefinition` cannot express;
     /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Document,
     ///   Audio, Video, an echoed provider block) have no crate `ContentBlock`,
-    ///   and neither has a tool result that carries images or a toolset name.
+    ///   and neither has a tool result that carries images.
     fn crate_expressible(request: &LLMRequest) -> bool {
         use crate::core::llm::server_tools;
 
@@ -1846,9 +1846,7 @@ impl AnthropicAdapter {
                     super::ContentPart::Text { .. }
                     | super::ContentPart::Image { .. }
                     | super::ContentPart::ToolUse { .. } => true,
-                    super::ContentPart::ToolResult { tool_result } => {
-                        tool_result.toolset_name.is_none() && tool_result.images.is_empty()
-                    }
+                    super::ContentPart::ToolResult { tool_result } => tool_result.images.is_empty(),
                     _ => false,
                 })
             })
@@ -2292,8 +2290,6 @@ impl AnthropicAdapter {
         if let Some(tools) = &request.tools {
             use crate::core::llm::server_tools;
 
-            Self::validate_client_toolset_tool_choice(tools, request.tool_choice.as_ref())?;
-
             let anthropic_tools: Vec<Value> = tools
                 .iter()
                 .filter_map(|tool| {
@@ -2302,7 +2298,7 @@ impl AnthropicAdapter {
                     // Check if this is a known Anthropic server-side tool
                     if server_tools::is_anthropic_server_tool(tool_name) {
                         // Use the server-tool definition format
-                        server_tools::build_server_tool_definition(tool_name, &tool.parameters)
+                        server_tools::build_server_tool_definition(tool_name)
                     } else {
                         // Regular client tool – flat format with input_schema
                         Some(serde_json::json!({
@@ -2691,37 +2687,12 @@ impl AnthropicAdapter {
             Value::Array(blocks)
         };
 
-        let mut block = serde_json::json!({
+        serde_json::json!({
             "type": "tool_result",
             "tool_use_id": tool_result.tool_use_id,
             "content": content,
             "is_error": tool_result.is_error
-        });
-        // Anthropic rejects a client toolset member result that omits
-        // `toolset_name`; only member results may carry it.
-        if let Some(toolset_name) = &tool_result.toolset_name {
-            block["toolset_name"] = serde_json::json!(toolset_name);
-        }
-        block
-    }
-
-    /// A client toolset entry rejects a `tool_choice` of type `tool`, whether it
-    /// names the toolset or one of its members.
-    fn validate_client_toolset_tool_choice(
-        tools: &[super::ToolDefinition],
-        tool_choice: Option<&super::ToolChoice>,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        use crate::core::llm::server_tools::COMPUTER_TOOLSET_TYPE;
-
-        let declares_toolset = tools.iter().any(|tool| tool.name == COMPUTER_TOOLSET_TYPE);
-        if declares_toolset && matches!(tool_choice, Some(super::ToolChoice::Specific(_))) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "The computer use toolset cannot be combined with a tool_choice that names a tool",
-            )
-            .into());
-        }
-        Ok(())
+        })
     }
 
     /// Validate that every tool result message has a matching tool_use block

@@ -170,7 +170,7 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "job_executions",
         // Background Agents
         "background_agents",
-        // Master Password (SECSYS-001)
+        // Master Password
         "master_password",
         "master_password_migration",
         // AGI Task Checkpointing
@@ -4542,7 +4542,7 @@ fn apply_migration_v50(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v51: Create master password tables for SECSYS-001 security enhancement
+/// Migration v51: Create master password tables
 ///
 /// This migration adds:
 /// - master_password: Stores password verifier hash and Argon2 parameters
@@ -4575,7 +4575,7 @@ fn apply_migration_v51(conn: &Connection) -> Result<()> {
     )?;
 
     tracing::info!(
-        "Applied migration v51: Created master_password tables for SECSYS-001 security enhancement"
+        "Applied migration v51: Created master_password tables"
     );
 
     Ok(())

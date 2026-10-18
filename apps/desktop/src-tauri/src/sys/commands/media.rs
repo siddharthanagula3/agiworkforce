@@ -56,10 +56,9 @@ pub struct MediaVideoRequest {
     pub style: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
-    // SECURITY: `plan` field removed, clients must NOT be able to self-upgrade
-    // their subscription tier. The plan tier is determined server-side by the
-    // web API based on authenticated user session / BillingState.
-    /// Video provider: "runway" or "veo3" (default: "runway")
+    // SECURITY: there is no `plan` field, so a client cannot self-upgrade its
+    // subscription tier; the web API derives the tier from the signed-in session.
+    /// Provider the managed media API should use; the old name "veo3" is sent as "google".
     #[serde(default)]
     pub provider: Option<String>,
     /// Input image URL for catalog models that support image-to-video generation.

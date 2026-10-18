@@ -690,23 +690,6 @@ pub async fn terminal_ai_suggest_command(
 }
 
 #[tauri::command]
-pub async fn terminal_ai_explain_error(
-    error_output: String,
-    command: Option<String>,
-    shell_type: String,
-    ai_state: State<'_, TerminalAI>,
-) -> Result<String, String> {
-    tracing::info!("AI explaining error");
-
-    let explanation = ai_state
-        .explain_error(&error_output, command.as_deref(), &shell_type)
-        .await
-        .map_err(|e| format!("Failed to explain error: {}", e))?;
-
-    Ok(explanation)
-}
-
-#[tauri::command]
 pub async fn terminal_smart_commit(
     session_id: String,
     ai_state: State<'_, TerminalAI>,

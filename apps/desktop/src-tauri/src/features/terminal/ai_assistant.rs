@@ -82,50 +82,6 @@ Command:"#,
         Ok(command)
     }
 
-    pub async fn explain_error(
-        &self,
-        error_output: &str,
-        command: Option<&str>,
-        shell_type: &str,
-    ) -> Result<String> {
-        let command_context = command
-            .map(|cmd| format!("\nCommand: {}", cmd))
-            .unwrap_or_default();
-
-        let prompt = format!(
-            r#"You are AGI Workforce's debugging assistant. Explain this terminal error in plain English and suggest fixes.
-
-Error Output:
-{}
-{}
-Shell: {}
-OS: {}
-
-Provide:
-1. Brief explanation of what went wrong (2-3 sentences)
-2. Most likely cause
-3. Step-by-step fix suggestions (numbered list)
-4. Alternative approaches if applicable
-
-Keep explanation concise and actionable."#,
-            error_output,
-            command_context,
-            shell_type,
-            std::env::consts::OS
-        );
-
-        let response = self
-            .router
-            .read()
-            .await
-            .send_message(&prompt, Some(local_only()))
-            .await
-            .map_err(|e| Error::Other(format!("LLM request failed: {}", e)))?;
-
-        tracing::info!("AI explained error");
-        Ok(response.trim().to_string())
-    }
-
     /// Commit what is staged with a message the local model writes. Host git
     /// runs hardened, outside any sandbox, in a folder a sandboxed command
     /// may have written: the repository's settings are checked as for any

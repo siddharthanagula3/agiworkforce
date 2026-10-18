@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::sys::error::{Error, Result};
+use crate::sys::error::Result;
 
 pub type TabId = String;
 
@@ -52,37 +52,6 @@ impl TabManager {
         if active.is_none() {
             *active = Some(id.to_string());
         }
-
-        Ok(())
-    }
-
-    pub async fn close_tab(&self, id: &TabId) -> Result<()> {
-        tracing::info!("Closing tab: {}", id);
-
-        let mut tabs = self.tabs.lock().await;
-        let mut active = self.active_tab.lock().await;
-
-        tabs.remove(id)
-            .ok_or_else(|| Error::Other(format!("Tab not found: {}", id)))?;
-
-        if active.as_ref() == Some(id) {
-            *active = None;
-        }
-
-        Ok(())
-    }
-
-    pub async fn switch_to_tab(&self, id: &TabId) -> Result<()> {
-        tracing::info!("Switching to tab: {}", id);
-
-        let tabs = self.tabs.lock().await;
-        if !tabs.contains_key(id) {
-            return Err(Error::Other(format!("Tab not found: {}", id)));
-        }
-        drop(tabs);
-
-        let mut active = self.active_tab.lock().await;
-        *active = Some(id.clone());
 
         Ok(())
     }
@@ -144,21 +113,5 @@ mod tests {
 
         let tabs = manager.list_tabs().await.unwrap();
         assert_eq!(tabs.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_close_tab() {
-        let manager = TabManager::new();
-        manager
-            .register_tab("target-1", "https://example.com")
-            .await
-            .unwrap();
-
-        let result = manager.close_tab(&"target-1".to_string()).await;
-        assert!(result.is_ok());
-
-        let tabs = manager.list_tabs().await.unwrap();
-        assert_eq!(tabs.len(), 0);
-        assert!(manager.get_active_tab().await.unwrap().is_none());
     }
 }

@@ -11,6 +11,7 @@ use crate::core::llm::provider_adapter::ProviderAdapterFactory;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::stream_engine::decode_direct_stream;
 use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse, Provider};
+use crate::sys::security::egress_policy::{is_internal_ipv4, is_internal_ipv6};
 use async_trait::async_trait;
 use futures_util::Stream;
 use reqwest::Client;
@@ -350,28 +351,18 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
         );
     }
 
-    // Block private/link-local IP ranges (SSRF prevention) for remote hosts.
-    match parsed.host() {
-        Some(url::Host::Ipv4(v4)) => {
-            if v4.is_private() || v4.is_link_local() {
-                return Err(format!(
-                    "Private/link-local IP addresses are not allowed as provider URLs: {v4}"
-                ));
-            }
-        }
-        Some(url::Host::Ipv6(v6)) => {
-            let segments = v6.segments();
-            // Block fe80::/10 (link-local)
-            let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
-            // Block fc00::/7 (unique local)
-            let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
-            if is_link_local || is_unique_local {
-                return Err(format!(
-                    "Link-local/unique-local IPv6 addresses are not allowed as provider URLs: {v6}"
-                ));
-            }
-        }
-        _ => {}
+    // A literal address is judged here by the egress policy's own ranges; a
+    // name is resolved and judged when the request is dialled.
+    let internal = match parsed.host() {
+        Some(url::Host::Ipv4(v4)) => is_internal_ipv4(v4),
+        Some(url::Host::Ipv6(v6)) => is_internal_ipv6(v6),
+        _ => false,
+    };
+    if internal {
+        return Err(format!(
+            "Private, link-local and other non-public addresses are not allowed as provider URLs: {}",
+            parsed.host_str().unwrap_or_default()
+        ));
     }
 
     Ok(())
@@ -1163,6 +1154,19 @@ mod tests {
         assert!(validate_provider_base_url("https://192.168.1.1/v1").is_err());
         // 172.16.x.x
         assert!(validate_provider_base_url("https://172.16.0.1/v1").is_err());
+    }
+
+    #[test]
+    fn validate_blocks_cgnat_and_this_network_ipv4() {
+        assert!(validate_provider_base_url("https://100.64.0.1/v1").is_err());
+        assert!(validate_provider_base_url("https://100.127.255.254/v1").is_err());
+        assert!(validate_provider_base_url("https://0.0.0.0/v1").is_err());
+        assert!(validate_provider_base_url("https://0.1.2.3/v1").is_err());
+    }
+
+    #[test]
+    fn validate_blocks_ipv4_carried_inside_ipv6() {
+        assert!(validate_provider_base_url("https://[::ffff:169.254.169.254]/v1").is_err());
     }
 
     #[test]

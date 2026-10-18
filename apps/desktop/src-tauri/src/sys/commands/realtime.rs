@@ -21,7 +21,7 @@ impl RealtimeState {
 
 /// Pairing requests the extension opened and the user has not answered yet.
 ///
-/// SEC-11: this is the only channel that carries the confirmation code. It is
+/// This is the only channel that carries the confirmation code. It is
 /// readable exclusively through Tauri IPC, the Desktop's own window, so the
 /// user reads the code off their screen and types it into the extension. The
 /// loopback HTTP endpoint never returns it.
