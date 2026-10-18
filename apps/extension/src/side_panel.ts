@@ -26,7 +26,7 @@ import { getExtensionTokensCssAuto } from './tokens';
 import { agiWebUrl } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
-import type { BrowserContextTabReference } from './types';
+import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
 import { pageChipLabel } from './utils';
@@ -1493,7 +1493,11 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
           message.cloudAgentRun.state === 'queued' ||
           message.cloudAgentRun.state === 'running'),
     );
-  if (resumable?.cloudAgentRun) {
+  if (!resumable) {
+    void adoptClosedPanelTurn(expectedGeneration, ownerAtAdmission);
+    return;
+  }
+  if (resumable.cloudAgentRun) {
     resumable.streaming = true;
     queueMicrotask(() => {
       if (
@@ -1512,6 +1516,68 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
       );
     });
   }
+}
+
+async function adoptClosedPanelTurn(
+  expectedGeneration: number,
+  owner: ManagedCloudOwner,
+): Promise<void> {
+  const conversationId = _ctx.conversationId;
+  const pending = _ctx.messages[_ctx.messages.length - 1];
+  if (
+    _ctx.temporaryChat ||
+    _ctx.isStreaming ||
+    pending?.role !== 'assistant' ||
+    pending.interrupted !== true ||
+    pending.streamCancellation !== undefined
+  )
+    return;
+  const isCurrent = (): boolean =>
+    _ctx.conversationGeneration === expectedGeneration &&
+    _ctx.conversationId === conversationId &&
+    sameManagedCloudOwner(_ctx.managedCloudOwner, owner) &&
+    !_ctx.isStreaming &&
+    _ctx.messages[_ctx.messages.length - 1] === pending;
+  const response = (await chrome.runtime
+    .sendMessage({
+      type: 'ADOPT_CHAT_TURN',
+      owner,
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      historyConversationId: conversationId,
+    })
+    .catch(() => null)) as AdoptChatTurnResponse | null;
+  if (!isCurrent()) return;
+  const adopted = response?.adopted;
+  if (!adopted) {
+    const storedMessages = (await getConversation(owner, conversationId))?.messages ?? [];
+    const stored = storedMessages[storedMessages.length - 1];
+    if (!isCurrent() || stored?.role !== 'assistant' || stored.streaming) return;
+    _ctx.messages[_ctx.messages.length - 1] = hydrateStoredChatMessage(stored, pending.id);
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    return;
+  }
+  pending.id = adopted.id;
+  pending.interrupted = false;
+  pending.streaming = true;
+  if (adopted.text.length >= pending.content.length) pending.content = adopted.text;
+  if (adopted.cloudRun) {
+    pending.cloudAgentRun = { ...adopted.cloudRun };
+    cloudRunsByStreamId.set(adopted.id, { ...adopted.cloudRun });
+  }
+  if (adopted.assistantMessageId) {
+    assistantCloudIdByStreamId.set(adopted.id, adopted.assistantMessageId);
+  }
+  ownerByStreamId.set(adopted.id, { ...owner });
+  quickModeByStreamId.set(adopted.id, pending.managedQuickMode === true);
+  streamStartedAtById.set(adopted.id, pending.timestamp);
+  _ctx.currentStreamId = adopted.id;
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  armManagedStreamInactivityWatchdog(adopted.id);
+  updateSendButton();
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
 }
 
 let newChatModelSelection = 'auto';
@@ -8223,6 +8289,7 @@ function postTurn(
       ...(memoryCommand ? { memoryCommand } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
+      ...(_ctx.temporaryChat ? {} : { historyConversationId: _ctx.conversationId }),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {
