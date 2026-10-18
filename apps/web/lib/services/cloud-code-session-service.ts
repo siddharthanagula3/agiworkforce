@@ -199,18 +199,6 @@ export class CloudCodeUnavailableError extends Error {
   }
 }
 
-/**
- * Postgres codes that mean "this deployment has not run the migrations yet":
- * 42P01 is an absent table, 42703 an absent column.
- *
- * The column case is the one a real deployment hits, a table added long ago
- * and a column added since. Matching only the table left a half-migrated
- * deployment answering "An unexpected error occurred", which tells the reader
- * nothing and the operator less. Reproduced against a live database with
- * `runtime_id` not yet added.
- */
-const SCHEMA_NOT_MIGRATED_CODES = new Set(['42P01', '42703']);
-
 export type GitFailureKind =
   | 'credentials'
   | 'repository_not_found'
@@ -281,18 +269,6 @@ function gitStepFailure(
     '[code] git step failed',
   );
   return new CloudCodeUnavailableError(`${step}. ${GIT_FAILURE_NEXT_MOVE[kind]}`);
-}
-
-export function isCloudCodeSchemaUnavailable(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
-    const candidate = current as { code?: unknown; cause?: unknown };
-    if (typeof candidate.code === 'string' && SCHEMA_NOT_MIGRATED_CODES.has(candidate.code)) {
-      return true;
-    }
-    current = candidate.cause;
-  }
-  return false;
 }
 
 interface SessionRow extends Record<string, unknown> {

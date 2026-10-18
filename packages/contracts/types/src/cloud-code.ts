@@ -361,7 +361,6 @@ export const CLOUD_CODE_SESSION_STATUS_FILTER_LABELS: Readonly<
 
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;
-  storageReady: boolean;
   planEntitled: boolean;
   planTier: string;
   maxSessions: number;

@@ -17,16 +17,11 @@ import {
 import { harnessTemplates } from '@/lib/e2b/templates';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  CloudCodeConflictError,
-  CloudCodeLimitError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
   createCloudCodeSession,
-  isCloudCodeSchemaUnavailable,
   type CloudCodeOwner,
   type OpenedCloudCodeSession,
 } from '@/lib/services/cloud-code-session-service';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   buildWorkspaceFeatureGateResponse,
@@ -38,22 +33,6 @@ import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
-
-export function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeLimitError) throw createError.forbidden(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.capabilityUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
-}
 
 export async function openCloudCodeSession(
   request: NextRequest,

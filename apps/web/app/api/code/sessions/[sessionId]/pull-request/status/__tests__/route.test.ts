@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
   readCloudCodeSessionPullRequestStatus: vi.fn(),
-  isCloudCodeSchemaUnavailable: vi.fn(),
   db: { query: vi.fn() },
 }));
 
@@ -79,7 +78,6 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
   CloudCodeNotFoundError: class CloudCodeNotFoundError extends Error {},
   CloudCodeUnavailableError: class CloudCodeUnavailableError extends Error {},
   CloudCodeValidationError: class CloudCodeValidationError extends Error {},
-  isCloudCodeSchemaUnavailable: mocks.isCloudCodeSchemaUnavailable,
   readCloudCodeSessionPullRequestStatus: mocks.readCloudCodeSessionPullRequestStatus,
 }));
 
@@ -108,7 +106,6 @@ beforeEach(() => {
     userId: 'user-1',
     organizationId: 'org-1',
   });
-  mocks.isCloudCodeSchemaUnavailable.mockReturnValue(false);
   mocks.readCloudCodeSessionPullRequestStatus.mockResolvedValue(STATUS);
 });
 
@@ -145,16 +142,6 @@ describe('GET /api/code/sessions/[sessionId]/pull-request/status', () => {
     const response = await call();
 
     expect(response.status).toBe(status);
-  });
-
-  it('answers 503 while the cloud schema is not deployed', async () => {
-    mocks.readCloudCodeSessionPullRequestStatus.mockRejectedValue(new Error('relation missing'));
-    mocks.isCloudCodeSchemaUnavailable.mockReturnValue(true);
-
-    const response = await call();
-
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toContain('Managed Code is coming soon');
   });
 
   it('returns the status scoped to the caller and organization', async () => {

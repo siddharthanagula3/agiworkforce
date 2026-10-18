@@ -374,10 +374,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     selectedSession ? selectedSession.runtimeId : draft.runtimeId || null,
   );
 
-  const canCreate =
-    availability?.deploymentEnabled === true &&
-    availability.storageReady === true &&
-    availability.planEntitled === true;
+  const canCreate = availability?.deploymentEnabled === true && availability.planEntitled === true;
   const canRun = canCreate;
 
   useEffect(() => {
@@ -1114,17 +1111,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const unavailableNotice = availability
     ? !availability.deploymentEnabled
       ? CODE_COPY.deploymentDisabled
-      : !availability.storageReady
-        ? CODE_COPY.storageNotReady
-        : !availability.planEntitled
-          ? CODE_COPY.planNotEntitled
-          : null
+      : !availability.planEntitled
+        ? CODE_COPY.planNotEntitled
+        : null
     : null;
 
   const planUpgradeRequired =
     availability !== null &&
     availability.deploymentEnabled &&
-    availability.storageReady &&
     !availability.planEntitled &&
     !local.supported &&
     selectedSession === null;

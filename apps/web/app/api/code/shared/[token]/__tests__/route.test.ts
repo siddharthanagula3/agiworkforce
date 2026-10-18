@@ -6,7 +6,6 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
-  isCloudCodeSchemaUnavailable: vi.fn(),
   openSharedCloudCodeSession: vi.fn(),
   db: { query: vi.fn() },
 }));
@@ -80,7 +79,6 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
   validateCloudCodeSessionId: vi.fn(),
   validateCreateCloudCodeSession: vi.fn(),
   writeCloudCodeNotebookFile: vi.fn(),
-  isCloudCodeSchemaUnavailable: mocks.isCloudCodeSchemaUnavailable,
 }));
 vi.mock('@/lib/services/cloud-code-session-sharing', () => ({
   CloudCodeSharingForbiddenError: class CloudCodeSharingForbiddenError extends Error {},
@@ -106,7 +104,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.getUserScopedDb.mockResolvedValue({ db: mocks.db, userId: 'viewer-1' });
-  mocks.isCloudCodeSchemaUnavailable.mockReturnValue(false);
   mocks.openSharedCloudCodeSession.mockResolvedValue(SHARED);
 });
 
@@ -149,15 +146,6 @@ describe('GET /api/code/shared/[token]', () => {
     const response = await call();
 
     expect(response.status).toBe(403);
-  });
-
-  it('answers 503 while the cloud schema is not deployed', async () => {
-    mocks.openSharedCloudCodeSession.mockRejectedValue(new Error('relation missing'));
-    mocks.isCloudCodeSchemaUnavailable.mockReturnValue(true);
-
-    const response = await call();
-
-    expect(response.status).toBe(503);
   });
 
   it('opens the shared session for the viewer', async () => {

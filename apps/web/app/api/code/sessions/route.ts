@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getPlanMaxSandboxes,
   planIncludesAgiCode,
-  type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
 } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -17,10 +16,9 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   asCloudCodeSessionStatusFilter,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
   listCloudCodeSessions,
 } from '@/lib/services/cloud-code-session-service';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 import { openCloudCodeSession } from '@/lib/services/cloud-code-session-open';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
@@ -50,18 +48,9 @@ async function handleList(request: NextRequest) {
   try {
     status = asCloudCodeSessionStatusFilter(request.nextUrl.searchParams.get('status'));
   } catch (error) {
-    if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-    throw error;
+    rethrowCloudCodeError(error);
   }
-  let storageReady = true;
-  let sessions: CloudCodeSession[];
-  try {
-    sessions = await listCloudCodeSessions(db, { userId, organizationId }, status);
-  } catch (error) {
-    if (!isCloudCodeSchemaUnavailable(error)) throw error;
-    storageReady = false;
-    sessions = [];
-  }
+  const sessions = await listCloudCodeSessions(db, { userId, organizationId }, status);
   // Offered only to an entitled account: the catalogue is a read against the
   // team's E2B org, not public information, and an unentitled caller cannot
   // create a session with any of it.
@@ -70,7 +59,6 @@ async function handleList(request: NextRequest) {
   return NextResponse.json({
     availability: {
       deploymentEnabled: e2bProvisioningReady(),
-      storageReady,
       planEntitled,
       planTier,
       maxSessions,

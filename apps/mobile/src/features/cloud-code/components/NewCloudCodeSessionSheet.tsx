@@ -78,7 +78,6 @@ const COPY = Object.freeze({
   branchProtected: 'Protected',
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
-  storageNotReady: 'Managed environments are not available yet. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
   retry: 'Try again',
 });
@@ -106,7 +105,6 @@ export function titleFromTask(task: string): string {
 export function unavailableReason(availability: CloudCodeAvailability | null): string | null {
   if (!availability) return null;
   if (!availability.deploymentEnabled) return COPY.deploymentDisabled;
-  if (!availability.storageReady) return COPY.storageNotReady;
   if (!availability.planEntitled) return COPY.planNotEntitled;
   return null;
 }

@@ -48,7 +48,6 @@ async function mockNotebookApi(page: Page): Promise<{ uploaded: string[] }> {
       return fulfillJson(route, {
         availability: {
           deploymentEnabled: true,
-          storageReady: true,
           planEntitled: true,
           planTier: 'pro',
           maxSessions: 5,

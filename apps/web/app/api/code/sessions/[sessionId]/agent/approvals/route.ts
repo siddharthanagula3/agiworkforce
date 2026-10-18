@@ -12,13 +12,6 @@ import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
-} from '@/lib/services/cloud-code-session-service';
-import {
   CloudCodeApprovalExpiredError,
   decideCloudCodeAgentApproval,
   listCloudCodeAgentApprovals,
@@ -31,6 +24,7 @@ import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 
@@ -44,20 +38,9 @@ export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
-function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
+function rethrowRouteError(error: unknown): never {
   if (error instanceof CloudCodeApprovalExpiredError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.serviceUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
+  rethrowCloudCodeError(error);
 }
 
 async function handleListApprovals(request: NextRequest, context: RouteContext) {
@@ -69,7 +52,7 @@ async function handleListApprovals(request: NextRequest, context: RouteContext) 
     return NextResponse.json(listed);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 
@@ -138,7 +121,7 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
     return NextResponse.json(decided);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) return managedUsageErrorResponse(error);
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 

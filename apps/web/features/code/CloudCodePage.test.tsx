@@ -267,7 +267,6 @@ const repositoryPage = {
 
 const availability = {
   deploymentEnabled: true,
-  storageReady: true,
   planEntitled: true,
   planTier: 'pro',
   maxSessions: 5,
@@ -1233,23 +1232,6 @@ describe('CloudCodePage', () => {
     expect(command).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
     expect(api.run).not.toHaveBeenCalled();
-  });
-
-  it('reports an unapplied storage migration without pretending a session can start', async () => {
-    const api = createApi({
-      list: vi.fn(async () => ({
-        availability: { ...availability, storageReady: false },
-        sessions: [],
-        runtimes: [],
-      })),
-    });
-    render(<CloudCodePage api={api} />);
-
-    expect(
-      await screen.findByText(/Managed environments are not available yet/),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Start the task' })).toBeDisabled();
-    expect(api.create).not.toHaveBeenCalled();
   });
 
   it('offers Retry on a failed load and reloads on click', async () => {

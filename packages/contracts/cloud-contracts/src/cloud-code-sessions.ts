@@ -122,7 +122,6 @@ export const CloudCodeRuntimeSchema = z.object({
 export const CloudCodeSessionListSchema = z.object({
   availability: z.object({
     deploymentEnabled: z.boolean(),
-    storageReady: z.boolean(),
     planEntitled: z.boolean(),
     planTier: z.string(),
     maxSessions: z.number().int().nonnegative(),

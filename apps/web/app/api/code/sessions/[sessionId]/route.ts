@@ -8,13 +8,8 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
   deleteCloudCodeSession,
   getCloudCodeSession,
-  isCloudCodeSchemaUnavailable,
   listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
   renameCloudCodeSession,
@@ -26,25 +21,15 @@ import {
 } from '@/lib/services/cloud-code-session-sharing';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { CLOUD_CODE_SHARE_VISIBILITIES, isCloudCodeShareVisibility } from '@agiworkforce/types';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
-function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
+function rethrowRouteError(error: unknown): never {
   if (error instanceof CloudCodeSharingForbiddenError) throw createError.forbidden(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.serviceUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
+  rethrowCloudCodeError(error);
 }
 
 async function requestObject(request: NextRequest): Promise<Record<string, unknown>> {
@@ -74,7 +59,7 @@ async function handleGet(request: NextRequest, context: RouteContext) {
     ]);
     return NextResponse.json({ session, terminalEntries, turns });
   } catch (error) {
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 
@@ -142,7 +127,7 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ session });
   } catch (error) {
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 
@@ -165,7 +150,7 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 

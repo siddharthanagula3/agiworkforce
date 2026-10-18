@@ -3,16 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import type { CloudCodePullRequestStatusReply } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
-  readCloudCodeSessionPullRequestStatus,
-} from '@/lib/services/cloud-code-session-service';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
+import { readCloudCodeSessionPullRequestStatus } from '@/lib/services/cloud-code-session-service';
 
 export const runtime = 'nodejs';
 
@@ -32,17 +26,7 @@ async function handleStatus(request: NextRequest, context: RouteContext) {
     );
     return NextResponse.json(status);
   } catch (error) {
-    if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-    if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-    if (error instanceof CloudCodeUnavailableError) {
-      throw createError.serviceUnavailable(error.message);
-    }
-    if (isCloudCodeSchemaUnavailable(error)) {
-      throw createError.capabilityUnavailable(
-        'Managed Code is coming soon. Cloud sessions are not available yet.',
-      );
-    }
-    throw error;
+    rethrowCloudCodeError(error);
   }
 }
 

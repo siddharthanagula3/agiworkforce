@@ -15,44 +15,12 @@ import {
   CloudCodeValidationError,
   cloudCodeSessionBaseBranch,
   cloudCodeWorkingBranchName,
-  isCloudCodeSchemaUnavailable,
   validateCloudCodeSessionId,
   validateCreateCloudCodeSession,
 } from './cloud-code-session-service';
 
 const GIT_REF_SHAPE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
-
-describe('cloud-code-session-service schema detection', () => {
-  it('treats an absent table and an absent column alike', () => {
-    // A half-migrated deployment - table present, column not - is the case a
-    // real deploy hits, and it used to fall through to "An unexpected error
-    // occurred". Reproduced live before this was widened.
-    const missingTable = Object.assign(new Error('relation does not exist'), { code: '42P01' });
-    const missingColumn = Object.assign(
-      new Error('column "runtime_id" of relation "cloud_code_sessions" does not exist'),
-      { code: '42703' },
-    );
-
-    expect(isCloudCodeSchemaUnavailable(missingTable)).toBe(true);
-    expect(isCloudCodeSchemaUnavailable(missingColumn)).toBe(true);
-  });
-
-  it('finds the code through a wrapped cause', () => {
-    const wrapped = Object.assign(new Error('query failed'), {
-      cause: Object.assign(new Error('inner'), { code: '42703' }),
-    });
-    expect(isCloudCodeSchemaUnavailable(wrapped)).toBe(true);
-  });
-
-  it('does not swallow an unrelated database error', () => {
-    expect(
-      isCloudCodeSchemaUnavailable(Object.assign(new Error('deadlock'), { code: '40P01' })),
-    ).toBe(false);
-    expect(isCloudCodeSchemaUnavailable(new Error('plain'))).toBe(false);
-    expect(isCloudCodeSchemaUnavailable(null)).toBe(false);
-  });
-});
 
 describe('cloud-code-session-service validation', () => {
   it('defaults to a credential-free home workspace', () => {
@@ -274,12 +242,6 @@ describe('cloud-code-session-service validation', () => {
     expect(validateCloudCodeSessionId('11111111-1111-4111-8111-111111111111')).toBe(
       '11111111-1111-4111-8111-111111111111',
     );
-  });
-
-  it('recognizes a missing migration through a wrapped Postgres error', () => {
-    expect(isCloudCodeSchemaUnavailable({ code: '42P01' })).toBe(true);
-    expect(isCloudCodeSchemaUnavailable({ cause: { code: '42P01' } })).toBe(true);
-    expect(isCloudCodeSchemaUnavailable({ code: '23505' })).toBe(false);
   });
 });
 

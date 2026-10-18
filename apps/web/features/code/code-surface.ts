@@ -160,7 +160,6 @@ export const CODE_COPY = {
   agentWorking: CLOUD_CODE_SESSION_COPY.agentWorking,
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
-  storageNotReady: 'Managed environments are not available yet. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
   upgradeHeading: 'AGI Code is on paid plans',
   upgradeBody:

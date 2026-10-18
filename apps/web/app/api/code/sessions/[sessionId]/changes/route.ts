@@ -9,12 +9,7 @@ import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
   discardCloudCodeSessionChanges,
-  isCloudCodeSchemaUnavailable,
   readCloudCodeSessionChanges,
 } from '@/lib/services/cloud-code-session-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -24,25 +19,11 @@ import {
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
-
-function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.capabilityUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
-}
 
 async function handleChanges(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);

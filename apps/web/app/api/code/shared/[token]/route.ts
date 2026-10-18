@@ -6,7 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { isCloudCodeSchemaUnavailable } from '@/lib/services/cloud-code-session-service';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 import {
   CloudCodeSharedRepositoryError,
   openSharedCloudCodeSession,
@@ -32,12 +32,7 @@ async function handleGet(request: NextRequest, context: RouteContext) {
     return NextResponse.json(reply);
   } catch (error) {
     if (error instanceof CloudCodeSharedRepositoryError) throw createError.forbidden(error.message);
-    if (isCloudCodeSchemaUnavailable(error)) {
-      throw createError.capabilityUnavailable(
-        'Managed Code is coming soon. Cloud sessions are not available yet.',
-      );
-    }
-    throw error;
+    rethrowCloudCodeError(error);
   }
 }
 

@@ -22,13 +22,6 @@ import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
-} from '@/lib/services/cloud-code-session-service';
-import {
   CloudCodeTurnStillRunningError,
   runCloudCodeTurn,
 } from '@/lib/services/cloud-code-turn-transport';
@@ -45,6 +38,7 @@ import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 
@@ -68,28 +62,6 @@ const MAX_GOAL_LENGTH = CLOUD_CODE_LIMITS.task;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
-function rethrowCloudCodeError(error: unknown): never {
-  // A durable turn outlives this request. Saying so is the honest answer, and a
-  // conflict is the status whose message reaches the reader intact.
-  if (error instanceof CloudCodeTurnStillRunningError) {
-    throw new AppError(ErrorCode.CONFLICT, error.message, 409, {
-      reason: CLOUD_CODE_TURN_STILL_RUNNING_CODE,
-    });
-  }
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.serviceUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
-}
-
 function modelNotOnPlanResponse(model: string): NextResponse {
   const modelName = modelDisplayNameById(model) ?? model;
   const requiredTier = getMinimumRequiredTier(model);
@@ -106,6 +78,17 @@ function modelNotOnPlanResponse(model: string): NextResponse {
     },
     { status: 403 },
   );
+}
+
+function rethrowRouteError(error: unknown): never {
+  // A durable turn outlives this request. Saying so is the honest answer, and a
+  // conflict is the status whose message reaches the reader intact.
+  if (error instanceof CloudCodeTurnStillRunningError) {
+    throw new AppError(ErrorCode.CONFLICT, error.message, 409, {
+      reason: CLOUD_CODE_TURN_STILL_RUNNING_CODE,
+    });
+  }
+  rethrowCloudCodeError(error);
 }
 
 async function handleAgentTurn(request: NextRequest, context: RouteContext) {
@@ -206,7 +189,7 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
         { status: 403 },
       );
     }
-    rethrowCloudCodeError(error);
+    rethrowRouteError(error);
   }
 }
 

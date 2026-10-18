@@ -27,7 +27,6 @@ describe('cloudCodeApi', () => {
       json({
         availability: {
           deploymentEnabled: true,
-          storageReady: true,
           planEntitled: true,
           planTier: 'pro',
           maxSessions: 5,
@@ -286,7 +285,6 @@ describe('cloudCodeApi session lifecycle', () => {
     const listBody = {
       availability: {
         deploymentEnabled: true,
-        storageReady: true,
         planEntitled: true,
         planTier: 'pro',
         maxSessions: 5,

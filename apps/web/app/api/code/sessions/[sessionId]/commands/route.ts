@@ -8,14 +8,7 @@ import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeUnavailableError,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
-  runCloudCodeCommand,
-} from '@/lib/services/cloud-code-session-service';
+import { runCloudCodeCommand } from '@/lib/services/cloud-code-session-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -23,26 +16,12 @@ import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeAccess,
 } from '@/lib/services/managed-compute-access';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 600;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
-
-function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (error instanceof CloudCodeUnavailableError) {
-    throw createError.serviceUnavailable(error.message);
-  }
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.serviceUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
-}
 
 async function requestObject(request: NextRequest): Promise<Record<string, unknown>> {
   let value: unknown;

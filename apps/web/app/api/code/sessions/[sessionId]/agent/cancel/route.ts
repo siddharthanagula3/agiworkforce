@@ -9,30 +9,13 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requestCloudCodeTurnCancellation } from '@/lib/services/cloud-code-agent-service';
-import {
-  CloudCodeConflictError,
-  CloudCodeNotFoundError,
-  CloudCodeValidationError,
-  isCloudCodeSchemaUnavailable,
-} from '@/lib/services/cloud-code-session-service';
+import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 export const runtime = 'nodejs';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
-
-function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
-  if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
-  if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
-  if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.capabilityUnavailable(
-      'Managed Code is coming soon. Cloud sessions are not available yet.',
-    );
-  }
-  throw error;
-}
 
 async function optionalTurnId(request: NextRequest): Promise<string | null> {
   let body: unknown;
