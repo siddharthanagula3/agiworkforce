@@ -126,13 +126,13 @@ export function TokenUsageDisplay({
           <span className="text-muted-foreground">tokens</span>
         </div>
 
-        {inputTokens && outputTokens && (
+        {inputTokens && outputTokens ? (
           <div className="text-muted-foreground">
             <span className="font-mono">{formatTokens(inputTokens)}</span>
             {' → '}
             <span className="font-mono">{formatTokens(outputTokens)}</span>
           </div>
-        )}
+        ) : null}
 
         {creditsLabel && <span className="font-mono font-medium">{creditsLabel}</span>}
       </div>

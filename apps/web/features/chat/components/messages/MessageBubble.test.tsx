@@ -1438,43 +1438,6 @@ describe('MessageBubble', () => {
     });
   });
 
-  describe('agent contributions', () => {
-    const msgWithContributions = makeMessage({
-      role: 'assistant',
-      content: 'Synthesized answer',
-      metadata: {
-        isMultiAgent: true,
-        collaborationMessages: [
-          { employeeName: 'Agent One', employeeAvatar: '#6366f1', content: 'Contribution 1' },
-          { employeeName: 'Agent Two', employeeAvatar: '#10b981', content: 'Contribution 2' },
-        ],
-      },
-    });
-
-    it('renders agents contributed toggle', () => {
-      render(<MessageBubble message={msgWithContributions} />);
-      expect(screen.getByLabelText('Toggle agent contributions visibility')).toBeInTheDocument();
-    });
-
-    it('shows agent count in toggle', () => {
-      render(<MessageBubble message={msgWithContributions} />);
-      expect(screen.getByText(/2 agents contributed/)).toBeInTheDocument();
-    });
-
-    it('expands contributions on click', async () => {
-      render(<MessageBubble message={msgWithContributions} />);
-      const toggle = screen.getByLabelText('Toggle agent contributions visibility');
-
-      expect(screen.queryByText('Agent One')).not.toBeInTheDocument();
-      fireEvent.click(toggle);
-
-      await waitFor(() => {
-        expect(screen.getByText('Agent One')).toBeInTheDocument();
-        expect(screen.getByText('Agent Two')).toBeInTheDocument();
-      });
-    });
-  });
-
   describe('token metadata in dropdown', () => {
     it('renders the catalog display name instead of a transport model identifier', async () => {
       const user = userEvent.setup();

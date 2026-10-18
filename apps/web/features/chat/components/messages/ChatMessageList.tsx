@@ -466,10 +466,7 @@ interface MessageRowProps {
 }
 
 type RenderedMessageMetadata = MessageMetadata &
-  Pick<
-    WebChatMessageMetadata,
-    'citations' | 'comparisonOptions' | 'comparisonChoice' | 'videoUrl' | 'tokensUsed'
-  >;
+  Pick<WebChatMessageMetadata, 'citations' | 'videoUrl' | 'tokensUsed'>;
 
 function getMeta(msg: ChatMessage | undefined): RenderedMessageMetadata | undefined {
   return msg?.metadata as RenderedMessageMetadata | undefined;
@@ -530,8 +527,6 @@ function renderedMetadataEqual(
     prev?.codeExecutionResult === next?.codeExecutionResult &&
     prev?.isExecutingCode === next?.isExecutingCode &&
     prev?.citations === next?.citations &&
-    prev?.comparisonOptions === next?.comparisonOptions &&
-    prev?.comparisonChoice === next?.comparisonChoice &&
     prev?.documentData === next?.documentData &&
     prev?.artifactManifest === next?.artifactManifest &&
     prev?.generatedFile === next?.generatedFile &&

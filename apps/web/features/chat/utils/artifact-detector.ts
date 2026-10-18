@@ -28,12 +28,6 @@ function toArtifactData(a: SharedArtifact): ArtifactData {
     language: a.language,
     title: a.title,
     content: a.content,
-    // No `versions` / `currentVersion`: this used to emit a synthesised
-    // one-entry history ("Initial version") for every derived artifact, which
-    // is what made every artifact report version 1. Version history is owned by
-    // the shared store's content-keyed `versionsById` and read through
-    // `getArtifactVersions`; the panel passes it to ArtifactPreview as
-    // `versionHistory`.
   };
 }
 
@@ -98,5 +92,3 @@ export function splitProseAroundArtifacts(
 export function hasArtifacts(markdown: string): boolean {
   return hasArtifactsShared(markdown);
 }
-
-// `getArtifactStats` lived here and was exported for "analytics" with no caller

@@ -131,11 +131,6 @@ export interface PaywallSlot {
   freeLimit?: FreeLimitSlot;
 }
 
-export interface ComparisonOptions {
-  a: { label?: string; content: string };
-  b: { label?: string; content: string };
-}
-
 export interface ToolEntry {
   name: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -173,7 +168,6 @@ export interface WebChatMessageMetadata {
   thinkingDurationSeconds?: number;
   thinkingSegments?: ThinkingSegment[];
   thinkingSteps?: string[];
-  isThinking?: boolean;
 
   isStreaming?: boolean;
 
@@ -197,13 +191,6 @@ export interface WebChatMessageMetadata {
   isExecutingCode?: boolean;
   codeExecutionResult?: unknown;
 
-  isCollaboration?: boolean;
-  collaborationType?: 'contribution' | 'discussion' | 'synthesis';
-  collaborationTo?: string;
-  isMultiAgent?: boolean;
-  employeesInvolved?: string[];
-  isSynthesis?: boolean;
-
   tools?: ToolEntry[];
   toolResult?: boolean;
   toolType?: string;
@@ -223,16 +210,12 @@ export interface WebChatMessageMetadata {
   videoProgress?: number;
   videoError?: string;
   videoRetryable?: boolean;
-  videoData?: unknown;
   documentData?: unknown;
   computeSession?: unknown;
   generatedFile?: unknown;
   artifactManifest?: unknown;
 
   paywall?: PaywallSlot;
-
-  comparisonOptions?: ComparisonOptions;
-  comparisonChoice?: 'a' | 'b';
 
   citations?: Array<{
     type?: string;
@@ -243,19 +226,6 @@ export interface WebChatMessageMetadata {
 
   reaction?: string;
 
-  isPasted?: boolean;
-
-  collaborationMessages?: Array<{
-    employeeName: string;
-    employeeAvatar: string;
-    content: string;
-    messageType?: string;
-  }>;
-
-  isDocument?: boolean;
-  documentTitle?: string;
-  hasWorkStream?: boolean;
-  workStreamData?: Record<string, unknown>;
   isPinned?: boolean;
 
   privacyMode?: string;

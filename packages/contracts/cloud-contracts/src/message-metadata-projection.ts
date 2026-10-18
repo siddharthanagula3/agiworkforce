@@ -480,9 +480,6 @@ const KEY_BUDGET_CHARS: Record<string, number> = {
   research: 2_500,
   agiWorkPlan: 1_500,
   attachments: 6_000,
-  collaborationMessages: 2_000,
-  workStreamData: 2_000,
-  comparisonOptions: 2_000,
 };
 /**
  * Left free under the cap after the shared shrink, so the JSON encoding of a

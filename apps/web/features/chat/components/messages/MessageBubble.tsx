@@ -12,10 +12,6 @@ import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallba
 import dynamic from 'next/dynamic';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Badge,
   Button,
   Tooltip,
   TooltipContent,
@@ -43,7 +39,6 @@ import {
   Pencil,
   Pin,
   RefreshCw,
-  Sparkles,
   Square,
   ThumbsDown,
   ThumbsUp,
@@ -201,11 +196,9 @@ import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
 import { pptxToSlidesMarkdown, xlsxFirstSheetToCsv } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
-import { ComparisonResponse } from './ComparisonResponse';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
-import { useComparisonStore } from '../../stores/comparison-store';
 import {
   hasResponseRatingDetails,
   useResponseRatingDraftStore,
@@ -513,10 +506,6 @@ interface Message {
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
     cloudAgentRun?: StoreMessageMetadata['cloudAgentRun'];
-    isDocument?: boolean;
-    documentTitle?: string;
-    hasWorkStream?: boolean;
-    workStreamData?: Record<string, unknown>;
     isPinned?: boolean;
     requestId?: string;
     tokensUsed?: number;
@@ -562,14 +551,7 @@ interface Message {
       completedAt: string | null;
       durationSeconds?: number;
     }>;
-    isThinking?: boolean;
     isStreaming?: boolean;
-    isCollaboration?: boolean;
-    collaborationType?: 'contribution' | 'discussion' | 'synthesis';
-    collaborationTo?: string;
-    isMultiAgent?: boolean;
-    employeesInvolved?: string[];
-    isSynthesis?: boolean;
     searchResults?: SearchResponse | SearchResult[];
     isSearching?: boolean;
     /** True when this turn's request had web search on (see useChatStream). */
@@ -607,19 +589,12 @@ interface Message {
     videoProgress?: number;
     videoError?: string;
     videoRetryable?: boolean;
-    videoData?: MediaGenerationResult;
     documentData?: GeneratedDocument;
     computeSession?: ComputeSession;
     generatedFile?: GeneratedFile;
     artifactManifest?: ArtifactManifest;
     /** Tool/provider-generated files (x_generated_files) with same-origin /api/files uris. */
     generatedFiles?: GeneratedFileMetadataEntry[];
-    collaborationMessages?: Array<{
-      employeeName: string;
-      employeeAvatar: string;
-      content: string;
-      messageType?: string;
-    }>;
     /** Project knowledge passages this turn read, each with where it came from. */
     projectSources?: ProjectFileCitation[];
     pastChatSources?: StoreMessageMetadata['pastChatSources'];
@@ -631,18 +606,6 @@ interface Message {
       title?: string;
       url?: string;
     }>;
-    /** A/B comparison options; when present renders ComparisonResponse instead of plain content */
-    comparisonOptions?: {
-      a: { label?: string; content: string };
-      b: { label?: string; content: string };
-    };
-    /** Which A/B option the user selected */
-    comparisonChoice?: 'a' | 'b';
-    /**
-     * True when this user message was pasted (not typed).
-     * Set by the composer paste handler; renders a "PASTED" badge (Fix 42).
-     */
-    isPasted?: boolean;
     sendReplay?: StoreMessageMetadata['sendReplay'];
     mcpContext?: StoreMessageMetadata['mcpContext'];
     /** Persisted thumbs-up/down reaction from the user (stored in cloud messages.metadata). */
@@ -825,7 +788,6 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.truncatedAttachments,
   );
   const [showThinking, setShowThinking] = useState(false);
-  const [showContributions, setShowContributions] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoAttempt, setVideoAttempt] = useState(0);
   // Attachment image rendering (claude.ai parity): the opened lightbox image and
@@ -1317,10 +1279,6 @@ const MessageBubbleComponent = function MessageBubble({
   );
 
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
-  const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
-  const storedChoice = useComparisonStore((state) =>
-    state.getComparisonChoice(message.sessionId ?? '', message.id),
-  );
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -1976,7 +1934,6 @@ const MessageBubbleComponent = function MessageBubble({
       meta.imageUrl ||
       meta.imageData ||
       meta.videoUrl ||
-      meta.videoData ||
       meta.videoStatus ||
       meta.documentData ||
       meta.generatedFile ||
@@ -1985,7 +1942,6 @@ const MessageBubbleComponent = function MessageBubble({
       meta.codeExecutionResult ||
       meta.isExecutingCode ||
       meta.interactiveCards?.length ||
-      meta.comparisonOptions ||
       meta.paywall ||
       hasWebSearchSources(meta.searchResults) ||
       meta.toolType === 'image-generation' ||
@@ -2014,10 +1970,6 @@ const MessageBubbleComponent = function MessageBubble({
 
   const hasThinkingSteps =
     message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
-  const hasContributions =
-    message.metadata?.isMultiAgent &&
-    message.metadata?.collaborationMessages &&
-    message.metadata.collaborationMessages.length > 0;
   const voiceModeActive = useVoiceModeActive();
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
@@ -2306,10 +2258,7 @@ const MessageBubbleComponent = function MessageBubble({
           )}
         >
           {/* Slim badge row · only rendered when a marker is present (no name/timestamp) */}
-          {(message.metadata?.isPinned ||
-            hasBranches ||
-            branchNavigation ||
-            (isUser && message.metadata?.isPasted)) && (
+          {(message.metadata?.isPinned || hasBranches || branchNavigation) && (
             <div className="mb-1 flex items-center gap-1.5">
               {message.metadata?.isPinned && (
                 <Pin className="h-3 w-3 text-accent-text" aria-hidden="true" />
@@ -2324,11 +2273,6 @@ const MessageBubbleComponent = function MessageBubble({
                   onSwitch={branchNavigation.onSwitch}
                   messageId={message.id}
                 />
-              )}
-              {isUser && message.metadata?.isPasted && (
-                <span className="rounded-compact bg-muted px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-                  pasted
-                </span>
               )}
             </div>
           )}
@@ -2503,19 +2447,6 @@ const MessageBubbleComponent = function MessageBubble({
 
           {!nonInterleavedToolsFollowProse && nonInterleavedToolBlock}
 
-          {/* A/B comparison response · shown instead of main content when options are present */}
-          {!isUser && message.metadata?.comparisonOptions && (
-            <ComparisonResponse
-              optionA={message.metadata.comparisonOptions.a}
-              optionB={message.metadata.comparisonOptions.b}
-              choice={storedChoice ?? message.metadata.comparisonChoice}
-              isStreaming={message.isStreaming}
-              onChoose={(side) => {
-                setComparisonChoice(message.sessionId ?? '', message.id, side);
-              }}
-            />
-          )}
-
           {!isUser &&
             (message.metadata?.isExecutingCode || message.metadata?.codeExecutionResult) && (
               <CodeExecutionBlock
@@ -2561,7 +2492,6 @@ const MessageBubbleComponent = function MessageBubble({
                 // `wrap-anywhere` is the only one of the two that changes
                 // intrinsic sizing.
                 isUser && 'user-bubble wrap-anywhere',
-                !isUser && message.metadata?.comparisonOptions && 'hidden',
                 isEditing && 'hidden',
               )}
               style={
@@ -3182,74 +3112,6 @@ const MessageBubbleComponent = function MessageBubble({
                     </div>
                   ))}
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          {/* Agent Contributions (Collapsible) */}
-          {hasContributions && (
-            <Collapsible
-              open={showContributions}
-              onOpenChange={setShowContributions}
-              className="mt-3"
-            >
-              <CollapsibleTrigger asChild>
-                <button
-                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-                  aria-expanded={showContributions}
-                  aria-label="Toggle agent contributions visibility"
-                >
-                  {showContributions ? (
-                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                  )}
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {message.metadata?.collaborationMessages?.length} agents contributed
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-2">
-                {message.metadata?.collaborationMessages?.map((collab, collabIndex) => (
-                  <div
-                    key={`collab-${collabIndex}-${collab.employeeName}`}
-                    className="rounded-lg border border-border bg-card p-3"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <Avatar className="h-5 w-5">
-                        {collab.employeeAvatar &&
-                          (collab.employeeAvatar.startsWith('http') ||
-                            collab.employeeAvatar.startsWith('/')) && (
-                            <AvatarImage src={collab.employeeAvatar} />
-                          )}
-                        <AvatarFallback
-                          className="text-caption font-semibold text-white"
-                          style={{
-                            backgroundColor:
-                              collab.employeeAvatar &&
-                              !collab.employeeAvatar.startsWith('http') &&
-                              !collab.employeeAvatar.startsWith('/')
-                                ? collab.employeeAvatar
-                                : '#6366f1',
-                          }}
-                        >
-                          {collab.employeeName
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs font-medium">{collab.employeeName}</span>
-                      {collab.messageType && (
-                        <Badge variant="secondary" className="h-4 text-caption">
-                          {collab.messageType}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                      <MarkdownContent content={collab.content} />
-                    </div>
-                  </div>
-                ))}
               </CollapsibleContent>
             </Collapsible>
           )}
@@ -3918,7 +3780,6 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
   if (prev === next) return true;
   return (
     prev?.isPinned === next?.isPinned &&
-    prev?.isPasted === next?.isPasted &&
     prev?.reaction === next?.reaction &&
     prev?.model === next?.model &&
     prev?.requestedModel === next?.requestedModel &&
@@ -3931,7 +3792,6 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.thinkingDurationSeconds === next?.thinkingDurationSeconds &&
     prev?.thinkingSegments === next?.thinkingSegments &&
     prev?.thinkingSteps === next?.thinkingSteps &&
-    prev?.isThinking === next?.isThinking &&
     prev?.agentActivity === next?.agentActivity &&
     prev?.research === next?.research &&
     prev?.agiWorkPlan === next?.agiWorkPlan &&
@@ -3946,10 +3806,6 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.isExecutingCode === next?.isExecutingCode &&
     prev?.codeExecutionResult === next?.codeExecutionResult &&
     prev?.citations === next?.citations &&
-    prev?.comparisonOptions === next?.comparisonOptions &&
-    prev?.comparisonChoice === next?.comparisonChoice &&
-    prev?.collaborationMessages === next?.collaborationMessages &&
-    prev?.isMultiAgent === next?.isMultiAgent &&
     prev?.paywall === next?.paywall &&
     prev?.interactiveCards === next?.interactiveCards &&
     prev?.imageUrl === next?.imageUrl &&
@@ -3966,12 +3822,9 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.videoProgress === next?.videoProgress &&
     prev?.videoError === next?.videoError &&
     prev?.videoRetryable === next?.videoRetryable &&
-    prev?.videoData === next?.videoData &&
     prev?.thumbnailUrl === next?.thumbnailUrl &&
     prev?.toolResult === next?.toolResult &&
     prev?.toolType === next?.toolType &&
-    prev?.isDocument === next?.isDocument &&
-    prev?.documentTitle === next?.documentTitle &&
     prev?.sendReplay === next?.sendReplay &&
     prev?.mcpContext === next?.mcpContext &&
     prev?.metadataNotSaved === next?.metadataNotSaved &&
