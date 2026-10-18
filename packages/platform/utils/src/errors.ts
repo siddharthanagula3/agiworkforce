@@ -317,6 +317,25 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Upgrade your plan to access this feature.',
     icon: 'payment',
   },
+  [ErrorCode.SUBSCRIPTION_REQUIRED]: {
+    title: 'Upgrade Required',
+    message: 'This needs an active Team or Enterprise subscription.',
+    suggestion: 'Upgrade the plan, or ask the workspace owner to.',
+    icon: 'payment',
+  },
+  [ErrorCode.ORG_TRANSFER_ENTITLEMENT_REQUIRED]: {
+    title: 'Plan Required to Transfer',
+    message: 'The new owner needs a plan that keeps team administration working.',
+    suggestion:
+      'Give the new owner a Team or Enterprise plan, or attach a subscription to the organization.',
+    icon: 'payment',
+  },
+  [ErrorCode.STEP_UP_REQUIRED]: {
+    title: 'Confirm It Is You',
+    message: 'This action needs a fresh confirmation of your identity.',
+    suggestion: 'Confirm with your passkey, security key or code, then try again.',
+    icon: 'auth',
+  },
 };
 
 /**

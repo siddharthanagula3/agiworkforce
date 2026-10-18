@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
-import { AppError, createError, type ErrorCodeValue } from '@/lib/errors';
+import { AppError, createError } from '@/lib/errors';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
 import {
   resolveOrganizationEntitlementPlan,
@@ -77,7 +77,7 @@ export async function requireTeamAdminAccess(
 
   if (!access.canManageTeam) {
     throw new AppError(
-      'SUBSCRIPTION_REQUIRED' as ErrorCodeValue,
+      'SUBSCRIPTION_REQUIRED',
       'Team administration requires an active Team or Enterprise subscription.',
       403,
       { currentPlan: access.plan, requiredPlans: ['team', 'enterprise'] },

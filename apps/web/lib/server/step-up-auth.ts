@@ -10,7 +10,7 @@ import {
 } from '@/lib/server/step-up/grant-token';
 
 export const STEP_UP_TOKEN_HEADER = 'x-step-up-token';
-const STEP_UP_ERROR_CODE = 'STEP_UP_REQUIRED' as ErrorCodeValue;
+const STEP_UP_ERROR_CODE: ErrorCodeValue = 'STEP_UP_REQUIRED';
 const STEP_UP_ERROR_REASON = 'step_up_required';
 
 export class StepUpRequiredError extends AppError {

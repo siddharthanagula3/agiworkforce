@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { createError, AppError, type ErrorCodeValue } from '@/lib/errors';
+import { createError, AppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -115,7 +115,7 @@ async function handleTransfer(request: NextRequest) {
           (orgNeedsEnterpriseControls && !successorGrantsEnterpriseControls)
         ) {
           throw new AppError(
-            'ORG_TRANSFER_ENTITLEMENT_REQUIRED' as ErrorCodeValue,
+            'ORG_TRANSFER_ENTITLEMENT_REQUIRED',
             "This organization has no subscription of its own, so team administration follows the owner's personal plan. Give the new owner a Team or Enterprise plan, or attach a subscription to the organization, before transferring ownership.",
             409,
             {

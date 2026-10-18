@@ -53,6 +53,9 @@ export const ErrorCode = {
   INVALID_RESPONSE: 'INVALID_RESPONSE',
 
   PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
+  SUBSCRIPTION_REQUIRED: 'SUBSCRIPTION_REQUIRED',
+  ORG_TRANSFER_ENTITLEMENT_REQUIRED: 'ORG_TRANSFER_ENTITLEMENT_REQUIRED',
+  STEP_UP_REQUIRED: 'STEP_UP_REQUIRED',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -212,6 +215,9 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.PAYLOAD_TOO_LARGE]: 413,
   [ErrorCode.INVALID_RESPONSE]: 502,
   [ErrorCode.PAYMENT_REQUIRED]: 402,
+  [ErrorCode.SUBSCRIPTION_REQUIRED]: 403,
+  [ErrorCode.ORG_TRANSFER_ENTITLEMENT_REQUIRED]: 409,
+  [ErrorCode.STEP_UP_REQUIRED]: 403,
 };
 
 export const DENIAL_ERROR_CODE_TO_HTTP_STATUS: Record<DenialErrorCodeValue, number> = {
