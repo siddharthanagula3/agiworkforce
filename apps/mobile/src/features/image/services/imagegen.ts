@@ -1,7 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
-import { ApiHttpError } from '@/services/apiErrors';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
@@ -54,21 +53,11 @@ export async function generateImage(
   }
 
   const operationId = options.operationId ?? Crypto.randomUUID();
-  let submitted: ImageGenResponse;
-  try {
-    submitted = await api.post<ImageGenResponse>(
-      '/api/media/image/generate',
-      { ...request, async: true },
-      { headers: { 'Idempotency-Key': imageIdempotencyKey(operationId) } },
-    );
-  } catch (error) {
-    if (error instanceof ApiHttpError && error.code === 'image_job_store_unavailable') {
-      return api.post<ImageGenResponse>('/api/media/image/generate', request, {
-        headers: { 'Idempotency-Key': imageIdempotencyKey(`${operationId}-direct`) },
-      });
-    }
-    throw error;
-  }
+  const submitted = await api.post<ImageGenResponse>(
+    '/api/media/image/generate',
+    { ...request, async: true },
+    { headers: { 'Idempotency-Key': imageIdempotencyKey(operationId) } },
+  );
   return followImageJob(submitted);
 }
 

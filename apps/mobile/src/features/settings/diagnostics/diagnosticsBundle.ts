@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Dimensions, Platform } from 'react-native';
 
 import { apiFetch } from '../../../../services/api';
+import { SUPPORT_DIAGNOSTICS_PATH } from '@agiworkforce/cloud-contracts/support';
 
 /**
  * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. There is no DOM here, so
@@ -37,7 +38,6 @@ export interface DiagnosticsExportResult {
 }
 
 export const MAX_DIAGNOSTIC_EVENTS = 10;
-const DIAGNOSTICS_PATH = '/api/support/diagnostics';
 
 function readResolvedOptions(): { locale?: string; timeZone?: string } {
   try {
@@ -91,7 +91,7 @@ export async function exportMobileDiagnostics(
     screen?: string | null;
   } = {},
 ): Promise<DiagnosticsExportResult> {
-  const response = await apiFetch(DIAGNOSTICS_PATH, {
+  const response = await apiFetch(SUPPORT_DIAGNOSTICS_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ diagnostics: collectMobileDiagnostics(input) }),

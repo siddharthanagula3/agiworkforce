@@ -16,7 +16,6 @@ jest.mock('expo-crypto', () => ({
 }));
 
 import { generateImage } from '../src/features/image/services/imagegen';
-import { ApiHttpError } from '../services/apiErrors';
 
 function sentHeaders(): Record<string, string> {
   const options = mockPost.mock.calls[0]?.[2] as { headers?: Record<string, string> } | undefined;
@@ -100,47 +99,6 @@ describe('generateImage, idempotency', () => {
     expect(result.status).toBe('completed');
     expect(result.images?.[0]?.url).toBe('/api/files/0190a000-0000-4000-8000-000000000002');
     jest.useRealTimers();
-  });
-
-  it('falls back to a direct request where durable jobs are not deployed', async () => {
-    mockPost
-      .mockRejectedValueOnce(
-        new ApiHttpError(
-          'Durable image jobs are not available',
-          503,
-          'image_job_store_unavailable',
-        ),
-      )
-      .mockResolvedValueOnce({ success: true, images: [{ url: 'https://cdn.test/x.png' }] });
-
-    const result = await generateImage({ prompt: 'a lighthouse' });
-
-    expect(mockPost).toHaveBeenLastCalledWith(
-      '/api/media/image/generate',
-      { prompt: 'a lighthouse' },
-      expect.objectContaining({ headers: expect.any(Object) }),
-    );
-    expect(result.images?.[0]?.url).toBe('https://cdn.test/x.png');
-  });
-
-  it('keeps the fallback key stable across retries of the same turn', async () => {
-    const unavailable = () =>
-      new ApiHttpError('Durable image jobs are not available', 503, 'image_job_store_unavailable');
-    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
-    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
-    const first = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
-      'Idempotency-Key'
-    ];
-
-    mockPost.mockReset();
-    mockPost.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce({ success: true });
-    await generateImage({ prompt: 'a lighthouse' }, { operationId: 'turn-operation-1' });
-    const second = (mockPost.mock.calls[1]?.[2] as { headers: Record<string, string> }).headers[
-      'Idempotency-Key'
-    ];
-
-    expect(second).toBe(first);
-    expect(isManagedMediaIdempotencyKey(first!)).toBe(true);
   });
 
   it('rejects an empty prompt before spending a key', async () => {
