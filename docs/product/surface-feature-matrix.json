@@ -495,7 +495,7 @@
         },
         "desktop": {
           "state": "unverified",
-          "settledBy": "apps/desktop/src/features/subscription is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+          "settledBy": "A desktop file that shows the plan status and that the surface's shell imports or routes to would settle this, naming both."
         },
         "mobile": {
           "state": "present",
@@ -707,7 +707,7 @@
         },
         "desktop": {
           "state": "unverified",
-          "settledBy": "The same registry answer as web. apps/desktop/src/features/analytics is product analytics, which is a different thing."
+          "settledBy": "The same registry answer as web."
         },
         "mobile": {
           "state": "unverified",
@@ -1089,7 +1089,7 @@
         },
         "desktop": {
           "state": "absent",
-          "why": "The desktop renderer's MCP service (apps/desktop/src/services/mcp.ts) was unreachable from the shell and was deleted; the public Electron desktop reports localMcp false and uses the hosted connector service."
+          "why": "The public Electron desktop reports localMcp false and uses the hosted connector service."
         },
         "mobile": {
           "state": "absent",

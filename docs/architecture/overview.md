@@ -2,20 +2,20 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-22
+Last updated: 2026-10-18
 
 ## Monorepo Shape
 
-| Path                | Owner             | Purpose                                                                            |
-| ------------------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `apps/`             | Surface leads     | User-facing surfaces. One folder per shippable surface.                            |
-| `packages/`         | Platform          | Shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.    |
-| `crates/`           | Rust platform     | Shared Rust runtime, protocol, command registry, plugin, task, and sandbox crates. |
-| `services/`         | Backend/platform  | Deployable backend services; currently the signaling server only.                  |
-| `apps/web/db/neon/` | Data/backend      | Canonical Neon database migrations.                                                |
-| `docs/`             | Docs/platform     | Current docs, decisions, plans, support/legal/marketing docs, and archive.         |
-| `audit/`            | Platform/security | Evidence ledgers, scan output, parity research, and source-backed claims.          |
-| `patches/`          | Platform          | pnpm dependency patches with upstream/version-specific rationale.                  |
+| Path                | Owner             | Purpose                                                                                                |
+| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `apps/`             | Surface leads     | User-facing surfaces. One folder per shippable surface.                                                |
+| `packages/`         | Platform          | Shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.                        |
+| `crates/`           | Rust platform     | Shared Rust protocol, LLM, agent core, MCP, app server, sandbox policy, worktree, and registry crates. |
+| `services/`         | Backend/platform  | Deployable backend services: the signaling server and the upload scanner.                              |
+| `apps/web/db/neon/` | Data/backend      | Canonical Neon database migrations.                                                                    |
+| `docs/`             | Docs/platform     | Current docs, decisions, specs, runbooks, compliance, research, and generated indexes.                 |
+| `audit/`            | Platform/security | Evidence ledgers, scan output, parity research, and source-backed claims.                              |
+| `patches/`          | Platform          | pnpm dependency patches with upstream/version-specific rationale.                                      |
 
 ## Surface Feature Roots
 
@@ -68,9 +68,8 @@ Three rules the registry encodes and every surface has to honour:
   more restrictive side, because losing "memory off" to a stale device collects
   what the user refused.
 - A synced row does not promise the bytes are in the cloud. Artifacts and
-  skills may keep their payload on the device that produced it, so a surface
-  asks `resourceAvailability` and can say which device holds it rather than
-  showing a failure.
+  skills may keep their payload on the device that produced it
+  (`cloud-or-device`), so a missing payload is not by itself a failure.
 
 Account Cloud continuity includes Web, Mobile Cloud, Desktop Cloud and
 provenance-eligible Chrome Managed Cloud conversations. Chrome remains locally
@@ -109,7 +108,7 @@ from shared contracts instead of surface-local copy.
 
 Retained Tauri document generation has manifest-producing command paths for PDF, DOCX, XLSX, and PPTX. These return the legacy file path plus `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with local privacy, checksum, byte count, MIME type, and file URI. Each generated-document session also creates a local app-data work directory with `manifest.json`, append-only `audit.jsonl`, and compute-session TTL metadata.
 
-Provider-hosted generated files use the same manifest contract after provider-specific file citations are materialized. The OpenAI provider adapter extracts Code Interpreter `container_file_citation` annotations but does not create `GeneratedFile` records until the caller supplies URI, byte count, checksum, privacy mode, provider mode, storage scope, owner, and source context.
+Provider-hosted generated files use the same manifest contract after provider-specific file citations are materialized. The managed chat route collects OpenAI Code Interpreter `container_file_citation` and Anthropic `code_execution_output` file references, fetches the bytes from the provider, and stores them as generated files with checksum and byte count (`apps/web/lib/server/container-files.ts`).
 
 Generated-file trust-boundary validation lives in `@agiworkforce/types`. It proves Local files remain on local-device storage, BYOK transfer requires preview and explicit approval evidence, and Managed files carry quota, owner, checksum, retention, TTL, and deletion metadata before surfaces present them as available.
 

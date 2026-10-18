@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-09
+Last updated: 2026-10-18
 
 ## Decision
 
@@ -12,10 +12,10 @@ parallel stack:
 
 1. **Core logic as workspace packages** (`packages/guardian/core`,
    `packages/guardian/github`): pure, network-free, fixture-tested. Finding
-   schema, fingerprints, config, verification, dedup, ranking, policy,
-   scanner adapters, webhook security, event normalization, `/agi` command
-   parsing, and Checks/PR payload builders all live here so every execution
-   surface (Actions workflow, web control plane, future workers) shares one
+   schema, fingerprints, config, dedup, ranking, policy, the repo-check
+   adapter that turns a `check:*` script's result into findings, and the
+   Checks/PR payload builders all live here so every execution surface
+   (Actions workflow, web control plane, future workers) shares one
    implementation.
 2. **Execution surface #1, GitHub Actions** (`.github/workflows/guardian.yml`):
    the authoritative push/PR reviewer today. Runs the deterministic scan via
@@ -46,12 +46,11 @@ parallel stack:
   are not already in ci.yml's fast path, normalized into the finding schema.
 - Nightly schedule and `workflow_dispatch --deep` add heavy checks
   (`check:trust-boundaries`, `check:knip:production`).
-- `merge_group`, `release`, richer `/agi` commands and a GitHub App webhook are
-  not implemented; the event normalizer and webhook receiver were removed
-  because no host served them.
+- `merge_group`, `release`, `/agi` commands and a Guardian GitHub App webhook
+  are not implemented.
 - ci.yml lanes (semgrep 1.172.0, CodeQL, clippy, audits, tests) are read, not
   re-run. Guardian adds the layer CI lacks: normalization, fingerprints,
-  verification, dedup, baselining, policy, and single-comment publishing.
+  dedup, baselining, policy, and single-comment publishing.
 
 ## Safety invariants (enforced in code, tested)
 
@@ -61,9 +60,9 @@ parallel stack:
 - Scanner failure ≠ clean: `ScannerRun.status` distinguishes
   `clean|findings|scanner-failed|timeout|skipped`, and blocking mode fails on
   scanner failure.
-- No LLM finding publishes without verification (path/line existence at head,
-  diff relevance, dedup, confidence threshold, concrete failure scenario);
-  an LLM finding can never block without deterministic corroboration.
+- An LLM finding can never block without deterministic corroboration or a
+  confirmed failure scenario (`isBlockingEligible` in `policy.ts`). The scan
+  runs only repository checks today, so it produces no LLM findings.
 - Shadow mode structurally cannot fail a check (`evaluatePolicy`).
 - Fork PRs run under the read-only token; publishing degrades to an artifact.
 - All repository-controlled text is bounded and secret-redacted before it
@@ -79,6 +78,6 @@ SHA history lives on the finding record (`first_seen_sha`/`last_seen_sha`).
 ## Rollout
 
 shadow → advisory → blocking, controlled solely by `.agi-guardian.yml`.
-Blocking is gated on demonstrated precision (see the evaluation plan in
-`IMPLEMENTATION_STATUS.md`). During shadow, the only required check candidate
+Blocking is gated on demonstrated precision (see the evaluation corpus in
+`docs/specs/guardian-phase-3/tasks.md`). During shadow, the only required check candidate
 is "AGI Guardian / Final Policy", and it concludes neutral.

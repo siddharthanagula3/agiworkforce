@@ -1,6 +1,6 @@
 # Desktop device runtime
 
-> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** current Electron device-capability host · **Updated:** 2026-10-14.
+> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** current Electron device-capability host · **Updated:** 2026-10-18.
 
 ## What this is
 
@@ -233,7 +233,7 @@ Unix sockets stay closed, as in the CLI's own commands.
 
 The spec this was built to prefers packaging the frontend into the desktop
 renderer so the app loads a trusted local origin. That is not currently
-possible: `apps/web` is a Next.js app with 288 server routes doing database and
+possible: `apps/web` is a Next.js app whose server routes do database and
 Clerk work. A static export cannot exist, and shipping the standalone server
 locally would ship backend credentials to every user's machine.
 
@@ -295,7 +295,7 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 | Filesystem read / write               | ✅ list, read, read bytes, write, edit in place, glob and grep                                 |
 | Git read state                        | ✅ branch, head, upstream, ahead/behind, status counts                                         |
 | Git write and destructive operations  | ⚠️ switch and push a session's branch, discard its changes, stage and revert agent checkpoints |
-| Filesystem watcher                    | ❌ command name reserved, no implementation                                                    |
+| Filesystem watcher                    | ❌ not started                                                                                 |
 | Shell execution                       | ✅ one-shot and long-running commands, sandboxed, asked in main                                |
 | PTY terminal                          | ⚠️ a long-running command gets a pseudo-terminal on macOS, pipes elsewhere                     |
 | Embedded browser and CDP tools        | ❌ not started; a paired Chrome extension is used                                              |
@@ -303,7 +303,8 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 | iOS simulator, Android emulator       | ❌ not started                                                                                 |
 | Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                   |
 | Local MCP                             | ✅ project servers, each launch approved in main                                               |
-| Scheduled tasks, SSH                  | ❌ not started                                                                                 |
+| Scheduled tasks                       | ✅ local routines: a scheduled prompt in an approved folder, run as a developer session        |
+| SSH                                   | ⚠️ developer sessions on an SSH host; no PTY, file editor, worktrees or jump hosts             |
 
 The contract carries a capability name only once a command is gated on it. A
 name for an unimplemented row is added with the first command that checks it.
@@ -324,12 +325,12 @@ against the old behaviour.
 
 ## Tests
 
-- `packages/contracts/local-runtime/src/__tests__/path-safety.test.ts`: 25 cases, posix and win32
-- `apps/desktop/electron/__tests__/pathGuard.test.ts`: 12 cases against real symlinks in a temp directory
-- `apps/desktop/electron/__tests__/filesystemService.test.ts`: 20 cases
-- `apps/desktop/electron/__tests__/permissionCore.test.ts`: 15 cases
-- `apps/desktop/electron/__tests__/gitService.test.ts`: 11 cases against a real repository
-- `packages/client/client-runtime/src/__tests__/electronRuntime.test.ts`: 13 cases
+- `packages/contracts/local-runtime/src/__tests__/path-safety.test.ts`: posix and win32
+- `apps/desktop/electron/__tests__/pathGuard.test.ts`: real symlinks in a temp directory
+- `apps/desktop/electron/__tests__/filesystemService.test.ts`
+- `apps/desktop/electron/__tests__/permissionCore.test.ts`
+- `apps/desktop/electron/__tests__/gitService.test.ts`: a real repository
+- `packages/client/client-runtime/src/__tests__/electronRuntime.test.ts`
 
 The three symlink-escape cases and the git status case were each confirmed red
 against the unfixed code before being kept.

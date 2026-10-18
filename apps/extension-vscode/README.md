@@ -7,7 +7,7 @@
   Status: Current
   Owner: Extension lead
   Purpose: Marketplace listing copy for the AGI Workforce VS Code extension.
-  Last updated: 2026-08-08
+  Last updated: 2026-10-18
 -->
 
 # AGI Workforce for VS Code
@@ -97,7 +97,7 @@ The most used ones:
 | AGI Workforce: Explain Selection     | `Ctrl+Shift+Alt+E` / `Cmd+Shift+Alt+E` |
 | AGI Workforce: Ask About Code        | `Ctrl+Shift+Alt+A` / `Cmd+Shift+Alt+A` |
 | AGI Workforce: Explain Error         | `Ctrl+Shift+Alt+X` / `Cmd+Shift+Alt+X` |
-| AGI Workforce: Agent Mode            | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
+| AGI Workforce: Choose Agent Mode     | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
 | AGI Workforce: Run Terminal Command  | `Ctrl+Shift+Alt+T` / `Cmd+Shift+Alt+T` |
 | AGI Workforce: Select Model          | ,                                      |
 | AGI Workforce: Restart Local Runtime | ,                                      |

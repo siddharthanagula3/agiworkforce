@@ -2,15 +2,15 @@
 
 Status: Active
 Owner: Guardian
-Last updated: 2026-08-28
+Last updated: 2026-10-18
 
 ## Problem
 
 Guardian ships a deterministic analyzer surface through GitHub Actions, but
 findings do not survive a run. Without persistence there is no baseline, so
 existing findings flood every new pull request, fixed findings never close, and
-suppressions cannot expire. The control plane only routes `issue_comment`
-mentions, so pushes and pull requests never open a review run.
+suppressions cannot expire. The GitHub App webhook opens no Guardian review
+run, so pushes and pull requests never get one.
 
 ## Requirements
 
@@ -19,8 +19,8 @@ mentions, so pushes and pull requests never open a review run.
 2. Push, pull_request and merge_group events open review runs through the
    existing GitHub App installation and entitlement path.
 3. LLM specialist reviewers are provider-neutral, run behind the model router
-   with per-run cost budgets, and enter the same verify to dedupe to rank to
-   policy pipeline every other finding source uses.
+   with per-run cost budgets, and enter the same dedupe to rank to policy
+   pipeline every other finding source uses.
 4. Promotion out of shadow mode is gated on measured precision and recall, not
    on judgement.
 
@@ -30,7 +30,7 @@ mentions, so pushes and pull requests never open a review run.
 - A fixed finding closes without human action.
 - `/agi suppress` survives a run and expires on schedule.
 - No reviewer can emit a finding that bypasses the corroboration rule the
-  schema already enforces.
+  policy already enforces.
 
 ## Non-goals
 
@@ -44,8 +44,9 @@ mentions, so pushes and pull requests never open a review run.
 - The Actions surface runs deterministic analyzers only; no LLM reviewers yet.
 - Findings are not yet persisted across runs: `fixedSincePreviousRun` is
   empty and baselining is unavailable until the persistence layer lands.
-- `/agi suppress|unsuppress|fix` parse and validate but have no backing
-  store; `fix` stays disabled by design until the write-phase rollout.
+- `/agi suppress|unsuppress|fix` are not implemented: nothing parses them and
+  there is no backing store; `fix` stays disabled by design until the
+  write-phase rollout.
 - Delivery dedup fails open on Neon unavailability (deliberate; logged).
 - `check:trust-boundaries` exceeds the fast-lane budget (~8 min observed) and
   therefore lives in the deep lane.

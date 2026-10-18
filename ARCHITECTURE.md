@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-07
+Last updated: 2026-10-18
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -40,7 +40,7 @@ none is forced into another's framework conventions.
 | `apps/extension`        | Chrome MV3                                                                         |
 | `apps/extension-vscode` | VS Code                                                                            |
 
-## The desktop is two shells over one renderer
+## The desktop is two shells with two renderers
 
 `apps/desktop` builds two applications, and confusing them is the single most
 expensive mistake made against this tree.
@@ -71,15 +71,15 @@ reach it. `apps/desktop/README.md` states which shell owns what today.
 
 ## Shared packages
 
-| Group                | Owns                                                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contracts` | Types, cloud contracts, licensing, compliance, trust boundaries. The types package also consumes the shared model registry. |
-| `packages/ai`        | Model registry, routing, provider protocol and runtime, per-provider adapters                                               |
-| `packages/client`    | Client runtime, sync, desktop command client                                                                                |
-| `packages/ui`        | `unified-chat` (surface-neutral chat), shared UI, design tokens, i18n                                                       |
-| `packages/platform`  | Data layer, local LLM, artifacts, utilities                                                                                 |
-| `packages/tools`     | MCP, skills, apply-patch, browser tool                                                                                      |
-| `packages/guardian`  | Findings pipeline and its GitHub surface                                                                                    |
+| Group                | Owns                                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts` | Types, cloud contracts, context, licensing, compliance, local runtime, trust boundaries. The types package also consumes the shared model registry. |
+| `packages/ai`        | Model registry, routing, agent core, search, provider protocol and runtime, per-provider adapters                                                   |
+| `packages/client`    | Client runtime, IDE runtime, sync, desktop command client                                                                                           |
+| `packages/ui`        | `unified-chat` (surface-neutral chat), shared UI, design tokens, icons, i18n                                                                        |
+| `packages/platform`  | Data layer, identity, files, object storage, key-value, context engine, observability, local LLM, artifacts, utilities                              |
+| `packages/tools`     | MCP, skills, apply-patch, browser tool                                                                                                              |
+| `packages/guardian`  | Findings pipeline and its GitHub surface                                                                                                            |
 
 Contracts are the shared product boundary; exact dependency edges are owned by
 the workspace manifests, including the types package's model-registry

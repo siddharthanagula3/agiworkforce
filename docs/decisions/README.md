@@ -3,7 +3,7 @@
 Status: Current
 Owner: Founder + platform lead
 Last reviewed: 2026-09-22
-Last updated: 2026-09-27
+Last updated: 2026-10-18
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 

@@ -118,8 +118,8 @@ the hosted web runtime for conversation inference.
 ## Model routing and caching
 
 `packages/ai/model-registry` compiles a curated catalog into a generated
-registry (`generated/registry.json`) that declares 39 canonical models, 99
-provider routes, and 30 protocol harnesses. A canonical model is not tied to
+registry (`generated/registry.json`) that declares every canonical model, its
+provider routes, and the protocol harnesses they speak. A canonical model is not tied to
 one provider: a single flagship model can have a route through its own
 provider directly, through OpenRouter, through Vercel AI Gateway, and
 through an Anthropic-Messages-compatible mirror, each with its own pricing
@@ -331,7 +331,8 @@ vulnerability privately through GitHub's advisory flow: [`SECURITY.md`](SECURITY
   provider credentials in the OS keyring and keeps only provider names in its
   on-disk index.
 - **Sandbox policies**: `crates/agiworkforce-sandbox-policy` enforces
-  execution policy; the CLI supports optional Linux seccomp filtering.
+  execution policy; the CLI runs agent commands under Seatbelt on macOS and
+  bubblewrap on Linux.
 - **Input validation**: Zod schemas on API boundaries; Helmet and rate
   limiting on Express services.
 - **Secure automation**: the computer-use loop enforces a

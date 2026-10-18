@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + desktop lead
-Last updated: 2026-09-21
+Last updated: 2026-10-18
 
 The public AGI Desktop product is the Electron application under
 `apps/desktop/electron`. The Rust/Tauri implementation in
@@ -35,8 +35,8 @@ the new trust boundary.
 
 The executable owners are:
 
-- `apps/desktop/electron/config.ts` for renderer mode, allowed origins, and the
-  Managed Cloud boundary.
+- `apps/desktop/electron/config.ts` for the hosted web origin, allowed origins,
+  and the Managed Cloud boundary.
 - `apps/desktop/electron/main.ts` for the hardened browser window, preload,
   deep links, tray, shortcuts, and IPC registration.
 - `apps/desktop/electron/runtime/dispatcher.ts` for command classification,
@@ -47,7 +47,9 @@ The executable owners are:
 
 ## Renderer and IPC boundary
 
-The shipped renderer mode loads `https://agiworkforce.com`. The main window
+The window always loads the hosted web app, `https://agiworkforce.com`;
+`AGI_CLOUD_APP_ORIGIN` can point it at localhost or another first-party host
+for development. The main window
 uses context isolation, Chromium sandboxing, no renderer Node integration, and
 the Electron preload. The preload exposes the host bridge only to the allowed
 AGI origin; OAuth pages do not inherit it.

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: CLI lead
-Last updated: 2026-07-25
+Last updated: 2026-10-18
 Kind: app
 Criticality: high
 
@@ -352,8 +352,8 @@ agi hooks remove PreToolUse 1
   `cargo build --release -p agiworkforce-cli --bin agi`.
 - TUI: ratatui + crossterm. The live module set is guarded by the repository
   module-reachability check.
-- Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
-  Landlock are enum stubs.
+- Sandboxing: Linux (bubblewrap) and macOS (Seatbelt); Windows has no
+  sandbox.
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
 - Hooks: 32 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
   with the Sprint B5 canonical vocabulary (Claude Code aliases like

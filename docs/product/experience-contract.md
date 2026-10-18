@@ -2,7 +2,7 @@
 
 Status: Current target; implementation incomplete
 Owner: Product + frontend platform
-Last updated: 2026-09-21
+Last updated: 2026-10-18
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
@@ -650,7 +650,7 @@ work superseded; mirrors the same corrections in
   capabilities and is split, matching the parity matrix's 2026-08-06 split.
   **AGI Work**: composer-mode dispatch, is mounted and wired end to end on all
   three consumer surfaces (`apps/web/lib/workflows/start-cloud-agent-workflow.ts`,
-  `apps/web/app/tasks/page.tsx`, `apps/mobile/app/(app)/agents/index.tsx`,
+  `apps/web/app/tasks/page.tsx`, `apps/mobile/app/(app)/tasks.tsx`,
   `AgiWorkProjects`/`AgiWorkArtifacts`/`AgiWorkScheduled` rendered from
   `apps/desktop/src/features/v3/DesktopShellV3.tsx`). The August correction also
   tracked a standalone work product as Missing. That separate-product target is

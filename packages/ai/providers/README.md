@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Provider/platform owner
-Last updated: 2026-05-20
+Last updated: 2026-10-18
 Kind: provider-package
 Criticality: high
 
@@ -28,14 +28,18 @@ Current leaf packages:
 - `anthropic`
 - `deepseek`
 - `google`
+- `groq`
 - `lmstudio`
 - `minimax`
 - `moonshot`
+- `nvidia`
 - `ollama`
 - `openai`
 - `openrouter`
 - `perplexity`
 - `qwen`
+- `vercel-gateway`
+- `workers-ai`
 - `xai`
 - `zhipu`
 

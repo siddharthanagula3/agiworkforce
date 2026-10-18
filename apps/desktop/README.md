@@ -2,10 +2,10 @@
 
 Status: Current
 Owner: Desktop surface maintainers
-Last updated: 2026-09-17
+Last updated: 2026-10-18
 
-Two desktop applications build from this directory over one React renderer. The
-repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
+Two desktop applications build from this directory, and they show different
+renderers. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
 of it are in `AGENTS.md`.
 
 ## The two shells
@@ -72,7 +72,7 @@ session never starts, check the grant store before suspecting the code.
 
 ## Release
 
-`docs/qa` holds the per-release checks and `docs/macos-release-runbook.md` the
+`docs/qa/screenshots` holds QA captures and `docs/macos-release-runbook.md` the
 macOS signing and notarisation procedure. The release workflows themselves are
 `.github/workflows/release-desktop.yml`,
 `.github/workflows/release-desktop-cloud.yml` and

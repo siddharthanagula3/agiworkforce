@@ -242,7 +242,7 @@ this document.
 ### Plan status
 
 - **web**: present. `apps/web/app/billing/page.tsx`, reached by `apps/web/app/billing/layout.tsx` (route).
-- **desktop**: unverified. Settled by: apps/desktop/src/features/subscription is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both.
+- **desktop**: unverified. Settled by: A desktop file that shows the plan status and that the surface's shell imports or routes to would settle this, naming both.
 - **mobile**: present. `apps/mobile/app/(app)/settings/cloud-billing.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/usage_summary.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/integrations/tierResolver.ts`, reached by `apps/extension-vscode/src/extension.ts` (import).
@@ -292,7 +292,7 @@ this document.
 ### Analyze
 
 - **web**: unverified. Settled by: An entry point that names an analyze mode. The checklist names it as a feature; the interaction-mode registry has no analyze member, so either the registry is missing one or the row names a capability that was folded into chat.
-- **desktop**: unverified. Settled by: The same registry answer as web. apps/desktop/src/features/analytics is product analytics, which is a different thing.
+- **desktop**: unverified. Settled by: The same registry answer as web.
 - **mobile**: unverified. Settled by: The same registry answer as web.
 - **cli**: unverified. Settled by: The same registry answer as web.
 - **vscode**: unverified. Settled by: The same registry answer as web.
@@ -382,7 +382,7 @@ this document.
 ### MCP
 
 - **web**: present. `apps/web/lib/mcp-tool-executor.ts`, reached by `apps/web/lib/user-connector-tools.ts` (import).
-- **desktop**: absent. The desktop renderer's MCP service (apps/desktop/src/services/mcp.ts) was unreachable from the shell and was deleted; the public Electron desktop reports localMcp false and uses the hosted connector service.
+- **desktop**: absent. The public Electron desktop reports localMcp false and uses the hosted connector service.
 - **mobile**: absent. The capability table records canUseLocalMcp false for mobile and nothing under apps/mobile dials an MCP server.
 - **cli**: unverified. Settled by: apps/cli/src/mcp/mod.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
 - **vscode**: unverified. Settled by: An editor path that dials an MCP server of its own. apps/extension-vscode/src/integrations/localRuntimeClient.ts reaches the CLI runtime, which owns the MCP connection; whether the editor is a client in its own right is not decidable from the tree.

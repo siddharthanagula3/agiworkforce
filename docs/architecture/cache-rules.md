@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/infrastructure
-Last updated: 2026-09-27
+Last updated: 2026-10-18
 
 Every cache in the hosted product, with the eight facts a reviewer asks about
 each one: what the value's source of truth is, how its key is built, how it is
