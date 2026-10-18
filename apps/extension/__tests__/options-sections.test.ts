@@ -20,6 +20,7 @@ import {
   pickRecordableTab,
   type ShortcutsSectionDependencies,
 } from '../src/features/options/shortcuts-section';
+import { optionsDestinations } from '../src/features/options/destinations';
 import { createInPageAssistantRow } from '../src/features/options/preference-rows';
 import { createDesktopPairingRows } from '../src/features/options/desktop-pairing-rows';
 
@@ -453,17 +454,22 @@ describe('options page navigation', () => {
   const source = readFileSync(resolve(__dirname, '../src/options.ts'), 'utf8');
 
   it('has the five destinations Claude has, Permissions first', () => {
-    const nav = source.slice(source.indexOf('const navItems'), source.indexOf('const navButtons'));
-    const order = [
-      'optNavPermissions',
-      'optNavShortcuts',
-      'optNavOptions',
-      'optNavAccount',
-      'optNavHelp',
-    ];
-    const positions = order.map((key) => nav.indexOf(key));
-    expect(positions.every((position) => position > -1)).toBe(true);
-    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(
+      optionsDestinations().map((destination) => [destination.label, destination.target]),
+    ).toEqual([
+      ['optNavPermissions', 'opt-permissions'],
+      ['optNavShortcuts', 'opt-shortcuts'],
+      ['optNavOptions', 'opt-options'],
+      ['optNavAccount', 'opt-account'],
+      ['optNavHelp', 'opt-help'],
+    ]);
+  });
+
+  it('shows the Options destination with its keyboard and appearance cards', () => {
+    const options = optionsDestinations().find(
+      (destination) => destination.target === 'opt-options',
+    );
+    expect(options?.sections).toEqual(['opt-options', 'opt-keyboard', 'opt-appearance']);
   });
 
   it('no longer hosts notifications inside Permissions', () => {

@@ -223,6 +223,8 @@ import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
+import { WELCOME_PAGE_PATH } from './features/onboarding/paths';
+import { createTaskNotifier, isSidePanelInFocus } from './background/task-notifications';
 import { flushAutomationAuditOutbox } from './features/observability/automationAudit';
 import {
   isCurrentManagedCloudOperation,
@@ -1464,6 +1466,12 @@ async function taskNotificationsEnabled(): Promise<boolean> {
     return true;
   }
 }
+
+export const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({
+  isEnabled: taskNotificationsEnabled,
+  isUserLooking: () => isSidePanelInFocus(),
+  show: showNotification,
+});
 
 async function notifyScheduledTaskRunning(
   taskName: string,
@@ -5668,8 +5676,11 @@ function handleContextMenuClick(
 
 chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   void rebuildContextMenus();
+  if (details.reason === 'install') {
+    void chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE_PATH) });
+  }
 });
 
 function sendNativeMessage(message: Record<string, unknown>): Promise<void> {

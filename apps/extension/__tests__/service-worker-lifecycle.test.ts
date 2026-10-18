@@ -60,7 +60,7 @@ describe('the worker is only woken when there is work', () => {
 
   it('rebuilds the context menus on install, not on every worker start', () => {
     expect(background).toMatch(
-      /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{\s*void rebuildContextMenus\(\);/,
+      /chrome\.runtime\.onInstalled\.addListener\(\(details\) => \{\s*void rebuildContextMenus\(\);/,
     );
     expect(background).toMatch(
       /async function rebuildContextMenus\(\)[\s\S]*?await chrome\.contextMenus\.removeAll\(\)[\s\S]*?chrome\.contextMenus\.create\(item/,

@@ -27,10 +27,6 @@
     "message": "Add Tab to AGI Workforce Group",
     "description": "Context menu that moves the tab into the extension's tab group"
   },
-  "spNext": {
-    "message": "Next",
-    "description": "First-run wizard primary button, used when a step declares no label of its own"
-  },
   "spModelBadgeDefault": {
     "message": "AI Assistant",
     "description": "Model selector badge before a concrete model is resolved"
@@ -540,40 +536,6 @@
   "spSendSendAria": {
     "message": "Send message",
     "description": "Composer send button accessible name at rest"
-  },
-  "spWizardContinueAria": {
-    "message": "Continue",
-    "description": "First-run wizard primary button accessible name when the step declares none"
-  },
-  "spOnboardingUnderstand": {
-    "message": "I understand",
-    "description": "First-run onboarding primary button on the opening step"
-  },
-  "spOnboardingLetsGo": {
-    "message": "Let's go",
-    "description": "First-run onboarding primary button on the penultimate step"
-  },
-  "spOnboardingDone": {
-    "message": "Done",
-    "description": "First-run onboarding primary button on the final step"
-  },
-  "spOnboardingContinueAria": {
-    "message": "Continue, step $STEP$ of $TOTAL$",
-    "description": "First-run onboarding primary button accessible name on a non-final step",
-    "placeholders": {
-      "step": {
-        "content": "$1",
-        "example": "2"
-      },
-      "total": {
-        "content": "$2",
-        "example": "5"
-      }
-    }
-  },
-  "spOnboardingDismissAria": {
-    "message": "Dismiss onboarding",
-    "description": "First-run onboarding primary button accessible name on the final step"
   },
   "spHistoryDelete": {
     "message": "Delete chat",
@@ -3737,70 +3699,6 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
-  "spOnboardingStepLabel": {
-    "message": "Step $STEP$ of $TOTAL$",
-    "description": "Names a first-run setup step and how many there are",
-    "placeholders": {
-      "step": {
-        "content": "$1",
-        "example": "2"
-      },
-      "total": {
-        "content": "$2",
-        "example": "6"
-      }
-    }
-  },
-  "spSetupAccountTitle": {
-    "message": "Your account",
-    "description": "Heading of the first-run setup step that signs in"
-  },
-  "spSetupAccountSignedOut": {
-    "message": "Sign in to use AGI Cloud from the side panel. You can also sign in later from the menu.",
-    "description": "First-run setup text while signed out"
-  },
-  "spSetupAccountSignIn": {
-    "message": "Sign in",
-    "description": "Opens sign-in from the first-run setup"
-  },
-  "spSetupAccountSignedIn": {
-    "message": "Signed in as $NAME$.",
-    "description": "First-run setup text once signed in",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Ada Lovelace"
-      }
-    }
-  },
-  "spSetupNameLabel": {
-    "message": "What should AGI call you?",
-    "description": "Label of the first-run setup name field"
-  },
-  "spSetupModelTitle": {
-    "message": "Choose a default model",
-    "description": "Heading of the first-run setup step that picks the model new chats start with"
-  },
-  "spSetupModelBody": {
-    "message": "New chats start with this model. You can switch any time from the model menu.",
-    "description": "Explains the default model choice"
-  },
-  "spSetupModelSignedOut": {
-    "message": "Sign in to choose a model. Until then, Auto picks one for each message.",
-    "description": "Model step text while signed out"
-  },
-  "spSetupModelAuto": {
-    "message": "Auto",
-    "description": "The automatic model choice"
-  },
-  "spSetupMemoryTitle": {
-    "message": "Memory",
-    "description": "Heading of the first-run setup step about memory"
-  },
-  "spSetupMemoryBody": {
-    "message": "AGI can remember details you share and use them in later chats. You decide whether it does, and you can change it any time under Settings in the menu.",
-    "description": "Explains memory during first-run setup"
-  },
   "spSetupMemoryRemember": {
     "message": "Remember details across chats",
     "description": "Turns saved memory on or off"
@@ -3820,24 +3718,6 @@
   "spSetupMemoryUnavailable": {
     "message": "Your memory settings could not be loaded. You can change them later under Settings.",
     "description": "Loading memory settings failed"
-  },
-  "spSetupSaving": {
-    "message": "Saving…",
-    "description": "The final setup button while choices are saved"
-  },
-  "spSetupSaveFailed": {
-    "message": "Your choices could not be saved: $REASON$",
-    "description": "Saving first-run setup choices failed",
-    "placeholders": {
-      "reason": {
-        "content": "$1",
-        "example": "Network error."
-      }
-    }
-  },
-  "spSetupSaveFailedGeneric": {
-    "message": "try again, or skip and change them later.",
-    "description": "Fallback reason when setup saving fails without a message"
   },
   "spMemoryPreferenceSaved": {
     "message": "Memory setting saved.",
@@ -4941,5 +4821,165 @@
   "optPairingUnpair": {
     "message": "Unpair",
     "description": "Button that disconnects the desktop app. Pairing again restores it."
+  },
+  "welcomeTitle": {
+    "message": "Welcome to AGI",
+    "description": "Heading of the post-install page."
+  },
+  "welcomeLead": {
+    "message": "Your AI workforce now lives in Chrome. A few things to know before you start.",
+    "description": "Intro under the post-install heading."
+  },
+  "welcomePinTitle": {
+    "message": "Pin AGI to your toolbar",
+    "description": "Post-install step heading."
+  },
+  "welcomePinBody": {
+    "message": "Select the puzzle icon in Chrome's toolbar, then the pin next to AGI. One click then opens the side panel on any page.",
+    "description": "Post-install pin instructions."
+  },
+  "welcomeSignInTitle": {
+    "message": "Sign in",
+    "description": "Post-install step heading."
+  },
+  "welcomeSignInBody": {
+    "message": "Sign in to chat with your AGI account and keep your conversations in sync across devices.",
+    "description": "Post-install sign-in text."
+  },
+  "welcomeSignInAction": {
+    "message": "Sign in",
+    "description": "Post-install button that starts sign-in."
+  },
+  "welcomeSignedIn": {
+    "message": "You are signed in.",
+    "description": "Post-install status once signed in."
+  },
+  "welcomeCanTitle": {
+    "message": "What AGI can do",
+    "description": "Post-install section heading."
+  },
+  "welcomeCan1": {
+    "message": "Read the page you are on, only when you ask.",
+    "description": "Post-install capability."
+  },
+  "welcomeCan2": {
+    "message": "Click, type and navigate on sites you approve.",
+    "description": "Post-install capability."
+  },
+  "welcomeCan3": {
+    "message": "Run saved prompts, recorded steps and schedules.",
+    "description": "Post-install capability."
+  },
+  "welcomeCannotTitle": {
+    "message": "What AGI will not do",
+    "description": "Post-install section heading."
+  },
+  "welcomeCannot1": {
+    "message": "Act on a site you have not approved.",
+    "description": "Post-install limit."
+  },
+  "welcomeCannot2": {
+    "message": "Enter passwords or payment details for you.",
+    "description": "Post-install limit."
+  },
+  "welcomeCannot3": {
+    "message": "Keep going when you press Stop.",
+    "description": "Post-install limit."
+  },
+  "welcomeTryTitle": {
+    "message": "Try it",
+    "description": "Post-install step heading."
+  },
+  "welcomeTryBody": {
+    "message": "Open the side panel and ask your first question. On any website you approve, AGI can read the page and act on it.",
+    "description": "Post-install try-it text."
+  },
+  "welcomeTryAction": {
+    "message": "Get started",
+    "description": "Post-install button that confirms the page was read and opens the side panel."
+  },
+  "welcomeTryFailed": {
+    "message": "Chrome did not open the panel. Use the toolbar icon or press the shortcut shown in Options.",
+    "description": "Post-install error when the panel could not be opened."
+  },
+  "welcomeSettings": {
+    "message": "Open settings",
+    "description": "Post-install link to the Options page."
+  },
+  "obPinTitle": {
+    "message": "Pin AGI to keep it in your toolbar",
+    "description": "In-panel pin prompt text."
+  },
+  "obPinHint": {
+    "message": "Select the puzzle icon, then the pin next to AGI.",
+    "description": "In-panel pin prompt instructions."
+  },
+  "obPinDismiss": {
+    "message": "Not now",
+    "description": "Button that dismisses the pin prompt."
+  },
+  "obPinDone": {
+    "message": "Got it",
+    "description": "Button that confirms the pin prompt was followed."
+  },
+  "notifyTaskFinishedTitle": {
+    "message": "Task finished",
+    "description": "Chrome notification title when a browser task finishes."
+  },
+  "notifyTaskFinishedBody": {
+    "message": "AGI finished your task. Select to see the result.",
+    "description": "Chrome notification body when a browser task finishes. Never includes page content."
+  },
+  "notifyTaskFailedTitle": {
+    "message": "Task stopped",
+    "description": "Chrome notification title when a browser task fails."
+  },
+  "notifyTaskFailedBody": {
+    "message": "AGI could not finish your task. Select to see why.",
+    "description": "Chrome notification body when a browser task fails."
+  },
+  "notifyTaskInputTitle": {
+    "message": "AGI needs your input",
+    "description": "Chrome notification title when a task waits for approval."
+  },
+  "notifyTaskInputBody": {
+    "message": "A task is waiting for your approval. Select to review it.",
+    "description": "Chrome notification body when a task waits for approval."
+  },
+  "welcomeSignInOpened": {
+    "message": "Finish signing in in the tab that opened, then come back here.",
+    "description": "Post-install status after sign-in opens."
+  },
+  "welcomeSignInFailed": {
+    "message": "Sign-in could not be opened. Please try again.",
+    "description": "Post-install error when sign-in fails to open."
+  },
+  "welcomePinned": {
+    "message": "AGI is pinned to your toolbar.",
+    "description": "Post-install status when the extension is pinned."
+  },
+  "welcomeDataTitle": {
+    "message": "How AGI handles your data",
+    "description": "Post-install section heading."
+  },
+  "welcomeInjection": {
+    "message": "Websites, emails and documents can hide instructions that try to trick an AI into acting against you. Review what AGI is about to do on sensitive sites.",
+    "description": "Post-install prompt-injection warning."
+  },
+  "welcomeLearnMore": {
+    "message": "Learn more",
+    "description": "Link to the security page."
+  },
+  "welcomeReady": {
+    "message": "The side panel is open. You can close this tab.",
+    "description": "Post-install status after the panel opened."
+  },
+  "obReviewText": {
+    "message": "Review how AGI handles your data and what it can do.",
+    "description": "In-panel prompt on first run or after the data handling text changes."
+  },
+  "obReviewAction": {
+    "message": "Review",
+    "description": "Button that opens the welcome page."
   }
 }
