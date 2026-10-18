@@ -470,81 +470,12 @@ export async function upsertSubscriptionFromSession(
     session.metadata?.['user_id'] || session.metadata?.['userId'] || session.client_reference_id;
 
   if (!resolvedUserId && session.customer) {
-    try {
-      const stripeCustomerId = session.customer as string;
-
-      const profiles = await db.query<{ id: string }>(
-        'select id from profiles where stripe_customer_id = $1 limit 1',
-        [stripeCustomerId],
-      );
-      const profile = profiles[0];
-
-      if (profile?.id) {
-        resolvedUserId = profile.id;
-        logger.info(
-          { sessionId: session.id, customerId: stripeCustomerId, userId: resolvedUserId },
-          'Resolved user_id from stripe_customer_id in profiles table (BEST PRACTICE)',
-        );
-      } else {
-        logger.warn(
-          { sessionId: session.id, customerId: stripeCustomerId },
-          'SECURITY WARNING: stripe_customer_id not found in profiles - attempting email fallback (legacy only)',
-        );
-
-        const customer = await stripe.customers.retrieve(stripeCustomerId);
-        if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-          const matchingProfiles = await db.query<{ id: string; email: string | null }>(
-            'select id, email from profiles where email = $1 limit 1',
-            [customer.email.toLowerCase()],
-          );
-
-          if (matchingProfiles.length > 0) {
-            const matchingUser = matchingProfiles[0];
-
-            if (matchingUser) {
-              const duplicateCheck = await db.query<{ id: string }>(
-                'select id from profiles where email = $1 limit 2',
-                [customer.email],
-              );
-
-              if (duplicateCheck.length > 1) {
-                logger.error(
-                  {
-                    sessionId: session.id,
-                    count: duplicateCheck.length,
-                  },
-                  'SECURITY: Multiple profiles found with same email - cannot safely assign subscription',
-                );
-                throw new Error('Email reuse detected - cannot safely assign subscription');
-              }
-
-              resolvedUserId = matchingUser.id;
-              logger.warn(
-                { sessionId: session.id, userId: resolvedUserId },
-                'FALLBACK: Resolved user_id from email - storing customer_id for future',
-              );
-
-              await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
-                stripeCustomerId,
-                resolvedUserId,
-              ]);
-
-              logger.info(
-                { userId: resolvedUserId, customerId: stripeCustomerId },
-                'Stored stripe_customer_id in profile (migration from email fallback)',
-              );
-            } else {
-              logger.error(
-                { sessionId: session.id, customerId: stripeCustomerId },
-                'No auth user found matching customer email',
-              );
-            }
-          }
-        }
-      }
-    } catch (error) {
-      logger.warn({ error, sessionId: session.id }, 'Failed to resolve user from customer');
-    }
+    const stripeCustomerId = session.customer as string;
+    const [profile] = await db.query<{ id: string }>(
+      'select id from profiles where stripe_customer_id = $1 limit 1',
+      [stripeCustomerId],
+    );
+    resolvedUserId = profile?.id ?? null;
   }
 
   if (!resolvedUserId) {
@@ -1323,50 +1254,10 @@ export async function updateSubscriptionFromStripeSubscription(
           );
           resolvedUserId = profileByCustomer.id;
         } else {
-          try {
-            const customer = await stripe.customers.retrieve(stripeCustomerId);
-            if (typeof customer !== 'string' && !customer.deleted && customer.email) {
-              const customerEmail = customer.email;
-              logger.warn(
-                { stripeCustomerId },
-                'FALLBACK: Attempting to find user by customer email',
-              );
-
-              const emailProfiles = await db.query<{ id: string }>(
-                'select id from profiles where email = $1 limit 1',
-                [customerEmail],
-              );
-              const emailProfile = emailProfiles[0];
-
-              if (emailProfile?.id) {
-                logger.warn(
-                  { userId: emailProfile.id, customerId: stripeCustomerId },
-                  'FALLBACK: Found user by email (will store customer_id for future)',
-                );
-                resolvedUserId = emailProfile.id;
-
-                await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
-                  stripeCustomerId,
-                  emailProfile.id,
-                ]);
-              } else {
-                logger.error(
-                  { stripeCustomerId, stripeSubId },
-                  'CRITICAL: No existing profile found for customer - cannot create subscription',
-                );
-              }
-            } else {
-              logger.error(
-                { stripeCustomerId, stripeSubId },
-                'CRITICAL: Customer has no email address',
-              );
-            }
-          } catch (customerError) {
-            logger.error(
-              { error: customerError, stripeSubId },
-              'CRITICAL: Failed to retrieve customer',
-            );
-          }
+          logger.error(
+            { stripeCustomerId, stripeSubId },
+            'CRITICAL: No profile owns this Stripe customer - subscription left for reconciliation',
+          );
         }
       }
 
@@ -1566,7 +1457,7 @@ export async function updateSubscriptionFromStripeSubscription(
       } else {
         logger.error(
           { stripeSubId, stripeCustomerId },
-          'CRITICAL: Cannot create subscription - no user_id found via metadata, customer_id, or email',
+          'CRITICAL: Cannot create subscription - no user_id found via metadata or customer_id',
         );
         throw new Error(`Cannot create subscription ${stripeSubId}: no user_id found`);
       }
