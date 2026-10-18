@@ -76,6 +76,7 @@ import { DELETE, POST } from './route';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
+  CHROME_RESPONSE_RATING_MESSAGE,
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
   WEB_RESPONSE_RATING_MESSAGE,
@@ -645,6 +646,19 @@ describe('thumbs-down details', () => {
     expect(response.status).toBe(200);
     expect(rows[0]?.message).toBe(WEB_RESPONSE_RATING_MESSAGE);
     expect(JSON.stringify(rows)).not.toContain('Paris is the capital of France.');
+  });
+
+  it('stores its own note for a Chrome rating, never the answer the extension sent', async () => {
+    const rows = feedbackTable();
+
+    const response = await POST(
+      rating({ source: 'chrome', platform: 'chrome' }, { message: 'Paris is the capital.' }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(rows[0]?.message).toBe(CHROME_RESPONSE_RATING_MESSAGE);
+    expect(rows[0]?.metadata['message_source']).toBe('note');
+    expect(JSON.stringify(rows)).not.toContain('Paris is the capital.');
   });
 
   it('marks every web rating it stores with whether the message is its note or the comment', async () => {

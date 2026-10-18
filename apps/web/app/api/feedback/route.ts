@@ -15,6 +15,7 @@ import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
   RESPONSE_RATING_REASONS,
+  CHROME_RESPONSE_RATING_MESSAGE,
   WEB_RESPONSE_RATING_MESSAGE,
 } from './response-rating-contract';
 
@@ -181,13 +182,25 @@ interface FeedbackAttachments {
 
 const NO_ATTACHMENTS: FeedbackAttachments = { logs: null, screenshotKey: null };
 
-function isWebResponseRating(metadata: Feedback['metadata']): boolean {
-  return metadata.feedback_context === 'response_rating' && metadata.source === 'web';
+const ANSWERLESS_RATING_MESSAGES: Partial<
+  Record<NonNullable<Feedback['metadata']['source']>, string>
+> = {
+  web: WEB_RESPONSE_RATING_MESSAGE,
+  chrome: CHROME_RESPONSE_RATING_MESSAGE,
+};
+
+function answerlessRatingMessage(metadata: Feedback['metadata']): string | undefined {
+  if (metadata.feedback_context !== 'response_rating' || !metadata.source) return undefined;
+  return ANSWERLESS_RATING_MESSAGES[metadata.source];
+}
+
+function isAnswerlessResponseRating(metadata: Feedback['metadata']): boolean {
+  return answerlessRatingMessage(metadata) !== undefined;
 }
 
 function storedMessage({ message, metadata }: Feedback): string {
   if (metadata.comment) return metadata.comment;
-  return isWebResponseRating(metadata) ? WEB_RESPONSE_RATING_MESSAGE : message;
+  return answerlessRatingMessage(metadata) ?? message;
 }
 
 function feedbackRow(
@@ -212,7 +225,7 @@ function feedbackRow(
       ...(metadata.run_id ? { run_id: metadata.run_id } : {}),
       ...(metadata.rating ? { rating: metadata.rating } : {}),
       ...(metadata.reason ? { reason: metadata.reason } : {}),
-      ...(isWebResponseRating(metadata)
+      ...(isAnswerlessResponseRating(metadata)
         ? { message_source: metadata.comment ? 'comment' : 'note' }
         : {}),
       ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),

@@ -15,3 +15,6 @@ export const RESPONSE_RATING_MESSAGE_MAX_CHARS = 200;
 
 export const WEB_RESPONSE_RATING_MESSAGE =
   'An answer in web chat. The answer text is not attached.';
+
+export const CHROME_RESPONSE_RATING_MESSAGE =
+  'An answer in the Chrome extension. The answer text is not attached.';

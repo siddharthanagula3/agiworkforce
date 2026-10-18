@@ -33,7 +33,7 @@ import {
 } from '@/lib/services/bonus-credit-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
-import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
 import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 
 export interface AccountUsageCredits extends ManagedUsageCredits {
@@ -61,12 +61,13 @@ export async function getManagedUsageSummary(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<AccountUsageSummary> {
-  const [balance, subscription, spendableCredits, prepaid] = await Promise.all([
+  const [balance, entitlement, spendableCredits, prepaid] = await Promise.all([
     CreditService.getBalance(db, userId),
-    resolveEffectiveSubscription(db, userId),
+    resolveEntitlementBundle(db, userId),
     getSpendableCredits(db, userId),
     readPrepaidCredits(db, userId),
   ]);
+  const subscription = entitlement.subscription;
 
   const planTier = subscription?.plan_tier || 'free';
   const creditsAllocated = balance?.credits_allocated_microusd ?? 0;
@@ -168,6 +169,7 @@ export async function getManagedUsageSummary(
   const wirePlan = wirePlanOf(planTier);
   return {
     plan_tier: wirePlan.tier,
+    effective_plan_tier: wirePlanOf(entitlement.plan).tier,
     ...seatTypeField(wirePlan.seatType),
     usage_percentage: usagePercentage,
     usage_reset_at: usageResetAt,

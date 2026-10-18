@@ -19,11 +19,14 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 vi.mock('@/lib/services/effective-subscription-service', () => ({
-  resolveEffectiveSubscription: async () => ({
-    plan_tier: 'pro',
-    status: 'active',
-    current_period_start: '2026-09-01T00:00:00.000Z',
-    current_period_end: '2026-10-01T00:00:00.000Z',
+  resolveEntitlementBundle: async () => ({
+    plan: 'pro',
+    subscription: {
+      plan_tier: 'pro',
+      status: 'active',
+      current_period_start: '2026-09-01T00:00:00.000Z',
+      current_period_end: '2026-10-01T00:00:00.000Z',
+    },
   }),
 }));
 

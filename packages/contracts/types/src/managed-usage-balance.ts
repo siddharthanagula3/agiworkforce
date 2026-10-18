@@ -65,6 +65,8 @@ export interface ManagedUsageCredits {
 
 export interface ManagedUsageSummaryResponse {
   plan_tier: string;
+  /** The tier the account is entitled to now, as /api/me's plan.effective_tier; absent on older servers. */
+  effective_plan_tier?: string;
   seat_type?: TeamSeatType;
   usage_percentage: number;
   usage_reset_at: string | null;
@@ -220,6 +222,9 @@ export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSu
 
   return {
     plan_tier: readString(record, 'plan_tier'),
+    ...(typeof record['effective_plan_tier'] === 'string'
+      ? { effective_plan_tier: record['effective_plan_tier'] }
+      : {}),
     ...(isTeamSeatType(record['seat_type']) ? { seat_type: record['seat_type'] } : {}),
     usage_percentage: readPercentage(record, 'usage_percentage'),
     usage_reset_at: readNullableTimestamp(record, 'usage_reset_at'),

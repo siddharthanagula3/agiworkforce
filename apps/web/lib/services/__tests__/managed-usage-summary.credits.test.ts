@@ -12,6 +12,7 @@ const INR_BASIC_PRICE_ID = 'price_fixture_basic_monthly_inr';
 const {
   mockGetBalance,
   mockResolveEffectiveSubscription,
+  mockEntitledPlan,
   mockGetSpendableCredits,
   mockGetRollingUsage,
   mockGetFreeTrialPublicUsage,
@@ -19,6 +20,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetBalance: vi.fn(),
   mockResolveEffectiveSubscription: vi.fn(),
+  mockEntitledPlan: vi.fn(),
   mockGetSpendableCredits: vi.fn(),
   mockGetRollingUsage: vi.fn(),
   mockGetFreeTrialPublicUsage: vi.fn(),
@@ -34,7 +36,10 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 vi.mock('@/lib/services/effective-subscription-service', () => ({
-  resolveEffectiveSubscription: mockResolveEffectiveSubscription,
+  resolveEntitlementBundle: async (...args: unknown[]) => {
+    const subscription = await mockResolveEffectiveSubscription(...args);
+    return { subscription, plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free' };
+  },
 }));
 
 vi.mock('@/lib/server/spendable-credits', () => ({
@@ -134,6 +139,22 @@ describe('managed usage summary, stated in credits', () => {
       next_expiry_at: '2026-12-01T00:00:00.000Z',
     });
     expect(summary.usage_allocation).toBe('provisioned');
+    expect(summary.effective_plan_tier).toBe('pro');
+  });
+
+  it('states the entitled tier beside the subscription row tier when the row has lapsed', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue({
+      ...subscription('pro'),
+      status: 'past_due',
+    });
+    mockEntitledPlan.mockReturnValueOnce('free');
+    mockGetBalance.mockResolvedValue(null);
+    mockGetFreeTrialPublicUsage.mockResolvedValue(null);
+
+    const summary = await getManagedUsageSummary(db, 'user-1');
+
+    expect(summary.plan_tier).toBe('pro');
+    expect(summary.effective_plan_tier).toBe('free');
   });
 
   it('states an India web Basic subscriber in the budget their rupee price pays for', async () => {
