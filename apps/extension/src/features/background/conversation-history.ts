@@ -29,7 +29,7 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
-import { isChromeVideoTaskId } from '../cloud-bridge/videoGenerationClient';
+import { isChromeVideoTaskId } from '../cloud-bridge/videoTaskId';
 import {
   CODE_EXECUTION_OUTPUT_MAX_CHARS,
   type ManagedCodeExecution,

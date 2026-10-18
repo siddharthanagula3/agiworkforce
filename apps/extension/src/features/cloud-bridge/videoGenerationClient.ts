@@ -1,13 +1,15 @@
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { isChromeVideoTaskId } from './videoTaskId';
+
+export { isChromeVideoTaskId };
 
 export const VIDEO_GENERATE_PATH = '/api/media/video/generate';
 export const VIDEO_STATUS_PATH = '/api/media/video/status';
 export const VIDEO_POLL_INTERVAL_MS = 5_000;
 export const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
-const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 const UPGRADE_CODES: ReadonlySet<string> = new Set([
   'plan_upgrade_required',
   'subscription_required',
@@ -45,10 +47,6 @@ const DEFAULT_DEPENDENCIES: ChromeVideoDependencies = {
   fetchImpl: (input, init) => fetch(input, init),
   operationId: () => crypto.randomUUID(),
 };
-
-export function isChromeVideoTaskId(value: unknown): value is string {
-  return typeof value === 'string' && TASK_ID_PATTERN.test(value);
-}
 
 function readTask(value: unknown): ChromeVideoTask {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
