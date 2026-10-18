@@ -211,6 +211,8 @@ export async function requireCsrfToken(
   sessionId?: string,
 ): Promise<Response | null> {
   if (!(await validateCsrfFromRequest(request, sessionId))) {
+    const { logCsrfFailure } = await import('@/lib/security-audit');
+    await logCsrfFailure(request);
     return new Response(
       JSON.stringify({
         error: 'Invalid or missing CSRF token',
