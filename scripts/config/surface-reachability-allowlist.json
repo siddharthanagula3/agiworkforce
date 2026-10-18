@@ -39,8 +39,7 @@
           "apps/mobile/src/features/notifications/index.ts",
           "apps/mobile/src/features/onboarding/index.ts",
           "apps/mobile/src/integrations/index.ts",
-          "apps/mobile/src/shared/components/index.ts",
-          "apps/mobile/src/storage/index.ts"
+          "apps/mobile/src/shared/components/index.ts"
         ]
       }
     },
