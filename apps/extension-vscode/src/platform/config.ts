@@ -1,19 +1,9 @@
 /**
- * config.ts, Typed accessors for `agiWorkforce.*` settings (A3).
- *
- * Replaces the 31 raw `vscode.workspace.getConfiguration('agiWorkforce').get<T>(...)`
- * callsites scattered across the codebase. Benefits:
- *   1. Defaults centralised, no more `?? 300` drifting from `package.json` default
- *   2. Type safety, accessors return the correct type, no `<unknown>`
- *   3. Workspace-trust gating, sensitive endpoint accessors honor `isTrusted`
- *      via `getGlobalConfig` (security fix VSCODE-01)
- *   4. Discoverability, every setting key the extension actually reads is in
- *      ONE file; new settings get a typed entry here
- *
- * Trust-restricted runtime accessors also live in `utils/api.ts`
- * (`getCloudApiEndpoint`). The settings panel uses the
- * user-scoped accessors here so an untrusted workspace can never supply or
- * receive a sensitive endpoint value through the webview.
+ * Sensitive settings are read from user scope only, and `cliPath` honours a
+ * workspace value only in a trusted workspace, so an untrusted workspace can
+ * never supply an endpoint or executable, nor receive one through the settings
+ * webview. The runtime's trust-restricted endpoint is `getCloudApiEndpoint` in
+ * `utils/api.ts`.
  */
 
 import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';

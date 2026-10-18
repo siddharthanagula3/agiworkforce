@@ -656,9 +656,9 @@ export function registerChatParticipant(
       _token: vscode.CancellationToken,
     ): vscode.ChatFollowup[] {
       return [
-        { prompt: '/explain', label: 'Explain the selected code', command: 'explain' },
-        { prompt: '/fix', label: 'Fix issues in the selection', command: 'fix' },
-        { prompt: '/tests', label: 'Generate tests', command: 'tests' },
+        { prompt: 'Explain the selected code', command: 'explain' },
+        { prompt: 'Fix issues in the selection', command: 'fix' },
+        { prompt: 'Generate tests', command: 'tests' },
       ];
     },
   };

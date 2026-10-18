@@ -16,6 +16,7 @@ import {
 } from '../../utils/accountPreferences';
 
 const PERSONALIZATION_NAMESPACE = 'personalization';
+const IDENTITY_NAMESPACE = 'general';
 const TRAIT_LOW = 0;
 const TRAIT_HIGH = 100;
 
@@ -25,8 +26,13 @@ interface ChoiceItem extends vscode.QuickPickItem {
   value: unknown;
 }
 
+interface PreferenceEdit {
+  namespace: string;
+  patch: Namespace;
+}
+
 interface SettingItem extends vscode.QuickPickItem {
-  edit?: () => Promise<Namespace | undefined>;
+  edit?: () => Promise<PreferenceEdit | undefined>;
 }
 
 const STYLE_LABELS: Record<(typeof RESPONSE_STYLES)[number], string> = {
@@ -91,30 +97,46 @@ function traitSetting(trait: (typeof TRAITS)[number], value: number | undefined)
   return value <= 50 ? trait.less : trait.more;
 }
 
-function buildItems(namespace: Namespace, preference: ResponseStylePreference): SettingItem[] {
-  const text = (key: string) =>
-    typeof namespace[key] === 'string' ? (namespace[key] as string) : '';
-  const editText = (key: string, prompt: string, maxLength: number) => async () => {
-    const value = await vscode.window.showInputBox({
-      prompt,
-      value: text(key),
-      ignoreFocusOut: true,
-      validateInput: (input) =>
-        input.trim().length > maxLength ? `Keep it under ${maxLength} characters.` : null,
-    });
-    return value === undefined ? undefined : { [key]: value.trim() };
-  };
+function stringField(source: Namespace, key: string): string {
+  const value = source[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function personalizationEdit(patch: Namespace): PreferenceEdit {
+  return { namespace: PERSONALIZATION_NAMESPACE, patch };
+}
+
+function buildItems(
+  identity: Namespace,
+  namespace: Namespace,
+  preference: ResponseStylePreference,
+): SettingItem[] {
+  const identityText = (key: string, legacyKey: string) =>
+    stringField(identity, key) || stringField(namespace, legacyKey);
+  const editIdentity =
+    (key: string, legacyKey: string, prompt: string, maxLength: number) => async () => {
+      const value = await vscode.window.showInputBox({
+        prompt,
+        value: identityText(key, legacyKey),
+        ignoreFocusOut: true,
+        validateInput: (input) =>
+          input.trim().length > maxLength ? `Keep it under ${maxLength} characters.` : null,
+      });
+      return value === undefined
+        ? undefined
+        : { namespace: IDENTITY_NAMESPACE, patch: { [key]: value.trim() } };
+    };
   return [
     { label: 'About you', kind: vscode.QuickPickItemKind.Separator },
     {
       label: '$(person) What should AGI call you?',
-      description: text('preferredName') || 'Not set',
-      edit: editText('preferredName', 'What should AGI call you?', 60),
+      description: identityText('preferredName', 'nickname') || 'Not set',
+      edit: editIdentity('preferredName', 'nickname', 'What should AGI call you?', 60),
     },
     {
       label: '$(briefcase) What do you do?',
-      description: text('workDescription') || 'Not set',
-      edit: editText('workDescription', 'Your role or what you work on', 120),
+      description: identityText('workDescription', 'occupation') || 'Not set',
+      edit: editIdentity('workDescription', 'occupation', 'Your role or what you work on', 120),
     },
     { label: 'Responses', kind: vscode.QuickPickItemKind.Separator },
     {
@@ -128,7 +150,7 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           STYLE_LABELS,
           (value) => (value === 'default' ? undefined : RESPONSE_STYLE_GUIDANCE[value]),
         );
-        return style === undefined ? undefined : { style };
+        return style === undefined ? undefined : personalizationEdit({ style });
       },
     },
     {
@@ -141,7 +163,7 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           TECHNICAL_LEVELS,
           LEVEL_LABELS,
         );
-        return technicalLevel === undefined ? undefined : { technicalLevel };
+        return technicalLevel === undefined ? undefined : personalizationEdit({ technicalLevel });
       },
     },
     {
@@ -154,7 +176,9 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           PREFERRED_FORMATTINGS,
           FORMATTING_LABELS,
         );
-        return preferredFormatting === undefined ? undefined : { preferredFormatting };
+        return preferredFormatting === undefined
+          ? undefined
+          : personalizationEdit({ preferredFormatting });
       },
     },
     {
@@ -167,7 +191,7 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           PREFERRED_LENGTHS,
           LENGTH_LABELS,
         );
-        return preferredLength === undefined ? undefined : { preferredLength };
+        return preferredLength === undefined ? undefined : personalizationEdit({ preferredLength });
       },
     },
     {
@@ -187,7 +211,9 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           ignoreFocusOut: true,
         });
         if (value === undefined) return undefined;
-        return { responseLanguage: value.trim() === '' ? RESPONSE_LANGUAGE_AUTO : value.trim() };
+        return personalizationEdit({
+          responseLanguage: value.trim() === '' ? RESPONSE_LANGUAGE_AUTO : value.trim(),
+        });
       },
     },
     { label: 'Tone', kind: vscode.QuickPickItemKind.Separator },
@@ -203,7 +229,9 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
           ],
           { title: trait.label },
         );
-        return picked === undefined ? undefined : { [trait.key]: picked.value };
+        return picked === undefined
+          ? undefined
+          : personalizationEdit({ [trait.key]: picked.value });
       },
     })),
   ];
@@ -211,16 +239,20 @@ function buildItems(namespace: Namespace, preference: ResponseStylePreference): 
 
 export async function managePersonalization(secrets: vscode.SecretStorage): Promise<void> {
   for (;;) {
+    let identity: Namespace | undefined;
     let namespace: Namespace | undefined;
     try {
-      namespace = await readAccountPreferences(secrets, PERSONALIZATION_NAMESPACE);
+      [identity, namespace] = await Promise.all([
+        readAccountPreferences(secrets, IDENTITY_NAMESPACE),
+        readAccountPreferences(secrets, PERSONALIZATION_NAMESPACE),
+      ]);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `AGI Workforce: personalization could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
       );
       return;
     }
-    if (namespace === undefined) {
+    if (identity === undefined || namespace === undefined) {
       const choice = await vscode.window.showWarningMessage(
         'AGI Workforce: sign in to AGI Cloud to change how AGI answers you.',
         'Sign in',
@@ -229,17 +261,17 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
       return;
     }
     const picked = await vscode.window.showQuickPick(
-      buildItems(namespace, normalizeResponseStylePreference(namespace)),
+      buildItems(identity, namespace, normalizeResponseStylePreference(namespace)),
       {
         title: 'AGI Workforce, Personalization',
         placeHolder: 'Applies to AGI Cloud answers on every device',
       },
     );
     if (picked?.edit === undefined) return;
-    const patch = await picked.edit();
-    if (patch === undefined) continue;
+    const edit = await picked.edit();
+    if (edit === undefined) continue;
     try {
-      await patchAccountPreferences(secrets, PERSONALIZATION_NAMESPACE, patch);
+      await patchAccountPreferences(secrets, edit.namespace, edit.patch);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `AGI Workforce: that change was not saved, ${error instanceof Error ? error.message : String(error)}.`,

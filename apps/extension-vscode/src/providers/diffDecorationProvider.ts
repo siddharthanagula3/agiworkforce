@@ -518,6 +518,9 @@ export class DiffDecorationProvider implements vscode.Disposable {
       (session) => session.uri.toString() !== uriStr,
     );
     this.codeLensProvider.refresh(this._activeDiffs);
+    if (this._activeDiffs.size === 0) {
+      void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', false);
+    }
   }
 
   private _applyDecorationsToEditor(editor: vscode.TextEditor): void {
