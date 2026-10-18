@@ -812,21 +812,6 @@ impl AgentSession {
         }
     }
 
-    /// Initialize the subagent manager for parallel task execution.
-    #[allow(dead_code)]
-    pub fn init_subagent_manager(&mut self, config: &CliConfig, sys_context: &SystemContext) {
-        self.subagent_manager = Some(subagent::SubagentManager::new(
-            config.clone(),
-            self.model.clone(),
-            sys_context.clone(),
-            self.skips_approval(),
-            self.governed_permission_mode(),
-            self.allowed_tools.clone(),
-            self.disallowed_tools.clone(),
-            self.subagent_depth,
-        ));
-    }
-
     pub fn approve_plan(&mut self) -> Result<(), &'static str> {
         if !matches!(
             self.permission_mode,
@@ -1035,27 +1020,6 @@ impl AgentSession {
             return;
         }
         self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());
-    }
-
-    /// Generate an A2A AgentCard representing this session's capabilities.
-    #[allow(dead_code)]
-    pub fn a2a_card(&self) -> crate::a2a::AgentCard {
-        let tool_names: Vec<String> = self
-            .effective_tool_definitions()
-            .iter()
-            .map(|t| t.name.clone())
-            .collect();
-
-        crate::a2a::AgentCard {
-            agent_id: crate::a2a::generate_agent_id(),
-            name: format!("agiworkforce-{}", std::process::id()),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            capabilities: tool_names,
-            supported_models: vec![self.model.clone()],
-            endpoint: "http://127.0.0.1:7892".to_string(),
-            auth_required: false,
-            metadata: std::collections::HashMap::new(),
-        }
     }
 
     /// Switch the model mid-session (keeps conversation history).

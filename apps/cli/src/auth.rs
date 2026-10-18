@@ -737,20 +737,11 @@ fn auth_status_from_store(
 /// Public per OAuth spec (not a secret). Registered at github.com/settings/applications.
 const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
-// HOST FOOTGUN NOTE: There are three different hosts in the AGI Workforce surface:
-//   - https://api.agiworkforce.com, device code login endpoints (oauth.rs device_code_login),
-//                                      used by this const
-//   - https://agiworkforce.com, /api/me tier lookup (tier_cache::DEFAULT_API_BASE),
-//                                      used by resolve_user_tier()
-//   - the configured managed inference host, selected by models/provider_dispatch.rs only
-//     after an explicit Managed privacy handoff; there is no separate cloud-task command
-//
-// These MUST NOT be conflated. The unauthenticated device-grant endpoints now
-// live on the web origin (apps/web: POST /api/auth/device/code + /token), so the
-// base targets `agiworkforce.com/api`. The base MUST include `/api` because
-// `device_code_login` appends `/auth/device/code` (→ `/api/auth/device/code`).
-// Override with AGI_AUTH_BASE (e.g. `http://localhost:3000/api`) to test against
-// a local `next dev` web server.
+// The device-grant endpoints live on the web origin (apps/web: POST
+// /api/auth/device/code, /token, /refresh), so this base MUST include `/api`:
+// `device_code_login` appends `/auth/device/code`. The /api/me tier lookup
+// uses the bare origin (tier_cache::DEFAULT_API_BASE). AGI_AUTH_BASE overrides
+// this base for a trusted host (see app_server::account::device_auth_base).
 const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
 
 /// Device-grant endpoint base, so every surface that starts a login targets
@@ -959,57 +950,10 @@ pub async fn resolve_auth(
                 Some("https://api.githubcopilot.com/chat/completions".to_string()),
             )))
         }
-        // INTENTIONAL SEAM, managed AGI Workforce cloud auth is NOT wired here.
-        // A future "agiworkforce" / "managed_cloud" arm is BLOCKED on:
-        //   (a) a proven headless token-grant endpoint (device code or browser-link/poll),
-        //   (b) managed-cloud beta exit with ledger, abuse, refund, and retention controls,
-        //   (c) explicit user consent + visible provider label at every inference call.
-        // When that arm is added it MUST preserve the Local/BYOK trust boundary:
-        // Local and BYOK sessions must never be silently routed through managed cloud.
-        // See the HOST FOOTGUN NOTE near AGIWORKFORCE_API_BASE for the three-host context.
+        // The managed credential is resolved by provider_dispatch::resolve_key,
+        // never here, so a Local or BYOK route cannot pick it up.
         _ => Ok(None),
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Interactive Login
-// ──────────────────────────────────────────────────────────────────────────────
-
-pub async fn interactive_login() -> Result<()> {
-    let choices = &["GitHub Copilot (free with Copilot subscription)", "Cancel"];
-
-    let selection = dialoguer::Select::new()
-        .with_prompt("Choose a subscription to authenticate")
-        .items(choices)
-        .default(0)
-        .interact()
-        .context("Failed to display login menu")?;
-
-    let (key, entry) = match selection {
-        0 => {
-            println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
-            let entry = login_copilot().await?;
-            ("copilot".to_string(), entry)
-        }
-        _ => {
-            println!("Cancelled.");
-            return Ok(());
-        }
-    };
-
-    let mut store = AuthStore::load()?;
-    store.entries.insert(key.clone(), entry);
-    store.save()?;
-    record_credential_use(&key, "signed in and saved a credential");
-
-    println!(
-        "\n  {} {} authentication saved to {}",
-        ts::success_header("Done!"),
-        key,
-        auth_path()?.display()
-    );
-
-    Ok(())
 }
 
 fn save_auth_entry(key: &str, entry: AuthEntry) -> Result<()> {

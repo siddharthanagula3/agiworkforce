@@ -43,13 +43,6 @@ pub(super) fn print_tool_status(tool_name: &str, display: &str) {
     );
 }
 
-#[allow(dead_code)]
-pub(super) fn print_tool_status_unless_quiet(tool_name: &str, display: &str, quiet: bool) {
-    if !quiet {
-        print_tool_status(tool_name, display);
-    }
-}
-
 pub(super) fn describe_command(command: &str) -> String {
     redact_tool_output(&describe_command_shape(command))
 }

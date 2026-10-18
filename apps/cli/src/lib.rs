@@ -74,7 +74,6 @@ pub mod sensitive_files;
 pub mod sessions;
 pub mod skills;
 pub mod subagent;
-pub mod subagent_v2;
 pub mod teams;
 // tools lives at features::exec::tools; re-exported here so all 42 call-sites
 // using `crate::tools::*` continue to resolve unchanged.

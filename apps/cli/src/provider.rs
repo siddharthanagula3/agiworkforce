@@ -12,7 +12,6 @@
 // helper still trips the dead-code lint instead of rotting unnoticed.
 
 use crate::model_catalog;
-use serde_json::Value;
 
 /// Static model catalog entry.
 #[derive(Debug, Clone)]
@@ -437,26 +436,6 @@ impl MessageNormalizer {
     #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
     pub fn mistral_tool_id(index: usize) -> String {
         format!("call{:05}", index)
-    }
-
-    /// Filter empty messages (some providers reject them).
-    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
-    pub fn filter_empty_messages(messages: &[Value]) -> Vec<Value> {
-        messages
-            .iter()
-            .filter(|m| {
-                if let Some(content) = m.get("content") {
-                    if let Some(s) = content.as_str() {
-                        return !s.is_empty();
-                    }
-                    if let Some(arr) = content.as_array() {
-                        return !arr.is_empty();
-                    }
-                }
-                true
-            })
-            .cloned()
-            .collect()
     }
 }
 

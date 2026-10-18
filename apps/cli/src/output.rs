@@ -641,71 +641,6 @@ pub fn print_session_cost(
 // Status display
 // ---------------------------------------------------------------------------
 
-/// Print a summary of a tool execution (name, duration, pass/fail).
-#[allow(dead_code)]
-pub fn print_tool_execution_summary(tool_name: &str, duration_ms: u64, success: bool) {
-    let status = if success {
-        ts::success_header("OK")
-    } else {
-        ts::danger_header("FAIL")
-    };
-    let duration = ts::muted(format!("{}ms", duration_ms));
-    eprintln!(
-        "  {} {} {} {}",
-        ts::muted("tool:"),
-        ts::accent(sanitize_terminal_text(tool_name)),
-        duration,
-        status
-    );
-}
-
-/// Print a context-window usage warning.
-/// `usage_pct` is 0.0..=100.0 (percentage of the window consumed).
-#[allow(dead_code)]
-pub fn print_context_warning(usage_pct: f64, used_tokens: usize, limit: usize) {
-    let pct_display = format!("{:.1}%", usage_pct);
-    let detail = format!("{}/{} tokens", used_tokens, limit);
-
-    if usage_pct >= 90.0 {
-        eprintln!(
-            "{} Context window {} ({}), consider compacting",
-            ts::danger_header("warn:"),
-            ts::danger_header(pct_display),
-            ts::muted(detail)
-        );
-    } else if usage_pct >= 75.0 {
-        eprintln!(
-            "{} Context window {} ({})",
-            ts::warn_label(),
-            ts::warning_header(pct_display),
-            ts::muted(detail)
-        );
-    } else {
-        eprintln!(
-            "{} Context window {} ({})",
-            ts::info_label(),
-            pct_display,
-            ts::muted(detail)
-        );
-    }
-}
-
-/// Print MCP server connection status.
-#[allow(dead_code)]
-pub fn print_mcp_status(server_name: &str, tool_count: usize) {
-    let tools_display = if tool_count == 1 {
-        "1 tool".to_string()
-    } else {
-        format!("{} tools", tool_count)
-    };
-    eprintln!(
-        "  {} {} ({})",
-        ts::muted("mcp:"),
-        ts::accent(sanitize_terminal_text(server_name)),
-        ts::muted(tools_display)
-    );
-}
-
 /// Pluralise a message count for a listing row, so a single-message session
 /// never reads "1 msgs".
 pub fn format_message_count(count: i64) -> String {
@@ -714,32 +649,6 @@ pub fn format_message_count(count: i64) -> String {
     } else {
         format!("{count} msgs")
     }
-}
-
-/// Print a session-loaded confirmation line.
-#[allow(dead_code)]
-pub fn print_session_loaded(id: &str, msg_count: usize, model: &str) {
-    let msgs = if msg_count == 1 {
-        "1 message".to_string()
-    } else {
-        format!("{} messages", msg_count)
-    };
-    eprintln!(
-        "{} Resumed session {}, {} ({})",
-        ts::info_label(),
-        ts::muted(sanitize_terminal_text(id)),
-        msgs,
-        ts::muted(sanitize_terminal_text(model))
-    );
-}
-
-/// Print a horizontal divider.
-#[allow(dead_code)]
-pub fn print_divider() {
-    if plain_output() {
-        return;
-    }
-    eprintln!("{}", ts::muted("─".repeat(50)));
 }
 
 // ---------------------------------------------------------------------------

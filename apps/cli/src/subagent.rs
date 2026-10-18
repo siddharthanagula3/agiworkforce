@@ -722,27 +722,6 @@ impl SubagentManager {
         }
         let _ = self.wait_all().await;
     }
-
-    /// Format a human-readable summary of all subagents.
-    #[allow(dead_code)]
-    pub async fn format_summary(&self) -> String {
-        let items = self.list().await;
-        if items.is_empty() {
-            return "No subagents have been spawned.".to_string();
-        }
-
-        let mut out = format!("Subagents ({}):\n", items.len());
-        for (id, description, status) in &items {
-            let status_str = match status {
-                SubagentStatus::Running => ts::warning("running").to_string(),
-                SubagentStatus::Completed => ts::success("completed").to_string(),
-                SubagentStatus::Failed(msg) => format!("{}: {}", ts::danger("failed"), msg),
-                SubagentStatus::Cancelled => "cancelled".dimmed().to_string(),
-            };
-            out.push_str(&format!("  {}, {} [{}]\n", id, description, status_str));
-        }
-        out
-    }
 }
 
 // ---------------------------------------------------------------------------

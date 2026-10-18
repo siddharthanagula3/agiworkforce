@@ -4,11 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, RwLock};
-
-use crate::terminal_style as ts;
 
 pub const LEAD: &str = "lead";
 pub const USER: &str = "user";
@@ -448,64 +445,6 @@ impl TeamManager {
                 },
             )
             .await;
-        }
-    }
-
-    /// Print a formatted summary of the team state to stderr.
-    /// Will be wired into the /team REPL command for team status display.
-    #[allow(dead_code)]
-    pub async fn print_team_status(&self) {
-        let teammates = self.list_teammates().await;
-        let tasks = self.get_tasks().await;
-
-        eprintln!("{}", ts::accent_header("Team Status"));
-        eprintln!("{}", ts::muted("───────────"));
-
-        if teammates.is_empty() {
-            eprintln!("  No teammates registered.");
-        } else {
-            eprintln!("  {}", "Teammates:".bold());
-            for tm in &teammates {
-                let status_color = match tm.status {
-                    TeammateStatus::Active => ts::success(tm.status.to_string()),
-                    TeammateStatus::Idle => ts::warning(tm.status.to_string()),
-                    TeammateStatus::Completed => tm.status.to_string().dimmed(),
-                };
-                eprintln!(
-                    "    {}, {} [{}]",
-                    tm.name.bold(),
-                    tm.role.dimmed(),
-                    status_color
-                );
-            }
-        }
-
-        if tasks.is_empty() {
-            eprintln!("  No shared tasks.");
-        } else {
-            eprintln!("  {}", "Tasks:".bold());
-            for task in &tasks {
-                let status_color = match task.status {
-                    TaskStatus::Pending => ts::warning(task.status.to_string()),
-                    TaskStatus::InProgress => ts::accent(task.status.to_string()),
-                    TaskStatus::Completed => ts::success(task.status.to_string()),
-                    TaskStatus::Blocked => ts::danger(task.status.to_string()),
-                };
-                let assignee = task.assignee.as_deref().unwrap_or("unassigned");
-                let deps = if task.dependencies.is_empty() {
-                    String::new()
-                } else {
-                    format!(" (deps: {})", task.dependencies.join(", "))
-                };
-                eprintln!(
-                    "    [{}] {}, {} → {}{}",
-                    task.id.dimmed(),
-                    task.title,
-                    assignee.dimmed(),
-                    status_color,
-                    deps.dimmed()
-                );
-            }
         }
     }
 }

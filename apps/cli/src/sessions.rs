@@ -712,26 +712,6 @@ fn github_pr_search_keys(input: &str) -> HashSet<String> {
         .collect()
 }
 
-/// Largest char boundary `<= index` (clamped to `s.len()`).
-#[allow(dead_code)]
-fn floor_char_boundary(s: &str, index: usize) -> usize {
-    let mut idx = index.min(s.len());
-    while idx > 0 && !s.is_char_boundary(idx) {
-        idx -= 1;
-    }
-    idx
-}
-
-/// Smallest char boundary `>= index` (clamped to `s.len()`).
-#[allow(dead_code)]
-fn ceil_char_boundary(s: &str, index: usize) -> usize {
-    let mut idx = index.min(s.len());
-    while idx < s.len() && !s.is_char_boundary(idx) {
-        idx += 1;
-    }
-    idx
-}
-
 /// Full-text search across managed session titles and message content.
 pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSummary>> {
     let needle = normalize_for_search(query);
