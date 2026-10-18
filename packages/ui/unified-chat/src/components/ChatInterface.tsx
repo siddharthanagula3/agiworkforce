@@ -728,17 +728,9 @@ export function ChatInterface({
 
   const handleSaveArtifactEdit = useCallback(
     async (artifactId: string, content: string) => {
+      if (!runtime?.updateArtifact) return;
       const realId = artifactId.split('::v')[0] ?? artifactId;
-      let savedContent = content;
-
-      if (runtime?.updateArtifact) {
-        try {
-          const result = await runtime.updateArtifact(artifactId, content);
-          savedContent = result.content;
-        } catch (err) {
-          console.error('[ChatInterface] Failed to persist artifact edit:', err);
-        }
-      }
+      const { content: savedContent } = await runtime.updateArtifact(artifactId, content);
 
       if (activeConversationId) {
         const store = useChatStore.getState();
@@ -760,7 +752,7 @@ export function ChatInterface({
             const versions = await runtime.getArtifactVersions(updated);
             setActiveArtifactVersions(versions.length > 0 ? versions : [updated]);
           } catch {
-            // noop
+            setActiveArtifactVersions([updated]);
           }
         }
       }
@@ -1083,7 +1075,7 @@ export function ChatInterface({
                 onRestoreVersion={
                   runtime?.restoreArtifactVersion ? handleRestoreArtifactVersion : undefined
                 }
-                onSaveEdit={handleSaveArtifactEdit}
+                onSaveEdit={runtime?.updateArtifact ? handleSaveArtifactEdit : undefined}
                 hostActions={artifactActions}
               />
             </div>

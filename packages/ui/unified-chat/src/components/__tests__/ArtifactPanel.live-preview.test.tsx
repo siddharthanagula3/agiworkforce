@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ArtifactPanel } from '../ArtifactPanel';
 import { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from '../../lib/artifact-sandbox';
 import type { Artifact } from '../../lib/types';
@@ -186,6 +186,32 @@ describe('ArtifactPanel edit-in-place', () => {
 
     expect(captured.id).toBe('art-1');
     expect(captured.content).toBe('const x = 2;');
+  });
+
+  it('keeps the draft open and says so when the save fails', async () => {
+    const artifact = makeArtifact({ id: 'art-1', type: 'code', content: 'const x = 1;' });
+    render(
+      <ArtifactPanel
+        artifact={artifact}
+        viewMode="code"
+        onViewModeChange={() => {}}
+        onClose={() => {}}
+        onSaveEdit={async () => {
+          throw new Error('write refused');
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Edit artifact'));
+    fireEvent.change(screen.getByLabelText('Edit artifact content'), {
+      target: { value: 'const x = 2;' },
+    });
+    fireEvent.click(screen.getByLabelText('Save edit'));
+
+    await waitFor(() => expect(screen.getByLabelText('Dismiss save error')).toBeDefined());
+    expect((screen.getByLabelText('Edit artifact content') as HTMLTextAreaElement).value).toBe(
+      'const x = 2;',
+    );
   });
 
   it('discards the draft when Discard is clicked', () => {

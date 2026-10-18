@@ -376,6 +376,7 @@ export function ArtifactPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [saveEditError, setSaveEditError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<ArtifactPublishResult | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -409,6 +410,7 @@ export function ArtifactPanel({
   useEffect(() => {
     setHistoryOpen(false);
     setRestoreError(null);
+    setSaveEditError(null);
   }, [artifactRealId]);
 
   useEffect(() => {
@@ -488,15 +490,21 @@ export function ArtifactPanel({
   function discardEdit() {
     setIsEditing(false);
     setEditDraft('');
+    setSaveEditError(null);
   }
 
   async function saveEdit() {
     if (!artifact || !onSaveEdit) return;
     setIsSavingEdit(true);
+    setSaveEditError(null);
     try {
       await onSaveEdit(artifact.id, editDraft);
       setIsEditing(false);
       setEditDraft('');
+    } catch (err) {
+      setSaveEditError(
+        toUserMessage(err, 'Could not save your edit. Your changes are still here; try again.'),
+      );
     } finally {
       setIsSavingEdit(false);
     }
@@ -1001,7 +1009,12 @@ export function ArtifactPanel({
       </div>
 
       {/* Publish / clipboard notification bar, shown after an action resolves */}
-      {(isPublishing || publishResult || publishError || copyError || restoreError) && (
+      {(isPublishing ||
+        publishResult ||
+        publishError ||
+        copyError ||
+        restoreError ||
+        saveEditError) && (
         <div
           className={cn(
             'shrink-0 border-t border-[var(--chat-border)] px-3 py-2',
@@ -1073,9 +1086,26 @@ export function ArtifactPanel({
             </>
           )}
 
+          {!isPublishing && !publishError && saveEditError && (
+            <>
+              <span className="text-[var(--chat-destructive-text)]" role="status">
+                {saveEditError}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss save error"
+                onClick={() => setSaveEditError(null)}
+                className="ms-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+              >
+                <X size={11} />
+              </Button>
+            </>
+          )}
+
           {/* AUDIT-FIX ART-24: clipboard failures were swallowed by three empty
               catch blocks; the user pressed Copy and nothing at all happened. */}
-          {!isPublishing && !publishError && restoreError && (
+          {!isPublishing && !publishError && !saveEditError && restoreError && (
             <>
               <span className="text-[var(--chat-destructive-text)]" role="status">
                 {restoreError}
@@ -1092,7 +1122,7 @@ export function ArtifactPanel({
             </>
           )}
 
-          {!isPublishing && !publishError && !restoreError && copyError && (
+          {!isPublishing && !publishError && !saveEditError && !restoreError && copyError && (
             <>
               <span className="text-[var(--chat-destructive-text)]" role="status">
                 {copyError}

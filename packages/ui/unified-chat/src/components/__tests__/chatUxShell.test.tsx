@@ -415,7 +415,7 @@ describe('ChatInterface artifact panel wiring', () => {
     }
   });
 
-  it('opens with the real artifact content and a working Edit affordance once wired', () => {
+  it('opens with the real artifact content and offers no Edit when the runtime cannot save one', () => {
     const artifact = {
       id: 'artifact-1',
       type: 'markdown' as const,
@@ -446,7 +446,7 @@ describe('ChatInterface artifact panel wiring', () => {
       expect(html).not.toContain('No artifact selected');
       expect(html).toContain('# Hello Artifact');
 
-      expect(html).toContain('Edit artifact');
+      expect(html).not.toContain('Edit artifact');
     } finally {
       unmount();
     }
