@@ -6,16 +6,11 @@ import {
   appendTerminalOutput,
   buildCodeReviewPrompt,
   CODE_REVIEW_DIAGNOSTIC_SOURCE,
-  describePatchRefusal,
   describeTerminalOutsideWorkspace,
   emptyTerminalCapture,
   formatTerminalCapture,
-  matchAggressively,
-  matchPatchBlock,
-  matchPatchBlockAggressive,
   parseCodeReview,
   parseSuggestedCommands,
-  parsePatchBlocks,
   positionAt,
   runSuggestedCommand,
   stripTerminalControlSequences,
@@ -121,81 +116,6 @@ describe('diagnostics', () => {
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.severity).toBe('info');
     expect(result.summary).toBe('Summary.');
-  });
-});
-
-describe('diff representation', () => {
-  it('parses SEARCH/REPLACE envelopes into plain blocks', () => {
-    const input = [
-      '```patch:src/a.ts',
-      '<<<<<<< SEARCH',
-      'old',
-      '=======',
-      'new',
-      '>>>>>>> REPLACE',
-      '```',
-    ].join('\n');
-    expect(parsePatchBlocks(input)).toEqual([
-      { filePath: 'src/a.ts', search: 'old', replace: 'new' },
-    ]);
-  });
-
-  it('matches exactly and reports a range in plain line/character coordinates', () => {
-    const outcome = matchPatchBlock('one\ntwo\nthree\n', {
-      filePath: 'a.ts',
-      search: 'two',
-      replace: '2',
-    });
-    expect(outcome.matched).toBe(true);
-    if (!outcome.matched) return;
-    expect(outcome.match.range).toEqual({
-      start: { line: 1, character: 0 },
-      end: { line: 1, character: 3 },
-    });
-    expect(outcome.match.strategy).toBe('exact');
-    expect(outcome.match.confidence).toBe('high');
-  });
-
-  it('matches through differing whitespace and lowers its confidence', () => {
-    const outcome = matchPatchBlock('function  f( ) {\n  return 1;\n}\n', {
-      filePath: 'a.ts',
-      search: 'function f( ) {',
-      replace: 'function f() {',
-    });
-    expect(outcome.matched).toBe(true);
-    if (!outcome.matched) return;
-    expect(outcome.match.fuzzy).toBe(true);
-    expect(outcome.match.strategy).toBe('fuzzy');
-  });
-
-  it('refuses an aggressive match that is too short to identify a region', () => {
-    const refusal = matchAggressively('const a = 1;', 'const a');
-    expect(refusal).toMatchObject({ kind: 'too-short' });
-  });
-
-  it('refuses an aggressive match that appears more than once', () => {
-    const body = 'export function handler(request) { return respond(request); }';
-    const refusal = matchAggressively(`${body}\n${body}`, body);
-    expect(refusal).toMatchObject({ kind: 'ambiguous' });
-  });
-
-  it('falls back to an aggressive match and names it low confidence', () => {
-    const outcome = matchPatchBlockAggressive(
-      'export   function handler ( request ) { return respond(request); }',
-      {
-        filePath: 'a.ts',
-        search: 'export function handler(request) {\nreturn respond(request);\n}',
-        replace: '',
-      },
-    );
-    expect(outcome.matched).toBe(true);
-    if (!outcome.matched) return;
-    expect(outcome.match.confidence).toBe('low');
-    expect(outcome.match.strategy).toBe('aggressive');
-  });
-
-  it('describes a refusal without naming an editor concept', () => {
-    expect(describePatchRefusal({ kind: 'no-match' }, 'a.ts')).toBe('No match found for a.ts');
   });
 });
 

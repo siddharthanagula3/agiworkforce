@@ -70,20 +70,6 @@ export function positionAt(text: string, offset: number): CodePosition {
   return { line, character: clamped - lastBreak - 1 };
 }
 
-export function offsetAt(text: string, position: CodePosition): number {
-  const lines = text.split('\n');
-  const line = Math.max(0, Math.min(position.line, lines.length - 1));
-  let offset = 0;
-  for (let index = 0; index < line; index += 1) {
-    offset += (lines[index]?.length ?? 0) + 1;
-  }
-  return Math.min(offset + Math.max(0, position.character), text.length);
-}
-
-export function rangeFromOffsets(text: string, start: number, end: number): CodeRange {
-  return { start: positionAt(text, start), end: positionAt(text, end) };
-}
-
 export function lineRange(line: number): CodeRange {
   return {
     start: { line, character: 0 },

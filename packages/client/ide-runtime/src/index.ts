@@ -1,4 +1,4 @@
-export { CODE_SESSION_IDES, lineRange, offsetAt, positionAt, rangeFromOffsets } from './session';
+export { CODE_SESSION_IDES, lineRange, positionAt } from './session';
 export type {
   CodeDiagnosticsSession,
   CodeDocument,
@@ -25,26 +25,6 @@ export type {
   CodeReviewPrompt,
   CodeReviewResult,
 } from './diagnostics';
-
-export {
-  AGGRESSIVE_FUZZY_MIN_LEN,
-  describePatchMatch,
-  describePatchRefusal,
-  matchAggressively,
-  matchPatchBlock,
-  matchPatchBlockAggressive,
-  parsePatchBlocks,
-  patchFailureMessage,
-  whitespaceDiffPercent,
-} from './diff';
-export type {
-  PatchBlock,
-  PatchConfidence,
-  PatchMatch,
-  PatchMatchStrategy,
-  PatchOutcome,
-  PatchRefusal,
-} from './diff';
 
 export {
   BINARY_SNIFF_BYTES,
