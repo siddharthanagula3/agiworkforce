@@ -236,4 +236,21 @@ describe('WorkspaceRoles', () => {
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(screen.queryByText('Additional roles')).toBeNull();
   });
+
+  it('shows who holds each role, read-only, to someone who may only see roles', () => {
+    withRoles({
+      canManageRoles: false,
+      currentUserPermissions: ['admin.roles.view'],
+      memberRoleGrants: { 'viewer-1': ['role-auditor'] },
+    });
+    render(<WorkspaceRoles />);
+
+    expect(screen.getByText('Additional roles')).toBeTruthy();
+    const row = screen.getByText('Vera Viewer').closest('li') as HTMLElement;
+    expect(within(row).getByText('Auditor')).toBeTruthy();
+    expect(within(row).queryByRole('checkbox')).toBeNull();
+    expect(within(row).queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New role' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
 });

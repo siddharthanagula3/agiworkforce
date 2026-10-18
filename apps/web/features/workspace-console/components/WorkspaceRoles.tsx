@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import {
+  adminPermissionLevel,
   canonicalOrganizationPermission,
   expandOrganizationPermissions,
   ORGANIZATION_PERMISSIONS,
@@ -331,6 +332,42 @@ function assignableRoles(data: WorkspaceRolesResult): WorkspaceRole[] {
   );
 }
 
+function MemberRoleSummary({ member }: { member: TeamMember }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <p className="min-w-0 truncate text-sm" style={{ color: 'var(--text-1)' }}>
+        {member.name || member.email}
+      </p>
+      <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+        {member.role === 'owner' ? 'Primary Owner' : member.role}
+      </p>
+    </div>
+  );
+}
+
+function ReadOnlyMemberRoleRow({
+  member,
+  data,
+}: {
+  member: TeamMember;
+  data: WorkspaceRolesResult;
+}) {
+  const grantedIds = new Set(data.memberRoleGrants[member.userId] ?? []);
+  const granted = assignableRoles(data).filter((role) => grantedIds.has(role.id));
+
+  return (
+    <li
+      className="flex flex-col gap-2 border-b px-5 py-3"
+      style={{ borderColor: 'var(--settings-border)' }}
+    >
+      <MemberRoleSummary member={member} />
+      <p className="text-xs" style={{ color: 'var(--text-2)' }}>
+        {granted.length > 0 ? granted.map((role) => role.name).join(', ') : 'No additional roles'}
+      </p>
+    </li>
+  );
+}
+
 function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRolesResult }) {
   const setRoles = useSetMemberRoles();
   const current = data.memberRoleGrants[member.userId] ?? [];
@@ -343,14 +380,7 @@ function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRo
       className="flex flex-col gap-2 border-b px-5 py-3"
       style={{ borderColor: 'var(--settings-border)' }}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-sm" style={{ color: 'var(--text-1)' }}>
-          {member.name || member.email}
-        </p>
-        <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-          {member.role === 'owner' ? 'Primary Owner' : member.role}
-        </p>
-      </div>
+      <MemberRoleSummary member={member} />
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {assignableRoles(data).map((role) => {
           const grantable = role.permissions.every((permission) => held.has(permission));
@@ -394,12 +424,16 @@ function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRo
 
 function MemberRoles({ data }: { data: WorkspaceRolesResult }) {
   const members = useTeamMembers(data.organizationId);
-  if (!data.canManageRoles) return null;
+  const canSeeHolders =
+    data.canManageRoles || adminPermissionLevel(data.currentUserPermissions, 'roles') !== 'none';
+  if (!canSeeHolders) return null;
 
   return (
     <section style={cardStyle} aria-labelledby="workspace-member-roles-heading">
       <CardHeader id="workspace-member-roles-heading" title="Additional roles">
-        A member keeps their membership role and gains every permission of each role checked here.
+        {data.canManageRoles
+          ? 'A member keeps their membership role and gains every permission of each role checked here.'
+          : 'A member keeps their membership role and gains every permission of each role listed here.'}
       </CardHeader>
       {members.isError ? (
         <div className="px-5 py-3">
@@ -407,9 +441,13 @@ function MemberRoles({ data }: { data: WorkspaceRolesResult }) {
         </div>
       ) : (
         <ul className="flex flex-col">
-          {(members.data ?? []).map((member) => (
-            <MemberRoleRow key={member.userId} member={member} data={data} />
-          ))}
+          {(members.data ?? []).map((member) =>
+            data.canManageRoles ? (
+              <MemberRoleRow key={member.userId} member={member} data={data} />
+            ) : (
+              <ReadOnlyMemberRoleRow key={member.userId} member={member} data={data} />
+            ),
+          )}
         </ul>
       )}
     </section>
