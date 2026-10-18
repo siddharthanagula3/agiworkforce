@@ -605,8 +605,6 @@ export interface ProviderAdapter {
   stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk>;
 }
 
-export type ProviderAdapterFactory = (config: ProviderAdapterConfig) => ProviderAdapter;
-
 /**
  * Where a cancellation signal actually reaches. `external-side-effect` is the
  * boundary nothing crosses: a request already accepted by a third party is not

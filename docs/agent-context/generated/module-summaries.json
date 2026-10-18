@@ -12,7 +12,7 @@
       "name": "agiworkforce-app-server",
       "path": "crates/agiworkforce-app-server",
       "kind": "crate",
-      "purpose": "JSON-RPC stdio + WebSocket transport exposing AGI Workforce tools to programmatic clients"
+      "purpose": "Developer-session protocol over JSONL stdio and authenticated WebSocket"
     },
     {
       "name": "agiworkforce-command-registry",
@@ -330,7 +330,7 @@
       "name": "@agiworkforce/data-layer",
       "path": "packages/platform/data-layer",
       "kind": "package",
-      "purpose": "Vendor-neutral database and identity data-layer boundary for AGI Workforce"
+      "purpose": "Vendor-neutral database boundary for AGI Workforce: Neon and plain Postgres adapters behind one RLS-aware contract"
     },
     {
       "name": "@agiworkforce/files",
@@ -342,7 +342,7 @@
       "name": "@agiworkforce/identity",
       "path": "packages/platform/identity",
       "kind": "package",
-      "purpose": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter. The host app supplies the provider SDK from its own dependencies; see the note in src/adapters/clerk.ts for why this package must not declare it."
+      "purpose": "IdentityProvider port with a Clerk adapter and a browser-safe session-cookie entry. The host app supplies the provider SDK from its own dependencies; see the note in src/adapters/clerk.ts for why this package must not declare it."
     },
     {
       "name": "@agiworkforce/key-value",

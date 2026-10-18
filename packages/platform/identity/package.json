@@ -3,11 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "IdentityProvider port with a Clerk adapter, a browser-safe session-cookie entry and a testing adapter. The host app supplies the provider SDK from its own dependencies; see the note in src/adapters/clerk.ts for why this package must not declare it.",
+  "description": "IdentityProvider port with a Clerk adapter and a browser-safe session-cookie entry. The host app supplies the provider SDK from its own dependencies; see the note in src/adapters/clerk.ts for why this package must not declare it.",
   "exports": {
     ".": "./src/index.ts",
-    "./browser": "./src/session-cookie.ts",
-    "./testing": "./src/testing.ts"
+    "./browser": "./src/session-cookie.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

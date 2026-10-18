@@ -227,7 +227,6 @@ export * from './cloud-task-handoff-uri';
 export * from './developer-session-handoff-uri';
 export * from './capabilities';
 export * from './client-failures';
-export * from './network-state';
 
 export * from './tool-display';
 
