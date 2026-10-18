@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { Config } from '../../platform/config';
 
 export class AgiHoverProvider implements vscode.HoverProvider {
   provideHover(
@@ -6,8 +7,7 @@ export class AgiHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     _token: vscode.CancellationToken,
   ): vscode.Hover | undefined {
-    const config = vscode.workspace.getConfiguration('agiWorkforce');
-    if (config.get<boolean>('hoverEnabled') !== true) {
+    if (!Config.hoverEnabled()) {
       return undefined;
     }
 

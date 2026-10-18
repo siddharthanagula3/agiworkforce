@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
   loadLegacyWorkspaceFacts,
-  containsFact,
   buildMemoryContextInput,
   MEMORY_STORE_KEY,
   type MemoryFact,
@@ -38,14 +37,6 @@ describe('loadLegacyWorkspaceFacts', () => {
   it('accepts a fact written before updatedAt existed', () => {
     const legacy: MemoryFact = { id: 'leg-1', text: 'legacy', createdAt: '2025-01-01' };
     expect(loadLegacyWorkspaceFacts(makeWorkspaceState([legacy]))[0]!.updatedAt).toBeUndefined();
-  });
-});
-
-describe('containsFact', () => {
-  it('uses shared case and whitespace normalization', () => {
-    const facts: MemoryFact[] = [{ id: '1', text: 'User prefers Rust', createdAt: '2026-01-01' }];
-    expect(containsFact(facts, '  USER   PREFERS rust ')).toBe(true);
-    expect(containsFact(facts, 'user prefers Go')).toBe(false);
   });
 });
 

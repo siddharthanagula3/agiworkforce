@@ -955,50 +955,18 @@ export async function fetchAccountIdentity(
   const accountToken = await getAccountToken(secrets);
   if (accountToken === undefined || accountToken === '') return undefined;
 
-  const parsed = new URL('/api/me?surface=vscode', getCloudWebOrigin());
-  const isHttps = parsed.protocol === 'https:';
-  const lib = isHttps ? https : http;
-
-  return new Promise((resolve) => {
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
-      path: parsed.pathname + parsed.search,
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accountToken}`,
-        ...platformRequestHeaders(),
-      },
-    };
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        if ((res.statusCode ?? 0) >= 400) {
-          if (res.statusCode === 401) {
-            notifyAccountTierMayHaveChanged();
-            void invalidateAccountToken(secrets, accountToken);
-          }
-          resolve(undefined);
-          return;
-        }
-        try {
-          resolve(parseAccountIdentityResponse(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
-        } catch {
-          resolve(undefined);
-        }
-      });
-      res.on('error', () => resolve(undefined));
-    });
-
-    req.on('error', () => resolve(undefined));
-    req.setTimeout(5_000, () => {
-      req.destroy();
-      resolve(undefined);
-    });
-    req.end();
-  });
+  const response = await getCloudJson(
+    new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString(),
+    accountToken,
+  );
+  if (response.kind === 'http-error') {
+    if (response.status === 401) {
+      notifyAccountTierMayHaveChanged();
+      void invalidateAccountToken(secrets, accountToken);
+    }
+    return undefined;
+  }
+  return response.kind === 'ok' ? parseAccountIdentityResponse(response.body) : undefined;
 }
 
 type CloudJsonResponse =

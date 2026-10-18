@@ -15,11 +15,7 @@ import {
   normalizeCapabilityEntries,
   surfaceSectionItem,
 } from '../features/surfaces';
-import {
-  resolveAccountPresence,
-  resolveAccountToken,
-  signIn,
-} from '../features/surfaces/accountAccess';
+import { resolveAccountPresence, signIn } from '../features/surfaces/accountAccess';
 import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { manageMcpServers } from '../features/surfaces/capabilityManagement';
@@ -272,14 +268,9 @@ describe('single sign-in', () => {
     const adapter = new CliCapabilityAdapter(
       poolWith({
         accountStatus: async () => ({ signedIn: true, email: 'dev@example.com', tier: 'max' }),
-        accountToken: async () => ({ token: 'cli-token' }),
       }),
     );
 
-    await expect(resolveAccountToken(secretsWith('extension-token'), adapter)).resolves.toEqual({
-      token: 'cli-token',
-      source: 'cli',
-    });
     await expect(resolveAccountPresence(secretsWith(undefined), adapter)).resolves.toMatchObject({
       signedIn: true,
       source: 'cli',
@@ -289,8 +280,8 @@ describe('single sign-in', () => {
   it('keeps the stored device-flow token when the CLI cannot answer', async () => {
     const adapter = new CliCapabilityAdapter(poolWith({}));
 
-    await expect(resolveAccountToken(secretsWith('extension-token'), adapter)).resolves.toEqual({
-      token: 'extension-token',
+    await expect(resolveAccountPresence(secretsWith('extension-token'), adapter)).resolves.toEqual({
+      signedIn: true,
       source: 'extension',
     });
   });

@@ -1,7 +1,7 @@
 import { getCoreManualModelOptions } from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
 import { extractProvider, guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { tierAtLeast, TIER_ORDER } from '../integrations/tierResolver';
+import { tierAtLeast } from '../integrations/tierResolver';
 import { requireCatalogModel, SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const CATALOG_MODELS = getCoreManualModelOptions();
@@ -12,6 +12,19 @@ const OPENAI_SECONDARY = requireCatalogModel('openai', 1).id;
 const GOOGLE_PRIMARY = requireCatalogModel('google').id;
 const XAI_PRIMARY = requireCatalogModel('xai').id;
 const SYNTHETIC_UNKNOWN_MODEL_ID = 'fixture-unknown-model';
+
+const TIER_LADDER = [
+  'local',
+  'byok',
+  'free',
+  'basic',
+  'pro',
+  'team',
+  'max',
+  'team_premium',
+  'max_15x',
+  'enterprise',
+] as const;
 
 describe('extractProvider', () => {
   it('derives every manual model provider from canonical catalog metadata', () => {
@@ -138,23 +151,8 @@ describe('tierAtLeast', () => {
   });
 
   it('any tier is at least itself', () => {
-    for (const tier of TIER_ORDER) {
+    for (const tier of TIER_LADDER) {
       expect(tierAtLeast(tier, tier)).toBe(true);
     }
-  });
-
-  it('TIER_ORDER has the expected sequence', () => {
-    expect(TIER_ORDER).toEqual([
-      'local',
-      'byok',
-      'free',
-      'basic',
-      'pro',
-      'team',
-      'max',
-      'team_premium',
-      'max_15x',
-      'enterprise',
-    ]);
   });
 });

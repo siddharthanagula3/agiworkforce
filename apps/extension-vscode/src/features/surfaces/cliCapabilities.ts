@@ -31,7 +31,6 @@ export const CLI_CAPABILITY_METHODS = {
   accountStatus: 'accountStatus',
   accountLogin: 'startAccountLogin',
   accountLoginWait: 'waitForAccountLogin',
-  accountToken: 'accountToken',
   accountLogout: 'accountLogout',
   savedPermissions: 'listSavedPermissions',
   savedPermissionsRemove: 'removeSavedPermission',
@@ -105,7 +104,6 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   accountStatus: 'account',
   accountLogin: 'account',
   accountLoginWait: 'account',
-  accountToken: 'account',
   accountLogout: 'account',
   savedPermissions: 'savedPermissions',
   savedPermissionsRemove: 'savedPermissions',
@@ -327,18 +325,6 @@ export class CliCapabilityAdapter {
         ...(webSearch === undefined ? {} : { webSearch }),
       },
     };
-  }
-
-  async accountToken(): Promise<string | undefined> {
-    const result = await this.call<unknown>('accountToken');
-    if (result.status !== 'ok') return undefined;
-    if (typeof result.value === 'string' && result.value !== '') return result.value;
-    if (result.value === null || typeof result.value !== 'object') return undefined;
-    return readString(result.value as Record<string, unknown>, ['token', 'accessToken']);
-  }
-
-  async logout(): Promise<CliCapabilityResult<void>> {
-    return this.call<void>('accountLogout');
   }
 
   async login(): Promise<CliCapabilityResult<CliLoginChallenge>> {

@@ -23,7 +23,7 @@ import {
 } from '@agiworkforce/utils/remote-control';
 import type { ThreadSummary } from '@agiworkforce/types';
 import { Config } from '../../platform/config';
-import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { getExtensionVersion } from '../../platform/version';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { t } from '../../l10n';
@@ -96,10 +96,8 @@ async function requestPairing(token: string): Promise<RemoteControlStartRequest>
   const response = await fetch(`${getCloudWebOrigin()}/api/pair/initiate`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...accountRequestHeaders(token),
       'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...platformRequestHeaders(),
     },
     body: JSON.stringify({ initiator: 'desktop' }),
   });

@@ -4,7 +4,10 @@ import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
 import * as telemetry from './telemetry';
 import { trackProductEvent } from '../features/analytics/productAnalytics';
-import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
+import {
+  classifyCloudUtilityFailure,
+  showCloudUtilityErrorActions,
+} from './cloudUtilityErrorActions';
 import { describeOutboundRefusal } from './outboundContentGuard';
 
 export type InlineCommand = 'fix' | 'refactor' | 'tests' | 'docs';
@@ -53,8 +56,7 @@ export async function runInlineCommand(
 
   const lang = editor.document.languageId;
   const planModeEnabled = Config.planModeActive();
-  const autoApplyFixes =
-    vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('autoApplyFixes') ?? false;
+  const autoApplyFixes = Config.autoApplyFixes();
 
   if (planModeEnabled) {
     const choice = await vscode.window.showInformationMessage(
@@ -123,7 +125,7 @@ export async function runInlineCommand(
   );
 
   if (failure === undefined) return;
-  if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+  if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
   telemetry.logError(failure instanceof Error ? failure : String(failure), { command });
   await showCloudUtilityErrorActions(failure, {
     title: `AGI Workforce: ${commandLabel(command)} failed`,

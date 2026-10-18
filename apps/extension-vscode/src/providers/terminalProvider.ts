@@ -10,7 +10,10 @@ import {
   type CodeTerminalCapture,
   type CodeTerminalSession,
 } from '@agiworkforce/ide-runtime';
-import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
+import {
+  classifyCloudUtilityFailure,
+  showCloudUtilityErrorActions,
+} from '../core/cloudUtilityErrorActions';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { buildExplainTerminalPrompt, runEditorUtility } from '../features/editor-utilities';
 import {
@@ -414,7 +417,7 @@ export function activateTerminal(
       );
 
       if (failure === undefined) return;
-      if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+      if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
       await showCloudUtilityErrorActions(failure, {
         title: 'AGI Workforce: Failed to suggest command',
         retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),

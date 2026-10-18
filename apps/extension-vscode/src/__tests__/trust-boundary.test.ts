@@ -1,21 +1,34 @@
 import { describe, it, expect } from 'vitest';
 
-import { TIER_ORDER, tierAtLeast } from '../integrations/tierResolver';
+import { tierAtLeast } from '../integrations/tierResolver';
+
+const TIER_LADDER = [
+  'local',
+  'byok',
+  'free',
+  'basic',
+  'pro',
+  'team',
+  'max',
+  'team_premium',
+  'max_15x',
+  'enterprise',
+] as const;
 
 describe('tier resolver ordering', () => {
   it('local is the lowest tier', () => {
-    expect(TIER_ORDER[0]).toBe('local');
+    expect(TIER_LADDER[0]).toBe('local');
   });
 
   it('byok is the default fallback tier (safe under-gate)', () => {
     const DEFAULT_TIER = 'byok';
-    expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeGreaterThan(TIER_ORDER.indexOf('local'));
-    expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeLessThan(TIER_ORDER.indexOf('basic'));
+    expect(TIER_LADDER.indexOf(DEFAULT_TIER)).toBeGreaterThan(TIER_LADDER.indexOf('local'));
+    expect(TIER_LADDER.indexOf(DEFAULT_TIER)).toBeLessThan(TIER_LADDER.indexOf('basic'));
   });
 
   it('keeps the canonical enterprise tier as the highest tier', () => {
-    expect(TIER_ORDER[TIER_ORDER.length - 1]).toBe('enterprise');
-    expect(TIER_ORDER.indexOf('max')).toBeLessThan(TIER_ORDER.indexOf('max_15x'));
+    expect(TIER_LADDER[TIER_LADDER.length - 1]).toBe('enterprise');
+    expect(TIER_LADDER.indexOf('max')).toBeLessThan(TIER_LADDER.indexOf('max_15x'));
   });
 
   it('tierAtLeast, local and byok are peers, not a ladder', () => {
@@ -62,9 +75,9 @@ describe('vscode extension trust-boundary gates', () => {
   });
 
   it('tier transitions are monotonic (non-decreasing, equal ranks are peers)', () => {
-    for (let i = 0; i < TIER_ORDER.length - 1; i++) {
-      const lower = TIER_ORDER[i]!;
-      const higher = TIER_ORDER[i + 1]!;
+    for (let i = 0; i < TIER_LADDER.length - 1; i++) {
+      const lower = TIER_LADDER[i]!;
+      const higher = TIER_LADDER[i + 1]!;
       expect(tierAtLeast(higher, lower)).toBe(true);
     }
   });

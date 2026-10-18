@@ -189,7 +189,7 @@ export class AccountMemoryStore {
       source: MEMORY_SOURCE,
       baseVersion: INITIAL_CURSOR,
     };
-    return this.write([item], () => {});
+    return this.write([item]);
   }
 
   async update(id: string, text: string): Promise<AccountMemoryWriteResult> {
@@ -204,7 +204,7 @@ export class AccountMemoryStore {
       source: MEMORY_SOURCE,
       baseVersion: this.baseVersion(id),
     };
-    return this.write([item], () => {});
+    return this.write([item]);
   }
 
   async remove(id: string): Promise<AccountMemoryWriteResult> {
@@ -218,7 +218,7 @@ export class AccountMemoryStore {
       baseVersion: this.baseVersion(id),
       isDeleted: true,
     };
-    return this.write([item], () => {});
+    return this.write([item]);
   }
 
   async clear(): Promise<AccountMemoryWriteResult> {
@@ -241,10 +241,7 @@ export class AccountMemoryStore {
     return versions[id] ?? INITIAL_CURSOR;
   }
 
-  private async write(
-    items: MemoryPushItem[],
-    onApplied: () => void,
-  ): Promise<AccountMemoryWriteResult> {
+  private async write(items: MemoryPushItem[]): Promise<AccountMemoryWriteResult> {
     if (await this.signedOut()) {
       return {
         applied: false,
@@ -270,7 +267,6 @@ export class AccountMemoryStore {
     const refusals = describeRefusals(items, response);
     if (refusals.length === 0) {
       await this.applyLocalWrites(items);
-      onApplied();
     }
     this.changed.fire();
     return { applied: refusals.length === 0, refusals };

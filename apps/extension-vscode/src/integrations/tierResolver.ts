@@ -32,26 +32,6 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'enterprise',
 ]);
 
-/**
- * Tier ordering: lower index = lower tier.
- * Used to compare tiers (e.g. is 'basic' < 'pro'?).
- *
- * Kept here as a local convenience for tests that introspect order; the
- * canonical comparator is {@link tierAtLeast} from `@agiworkforce/types`.
- */
-export const TIER_ORDER: readonly Tier[] = [
-  'local',
-  'byok',
-  'free',
-  'basic',
-  'pro',
-  'team',
-  'max',
-  'team_premium',
-  'max_15x',
-  'enterprise',
-];
-
 /** Re-export of the canonical {@link tierAtLeast} comparator. */
 export { tierAtLeast };
 

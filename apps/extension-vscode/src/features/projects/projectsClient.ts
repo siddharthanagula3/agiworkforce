@@ -1,7 +1,6 @@
 import type * as vscode from 'vscode';
 import {
   ManagedCloudProjectKnowledgeListResponseSchema,
-  createManagedCloudChatClient,
   createManagedCloudProjectsClient,
   managedCloudProjectKnowledgePath,
   type ManagedCloudChatClient,
@@ -9,7 +8,8 @@ import {
   type ManagedCloudProjectsClient,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { accountRequestHeaders } from '../../platform/accountHeaders';
+import { createExtensionManagedCloudChat } from '../../utils/managedCloudChat';
 import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export interface ProjectKnowledgeReader {
@@ -24,14 +24,6 @@ export interface ProjectsWorkspace {
 
 export type ProjectsWorkspaceResolution =
   { status: 'ready'; workspace: ProjectsWorkspace } | { status: 'signed-out' };
-
-function hostedHeaders(token: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/json',
-    ...platformRequestHeaders(),
-  };
-}
 
 export class ProjectKnowledgeHttpError extends Error {
   constructor(
@@ -49,7 +41,7 @@ function createKnowledgeReader(token: string): ProjectKnowledgeReader {
   return {
     async listKnowledgeFiles(projectId) {
       const response = await fetch(`${baseUrl}${managedCloudProjectKnowledgePath(projectId)}`, {
-        headers: hostedHeaders(token),
+        headers: accountRequestHeaders(token),
       });
       if (!response.ok) {
         const refusal = await readAccountRefusal(response);
@@ -75,20 +67,9 @@ export function createExtensionProjectsWorkspace(token: string): ProjectsWorkspa
   return {
     projects: createManagedCloudProjectsClient({
       baseUrl,
-      getHeaders: () => hostedHeaders(token),
+      getHeaders: () => accountRequestHeaders(token),
     }),
-    chat: createManagedCloudChatClient({
-      baseUrl,
-      getAuthToken: () => Promise.resolve(token),
-      fetchImpl: (input, init) =>
-        fetch(input, {
-          ...init,
-          headers: {
-            ...(init?.headers as Record<string, string> | undefined),
-            ...hostedHeaders(token),
-          },
-        }),
-    }),
+    chat: createExtensionManagedCloudChat(token),
     knowledge: createKnowledgeReader(token),
   };
 }

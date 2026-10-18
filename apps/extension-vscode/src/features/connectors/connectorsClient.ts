@@ -5,7 +5,7 @@ import {
   type ListConnectorsResponse,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export class ConnectorsHttpError extends Error {
@@ -31,11 +31,7 @@ export function createExtensionConnectorsClient(token: string): ConnectorsClient
   return {
     async listConnectors() {
       const response = await fetch(`${baseUrl}${MANAGED_CLOUD_CONNECTORS_PATH}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-          ...platformRequestHeaders(),
-        },
+        headers: accountRequestHeaders(token),
       });
       if (!response.ok) {
         const refusal = await readAccountRefusal(response);

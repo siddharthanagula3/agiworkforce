@@ -2,17 +2,17 @@ import {
   MemorySyncPullResponseSchema,
   MemorySyncPushResponseSchema,
   MemorySyncRejectionSchema,
+  SYNC_PROTOCOL_VERSION,
   type MemorySyncPushItem,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
 import { selectNextCursor } from '@agiworkforce/sync';
 import { z } from 'zod';
-import { platformRequestHeaders } from '../platform/platformHeaders';
+import { accountRequestHeaders } from '../platform/accountHeaders';
 
 export const MEMORY_SYNC_PATH = '/api/memory/sync';
 export const MEMORY_PATH = '/api/memory';
 export const WORKSPACES_PATH = '/api/settings/workspaces';
-export const MEMORY_SYNC_PROTOCOL_VERSION = 2;
 export const MEMORY_SOURCE = 'vscode';
 export const INITIAL_CURSOR = '0';
 
@@ -99,9 +99,7 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
         ...init,
         headers: {
           ...(init.headers as Record<string, string> | undefined),
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-          ...platformRequestHeaders(),
+          ...accountRequestHeaders(token),
         },
       });
     } catch (error) {
@@ -153,7 +151,7 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          protocolVersion: MEMORY_SYNC_PROTOCOL_VERSION,
+          protocolVersion: SYNC_PROTOCOL_VERSION,
           memories,
         }),
       });

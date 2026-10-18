@@ -153,7 +153,10 @@ import { showOriginalContext, getPatchOutputChannel } from '../integrations/patc
 import { runInlineCommand } from './runInlineCommand';
 import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
-import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
+import {
+  classifyCloudUtilityFailure,
+  showCloudUtilityErrorActions,
+} from './cloudUtilityErrorActions';
 import {
   clearAccountTierCache,
   refreshAccountTierCache,
@@ -400,7 +403,7 @@ function getAgiGitOutputChannel(): vscode.OutputChannel {
   return _agiGitOutputChannel;
 }
 
-async function runGitToOutputChannel(args: string[], cwd: string, title: string): Promise<void> {
+async function runGitToOutputChannel(args: string[], cwd: string, title: string): Promise<boolean> {
   const channel = getAgiGitOutputChannel();
   channel.appendLine(`\n$ git ${args.join(' ')}`);
   try {
@@ -408,11 +411,13 @@ async function runGitToOutputChannel(args: string[], cwd: string, title: string)
     channel.append(result.stdout);
     if (result.stderr) channel.append(result.stderr);
     channel.show(true);
+    return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     channel.appendLine(`[error] ${msg}`);
     channel.show(true);
     vscode.window.showErrorMessage(`AGI Workforce: ${title} failed, ${msg}`);
+    return false;
   }
 }
 
@@ -1113,7 +1118,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
 
       if (failure === undefined) return;
-      if (failure instanceof Error && failure.message.includes('CANCELLED')) return;
+      if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
       await showCloudUtilityErrorActions(failure, {
         title: 'AGI Workforce: Code review failed',
         retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
@@ -1543,8 +1548,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
         return;
       }
-      await runGitToOutputChannel(['add', '-u'], folder.uri.fsPath, 'git add');
-      await runGitToOutputChannel(['commit', '-m', msg], folder.uri.fsPath, 'git commit');
+      if (!(await runGitToOutputChannel(['add', '-u'], folder.uri.fsPath, 'git add'))) return;
+      if (!(await runGitToOutputChannel(['commit', '-m', msg], folder.uri.fsPath, 'git commit'))) {
+        return;
+      }
       vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
     }),
 
@@ -1703,86 +1710,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         case 'switch-model':
           await vscode.commands.executeCommand('agi-workforce.selectModel');
           break;
-        case 'effort': {
-          type EffortItem = vscode.QuickPickItem & {
-            value: 'low' | 'medium' | 'high' | 'max';
-          };
-          const effortItems: EffortItem[] = [
-            {
-              label: '$(circle-outline) Low',
-              description: 'Minimal reasoning, fastest, lowest cost',
-              value: 'low',
-            },
-            {
-              label: '$(circle-filled) Medium',
-              description: 'Balanced reasoning, default',
-              value: 'medium',
-            },
-            {
-              label: '$(pulse) High',
-              description: 'Extended reasoning, slower, higher quality',
-              value: 'high',
-            },
-            {
-              label: '$(sparkle) Max',
-              description: 'Maximum reasoning budget',
-              value: 'max',
-            },
-          ];
-          const effortPick = await vscode.window.showQuickPick(effortItems, {
-            title: 'AGI Workforce, Set Effort',
-            placeHolder: `Current: ${cap(currentEffort)}`,
-          });
-          const selectedEffort = effortPick?.value;
-          if (selectedEffort !== undefined) {
-            if (await setAgentEffortWithConsent(context, selectedEffort)) {
-              vscode.window.showInformationMessage(
-                `AGI Workforce effort set to: ${cap(selectedEffort)}`,
-              );
-            }
-          }
+        case 'effort':
+          await vscode.commands.executeCommand('agi-workforce.setAgentEffort');
           break;
-        }
-        case 'mode': {
-          type AgentModeItem = vscode.QuickPickItem & {
-            value: 'ask' | 'auto' | 'plan' | 'bypass';
-          };
-          const modeItems: AgentModeItem[] = [
-            {
-              label: '$(comment-discussion) Ask before edits',
-              description: 'Confirm every edit before it runs',
-              value: 'ask',
-            },
-            {
-              label: '$(robot) Auto safe operations',
-              description: 'Safe reads run automatically; writes and commands require approval',
-              value: 'auto',
-            },
-            {
-              label: '$(checklist) Plan mode',
-              description: 'Generate a plan; no edits until approved',
-              value: 'plan',
-            },
-            {
-              label: '$(warning) Bypass permissions',
-              description: 'Skip all approval prompts (dangerous)',
-              value: 'bypass',
-            },
-          ];
-          const modePick = await vscode.window.showQuickPick(modeItems, {
-            title: 'AGI Workforce, Set Agent Mode',
-            placeHolder: `Current: ${cap(currentMode)}`,
-          });
-          const selectedMode = modePick?.value;
-          if (selectedMode !== undefined) {
-            if (await setAgentModeWithConsent(context, selectedMode)) {
-              vscode.window.showInformationMessage(
-                `AGI Workforce agent mode set to: ${cap(selectedMode)}`,
-              );
-            }
-          }
+        case 'mode':
+          await vscode.commands.executeCommand('agi-workforce.setAgentMode');
           break;
-        }
         case 'account':
           await vscode.commands.executeCommand('agi-workforce.showAccountUsage');
           break;

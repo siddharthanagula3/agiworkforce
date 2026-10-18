@@ -5,24 +5,6 @@ import { type CliAccountStatus, type CliCapabilityAdapter } from './cliCapabilit
 
 export type AccountTokenSource = 'cli' | 'extension';
 
-export interface ResolvedAccountToken {
-  token: string;
-  source: AccountTokenSource;
-}
-
-export async function resolveAccountToken(
-  secrets: vscode.SecretStorage,
-  adapter: CliCapabilityAdapter,
-): Promise<ResolvedAccountToken | undefined> {
-  const status = await adapter.accountStatus();
-  if (status.status === 'ok' && status.value.signedIn) {
-    const token = await adapter.accountToken();
-    if (token !== undefined && token !== '') return { token, source: 'cli' };
-  }
-  const stored = await getAccountToken(secrets);
-  return stored === undefined || stored === '' ? undefined : { token: stored, source: 'extension' };
-}
-
 export async function resolveAccountPresence(
   secrets: vscode.SecretStorage,
   adapter: CliCapabilityAdapter,

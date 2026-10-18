@@ -4,7 +4,6 @@ import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudArtifactIndexResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
-  createManagedCloudChatClient,
   managedCloudArtifactIndexQueryString,
   type ManagedCloudArtifactIndexEntry,
   type ManagedCloudArtifactIndexQuery,
@@ -12,7 +11,8 @@ import {
   type ManagedCloudPublishedArtifact,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { accountRequestHeaders } from '../../platform/accountHeaders';
+import { createExtensionManagedCloudChat } from '../../utils/managedCloudChat';
 import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export class ArtifactsHttpError extends Error {
@@ -39,16 +39,8 @@ export interface ArtifactsWorkspace {
 export type ArtifactsWorkspaceResolution =
   { status: 'ready'; workspace: ArtifactsWorkspace } | { status: 'signed-out' };
 
-function hostedHeaders(token: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/json',
-    ...platformRequestHeaders(),
-  };
-}
-
 async function readJson(url: string, token: string): Promise<unknown> {
-  const response = await fetch(url, { headers: hostedHeaders(token) });
+  const response = await fetch(url, { headers: accountRequestHeaders(token) });
   if (!response.ok) {
     const refusal = await readAccountRefusal(response);
     throw new ArtifactsHttpError(
@@ -86,18 +78,7 @@ export function createExtensionArtifactsWorkspace(token: string): ArtifactsWorks
         return parsed.data.artifacts;
       },
     },
-    chat: createManagedCloudChatClient({
-      baseUrl,
-      getAuthToken: () => Promise.resolve(token),
-      fetchImpl: (input, init) =>
-        fetch(input, {
-          ...init,
-          headers: {
-            ...(init?.headers as Record<string, string> | undefined),
-            ...hostedHeaders(token),
-          },
-        }),
-    }),
+    chat: createExtensionManagedCloudChat(token),
   };
 }
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { normalizeMemoryKey, type MemoryCategory } from '@agiworkforce/agent-core';
+import { type MemoryCategory } from '@agiworkforce/agent-core';
 import { Config } from '../platform/config';
 
 /**
@@ -83,9 +83,4 @@ export function buildMemoryContextInput(
       `<untrusted_memory_context>\n${lines.join('\n')}\n</untrusted_memory_context>`,
     text_elements: [],
   };
-}
-
-export function containsFact(facts: readonly MemoryFact[], text: string): boolean {
-  const key = normalizeMemoryKey(text);
-  return facts.some((fact) => normalizeMemoryKey(fact.text) === key);
 }
