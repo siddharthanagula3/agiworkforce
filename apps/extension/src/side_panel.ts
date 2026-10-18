@@ -25,7 +25,13 @@ import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkfor
 import { getExtensionTokensCssAuto } from './tokens';
 import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
-import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
+import {
+  chooseBrowserContextTabs,
+  prepareSelectionContext,
+  readVisibleSelection,
+  TAB_CONTEXT_PICKER_CSS,
+  type PageSelection,
+} from './features/side-panel/tabContext';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
@@ -41,7 +47,6 @@ import {
   classifyManagedQuotaErrorCode,
   formatCredits,
   formatUsageResetIn,
-  getBillingPlanPricing,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -645,7 +650,7 @@ function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
     case 'top_up':
       return t('spQuotaRecoveryTopUp');
     case 'upgrade':
-      return t('spQuotaUpgrade');
+      return t('spQuotaFreeUpgrade');
     case 'view_usage':
       return t('spQuotaManageUsage');
     case 'contact_support':
@@ -716,6 +721,7 @@ interface UsageBanner {
 }
 
 let usageBanner: UsageBanner | null = null;
+const FULL_ACCESS_NOTICE_DISMISSED_KEY = 'agi.notice.full-access-dismissed';
 const quotaWarnedStreamIds = new Set<string>();
 const MODEL_USAGE_ROW_LIMIT = 5;
 
@@ -745,6 +751,7 @@ function managedPlanTier(access: ManagedModelAccess): string {
 
 function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
   if (!managedModelAccess || managedCloudChatState !== 'ready') return;
+  if (isFreeBillingPlanTier(normalizeBillingPlanTier(managedPlanTier(managedModelAccess)))) return;
   const warning = quotaWarningFromSignal(
     usageWindowViews(managedModelAccess.usage),
     signal,
@@ -4134,6 +4141,16 @@ function injectStyles(): void {
     }
     .sp-autonomy-chip:hover { filter: brightness(1.12); }
     .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
+    .sp-autonomy-heading {
+      padding: 4px 9px 6px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 600;
+    }
+    .sp-autonomy-learn-more { margin: 4px 9px 2px; }
+    .sp-autonomy-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-full-access-notice { color: var(--agi-ext-text); }
 
     /* Per-row provenance badge in the history drawer. */
     .sp-drawer-history-badge {
@@ -9238,20 +9255,82 @@ function renderVideoModeChip(bar: HTMLElement): void {
   bar.appendChild(chip);
 }
 
+let pendingSelectionText: string | null = null;
+let offeredSelectionKey: string | null = null;
+
+function pendingSelectionAttached(): boolean {
+  return pendingSelectionText !== null && _ctx.pendingPageContext === pendingSelectionText;
+}
+
+async function offerPageSelection(): Promise<void> {
+  if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
+  if (pendingBrowserContextTabs.length > 0) return;
+  if (_ctx.pendingPageContext !== null && !pendingSelectionAttached()) return;
+  const generation = _ctx.conversationGeneration;
+  let tab: chrome.tabs.Tab | undefined;
+  let selection: PageSelection | null = null;
+  try {
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url) return;
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readVisibleSelection,
+      args: [MAX_PAGE_TEXT_CHARACTERS],
+    });
+    selection = (result?.result as PageSelection | null | undefined) ?? null;
+  } catch {
+    return;
+  }
+  if (!tab?.id || !tab.url || !selection) return;
+  const prepared = prepareSelectionContext(selection, tab.url);
+  if (!prepared) return;
+  const key = `${tab.id}\n${tab.url}\n${prepared.text}`;
+  if (key === offeredSelectionKey) return;
+  if (
+    generation !== _ctx.conversationGeneration ||
+    _ctx.isStreaming ||
+    managedCloudChatState !== 'ready' ||
+    pendingBrowserContextTabs.length > 0 ||
+    (_ctx.pendingPageContext !== null && !pendingSelectionAttached())
+  ) {
+    return;
+  }
+  offeredSelectionKey = key;
+  pendingSelectionText = prepared.text;
+  _ctx.pendingPageContext = prepared.text;
+  _ctx.pendingPageContextSource = {
+    tabId: tab.id,
+    url: tab.url,
+    title: t('spSelectionChipTitle', [pageChipLabel(tab.url)]),
+  };
+  composerContextNotice = null;
+  updateAttachmentPreview();
+  updateContextButton();
+}
+
 function renderPendingPageChip(bar: HTMLElement): void {
   const source = _ctx.pendingPageContextSource;
   if (!_ctx.pendingPageContext || !source) return;
+  const selection = pendingSelectionAttached();
   const label = source.title || pageChipLabel(source.url);
   const chip = el('div', {
-    class: 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
-    title: source.url,
+    class: selection
+      ? 'sp-attachment-chip sp-attachment-doc sp-attachment-page sp-attachment-selection'
+      : 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
+    title: selection ? _ctx.pendingPageContext : source.url,
   });
   const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
-  icon.appendChild(renderIcon(Globe, 16));
+  icon.appendChild(renderIcon(selection ? FileText : Globe, 16));
   chip.appendChild(icon);
   const copy = el('div', { class: 'sp-attachment-doc-copy' });
   copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
-  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, pageChipLabel(source.url)));
+  copy.appendChild(
+    el(
+      'span',
+      { class: 'sp-attachment-doc-status' },
+      selection ? _ctx.pendingPageContext : pageChipLabel(source.url),
+    ),
+  );
   chip.appendChild(copy);
   const removeBtn = el(
     'button',
@@ -10157,9 +10236,6 @@ function buildUI(): void {
     switchTab('chat');
   });
   headerRight.appendChild(newChatBtn);
-
-  const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
-  headerRight.appendChild(quotaBadgeSlot);
 
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
@@ -13345,19 +13421,6 @@ function buildUI(): void {
     drawerMenu.appendChild(row);
   }
 
-  const quotaBadgeEl = el('button', {
-    id: 'sp-quota-badge',
-    type: 'button',
-    title: 'AGI Cloud plan',
-    'aria-label': 'AGI Cloud plan and usage, open menu',
-  });
-  quotaBadgeEl.addEventListener('click', () => {
-    openDrawer(quotaBadgeEl);
-  });
-  const quotaSlot = document.getElementById('sp-quota-badge-slot');
-  if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
-  else document.body.appendChild(quotaBadgeEl);
-
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearUsageResetTimer(): void {
@@ -13460,7 +13523,6 @@ function buildUI(): void {
     const views = usageWindowViews(usage);
     const purchased = purchasedCreditsView(usage);
     const recovery = planQuotaRecovery(managedPlanTier(access));
-    const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
     const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier));
     quotaWrap.dataset['upgradeOnly'] = String(upgradeOnly);
     clearChildren(quotaWindowsEl);
@@ -13469,15 +13531,12 @@ function buildUI(): void {
       if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
     }
     renderPlanComparison(access.subscriptionTier);
+    planCompareEl.hidden = upgradeOnly;
     quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
-    quotaBadgeEl.classList.add('visible');
 
     if (usage.usage_allocation === 'pending') {
       setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
       quotaUpgradeRow.style.display = 'none';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('unavailable', {
         message: t('spQuotaAllocationPending'),
         action: 'retry',
@@ -13497,9 +13556,6 @@ function buildUI(): void {
       quotaUpgradeBtn.dataset['destination'] = 'recovery';
       quotaUpgradeBtn.dataset['href'] = recovery.href;
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spQuotaManageUsage');
       setManagedCloudChatState('unavailable', {
         message,
         action: 'recovery',
@@ -13513,13 +13569,10 @@ function buildUI(): void {
     if (upgradeOnly) {
       setQuotaNotice('', null);
       quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
-      quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
+      quotaUpgradeBtn.textContent = t('spQuotaFreeUpgrade');
       delete quotaUpgradeBtn.dataset['destination'];
       delete quotaUpgradeBtn.dataset['href'];
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('ready');
       renderUsageBanner(null);
       return;
@@ -13534,9 +13587,6 @@ function buildUI(): void {
         : null;
     setQuotaNotice(banner?.text ?? '', banner?.severity ?? null);
     quotaUpgradeRow.style.display = 'none';
-    quotaBadgeEl.classList.add('has-prompts');
-    quotaBadgeEl.classList.remove('exhausted');
-    quotaBadgeEl.textContent = planLabel;
     setManagedCloudChatState('ready');
     renderUsageBanner(banner);
   }
@@ -13556,7 +13606,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
         message: t('spGateVerifyFailed'),
@@ -13590,7 +13639,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
         message: isClerkExtensionAuthConfigured()
@@ -13632,7 +13680,6 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       cloudLinkHint.style.display = 'none';
       cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof AccountUnavailableError) {
         signinPrompt.style.display = 'none';
@@ -13727,9 +13774,6 @@ function buildUI(): void {
       quotaUpgradeBtn.textContent = t('spBillingManage');
       quotaUpgradeBtn.dataset['destination'] = 'billing';
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('visible', 'exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spBillingBadge');
       setManagedCloudChatState('unavailable', {
         message:
           access.subscriptionStatus === 'past_due'
@@ -13781,10 +13825,6 @@ function buildUI(): void {
     quotaUpgradeBtn.dataset['destination'] = 'pricing';
     quotaUpgradeRow.style.display = '';
 
-    quotaBadgeEl.classList.add('visible');
-    quotaBadgeEl.classList.remove('has-prompts');
-    quotaBadgeEl.classList.add('exhausted');
-    quotaBadgeEl.textContent = t('spQuotaUpgrade');
     setManagedCloudChatState('unavailable', {
       message: t('spQuotaProRequired'),
       action: 'upgrade',
@@ -15453,6 +15493,8 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
+  inputEl.addEventListener('focus', () => void offerPageSelection());
+  window.addEventListener('focus', () => void offerPageSelection());
 
   const slashMenu = el('div', {
     id: 'sp-slash-menu',
@@ -16284,8 +16326,15 @@ function buildUI(): void {
   const autonomyPopover = el('div', {
     id: 'sp-autonomy-popover',
     role: 'menu',
-    'aria-label': 'Browser action approvals',
+    'aria-labelledby': 'sp-autonomy-heading',
   });
+  autonomyPopover.appendChild(
+    el(
+      'div',
+      { id: 'sp-autonomy-heading', class: 'sp-autonomy-heading', role: 'presentation' },
+      t('spAutonomyMenuHeading'),
+    ),
+  );
   const askFirstOption = el('button', {
     class: 'sp-autonomy-option',
     type: 'button',
@@ -16312,6 +16361,12 @@ function buildUI(): void {
   fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
   autonomyPopover.appendChild(fullAccessOption);
+  const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
+  autonomyLearnMore.classList.add('sp-autonomy-learn-more');
+  autonomyLearnMore.setAttribute('role', 'menuitem');
+  autonomyLearnMore.addEventListener('click', () => closeAutonomyPopover());
+  autonomyPopover.appendChild(autonomyLearnMore);
+  wireMenuArrowKeys(autonomyPopover);
   autonomyControl.appendChild(autonomyChip);
   autonomyControl.appendChild(autonomyPopover);
   composerBarStart.appendChild(autonomyControl);
@@ -16368,8 +16423,41 @@ function buildUI(): void {
     }
   });
 
+  const fullAccessNotice = el('div', {
+    id: 'sp-full-access-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  fullAccessNotice.appendChild(el('span', {}, t('spFullAccessNotice')));
+  const fullAccessNoticeDismiss = el('button', {
+    class: 'sp-composer-notice-dismiss',
+    type: 'button',
+    'aria-label': t('spFullAccessNoticeDismiss'),
+  });
+  fullAccessNoticeDismiss.appendChild(renderIcon(X, 12));
+  fullAccessNoticeDismiss.addEventListener('click', () => {
+    fullAccessNotice.classList.remove('visible');
+    void chrome.storage.local.set({ [FULL_ACCESS_NOTICE_DISMISSED_KEY]: true }).catch(() => {});
+    autonomyChip.focus();
+  });
+  fullAccessNotice.appendChild(fullAccessNoticeDismiss);
+
+  async function discloseFullAccess(): Promise<void> {
+    let dismissed = false;
+    try {
+      const stored = await chrome.storage.local.get(FULL_ACCESS_NOTICE_DISMISSED_KEY);
+      dismissed = stored[FULL_ACCESS_NOTICE_DISMISSED_KEY] === true;
+    } catch {
+      dismissed = false;
+    }
+    if (autonomyChip.getAttribute('data-mode') !== 'full') return;
+    fullAccessNotice.classList.toggle('visible', !dismissed);
+  }
+
   askFirstOption.addEventListener('click', () => {
     renderAutonomyChip(true);
+    fullAccessNotice.classList.remove('visible');
     void chrome.storage.local.set({ agi_cu_ask_before_acting: true });
     closeAutonomyPopover(true);
   });
@@ -16377,12 +16465,16 @@ function buildUI(): void {
     renderAutonomyChip(false);
     void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
     closeAutonomyPopover(true);
+    void discloseFullAccess();
   });
   autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeAutonomyPopover(true);
+      return;
     }
+    if (event.key === 'Tab') closeAutonomyPopover();
   });
   document.addEventListener('click', (event: MouseEvent) => {
     if (!autonomyControl.contains(event.target as Node)) closeAutonomyPopover();
@@ -16393,6 +16485,7 @@ function buildUI(): void {
     const change = changes['agi_cu_ask_before_acting'];
     if (!change) return;
     renderAutonomyChip(change.newValue !== false);
+    if (change.newValue !== false) fullAccessNotice.classList.remove('visible');
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -16543,6 +16636,7 @@ function buildUI(): void {
   freePlanNotices = buildFreePlanNotices();
   inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
+  inputArea.appendChild(fullAccessNotice);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);
   inputArea.appendChild(memoryNotice);
