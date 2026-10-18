@@ -99,7 +99,6 @@ export function resolveManagedComputerUseModel(
 
 export const DEFAULT_GATEWAY_BASE = configuredAgiWebOrigin() ?? '';
 
-const GATEWAY_URL_OVERRIDE_KEY = 'agi_gateway_url';
 const COMPUTER_USE_MAX_SSE_FRAME_CHARS = 1_048_576;
 
 export interface TextMessage {
@@ -582,17 +581,5 @@ async function callCloudRequest(
 }
 
 export async function resolveGatewayBase(): Promise<string> {
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const result = await chrome.storage.local.get([GATEWAY_URL_OVERRIDE_KEY]);
-      const override = result[GATEWAY_URL_OVERRIDE_KEY];
-      if (typeof override === 'string') {
-        const validated = validateGatewayUrl(override);
-        if (validated) return validated;
-      }
-    }
-  } catch {
-    /* noop */
-  }
   return DEFAULT_GATEWAY_BASE;
 }

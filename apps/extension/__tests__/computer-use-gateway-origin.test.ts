@@ -22,7 +22,7 @@ describe('computer-use configured API origin', () => {
     expect(validateGatewayUrl('http://user:password@localhost:3000')).toBeNull();
   });
 
-  it('uses the same configured development API as chat without a private gateway override', async () => {
+  it('uses the same configured development API as chat', async () => {
     vi.stubEnv('VITE_AGI_WEB_API_BASE_URL', 'http://localhost:3000');
     const { callCloud, resolveGatewayBase } =
       await import('../src/features/computer-use/cloudAgentClient');
@@ -45,19 +45,5 @@ describe('computer-use configured API origin', () => {
 
     await expect(callCloud([], 'qa-token')).rejects.toThrow('gateway URL not in allowlist');
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('preserves an explicitly configured and validated gateway override', async () => {
-    vi.stubEnv('VITE_AGI_WEB_API_BASE_URL', 'http://localhost:3000');
-    const { resolveGatewayBase } = await import('../src/features/computer-use/cloudAgentClient');
-    vi.stubGlobal('chrome', {
-      storage: {
-        local: {
-          get: vi.fn(async () => ({ agi_gateway_url: 'https://api.agiworkforce.com' })),
-        },
-      },
-    });
-
-    expect(await resolveGatewayBase()).toBe('https://api.agiworkforce.com');
   });
 });
