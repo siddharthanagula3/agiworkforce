@@ -7,14 +7,9 @@
         "electron/*.{ts,mjs}",
         "scripts/*.mjs",
         "**/*.test.{ts,tsx}",
-        "src/lib/tauri-web/*.ts",
-        "src/lib/tauri-electron/*.ts",
         "vite.config.ts"
       ],
-      "project": [
-        "src/**/*.{ts,tsx}",
-        "electron/**/*.ts"
-      ]
+      "project": ["src/**/*.{ts,tsx}", "electron/**/*.ts"]
     },
     "apps/extension": {
       "entry": [
@@ -25,19 +20,11 @@
         "vite.config.ts",
         "**/*.test.{ts,tsx}"
       ],
-      "project": [
-        "**/*.{ts,tsx}"
-      ]
+      "project": ["**/*.{ts,tsx}"]
     },
     "apps/extension-vscode": {
-      "entry": [
-        "src/extension.ts",
-        "esbuild.js",
-        "**/*.test.{ts,tsx}"
-      ],
-      "project": [
-        "**/*.{ts,tsx}"
-      ]
+      "entry": ["src/extension.ts", "esbuild.js", "**/*.test.{ts,tsx}"],
+      "project": ["**/*.{ts,tsx}"]
     },
     "apps/mobile": {
       "entry": [
@@ -47,9 +34,7 @@
         "babel.config.js",
         "**/*.test.{ts,tsx}"
       ],
-      "project": [
-        "**/*.{ts,tsx}"
-      ]
+      "project": ["**/*.{ts,tsx}"]
     },
     "apps/web": {
       "entry": [
@@ -61,36 +46,19 @@
         "next.config.ts",
         "**/*.test.{ts,tsx}"
       ],
-      "project": [
-        "**/*.{ts,tsx}"
-      ]
+      "project": ["**/*.{ts,tsx}"]
     },
     "packages/*": {
-      "entry": [
-        "src/index.{ts,tsx}",
-        "**/*.test.{ts,tsx}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ]
+      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/ui/*": {
-      "entry": [
-        "src/index.{ts,tsx}",
-        "**/*.test.{ts,tsx}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ]
+      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"]
     },
     "services/signaling-server": {
-      "entry": [
-        "src/index.ts",
-        "**/*.test.ts"
-      ],
-      "project": [
-        "**/*.ts"
-      ]
+      "entry": ["src/index.ts", "**/*.test.ts"],
+      "project": ["**/*.ts"]
     }
   },
   "ignore": [
@@ -103,9 +71,6 @@
     "**/.vscode-test/**",
     "**/out/**"
   ],
-  "ignoreDependencies": [
-    "@types/*",
-    "pino-pretty"
-  ],
+  "ignoreDependencies": ["@types/*", "pino-pretty"],
   "ignoreExportsUsedInFile": true
 }

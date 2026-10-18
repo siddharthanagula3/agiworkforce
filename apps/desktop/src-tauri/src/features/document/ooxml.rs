@@ -91,12 +91,10 @@ pub fn extract_pptx_text(bytes: &[u8]) -> Result<String> {
 
     let mut output = String::new();
     for (number, name) in slides {
-        let mut xml = String::new();
-        archive
+        let file = archive
             .by_name(&name)
-            .map_err(|e| Error::Generic(format!("Failed to read {}: {}", name, e)))?
-            .read_to_string(&mut xml)
-            .map_err(|e| Error::Generic(format!("Failed to load {}: {}", name, e)))?;
+            .map_err(|e| Error::Generic(format!("Failed to read {}: {}", name, e)))?;
+        let xml = read_entry_to_string(file, &name)?;
 
         let document = XmlDocument::parse(&xml)
             .map_err(|e| Error::Generic(format!("Invalid PPTX XML in {}: {}", name, e)))?;
@@ -167,12 +165,27 @@ fn open_archive<'a>(bytes: &'a [u8], label: &str) -> Result<ZipArchive<Cursor<&'
 
 fn read_archive_entry(bytes: &[u8], entry: &str, label: &str) -> Result<String> {
     let mut archive = open_archive(bytes, label)?;
-    let mut contents = String::new();
-    archive
+    let file = archive
         .by_name(entry)
-        .map_err(|_| Error::Generic(format!("Invalid {}: missing {}", label, entry)))?
+        .map_err(|_| Error::Generic(format!("Invalid {}: missing {}", label, entry)))?;
+    read_entry_to_string(file, entry)
+}
+
+/// An entry that inflates past a whole document's size limit is refused, so a
+/// small archive cannot expand into an allocation the size of the disk.
+pub(super) fn read_entry_to_string(entry: impl Read, name: &str) -> Result<String> {
+    let mut contents = String::new();
+    entry
+        .take(super::MAX_DOCUMENT_SIZE + 1)
         .read_to_string(&mut contents)
-        .map_err(|e| Error::Generic(format!("Failed to load {}: {}", entry, e)))?;
+        .map_err(|e| Error::Generic(format!("Failed to load {}: {}", name, e)))?;
+    if contents.len() as u64 > super::MAX_DOCUMENT_SIZE {
+        return Err(Error::Generic(format!(
+            "{} expands past {} bytes and was not read",
+            name,
+            super::MAX_DOCUMENT_SIZE
+        )));
+    }
     Ok(contents)
 }
 

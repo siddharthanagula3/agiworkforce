@@ -6,7 +6,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
 import { invoke } from '../lib/tauri-mock';
-import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
+import { isTauri } from '../lib/runtimeEnvironment';
 
 export interface NativeCloudCredential {
   accessToken: string;
@@ -36,7 +36,7 @@ interface NativeDeviceAuthorizationResponse {
 
 const APPROVED_POLL_ATTEMPTS = 4;
 const APPROVED_POLL_DELAY_MS = 400;
-const usesNativeCloudAccountBridge = isTauri || isElectronHost;
+const usesNativeCloudAccountBridge = isTauri;
 
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

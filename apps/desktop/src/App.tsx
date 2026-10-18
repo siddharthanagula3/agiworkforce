@@ -24,7 +24,7 @@ import {
   resetClientFailureReporting,
 } from './services/clientFailureReporting';
 import { useUnifiedAuthStore } from './stores/auth';
-import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
+import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { useQuickQueryDoubleTap } from './hooks/useQuickQueryDoubleTap';
@@ -1637,37 +1637,6 @@ const DesktopShell = () => {
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
-        {/*
-          The banner that tells a browser visitor there is a desktop app to
-          download. `!isTauri` is not that audience: Electron is not Tauri
-          either, so the shipped desktop build rendered "Web Chat" and a
-          a download link to someone who had already downloaded and opened the
-          desktop app. Observed 2026-09-08 in the built Electron binary.
-
-          Same root cause as the Tasks readiness state: `isTauri` was standing
-          in for "is the desktop app", and Electron falls on the wrong side of
-          it. The audience here is a real browser, so both hosts are excluded.
-        */}
-        {!isTauri && !isElectronHost && !import.meta.env.DEV && (
-          <div className="border-b border-[var(--chat-border)] bg-[var(--chat-accent-secondary)] px-4 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--chat-accent-primary-contrast)] font-semibold text-sm">
-                AGI Workforce
-              </span>
-              <span className="text-[var(--chat-accent-primary-contrast)]/70 text-xs">
-                Web Chat
-              </span>
-            </div>
-            <a
-              href="https://agiworkforce.com/download"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-[var(--chat-accent-primary-contrast)]/90 hover:text-[var(--chat-accent-primary-contrast)] bg-[var(--chat-accent-primary-contrast)]/15 hover:bg-[var(--chat-accent-primary-contrast)]/25 px-3 py-1 rounded-full transition-colors"
-            >
-              Download Desktop App
-            </a>
-          </div>
-        )}
         {isTauri && (
           <Suspense fallback={null}>
             <VoiceInputOverlay />
@@ -1879,12 +1848,12 @@ const DesktopShell = () => {
             />
           )}
         </Suspense>
-        {(isTauri || isElectronHost) && (
+        {isTauri && (
           <Suspense fallback={null}>
             <UpdateChecker onUpdateNow={openSettings} />
           </Suspense>
         )}
-        {(isTauri || isElectronHost) && (
+        {isTauri && (
           <Suspense fallback={null}>
             <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
           </Suspense>

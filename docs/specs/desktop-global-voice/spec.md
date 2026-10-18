@@ -60,9 +60,8 @@ deliberately does not drive the in-app dictation store, whose transcription
 goes through a native command this shell cannot reach, and which therefore
 answers with placeholder text here.
 
-Only the renderer AGI Cloud ships receives the press. With
-`AGI_CLOUD_RENDERER=remote` the shell loads the cloud app top-level with no
-preload and therefore no IPC receiver, so the press is logged and reported once
+Only the renderer AGI Cloud ships receives the press. The shell loads the
+cloud app top-level with no preload and therefore no IPC receiver, so the press is logged and reported once
 as unavailable rather than silently dropped.
 
 ## Language

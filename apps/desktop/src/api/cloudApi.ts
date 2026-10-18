@@ -1,5 +1,5 @@
 import { guardedFetch } from '../lib/egressGuard';
-import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
+import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import {
   MANAGED_CLOUD_CONVERSATION_LIMITS,
@@ -36,8 +36,8 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 // Exported so runtimes can resolve relative wire uris (e.g. the
-export const CLOUD_API_BASE_URL = isTauri || isElectronHost ? WEB_APP_URL : '';
-const usesNativeCloudSession = isTauri || isElectronHost;
+export const CLOUD_API_BASE_URL = isTauri ? WEB_APP_URL : '';
+const usesNativeCloudSession = isTauri;
 
 export const CLOUD_SSE_MAX_EVENT_CHARS = 1_048_576;
 export const CLOUD_SSE_IDLE_TIMEOUT_MS = 90_000;

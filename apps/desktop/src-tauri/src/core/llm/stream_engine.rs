@@ -397,9 +397,9 @@ mod tests {
 
     #[tokio::test]
     async fn openai_compat_tool_call_args_accumulate_by_index() {
-        // Tool call at index 1, id+name then split arguments across two events
-        // (Bug #27 shape), the crate assembler tracks the explicit index and
-        // the desktop accumulator merges by index.
+        // Tool call at index 1, id+name then split arguments across two events;
+        // the crate assembler tracks the explicit index and the desktop
+        // accumulator merges by index.
         let raw = concat!(
             "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_x\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"src/\"}}]}}]}\n\n",
             "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"main.rs\\\"}\"}}]}}]}\n\n",

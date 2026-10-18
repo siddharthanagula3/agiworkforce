@@ -13,23 +13,9 @@ pub struct CacheTypeStats {
     pub savings_usd: Option<f64>,
 }
 
-impl Default for CacheTypeStats {
-    fn default() -> Self {
-        Self {
-            hits: 0,
-            misses: 0,
-            hit_rate: 0.0,
-            size_mb: 0.0,
-            entries: 0,
-            savings_usd: None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
     pub llm_cache: CacheTypeStats,
-    pub tool_cache: CacheTypeStats,
     pub total_size_mb: f64,
     pub total_savings_usd: f64,
 }
@@ -65,16 +51,11 @@ pub async fn cache_get_stats(db: State<'_, AppDatabase>) -> Result<CacheStats, S
     let conn = db.connection()?;
 
     let llm_stats = get_llm_cache_stats(&conn)?;
-
-    let tool_stats = CacheTypeStats::default();
-
-    let total_size_mb = llm_stats.size_mb + tool_stats.size_mb;
-    let total_savings_usd =
-        llm_stats.savings_usd.unwrap_or(0.0) + tool_stats.savings_usd.unwrap_or(0.0);
+    let total_size_mb = llm_stats.size_mb;
+    let total_savings_usd = llm_stats.savings_usd.unwrap_or(0.0);
 
     Ok(CacheStats {
         llm_cache: llm_stats,
-        tool_cache: tool_stats,
         total_size_mb,
         total_savings_usd,
     })
@@ -118,15 +99,6 @@ pub async fn cache_clear_by_type(
                 .map_err(|e| format!("Failed to prune expired cache: {}", e))?;
 
             tracing::info!("LLM cache cleared");
-            Ok(())
-        }
-        "tool" => {
-            // Tool caches are managed per-execution by AgiExecutor instances.
-            // They automatically clear when executions complete.
-            // No global tool cache to clear, but we log the request for visibility.
-            tracing::info!(
-                "Tool cache clear requested - tool caches are per-execution and auto-clear on completion"
-            );
             Ok(())
         }
         _ => Err(format!("Unknown cache type: {}", cache_type)),

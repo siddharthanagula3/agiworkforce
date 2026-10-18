@@ -13,7 +13,7 @@ const TRELLO_BASE_URL: &str = "https://api.trello.com/1";
 /// URL-encode a path segment to prevent issues with special characters
 /// While Trello IDs are typically alphanumeric, user-provided values (like list names)
 /// could contain special characters that need encoding.
-/// Bug #227 fix: Iterate over bytes instead of using `c as u8` which is incorrect
+/// Iterate over bytes instead of using `c as u8` which is incorrect
 /// for multi-byte UTF-8 characters.
 fn encode_path_segment(segment: &str) -> String {
     // Percent-encode characters that are not unreserved according to RFC 3986
@@ -496,7 +496,7 @@ impl UnifiedTaskProvider for TrelloClient {
     }
 
     async fn update_task(&self, task: Task) -> Result<()> {
-        // Bug #228 fix: Use task.project_id (board ID) when available instead of always
+        // Use task.project_id (board ID) when available instead of always
         // using the first board
         let board_id = if let Some(ref project_id) = task.project_id {
             project_id.clone()

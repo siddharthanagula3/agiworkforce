@@ -8,8 +8,6 @@ vi.mock('electron', () => ({ shell: { openExternal } }));
 vi.mock('../config', () => ({
   CLERK_DEVELOPMENT_HOST: null,
   CLOUD_APP_ORIGIN: 'https://agiworkforce.com',
-  RENDERER_MODE: 'remote',
-  RENDERER_ORIGIN: 'agi://cloud',
 }));
 
 const { applyRemoteWindowPolicy, decideRemoteNavigation, decideRemoteRedirect } =

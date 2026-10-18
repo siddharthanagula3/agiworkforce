@@ -6,15 +6,14 @@ import {
 } from '../permissionPolicy';
 
 describe('Electron cloud permission policy', () => {
-  it.each(['https://agiworkforce.com/chat', 'agi://cloud/index.html'])(
-    'recognizes the owned renderer origin: %s',
-    (origin) => expect(isTrustedCloudRendererOrigin(origin)).toBe(true),
-  );
+  it('recognizes the cloud app origin', () => {
+    expect(isTrustedCloudRendererOrigin('https://agiworkforce.com/chat')).toBe(true);
+  });
 
   it.each([
     'https://accounts.google.com/',
     'https://agiworkforce.com.attacker.test/',
-    'agi://cloud.attacker.test/',
+    'agi://cloud/index.html',
     'not a url',
   ])('rejects a non-owned permission origin: %s', (origin) => {
     expect(isTrustedCloudRendererOrigin(origin)).toBe(false);

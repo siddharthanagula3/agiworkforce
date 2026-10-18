@@ -10,13 +10,13 @@ use pdf_extract;
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
 use crate::sys::error::{Error, Result};
 
-/// DOC-014 fix: Cache duration for parsed PDF metadata (5 minutes)
+/// Cache duration for parsed PDF metadata (5 minutes)
 const CACHE_DURATION: Duration = Duration::from_secs(300);
 
-/// DOC-014 fix: Maximum number of cached entries to prevent unbounded memory growth
+/// Maximum number of cached entries to prevent unbounded memory growth
 const MAX_CACHE_ENTRIES: usize = 100;
 
-/// DOC-014 fix: Cached PDF metadata with timestamp for expiration
+/// Cached PDF metadata with timestamp for expiration
 struct CachedMetadata {
     metadata: DocumentMetadata,
     cached_at: Instant,
@@ -29,7 +29,7 @@ impl CachedMetadata {
 }
 
 pub struct PdfHandler {
-    /// DOC-014 fix: Cache for parsed document metadata to avoid re-parsing
+    /// Cache for parsed document metadata to avoid re-parsing
     cache: RwLock<HashMap<String, CachedMetadata>>,
 }
 
@@ -40,14 +40,14 @@ impl PdfHandler {
         }
     }
 
-    /// DOC-014 fix: Invalidate all expired cache entries
+    /// Invalidate all expired cache entries
     fn cleanup_expired_entries(&self) {
         if let Ok(mut cache) = self.cache.write() {
             cache.retain(|_, entry| !entry.is_expired());
         }
     }
 
-    /// DOC-014 fix: Evict oldest entries if cache is full (LRU-like based on cache time)
+    /// Evict oldest entries if cache is full (LRU-like based on cache time)
     fn evict_if_needed(&self) {
         if let Ok(mut cache) = self.cache.write() {
             if cache.len() >= MAX_CACHE_ENTRIES {
@@ -66,7 +66,7 @@ impl PdfHandler {
     pub async fn read(&self, file_path: &str) -> Result<DocumentContent> {
         let text = self.extract_text(file_path).await?;
 
-        // DOC-014 fix: Use cached metadata if available
+        // Use cached metadata if available
         let mut metadata = self.get_metadata(file_path).await?;
         metadata.word_count = Some(text.split_whitespace().count());
 
@@ -91,13 +91,13 @@ impl PdfHandler {
             return Err(Error::Generic(format!("File not found: {}", file_path)));
         }
 
-        // DOC-014 fix: Check file modification time for cache invalidation
+        // Check file modification time for cache invalidation
         let file_metadata = fs::metadata(path)
             .map_err(|e| Error::Generic(format!("Failed to read file metadata: {}", e)))?;
 
         let modified_time = file_metadata.modified().ok();
 
-        // DOC-014 fix: Try to get from cache first
+        // Try to get from cache first
         if let Ok(cache) = self.cache.read() {
             if let Some(cached) = cache.get(file_path) {
                 if !cached.is_expired() {
@@ -113,14 +113,14 @@ impl PdfHandler {
                         .map(|d| d.as_secs());
 
                     if cached_modified == current_modified {
-                        tracing::debug!("DOC-014: Using cached metadata for {}", file_path);
+                        tracing::debug!("Using cached metadata for {}", file_path);
                         return Ok(cached.metadata.clone());
                     }
                 }
             }
         }
 
-        // DOC-014 fix: Parse and cache the metadata
+        // Parse and cache the metadata
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -171,7 +171,7 @@ impl PdfHandler {
             mime_type: Some("application/pdf".to_string()),
         };
 
-        // DOC-014 fix: Store in cache
+        // Store in cache
         self.cleanup_expired_entries();
         self.evict_if_needed();
 
@@ -184,7 +184,7 @@ impl PdfHandler {
                 },
             );
             tracing::debug!(
-                "DOC-014: Cached metadata for {} (cache size: {})",
+                "Cached metadata for {} (cache size: {})",
                 file_path,
                 cache.len()
             );
@@ -198,7 +198,7 @@ impl PdfHandler {
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 
-        // DOC-013 fix: Pre-lowercase the entire content once for O(n) instead of O(n*m)
+        // Pre-lowercase the entire content once for O(n) instead of O(n*m)
         // where n is content length and m is number of lines
         let text_lower = text.to_lowercase();
         let lines: Vec<&str> = text.lines().collect();
@@ -226,12 +226,12 @@ impl Default for PdfHandler {
 }
 
 impl PdfHandler {
-    /// DOC-014 fix: Clear the metadata cache (useful for testing or manual refresh)
+    /// Clear the metadata cache (useful for testing or manual refresh)
     // Used by: testing and cache invalidation
     pub fn clear_cache(&self) {
         if let Ok(mut cache) = self.cache.write() {
             cache.clear();
-            tracing::debug!("DOC-014: Cache cleared");
+            tracing::debug!("Cache cleared");
         }
     }
 }

@@ -52,7 +52,7 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         let task_id = parse_optional_task_id(args);
         let undo_state = self.undo_state()?;
-        let manager = undo_state.get_manager().await;
+        let manager = undo_state.get_manager();
         let summary = manager.get_undo_summary(task_id.as_deref()).await;
 
         Ok(ToolResult {
@@ -74,7 +74,7 @@ impl ToolExecutor {
         let task_id = parse_optional_task_id(args);
         let limit = parse_positive_limit(args)?;
         let undo_state = self.undo_state()?;
-        let manager = undo_state.get_manager().await;
+        let manager = undo_state.get_manager();
         let summary = manager.get_undo_summary(task_id.as_deref()).await;
         let changes: Vec<Value> = summary
             .recent_changes
@@ -104,7 +104,7 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         let task_id = parse_optional_task_id(args);
         let undo_state = self.undo_state()?;
-        let manager = undo_state.get_manager().await;
+        let manager = undo_state.get_manager();
         let result = manager
             .undo_last(task_id.as_deref())
             .await
@@ -128,7 +128,7 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         let change_id = parse_required_string(args, "change_id")?;
         let undo_state = self.undo_state()?;
-        let manager = undo_state.get_manager().await;
+        let manager = undo_state.get_manager();
         let result = manager
             .undo_change(&change_id)
             .await

@@ -3015,12 +3015,7 @@ describe('the commands the contract lists', () => {
     'system_permission_open',
   ]);
   /** Named for another host, or retired from this one: no page asks this shell for them. */
-  const NOT_ANSWERED_HERE = new Set<string>([
-    'file_stat',
-    'phone_step',
-    'window_open',
-    'workspace_snapshot',
-  ]);
+  const NOT_ANSWERED_HERE = new Set<string>(['phone_step']);
   const CONSTANT_LABELS: Record<string, string> = {
     BROWSER_SIGN_IN_START,
     BROWSER_SIGN_IN_CANCEL,

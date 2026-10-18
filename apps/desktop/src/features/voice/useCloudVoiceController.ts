@@ -26,7 +26,6 @@ import {
 } from '../../stores/computerUseStore';
 import { useVoiceInputStore } from '../../stores/settingsStore';
 import { toProviderLanguage } from '../../lib/voiceLanguage';
-import { onGlobalVoiceHotkey } from '../../lib/tauri-electron/voice-hotkey';
 import { rewriteCloudVoiceTranscript, type CloudVoiceDecision } from './cloudVoiceService';
 
 type DesktopVoiceWorkflowState = Extract<
@@ -435,16 +434,6 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
   const denyPausedStep = useCallback(async () => {
     await useComputerUseStore.getState().resolveConfirmation(false);
   }, []);
-
-  const toggleRef = useRef(onToggle);
-  useEffect(() => {
-    toggleRef.current = onToggle;
-  }, [onToggle]);
-
-  // The shell's OS-global accelerator has to reach the same capture this
-  // composer runs. Driving the local dictation store instead would transcribe
-  // through a Tauri command the cloud shell cannot reach.
-  useEffect(() => onGlobalVoiceHotkey(() => void toggleRef.current()), []);
 
   const controllerState: ComposerVoiceState = composerVoiceStateFromTranscription(workflowState, {
     isRecording,

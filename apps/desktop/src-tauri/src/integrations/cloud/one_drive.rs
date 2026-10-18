@@ -511,7 +511,7 @@ impl OneDriveClient {
 
             let status = response.status();
 
-            // Bug #229 fix: 202 Accepted is an intermediate response (more chunks needed).
+            // 202 Accepted is an intermediate response (more chunks needed).
             // Only 200 OK or 201 Created indicate upload completion.
             if !(status.is_success() || status == 202) {
                 let body = response

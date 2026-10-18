@@ -127,7 +127,7 @@ pub fn window_dock(
 }
 
 #[tauri::command]
-pub fn window_toggle_maximize(app: AppHandle, _state: State<AppState>) -> Result<(), String> {
+pub fn window_toggle_maximize(app: AppHandle) -> Result<(), String> {
     let window = main_window(&app)?;
 
     let is_maximized = window.is_maximized().map_err(|e| e.to_string())?;

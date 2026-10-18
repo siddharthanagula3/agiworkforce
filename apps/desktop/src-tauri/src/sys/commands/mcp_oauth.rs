@@ -44,10 +44,6 @@ enum ConnectorCredentialSource {
     OAuth { provider: &'static str },
     /// Uses API key stored via api_key_{connector_id}
     ApiKey,
-    /// No credentials needed
-    // Used by: public MCP servers that require no authentication
-    #[allow(dead_code)]
-    None,
     Remote {
         url: &'static str,
         client: Option<McpOAuthProvider>,
@@ -2451,7 +2447,7 @@ async fn stdio_connector_configs(
                 );
             }
         }
-        ConnectorCredentialSource::None | ConnectorCredentialSource::Remote { .. } => {}
+        ConnectorCredentialSource::Remote { .. } => {}
     }
 
     // Build the MCP server config

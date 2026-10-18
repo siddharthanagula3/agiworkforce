@@ -308,12 +308,6 @@ pub enum SessionEvent {
         session_id: String,
         task: ComputerUseTask,
     },
-    /// Action about to be executed.
-    ActionStarting {
-        session_id: String,
-        action: ComputerUseAction,
-        action_index: u32,
-    },
     /// Action completed.
     ActionCompleted {
         session_id: String,
@@ -339,10 +333,6 @@ pub enum SessionEvent {
     },
     /// Session resumed after pause.
     SessionResumed { session_id: String },
-    /// Session cancelled by user.
-    SessionCancelled { session_id: String },
-    /// Error occurred.
-    Error { session_id: String, error: String },
 }
 
 /// A Computer Use session tracks the execution of a task.
@@ -363,8 +353,6 @@ pub struct ComputerUseSession {
     ended_at: Option<DateTime<Utc>>,
     /// Whether session is paused.
     is_paused: bool,
-    /// Whether session was cancelled.
-    is_cancelled: bool,
     /// App handle for event emission.
     app_handle: Option<AppHandle>,
 }
@@ -383,7 +371,6 @@ impl ComputerUseSession {
             started_at: Utc::now(),
             ended_at: None,
             is_paused: false,
-            is_cancelled: false,
             app_handle: None,
         }
     }
@@ -405,9 +392,6 @@ impl ComputerUseSession {
                 SessionEvent::SessionStarted { .. } => {
                     app.emit("computer_use:session_started", &event)
                 }
-                SessionEvent::ActionStarting { .. } => {
-                    app.emit("computer_use:action_starting", &event)
-                }
                 SessionEvent::ActionCompleted { .. } => {
                     app.emit("computer_use:action_completed", &event)
                 }
@@ -423,10 +407,6 @@ impl ComputerUseSession {
                 SessionEvent::SessionResumed { .. } => {
                     app.emit("computer_use:session_resumed", &event)
                 }
-                SessionEvent::SessionCancelled { .. } => {
-                    app.emit("computer_use:session_cancelled", &event)
-                }
-                SessionEvent::Error { .. } => app.emit("computer_use:error", &event),
             };
 
             if let Err(e) = emitted {
@@ -558,16 +538,6 @@ impl ComputerUseSession {
         });
     }
 
-    /// Cancels the session.
-    pub fn cancel(&mut self) {
-        self.is_cancelled = true;
-        self.ended_at = Some(Utc::now());
-        self.purge_persisted_screenshots();
-        self.emit(SessionEvent::SessionCancelled {
-            session_id: self.id.clone(),
-        });
-    }
-
     /// Completes the session with an outcome.
     pub fn complete(&mut self, outcome: TaskOutcome) {
         self.ended_at = Some(Utc::now());
@@ -615,11 +585,6 @@ impl ComputerUseSession {
     /// Checks if session is paused.
     pub fn is_paused(&self) -> bool {
         self.is_paused
-    }
-
-    /// Checks if session was cancelled.
-    pub fn is_cancelled(&self) -> bool {
-        self.is_cancelled
     }
 
     /// Returns all screenshot paths for this session.
@@ -918,7 +883,6 @@ mod tests {
         assert_eq!(session.task.id, task.id);
         assert_eq!(session.action_count(), 0);
         assert!(!session.is_paused());
-        assert!(!session.is_cancelled());
     }
 
     /// The action may have brought a blocked app forward, so a frame after it

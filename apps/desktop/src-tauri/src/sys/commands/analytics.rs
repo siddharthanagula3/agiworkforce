@@ -190,7 +190,7 @@ pub async fn analytics_get_usage_stats(
         )
         .unwrap_or(0);
 
-    // Bug #82 fix: The old query compared session `id` (which is unique per
+    // The old query compared session `id` (which is unique per
     // session) to itself, so it would always return 0. For a single-user
     // desktop app we check whether any sessions exist before today, if not,
     // this is a new user today.
@@ -275,7 +275,7 @@ use crate::sys::commands::AppDatabase;
 
 /// Reuse the managed `AppDatabase` connection for analytics work.
 ///
-/// Bug #76 fix: analytics now shares the desktop runtime's SQLite connection
+/// Analytics now shares the desktop runtime's SQLite connection
 /// instead of opening a second writer.
 fn create_analytics_db_connection(
     app_db: &AppDatabase,

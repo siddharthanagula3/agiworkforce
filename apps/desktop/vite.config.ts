@@ -11,10 +11,6 @@ const DEFAULT_DEV_PORT = 5173;
 
 export default defineConfig(async ({ mode }: ConfigEnv) => {
   const env = loadEnv(mode, process.cwd(), ['VITE_', 'TAURI_']);
-  const buildTargetEnv = env['VITE_BUILD_TARGET'] || process.env['VITE_BUILD_TARGET'];
-  const isWebBuild = buildTargetEnv === 'web';
-  const isElectronBuild = buildTargetEnv === 'electron';
-  const isBrowserBundle = isWebBuild || isElectronBuild;
 
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
   const tauriDevHost = env['TAURI_DEV_HOST'] || '127.0.0.1';
@@ -35,57 +31,20 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
 
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
   const isDebug = Boolean(env['TAURI_DEBUG']);
-  const browserShimDir = (module: string) =>
-    isElectronBuild &&
-    ['core', 'window', 'deep-link', 'dialog', 'shell', 'process', 'updater'].includes(module)
-      ? './src/lib/tauri-electron'
-      : './src/lib/tauri-web';
-  const webTauriAliases = isBrowserBundle
-    ? {
-        '@tauri-apps/api/core': path.resolve(__dirname, `${browserShimDir('core')}/core.ts`),
-        '@tauri-apps/api/event': path.resolve(__dirname, './src/lib/tauri-web/event.ts'),
-        '@tauri-apps/api/window': path.resolve(__dirname, `${browserShimDir('window')}/window.ts`),
-        '@tauri-apps/api/path': path.resolve(__dirname, './src/lib/tauri-web/path.ts'),
-        '@tauri-apps/plugin-deep-link': path.resolve(
-          __dirname,
-          `${browserShimDir('deep-link')}/deep-link.ts`,
-        ),
-        '@tauri-apps/plugin-dialog': path.resolve(
-          __dirname,
-          `${browserShimDir('dialog')}/dialog.ts`,
-        ),
-        '@tauri-apps/plugin-shell': path.resolve(__dirname, `${browserShimDir('shell')}/shell.ts`),
-        '@tauri-apps/plugin-fs': path.resolve(__dirname, './src/lib/tauri-web/fs.ts'),
-        '@tauri-apps/plugin-process': path.resolve(
-          __dirname,
-          `${browserShimDir('process')}/process.ts`,
-        ),
-        '@tauri-apps/plugin-updater': path.resolve(
-          __dirname,
-          `${browserShimDir('updater')}/updater.ts`,
-        ),
-      }
-    : {};
 
   const buildTarget = isWindows ? 'chrome105' : 'safari15';
 
   const config: UserConfig = {
-    base: isBrowserBundle ? '/' : undefined,
-
     plugins: [
       react({
         devTarget: 'esnext',
       }),
       tailwindcss(),
-      ...(isBrowserBundle
-        ? []
-        : [
-            ipcCheckPlugin({
-              srcDir: path.resolve(__dirname, './src'),
-              srcTauriDir: path.resolve(__dirname, './src-tauri/src'),
-              failOnDrift: false,
-            }),
-          ]),
+      ipcCheckPlugin({
+        srcDir: path.resolve(__dirname, './src'),
+        srcTauriDir: path.resolve(__dirname, './src-tauri/src'),
+        failOnDrift: false,
+      }),
     ],
 
     server: {
@@ -141,7 +100,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
     envPrefix: ['VITE_'],
 
     build: {
-      target: isBrowserBundle ? 'esnext' : buildTarget,
+      target: buildTarget,
 
       minify: isDebug ? false : 'esbuild',
 
@@ -178,7 +137,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               return 'ui-vendor';
             }
 
-            if (!isBrowserBundle && id.includes('/@xterm/')) {
+            if (id.includes('/@xterm/')) {
               return 'terminal-vendor';
             }
 
@@ -300,7 +259,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/platform/utils/src/index.ts',
         ),
-        ...webTauriAliases,
       },
     },
 
@@ -309,13 +267,13 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'react',
         'react-dom',
         'zustand',
-        ...(isBrowserBundle ? [] : ['@tauri-apps/api']),
+        '@tauri-apps/api',
         'framer-motion',
         'clsx',
         'date-fns',
         'react-syntax-highlighter',
       ],
-      exclude: isBrowserBundle ? [] : ['@tauri-apps/cli'],
+      exclude: ['@tauri-apps/cli'],
       force: false,
     },
 
@@ -330,8 +288,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       __APP_VERSION__: JSON.stringify(env['npm_package_version'] || '0.0.0'),
       __DEV__: JSON.stringify(mode === 'development'),
       __PROD__: JSON.stringify(mode === 'production'),
-      __WEB_BUILD__: JSON.stringify(isBrowserBundle),
-      __ELECTRON_BUILD__: JSON.stringify(isElectronBuild),
     },
 
     esbuild: {

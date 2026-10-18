@@ -9,7 +9,7 @@ import { shell } from 'electron';
 import { hostKeepsSignInInWindow } from '@agiworkforce/local-runtime-contract';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
-import { CLERK_DEVELOPMENT_HOST, CLOUD_APP_ORIGIN, RENDERER_MODE, RENDERER_ORIGIN } from './config';
+import { CLERK_DEVELOPMENT_HOST, CLOUD_APP_ORIGIN } from './config';
 
 /**
  * The window holds the product and the sign-in flow. Everything else the site
@@ -220,15 +220,12 @@ function lockDetachedPage(child: BrowserWindow): void {
 }
 
 export function applyRemoteWindowPolicy(win: BrowserWindow): void {
-  const isRemote = RENDERER_MODE === 'remote';
-  const appOrigin = isRemote ? CLOUD_APP_ORIGIN : RENDERER_ORIGIN;
+  const appOrigin = CLOUD_APP_ORIGIN;
 
-  if (isRemote) {
-    win.webContents.userAgent = win.webContents.userAgent
-      .replace(/\sAGICloud\/[\d.]+/i, '')
-      .replace(/\sAGI Cloud\/[\d.]+/i, '')
-      .replace(/\sElectron\/[\d.]+/i, '');
-  }
+  win.webContents.userAgent = win.webContents.userAgent
+    .replace(/\sAGICloud\/[\d.]+/i, '')
+    .replace(/\sAGI Cloud\/[\d.]+/i, '')
+    .replace(/\sElectron\/[\d.]+/i, '');
 
   win.webContents.setWindowOpenHandler(({ url, frameName }) => {
     if (isPanelWindowRequest(url, frameName)) {
@@ -255,13 +252,8 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
     if (isPanelWindowRequest(url, frameName)) closeWithOpener(child, win);
   });
 
-  const isLocalRenderer = (url: string) => url.startsWith(`${RENDERER_ORIGIN}/`);
-
   win.webContents.on('will-navigate', (event, url) => {
-    const allowed = isRemote
-      ? decideRemoteNavigation(url, CLOUD_APP_ORIGIN) === 'allow'
-      : isLocalRenderer(url);
-    if (!allowed) {
+    if (decideRemoteNavigation(url, appOrigin) !== 'allow') {
       event.preventDefault();
       openExternally(url);
     }
@@ -269,10 +261,7 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
 
   win.webContents.on('will-redirect', (event) => {
     if (!event.isMainFrame) return;
-    const allowed = isRemote
-      ? decideRemoteRedirect(event.url, CLOUD_APP_ORIGIN) === 'allow'
-      : isLocalRenderer(event.url);
-    if (!allowed) {
+    if (decideRemoteRedirect(event.url, appOrigin) !== 'allow') {
       event.preventDefault();
       openExternally(event.url);
     }

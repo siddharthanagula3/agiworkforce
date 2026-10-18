@@ -2,16 +2,7 @@
   "schemaVersion": 1,
   "surfaces": {
     "desktop": {
-      "intentional": [
-        {
-          "pathPrefix": "apps/desktop/src/lib/tauri-web/",
-          "reason": "Web-build shims aliased over @tauri-apps/* only when isWebBuild is set (apps/desktop/vite.config.ts:38-56), so they are unreachable from the Tauri renderer entry by design."
-        },
-        {
-          "pathPrefix": "apps/desktop/src/lib/tauri-electron/",
-          "reason": "Electron-build shims aliased over @tauri-apps/* only when the build target is electron (apps/desktop/vite.config.ts:35,60-61), so they are unreachable from the Tauri renderer entry by design. Mirrors the tauri-web/ entry above."
-        }
-      ],
+      "intentional": [],
       "unreachableDebt": {
         "reason": "Pre-existing unreachable desktop modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",

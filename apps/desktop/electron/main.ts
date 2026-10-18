@@ -9,15 +9,13 @@ import {
   app,
   clipboard,
   desktopCapturer,
-  dialog,
   ipcMain,
   nativeTheme,
-  protocol,
   screen,
   session,
   shell,
 } from 'electron';
-import { promises as fs, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import {
   LOCAL_CODE_SESSION_ACTIVITY_PATH,
@@ -41,10 +39,7 @@ import {
 } from './desktopAutoUpdate';
 import {
   ELECTRON_IPC_CHANNELS,
-  isElectronBridgeCommand,
-  type ElectronDialogRequest,
   type ElectronNotifyRequest,
-  type ElectronWindowControlRequest,
 } from '../src/lib/tauri-electron/bridgeContract';
 import {
   NO_HOST_SHORTCUT,
@@ -66,7 +61,6 @@ import {
   startBrowserBridge,
   stopBrowserBridge,
 } from './browser/bridgeServer';
-import { handleBridgeCommand } from './accountBridge';
 import {
   dispatch as dispatchDesktopRuntime,
   noteDeveloperSessionEvent as noteDispatcherSessionEvent,
@@ -156,16 +150,7 @@ import {
   shellScreenUrl,
 } from './shellScreens';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
-import {
-  CLOUD_APP_ORIGIN,
-  DEEP_LINK_SCHEME,
-  REMOTE_SESSION_PARTITION,
-  RENDERER_CSP,
-  RENDERER_HOST,
-  RENDERER_MODE,
-  RENDERER_ORIGIN,
-  RENDERER_SCHEME,
-} from './config';
+import { CLOUD_APP_ORIGIN, DEEP_LINK_SCHEME, REMOTE_SESSION_PARTITION } from './config';
 import {
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
@@ -283,87 +268,11 @@ const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 
 const SUPPORT_PATH = '/support';
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: RENDERER_SCHEME,
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      stream: true,
-    },
-  },
-]);
-
-const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.wasm': 'application/wasm',
-  '.map': 'application/json',
-  '.txt': 'text/plain; charset=utf-8',
-  '.mp3': 'audio/mpeg',
-  '.mp4': 'video/mp4',
-};
-
-function rendererDistDir(): string {
-  return path.join(app.getAppPath(), 'dist');
-}
-
-async function serveRenderer(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  if (url.hostname !== RENDERER_HOST) {
-    return new Response('Not found', { status: 404 });
-  }
-
-  const distDir = rendererDistDir();
-  const requested = decodeURIComponent(url.pathname);
-  const relative = requested === '/' ? 'index.html' : requested.replace(/^\/+/, '');
-  let filePath = path.normalize(path.join(distDir, relative));
-  if (!filePath.startsWith(distDir + path.sep) && filePath !== path.join(distDir, 'index.html')) {
-    return new Response('Forbidden', { status: 403 });
-  }
-
-  let body: Buffer;
-  try {
-    body = await fs.readFile(filePath);
-  } catch {
-    filePath = path.join(distDir, 'index.html');
-    try {
-      body = await fs.readFile(filePath);
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
-  };
-  if (filePath.endsWith('.html')) {
-    headers['Content-Security-Policy'] = RENDERER_CSP;
-  }
-  return new Response(new Uint8Array(body), { status: 200, headers });
-}
-
 /**
  * Which document may call the bridge.
  *
  * Main-frame only, so an embedded iframe never reaches it, and then the origin
- * must be one this build serves: the bundled `agi://cloud` renderer, or the
- * cloud app itself when the window is wrapping the website.
+ * must be the cloud app the window wraps.
  *
  * `windowPolicy.ts` deliberately allows top-level navigation to the sign-in
  * providers, Google, Microsoft, Apple and Clerk, because that is how OAuth
@@ -470,140 +379,7 @@ async function startPairingBridge(): Promise<void> {
   }
 }
 
-/**
- * Restarts through the same quit the menu takes: the question about work in
- * flight, then `will-quit`, which stops every agent, command and paired phone.
- * `app.exit` skips both and leaves them running with nobody to answer them.
- */
-async function relaunchThroughQuitGuard(allowQuit: () => void): Promise<boolean> {
-  const prompt = quitPrompt(liveWork());
-  if (prompt && !(await askGuardPrompt(prompt))) return false;
-  allowQuit();
-  app.relaunch();
-  app.quit();
-  return true;
-}
-
-/**
- * The half of the bridge only the bundled renderer drives: the account bridge,
- * the window, native dialogs that hand back absolute paths, and a restart. The
- * hosted page has no caller for any of it, so in remote mode none of it is
- * registered and a script on the app origin has nothing to reach.
- */
-function registerBundledRendererHandlers(allowQuit: () => void): void {
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.invokeBridge, async (event, command, args) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (typeof command !== 'string' || !isElectronBridgeCommand(command)) {
-      throw new Error('Unknown bridge command.');
-    }
-    const safeArgs =
-      args && typeof args === 'object' && !Array.isArray(args)
-        ? (args as Record<string, unknown>)
-        : undefined;
-    return handleBridgeCommand(command, safeArgs);
-  });
-
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.windowControl, async (event, request) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return false;
-    const { action, value } = (request ?? {}) as ElectronWindowControlRequest;
-    switch (action) {
-      case 'minimize':
-        win.minimize();
-        return true;
-      case 'maximize':
-        win.maximize();
-        return true;
-      case 'unmaximize':
-        win.unmaximize();
-        return true;
-      case 'toggleMaximize':
-        if (win.isMaximized()) win.unmaximize();
-        else win.maximize();
-        return true;
-      case 'isMaximized':
-        return win.isMaximized();
-      case 'close':
-        win.close();
-        return true;
-      case 'show':
-        win.show();
-        return true;
-      case 'hide':
-        win.hide();
-        return true;
-      case 'setFocus':
-        win.focus();
-        return true;
-      case 'setAlwaysOnTop':
-        win.setAlwaysOnTop(value === true);
-        return true;
-      case 'setTitle':
-        if (typeof value === 'string') win.setTitle(value);
-        return true;
-      case 'startDragging':
-        return false;
-      default:
-        return false;
-    }
-  });
-
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.dialog, async (event, request) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return null;
-    const req = (request ?? {}) as ElectronDialogRequest;
-    switch (req.kind) {
-      case 'message': {
-        await showNativeMessage(win, {
-          type: 'info',
-          message: String(req.message ?? ''),
-          title: req.title ?? app.name,
-        });
-        return null;
-      }
-      case 'ask':
-      case 'confirm': {
-        const { response } = await showNativeMessage(win, {
-          type: 'question',
-          buttons: ['Yes', 'No'],
-          defaultId: 0,
-          cancelId: 1,
-          message: String(req.message ?? ''),
-          title: req.title ?? app.name,
-        });
-        return response === 0;
-      }
-      case 'open': {
-        const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-          title: req.title,
-          properties: [req.directory ? 'openDirectory' : 'openFile'],
-        });
-        if (canceled || filePaths.length === 0) return null;
-        return filePaths[0] ?? null;
-      }
-      case 'save': {
-        const { canceled, filePath } = await dialog.showSaveDialog(win, {
-          title: req.title,
-          defaultPath: req.defaultPath,
-        });
-        return canceled || !filePath ? null : filePath;
-      }
-      default:
-        return null;
-    }
-  });
-
-  ipcMain.handle(ELECTRON_IPC_CHANNELS.relaunch, async (event) => {
-    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    return relaunchThroughQuitGuard(allowQuit);
-  });
-}
-
-function registerIpcHandlers(allowQuit: () => void): void {
-  if (RENDERER_MODE === 'bundled') registerBundledRendererHandlers(allowQuit);
-
+function registerIpcHandlers(): void {
   ipcMain.handle(DESKTOP_RUNTIME_CHANNEL, async (event, command, args) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     if (typeof command !== 'string') throw new Error('Unknown runtime command.');
@@ -1003,18 +779,8 @@ function followWindowFrame(win: BrowserWindow, restored: WindowRestore): () => v
   };
 }
 
-/**
- * The address a route is loaded from. Bundled serves the renderer's own bundle
- * and falls back to `index.html` for any path it has no file for, so the same
- * in-app route reaches the right screen in both modes.
- */
 function windowUrlFor(route: string | null): string {
-  if (RENDERER_MODE === 'remote') {
-    return `${CLOUD_APP_ORIGIN}${route ?? NEW_CHAT_ROUTE}`;
-  }
-  return route === null || route === NEW_CHAT_ROUTE
-    ? `${RENDERER_ORIGIN}/index.html`
-    : `${RENDERER_ORIGIN}${route}`;
+  return `${CLOUD_APP_ORIGIN}${route ?? NEW_CHAT_ROUTE}`;
 }
 
 /**
@@ -1038,7 +804,6 @@ function secondaryWindowBounds(): WindowFrame {
 }
 
 function createShellWindow(options: { primary: boolean; route?: string | null }): BrowserWindow {
-  const isRemote = RENDERER_MODE === 'remote';
   const restore = windowRestore();
   const startBounds = options.primary ? restore.bounds : secondaryWindowBounds();
 
@@ -1056,9 +821,6 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
-      // The preload is attached in BOTH modes now. Remote used to go without
-      // one, which is why deep links, the account bridge and the update check
-      // were all dead there; the window was a browser tab pointed at the site.
       // `preload.ts` exposes the bridge on every document, including the
       // sign-in providers `windowPolicy.ts` allows; `isTrustedSender` is what
       // refuses their calls.
@@ -1066,17 +828,15 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       additionalArguments: [
         `--agi-app-version=${app.getVersion()}`,
         `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
-        `--agi-renderer=${RENDERER_MODE}`,
       ],
-      // Remote keeps a persistent partition so the site's session survives a
-      // restart. Bundled has no cross-origin session to keep.
-      ...(isRemote ? { partition: REMOTE_SESSION_PARTITION } : {}),
+      // A persistent partition so the site's session survives a restart.
+      partition: REMOTE_SESSION_PARTITION,
     },
   });
 
   applyRemoteWindowPolicy(win);
 
-  const entryRoute = options.primary ? (isRemote ? restore.route : null) : (options.route ?? null);
+  const entryRoute = options.primary ? restore.route : (options.route ?? null);
   const entry: ShellWindowEntry = {
     win,
     primary: options.primary,
@@ -1122,50 +882,48 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   const rootUrl = windowUrlFor(null);
   const entryUrl = windowUrlFor(entryRoute);
 
-  if (isRemote) {
-    const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
-      // A restored conversation deleted elsewhere must not become the page the
-      // app opens on, so a not-found answer sends the window to the root. The
-      // root answering the same way is not something a second load can fix.
-      if (shouldFallBackToRoot(httpStatusCode) && url !== rootUrl) {
-        entry.route = NEW_CHAT_ROUTE;
-        if (options.primary) {
-          patchShellWindowState(rememberRoute(readShellWindowState(), null, signedInAccount));
-        }
-        void win.loadURL(rootUrl);
-        return;
-      }
-      const route = routeFromUrl(url, CLOUD_APP_ORIGIN);
-      if (!route) return;
-
-      // The window the shell is putting back after a clash has already been
-      // decided; re-judging that navigation would send it back again forever.
-      if (entry.returningTo === route) {
-        entry.returningTo = null;
-        entry.route = route;
-        return;
-      }
-
-      const clash = resolveNavigationConflict(openWindows(), win.id, route);
-      if (clash) {
-        const previous = entry.route;
-        entry.returningTo = previous;
-        focusWindow(clash.focus);
-        void win.loadURL(windowUrlFor(previous));
-        return;
-      }
-
-      entry.route = route;
-      installMenu();
+  const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
+    // A restored conversation deleted elsewhere must not become the page the
+    // app opens on, so a not-found answer sends the window to the root. The
+    // root answering the same way is not something a second load can fix.
+    if (shouldFallBackToRoot(httpStatusCode) && url !== rootUrl) {
+      entry.route = NEW_CHAT_ROUTE;
       if (options.primary) {
-        patchShellWindowState(rememberRoute(readShellWindowState(), route, signedInAccount));
+        patchShellWindowState(rememberRoute(readShellWindowState(), null, signedInAccount));
       }
-    };
-    win.webContents.on('did-navigate', followRoute);
-    win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
-      if (isMainFrame) followRoute(_event, url);
-    });
-  }
+      void win.loadURL(rootUrl);
+      return;
+    }
+    const route = routeFromUrl(url, CLOUD_APP_ORIGIN);
+    if (!route) return;
+
+    // The window the shell is putting back after a clash has already been
+    // decided; re-judging that navigation would send it back again forever.
+    if (entry.returningTo === route) {
+      entry.returningTo = null;
+      entry.route = route;
+      return;
+    }
+
+    const clash = resolveNavigationConflict(openWindows(), win.id, route);
+    if (clash) {
+      const previous = entry.route;
+      entry.returningTo = previous;
+      focusWindow(clash.focus);
+      void win.loadURL(windowUrlFor(previous));
+      return;
+    }
+
+    entry.route = route;
+    installMenu();
+    if (options.primary) {
+      patchShellWindowState(rememberRoute(readShellWindowState(), route, signedInAccount));
+    }
+  };
+  win.webContents.on('did-navigate', followRoute);
+  win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    if (isMainFrame) followRoute(_event, url);
+  });
 
   win.webContents.on(
     'did-fail-load',
@@ -1257,7 +1015,6 @@ function setFrontWindowOnTop(onTop: boolean): void {
 
 function openSettings(): void {
   showMainWindow();
-  if (RENDERER_MODE !== 'remote') return;
   void mainWindow?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
 }
 
@@ -1500,7 +1257,7 @@ function takeOverScreen(): void {
 const garnishHandlers = {
   onOpen: showMainWindow,
   onNewChat: openNewChat,
-  onQuickAsk: () => toggleQuickAsk(mainWindow),
+  onQuickAsk: () => toggleQuickAsk(),
   onScreenshot: () => void captureToChat(mainWindow),
   onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
   onVoice: () => void toggleGlobalDictation(mainWindow, showMainWindow),
@@ -1947,23 +1704,14 @@ if (!hasSingleInstanceLock) {
   });
 
   void app.whenReady().then(() => {
-    // The handlers the hosted page calls are registered in both modes, and
-    // `isTrustedSender` decides who may call them. The ones only the bundled
-    // renderer drives are registered for it alone.
+    // `isTrustedSender` decides who may call these handlers.
     recordDesktopEvent({ domain: 'launch', outcome: 'started' });
-    registerIpcHandlers(() => {
-      quitConfirmed = true;
-    });
+    registerIpcHandlers();
     signedInAccount = readShellWindowState().lastAccount;
     onShellIdentityReported((identity) => adoptReportedAccount(accountFingerprint(identity)));
     nativeTheme.themeSource = getPreferences().appearance;
     nativeTheme.on('updated', paintWindowsForTheme);
-    if (RENDERER_MODE === 'bundled') {
-      protocol.handle(RENDERER_SCHEME, serveRenderer);
-      configureSession(session.defaultSession);
-    } else {
-      configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));
-    }
+    configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));
 
     deepLinkQueue = mergeDeepLinkQueues(
       loadDeepLinkQueue(deepLinkQueuePath(), Date.now()),

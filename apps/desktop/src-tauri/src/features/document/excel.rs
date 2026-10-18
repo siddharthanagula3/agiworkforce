@@ -7,7 +7,7 @@ use chrono::{Duration as ChronoDuration, NaiveDate, NaiveDateTime};
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
 use crate::sys::error::{Error, Result};
 
-/// DOC-015 fix: Maximum text extraction size to prevent memory exhaustion (10 MB)
+/// Maximum text extraction size to prevent memory exhaustion (10 MB)
 const MAX_EXTRACTION_SIZE: usize = 10 * 1024 * 1024;
 
 struct ExcelExtraction {
@@ -57,7 +57,7 @@ impl ExcelHandler {
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 
-        // DOC-013 fix: Pre-lowercase the entire content once for O(n) instead of O(n*m)
+        // Pre-lowercase the entire content once for O(n) instead of O(n*m)
         let text_lower = extraction.text.to_lowercase();
         let lines: Vec<&str> = extraction.text.lines().collect();
         let lines_lower: Vec<&str> = text_lower.lines().collect();
@@ -92,7 +92,7 @@ impl ExcelHandler {
         let mut size_limit_reached = false;
 
         'sheets: for sheet_name in sheet_names {
-            // DOC-015 fix: Check size limit before processing more sheets
+            // Check size limit before processing more sheets
             if aggregated.len() >= MAX_EXTRACTION_SIZE {
                 size_limit_reached = true;
                 break 'sheets;
@@ -106,7 +106,7 @@ impl ExcelHandler {
 
             if let Ok(range) = workbook.worksheet_range(&sheet_name) {
                 for row in range.rows() {
-                    // DOC-015 fix: Check size limit per row to prevent unbounded growth
+                    // Check size limit per row to prevent unbounded growth
                     if aggregated.len() >= MAX_EXTRACTION_SIZE {
                         size_limit_reached = true;
                         break 'sheets;
@@ -135,7 +135,7 @@ impl ExcelHandler {
             }
         }
 
-        // DOC-015 fix: Add truncation message if size limit was reached
+        // Add truncation message if size limit was reached
         if size_limit_reached {
             aggregated.push_str("\n\n[Content truncated due to size limit]");
             tracing::warn!(

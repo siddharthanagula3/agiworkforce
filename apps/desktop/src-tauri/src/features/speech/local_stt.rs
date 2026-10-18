@@ -158,14 +158,6 @@ impl WhisperLocal {
         Ok(())
     }
 
-    #[cfg(not(feature = "local-whisper"))]
-    #[allow(dead_code)]
-    async fn ensure_loaded(&self) -> Result<()> {
-        Err(anyhow!(
-            "Local Whisper support not compiled. Enable the 'local-whisper' feature."
-        ))
-    }
-
     /// Transcribe audio samples
     ///
     /// # Arguments

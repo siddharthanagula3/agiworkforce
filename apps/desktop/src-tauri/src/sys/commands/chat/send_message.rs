@@ -9,18 +9,14 @@ use crate::sys::commands::chat::send_message_setup::{
 
 #[tauri::command]
 pub async fn chat_send_message(
-    _db: State<'_, AppDatabase>,
-    _llm_state: State<'_, LLMState>,
+    db_state: State<'_, AppDatabase>,
+    llm_state: State<'_, LLMState>,
     settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
-    #[cfg_attr(not(feature = "billing"), allow(unused_variables))] _billing_state: State<
-        '_,
-        crate::sys::billing::BillingStateWrapper,
-    >,
     mcp_state: State<'_, crate::sys::commands::mcp::McpState>,
     project_context_state: State<'_, crate::sys::commands::project_context::ProjectContextState>,
     memory_state: State<'_, crate::sys::commands::memory::MemoryState>,
     project_memory_state: State<'_, crate::sys::commands::project_memory::ProjectMemoryState>,
-    _research_state: State<'_, crate::sys::commands::research::ResearchState>,
+    research_state: State<'_, crate::sys::commands::research::ResearchState>,
     app_handle: tauri::AppHandle,
     request: ChatSendMessageRequest,
 ) -> Result<ChatSendMessageResponse, String> {
@@ -56,7 +52,7 @@ pub async fn chat_send_message(
     let (provider_enum, model) = resolve_provider_and_model(&request);
     let preferences = build_router_preferences(&request, provider_enum, &model, "byok".to_string());
     let db = AppDatabase {
-        conn: _db.inner().conn.clone(),
+        conn: db_state.inner().conn.clone(),
     };
 
     let prepared = prepare_send_message(
@@ -66,7 +62,7 @@ pub async fn chat_send_message(
         &memory_state,
         &project_memory_state,
         &app_handle,
-        _llm_state.router.clone(),
+        llm_state.router.clone(),
         request,
         provider_enum,
         model,
@@ -90,8 +86,8 @@ pub async fn chat_send_message(
     let runtime = SendMessageRuntime {
         app_handle,
         db,
-        router: _llm_state.router.clone(),
-        research_config: _research_state.config.read().await.clone(),
+        router: llm_state.router.clone(),
+        research_config: research_state.config.read().await.clone(),
         correlation_id,
     };
 

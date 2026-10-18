@@ -266,7 +266,7 @@ impl GoogleDriveClient {
 
             offset += read as u64;
 
-            // Bug #228 fix: Extract file ID from the final 200/201 response body
+            // Extract file ID from the final 200/201 response body
             // instead of searching by name (which fails on duplicate names)
             if status.is_success() && offset >= total_size {
                 let uploaded: DriveFileItem = response.json().await.map_err(|e| {

@@ -75,11 +75,9 @@ pub(crate) async fn ensure_ollama_provider(
         }
     }
 
-    // LOCAL-CHAT-NOINVOKE-01 diagnostics: confirm the Local-dispatch precondition.
     // candidates() builds the explicit Ollama candidate ONLY when has_provider(Ollama)
     // is true; if `ollama_registered` is false here, the candidate list is empty and the
-    // Local send is dropped before /api/chat. Logging the final state pins the cause to
-    // provider registration (e.g. OllamaProvider::new failing) vs downstream dispatch.
+    // Local send is dropped before /api/chat.
     let ollama_registered = {
         let router = router.read().await;
         router.has_provider(Provider::Ollama)

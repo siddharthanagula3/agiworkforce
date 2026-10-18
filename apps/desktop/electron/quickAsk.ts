@@ -1,5 +1,5 @@
 import { BrowserWindow, screen, type WebPreferences } from 'electron';
-import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION, RENDERER_MODE } from './config';
+import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION } from './config';
 import { centeredUpperPosition } from './garnishCore';
 import { applyRemoteWindowPolicy } from './windowPolicy';
 
@@ -94,18 +94,9 @@ function reposition(win: BrowserWindow): void {
 
 /**
  * Bring the Quick Ask surface up without the toggle's hide branch, and report
- * which window now holds it. Bundled builds have no panel: the renderer they
- * ship is the main window, so that is the surface Quick Ask raises there.
+ * which window now holds it.
  */
-export function surfaceQuickAsk(mainWindow: BrowserWindow | null): BrowserWindow | null {
-  if (RENDERER_MODE === 'bundled') {
-    if (!mainWindow || mainWindow.isDestroyed()) return null;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-    return mainWindow;
-  }
-
+export function surfaceQuickAsk(): BrowserWindow {
   const win = ensurePanel();
   if (panelLoadFailed) {
     panelLoadFailed = false;
@@ -118,15 +109,13 @@ export function surfaceQuickAsk(mainWindow: BrowserWindow | null): BrowserWindow
   return win;
 }
 
-export function toggleQuickAsk(mainWindow: BrowserWindow | null): void {
-  if (RENDERER_MODE !== 'bundled') {
-    const win = ensurePanel();
-    if (win.isVisible() && !win.isMinimized()) {
-      win.hide();
-      return;
-    }
+export function toggleQuickAsk(): void {
+  const win = ensurePanel();
+  if (win.isVisible() && !win.isMinimized()) {
+    win.hide();
+    return;
   }
-  surfaceQuickAsk(mainWindow);
+  surfaceQuickAsk();
 }
 
 export function quickAskPanel(): BrowserWindow | null {
@@ -142,7 +131,6 @@ export function isQuickAskVisible(): boolean {
 }
 
 export function warmUpQuickAsk(): void {
-  if (RENDERER_MODE === 'bundled') return;
   if (panel || creating) return;
   ensurePanel();
 }

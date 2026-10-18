@@ -5,7 +5,6 @@ use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-// === Named constants for previously-hardcoded values ===
 /// Default temperature for LLM requests
 pub(crate) const DEFAULT_TEMPERATURE: f32 = 0.7;
 /// Default max tokens for LLM responses
@@ -18,18 +17,10 @@ pub(crate) const DEFAULT_CONVERSATION_PAGE_SIZE: i64 = 200;
 pub(crate) const MAX_CONVERSATION_PAGE_SIZE: i64 = 500;
 /// Maximum length for pending user messages
 pub(crate) const MAX_PENDING_MESSAGE_CHARS: usize = 100_000;
-/// Max idle wait for next streaming chunk before failing the stream.
-/// 300s (5 minutes) to accommodate:
-///   - Image/video generation tools (30-120s)
-///   - Extended thinking / reasoning models (60-180s before first token)
-///   - High-latency networks and provider cold-starts
-///   - Provider keepalive gaps during heavy load
-///     The SSE parser emits keepalive chunks for provider heartbeats (`: keep-alive`,
-///     `event: ping`), so this timeout only fires if truly NO bytes are received.
-///
-/// Bug #34 fix: Reduced from 300s to 90s. Since SSE keepalives reset the timer,
-/// 90s of total silence means the connection is dead. This prevents frozen UI
-/// while still accommodating reasoning models (60-90s before first token).
+/// Max idle wait for the next streaming chunk before failing the stream. The
+/// SSE parser turns provider heartbeats (`: keep-alive`, `event: ping`) into
+/// chunks, so 90s of total silence means the connection is dead, while a
+/// reasoning model that takes 60-90s before its first token still fits.
 pub(crate) const STREAM_CHUNK_IDLE_TIMEOUT_SECS: u64 = 90;
 /// Max wait per follow-up model invocation in tool loop (e.g. after image generation).
 /// 120s to accommodate reasoning/thinking models that can take 30-90s before first token.

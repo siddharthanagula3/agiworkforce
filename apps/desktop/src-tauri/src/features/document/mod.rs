@@ -10,17 +10,17 @@ pub mod ooxml;
 pub mod pdf;
 pub mod word;
 
-/// DOC-010 fix: Maximum file size for document parsing (100 MB)
+/// Maximum file size for document parsing (100 MB)
 /// This prevents DoS attacks via maliciously large files
 pub const MAX_DOCUMENT_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
 
-/// DOC-012 fix: Magic number signatures for file type validation
+/// Magic number signatures for file type validation
 /// These are the first few bytes that identify file types
 const PDF_MAGIC: &[u8] = b"%PDF-";
 const ZIP_MAGIC: &[u8] = &[0x50, 0x4B, 0x03, 0x04]; // PK.. (DOCX, XLSX are ZIP-based)
 const OLE_MAGIC: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0]; // Legacy XLS (OLE compound document)
 
-/// DOC-010 fix: Validate file size before parsing to prevent DoS attacks
+/// Validate file size before parsing to prevent DoS attacks
 pub fn validate_file_size(file_path: &Path) -> Result<u64> {
     let metadata = std::fs::metadata(file_path)
         .map_err(|e| Error::Generic(format!("Failed to read file metadata: {}", e)))?;
@@ -36,7 +36,7 @@ pub fn validate_file_size(file_path: &Path) -> Result<u64> {
     Ok(file_size)
 }
 
-/// DOC-012 fix: Validate file magic number matches expected type
+/// Validate file magic number matches expected type
 /// Prevents attacks using misnamed files (e.g., malware.exe renamed to report.pdf)
 pub fn validate_magic_number(file_path: &Path, expected_type: &DocumentType) -> Result<()> {
     let mut file = File::open(file_path)
@@ -186,12 +186,12 @@ impl DocumentManager {
     pub async fn read_document(&self, file_path: &str) -> Result<DocumentContent> {
         let path = Path::new(file_path);
 
-        // DOC-010 fix: Validate file size before parsing
+        // Validate file size before parsing
         validate_file_size(path)?;
 
         let doc_type = Self::detect_type(file_path)?;
 
-        // DOC-012 fix: Validate magic number matches expected type
+        // Validate magic number matches expected type
         validate_magic_number(path, &doc_type)?;
 
         match doc_type {
@@ -204,12 +204,12 @@ impl DocumentManager {
     pub async fn extract_text(&self, file_path: &str) -> Result<String> {
         let path = Path::new(file_path);
 
-        // DOC-010 fix: Validate file size before parsing
+        // Validate file size before parsing
         validate_file_size(path)?;
 
         let doc_type = Self::detect_type(file_path)?;
 
-        // DOC-012 fix: Validate magic number matches expected type
+        // Validate magic number matches expected type
         validate_magic_number(path, &doc_type)?;
 
         match doc_type {
@@ -222,12 +222,12 @@ impl DocumentManager {
     pub async fn get_metadata(&self, file_path: &str) -> Result<DocumentMetadata> {
         let path = Path::new(file_path);
 
-        // DOC-010 fix: Validate file size before parsing
+        // Validate file size before parsing
         validate_file_size(path)?;
 
         let doc_type = Self::detect_type(file_path)?;
 
-        // DOC-012 fix: Validate magic number matches expected type
+        // Validate magic number matches expected type
         validate_magic_number(path, &doc_type)?;
 
         match doc_type {
@@ -240,12 +240,12 @@ impl DocumentManager {
     pub async fn search(&self, file_path: &str, query: &str) -> Result<Vec<SearchResult>> {
         let path = Path::new(file_path);
 
-        // DOC-010 fix: Validate file size before parsing
+        // Validate file size before parsing
         validate_file_size(path)?;
 
         let doc_type = Self::detect_type(file_path)?;
 
-        // DOC-012 fix: Validate magic number matches expected type
+        // Validate magic number matches expected type
         validate_magic_number(path, &doc_type)?;
 
         match doc_type {

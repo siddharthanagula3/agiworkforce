@@ -150,8 +150,8 @@ pub struct AddPendingMessageRequest {
 pub struct PopPendingMessageRequest {
     #[serde(default, alias = "conversationId")]
     pub conversation_id: Option<i64>,
-    #[serde(default, alias = "pendingMessageId")]
-    pub pending_message_id: Option<String>,
+    #[serde(alias = "pendingMessageId")]
+    pub pending_message_id: String,
 }
 
 // ============================================================================
@@ -208,48 +208,16 @@ pub async fn chat_add_pending_message(
 pub async fn chat_pop_pending_message(
     request: PopPendingMessageRequest,
 ) -> Result<Option<PendingUserMessage>, String> {
-    // Withdrawal by id. The answer is `Some` whenever the message did not
-    // reach the model, so a repeated withdrawal gets the same answer.
-    if let Some(pending_message_id) = request.pending_message_id.as_deref() {
-        let withdrawal = withdraw_pending_message(pending_message_id, request.conversation_id);
-        if withdrawal.was_consumed() {
-            info!("[Chat] Steer {pending_message_id} was already sent to the model");
-        }
-        return Ok(match withdrawal {
-            Withdrawal::Withdrawn(message) | Withdrawal::AlreadyRemoved(message) => Some(message),
-            Withdrawal::Consumed | Withdrawal::Unknown => None,
-        });
+    // The answer is `Some` whenever the message did not reach the model, so a
+    // repeated withdrawal gets the same answer.
+    let withdrawal = withdraw_pending_message(&request.pending_message_id, request.conversation_id);
+    if withdrawal.was_consumed() {
+        info!("[Chat] Steer {} was already sent to the model", request.pending_message_id);
     }
-
-    let mut queue = PENDING_MESSAGES
-        .lock()
-        .map_err(|e| format!("Failed to lock pending messages queue: {e}"))?;
-
-    if queue.is_empty() {
-        return Ok(None);
-    }
-
-    let msg = if let Some(conversation_id) = request.conversation_id {
-        let idx = queue
-            .iter()
-            .position(|m| m.conversation_id == Some(conversation_id));
-        if let Some(idx) = idx {
-            queue.remove(idx)
-        } else {
-            return Ok(None);
-        }
-    } else {
-        // Fallback to global queue behavior for backward compatibility
-        queue.remove(0)
-    };
-
-    info!(
-        "[Chat] Popped pending message (remaining: {}): {}...",
-        queue.len(),
-        &msg.content.chars().take(50).collect::<String>()
-    );
-
-    Ok(Some(msg))
+    Ok(match withdrawal {
+        Withdrawal::Withdrawn(message) | Withdrawal::AlreadyRemoved(message) => Some(message),
+        Withdrawal::Consumed | Withdrawal::Unknown => None,
+    })
 }
 
 // ============================================================================

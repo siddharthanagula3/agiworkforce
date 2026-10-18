@@ -40,7 +40,7 @@ export function dictationTarget(mainWindow: BrowserWindow | null): BrowserWindow
     mainWindow.webContents.focus();
     return mainWindow;
   }
-  return surfaceQuickAsk(mainWindow);
+  return surfaceQuickAsk();
 }
 
 function sendToggle(contents: WebContents): void {

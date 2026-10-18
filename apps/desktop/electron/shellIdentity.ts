@@ -1,30 +1,17 @@
-import { session, type Session } from 'electron';
-import { resolveApiBase, shellRequestHeaders } from './accountBridge';
-import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION, RENDERER_MODE } from './config';
+import { app, session, type Session } from 'electron';
+import { platformRequestHeaders } from '../src/lib/platformHeaders';
+import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION } from './config';
 import type { ShellIdentity } from './runtime/developerAccountSync';
-import { getSecret } from './secretStore';
 
 const IDENTITY_TIMEOUT_MS = 15_000;
 
-interface ShellEndpoint {
-  base: string;
-  /** Present only for the bundled renderer, which holds a token instead of a cookie session. */
-  token: string | null;
-}
-
 function shellSession(): Session {
-  return RENDERER_MODE === 'bundled'
-    ? session.defaultSession
-    : session.fromPartition(REMOTE_SESSION_PARTITION);
+  return session.fromPartition(REMOTE_SESSION_PARTITION);
 }
 
-async function shellEndpoint(): Promise<ShellEndpoint> {
-  if (RENDERER_MODE !== 'bundled') return { base: CLOUD_APP_ORIGIN, token: null };
-  return { base: await resolveApiBase(), token: await getSecret('access_token') };
-}
-
-function bearer(endpoint: ShellEndpoint): Record<string, string> {
-  return endpoint.token ? { Authorization: `Bearer ${endpoint.token}` } : {};
+/** The main process's half: the version the installer put on disk. */
+function shellRequestHeaders(): Record<string, string> {
+  return platformRequestHeaders(app.getVersion());
 }
 
 function isJson(response: Response): boolean {
@@ -69,16 +56,12 @@ export function reportShellIdentity(identity: ShellIdentity): void {
  */
 export async function readShellIdentity(): Promise<ShellIdentity | null> {
   if (reportedIdentity) return reportedIdentity;
-  const endpoint = await shellEndpoint();
-  if (RENDERER_MODE === 'bundled' && endpoint.token === null) {
-    return { signedIn: false, email: null };
-  }
 
   let response: Response;
   try {
-    response = await shellSession().fetch(`${endpoint.base}/api/me`, {
+    response = await shellSession().fetch(`${CLOUD_APP_ORIGIN}/api/me`, {
       method: 'GET',
-      headers: { Accept: 'application/json', ...shellRequestHeaders(), ...bearer(endpoint) },
+      headers: { Accept: 'application/json', ...shellRequestHeaders() },
       cache: 'no-store',
       signal: AbortSignal.timeout(IDENTITY_TIMEOUT_MS),
     });
@@ -91,9 +74,8 @@ export async function readShellIdentity(): Promise<ShellIdentity | null> {
   return { signedIn: true, email: typeof body?.email === 'string' ? body.email : null };
 }
 
-async function csrfToken(endpoint: ShellEndpoint): Promise<Record<string, string> | null> {
-  if (endpoint.token) return {};
-  const response = await shellSession().fetch(`${endpoint.base}/api/csrf`, {
+async function csrfToken(): Promise<Record<string, string> | null> {
+  const response = await shellSession().fetch(`${CLOUD_APP_ORIGIN}/api/csrf`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     cache: 'no-store',
@@ -109,16 +91,14 @@ async function csrfToken(endpoint: ShellEndpoint): Promise<Record<string, string
  * could not be prepared, because the account refused a CSRF token.
  */
 export async function postAsShellAccount(path: string, body: unknown): Promise<Response | null> {
-  const endpoint = await shellEndpoint();
-  const csrf = await csrfToken(endpoint);
+  const csrf = await csrfToken();
   if (!csrf) return null;
-  return shellSession().fetch(`${endpoint.base}${path}`, {
+  return shellSession().fetch(`${CLOUD_APP_ORIGIN}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       ...shellRequestHeaders(),
-      ...bearer(endpoint),
       ...csrf,
     },
     body: JSON.stringify(body),

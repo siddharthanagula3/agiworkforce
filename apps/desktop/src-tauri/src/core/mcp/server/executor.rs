@@ -241,9 +241,6 @@ impl DesktopMcpServerExecutor {
                 .try_state::<crate::sys::commands::settings::SettingsState>()
                 .ok_or_else(|| "SettingsState unavailable".to_string())?,
             self.app_handle
-                .try_state::<crate::sys::billing::BillingStateWrapper>()
-                .ok_or_else(|| "BillingState unavailable".to_string())?,
-            self.app_handle
                 .try_state::<crate::sys::commands::mcp::McpState>()
                 .ok_or_else(|| "McpState unavailable".to_string())?,
             self.app_handle
@@ -365,9 +362,6 @@ impl DesktopMcpServerExecutor {
             self.app_handle
                 .try_state::<crate::sys::commands::settings::SettingsState>()
                 .ok_or_else(|| "SettingsState unavailable".to_string())?,
-            self.app_handle
-                .try_state::<crate::sys::billing::BillingStateWrapper>()
-                .ok_or_else(|| "BillingState unavailable".to_string())?,
             self.app_handle
                 .try_state::<crate::sys::commands::mcp::McpState>()
                 .ok_or_else(|| "McpState unavailable".to_string())?,

@@ -19,6 +19,7 @@ pub async fn error_report(error_data: ErrorReport) -> Result<(), String> {
         message = %error_data.message,
         timestamp = error_data.timestamp,
         context = ?error_data.context,
+        stack_trace = ?error_data.stack_trace,
         "Error reported from frontend"
     );
 

@@ -271,7 +271,6 @@ async fn send(app: &AppHandle, request: ChatSendMessageRequest) -> Result<String
         managed(app, "The history store")?,
         managed(app, "The model router")?,
         managed(app, "Settings")?,
-        managed(app, "Billing")?,
         managed(app, "The connector service")?,
         managed(app, "The project context")?,
         managed(app, "Memory")?,

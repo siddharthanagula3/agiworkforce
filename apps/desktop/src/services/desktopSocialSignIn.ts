@@ -1,6 +1,5 @@
 import { resolveAuthProviders, type AuthProviderId } from '@agiworkforce/client-runtime';
 
-import { isElectronHost } from '../lib/runtimeEnvironment';
 import {
   ClerkAuthError,
   createOauthSignIn,
@@ -20,9 +19,7 @@ export function configuredSocialProviders() {
   return resolveAuthProviders(import.meta.env[CONFIGURED_PROVIDERS_ENV_KEY] as string | undefined);
 }
 
-export const SSO_REDIRECT_URL = isElectronHost
-  ? 'agiworkforce-cloud://sso-callback'
-  : 'agiworkforce://sso-callback';
+export const SSO_REDIRECT_URL = 'agiworkforce://sso-callback';
 
 export interface SocialSignInHandle {
   signIn: ClerkSignIn;
@@ -36,11 +33,6 @@ async function openInSystemBrowser(url: string): Promise<void> {
   }
 
   const { isTauri } = await import('../lib/runtimeEnvironment');
-  if (isElectronHost) {
-    const { open } = await import('@tauri-apps/plugin-shell');
-    await open(url);
-    return;
-  }
   if (!isTauri) {
     const opened = window.open(url, '_blank', 'noopener,noreferrer');
     if (!opened) {

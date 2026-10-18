@@ -266,7 +266,7 @@ impl SessionManager {
     }
 }
 
-/// Bug #191 fix: Scrub potential secrets from a command string before storing in DB.
+/// Scrub potential secrets from a command string before storing in DB.
 /// Masks values matching common secret patterns (PASSWORD=xxx, --password xxx,
 /// export SECRET=xxx, API_KEY=xxx, TOKEN=xxx, auth headers, `-u user:pass`,
 /// attached short flags like `-pSECRET`, and credentials embedded in URLs).
@@ -403,7 +403,7 @@ async fn log_command_to_db(
     use crate::sys::commands::AppDatabase;
     use rusqlite::params;
 
-    // Bug #191 fix: Scrub potential secrets before persisting to DB
+    // Scrub potential secrets before persisting to DB
     let sanitized_command = scrub_secrets(command);
 
     let db_state = app_handle.state::<AppDatabase>();

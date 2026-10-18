@@ -10,7 +10,7 @@ import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
 import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
 import { effectivePlanTier, normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
-import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
+import { isTauri } from '../lib/runtimeEnvironment';
 import { authorizeDesktopDevice } from './desktopDeviceAuthorization';
 import {
   openDesktopCloudSignInWindow,
@@ -123,7 +123,7 @@ function readSessionRenewal(outcome: unknown): SessionRenewal {
 function unexpired(session: Session): Session | null {
   return session.expires_at && session.expires_at > Math.floor(Date.now() / 1000) ? session : null;
 }
-const usesNativeCloudAccountBridge = isTauri || isElectronHost;
+const usesNativeCloudAccountBridge = isTauri;
 
 interface CachedAuthData<T> {
   data: T;
@@ -303,11 +303,6 @@ function normalizeFeatureFlags(raw: MeResponse['feature_flags'] | null): Record<
 
 async function openWebAccount(path = '/sign-in'): Promise<void> {
   const url = `${WEB_APP_URL}${path}`;
-  if (isElectronHost) {
-    const { open } = await import('@tauri-apps/plugin-shell');
-    await open(url);
-    return;
-  }
   if (!isTauri) {
     window.location.href = url;
     return;
@@ -536,11 +531,6 @@ class CloudAccountAuthService {
             signInWindow.current = await openDesktopCloudSignInWindow(url, {
               onUserClosed: () => controller.abort(),
             });
-            return;
-          }
-          if (isElectronHost) {
-            const { open } = await import('@tauri-apps/plugin-shell');
-            await open(url);
             return;
           }
           const opened = window.open(url, '_blank', 'noopener,noreferrer');

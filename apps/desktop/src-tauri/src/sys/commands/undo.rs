@@ -9,11 +9,10 @@ use crate::sys::commands::file_ops::{require_granted_path, FileOperation};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::RwLock;
 
 /// Global undo manager state
 pub struct UndoState {
-    pub manager: RwLock<Option<Arc<UndoManager>>>,
+    pub manager: Arc<UndoManager>,
     pub change_tracker: Arc<ChangeTracker>,
 }
 
@@ -22,17 +21,13 @@ impl UndoState {
         let change_tracker = Arc::new(ChangeTracker::new());
         let manager = Arc::new(UndoManager::new(change_tracker.clone()));
         Self {
-            manager: RwLock::new(Some(manager)),
+            manager,
             change_tracker,
         }
     }
 
-    pub async fn get_manager(&self) -> Arc<UndoManager> {
-        let guard = self.manager.read().await;
-        guard
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| Arc::new(UndoManager::new(self.change_tracker.clone())))
+    pub fn get_manager(&self) -> Arc<UndoManager> {
+        self.manager.clone()
     }
 }
 
@@ -48,7 +43,7 @@ pub async fn undo_last(
     undo_state: State<'_, UndoState>,
     task_id: Option<String>,
 ) -> Result<UndoResult, String> {
-    let manager = undo_state.get_manager().await;
+    let manager = undo_state.get_manager();
     manager.undo_last(task_id.as_deref()).await
 }
 
@@ -58,7 +53,7 @@ pub async fn undo_can_undo(
     undo_state: State<'_, UndoState>,
     task_id: Option<String>,
 ) -> Result<bool, String> {
-    let manager = undo_state.get_manager().await;
+    let manager = undo_state.get_manager();
     let summary = manager.get_undo_summary(task_id.as_deref()).await;
     Ok(summary.revertible_changes > 0)
 }
@@ -175,7 +170,7 @@ mod tests {
     #[tokio::test]
     async fn test_undo_state_creation() {
         let state = UndoState::new();
-        let manager = state.get_manager().await;
+        let manager = state.get_manager();
         let summary = manager.get_undo_summary(None).await;
 
         assert_eq!(summary.total_changes, 0);

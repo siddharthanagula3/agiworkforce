@@ -1,25 +1,17 @@
-import { platformRequestHeaders } from '../../src/lib/platformHeaders';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>();
-const getSecret = vi.fn<(key: string) => Promise<string | null>>(async () => null);
 
 vi.mock('electron', () => ({
+  app: { getVersion: () => '1.2.3' },
   session: {
-    defaultSession: { fetch: (...args: never[]) => fetchMock(...(args as never)) },
     fromPartition: () => ({ fetch: (...args: never[]) => fetchMock(...(args as never)) }),
   },
 }));
 vi.mock('../config', () => ({
   CLOUD_APP_ORIGIN: 'http://localhost:3100',
   REMOTE_SESSION_PARTITION: 'persist:agi-cloud',
-  RENDERER_MODE: 'remote',
 }));
-vi.mock('../accountBridge', () => ({
-  resolveApiBase: async () => 'http://localhost:3100',
-  shellRequestHeaders: () => platformRequestHeaders('1.2.3'),
-}));
-vi.mock('../secretStore', () => ({ getSecret }));
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

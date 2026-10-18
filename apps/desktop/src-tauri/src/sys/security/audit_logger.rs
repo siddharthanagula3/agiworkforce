@@ -252,7 +252,7 @@ impl AuditLogger {
     /// Generate HMAC-SHA256 signature for audit event data.
     ///
     /// Returns `Err` on HMAC failure instead of an empty string, so callers
-    /// can detect and handle the error (Bug #66 fix).
+    /// can detect and handle the error.
     fn generate_signature(&self, data: &str) -> std::result::Result<String, Error> {
         let mut mac = HmacSha256::new_from_slice(&self.hmac_key).map_err(|e| {
             Error::Other(format!("Failed to create HMAC for audit signature: {}", e))

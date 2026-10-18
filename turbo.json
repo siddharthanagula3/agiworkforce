@@ -31,8 +31,7 @@
     },
     "build:web": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".tsbuildinfo"],
-      "env": ["VITE_BUILD_TARGET"]
+      "outputs": ["dist/**", ".tsbuildinfo"]
     },
     "build:native-host": {
       "outputs": ["src-tauri/binaries/**"]

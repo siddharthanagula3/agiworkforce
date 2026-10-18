@@ -30,7 +30,7 @@ const surfaceQuickAsk = vi.fn(() => quickAsk.surfaced);
 vi.mock('../quickAsk', () => ({
   isQuickAskVisible: () => quickAsk.visible,
   quickAskPanel: () => quickAsk.panel,
-  surfaceQuickAsk: (win: unknown) => surfaceQuickAsk(win as never),
+  surfaceQuickAsk: () => surfaceQuickAsk(),
 }));
 
 const { dictationTarget, toggleGlobalDictation } = await import('../voiceDictation');

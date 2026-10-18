@@ -361,9 +361,8 @@ impl ExtensionManager {
         // SECURITY: Encrypt sensitive config values before storing.
         // Values marked as `sensitive: true` in the manifest config schema (API keys,
         // tokens, passwords) are encrypted using AES-256-GCM with a machine-derived key
-        // before being persisted to the SQLite `config_json` column.
-        // Bug #11 fix: encrypt_sensitive_values now returns Result and refuses
-        // to fall back to plaintext if encryption fails.
+        // before being persisted to the SQLite `config_json` column, and never fall
+        // back to plaintext if encryption fails.
         let config_to_store = Self::encrypt_sensitive_values(&manifest, config)?;
 
         // Store configuration
@@ -378,7 +377,7 @@ impl ExtensionManager {
     ///
     /// Sensitive values are decrypted transparently before being returned.
     /// Legacy plaintext sensitive values are automatically migrated to encrypted
-    /// storage on first access (Bug #11 migration).
+    /// storage on first access.
     pub fn get_config(&self, id: &str) -> ExtensionResult<HashMap<String, serde_json::Value>> {
         let record = self
             .repository
@@ -396,7 +395,7 @@ impl ExtensionManager {
         // Parse manifest to identify sensitive fields
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
 
-        // Bug #11 migration: detect legacy plaintext sensitive values and
+        // Detect legacy plaintext sensitive values and
         // re-encrypt them transparently on read.
         if Self::has_plaintext_sensitive_values(&manifest, &raw_config) {
             tracing::warn!(
@@ -724,7 +723,7 @@ impl ExtensionManager {
 
     /// Returns true if any sensitive config values are stored in plaintext
     /// (not prefixed with `ENCRYPTED_VALUE_PREFIX`). Used to trigger the
-    /// Bug #11 migration path on read.
+    /// re-encryption on read.
     fn has_plaintext_sensitive_values(
         manifest: &ExtensionManifest,
         config: &HashMap<String, serde_json::Value>,
@@ -763,7 +762,7 @@ impl ExtensionManager {
     /// # Errors
     ///
     /// Returns an error if any sensitive value fails to encrypt. We refuse to
-    /// persist sensitive values in plaintext (Bug #11 fix).
+    /// persist sensitive values in plaintext.
     fn encrypt_sensitive_values(
         manifest: &ExtensionManifest,
         config: HashMap<String, serde_json::Value>,
@@ -1038,7 +1037,7 @@ mod tests {
     }
 
     // ==========================================================================
-    // Security tests: API key encryption (Bug #11)
+    // Security tests: API key encryption
     // ==========================================================================
 
     #[test]

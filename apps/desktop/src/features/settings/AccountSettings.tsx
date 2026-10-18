@@ -7,7 +7,6 @@ import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
-import { isElectronHost } from '../../lib/runtimeEnvironment';
 
 const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
   active: 'Active',
@@ -180,9 +179,7 @@ export function AccountSettings() {
   }
   rows.push({
     label: 'Sign out',
-    description: isElectronHost
-      ? 'Signs this Mac out of AGI Cloud. Sign in again to access your account.'
-      : 'Disconnects this Mac from AGI Cloud. Local data stays on this device.',
+    description: 'Disconnects this Mac from AGI Cloud. Local data stays on this device.',
     control: (
       <Button
         variant="outline"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { isElectronHost, isTauri } from '../../lib/tauri-mock';
+import { isTauri } from '../../lib/tauri-mock';
 import { useUpdater } from './useUpdater';
 import { useUpdaterStore, waitForUpdaterHydration } from '../../stores/updaterStore';
 import { UpdateDialog } from './UpdateDialog';
@@ -36,7 +36,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
           },
         },
         action: {
-          label: isElectronHost ? 'Download Installer' : 'Update Now',
+          label: 'Update Now',
           onClick: () => {
             if (onUpdateNow) {
               onUpdateNow();
@@ -51,7 +51,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
   );
 
   useEffect(() => {
-    if (!isTauri && !isElectronHost) {
+    if (!isTauri) {
       return;
     }
 

@@ -206,12 +206,6 @@ jobs:
           fi
           echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
 
-      - name: Build renderer bundle (electron target)
-        env:
-          VITE_BUILD_TARGET: electron
-          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
-        run: pnpm --filter @agiworkforce/desktop exec vite build
-
       - name: Bundle Electron main and preload
         run: node apps/desktop/electron/build-main.mjs
 

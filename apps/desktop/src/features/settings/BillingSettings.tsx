@@ -5,7 +5,6 @@ import { Button } from '@/ui/Button';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
-import { isElectronHost } from '../../lib/runtimeEnvironment';
 import { CreditTopUp } from './CreditTopUp';
 
 const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
@@ -79,9 +78,7 @@ export function BillingSettings() {
           Billing
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {isElectronHost
-            ? 'Your AGI Cloud plan, subscription, and metered usage.'
-            : 'Your plan and subscription. Local and BYOK are free; managed cloud is metered usage.'}
+          Your plan and subscription. Local and BYOK are free; managed cloud is metered usage.
         </p>
       </div>
 

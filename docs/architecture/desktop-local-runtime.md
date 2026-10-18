@@ -281,9 +281,6 @@ subject: one is open per subject, no more than three wait at once, and for the
 ones a page can repeat with nobody clicking, a Cancel is remembered for a
 minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 
-`RENDERER_MODE` in `config.ts` is the switch, and `bundled` still works, so the
-decision is reversible without an architectural change.
-
 ## What is implemented, honestly
 
 | Capability                            | State                                                                                          |
@@ -344,10 +341,6 @@ cd apps/desktop
 node electron/build-main.mjs
 AGI_CLOUD_APP_ORIGIN=http://localhost:3100 pnpm exec electron .
 ```
-
-`AGI_CLOUD_RENDERER=bundled` loads the old Tauri-shim renderer instead. The
-account bridge, window control, native dialog and relaunch IPC are registered
-only in that mode.
 
 Signing in through a development Clerk instance needs
 `VITE_CLERK_PUBLISHABLE_KEY` in the shell's environment; without it the window

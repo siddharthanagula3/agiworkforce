@@ -183,7 +183,6 @@ vi.mock('../lib/tauri-mock', async () => {
     isTauri: false,
     isCloudWeb: false,
     isDesktopUiDevLocal: false,
-    isElectronHost: false,
     supportsLocalAppMode: false,
     isTauriContext: () => false,
     listen: vi.fn().mockResolvedValue(() => {}),

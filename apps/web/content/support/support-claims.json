@@ -5357,7 +5357,7 @@
       "kind": "prose",
       "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
       "implementation": [
-        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
       ],
@@ -5376,7 +5376,7 @@
       "kind": "prose",
       "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
       "implementation": [
-        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
       ],
@@ -5431,7 +5431,7 @@
       "kind": "prose",
       "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
       "implementation": [
-        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
       ],
@@ -5450,7 +5450,7 @@
       "kind": "prose",
       "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
       "implementation": [
-        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
       ],
@@ -5544,7 +5544,7 @@
       "kind": "prose",
       "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
       "implementation": [
-        "apps/desktop/electron/config.ts#RENDERER_MODE",
+        "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
       ],

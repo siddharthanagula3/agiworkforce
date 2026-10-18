@@ -147,9 +147,9 @@ describe('Web and Desktop share the real app shell', () => {
     },
   );
 
-  it('Desktop shows the web chat strings because it loads the web app by default', () => {
+  it('Desktop shows the web chat strings because it loads the web app', () => {
     expect(readSource('apps/desktop/electron/config.ts')).toContain(
-      "process.env['AGI_CLOUD_RENDERER'] === 'bundled' ? 'bundled' : 'remote';",
+      'export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin();',
     );
   });
 

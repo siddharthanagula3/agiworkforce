@@ -45,16 +45,13 @@ none is forced into another's framework conventions.
 `apps/desktop` builds two applications, and confusing them is the single most
 expensive mistake made against this tree.
 
-| Shell    | Host                            | What it loads                                                    | Build                                                |
-| -------- | ------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
-| Tauri    | `apps/desktop/src-tauri` (Rust) | the Vite renderer in `apps/desktop/src`                          | `pnpm --filter @agiworkforce/desktop build`          |
-| Electron | `apps/desktop/electron` (Node)  | the hosted web app by default, the same Vite renderer on opt-out | `pnpm --filter @agiworkforce/desktop build:electron` |
+| Shell    | Host                            | What it loads                           | Build                                                |
+| -------- | ------------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| Tauri    | `apps/desktop/src-tauri` (Rust) | the Vite renderer in `apps/desktop/src` | `pnpm --filter @agiworkforce/desktop build`          |
+| Electron | `apps/desktop/electron` (Node)  | the hosted web app                      | `pnpm --filter @agiworkforce/desktop build:electron` |
 
-The Electron shell's renderer mode is decided by `apps/desktop/electron/config.ts`:
-`RENDERER_MODE` is `remote` unless `AGI_CLOUD_RENDERER=bundled` is set, so the
-window normally shows the deployed web app rather than `apps/desktop/src`. That
-is why a change to the Vite renderer can be invisible in the Electron build, and
-why a capability implemented as a Tauri command is not reachable from it.
+The Electron window always shows the deployed web app, so a change to
+`apps/desktop/src` never reaches it and a Tauri command is not reachable from it.
 
 The two shells expose different bridges, and neither is a superset of the other:
 

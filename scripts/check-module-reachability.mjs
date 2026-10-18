@@ -188,26 +188,8 @@ const tsTargets = [
         '@lib/*': path.join(desktopSrc, 'lib'),
       };
     },
-    knownUnreachable: [
-      'apps/desktop/src/lib/tauri-electron/core.ts',
-      'apps/desktop/src/lib/tauri-electron/deep-link.ts',
-      'apps/desktop/src/lib/tauri-electron/dialog.ts',
-      'apps/desktop/src/lib/tauri-electron/process.ts',
-      'apps/desktop/src/lib/tauri-electron/shell.ts',
-      'apps/desktop/src/lib/tauri-electron/updater.ts',
-      'apps/desktop/src/lib/tauri-electron/window.ts',
-      'apps/desktop/src/lib/tauri-web/core.ts',
-      'apps/desktop/src/lib/tauri-web/deep-link.ts',
-      'apps/desktop/src/lib/tauri-web/dialog.ts',
-      'apps/desktop/src/lib/tauri-web/event.ts',
-      'apps/desktop/src/lib/tauri-web/fs.ts',
-      'apps/desktop/src/lib/tauri-web/path.ts',
-      'apps/desktop/src/lib/tauri-web/process.ts',
-      'apps/desktop/src/lib/tauri-web/shell.ts',
-      'apps/desktop/src/lib/tauri-web/updater.ts',
-      'apps/desktop/src/lib/tauri-web/window.ts',
-    ],
-    maxKnownUnreachable: 17,
+    knownUnreachable: [],
+    maxKnownUnreachable: 0,
   },
 ];
 

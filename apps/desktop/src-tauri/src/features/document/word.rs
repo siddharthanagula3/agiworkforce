@@ -1,28 +1,18 @@
 use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 
 use roxmltree::Document as XmlDocument;
 use zip::read::ZipArchive;
 
+use super::ooxml::read_entry_to_string;
 use super::{DocumentContent, DocumentMetadata, DocumentType, SearchResult};
 use crate::sys::error::{Error, Result};
 
-/// DOC-011 security note: XXE (XML External Entity) Protection
-///
-/// This module uses `roxmltree` for XML parsing which is inherently safe from XXE attacks:
-/// - roxmltree is a read-only parser that does not resolve external entities
-/// - It does not support DOCTYPE declarations with SYSTEM or PUBLIC identifiers
-/// - External entity expansion is not implemented, preventing XXE injection
-///
-/// Additional protections:
-/// - File size limits are enforced at the DocumentManager level (DOC-010)
-/// - ZIP bomb protection via the `zip` crate's built-in limits
-/// - No network access during parsing (no external resource fetching)
-const CORE_PROPS_NS: &str =
-    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-
+// `roxmltree` resolves no external entity and rejects DOCTYPE declarations
+// with SYSTEM or PUBLIC identifiers, so parsing a document cannot reach XXE.
 const DC_NS: &str = "http://purl.org/dc/elements/1.1/";
+
+const DCTERMS_NS: &str = "http://purl.org/dc/terms/";
 
 const EXT_PROPS_NS: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
@@ -95,22 +85,21 @@ impl WordHandler {
         };
 
         // Try to read Core Properties
-        if let Ok(mut prop_entry) = archive.by_name("docProps/core.xml") {
-            let mut xml = String::new();
-            if prop_entry.read_to_string(&mut xml).is_ok() {
+        if let Ok(prop_entry) = archive.by_name("docProps/core.xml") {
+            if let Ok(xml) = read_entry_to_string(prop_entry, "docProps/core.xml") {
                 if let Ok(doc) = XmlDocument::parse(&xml) {
                     for node in doc.descendants() {
                         if node.has_tag_name((DC_NS, "title")) {
                             metadata.title = node.text().map(|s| s.to_string());
                         } else if node.has_tag_name((DC_NS, "creator")) {
                             metadata.author = node.text().map(|s| s.to_string());
-                        } else if node.has_tag_name((CORE_PROPS_NS, "created")) {
+                        } else if node.has_tag_name((DCTERMS_NS, "created")) {
                             metadata.created_at = node
                                 .text()
                                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                                 .map(|dt| dt.with_timezone(&chrono::Utc))
                                 .map(|dt| dt.to_rfc3339());
-                        } else if node.has_tag_name((CORE_PROPS_NS, "modified")) {
+                        } else if node.has_tag_name((DCTERMS_NS, "modified")) {
                             metadata.modified_at = node
                                 .text()
                                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -123,9 +112,8 @@ impl WordHandler {
         }
 
         // Try to read Extended Properties (for stats)
-        if let Ok(mut app_entry) = archive.by_name("docProps/app.xml") {
-            let mut xml = String::new();
-            if app_entry.read_to_string(&mut xml).is_ok() {
+        if let Ok(app_entry) = archive.by_name("docProps/app.xml") {
+            if let Ok(xml) = read_entry_to_string(app_entry, "docProps/app.xml") {
                 if let Ok(doc) = XmlDocument::parse(&xml) {
                     for node in doc.descendants() {
                         if node.has_tag_name((EXT_PROPS_NS, "Pages")) {

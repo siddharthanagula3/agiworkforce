@@ -36,7 +36,6 @@ vi.mock('../config', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   CLOUD_APP_ORIGIN: 'http://localhost:3100',
   REMOTE_SESSION_PARTITION: 'persist:test',
-  RENDERER_MODE: 'remote',
 }));
 vi.mock('../windowPolicy', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
@@ -52,7 +51,7 @@ describe('Quick Ask panel', () => {
   });
 
   it('loads the dedicated compact route and focuses its web contents', () => {
-    const surfaced = quickAsk.surfaceQuickAsk(null);
+    const surfaced = quickAsk.surfaceQuickAsk();
 
     expect(windows).toHaveLength(1);
     expect(windows[0]?.loadURL).toHaveBeenCalledWith('http://localhost:3100/quick-ask');
@@ -66,8 +65,8 @@ describe('Quick Ask panel', () => {
     const failed = panel.webContents.on.mock.calls.find(([name]) => name === 'did-fail-load')?.[1];
     failed?.({}, -106, 'ERR_INTERNET_DISCONNECTED', 'http://localhost:3100/quick-ask', true);
 
-    quickAsk.surfaceQuickAsk(null);
-    quickAsk.surfaceQuickAsk(null);
+    quickAsk.surfaceQuickAsk();
+    quickAsk.surfaceQuickAsk();
 
     expect(windows).toHaveLength(1);
     expect(panel.loadURL).toHaveBeenCalledTimes(2);
@@ -80,7 +79,7 @@ describe('Quick Ask panel', () => {
     failed?.({}, -3, 'ERR_ABORTED', 'http://localhost:3100/quick-ask', true);
     failed?.({}, -106, 'ERR_INTERNET_DISCONNECTED', 'https://frame.example/', false);
 
-    quickAsk.surfaceQuickAsk(null);
+    quickAsk.surfaceQuickAsk();
 
     expect(panel.loadURL).toHaveBeenCalledOnce();
   });

@@ -154,13 +154,13 @@
         "apps/desktop/electron-builder.yml",
         "apps/desktop/electron",
         "apps/desktop/electron/desktopCloudUpdate.ts",
-        "apps/desktop/src/lib/tauri-electron",
+        "apps/desktop/src/lib/tauri-electron/bridgeContract.ts",
         "apps/web/app/api/releases/desktop-cloud/latest",
         "apps/web/app/api/download"
       ],
       "reviewFocus": "Signed/notarized artifact availability, release-tag checkout integrity, architecture-specific downloads, registered callback schemes, origin-scoped native permissions, and honest manual-installer behavior (do not claim in-place electron-updater support without a real feed)",
       "checks": [
-        "rg \"agiworkforce-cloud|checkForUpdate|openUpdateInstaller|setPermission\" apps/desktop/electron apps/desktop/src/lib/tauri-electron apps/desktop/electron-builder.yml",
+        "rg \"agiworkforce-cloud|checkForUpdate|openUpdateInstaller|setPermission\" apps/desktop/electron apps/desktop/src/lib/tauri-electron/bridgeContract.ts apps/desktop/electron-builder.yml",
         "rg \"desktop-cloud|api/download\" .github/workflows/release-desktop-cloud.yml apps/web/app/api/releases apps/web/app/api/download"
       ]
     },

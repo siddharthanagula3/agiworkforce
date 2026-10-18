@@ -274,10 +274,6 @@ vi.mock('../windowPolicy', async (importOriginal) => ({
   applyRemoteWindowPolicy: vi.fn(),
   openExternally: vi.fn(),
 }));
-vi.mock('../accountBridge', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  handleBridgeCommand: vi.fn(),
-}));
 vi.mock('../appMenu', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   installAppMenu: vi.fn(),

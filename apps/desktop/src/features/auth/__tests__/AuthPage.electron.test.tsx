@@ -7,14 +7,13 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: false,
   isCloudWeb: true,
-  isElectronHost: true,
 }));
 
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useAuthStore } from '../../../stores/auth';
 import { AuthPage } from '../AuthPage';
 
-describe('Electron Cloud sign-in shell', () => {
+describe('the sign-in page outside a native host', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_CLERK_PUBLISHABLE_KEY', 'pk_test_Y2xlcmsuYWdpd29ya2ZvcmNlLmNvbSQ');
     useAuthStore.setState({

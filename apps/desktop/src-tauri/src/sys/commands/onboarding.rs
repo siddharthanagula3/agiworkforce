@@ -54,14 +54,7 @@ pub async fn set_user_preference(
            data_type = excluded.data_type,
            description = COALESCE(excluded.description, description),
            updated_at = excluded.updated_at",
-        [
-            &key,
-            &value,
-            &category,
-            &data_type,
-            &description.unwrap_or_default(),
-            &now.to_string(),
-        ],
+        rusqlite::params![key, value, category, data_type, description, now.to_string()],
     )
     .map_err(|e| format!("Failed to set user preference: {}", e))?;
 

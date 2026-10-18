@@ -18,7 +18,6 @@ directories:
   buildResources: electron/resources
 
 files:
-  - dist/**
   - electron/dist/**
   - '!electron/dist/bin/**'
   - '!electron/dist/agi-input'

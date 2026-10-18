@@ -159,5 +159,3 @@ pub use vision::*;
 pub use voice::*;
 pub use voice_global::*;
 pub use window::*;
-
-// Re-export web_search command from features

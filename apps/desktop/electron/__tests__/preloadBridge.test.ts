@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile },
 }));
 
-const BUNDLED_ONLY = ['handles', 'invokeBridge', 'windowControl', 'dialog', 'relaunch'];
+const RETIRED = ['handles', 'invokeBridge', 'windowControl', 'dialog', 'relaunch'];
 const HOSTED_PAGE = [
   'invokeRuntime',
   'onDeepLink',
@@ -52,24 +52,13 @@ afterEach(() => {
 });
 
 describe('what the preload puts on the page', () => {
-  it.each([
-    ['the hosted app', ['--agi-renderer=remote']],
-    ['a window main did not name a mode for', []],
-  ])('leaves out the bundled renderer bridge for %s', async (_label, extraArguments) => {
-    const bridge = await loadPreload(extraArguments);
+  it('exposes the hosted page bridge and nothing that drives the window or the account', async () => {
+    const bridge = await loadPreload([]);
 
-    for (const name of BUNDLED_ONLY) expect(name in bridge, name).toBe(false);
+    for (const name of RETIRED) expect(name in bridge, name).toBe(false);
     for (const name of HOSTED_PAGE) expect(typeof bridge[name], name).toBe('function');
     expect(bridge['appVersion']).toBe('1.8.0');
     expect(bridge['browserSignIn']).toEqual({ cancellation: true });
-  });
-
-  it('carries the whole bridge for the bundled renderer', async () => {
-    const bridge = await loadPreload(['--agi-renderer=bundled']);
-
-    for (const name of [...BUNDLED_ONLY, ...HOSTED_PAGE]) {
-      expect(typeof bridge[name], name).toBe('function');
-    }
   });
 });
 
@@ -77,7 +66,7 @@ describe('a drop on the page', () => {
   async function dropListener(): Promise<(event: unknown) => void> {
     const listen = vi.spyOn(window, 'addEventListener');
     try {
-      await loadPreload(['--agi-renderer=remote']);
+      await loadPreload([]);
       const registered = listen.mock.calls.find(([type]) => type === 'drop')?.[1];
       if (typeof registered !== 'function') throw new Error('the preload listens for no drop');
       return registered as (event: unknown) => void;

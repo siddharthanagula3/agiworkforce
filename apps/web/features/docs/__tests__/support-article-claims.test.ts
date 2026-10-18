@@ -325,7 +325,7 @@ describe('current CLI help articles distinguish implementation from release avai
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
     expect(repoText('apps', 'desktop', 'electron', 'config.ts')).toMatch(
-      /AGI_CLOUD_RENDERER'\] === 'bundled' \? 'bundled' : 'remote'/u,
+      /export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin\(\);/u,
     );
     expect(fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts')).toMatch(
       /const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u,

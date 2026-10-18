@@ -13,7 +13,6 @@ const shell = vi.hoisted(() => ({
 
 const appHandlers = new Map<string, (...args: unknown[]) => void>();
 const HOSTED_PAGE = 'https://agiworkforce.com/chat';
-const BUNDLED_PAGE = 'agi://cloud/index.html';
 let pageUrl = HOSTED_PAGE;
 const webContentsSend = vi.fn();
 
@@ -137,12 +136,9 @@ vi.mock('../screenshot', () => ({
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../windowPolicy', () => ({ applyRemoteWindowPolicy: vi.fn() }));
-vi.mock('../accountBridge', () => ({ handleBridgeCommand: vi.fn() }));
 
-async function bootMain(mode: 'remote' | 'bundled' | 'unset') {
-  if (mode === 'unset') delete process.env['AGI_CLOUD_RENDERER'];
-  else process.env['AGI_CLOUD_RENDERER'] = mode;
-  pageUrl = mode === 'bundled' ? BUNDLED_PAGE : HOSTED_PAGE;
+async function bootMain() {
+  pageUrl = HOSTED_PAGE;
   vi.resetModules();
   appHandlers.clear();
   webContentsSend.mockClear();
@@ -160,7 +156,6 @@ function openUrl(url: string): void {
 
 describe('deep-link delivery', () => {
   let warn: ReturnType<typeof vi.spyOn>;
-  const originalMode = process.env['AGI_CLOUD_RENDERER'];
 
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -168,28 +163,14 @@ describe('deep-link delivery', () => {
 
   afterEach(() => {
     warn.mockRestore();
-    if (originalMode === undefined) delete process.env['AGI_CLOUD_RENDERER'];
-    else process.env['AGI_CLOUD_RENDERER'] = originalMode;
-  });
-
-  it('delivers the callback over IPC when nothing sets the renderer mode', async () => {
-    await bootMain('unset');
-
-    openUrl(DEEP_LINK);
-
-    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
-    expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
   });
 
   /**
-   * This used to assert the opposite: that remote mode dropped the link and
-   * said so. That was true while remote attached no preload, which is the
-   * limitation the wrap removed. Both modes now carry the bridge, so the
-   * guarantee worth pinning is that an OAuth callback actually arrives, and
-   * that the secret inside it still never reaches a log.
+   * The guarantee worth pinning is that an OAuth callback actually arrives,
+   * and that the secret inside it never reaches a log.
    */
-  it('delivers the callback over IPC in remote mode too', async () => {
-    await bootMain('remote');
+  it('delivers the callback over IPC', async () => {
+    await bootMain();
     warn.mockClear();
 
     openUrl(DEEP_LINK);
@@ -200,22 +181,13 @@ describe('deep-link delivery', () => {
     expect(warned).not.toContain('nonce-abc123');
   });
 
-  it('delivers over IPC when the bundled renderer attaches the bridge', async () => {
-    await bootMain('bundled');
-
-    openUrl(DEEP_LINK);
-
-    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
-    expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
-  });
-
   it('holds a link that arrives before the app is ready until the window exists', async () => {
     let becomeReady = () => {};
     shell.ready = false;
     shell.readyGate = new Promise<void>((resolve) => {
       becomeReady = resolve;
     });
-    await bootMain('remote');
+    await bootMain();
     openUrl(DEEP_LINK);
     expect(shell.windows).toHaveLength(0);
 
@@ -229,7 +201,7 @@ describe('deep-link delivery', () => {
   });
 
   it('tells the page a legacy sign-in callback expired without navigating the window', async () => {
-    await bootMain('remote');
+    await bootMain();
 
     openUrl(LEGACY_SSO_LINK);
 
@@ -247,7 +219,7 @@ describe('deep-link delivery', () => {
   });
 
   it('holds a link while the window shows a sign-in provider, which is not the page it is for', async () => {
-    await bootMain('remote');
+    await bootMain();
     pageUrl = 'https://accounts.google.com/o/oauth2/auth';
 
     openUrl(DEEP_LINK);
@@ -256,7 +228,7 @@ describe('deep-link delivery', () => {
   });
 
   it('ignores URLs outside the deep-link scheme', async () => {
-    await bootMain('remote');
+    await bootMain();
     warn.mockClear();
 
     openUrl('https://evil.example/sso-callback');

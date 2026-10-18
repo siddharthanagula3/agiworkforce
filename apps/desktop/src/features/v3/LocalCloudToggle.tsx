@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Laptop, Cloud, type LucideIcon } from 'lucide-react';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
-import { isElectronHost, supportsLocalAppMode } from '../../lib/runtimeEnvironment';
+import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
 
 export interface LocalCloudToggleProps {
   collapsed?: boolean;
@@ -98,10 +98,6 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
   const localLabel = t('sidebar.mode.local');
   const cloudLabel = t('sidebar.mode.cloud');
   const localUnavailable = t('sidebar.mode.localUnavailable');
-
-  // After the hooks, not before: the value is a build constant so the order is
-  // stable either way, but the rule is right to refuse a conditional hook.
-  if (isElectronHost) return null;
 
   if (collapsed) {
     const Icon = isLocal ? Laptop : Cloud;

@@ -1,8 +1,6 @@
 /**
- * Sandboxed preload exposing `window.agiHost`, the only surface the renderer
- * has beyond the DOM: the `HostBridge` contract for the hosted page, and the
- * rest of `ElectronHostBridge` (`src/lib/tauri-electron/bridgeContract.ts`)
- * only for the bundled renderer, which is the one mode main answers it in.
+ * Sandboxed preload exposing `window.agiHost`, the only surface the hosted
+ * page has beyond the DOM: the `HostBridge` contract.
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
@@ -17,13 +15,9 @@ import {
   type HostRestartOutcome,
 } from '@agiworkforce/local-runtime-contract';
 import {
-  ELECTRON_BRIDGE_COMMANDS,
   ELECTRON_HOST_SHELL,
   ELECTRON_IPC_CHANNELS,
-  type ElectronDialogRequest,
-  type ElectronHostBridge,
   type ElectronNotifyRequest,
-  type ElectronWindowControlRequest,
 } from '../src/lib/tauri-electron/bridgeContract';
 
 function argValue(prefix: string): string {
@@ -49,8 +43,6 @@ ipcRenderer.on(ELECTRON_IPC_CHANNELS.deepLink, (_event: unknown, url: unknown) =
   }
   for (const listener of deepLinkListeners) listener(url);
 });
-
-const bridgeCommands = new Set<string>(ELECTRON_BRIDGE_COMMANDS);
 
 const hostBridge: HostBridge = {
   platform: `electron-${process.platform}`,
@@ -139,42 +131,11 @@ const hostBridge: HostBridge = {
   },
 };
 
-const bundledRendererBridge: Omit<ElectronHostBridge, keyof HostBridge> = {
-  handles(command: string): boolean {
-    return bridgeCommands.has(command);
-  },
-
-  async invokeBridge(command: string, args?: Record<string, unknown>): Promise<unknown> {
-    if (!bridgeCommands.has(command)) {
-      throw new Error(`Unknown bridge command: ${command}`);
-    }
-    return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.invokeBridge, command, args);
-  },
-
-  async windowControl(request: ElectronWindowControlRequest): Promise<boolean> {
-    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.windowControl, request)) === true;
-  },
-
-  async dialog(request: ElectronDialogRequest): Promise<string | boolean | null> {
-    return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.dialog, request)) as
-      string | boolean | null;
-  },
-
-  async relaunch(): Promise<void> {
-    await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.relaunch);
-  },
-};
-
-const agiHost: HostBridge | ElectronHostBridge =
-  argValue('--agi-renderer=') === 'bundled'
-    ? { ...hostBridge, ...bundledRendererBridge }
-    : hostBridge;
-
 /**
  * Exposed on every document. A sandboxed preload runs before the document, so
  * there is no origin to read here; `isTrustedSender` in `main.ts` is the gate.
  */
-contextBridge.exposeInMainWorld('agiHost', agiHost);
+contextBridge.exposeInMainWorld('agiHost', hostBridge);
 
 /**
  * A directory has no bytes for the DOM to hand over, so its path goes to the
