@@ -2019,7 +2019,7 @@ mod tests {
 
     #[test]
     fn provider_detection() {
-        // nvidia and openrouter carry no bundled models post-restructure.
+        // nvidia and openrouter carry no bundled models post-restructure;
         // see all_providers_represented above.
         let cat = Catalog::bundled();
         for provider in ["anthropic", "openai", "google", "xai", "deepseek", "qwen"] {

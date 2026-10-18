@@ -1694,8 +1694,8 @@ impl SideQuery {
 /// callbacks need (config, tool definitions, scheduling name-sets, the caller's
 /// first-turn stream callback, and the sequential-path `additional_context`
 /// accrual). Each trait method holds the CLI-local work moved verbatim out of
-/// the old `Session::send` loop, hooks, plan-mode gating, tool-filters, MCP/
-/// team/subagent dispatch, approval prompts, and the json/TUI/stderr routing.
+/// the old `Session::send` loop (hooks, plan-mode gating, tool-filters, MCP/
+/// team/subagent dispatch, approval prompts, and the json/TUI/stderr routing),
 /// so the emitted cadence is byte-for-byte preserved.
 struct TurnHostAdapter<'a> {
     session: &'a mut AgentSession,

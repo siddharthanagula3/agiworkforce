@@ -908,7 +908,7 @@ impl GitOperation {
                     "branch".into(),
                     "--list".into(),
                     "--no-color".into(),
-                    "--format=%(HEAD)%00%(refname:short)%00%(objectname:short)%00%(upstream:short)"
+                    "--format=%(HEAD)%00%(refname)%00%(objectname:short)%00%(upstream:short)"
                         .into(),
                 ];
                 if *include_remote {
@@ -1391,12 +1391,18 @@ pub fn parse_commit_detail(text: &str) -> Result<CommitDetail> {
     })
 }
 
+/// Branches from `git branch --format`, named by their full ref, so a remote
+/// branch is told apart by where it lives rather than by its remote's name.
 pub fn parse_branch_list(text: &str) -> Vec<BranchRef> {
     text.lines()
         .filter_map(|line| {
             let mut fields = line.split('\0');
             let head = fields.next().unwrap_or_default();
-            let name = fields.next().unwrap_or_default().trim();
+            let refname = fields.next().unwrap_or_default().trim();
+            let (name, is_remote) = match refname.strip_prefix("refs/remotes/") {
+                Some(remote) => (remote, true),
+                None => (refname.strip_prefix("refs/heads/").unwrap_or(refname), false),
+            };
             if name.is_empty() {
                 return None;
             }
@@ -1409,7 +1415,7 @@ pub fn parse_branch_list(text: &str) -> Vec<BranchRef> {
             Some(BranchRef {
                 name: name.to_string(),
                 is_current: head.trim() == "*",
-                is_remote: name.starts_with("remotes/") || name.starts_with("origin/"),
+                is_remote,
                 commit,
                 upstream,
             })
@@ -2427,6 +2433,12 @@ impl GitApi {
         let listing = operation == StashOperation::List;
         let restoring = operation == StashOperation::Pop;
         let dropping = matches!(operation, StashOperation::Drop { .. });
+        let saving = matches!(operation, StashOperation::Push { .. });
+        let top_before = if saving {
+            self.stash_top().await
+        } else {
+            None
+        };
         let stdout = self.run_checked(GitOperation::Stash(operation)).await?;
         if listing {
             return Ok(StashOutcome::Listed {
@@ -2439,12 +2451,22 @@ impl GitApi {
         if dropping {
             return Ok(StashOutcome::Dropped);
         }
-        if stdout.contains("No local changes to save") {
+        // Git words "nothing to save" in the user's language, so whether a
+        // stash was made is read from the stash ref: a push reported as saved
+        // when it was not would have the next pop restore an older stash.
+        if self.stash_top().await == top_before {
             return Ok(StashOutcome::NothingToStash);
         }
         Ok(StashOutcome::Saved {
             message: stdout.trim().to_string(),
         })
+    }
+
+    async fn stash_top(&self) -> Option<String> {
+        self.rev_parse("refs/stash")
+            .await
+            .ok()
+            .map(|parsed| parsed.commit)
     }
 }
 
@@ -3432,6 +3454,25 @@ mod tests {
     }
 
     #[test]
+    fn a_remote_branch_is_known_by_its_ref_not_by_its_remote_name() {
+        let branches = parse_branch_list(
+            "*\0refs/heads/main\0abc1234\0upstream/main\n\
+             \0refs/heads/origin/topic\0bcd2345\0\n\
+             \0refs/remotes/upstream/main\0cde3456\0\n",
+        );
+
+        let named = |name: &str| {
+            branches
+                .iter()
+                .find(|branch| branch.name == name)
+                .unwrap_or_else(|| panic!("no branch {name}"))
+        };
+        assert!(!named("main").is_remote);
+        assert!(!named("origin/topic").is_remote);
+        assert!(named("upstream/main").is_remote);
+    }
+
+    #[test]
     fn a_commit_is_parsed_into_fields_and_files() {
         let detail = parse_commit_detail(
             "abc123\u{0}Ada\u{0}2026-09-17T10:00:00+00:00\u{0}Fix the parser\u{0}It was wrong.\n\
@@ -3761,6 +3802,16 @@ mod tests {
             .await
             .expect("stash push");
         assert!(matches!(saved, StashOutcome::Saved { .. }));
+
+        assert_eq!(
+            git.stash(StashOperation::Push {
+                message: None,
+                include_untracked: false,
+            })
+            .await
+            .expect("stash push with nothing to save"),
+            StashOutcome::NothingToStash
+        );
 
         let listed = git.stash(StashOperation::List).await.expect("stash list");
         let StashOutcome::Listed { entries } = listed else {

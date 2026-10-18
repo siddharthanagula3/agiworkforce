@@ -990,7 +990,6 @@ impl ManagedSession {
     }
 
     /// Add a message and refresh the session timestamp.
-    #[allow(dead_code)]
     pub fn push_message(&mut self, message: Message) {
         if self.objective.is_none() && message.role == "user" {
             let text = activity_text(&message.text_content());

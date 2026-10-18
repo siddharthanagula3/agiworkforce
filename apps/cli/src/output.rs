@@ -1463,8 +1463,8 @@ mod tests {
         let lines: Vec<&str> = result.lines().collect();
         assert_eq!(lines.len(), 4); // header + separator + 2 data rows
 
-        // The widest fixture cell determines the padding for every row.
-        // in col 0 should be padded to at least that width.
+        // The widest fixture cell in col 0 determines the padding for every
+        // row, so each row is padded to at least that width.
         assert!(lines[0].starts_with("Model"));
         assert!(lines[2].starts_with("fixture-short"));
         assert!(lines[3].starts_with("fixture-model-long"));

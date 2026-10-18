@@ -2159,7 +2159,7 @@ impl McpManager {
 
     /// Convert MCP tools to ToolDefinitions for the LLM.
     ///
-    /// Concurrency flags default to false (safe, sequential) for MCP tools.
+    /// Concurrency flags default to false (safe, sequential) for MCP tools:
     /// the MCP protocol exposes `annotations.readOnlyHint` and similar but we
     /// don't plumb those through yet.
     ///

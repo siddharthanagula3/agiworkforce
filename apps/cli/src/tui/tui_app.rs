@@ -160,12 +160,10 @@ struct ChatMessage {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 enum ChatRole {
     User,
     Assistant,
     System,
-    Tool,
     Error,
     Detail,
 }
@@ -490,16 +488,9 @@ impl TuiApp {
         let model_name = session.model.clone();
         let provider_name = crate::design_system::provider_label(&session.provider);
 
-        // Resume support: `run()` loads a resumed session's prior turns into
-        // `session.messages`/`session.turn_count` *before* constructing
-        // `TuiApp` (see the `resume_messages`/`resume_managed_session` match
-        // above), but until now that only fed the model/context-loading
-        // state, the transcript pane's own `chat_messages` was always
-        // seeded empty, so a resumed TUI launch rendered the blank welcome
-        // screen with "Turns: 0" even though the underlying session (and any
-        // follow-up prompt) had the full prior history. Hydrate the
-        // transcript widget state from the same `session.messages` here so
-        // the first render already shows the resumed conversation.
+        // `run()` loads a resumed session's prior turns into `session.messages`
+        // before this, so the transcript is seeded from them and the first
+        // frame already shows the resumed conversation.
         let imported_from = session.managed_session.as_ref().and_then(|managed| {
             crate::sessions::open_db()
                 .ok()
@@ -835,8 +826,8 @@ impl TuiApp {
         crate::features::exec::tools::workspace_policy_is_trusted(&self.workspace_root())
     }
 
-    /// Install the fallback banner sink on the underlying session. Idempotent
-    ///, calling twice replaces the previous sink.
+    /// Install the fallback banner sink on the underlying session. Idempotent:
+    /// calling twice replaces the previous sink.
     fn wire_fallback_banner(&mut self) {
         let banner = Arc::clone(&self.fallback_banner);
         self.session.on_fallback = Some(crate::agent::FallbackSink(Box::new(
@@ -887,11 +878,6 @@ impl TuiApp {
 
     fn spinner_char(&self) -> &str {
         spinner_frame(self.spinner_tick)
-    }
-
-    /// AGI Agent loading verb shown beside the spinner.
-    fn loading_verb(&self) -> &'static str {
-        loading_verb_for(self.session.turn_count)
     }
 
     fn model_reasons(&self) -> bool {
@@ -1002,8 +988,8 @@ impl TuiApp {
                 self.active_overlay = None;
             }
             ViewAction::Submit(_) => {
-                // Apply the overlay's committed result (was previously dropped.
-                // the root cause of every generic overlay "saving" nothing).
+                // Apply the overlay's committed result; dropping it made every
+                // generic overlay save nothing.
                 let result = ov.take_result();
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
@@ -1035,19 +1021,33 @@ impl TuiApp {
                 // Persist the disabled set; discover_skills() then skips them for
                 // every consumer (prompt injection, registry, tools).
                 let set: std::collections::HashSet<String> = names.into_iter().collect();
-                let _ = crate::skills::save_disabled_skills(&set);
+                if let Err(error) = crate::skills::save_disabled_skills(&set) {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::Error,
+                        text: format!("The skill choices were not saved: {error}"),
+                    });
+                }
             }
             OverlayResult::Memory(settings) => {
                 self.session.memory_enabled =
                     settings.auto_memory && crate::cli_options::memory_enabled();
                 // Persist; the memory pipeline (extract/prune/consolidate) reads it.
-                if let Ok(home) = crate::config::CliConfig::config_dir() {
-                    let _ = crate::memory_pipeline::save_memory_settings(
-                        &home,
-                        settings.auto_memory,
-                        settings.decay_threshold_days,
-                        settings.max_facts,
-                    );
+                let saved = crate::config::CliConfig::config_dir()
+                    .map_err(|error| error.to_string())
+                    .and_then(|home| {
+                        crate::memory_pipeline::save_memory_settings(
+                            &home,
+                            settings.auto_memory,
+                            settings.decay_threshold_days,
+                            settings.max_facts,
+                        )
+                        .map_err(|error| error.to_string())
+                    });
+                if let Err(error) = saved {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::Error,
+                        text: format!("The memory settings were not saved: {error}"),
+                    });
                 }
             }
             OverlayResult::DiffReviewed(outcome) => {
@@ -1673,7 +1673,7 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
 }
 
 /// Live in-turn frame. Drawn on each 80ms tick while the send future holds
-/// `&mut app.session`, so it can only consume a `FrameCtx` of disjoint fields.
+/// `&mut app.session`, so it can only consume a `FrameCtx` of disjoint fields,
 /// never `&app`. Mirrors `render`'s layout (header / chat / composer / status)
 /// minus the picker/overlay/HUD layers, which are never active mid-turn. This is
 /// what makes streamed output, the animated spinner, and the stall hint visible
@@ -1781,9 +1781,7 @@ fn answer_details(
 
 /// AGI loading verb shown beside the spinner: one plain, steady word, the same
 /// register Claude Code and Codex use, not a rotating vocabulary.
-fn loading_verb_for(_turn_count: u32) -> &'static str {
-    "Thinking"
-}
+const LOADING_VERB: &str = "Thinking";
 
 /// Append a post-tool-call continuation chunk to the buffered reply. A
 /// continuation that resumes mid-sentence needs nothing; one that starts a
@@ -1830,6 +1828,9 @@ struct FrameCtx<'a> {
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
     workspace_pane: Option<&'a [String]>,
+    /// The key bound to quit, as the keybinding config names it; `None` when
+    /// nothing is bound, so the footer offers no quit hint.
+    quit_key: Option<&'a str>,
 }
 
 impl<'a> FrameCtx<'a> {
@@ -1850,7 +1851,7 @@ impl<'a> FrameCtx<'a> {
             stream_start: app.stream_start,
             stream_buffer: &app.stream_buffer,
             spinner_char: app.spinner_char(),
-            loading_verb: app.loading_verb(),
+            loading_verb: LOADING_VERB,
             awaiting_approval: false,
             scroll_offset: app.scroll_offset,
             access_mode: provider_access_mode(&app.session.provider),
@@ -1859,6 +1860,9 @@ impl<'a> FrameCtx<'a> {
             effort_label: app.visible_effort_label(),
             cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
+            quit_key: app
+                .keybindings
+                .display(crate::keybindings::KeybindingAction::Quit),
         }
     }
 }
@@ -2095,7 +2099,6 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .fg(ui_accent())
                         .add_modifier(Modifier::BOLD),
                 ),
-                ChatRole::Tool => ("  ▸ ", Style::default().fg(ui_accent())),
                 ChatRole::Error => (
                     "  ✗ ",
                     Style::default()
@@ -2113,13 +2116,13 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                 let md_lines = super::markdown_renderer::render_markdown(&msg.text);
                 lines.extend(md_lines);
             } else {
-                // Simple rendering for user/system/tool messages
+                // Simple rendering for user/system/error messages
                 for text_line in msg.text.lines() {
                     let style = match msg.role {
                         ChatRole::User => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
-                        ChatRole::Tool | ChatRole::Detail => Style::default().fg(ui_muted()),
+                        ChatRole::Detail => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
                         // default foreground rather than panicking so the TUI stays responsive.
@@ -2709,12 +2712,17 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Keyboard hints in descending usefulness. The slash hint is the one that
     // teaches the app, so it is the last to go; each has a compact form, since
     // a hint that only appears at 180 columns is a hint most users never see.
-    let hints = move |tier: usize| -> [&'static str; 3] {
-        if tier == 0 {
-            ["/: commands", "Esc: quit", "Shift+Tab: mode"]
+    let quit_key = ctx.quit_key;
+    let hints = move |tier: usize| -> Vec<String> {
+        let (slash, quit, mode) = if tier == 0 {
+            ("/: commands", ": quit", "Shift+Tab: mode")
         } else {
-            ["/ cmds", "esc quit", "⇧⇥ mode"]
-        }
+            ("/ cmds", " quit", "⇧⇥ mode")
+        };
+        std::iter::once(slash.to_string())
+            .chain(quit_key.map(|key| format!("{key}{quit}")))
+            .chain(std::iter::once(mode.to_string()))
+            .collect()
     };
 
     let avail = area.width as usize;
@@ -2795,10 +2803,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
     }
     for hint in hints(tier) {
-        optional.push(Span::styled(
-            hint.to_string(),
-            Style::default().fg(ui_muted()),
-        ));
+        optional.push(Span::styled(hint, Style::default().fg(ui_muted())));
     }
     for opt in optional {
         let w = display_width(&opt.content) + 2;
@@ -2878,11 +2883,9 @@ fn render_overlay(
     // prompt, so an escape here could repaint the decision the user is about
     // to give.
     sanitize_terminal_lines(&mut lines);
-    // Each InteractiveView already renders its own complete ASCII box (with a
-    // title row), so size the overlay to that content and draw it WITHOUT an
-    // extra ratatui border. Previously this wrapped the already-boxed text in
-    // Block::borders(ALL), producing a double box (outer themed frame + the
-    // widget's own `┌─ … ─┐`).
+    // Each InteractiveView already renders its own complete box (with a title
+    // row), so the overlay is sized to that content and drawn without a
+    // ratatui border of its own.
     let height = (lines.len() as u16).min(area.height);
     let width = lines
         .iter()
@@ -2905,9 +2908,6 @@ fn render_overlay(
         .scroll((scroll, 0));
     frame.render_widget(para, overlay_area);
 }
-
-// render_model_picker was replaced by super::widgets::model_picker::render
-// (called directly from the render() fn above)
 
 // ---------------------------------------------------------------------------
 // Event handling
@@ -3302,16 +3302,9 @@ fn composer_move_down(app: &mut TuiApp) -> bool {
 /// Register any MCP-discovered prompt commands (`/mcp:<server>:<prompt>`)
 /// into `registry` that aren't already present.
 ///
-/// Idempotent, skips prompts already registered by name (matching
-/// `CommandRegistry::find`), so it's safe to call both at `TuiApp`
-/// construction time (when MCP servers connected synchronously before the
-/// background attach was spawned, or not at all) and again once the
-/// background `mcp_attach_join` task finishes and injects the manager via
-/// `session.set_mcp_manager`. Without the second call, `/mcp:<server>:<prompt>`
-/// stayed permanently absent from `app.command_registry`, and therefore from
-/// the command popup's candidate list, for the overwhelmingly common case
-/// where MCP finishes connecting *after* the TUI has already started (the
-/// whole point of the non-blocking background attach).
+/// Idempotent: a prompt already registered by name is skipped, so this runs
+/// when `TuiApp` is built and again once the background MCP attach finishes,
+/// which is when most servers' prompts first exist.
 fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate::mcp::McpPrompt]) {
     for prompt in prompts {
         if registry.find(&prompt.command_name).is_some() {
@@ -3720,7 +3713,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
         let who = match message.role {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
-            ChatRole::System | ChatRole::Tool | ChatRole::Error | ChatRole::Detail => continue,
+            ChatRole::System | ChatRole::Error | ChatRole::Detail => continue,
         };
         for line in message.text.lines() {
             if line.to_lowercase().contains(&needle) {
@@ -4242,6 +4235,11 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
     }
     app.mode = mode;
     app.session.permission_mode = mode.permission_mode();
+    // An approval covers the plan it was given in; entering plan mode again
+    // must lock mutating tools until the next plan is approved.
+    if app.session.plan_mode != (mode == InteractionMode::Plan) {
+        app.session.plan_approved = false;
+    }
     app.session.plan_mode = mode == InteractionMode::Plan;
     app.session.skip_permissions =
         mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
@@ -4581,19 +4579,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/replay" => SlashResult::SystemMessage(
-            "Session replay: drop to shell and run\n  agi session list\n  agi session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
+            "Session replay: drop to shell and run\n  agi session list\n  agi session fork <id> --at-turn N --as <name>\n/rewind picks a turn of this session in place."
                 .to_string(),
         ),
 
         "/insights" => {
-            let sid = app
-                .session
-                .managed_session_id()
-                .unwrap_or("(no session)");
-            SlashResult::SystemMessage(format!(
-                "Inspect this session as JSONL events:\n  agi exec --json-events --session {} \"<prompt>\" | jq",
-                sid
-            ))
+            SlashResult::SystemMessage(crate::claude_parity::render_insights(&app.session))
         }
 
         "/status" => {
@@ -4646,10 +4637,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/new" => {
-            app.session.clear();
-            app.chat_messages.clear();
-            app.scroll_offset = 0;
-            app.sync_stats();
+            app.discard_conversation();
             SlashResult::SystemMessage("Started new conversation.".to_string())
         }
 
@@ -5144,10 +5132,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         ),
 
         // ── Voice ──
-        // The slash handler is sync and `run_voice_mode` is async, which is why
-        // this used to print "Voice mode requires the REPL" over a complete
-        // implementation. It does not require the REPL, it requires leaving the
-        // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
+        // The slash handler is sync and voice is async and needs the terminal
+        // outside the alternate screen, so it returns a deferred action, as
+        // RunLogin and RunAdvisor do.
         "/dictate" => SlashResult::RunDictate(
             if arg.is_empty() {
                 crate::voice_languages::default_language()
@@ -5504,19 +5491,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/extra-usage" | "/pricing" => {
-            SlashResult::SystemMessage(
-                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nManaged cloud: public alpha, open to signed-in users with metered plan usage.".into()
-            )
+            SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page())
         }
 
-        "/remote-env" => {
-            let mut lines = vec!["# Remote-env defaults".to_string()];
-            for key in ["AGIWORKFORCE_API_BASE", "AGIWORKFORCE_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"] {
-                let v = std::env::var(key).unwrap_or_else(|_| "<unset>".into());
-                lines.push(format!("{key} = {v}"));
-            }
-            SlashResult::SystemMessage(lines.join("\n"))
-        }
+        "/remote-env" => SlashResult::SystemMessage(crate::claude_parity::render_remote_env()),
 
         "/keybindings" | "/keys" => SlashResult::SystemMessage(app.keybindings.render_help(
             crate::keybindings::resolved_edit_mode(app.config.ui.edit_mode.as_deref()),
@@ -5622,7 +5600,7 @@ pub async fn run(
     skip_permissions: bool,
     allow_bypass_permissions: bool,
     fallback_chain: crate::routing::fallback::FallbackChain,
-    _session_name: Option<String>,
+    session_name: Option<String>,
     team_mode: bool,
     auto_approve_safe: bool,
     quiet: bool,
@@ -5665,9 +5643,7 @@ pub async fn run(
     if fallback_chain.primaries.len() > 1 {
         session.fallback_chain = Some(fallback_chain);
     }
-    // Sprint B4: thread the initial permission mode + headless
-    // auto-approve flag so the TUI launch path matches `--mode plan`
-    // semantics from `repl::run_repl` and `run_oneshot`.
+    session.session_name = session_name;
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
@@ -5748,13 +5724,10 @@ pub async fn run(
     // again (idempotent).
     super::set_tui_active(true);
 
-    // Do NOT block TUI startup on MCP connect / OAuth. Spawn the connect
-    // (including any browser-OAuth dance) on a background task; the resulting
-    // manager is injected into the session once it's ready (drained
-    // non-blockingly in the event loop). This stops the default TUI from hanging
-    // up to OAUTH_INTERACTIVE_TIMEOUT at launch when a repo `.mcp.json` declares
-    // an HTTP-OAuth server. Mirrors the REPL's P0-1 fix; until the manager is
-    // ready, turns simply run without MCP tools.
+    // MCP connect, browser OAuth included, runs in the background so a repo
+    // `.mcp.json` naming an OAuth server cannot hold startup for
+    // OAUTH_INTERACTIVE_TIMEOUT. The event loop injects the manager once it is
+    // ready; until then turns run without MCP tools.
     let mcp_elicitation_handler = Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
@@ -5946,13 +5919,8 @@ async fn run_event_loop(
             if let Some(handle) = mcp_attach_join.take() {
                 if let Ok(Some(mgr)) = handle.await {
                     app.session.set_mcp_manager(mgr);
-                    // `TuiApp::new` only saw whatever MCP prompts were
-                    // available *before* this background attach finished
-                    // (almost always none, that's the whole point of not
-                    // blocking startup on it). Refresh the command registry
-                    // now so `/mcp:<server>:<prompt>` becomes dispatchable
-                    // and shows up in the `/` command popup as soon as the
-                    // servers are actually connected.
+                    // The servers' prompts exist only now, so register them
+                    // for dispatch and for the `/` popup.
                     if let Some(prompts) = app.session.mcp_prompt_info() {
                         register_mcp_prompt_commands(&mut app.command_registry, prompts);
                     }
@@ -6806,12 +6774,9 @@ async fn send_message_with_prompt(
         host.begin_turn(broker.clone());
     }
 
-    // Stream tool lifecycle events into a local cell list during the turn, then
-    // surface them in the transcript after it ends. Drained in the select! loop
-    // below into a local Vec (never `app`) so it can't conflict with the
-    // `&mut app.session` borrow the turn future holds. A live mid-turn spinner
-    // needs the spawned agent-task model (future work); for now the cells appear
-    // once the turn completes, already a large win over invisible tool calls.
+    // Tool lifecycle events are drained in the select! loop below into a local
+    // Vec, never `app`, so they cannot conflict with the `&mut app.session`
+    // borrow the turn future holds; the live frame draws from that Vec.
     let (tool_tx, mut tool_rx) =
         tokio::sync::mpsc::unbounded_channel::<crate::tui::app_event::TuiAppEvent>();
     {
@@ -6895,7 +6860,7 @@ async fn send_message_with_prompt(
                             stream_start: app.stream_start,
                             stream_buffer: &app.stream_buffer,
                             spinner_char: spinner_frame(app.spinner_tick),
-                            loading_verb: loading_verb_for(turn_count),
+                            loading_verb: LOADING_VERB,
                             awaiting_approval: true,
                             scroll_offset: app.scroll_offset,
                             access_mode: turn_access_mode,
@@ -6904,6 +6869,9 @@ async fn send_message_with_prompt(
                             effort_label: turn_effort_label,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
+                            quit_key: app
+                                .keybindings
+                                .display(crate::keybindings::KeybindingAction::Quit),
                         };
                         if let crate::tui::approval_broker::ApprovalRequestKind::Question {
                             question,
@@ -7099,7 +7067,7 @@ async fn send_message_with_prompt(
                         loading_verb: if preparing {
                             "Preparing context"
                         } else {
-                            loading_verb_for(turn_count)
+                            LOADING_VERB
                         },
                         awaiting_approval: false,
                         scroll_offset: app.scroll_offset,
@@ -7109,13 +7077,16 @@ async fn send_message_with_prompt(
                         effort_label: turn_effort_label,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
+                        quit_key: app
+                            .keybindings
+                            .display(crate::keybindings::KeybindingAction::Quit),
                     };
                     render_turn_frame(terminal, &ctx, &app.input, app.queued_prompts.len())?;
 
                     // MCP servers may also elicit input MID-turn: the engine's
                     // read-loop parks awaiting the response, so the queue must
                     // be driven here too (the idle-loop drain at the top of
-                    // `run_app` only runs between turns). Mirrors the approval
+                    // `run_event_loop` only runs between turns). Mirrors the approval
                     // arm above; uses the same disjoint-field `ctx`.
                     let elicitation_handler = Arc::clone(&app.mcp_elicitation_handler);
                     while let Some(pending) = elicitation_handler.drain_pending().await {
@@ -7744,7 +7715,7 @@ mod tests {
     }
 
     /// End-to-end: a denied decision routed through callback → broker → tool
-    /// must produce an observable "denied" tool result and never touch disk.
+    /// must produce an observable "denied" tool result and never touch disk,
     /// proving behavior, not just compilation. The whole flow is wrapped in a
     /// timeout so that a future deadlock regression fails fast instead of
     /// hanging the suite (the symptom we want CI to catch).
@@ -7992,7 +7963,7 @@ mod tests {
             "allowed tool must land its exact content on disk"
         );
 
-        // The denied tool observed Deny: it failed and never touched disk.
+        // The denied tool observed Deny: it failed and never touched disk,
         // proving the two decisions were routed per-request, not swapped.
         assert!(!deny_success, "denied tool must report failure");
         assert!(!deny_exists, "denied tool must not create its file on disk");
@@ -8098,6 +8069,21 @@ mod tests {
     }
 
     #[test]
+    fn re_entering_plan_mode_locks_mutating_tools_until_the_next_approval() {
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+
+        assert!(apply_mode(&mut app, InteractionMode::Plan));
+        app.session.plan_approved = true;
+        assert!(apply_mode(&mut app, InteractionMode::Plan));
+        assert!(app.session.plan_approved, "staying in plan keeps its approval");
+
+        assert!(apply_mode(&mut app, InteractionMode::Chat));
+        assert!(apply_mode(&mut app, InteractionMode::Plan));
+        assert!(!app.session.plan_approved);
+    }
+
+    #[test]
     fn the_launch_opt_in_puts_bypass_and_full_auto_back_in_the_cycle() {
         let mut app = minimal_app();
         app.session.pinned_permission_mode = None;
@@ -8148,7 +8134,7 @@ mod tests {
             SlashResult::RunVoice(ref l) if l == "es"
         ));
 
-        // An unsupported language is rejected in place, listing what works.
+        // An unsupported language is rejected in place, listing what works;
         // it must not dispatch a voice session that would immediately fail.
         match handle_slash("/voice klingon", &mut app) {
             SlashResult::SystemMessage(msg) => {
@@ -9256,6 +9242,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
+            quit_key: Some("ctrl+d"),
         };
 
         let mut overlay = ApprovalOverlayState::default();
@@ -9336,6 +9323,7 @@ mod tests {
             effort_label,
             cost_str: "Tokens: 1234 in / 567 out (billed by your provider)".to_string(),
             notice,
+            quit_key: Some("ctrl+d"),
         }
     }
 
@@ -9474,7 +9462,7 @@ mod tests {
     }
 
     /// Regression: at 100 and 60 columns the footer showed neither the cost
-    /// readout nor the `/` and `Esc` hints, with no ellipsis to say anything was
+    /// readout nor the `/` and quit hints, with no ellipsis to say anything was
     /// hidden, so a user on a normal terminal never learned they existed.
     #[test]
     fn the_cost_and_the_slash_hint_survive_a_normal_terminal_width() {
@@ -9497,7 +9485,7 @@ mod tests {
         // At 60 the row abbreviates rather than dropping, and buys back the
         // quit hint as well.
         let narrow = draw_footer(60, "High", None);
-        assert!(narrow.contains("esc quit"), "{narrow}");
+        assert!(narrow.contains("ctrl+d quit"), "{narrow}");
     }
 
     /// The footer reports the session's own effort, not a hardcoded default.
@@ -9613,8 +9601,8 @@ mod tests {
         );
     }
 
-    /// Every externally-sourced string in the transcript, streamed provider
-    /// chunks, tool/system message text, and tool-cell summary/output rows.
+    /// Every externally-sourced string in the transcript (streamed provider
+    /// chunks, system message text, and tool-cell summary/output rows)
     /// used to reach the frame buffer verbatim: `Paragraph` only skips
     /// zero-width graphemes and `unicode-width` scores ESC as one column, so
     /// crossterm printed the escape to the operator's terminal.
@@ -9626,10 +9614,6 @@ mod tests {
             ChatMessage {
                 role: ChatRole::Assistant,
                 text: format!("assistant {ESCAPE_PAYLOAD}reply"),
-            },
-            ChatMessage {
-                role: ChatRole::Tool,
-                text: format!("tool {ESCAPE_PAYLOAD}result"),
             },
             ChatMessage {
                 role: ChatRole::System,
@@ -9675,6 +9659,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
+            quit_key: Some("ctrl+d"),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(120, 60)).expect("terminal");
@@ -9728,6 +9713,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
+            quit_key: Some("ctrl+d"),
         };
 
         let diff_review = DiffReviewView::new(vec![FileDiff::new(
@@ -9880,6 +9866,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
+            quit_key: Some("ctrl+d"),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("terminal");

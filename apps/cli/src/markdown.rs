@@ -550,7 +550,7 @@ enum ListMarker {
 }
 
 /// Parse a nested list item. Returns (depth, marker_type, text) if it's a nested item.
-/// depth 0 = 2-space indent, depth 1 = 4-space indent, etc.
+/// Depth 0 = 2-space indent, depth 1 = 4-space indent, etc.
 fn parse_nested_list(line: &str) -> Option<(usize, ListMarker, &str)> {
     // Must have leading whitespace
     if !line.starts_with(' ') && !line.starts_with('\t') {

@@ -389,7 +389,7 @@ fn canonical_program(program: &str) -> String {
 }
 
 /// The script a shell runs. Anything other than a `-c` operand, a script file,
-/// stdin, a heredoc, or an option table gap that makes the operand ambiguous.
+/// stdin, a heredoc, or an option table gap that makes the operand ambiguous
 /// yields no payload and marks the invocation hidden, because the shell will run
 /// a program this walk never sees.
 fn shell_plan(args: &[String]) -> ExecutionPlan {

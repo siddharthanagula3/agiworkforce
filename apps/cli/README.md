@@ -197,7 +197,7 @@ machine-readable `kind` (`api_rate_limit`, `auth_expired`, `network`, …) and
 a runbook hint.
 
 ```bash
-agi exec --json-events "explain main.rs" | jq '.[]'
+agi --json-events exec "explain main.rs" | jq '.[]'
 ```
 
 ### 3. Multi-model fallback chain

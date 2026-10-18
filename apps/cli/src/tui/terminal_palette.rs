@@ -383,7 +383,7 @@ fn ansi16_to_rgb(idx: u8) -> (u8, u8, u8) {
 
 /// Parse a `COLORFGBG` value into default fg/bg colors. The variable (set by
 /// rxvt/konsole/some tmux configs) is `"fg;bg"` or `"fg;default;bg"`; the last
-/// field is the background index. Returns `None` when absent or malformed.
+/// field is the background index. Returns `None` when absent or malformed;
 /// most modern terminals (iTerm2, Terminal.app) don't set it, so this is only
 /// the fallback for a terminal that does not answer the OSC 10/11 query.
 fn colorfgbg_to_default(raw: &str) -> Option<DefaultColors> {

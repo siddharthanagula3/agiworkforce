@@ -219,7 +219,7 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(render_terminal_setup())
         }
         "/reload-plugins" => ParityCommandResult::SystemMessage(render_reload_plugins()),
-        "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(render_extra_usage()),
+        "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(open_upgrade_page()),
         "/remote-env" => ParityCommandResult::SystemMessage(render_remote_env()),
         "/add-dir" => ParityCommandResult::SystemMessage(handle_add_dir(session, arg)),
         "/remove-dir" => ParityCommandResult::SystemMessage(handle_remove_dir(session, arg)),
@@ -1567,7 +1567,7 @@ pub fn render_replay() -> String {
 pub fn render_insights(session: &AgentSession) -> String {
     let session_id = session.managed_session_id().unwrap_or("(no session)");
     format!(
-        "Inspect this session as JSONL events:\n  agi exec --json-events --session {session_id} \"<prompt>\" | jq"
+        "Inspect this session as JSONL events:\n  agi --json-events --session {session_id} \"<prompt>\" | jq"
     )
 }
 
@@ -1621,15 +1621,10 @@ pub fn render_reload_plugins() -> String {
     }
 }
 
-pub fn render_extra_usage() -> String {
-    "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nManaged cloud: public alpha, open to signed-in users with metered plan usage.".to_string()
-}
-
 pub fn render_remote_env() -> String {
     let mut lines = vec!["# Remote-env defaults".to_string()];
     for key in [
         "AGIWORKFORCE_API_BASE",
-        "AGIWORKFORCE_PROXY",
         "HTTPS_PROXY",
         "HTTP_PROXY",
         "NO_PROXY",

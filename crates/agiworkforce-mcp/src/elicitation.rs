@@ -116,7 +116,7 @@ pub trait ElicitationHandler: Send + Sync {
     }
 
     /// Handle one elicitation request from the named MCP server. The handler is
-    /// allowed to take as long as it needs (including blocking on the user).
+    /// allowed to take as long as it needs (including blocking on the user);
     /// the MCP connection layer will wait.
     fn handle<'a>(
         &'a self,

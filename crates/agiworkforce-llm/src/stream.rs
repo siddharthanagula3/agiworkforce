@@ -744,7 +744,7 @@ where
 // OpenAI-compatible Chat Completions API (streaming)
 // ---------------------------------------------------------------------------
 
-/// Build the OpenAI-compatible Chat Completions request body for `req`. Pure.
+/// Build the OpenAI-compatible Chat Completions request body for `req`. Pure,
 /// exposed so conformance/parity oracles can byte-compare request
 /// bodies without a socket.
 pub fn build_openai_compat_request_body(req: &ChatRequest<'_>, opts: &OpenAiOpts) -> Value {

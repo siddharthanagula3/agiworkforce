@@ -59,8 +59,8 @@ impl ToolRegistry {
         Self::default()
     }
 
-    /// Register a tool under its `name()`. Last registration wins (intentional.
-    /// lets a surface override a default tool).
+    /// Register a tool under its `name()`. Last registration wins, so a
+    /// surface can override a default tool.
     pub fn register(&mut self, tool: Box<dyn Tool>) {
         self.tools.insert(tool.name(), tool);
     }

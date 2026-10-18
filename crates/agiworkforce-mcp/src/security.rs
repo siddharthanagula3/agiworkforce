@@ -415,7 +415,7 @@ pub fn enforce_same_origin(expected: &str, candidate: &str, what: &str) -> Resul
 /// WHY THIS LIVES HERE. `danger_accept_invalid_certs(true)` is called in
 /// `transport/http.rs` and `transport/sse.rs` whenever [`crate::McpTimeouts`]
 /// carries `verify_tls: false`. The only guard against that was in the DESKTOP
-/// caller (`apps/desktop/src-tauri/src/core/mcp/transport.rs`, SEV-DESK-07).
+/// caller (`apps/desktop/src-tauri/src/core/mcp/transport.rs`, SEV-DESK-07),
 /// far away from the code that performs the dangerous action, and invisible to
 /// any other caller. The CLI happens to pass `McpTimeouts::default()`
 /// (`verify_tls: true`), so nothing is exploitable today, but the safety

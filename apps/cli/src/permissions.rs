@@ -444,7 +444,7 @@ impl PermissionStore {
     pub fn check(&self, command: &str) -> Option<bool> {
         // `split_whitespace` eats newlines, so `git status\nrm -rf ./src`
         // tokenized to [git, status, rm, -rf, ./src] and prefix-matched a
-        // stored `git status` rule with no metachar in any trailing token.
+        // stored `git status` rule with no metachar in any trailing token, so
         // the prompt was skipped and sh -c ran both lines. A stored rule can
         // never span lines, so a multi-line command has no stored decision.
         if self.unreadable || command.contains('\n') || command.contains('\r') {

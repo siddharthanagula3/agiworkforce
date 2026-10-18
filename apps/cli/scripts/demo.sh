@@ -37,7 +37,7 @@ pause
 
 echo "--- 2. Typed JSON event stream ---"
 echo "Every lifecycle event becomes one JSONL object."
-$CLI exec --json-events "explain hello.txt in 5 words" 2>&1 | jq -c '{event, model, kind, from, to}' | head -8 || true
+$CLI --json-events exec "explain hello.txt in 5 words" 2>&1 | jq -c '{event, model, kind, from, to}' | head -8 || true
 pause
 
 echo "--- 3. Multi-model fallback chain ---"

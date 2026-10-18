@@ -94,7 +94,7 @@ pub struct LoadedPlugin {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     pub apps: Vec<String>,
     pub error: Option<String>,
-    /// Format of the manifest this plugin was loaded from. Always `Some`.
+    /// Format of the manifest this plugin was loaded from. Always `Some`:
     /// directories with none of the 5 recognized manifest files are skipped
     /// during discovery (see `PluginsManager::load_from_dir`) rather than
     /// loaded as an inert, capability-less entry.
@@ -681,7 +681,7 @@ impl PluginsManager {
             // untouched.
             m.mcp_servers.retain(|sname, cfg| {
                 if cfg.command.is_empty() {
-                    // No command means HTTP/SSE transport.
+                    // No command means HTTP/SSE transport, where the
                     // safety check doesn't apply.
                     return true;
                 }

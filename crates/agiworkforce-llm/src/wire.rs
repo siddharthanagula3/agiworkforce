@@ -51,7 +51,7 @@ pub enum ContentBlock {
 /// A tool definition to send to the API.
 ///
 /// Note: only `name`, `description`, and `input_schema` are forwarded to the
-/// model. The remaining fields are LOCAL metadata for the executor.
+/// model. The remaining fields are LOCAL metadata for the executor:
 /// concurrency hints and per-tool size caps. Each provider serializer
 /// explicitly picks the API-bound fields by name, so these extra fields stay
 /// client-side.

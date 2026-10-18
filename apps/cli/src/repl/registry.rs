@@ -2352,7 +2352,7 @@ mod tests {
     }
 
     /// `/raw` prints the assistant message straight to the terminal, so the
-    /// escape stripping the rendered transcript applies must hold here too.
+    /// escape stripping the rendered transcript applies must hold here too;
     /// otherwise one keystroke after a safely rendered turn replays an OSC 52
     /// clipboard write the model relayed from an untrusted page.
     #[test]
@@ -2372,7 +2372,7 @@ mod tests {
         assert!(!raw.contains("52;c"), "clipboard payload survived: {raw:?}");
         assert_eq!(raw, "here it is: done");
 
-        // JSON mode must keep the bytes recoverable for machine consumers.
+        // JSON mode must keep the bytes recoverable for machine consumers:
         // serde encodes them as \u001b rather than emitting a live escape.
         let json = render_raw_last_response(&session, "json");
         assert!(
