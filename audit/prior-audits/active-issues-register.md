@@ -4275,7 +4275,7 @@ Full-file review, exact locations and separate source claims (`audit/checklist/r
 
 Resolution/acceptance: Exercise the real message handlers and native worker lifecycle with controlled dependencies, or accurately qualify helper-only coverage. Adverse controls must detect removing the actual producer/consumer behavior. The October9 fourth Chrome packet separately re-read the original security-fixes file through EOF: its private test subjects remain disconnected, while real gateway/Markdown/redactor groups are distinguished. No test or implementation edits were made.
 
-October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot implementation correctness is separately tracked as CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01. Production recorder behavior and full browser tests were not run.
+October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot capture against the real handler is covered by `apps/extension/__tests__/background-screenshot-capture.test.ts`. Production recorder behavior and full browser tests were not run.
 
 ## AUDIT-CODEOWNERS-COMMENT-ONLY-01
 
@@ -4344,18 +4344,6 @@ Verification: Actual runStateWrites: id-only predicate yields guarded=false; add
 Limit: Exported classifier was executed, not SQL or a run-state transition. Current service race/exploit and database behavior were not run.
 
 Resolution/acceptance: Make the instrument reject the demonstrated negative case while retaining the valid control. Verify the actual guarded behavior independently before using a green scanner as product acceptance. No guard or product code was edited.
-
-## CHROME-SCREENSHOT-INACTIVE-TAB-CAPTURE-01
-
-Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation changes.
-
-The screenshot branch resolves the content sender tab/window but calls captureVisibleTab with the window alone, then labels the returned image with the sender tab id. After a user switches tabs during awaited page actions, a successful capture can therefore pair the active tab image with the sender document URL/title. The [current Chrome API contract](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab), independently checked October 9, specifies the current active tab in the window as the capture target.
-
-Verification: The specialist executed the unchanged selected handler and actual resolver helpers in an isolated transpiled VM. One coherent tab map supplies sender/get/query/capture state: active sender control captures and reports 42; inactive sender42 in window7 with unique active99 captures99 but reports42. Exact component controls and current-source anchors (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). Lead independently read the branch, page-action consumer and current full manifest.
-
-Limit: The outer admission wrapper, real Chrome capture, pixels and permission grants were not run. The scenario requires an admitted sender and capture permission for the captured active tab. Current manifest has narrow required hosts, optional HTTP/HTTPS hosts and activeTab, without all_urls; tabs and optional hosts alone are not evidence of capture authorization. No actual privacy disclosure or permission bypass is asserted.
-
-Resolution/acceptance: Return a screenshot bound to its actual captured identity and refuse or safely retry when the requested sender is not the capturable active target. A real admitted action/tab-switch test must cover success, refusal and denied capture permission. Source remains unchanged.
 
 ## DESKTOP-SETTINGS-SYNC-GAP-01
 
