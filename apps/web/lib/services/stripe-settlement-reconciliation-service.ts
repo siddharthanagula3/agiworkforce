@@ -53,8 +53,13 @@ const SELECT_STRIPE_BILLED_SUBSCRIPTIONS = `
     from public.subscriptions
    where stripe_subscription_id is not null
      and stripe_subscription_id <> ''
-   order by updated_at asc nulls first
+   order by stripe_state_reconciled_at asc nulls first
    limit $1`;
+
+const STAMP_EXAMINED_SUBSCRIPTIONS = `
+  update public.subscriptions
+     set stripe_state_reconciled_at = now()
+   where stripe_subscription_id = any($1::text[])`;
 
 function epochOf(value: string | Date | null | undefined): number | null {
   if (value === null || value === undefined) return null;
@@ -165,6 +170,11 @@ export async function reconcileStripeSettlement(input: {
   }
 
   const examined = rows.length;
+  if (examined > 0) {
+    await input.db.execute(STAMP_EXAMINED_SUBSCRIPTIONS, [
+      rows.map((row) => row.stripe_subscription_id),
+    ]);
+  }
   const diverged = drifts.length;
   const divergenceRatio = examined === 0 ? 0 : diverged / examined;
 

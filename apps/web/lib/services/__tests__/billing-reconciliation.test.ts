@@ -37,6 +37,10 @@ function subscriptionRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function fakeDb(rows: unknown[]) {
+  return { query: vi.fn(async (_sql: string) => rows), execute: vi.fn(async () => rows.length) };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getTierMapping.mockReturnValue({
@@ -127,7 +131,7 @@ describe('compareBilledPrice', () => {
 
 describe('reconcileBilledPlans', () => {
   it('reports no drift when every subscription is charged its stored plan', async () => {
-    const db = { query: vi.fn(async () => [subscriptionRow()]) };
+    const db = fakeDb([subscriptionRow()]);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS)),
@@ -145,7 +149,7 @@ describe('reconcileBilledPlans', () => {
   });
 
   it('flags a mismatch between the local plan and what Stripe charges', async () => {
-    const db = { query: vi.fn(async () => [subscriptionRow({ plan_tier: 'max' })]) };
+    const db = fakeDb([subscriptionRow({ plan_tier: 'max' })]);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS)),
@@ -168,13 +172,7 @@ describe('reconcileBilledPlans', () => {
   });
 
   it('repairs nothing, so a divergence survives to be acted on', async () => {
-    const statements: string[] = [];
-    const db = {
-      query: vi.fn(async (sql: string) => {
-        statements.push(sql);
-        return [subscriptionRow({ plan_tier: 'max' })];
-      }),
-    };
+    const db = fakeDb([subscriptionRow({ plan_tier: 'max' })]);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS)),
@@ -183,12 +181,50 @@ describe('reconcileBilledPlans', () => {
 
     await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
 
-    expect(statements).toHaveLength(1);
-    expect(statements[0]).not.toMatch(/\b(update|insert|delete)\s/iu);
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0]?.[0]).not.toMatch(/\b(update|insert|delete)\s/iu);
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    const [stamp] = db.execute.mock.calls[0] as unknown as [string];
+    expect(stamp).toMatch(/set stripe_price_reconciled_at = now\(\)\s+where/iu);
+    expect(stamp).not.toMatch(/plan_tier|billing_interval|status/iu);
+  });
+
+  it('reads the least recently compared subscriptions first and stamps every row it read', async () => {
+    const db = fakeDb([
+      subscriptionRow({ stripe_subscription_id: 'sub_read' }),
+      subscriptionRow({ user_id: 'user-2', stripe_subscription_id: 'sub_unreadable' }),
+    ]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async (id: string) => {
+          if (id === 'sub_unreadable') throw new Error('stripe unavailable');
+          return stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS);
+        }),
+      },
+    };
+
+    await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(db.query.mock.calls[0]?.[0]).toMatch(
+      /order by stripe_price_reconciled_at asc nulls first/iu,
+    );
+    expect(db.execute.mock.calls[0]).toEqual([
+      expect.any(String),
+      [['sub_read', 'sub_unreadable']],
+    ]);
+  });
+
+  it('stamps nothing when there is nothing to compare', async () => {
+    const db = fakeDb([]);
+    const stripe = { subscriptions: { retrieve: vi.fn() } };
+
+    await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(db.execute).not.toHaveBeenCalled();
   });
 
   it('counts a subscription Stripe cannot return as uncomparable, not as agreement', async () => {
-    const db = { query: vi.fn(async () => [subscriptionRow()]) };
+    const db = fakeDb([subscriptionRow()]);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => {
@@ -205,7 +241,7 @@ describe('reconcileBilledPlans', () => {
   });
 
   it('does not alert on a single divergence in a sample too small to mean anything', async () => {
-    const db = { query: vi.fn(async () => [subscriptionRow({ plan_tier: 'max' })]) };
+    const db = fakeDb([subscriptionRow({ plan_tier: 'max' })]);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS)),
@@ -225,7 +261,7 @@ describe('reconcileBilledPlans', () => {
         plan_tier: index < 5 ? 'max' : 'pro',
       }),
     );
-    const db = { query: vi.fn(async () => rows) };
+    const db = fakeDb(rows);
     const stripe = {
       subscriptions: {
         retrieve: vi.fn(async () => stripeSubscription(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS)),

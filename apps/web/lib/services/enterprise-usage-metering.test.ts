@@ -153,18 +153,41 @@ describe('computeNewOverageToReportCents', () => {
   });
 });
 
+function contractRow(overrides: Record<string, unknown> = {}) {
+  return {
+    organization_id: 'org_1',
+    stripe_customer_id: 'cus_1',
+    included_usage_cents_per_period: 10_000,
+    committed_usage_block_cents: 0,
+    overage_stripe_price_id: 'price_overage',
+    overage_reported_period: null,
+    overage_reported_cents: 0,
+    overage_pending_period: null,
+    overage_pending_cents: null,
+    overage_pending_cumulative_cents: null,
+    overage_pending_identifier: null,
+    overage_pending_at: null,
+    ...overrides,
+  };
+}
+
+function queryCalls(db: DatabaseAdapter): Array<[string, unknown[]]> {
+  return (db.query as ReturnType<typeof vi.fn>).mock.calls as Array<[string, unknown[]]>;
+}
+
+function contractsDb(contracts: unknown[], options: { claimed?: boolean } = {}) {
+  return fakeDb((sql) => {
+    if (sql.includes('from public.organization_billing_contracts')) return contracts;
+    if (sql.includes('returning organization_id')) {
+      return options.claimed === false ? [] : [{ organization_id: 'claimed' }];
+    }
+    return [];
+  });
+}
+
 describe('reportEnterpriseOverageUsage', () => {
   it('skips a contract with no overage price and never calls stripe', async () => {
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: null,
-        metadata: {},
-      },
-    ]);
+    const db = contractsDb([contractRow({ overage_stripe_price_id: null })]);
     const stripe = fakeStripe();
 
     const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
@@ -181,19 +204,25 @@ describe('reportEnterpriseOverageUsage', () => {
     expect(stripe.billing.meterEvents.create).not.toHaveBeenCalled();
   });
 
-  it('reports the full overage as a meter event and persists the cumulative total', async () => {
+  it('records the report as pending before stripe is called and confirms it after', async () => {
     getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(30_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {},
-      },
-    ]);
+    const order: string[] = [];
+    const db = fakeDb((sql) => {
+      if (sql.includes('from public.organization_billing_contracts')) return [contractRow()];
+      if (sql.includes('returning organization_id')) {
+        order.push('claim');
+        return [{ organization_id: 'org_1' }];
+      }
+      if (sql.includes('overage_reported_cents = overage_pending_cumulative_cents')) {
+        order.push('commit');
+      }
+      return [];
+    });
     const stripe = fakeStripe();
+    (stripe.billing.meterEvents.create as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push('stripe');
+      return { identifier: 'evt_1' };
+    });
 
     const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
 
@@ -205,10 +234,11 @@ describe('reportEnterpriseOverageUsage', () => {
         cumulativeOverageCents: 20_000,
       },
     ]);
+    expect(order).toEqual(['claim', 'stripe', 'commit']);
     expect(stripe.billing.meterEvents.create).toHaveBeenCalledWith({
       event_name: 'enterprise_overage',
       payload: { stripe_customer_id: 'cus_1', value: '20000' },
-      identifier: 'enterprise-overage:org_1:2026-02-15',
+      identifier: 'enterprise-overage:org_1:2026-02:20000',
       timestamp: Math.floor(FEBRUARY.getTime() / 1000),
     });
     expect(getOrganizationMonthToDateSpendCents).toHaveBeenCalledWith(
@@ -216,30 +246,109 @@ describe('reportEnterpriseOverageUsage', () => {
       db,
       resolveEnterpriseUsagePeriod(FEBRUARY),
     );
-    const persistCall = (db.query as ReturnType<typeof vi.fn>).mock.calls.find(([sql]) =>
-      sql.includes('update public.organization_billing_contracts'),
-    );
-    expect(persistCall?.[1]).toEqual([
+    const claim = queryCalls(db).find(([sql]) => sql.includes('returning organization_id'));
+    expect(claim?.[1]).toEqual([
       'org_1',
-      JSON.stringify({
-        enterpriseUsageReporting: { period: '2026-02', cumulativeOverageReportedCents: 20_000 },
-      }),
+      '2026-02',
+      20_000,
+      20_000,
+      'enterprise-overage:org_1:2026-02:20000',
+      FEBRUARY.toISOString(),
     ]);
   });
 
-  it('is idempotent: rerunning the same day with the same ledger total reports nothing new', async () => {
-    getOrganizationMonthToDateSpendCents.mockResolvedValue(30_000);
-    const db = fakeDb([
+  it('leaves the report pending when stripe rejects it, so nothing is marked reported', async () => {
+    getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(30_000);
+    const db = contractsDb([contractRow()]);
+    const stripe = fakeStripe();
+    (stripe.billing.meterEvents.create as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('stripe unavailable'),
+    );
+
+    const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
+
+    expect(results[0]).toMatchObject({ organizationId: 'org_1', status: 'failed' });
+    expect(
+      queryCalls(db).some(([sql]) =>
+        sql.includes('overage_reported_cents = overage_pending_cumulative_cents'),
+      ),
+    ).toBe(false);
+  });
+
+  it('resends an unconfirmed report under its original identifier before computing anything new', async () => {
+    getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(30_000);
+    const pendingAt = new Date('2026-02-14T05:10:00.000Z');
+    const db = contractsDb([
+      contractRow({
+        overage_pending_period: '2026-02',
+        overage_pending_cents: 20_000,
+        overage_pending_cumulative_cents: 20_000,
+        overage_pending_identifier: 'enterprise-overage:org_1:2026-02:20000',
+        overage_pending_at: pendingAt.toISOString(),
+      }),
+    ]);
+    const stripe = fakeStripe();
+
+    const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
+
+    expect(stripe.billing.meterEvents.create).toHaveBeenCalledTimes(1);
+    expect(stripe.billing.meterEvents.create).toHaveBeenCalledWith({
+      event_name: 'enterprise_overage',
+      payload: { stripe_customer_id: 'cus_1', value: '20000' },
+      identifier: 'enterprise-overage:org_1:2026-02:20000',
+      timestamp: Math.floor(pendingAt.getTime() / 1000),
+    });
+    expect(results).toEqual([
       {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {
-          enterpriseUsageReporting: { period: '2026-02', cumulativeOverageReportedCents: 20_000 },
-        },
+        organizationId: 'org_1',
+        status: 'reported',
+        reportedCents: 20_000,
+        cumulativeOverageCents: 20_000,
       },
+    ]);
+    expect(queryCalls(db).some(([sql]) => sql.includes('returning organization_id'))).toBe(false);
+  });
+
+  it('reports only growth past a resent report in the same run', async () => {
+    getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(35_000);
+    const db = contractsDb([
+      contractRow({
+        overage_pending_period: '2026-02',
+        overage_pending_cents: 20_000,
+        overage_pending_cumulative_cents: 20_000,
+        overage_pending_identifier: 'enterprise-overage:org_1:2026-02:20000',
+        overage_pending_at: '2026-02-14T05:10:00.000Z',
+      }),
+    ]);
+    const stripe = fakeStripe();
+
+    const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
+
+    const sent = (stripe.billing.meterEvents.create as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([params]) => [params.identifier, params.payload.value],
+    );
+    expect(sent).toEqual([
+      ['enterprise-overage:org_1:2026-02:20000', '20000'],
+      ['enterprise-overage:org_1:2026-02:25000', '5000'],
+    ]);
+    expect(results[0]).toMatchObject({ status: 'reported', reportedCents: 25_000 });
+  });
+
+  it('sends nothing when another run already holds an unconfirmed report', async () => {
+    getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(30_000);
+    const db = contractsDb([contractRow()], { claimed: false });
+    const stripe = fakeStripe();
+
+    const results = await reportEnterpriseOverageUsage({ db, stripe, now: FEBRUARY });
+
+    expect(results[0]).toMatchObject({ organizationId: 'org_1', status: 'failed' });
+    expect(stripe.billing.meterEvents.create).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent: rerunning with the same ledger total reports nothing new', async () => {
+    getOrganizationMonthToDateSpendCents.mockResolvedValue(30_000);
+    const db = contractsDb([
+      contractRow({ overage_reported_period: '2026-02', overage_reported_cents: 20_000 }),
     ]);
     const stripe = fakeStripe();
 
@@ -258,17 +367,8 @@ describe('reportEnterpriseOverageUsage', () => {
 
   it('resets the reported baseline across a period boundary', async () => {
     getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(15_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {
-          enterpriseUsageReporting: { period: '2026-02', cumulativeOverageReportedCents: 20_000 },
-        },
-      },
+    const db = contractsDb([
+      contractRow({ overage_reported_period: '2026-02', overage_reported_cents: '20000' }),
     ]);
     const stripe = fakeStripe();
 
@@ -286,16 +386,7 @@ describe('reportEnterpriseOverageUsage', () => {
 
   it('skips a price with no attached meter and logs once', async () => {
     getOrganizationMonthToDateSpendCents.mockResolvedValueOnce(30_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_no_meter',
-        metadata: {},
-      },
-    ]);
+    const db = contractsDb([contractRow({ overage_stripe_price_id: 'price_no_meter' })]);
     const stripe = fakeStripe({
       prices: { retrieve: vi.fn().mockResolvedValue({ recurring: { meter: null } }) },
     });
@@ -317,23 +408,9 @@ describe('reportEnterpriseOverageUsage', () => {
     getOrganizationMonthToDateSpendCents
       .mockResolvedValueOnce(30_000)
       .mockResolvedValueOnce(30_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {},
-      },
-      {
-        organization_id: 'org_2',
-        stripe_customer_id: 'cus_2',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_overage',
-        metadata: {},
-      },
+    const db = contractsDb([
+      contractRow(),
+      contractRow({ organization_id: 'org_2', stripe_customer_id: 'cus_2' }),
     ]);
     const stripe = fakeStripe();
     (stripe.billing.meterEvents.create as ReturnType<typeof vi.fn>)
@@ -350,23 +427,13 @@ describe('reportEnterpriseOverageUsage', () => {
     getOrganizationMonthToDateSpendCents
       .mockResolvedValueOnce(30_000)
       .mockResolvedValueOnce(30_000);
-    const db = fakeDb([
-      {
-        organization_id: 'org_1',
-        stripe_customer_id: 'cus_1',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
-        overage_stripe_price_id: 'price_shared',
-        metadata: {},
-      },
-      {
+    const db = contractsDb([
+      contractRow({ overage_stripe_price_id: 'price_shared' }),
+      contractRow({
         organization_id: 'org_2',
         stripe_customer_id: 'cus_2',
-        included_usage_cents_per_period: 10_000,
-        committed_usage_block_cents: 0,
         overage_stripe_price_id: 'price_shared',
-        metadata: {},
-      },
+      }),
     ]);
     const stripe = fakeStripe();
 

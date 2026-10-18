@@ -160,6 +160,27 @@ describe('stripe settlement reconciliation', () => {
     expect(summary.alert).toBe(true);
   });
 
+  it('reads the least recently compared rows first and stamps every row it examined', async () => {
+    const db = fakeDb([
+      storedRow({ stripe_subscription_id: 'sub_1' }),
+      storedRow({ user_id: 'user-2', stripe_subscription_id: 'sub_gone' }),
+    ]);
+
+    await reconcileStripeSettlement({
+      db: db as never,
+      stripe: fakeStripe({ sub_1: stripeSubscription() }) as never,
+    });
+
+    expect(db.query.mock.calls[0]?.[0]).toMatch(
+      /order by stripe_state_reconciled_at asc nulls first/iu,
+    );
+    expect(db.execute).toHaveBeenCalledOnce();
+    expect(db.execute.mock.calls[0]).toEqual([
+      expect.stringMatching(/set stripe_state_reconciled_at = now\(\)/iu),
+      [['sub_1', 'sub_gone']],
+    ]);
+  });
+
   it('does not alert on a sample too small to be meaningful', async () => {
     const summary = await reconcileStripeSettlement({
       db: fakeDb([storedRow()]) as never,

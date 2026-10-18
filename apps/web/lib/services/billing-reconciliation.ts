@@ -81,8 +81,13 @@ const SELECT_STRIPE_BILLED_SUBSCRIPTIONS = `
     from public.subscriptions
    where stripe_subscription_id is not null
      and stripe_subscription_id <> ''
-   order by updated_at asc nulls first
+   order by stripe_price_reconciled_at asc nulls first
    limit $1`;
+
+const STAMP_EXAMINED_SUBSCRIPTIONS = `
+  update public.subscriptions
+     set stripe_price_reconciled_at = now()
+   where stripe_subscription_id = any($1::text[])`;
 
 /** The list price in the smallest currency unit, or null where none is published. */
 export function expectedUnitAmount(
@@ -202,6 +207,11 @@ export async function reconcileBilledPlans(options: {
     });
   }
 
+  if (rows.length > 0) {
+    await options.db.execute(STAMP_EXAMINED_SUBSCRIPTIONS, [
+      rows.map((row) => row.stripe_subscription_id),
+    ]);
+  }
   const diverged = drifts.length;
   const divergenceRatio = examined === 0 ? 0 : diverged / examined;
 

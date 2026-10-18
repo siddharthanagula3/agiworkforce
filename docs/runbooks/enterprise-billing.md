@@ -251,8 +251,9 @@ allowance. Consumption itself is never blocked by the allowance; the
 organization's own configured spend limit remains the only hard cap. The
 daily `report-enterprise-usage` cron (WP-C) reports new overage since the
 last report to the meter behind `overage_stripe_price_id` via
-`stripe.billing.meterEvents.create`, idempotent per organization per day by
-storing the last reported cumulative overage in the contract's `metadata`.
+`stripe.billing.meterEvents.create`. Each report is first claimed as pending in
+the contract's `overage_*` columns (0367), so a retry resends the same
+identifier and value, and is committed once Stripe accepts it.
 A contract with no overage price configured is skipped and logged once, not
 retried daily.
 
