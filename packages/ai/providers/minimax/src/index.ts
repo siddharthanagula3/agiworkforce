@@ -17,7 +17,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -134,9 +133,6 @@ export function createMinimaxAdapter(config: MinimaxAdapterConfig = {}): Provide
     },
   };
 }
-
-export const minimaxAdapterFactory: ProviderAdapterFactory = (config) =>
-  createMinimaxAdapter(config as MinimaxAdapterConfig);
 
 export { MINIMAX_MODEL_CATALOG } from './catalog';
 export { MINIMAX_DEFAULT_BASE_URL } from './base-url';

@@ -20,7 +20,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -162,9 +161,6 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
     },
   };
 }
-
-export const ollamaAdapterFactory: ProviderAdapterFactory = (config) =>
-  createOllamaAdapter(config as OllamaAdapterConfig);
 
 export { fetchOllamaCatalog, OLLAMA_DEFAULT_BASE_URL } from './catalog';
 export {

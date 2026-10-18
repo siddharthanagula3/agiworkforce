@@ -35,7 +35,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -168,8 +167,5 @@ export function createZhipuAdapter(config: ZhipuAdapterConfig = {}): ProviderAda
     },
   };
 }
-
-export const zhipuAdapterFactory: ProviderAdapterFactory = (config) =>
-  createZhipuAdapter(config as ZhipuAdapterConfig);
 
 export { ZHIPU_MODEL_CATALOG } from './catalog';

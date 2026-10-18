@@ -17,7 +17,7 @@ import {
   createOpenAICompatAdapter,
   type OpenAICompatAdapterConfig,
 } from '@agiworkforce/providers-openai';
-import type { ProviderAdapter, ProviderAdapterFactory } from '@agiworkforce/types';
+import type { ProviderAdapter } from '@agiworkforce/types';
 
 import { WORKERS_AI_MODEL_CATALOG } from './catalog';
 
@@ -41,8 +41,5 @@ export function createWorkersAiAdapter(config: WorkersAiAdapterConfig = {}): Pro
     config,
   );
 }
-
-export const workersAiAdapterFactory: ProviderAdapterFactory = (config) =>
-  createWorkersAiAdapter(config as WorkersAiAdapterConfig);
 
 export { WORKERS_AI_MODEL_CATALOG } from './catalog';

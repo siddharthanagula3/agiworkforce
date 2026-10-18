@@ -16,7 +16,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -161,9 +160,6 @@ export function createVercelGatewayAdapter(
     },
   };
 }
-
-export const vercelGatewayAdapterFactory: ProviderAdapterFactory = (config) =>
-  createVercelGatewayAdapter(config as VercelGatewayAdapterConfig);
 
 export { VERCEL_GATEWAY_MODEL_CATALOG } from './catalog';
 export {

@@ -407,10 +407,7 @@
       "trustBoundary": "provider egress, streaming, retry and fallback",
       "status": "active-high-fan-in",
       "action": "keep",
-      "evidence": [
-        "packages/ai/provider-runtime/src/index.ts",
-        "packages/ai/provider-runtime/src/client/streamFromProvider.ts"
-      ]
+      "evidence": ["packages/ai/provider-runtime/src/index.ts"]
     },
     {
       "path": "packages/ai/providers",

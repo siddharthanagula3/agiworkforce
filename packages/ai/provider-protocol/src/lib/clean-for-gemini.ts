@@ -31,37 +31,6 @@ export const GEMINI_SUPPORTED_SCHEMA_KEYWORDS = new Set([
   'propertyOrdering',
 ]);
 
-/**
- * Retained for callers that assert on the historical stripping behaviour. The
- * allowlist above is what the cleaner actually enforces.
- */
-export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
-  'allOf',
-  'patternProperties',
-  'additionalProperties',
-  '$schema',
-  '$id',
-  '$ref',
-  '$defs',
-  'definitions',
-  'examples',
-
-  'minLength',
-  'maxLength',
-  'minimum',
-  'maximum',
-  'multipleOf',
-  'pattern',
-  'format',
-  'minItems',
-  'maxItems',
-  'uniqueItems',
-  'minProperties',
-  'maxProperties',
-
-  'not',
-]);
-
 const SCHEMA_META_KEYS = ['description', 'title', 'default'] as const;
 
 function defaultMatchesType(value: unknown, type: unknown, nullable: unknown): boolean {

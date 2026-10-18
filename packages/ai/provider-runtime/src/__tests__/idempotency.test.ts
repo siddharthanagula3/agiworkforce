@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  deriveIdempotencyKey,
-  meteredStepIdempotencyKey,
-  toolInvocationIdempotencyKey,
-} from '../idempotency';
+import { deriveIdempotencyKey, toolInvocationIdempotencyKey } from '../idempotency';
 
 const REQUEST_KEY = 'agi.chat.web.send.assistant-001';
 const TOOL_CALL_ID = 'call_abc123';
@@ -112,17 +108,6 @@ describe('idempotency key derivation', () => {
       resumeRound: 1,
     });
     expect(resumed).not.toBe(paused);
-  });
-
-  it('separates a metered step from a tool call in the same step', () => {
-    expect(meteredStepIdempotencyKey({ requestKey: REQUEST_KEY, step: 3 })).not.toBe(
-      toolInvocationIdempotencyKey({
-        requestKey: REQUEST_KEY,
-        step: 3,
-        toolCallId: TOOL_CALL_ID,
-        userId: USER_ID,
-      }),
-    );
   });
 
   it('cannot be forged by a segment that contains the separator', () => {

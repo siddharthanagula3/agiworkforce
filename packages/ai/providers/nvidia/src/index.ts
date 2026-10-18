@@ -14,7 +14,7 @@ import {
   createOpenAICompatAdapter,
   type OpenAICompatAdapterConfig,
 } from '@agiworkforce/providers-openai';
-import type { ProviderAdapter, ProviderAdapterFactory } from '@agiworkforce/types';
+import type { ProviderAdapter } from '@agiworkforce/types';
 
 import { NVIDIA_MODEL_CATALOG } from './catalog';
 
@@ -40,8 +40,5 @@ export function createNvidiaAdapter(config: NvidiaAdapterConfig = {}): ProviderA
     config,
   );
 }
-
-export const nvidiaAdapterFactory: ProviderAdapterFactory = (config) =>
-  createNvidiaAdapter(config as NvidiaAdapterConfig);
 
 export { NVIDIA_MODEL_CATALOG } from './catalog';

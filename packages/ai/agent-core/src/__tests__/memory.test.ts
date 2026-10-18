@@ -1,14 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  boostMemoryImportance,
   explicitForgetHandler,
   explicitRememberHandler,
   extractPassiveMemoryFacts,
   parseExplicitMemoryCommand,
   passiveMemoryText,
   classifyMemoryCategory,
-  cosineSimilarity,
-  decayMemoryImportance,
   extractCandidateMemoryFacts,
   memoryConflictTopic,
   memoryConsolidationKey,
@@ -40,19 +37,6 @@ describe('shared memory engine', () => {
     expect(memoryConflictTopic('User works at Acme')?.topic).toBe('employer');
     expect(memoryConflictTopic('User likes Rust')).toBeNull();
     expect(memoryConflictTopic('User lives in')).toBeNull();
-  });
-
-  it('applies the canonical decay and boost policy', () => {
-    expect(decayMemoryImportance(10, 14)).toBe(8);
-    expect(decayMemoryImportance(2, 365)).toBe(1);
-    expect(boostMemoryImportance(9)).toBe(10);
-  });
-
-  it('rejects invalid embeddings', () => {
-    expect(cosineSimilarity([1, 0], [1, 0])).toBe(1);
-    expect(cosineSimilarity([0, 0], [1, 0])).toBeNull();
-    expect(cosineSimilarity([1], [1, 0])).toBeNull();
-    expect(cosineSimilarity([Number.NaN], [1])).toBeNull();
   });
 
   it('uses a valid embedding signal in relevance scoring', () => {

@@ -24,7 +24,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -149,9 +148,6 @@ export function createMoonshotAdapter(config: MoonshotAdapterConfig = {}): Provi
     },
   };
 }
-
-export const moonshotAdapterFactory: ProviderAdapterFactory = (config) =>
-  createMoonshotAdapter(config as MoonshotAdapterConfig);
 
 export { MOONSHOT_MODEL_CATALOG } from './catalog';
 export { withMoonshotCacheUsageNormalization } from './cache-usage';

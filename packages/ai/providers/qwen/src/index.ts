@@ -22,7 +22,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -187,9 +186,6 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
     },
   };
 }
-
-export const qwenAdapterFactory: ProviderAdapterFactory = (config) =>
-  createQwenAdapter(config as QwenAdapterConfig);
 
 export { QWEN_MODEL_CATALOG } from './catalog';
 export { QWEN_DEFAULT_BASE_URL } from './base-url';

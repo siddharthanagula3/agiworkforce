@@ -19,7 +19,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -131,9 +130,6 @@ export function createDeepSeekAdapter(config: DeepSeekAdapterConfig = {}): Provi
     },
   };
 }
-
-export const deepseekAdapterFactory: ProviderAdapterFactory = (config) =>
-  createDeepSeekAdapter(config as DeepSeekAdapterConfig);
 
 export { DEEPSEEK_MODEL_CATALOG } from './catalog';
 export { withDeepSeekCacheUsageNormalization } from './cache-usage';

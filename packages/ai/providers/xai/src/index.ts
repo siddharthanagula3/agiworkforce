@@ -12,7 +12,7 @@ import {
   createOpenAICompatAdapter,
   type OpenAICompatAdapterConfig,
 } from '@agiworkforce/providers-openai';
-import type { ProviderAdapter, ProviderAdapterFactory } from '@agiworkforce/types';
+import type { ProviderAdapter } from '@agiworkforce/types';
 
 import { XAI_MODEL_CATALOG } from './catalog';
 
@@ -36,8 +36,5 @@ export function createXAIAdapter(config: XAIAdapterConfig = {}): ProviderAdapter
     config,
   );
 }
-
-export const xaiAdapterFactory: ProviderAdapterFactory = (config) =>
-  createXAIAdapter(config as XAIAdapterConfig);
 
 export { XAI_MODEL_CATALOG } from './catalog';

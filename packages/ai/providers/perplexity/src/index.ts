@@ -24,7 +24,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -168,8 +167,5 @@ export function createPerplexityAdapter(config: PerplexityAdapterConfig = {}): P
     },
   };
 }
-
-export const perplexityAdapterFactory: ProviderAdapterFactory = (config) =>
-  createPerplexityAdapter(config as PerplexityAdapterConfig);
 
 export { PERPLEXITY_MODEL_CATALOG } from './catalog';

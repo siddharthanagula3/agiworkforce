@@ -15,7 +15,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -131,9 +130,6 @@ export function createGroqAdapter(config: GroqAdapterConfig = {}): ProviderAdapt
     },
   };
 }
-
-export const groqAdapterFactory: ProviderAdapterFactory = (config) =>
-  createGroqAdapter(config as GroqAdapterConfig);
 
 export { GROQ_MODEL_CATALOG } from './catalog';
 export { withGroqCacheUsageNormalization } from './cache-usage';

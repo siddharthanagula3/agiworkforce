@@ -3,8 +3,8 @@
  *
  * Cross-provider LLM runtime infrastructure: retry generator with sticky
  * `RetryContext`, stream watchdog, latched session-stable headers,
- * 30+ branch error classifier, gateway fingerprinting, fallback chain
- * resolution, and message-history repair toolkit.
+ * 30+ branch error classifier, gateway fingerprinting and fallback chain
+ * resolution.
  *
  * This package is consumed by:
  *   - `packages/ai/providers/*`, every adapter, for `classifyError`,
@@ -27,11 +27,9 @@ export {
   EmptyProviderResponseError,
   RouteBudgetExhaustedError,
   ROUTE_BUDGET_EXHAUSTED_ERROR_NAME,
-  ERROR_CATEGORIES,
   classifyError,
   classifyModelStudioError,
   isErrorCategory,
-  networkConditionForErrorCategory,
   toStreamErrorClassification,
   parseContextOverflow,
   DATA_POLICY_NO_ENDPOINT_CODE,
@@ -69,7 +67,6 @@ export {
   StreamIdleTimeoutError,
   EmptyStreamError,
   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
-  DEFAULT_STREAM_IDLE_WARNING_MS,
   type WatchdogOptions,
   type WatchdogHooks,
 } from './watchdog';
@@ -83,38 +80,13 @@ export {
   type ValidateBaseUrlResult,
 } from './base-url';
 
-export {
-  deriveIdempotencyKey,
-  meteredStepIdempotencyKey,
-  toolInvocationIdempotencyKey,
-  type IdempotencyKeyInput,
-} from './idempotency';
+export { toolInvocationIdempotencyKey } from './idempotency';
 
 export {
   CredentialFailoverState,
   isCredentialFailureCategory,
   type CredentialFailoverStateOptions,
 } from './failover';
-
-export {
-  repairMessageHistory,
-  ensureToolResultPairing,
-  stripAnthropicOnlyFields,
-  stripExcessMediaItems,
-  DEFAULT_MAX_MEDIA_PER_REQUEST,
-  type RepairMessage,
-  type RepairBlock,
-  type RepairOptions,
-} from './history';
-
-// ----- shared retry-after helpers (also re-exported here for consumer migration) -----
-export { parseRetryAfter, parseRetryAfterFromError } from './retry-after-internal';
-
-export {
-  streamFromProvider,
-  type StreamFromProviderOptions,
-  type StreamIdleWatchdogOptions,
-} from './client/streamFromProvider';
 
 export {
   TRACEPARENT_HEADER,

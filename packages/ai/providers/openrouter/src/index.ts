@@ -18,7 +18,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -202,9 +201,6 @@ export function createOpenRouterAdapter(config: OpenRouterAdapterConfig = {}): P
     },
   };
 }
-
-export const openrouterAdapterFactory: ProviderAdapterFactory = (config) =>
-  createOpenRouterAdapter(config as OpenRouterAdapterConfig);
 
 export { OPENROUTER_MODEL_CATALOG } from './catalog';
 export {

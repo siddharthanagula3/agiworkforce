@@ -45,11 +45,7 @@ export {
   prependSystemPromptAdditionAfterCacheBoundary,
 } from './system-prompt-cache-boundary';
 
-// Prompt section utilities (re-exported for callers building system prompts)
-export {
-  normalizeStructuredPromptSection,
-  normalizePromptCapabilityIds,
-} from './lib/prompt-cache-stability';
+export { normalizeStructuredPromptSection } from './lib/prompt-cache-stability';
 
 export { resolveProviderRequestCapabilities } from './provider-attribution';
 export type {
@@ -63,7 +59,6 @@ export type {
 export {
   resolveAnthropicPayloadPolicy,
   applyAnthropicPayloadPolicyToParams,
-  applyAnthropicEphemeralCacheControlMarkers,
 } from './anthropic-payload-policy';
 export type {
   AnthropicPayloadPolicy,
@@ -85,31 +80,12 @@ export type {
 export {
   normalizeStrictOpenAIJsonSchema,
   normalizeOpenAIStrictToolParameters,
-  isStrictOpenAIJsonSchemaCompatible,
-  findOpenAIStrictToolSchemaDiagnostics,
-  resolveOpenAIStrictToolFlagForInventory,
 } from './openai-tool-schema';
-export type { OpenAIStrictToolSchemaDiagnostic } from './openai-tool-schema';
 
 export { normalizeToolParameterSchema } from './tool-parameter-schema';
 export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 
-export {
-  cleanSchemaForGemini,
-  GEMINI_SUPPORTED_SCHEMA_KEYWORDS,
-  GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS,
-} from './lib/clean-for-gemini';
-
-export {
-  createAnthropicToolPayloadCompatibilityWrapper,
-  createOpenAIAnthropicToolPayloadCompatibilityWrapper,
-} from './anthropic-tool-payload-compat';
-export type {
-  AnthropicToolPayloadCompatibilityOptions,
-  AnthropicToolSchemaMode,
-  AnthropicToolChoiceMode,
-  GenericStreamFn,
-} from './anthropic-tool-payload-compat';
+export { cleanSchemaForGemini, GEMINI_SUPPORTED_SCHEMA_KEYWORDS } from './lib/clean-for-gemini';
 
 export {
   openAIWireRequestToChatRequest,

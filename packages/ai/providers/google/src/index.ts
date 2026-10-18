@@ -21,7 +21,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -225,9 +224,6 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
     },
   };
 }
-
-export const googleAdapterFactory: ProviderAdapterFactory = (config) =>
-  createGoogleAdapter(config as GoogleAdapterConfig);
 
 export { GOOGLE_MODEL_CATALOG, fetchGoogleCatalog } from './catalog';
 export { translateChatRequest } from './translate';

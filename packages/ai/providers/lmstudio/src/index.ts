@@ -21,7 +21,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   StreamChunk,
 } from '@agiworkforce/types';
@@ -121,6 +120,3 @@ export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): Provi
     },
   };
 }
-
-export const lmstudioAdapterFactory: ProviderAdapterFactory = (config) =>
-  createLMStudioAdapter(config as LMStudioAdapterConfig);

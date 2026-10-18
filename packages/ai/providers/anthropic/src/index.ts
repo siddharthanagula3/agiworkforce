@@ -23,7 +23,6 @@ import type {
   ModelInfo,
   ProviderAdapter,
   ProviderAdapterConfig,
-  ProviderAdapterFactory,
   ProviderCatalogContext,
   ReplayPolicyContext,
   StreamChunk,
@@ -148,11 +147,7 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
   };
 }
 
-export const anthropicAdapterFactory: ProviderAdapterFactory = (config) =>
-  createAnthropicAdapter(config as AnthropicAdapterConfig);
-
 export { ANTHROPIC_MODEL_CATALOG } from './catalog';
 export { translateChatRequest } from './translate';
 export { translateAnthropicStream } from './stream';
 export { buildAnthropicReplayPolicy } from './replay-policy';
-export { parseRetryAfter, parseRetryAfterFromError } from './retry-after';

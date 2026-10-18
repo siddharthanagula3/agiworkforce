@@ -1,7 +1,5 @@
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 90_000;
 
-export const DEFAULT_STREAM_IDLE_WARNING_MS = 45_000;
-
 export class StreamIdleTimeoutError extends Error {
   readonly idleMs: number;
   constructor(idleMs: number) {

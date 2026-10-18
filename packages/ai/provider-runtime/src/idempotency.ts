@@ -18,7 +18,6 @@
 
 const SEGMENT_SEPARATOR = ':';
 const TOOL_OPERATION = 'tool';
-const STEP_OPERATION = 'step';
 const RESUME_OPERATION = 'input';
 
 export interface IdempotencyKeyInput {
@@ -67,13 +66,5 @@ export function toolInvocationIdempotencyKey(input: {
       input.resumeRound === undefined
         ? [TOOL_OPERATION, input.toolCallId]
         : [TOOL_OPERATION, input.toolCallId, RESUME_OPERATION, String(input.resumeRound)],
-  });
-}
-
-export function meteredStepIdempotencyKey(input: { requestKey: string; step: number }): string {
-  return deriveIdempotencyKey({
-    requestKey: input.requestKey,
-    step: input.step,
-    operation: [STEP_OPERATION],
   });
 }
