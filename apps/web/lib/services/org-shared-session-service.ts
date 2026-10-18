@@ -57,21 +57,6 @@ interface SharedSessionSummaryRow {
   created_at: string | Date;
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-export function isConversationSharingSchemaUnavailable(error: unknown): boolean {
-  let candidate: unknown = error;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!candidate || typeof candidate !== 'object') return false;
-    const row = candidate as Record<string, unknown>;
-    const code = row['code'];
-    if (code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN) return true;
-    candidate = row['cause'];
-  }
-  return false;
-}
-
 function toIso(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
@@ -112,21 +97,16 @@ export async function listSharedSessions(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<SharedSessionSummary[]> {
-  try {
-    const rows = await db.query<SharedSessionSummaryRow>(
-      `select ${SUMMARY_COLUMNS}
-         from public.organization_shared_sessions share
-         join public.shared_sessions session
-           on session.id = share.shared_session_id
-        where share.organization_id = $1
-        order by share.created_at desc`,
-      [organizationId],
-    );
-    return rows.map(rowToSummary);
-  } catch (error) {
-    if (isConversationSharingSchemaUnavailable(error)) return [];
-    throw error;
-  }
+  const rows = await db.query<SharedSessionSummaryRow>(
+    `select ${SUMMARY_COLUMNS}
+       from public.organization_shared_sessions share
+       join public.shared_sessions session
+         on session.id = share.shared_session_id
+      where share.organization_id = $1
+      order by share.created_at desc`,
+    [organizationId],
+  );
+  return rows.map(rowToSummary);
 }
 
 export interface ShareSessionInput {
@@ -230,39 +210,21 @@ const SESSION_COLUMNS = `id, token, owner_id, title, model_id, provider, message
  * The anonymous read: knowledge of the token is the read grant, and only for a
  * row whose audience is still `public`. A share aimed at a workspace never
  * serves here, even to somebody holding its link.
- *
- * The fallback covers an environment where 0186 has not been applied: the
- * column does not exist, every row is public by definition, and refusing every
- * link would be a worse answer than serving the 0051 behaviour.
  */
 export async function getPublicSharedSessionByToken(
   db: DatabaseAdapter,
   token: string,
 ): Promise<OrgReadableSession | null> {
   if (!token || !SHARE_TOKEN_REGEX.test(token)) return null;
-  let rows: OrgReadableSessionRow[];
-  try {
-    rows = await db.query<OrgReadableSessionRow>(
-      `select ${SESSION_COLUMNS}
-         from public.shared_sessions
-        where token = $1
-          and visibility = 'public'
-          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
-        limit 1`,
-      [token, UNATTENDED_RUN_DENIED_STATUSES],
-    );
-  } catch (error) {
-    if (!isConversationSharingSchemaUnavailable(error)) throw error;
-    rows = await db.query<OrgReadableSessionRow>(
-      `select id, token, owner_id, title, model_id, provider, messages,
-              total_messages, expires_at, created_at
-         from public.shared_sessions
-        where token = $1
-          and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
-        limit 1`,
-      [token, UNATTENDED_RUN_DENIED_STATUSES],
-    );
-  }
+  const rows = await db.query<OrgReadableSessionRow>(
+    `select ${SESSION_COLUMNS}
+       from public.shared_sessions
+      where token = $1
+        and visibility = 'public'
+        and ${ownerMayRunUnattendedSql('shared_sessions.owner_id', 2)}
+      limit 1`,
+    [token, UNATTENDED_RUN_DENIED_STATUSES],
+  );
   return rows[0] ? rowToSession(rows[0]) : null;
 }
 
@@ -278,19 +240,13 @@ export async function getOrgReadableSessionByToken(
   token: string,
 ): Promise<OrgReadableSession | null> {
   if (!token || !SHARE_TOKEN_REGEX.test(token)) return null;
-  let rows: OrgReadableSessionRow[];
-  try {
-    rows = await db.query<OrgReadableSessionRow>(
-      `select ${SESSION_COLUMNS}
-         from public.shared_sessions
-        where token = $1
-        limit 1`,
-      [token],
-    );
-  } catch (error) {
-    if (isConversationSharingSchemaUnavailable(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<OrgReadableSessionRow>(
+    `select ${SESSION_COLUMNS}
+       from public.shared_sessions
+      where token = $1
+      limit 1`,
+    [token],
+  );
   return rows[0] ? rowToSession(rows[0]) : null;
 }
 

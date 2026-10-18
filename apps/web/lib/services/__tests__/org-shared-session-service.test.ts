@@ -15,7 +15,6 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
 import {
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
-  isConversationSharingSchemaUnavailable,
   listSharedSessions,
   resolveSessionShareTarget,
   setSharedSessionVisibility,
@@ -103,12 +102,12 @@ describe('listSharedSessions', () => {
     });
   });
 
-  it('answers empty rather than failing where 0186 has not been applied', async () => {
+  it('surfaces a missing sharing table instead of listing nothing', async () => {
     const { db } = makeDb(() => {
       throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
     });
 
-    await expect(listSharedSessions(db, ORG)).resolves.toEqual([]);
+    await expect(listSharedSessions(db, ORG)).rejects.toMatchObject({ code: '42P01' });
   });
 });
 
@@ -160,19 +159,15 @@ describe('getPublicSharedSessionByToken', () => {
     expect(issued[0]?.sql).toMatch(/visibility = 'public'/);
   });
 
-  it('falls back to the 0051 read where the column does not exist yet', async () => {
-    let call = 0;
+  it('never retries without the audience filter when the read fails', async () => {
     const { db, issued } = makeDb(() => {
-      call += 1;
-      if (call === 1) throw Object.assign(new Error('no column'), { code: '42703' });
-      return [sessionRow({ visibility: undefined })];
+      throw Object.assign(new Error('no column'), { code: '42703' });
     });
 
-    const session = await getPublicSharedSessionByToken(db, TOKEN);
-
-    expect(issued).toHaveLength(2);
-    expect(issued[1]?.sql).not.toMatch(/visibility/);
-    expect(session?.visibility).toBe('public');
+    await expect(getPublicSharedSessionByToken(db, TOKEN)).rejects.toMatchObject({
+      code: '42703',
+    });
+    expect(issued).toHaveLength(1);
   });
 
   it('never issues a statement for a malformed token', async () => {
@@ -249,14 +244,5 @@ describe('setSharedSessionVisibility', () => {
       setSharedSessionVisibility(db, { userId: 'user_owner', token: '!', visibility: 'public' }),
     ).resolves.toBeNull();
     expect(issued).toHaveLength(0);
-  });
-});
-
-describe('isConversationSharingSchemaUnavailable', () => {
-  it('recognises a missing table or column, including one wrapped in a cause', () => {
-    expect(isConversationSharingSchemaUnavailable({ code: '42P01' })).toBe(true);
-    expect(isConversationSharingSchemaUnavailable({ cause: { code: '42703' } })).toBe(true);
-    expect(isConversationSharingSchemaUnavailable({ code: '23505' })).toBe(false);
-    expect(isConversationSharingSchemaUnavailable(null)).toBe(false);
   });
 });

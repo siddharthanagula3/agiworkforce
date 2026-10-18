@@ -224,17 +224,6 @@ export async function listWritableSharedProjectIds(
   return rows.map((row) => row.project_id);
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isMissingRelation(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  return (
-    record['code'] === PG_UNDEFINED_TABLE ||
-    String(record['message'] ?? '').includes('does not exist')
-  );
-}
-
 export interface SharedProjectScope {
   organizationId: string;
   projectIds: string[];
@@ -245,21 +234,16 @@ export async function resolveSharedProjectScope(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<SharedProjectScope | null> {
-  try {
-    const membership = await resolveOrgMembership(db, userId);
-    if (!membership) return null;
-    const projectIds = await listReadableSharedProjectIds(db, membership.organizationId, userId);
-    if (projectIds.length === 0) return null;
-    const grantedWrite = await listWritableSharedProjectIds(db, membership.organizationId, userId);
-    const writableProjectIds =
-      grantedWrite.length > 0 && (await mayHoldWrite(membership.organizationId, userId))
-        ? grantedWrite
-        : [];
-    return { organizationId: membership.organizationId, projectIds, writableProjectIds };
-  } catch (error) {
-    if (isMissingRelation(error)) return null;
-    throw error;
-  }
+  const membership = await resolveOrgMembership(db, userId);
+  if (!membership) return null;
+  const projectIds = await listReadableSharedProjectIds(db, membership.organizationId, userId);
+  if (projectIds.length === 0) return null;
+  const grantedWrite = await listWritableSharedProjectIds(db, membership.organizationId, userId);
+  const writableProjectIds =
+    grantedWrite.length > 0 && (await mayHoldWrite(membership.organizationId, userId))
+      ? grantedWrite
+      : [];
+  return { organizationId: membership.organizationId, projectIds, writableProjectIds };
 }
 
 /**

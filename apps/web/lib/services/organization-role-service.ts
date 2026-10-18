@@ -613,6 +613,11 @@ export async function readWorkspaceGroupMembers(
   return rows.map((row) => row.user_id);
 }
 
+/**
+ * Joining a workspace group confers every role the group holds, so changing its
+ * members is a role grant: the actor must hold what those roles carry, exactly
+ * as `setMemberRoles` requires for a direct grant.
+ */
 export async function setWorkspaceGroupMembers(
   db: DatabaseAdapter,
   input: {
@@ -620,10 +625,11 @@ export async function setWorkspaceGroupMembers(
     groupId: string;
     userIds: readonly string[];
     actorUserId: string;
+    actorPermissions: ReadonlySet<string>;
   },
 ): Promise<{ added: string[]; removed: string[] }> {
   const next = [...new Set(input.userIds)];
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx) => {
     await requireWorkspaceGroup(tx, input.organizationId, input.groupId);
     if (next.length > 0) {
       const members = await tx.query<{ user_id: string }>(
@@ -646,6 +652,28 @@ export async function setWorkspaceGroupMembers(
     ).map((row) => row.user_id);
     const added = next.filter((id) => !current.includes(id));
     const removed = current.filter((id) => !next.includes(id));
+    if (added.length > 0 || removed.length > 0) {
+      const conferred = await tx.query<{ permissions: string[] | null }>(
+        `select r.permissions
+           from public.organization_group_roles gr
+           join public.organization_roles r on r.id = gr.role_id
+          where gr.organization_id = $1 and gr.group_id = $2`,
+        [input.organizationId, input.groupId],
+      );
+      const missing = missingOrganizationPermissions(
+        input.actorPermissions,
+        conferred.flatMap((role) => role.permissions ?? []),
+      );
+      if (missing.length > 0) {
+        const refused: RoleChangeCheck = {
+          added,
+          removed,
+          missing,
+          escalated: added.length > 0 ? missing : [],
+        };
+        return { refused };
+      }
+    }
     if (removed.length > 0) {
       await tx.query(
         `delete from public.organization_group_members
@@ -662,8 +690,16 @@ export async function setWorkspaceGroupMembers(
         [input.organizationId, input.groupId, userId, input.actorUserId],
       );
     }
-    return { added, removed };
+    return { change: { added, removed } };
   });
+  if ('refused' in outcome) {
+    return refuseRoleChange(db, outcome.refused, {
+      organizationId: input.organizationId,
+      granterUserId: input.actorUserId,
+      subjectUserId: outcome.refused.added.includes(input.actorUserId) ? input.actorUserId : null,
+    });
+  }
+  return outcome.change;
 }
 
 export async function isDirectoryGroupManager(

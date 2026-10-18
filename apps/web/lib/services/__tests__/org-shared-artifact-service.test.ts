@@ -14,7 +14,6 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
 
 import {
   getOrgReadableArtifactByToken,
-  isArtifactSharingSchemaUnavailable,
   listSharedArtifacts,
   resolveArtifactShareTarget,
   shareArtifactWithOrganization,
@@ -98,11 +97,11 @@ describe('listSharedArtifacts', () => {
     expect(artifact?.visibility).toBe('public');
   });
 
-  it('returns nothing when the sharing schema is not applied yet', async () => {
+  it('surfaces a missing sharing table instead of listing nothing', async () => {
     const { db } = makeDb(() => {
       throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
     });
-    await expect(listSharedArtifacts(db, ORG)).resolves.toEqual([]);
+    await expect(listSharedArtifacts(db, ORG)).rejects.toMatchObject({ code: '42P01' });
   });
 });
 
@@ -207,13 +206,5 @@ describe('resolveArtifactShareTarget', () => {
     await expect(
       resolveArtifactShareTarget(db, { userId: 'user_stranger', token: TOKEN }),
     ).rejects.toMatchObject({ statusCode: 404 });
-  });
-});
-
-describe('isArtifactSharingSchemaUnavailable', () => {
-  it('recognises a missing table and a missing column, nested in a cause', () => {
-    expect(isArtifactSharingSchemaUnavailable({ code: '42P01' })).toBe(true);
-    expect(isArtifactSharingSchemaUnavailable({ cause: { code: '42703' } })).toBe(true);
-    expect(isArtifactSharingSchemaUnavailable({ code: '23505' })).toBe(false);
   });
 });

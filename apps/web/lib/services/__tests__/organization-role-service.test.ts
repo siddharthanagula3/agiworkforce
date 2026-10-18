@@ -14,6 +14,7 @@ import {
   createCustomRole,
   setDirectoryGroupRoles,
   setMemberRoles,
+  setWorkspaceGroupMembers,
 } from '../organization-role-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -220,5 +221,64 @@ describe('setDirectoryGroupRoles', () => {
         actorPermissions: new Set(['content.read', 'content.share']),
       }),
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+describe('setWorkspaceGroupMembers', () => {
+  function groupDb(conferred: string[]) {
+    return db((sql, params) => {
+      if (sql.includes('select source from public.scim_groups')) return [{ source: 'workspace' }];
+      if (sql.includes('from public.organization_members')) {
+        return (params[1] as string[]).map((user_id) => ({ user_id }));
+      }
+      if (sql.includes('select user_id from public.organization_group_members')) return [];
+      if (sql.includes('from public.organization_group_roles gr')) {
+        return [{ permissions: conferred }];
+      }
+      return [];
+    });
+  }
+
+  it('refuses adding anyone to a group whose roles carry permissions the actor lacks', async () => {
+    reportRefusedRoleGrant.mockClear();
+    const { adapter, query } = groupDb([...BUILT_IN_ORGANIZATION_ROLES.owner.permissions]);
+
+    await expect(
+      setWorkspaceGroupMembers(adapter, {
+        organizationId: ORG,
+        groupId: GROUP,
+        userIds: ['admin-1'],
+        actorUserId: 'admin-1',
+        actorPermissions: ADMIN,
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    const wrote = query.mock.calls.some(([sql]) =>
+      String(sql).includes('insert into public.organization_group_members'),
+    );
+    expect(wrote).toBe(false);
+    expect(reportRefusedRoleGrant).toHaveBeenCalledWith(
+      adapter,
+      expect.objectContaining({ granterUserId: 'admin-1', subjectUserId: 'admin-1' }),
+    );
+  });
+
+  it('adds members when the actor holds everything the group confers', async () => {
+    const { adapter, query } = groupDb(['content.read', 'audit.read']);
+
+    await expect(
+      setWorkspaceGroupMembers(adapter, {
+        organizationId: ORG,
+        groupId: GROUP,
+        userIds: ['member-1'],
+        actorUserId: 'admin-1',
+        actorPermissions: ADMIN,
+      }),
+    ).resolves.toEqual({ added: ['member-1'], removed: [] });
+
+    const wrote = query.mock.calls.some(([sql]) =>
+      String(sql).includes('insert into public.organization_group_members'),
+    );
+    expect(wrote).toBe(true);
   });
 });

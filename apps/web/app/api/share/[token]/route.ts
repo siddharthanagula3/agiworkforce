@@ -30,7 +30,6 @@ import { SITE_URL } from '@/lib/seo/site';
 import {
   getOrgReadableSessionByToken,
   getPublicSharedSessionByToken,
-  isConversationSharingSchemaUnavailable,
   readSharedSessionScope,
   resolveSessionShareTarget,
   setSharedSessionVisibility,
@@ -41,17 +40,6 @@ import {
 } from '@/lib/services/org-shared-session-service';
 
 const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
-
-function sharingUnavailableResponse(): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        message: 'Workspace sharing for conversations is not configured in this environment yet.',
-      },
-    },
-    { status: 503 },
-  );
-}
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -205,85 +193,78 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   const { db, userId } = await getUserScopedDb(request);
   const visibility = parsed.data.visibility;
 
-  try {
-    const ownerDb = getNeonDb();
-    const stored = await readSharedSessionScope(ownerDb, { userId, token });
-    if (!stored) {
-      throw createError.notFound('Shared session not found');
-    }
-    const conversationOrganizationId = stored.conversation?.organizationId ?? null;
-    if (stored.conversation) {
-      await requireSelectedWorkspace(
-        ownerDb,
-        userId,
-        request,
-        conversationOrganizationId,
-        SHARE_IN_OTHER_WORKSPACE_MESSAGE,
-      );
-    }
-
-    const target = await resolveSessionShareTarget(db, { userId, token });
-    if (conversationOrganizationId && conversationOrganizationId !== target.organizationId) {
-      throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
-    }
-
-    let revoked = false;
-    if (visibility === 'organization') {
-      await requireOrganizationPermission(
-        userId,
-        target.organizationId,
-        'content.share',
-        SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
-      );
-      await shareSessionWithOrganization(db, {
-        organizationId: target.organizationId,
-        sharedSessionId: target.sharedSessionId,
-        actorUserId: userId,
-      });
-    } else {
-      const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
-        conversationOrganizationId,
-        stored.grantOrganizationId,
-      ]);
-      if (sharingGateResponse) return sharingGateResponse;
-      revoked = await unshareSessionFromOrganization(
-        db,
-        target.organizationId,
-        target.sharedSessionId,
-      );
-    }
-
-    const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
-    if (!updated) {
-      throw createError.notFound('Shared session not found');
-    }
-
-    if (visibility === 'organization' || revoked) {
-      await recordAuditEvent({
-        userId,
-        organizationId: target.organizationId,
-        eventType:
-          visibility === 'organization'
-            ? 'organization_share_granted'
-            : 'organization_share_revoked',
-        request,
-        endpoint: SHARE_AUDIT_ENDPOINT,
-        detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
-      });
-    }
-
-    const changed: ConversationShareAudienceResponse = {
-      token: updated.token,
-      shareUrl: `${SITE_URL}/share/${updated.token}`,
-      visibility: updated.visibility,
-      organizationId: visibility === 'organization' ? target.organizationId : null,
-      expiresAt: updated.expiresAt,
-    };
-    return NextResponse.json(changed);
-  } catch (error) {
-    if (isConversationSharingSchemaUnavailable(error)) return sharingUnavailableResponse();
-    throw error;
+  const ownerDb = getNeonDb();
+  const stored = await readSharedSessionScope(ownerDb, { userId, token });
+  if (!stored) {
+    throw createError.notFound('Shared session not found');
   }
+  const conversationOrganizationId = stored.conversation?.organizationId ?? null;
+  if (stored.conversation) {
+    await requireSelectedWorkspace(
+      ownerDb,
+      userId,
+      request,
+      conversationOrganizationId,
+      SHARE_IN_OTHER_WORKSPACE_MESSAGE,
+    );
+  }
+
+  const target = await resolveSessionShareTarget(db, { userId, token });
+  if (conversationOrganizationId && conversationOrganizationId !== target.organizationId) {
+    throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
+  }
+
+  let revoked = false;
+  if (visibility === 'organization') {
+    await requireOrganizationPermission(
+      userId,
+      target.organizationId,
+      'content.share',
+      SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+    );
+    await shareSessionWithOrganization(db, {
+      organizationId: target.organizationId,
+      sharedSessionId: target.sharedSessionId,
+      actorUserId: userId,
+    });
+  } else {
+    const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
+      conversationOrganizationId,
+      stored.grantOrganizationId,
+    ]);
+    if (sharingGateResponse) return sharingGateResponse;
+    revoked = await unshareSessionFromOrganization(
+      db,
+      target.organizationId,
+      target.sharedSessionId,
+    );
+  }
+
+  const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
+  if (!updated) {
+    throw createError.notFound('Shared session not found');
+  }
+
+  if (visibility === 'organization' || revoked) {
+    await recordAuditEvent({
+      userId,
+      organizationId: target.organizationId,
+      eventType:
+        visibility === 'organization' ? 'organization_share_granted' : 'organization_share_revoked',
+      request,
+      endpoint: SHARE_AUDIT_ENDPOINT,
+      detail: { resourceType: 'conversation', resourceId: target.sharedSessionId },
+    });
+  }
+
+  const changed: ConversationShareAudienceResponse = {
+    token: updated.token,
+    shareUrl: `${SITE_URL}/share/${updated.token}`,
+    visibility: updated.visibility,
+    organizationId: visibility === 'organization' ? target.organizationId : null,
+    expiresAt: updated.expiresAt,
+  };
+  return NextResponse.json(changed);
 }
 
 export const GET = withErrorHandler(handleGetShare);

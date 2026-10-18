@@ -33,7 +33,6 @@ import {
   resolveActiveOrganizationId,
 } from '@/lib/services/active-workspace-service';
 import {
-  isConversationSharingSchemaUnavailable,
   SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   toSharedSessionVisibility,
   type SharedSessionVisibility,
@@ -557,28 +556,15 @@ async function handleListShares(request: NextRequest) {
   const conversationId = query.data.conversation_id ?? null;
   const db = getNeonDb();
 
-  let rows: SharedSessionListRow[];
-  try {
-    rows = await db.query<SharedSessionListRow>(
-      `select token, title, model_id, provider, total_messages, visibility, expires_at, created_at
+  const rows = await db.query<SharedSessionListRow>(
+    `select token, title, model_id, provider, total_messages, visibility, expires_at, created_at
      from shared_sessions
      where owner_id = $1
      ${conversationId ? 'and conversation_id = $2' : ''}
      order by created_at desc
      limit ${SHARE_LIST_LIMIT}`,
-      conversationId ? [userId, conversationId] : [userId],
-    );
-  } catch (error) {
-    if (conversationId || !isConversationSharingSchemaUnavailable(error)) throw error;
-    rows = await db.query<SharedSessionListRow>(
-      `select token, title, model_id, provider, total_messages, expires_at, created_at
-     from shared_sessions
-     where owner_id = $1
-     order by created_at desc
-     limit ${SHARE_LIST_LIMIT}`,
-      [userId],
-    );
-  }
+    conversationId ? [userId, conversationId] : [userId],
+  );
 
   const now = Date.now();
 

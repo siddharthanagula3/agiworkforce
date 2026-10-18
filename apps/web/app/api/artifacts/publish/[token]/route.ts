@@ -20,7 +20,6 @@ import {
   SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
 } from '@/lib/services/organization-permission-service';
 import {
-  isArtifactSharingSchemaUnavailable,
   resolveArtifactShareTarget,
   shareArtifactWithOrganization,
   unshareArtifactFromOrganization,
@@ -37,17 +36,6 @@ import {
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ token: string }> };
-
-function sharingUnavailableResponse(): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        message: 'Workspace sharing for artifacts is not configured in this environment yet.',
-      },
-    },
-    { status: 503 },
-  );
-}
 
 async function handleUnpublish(request: NextRequest, context: RouteContext): Promise<Response> {
   const { token } = await context.params;
@@ -166,40 +154,35 @@ async function handleUpdate(request: NextRequest, context: RouteContext): Promis
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { visibility, title } = parsed.data;
 
-  try {
-    const nextTitle =
-      title === undefined
-        ? undefined
-        : await inspectedTitle({ db, userId, organizationId, token, title });
+  const nextTitle =
+    title === undefined
+      ? undefined
+      : await inspectedTitle({ db, userId, organizationId, token, title });
 
-    let updated: PublishedArtifact | null = null;
-    let sharedWith: string | null = null;
-    if (visibility !== undefined) {
-      const moved = await moveToAudience(db, { userId, token, visibility });
-      updated = moved.updated;
-      sharedWith = moved.organizationId;
-      if (!updated) throw createError.notFound('Published artifact not found');
-    }
-    if (nextTitle !== undefined) {
-      updated = await renamePublishedArtifact(db, { userId, token, title: nextTitle });
-    }
-    if (!updated) {
-      throw createError.notFound('Published artifact not found');
-    }
-
-    const body: ManagedCloudPublishedArtifactUpdateResponse = {
-      token: updated.token,
-      shareUrl: buildPublishedArtifactUrl(updated.token),
-      title: updated.title,
-      visibility: updated.visibility,
-      organizationId: sharedWith,
-      updatedAt: updated.updatedAt,
-    };
-    return NextResponse.json(body);
-  } catch (error) {
-    if (isArtifactSharingSchemaUnavailable(error)) return sharingUnavailableResponse();
-    throw error;
+  let updated: PublishedArtifact | null = null;
+  let sharedWith: string | null = null;
+  if (visibility !== undefined) {
+    const moved = await moveToAudience(db, { userId, token, visibility });
+    updated = moved.updated;
+    sharedWith = moved.organizationId;
+    if (!updated) throw createError.notFound('Published artifact not found');
   }
+  if (nextTitle !== undefined) {
+    updated = await renamePublishedArtifact(db, { userId, token, title: nextTitle });
+  }
+  if (!updated) {
+    throw createError.notFound('Published artifact not found');
+  }
+
+  const body: ManagedCloudPublishedArtifactUpdateResponse = {
+    token: updated.token,
+    shareUrl: buildPublishedArtifactUrl(updated.token),
+    title: updated.title,
+    visibility: updated.visibility,
+    organizationId: sharedWith,
+    updatedAt: updated.updatedAt,
+  };
+  return NextResponse.json(body);
 }
 
 export const DELETE = withErrorHandler(handleUnpublish);

@@ -208,6 +208,17 @@ describe('GET /api/settings/organization/shared', () => {
     expect(body.sharedProjects).toHaveLength(1);
   });
 
+  it('shows a viewer who cannot share or list members the roster names but no email addresses', async () => {
+    respondFor('viewer');
+
+    const body = (await (await get()).json()) as {
+      members: { displayName: string | null; email: string | null }[];
+    };
+
+    expect(body.members.map((member) => member.displayName)).toContain('Owner Name');
+    expect(body.members.every((member) => member.email === null)).toBe(true);
+  });
+
   it('marks owner and admin as able to manage sharing', async () => {
     for (const role of ['owner', 'admin'] as const) {
       vi.clearAllMocks();

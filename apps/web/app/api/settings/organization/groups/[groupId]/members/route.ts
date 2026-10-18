@@ -67,6 +67,7 @@ async function handleSet(request: NextRequest, context: RouteContext) {
     groupId,
     userIds,
     actorUserId: userId,
+    actorPermissions: access.permissions,
   });
 
   if (change.added.length > 0 || change.removed.length > 0) {

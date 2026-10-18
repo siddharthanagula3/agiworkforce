@@ -35,21 +35,6 @@ interface SharedArtifactRow {
   created_at: string | Date;
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-export function isArtifactSharingSchemaUnavailable(error: unknown): boolean {
-  let candidate: unknown = error;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!candidate || typeof candidate !== 'object') return false;
-    const row = candidate as Record<string, unknown>;
-    const code = row['code'];
-    if (code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN) return true;
-    candidate = row['cause'];
-  }
-  return false;
-}
-
 function toIso(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
@@ -89,21 +74,16 @@ export async function listSharedArtifacts(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<SharedArtifactSummary[]> {
-  try {
-    const rows = await db.query<SharedArtifactRow>(
-      `select ${SUMMARY_COLUMNS}
-         from public.organization_shared_artifacts share
-         join public.published_artifacts artifact
-           on artifact.id = share.published_artifact_id
-        where share.organization_id = $1
-        order by share.created_at desc`,
-      [organizationId],
-    );
-    return rows.map(rowToSummary);
-  } catch (error) {
-    if (isArtifactSharingSchemaUnavailable(error)) return [];
-    throw error;
-  }
+  const rows = await db.query<SharedArtifactRow>(
+    `select ${SUMMARY_COLUMNS}
+       from public.organization_shared_artifacts share
+       join public.published_artifacts artifact
+         on artifact.id = share.published_artifact_id
+      where share.organization_id = $1
+      order by share.created_at desc`,
+    [organizationId],
+  );
+  return rows.map(rowToSummary);
 }
 
 export interface ShareArtifactInput {
@@ -183,20 +163,14 @@ export async function getOrgReadableArtifactByToken(
   token: string,
 ): Promise<PublishedArtifact | null> {
   if (!token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
-  let rows: OrgReadableArtifactRow[];
-  try {
-    rows = await db.query<OrgReadableArtifactRow>(
-      `select id, token, user_id, artifact_id, conversation_id, title, kind,
-              language, content, visibility, created_at, updated_at
-         from public.published_artifacts
-        where token = $1
-        limit 1`,
-      [token],
-    );
-  } catch (error) {
-    if (isArtifactSharingSchemaUnavailable(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<OrgReadableArtifactRow>(
+    `select id, token, user_id, artifact_id, conversation_id, title, kind,
+            language, content, visibility, created_at, updated_at
+       from public.published_artifacts
+      where token = $1
+      limit 1`,
+    [token],
+  );
   const row = rows[0];
   if (!row) return null;
   return {

@@ -187,10 +187,10 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect((await call({ visibility: 'organization' })).status).toBe(403);
   });
 
-  it('says the feature is unconfigured rather than 500ing before the migration lands', async () => {
+  it('reports a failed audience move as a server error, not an unconfigured feature', async () => {
     mocks.query.mockImplementation(async () => {
-      throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
+      throw new Error('connection terminated');
     });
-    expect((await call({ visibility: 'organization' })).status).toBe(503);
+    expect((await call({ visibility: 'organization' })).status).toBe(500);
   });
 });

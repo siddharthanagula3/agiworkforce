@@ -374,7 +374,7 @@ describe('resolveSharedProjectScope failure modes', () => {
     expect(await resolveSharedProjectScope(db, 'solo-user')).toBeNull();
   });
 
-  it('degrades to null, not an exception, when 0086 has not been applied', async () => {
+  it('surfaces a missing sharing table instead of reading it as no shared scope', async () => {
     const db = {
       query: vi.fn(async () => {
         const error: Error & { code?: string } = new Error(
@@ -384,7 +384,9 @@ describe('resolveSharedProjectScope failure modes', () => {
         throw error;
       }),
     } as never;
-    expect(await resolveSharedProjectScope(db, 'user-1')).toBeNull();
+    await expect(resolveSharedProjectScope(db, 'user-1')).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 
   it('re-throws a real database failure instead of silently widening scope', async () => {

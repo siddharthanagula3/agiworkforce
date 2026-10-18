@@ -183,6 +183,7 @@ describe('/api/settings/organization/groups/[groupId]/members', () => {
         groupId: GROUP,
         userIds: ['u-2', 'u-3'],
         actorUserId: 'admin-1',
+        actorPermissions: new Set(['groups.manage']),
       });
       expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({

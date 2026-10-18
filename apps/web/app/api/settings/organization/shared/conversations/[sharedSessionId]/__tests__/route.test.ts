@@ -70,7 +70,6 @@ vi.mock('@/lib/services/org-shared-session-service', () => ({
   SHARE_TOKEN_REGEX: vi.fn(),
   getOrgReadableSessionByToken: vi.fn(),
   getPublicSharedSessionByToken: vi.fn(),
-  isConversationSharingSchemaUnavailable: vi.fn(),
   isSharedSessionVisibility: vi.fn(),
   listSharedSessions: vi.fn(),
   readSharedSessionScope: vi.fn(),
