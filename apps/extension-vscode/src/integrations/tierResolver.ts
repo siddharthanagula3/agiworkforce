@@ -219,10 +219,8 @@ export async function refreshAccountTierCache(
 }
 
 /**
- * Synchronous tier resolution for callers that cannot await, currently the
- * webview HTML builders, which run inside `resolveWebviewView` / a constructor.
- *
- * Identical to {@link resolveTier}; kept for webview builders that cannot await.
+ * Cached tier for callers that cannot await, currently the webview HTML
+ * builders; it starts a background revalidation and returns what is cached.
  */
 export function resolveTierSync(context: vscode.ExtensionContext): Tier {
   void revalidateAccountTier(context).catch(() => undefined);

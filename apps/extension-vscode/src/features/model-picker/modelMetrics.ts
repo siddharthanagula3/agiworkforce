@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { escapeHtml } from '../sidebar-webview/webviewContent';
+import { escapeHtml, getNonce } from '../sidebar-webview/webviewContent';
 
 export interface ModelMetricsEntry {
   model: string;
@@ -207,10 +207,4 @@ export class ModelMetricsPanel {
 </body>
 </html>`;
   }
-}
-
-function getNonce(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { randomBytes } = require('crypto') as typeof import('crypto');
-  return randomBytes(24).toString('base64url');
 }

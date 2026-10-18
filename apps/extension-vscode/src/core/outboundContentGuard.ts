@@ -13,7 +13,3 @@ export function describeOutboundRefusal(document?: vscode.TextDocument): string 
   if (document.uri.scheme !== 'file' && document.uri.scheme !== 'vscode-remote') return null;
   return isSensitiveFile(document.uri.fsPath) ? SENSITIVE_REASON : null;
 }
-
-export function mayLeaveTheMachine(document?: vscode.TextDocument): boolean {
-  return describeOutboundRefusal(document) === null;
-}

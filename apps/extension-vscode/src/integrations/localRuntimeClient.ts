@@ -2227,6 +2227,4 @@ async function terminateLocalRuntimeProcessTree(
   });
 }
 
-export type TurnFailureEvent = z.infer<typeof turnFailureSchema>;
-
 export type { AppServerCapabilities };

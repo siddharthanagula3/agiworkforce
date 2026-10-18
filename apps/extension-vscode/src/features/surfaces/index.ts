@@ -74,15 +74,6 @@ function matching(pattern: RegExp): (contextValue: string) => boolean {
   return (contextValue) => pattern.test(contextValue);
 }
 
-export const CONVERSATION_ROW_ACTIONS: readonly SurfaceRowAction[] = [
-  {
-    command: 'agi-workforce.deleteConversation',
-    icon: 'trash',
-    tooltip: 'Archive this session',
-    matches: exact('conversation'),
-  },
-];
-
 export const PROJECT_ROW_ACTIONS: readonly SurfaceRowAction[] = [
   {
     command: 'agi-workforce.useProjectInChat',
@@ -200,11 +191,6 @@ export const CONTEXT_ROW_ACTIONS: readonly SurfaceRowAction[] = [
   },
 ];
 
-export const CONVERSATION_TITLE_ACTIONS: readonly SurfaceTitleAction[] = [
-  { command: 'agi-workforce.refreshConversations', icon: 'refresh', tooltip: 'Refresh sessions' },
-  { command: 'agi-workforce.newConversation', icon: 'add', tooltip: 'New chat', closes: true },
-];
-
 export const PROJECT_TITLE_ACTIONS: readonly SurfaceTitleAction[] = [
   { command: 'agi-workforce.refreshProjects', icon: 'refresh', tooltip: 'Refresh projects' },
   {
@@ -280,16 +266,6 @@ export const CONTEXT_TITLE_ACTIONS: readonly SurfaceTitleAction[] = [
   { command: 'agi-workforce.addToContext', icon: 'pin', tooltip: 'Pin the active file' },
   { command: 'agi-workforce.clearContext', icon: 'clear-all', tooltip: 'Clear pinned files' },
 ];
-
-export function openConversationsSurface(provider: TreeSource): Promise<void> {
-  return showSurfaceQuickPick({
-    title: 'AGI Workforce, Sessions',
-    placeholder: 'Resume a developer session…',
-    provider,
-    rowActions: CONVERSATION_ROW_ACTIONS,
-    titleActions: CONVERSATION_TITLE_ACTIONS,
-  });
-}
 
 export function openProjectsSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({

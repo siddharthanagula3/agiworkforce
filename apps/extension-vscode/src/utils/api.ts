@@ -154,19 +154,27 @@ export class AgiWorkforceUsageLimitError extends AgiWorkforceApiError {
   }
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  canRetry: () => boolean,
+  retries = 2,
+  delayMs = 1000,
+): Promise<T> {
   try {
     return await fn();
   } catch (err) {
     if (
       retries <= 0 ||
+      !canRetry() ||
       err instanceof AgiWorkforcePaywallError ||
-      (err instanceof AgiWorkforceApiError && err.statusCode !== undefined && err.statusCode < 500)
+      err instanceof AgiWorkforceClientUpdateRequiredError ||
+      (err instanceof AgiWorkforceApiError &&
+        (err.code === 'CANCELLED' || (err.statusCode !== undefined && err.statusCode < 500)))
     ) {
       throw err;
     }
     await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-    return withRetry(fn, retries - 1, delayMs * 2);
+    return withRetry(fn, canRetry, retries - 1, delayMs * 2);
   }
 }
 
@@ -678,20 +686,24 @@ export async function streamChatCompletion(
   if (cancellationToken.isCancellationRequested) {
     throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
   }
+  let tokenDelivered = false;
   try {
-    await withRetry(() =>
-      httpsPostStream(
-        `${endpoint}/chat/completions`,
-        authHeaders,
-        bodyStr,
-        (chunk) => {
-          const content = chunk.choices[0]?.delta?.content;
-          if (content !== undefined && content !== '') {
-            callbacks.onToken(content);
-          }
-        },
-        cancellationToken,
-      ),
+    await withRetry(
+      () =>
+        httpsPostStream(
+          `${endpoint}/chat/completions`,
+          authHeaders,
+          bodyStr,
+          (chunk) => {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content !== undefined && content !== '') {
+              tokenDelivered = true;
+              callbacks.onToken(content);
+            }
+          },
+          cancellationToken,
+        ),
+      () => !tokenDelivered && !cancellationToken.isCancellationRequested,
     );
   } catch (error) {
     if (error instanceof AgiWorkforceApiError && error.statusCode === 401) {
