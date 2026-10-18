@@ -76,7 +76,8 @@ fn describe_location(at: &std::panic::Location<'_>) -> String {
 }
 
 /// The panic payload is deliberately left out: it routinely carries a path, a
-/// prompt fragment or a tool argument, and the location already identifies the.
+/// prompt fragment or a tool argument, and the location already identifies the
+/// defect.
 pub fn install_panic_hook(dir: PathBuf) {
     let _ = startup_metrics::record_ready(&dir);
     let previous = std::panic::take_hook();

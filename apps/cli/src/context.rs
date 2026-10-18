@@ -410,11 +410,9 @@ pub fn detect_editor_configs(cwd: &str) -> Vec<String> {
     editors
 }
 
-// ---------------------------------------------------------------------------
-// Canonical domain records (agiworkforce_protocol::code_domain).
-
 /// Names that make an environment variable a credential reference rather than
-/// configuration. Matched on the name, so no value is ever inspected to.
+/// configuration. Matched on the name, so no value is ever inspected to
+/// classify one.
 const CREDENTIAL_NAME_MARKERS: &[&str] = &[
     "API_KEY",
     "APIKEY",
@@ -489,7 +487,8 @@ pub fn repository_identity_from_remote(url: &str) -> RepositoryId {
 }
 
 /// A repository's identity: its default remote when it has one, so the same
-/// repository cloned twice on one machine is one repository, and its root.
+/// repository cloned twice on one machine is one repository, and its root
+/// otherwise.
 pub fn repository_identity(remotes: &[RepositoryRemote], root: &Path) -> RepositoryId {
     repository_identity_with_default(remotes, root, None)
 }
@@ -547,7 +546,8 @@ fn status_kind(code: char) -> Option<ChangeKind> {
 }
 
 /// Parse `git status --porcelain` into typed changes. The index column and the
-/// worktree column are distinct changes to the same path, which is what makes.
+/// worktree column are distinct changes to the same path, which is what makes
+/// the staged state readable instead of guessed.
 pub fn parse_porcelain_status(text: &str) -> Vec<RepositoryChange> {
     let mut changes = Vec::new();
     for line in text.lines() {
@@ -577,7 +577,8 @@ pub fn parse_porcelain_status(text: &str) -> Vec<RepositoryChange> {
 }
 
 /// Capture what the repository holds right now. Every change starts attributed
-/// to the user; call [`RepositorySnapshot::attribute_against`] with the.
+/// to the user; call [`RepositorySnapshot::attribute_against`] with the
+/// session's opening snapshot to tell later agent work apart from it.
 pub fn capture_repository_snapshot(
     cwd: &Path,
     repository_id: RepositoryId,
@@ -703,7 +704,8 @@ where
 }
 
 /// Every executable name reachable on `PATH`, in `PATH` precedence order.
-/// Versions are not probed here: running several thousand binaries to ask them.
+/// Versions are not probed here: running several thousand binaries to ask them
+/// would cost more than the answer is worth.
 pub fn discover_path_binaries() -> Vec<DiscoveredBinary> {
     let Some(path_var) = std::env::var_os("PATH") else {
         return Vec::new();
@@ -758,7 +760,8 @@ pub fn detect_shell() -> ShellInfo {
 }
 
 /// Containers the session is actually inside, plus the ones the project merely
-/// configures. Presence of a `Dockerfile` is configuration; a running.
+/// configures. Presence of a `Dockerfile` is configuration; a running
+/// devcontainer is state, and only the second changes what a command can do.
 pub fn detect_container_states(cwd: &str) -> Vec<ContainerState> {
     let mut states = Vec::new();
     if Path::new("/.dockerenv").exists() {
@@ -820,7 +823,8 @@ pub fn is_credential_env_name(name: &str) -> bool {
 }
 
 /// Credential *references* for the credential-shaped names among `vars`: the
-/// name and whether it is set. The value is consulted for emptiness and then.
+/// name and whether it is set. The value is consulted for emptiness and then
+/// dropped, so an environment is never represented as a raw `.env` dump.
 pub fn credential_refs_from<I, N, V>(vars: I) -> Vec<CredentialRef>
 where
     I: IntoIterator<Item = (N, V)>,
@@ -1007,9 +1011,6 @@ mod tests {
         assert!(!ctx.os.is_empty());
     }
 
-    // -----------------------------------------------------------------------
-    // detect_project_type.
-
     #[test]
     fn test_detect_project_type_rust() {
         let (_d, path) = tmp_project_dir();
@@ -1115,9 +1116,6 @@ mod tests {
         assert_eq!(detect_project_type(&path).as_deref(), Some("rust"));
     }
 
-    // -----------------------------------------------------------------------
-    // detect_project_language.
-
     #[test]
     fn test_detect_language_rust() {
         let (_d, path) = tmp_project_dir();
@@ -1186,9 +1184,6 @@ mod tests {
         let (_d, path) = tmp_project_dir();
         assert!(detect_project_language(&path).is_none());
     }
-
-    // -----------------------------------------------------------------------
-    // detect_ci_providers.
 
     #[test]
     fn test_detect_ci_github_actions() {
@@ -1264,9 +1259,6 @@ mod tests {
         assert!(providers.is_empty());
     }
 
-    // -----------------------------------------------------------------------
-    // detect_monorepo_type.
-
     #[test]
     fn test_detect_monorepo_pnpm() {
         let (_d, path) = tmp_project_dir();
@@ -1322,9 +1314,6 @@ mod tests {
             Some("pnpm workspaces")
         );
     }
-
-    // -----------------------------------------------------------------------
-    // detect_package_manager.
 
     #[test]
     fn test_detect_pm_pnpm() {
@@ -1397,9 +1386,6 @@ mod tests {
         assert_eq!(detect_package_manager(&path).as_deref(), Some("pnpm"));
     }
 
-    // -----------------------------------------------------------------------
-    // detect_containerization.
-
     #[test]
     fn test_detect_container_dockerfile() {
         let (_d, path) = tmp_project_dir();
@@ -1467,9 +1453,6 @@ mod tests {
         let tools = detect_containerization(&path);
         assert!(tools.is_empty());
     }
-
-    // -----------------------------------------------------------------------
-    // detect_editor_configs.
 
     #[test]
     fn test_detect_editor_vscode() {
@@ -1539,9 +1522,6 @@ mod tests {
         assert_eq!(editors, vec!["vim/neovim"]);
     }
 
-    // -----------------------------------------------------------------------
-    // detect_git_remote_url (unit-testable via mock, but we can test the.
-
     #[test]
     fn test_detect_git_remote_url_runs() {
         // This runs in the repo, so it should return Some(...).
@@ -1551,9 +1531,6 @@ mod tests {
             assert!(!u.is_empty());
         }
     }
-
-    // -----------------------------------------------------------------------
-    // Display impl.
 
     #[test]
     fn test_display_full_context() {
@@ -1702,9 +1679,6 @@ mod tests {
         assert!(output.contains("CI: GitHub Actions, Jenkins"));
     }
 
-    // -----------------------------------------------------------------------
-    // git status parsing.
-
     #[test]
     fn test_git_status_parsing_runs() {
         // Just ensure no panics. Actual content depends on repo state.
@@ -1715,9 +1689,6 @@ mod tests {
     fn test_git_branch_parsing_runs() {
         let _result = detect_git_branch(Path::new("."));
     }
-
-    // -----------------------------------------------------------------------
-    // Canonical domain records.
 
     #[test]
     fn remotes_are_enumerated_not_reduced_to_origin() {

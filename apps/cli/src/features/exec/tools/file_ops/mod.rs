@@ -95,7 +95,10 @@ fn print_diff_preview(diff: &str) {
 }
 
 /// Reached when a mutating tool needs approval, there is no TUI/approval
-/// callback installed (headless / `agi exec` context), and stdin is not a.
+/// callback installed (headless / `agi exec` context), and stdin is not a
+/// TTY, so there is no way to obtain user consent. A routine failed tool
+/// result would let the process exit 0 though the mutation never happened;
+/// hard-failing gives a script driving `agi exec` a failure it can detect.
 fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
     eprintln!(
         "{}",
@@ -121,7 +124,8 @@ fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
 }
 
 /// True when there is no way to prompt a human for approval right now:
-/// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a.
+/// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a
+/// piped/scripted invocation, or a CI runner).
 fn stdin_is_noninteractive() -> bool {
     !crate::interactive::can_prompt()
 }
@@ -779,7 +783,9 @@ pub(super) async fn execute_write_file(
                 .await
                 {
                     // Resolved by the TUI approval overlay (or any installed callback).
-                    // This decision is authoritative, do NOT fall through to the.
+                    // This decision is authoritative, do NOT fall through to the
+                    // dialoguer confirm below, which would double-prompt on the
+                    // alternate screen and auto-deny when stdin is not a TTY.
                     if !approval_allows(decision) {
                         return Ok(ToolResult {
                             tool_name: "write_file".to_string(),
@@ -1247,7 +1253,9 @@ pub(super) async fn execute_apply_patch(
         }
     }
     // Freshness gate: for every existing file the patch will touch, confirm
-    // it has been read since it was last modified on disk.  This matches the.
+    // it has been read since it was last modified on disk. This matches the
+    // read-before-write contract enforced by write_file/edit_file/multiedit.
+    // New files (not yet on disk) are skipped, there is nothing to be stale.
     for path in &patch_paths {
         if path.exists() {
             if let Err(msg) = crate::file_state::ensure_previously_read_and_fresh(path) {
@@ -1738,7 +1746,8 @@ mod tests {
     use std::path::Path;
 
     /// The preview is the operator's only look at the change before the
-    /// confirm prompt; a hunk carrying OSC/CSI bytes used to reach the.
+    /// confirm prompt; a hunk carrying OSC/CSI bytes used to reach the
+    /// terminal verbatim and could repaint that prompt.
     #[test]
     fn diff_preview_strips_escape_sequences_from_hunks() {
         let payload = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H";

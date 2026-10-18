@@ -1,5 +1,4 @@
 //! Preflight diagnostics for `agi doctor`.
-//!.
 
 use anyhow::Result;
 use serde::Serialize;
