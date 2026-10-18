@@ -168,7 +168,6 @@ export default function AgentDetailScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-3 h-12">
         <PressableBox
           onPress={handleBack}
@@ -196,10 +195,8 @@ export default function AgentDetailScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status card */}
         <Animated.View entering={FadeIn.duration(motion.quick)}>
           <Card variant="elevated" className="mb-4">
-            {/* Agent name + status */}
             <View className="flex-row items-center gap-3 mb-3">
               <View className="w-10 h-10 rounded-xl bg-white/5 items-center justify-center">
                 <AgentStatusIcon status={agent.status} />
@@ -215,7 +212,6 @@ export default function AgentDetailScreen() {
 
             <Separator className="mb-3" />
 
-            {/* Timing row */}
             <View className="flex-row items-center gap-4 mb-3">
               <View className="flex-row items-center gap-1.5">
                 <Clock size={12} color={colors.textMuted} />
@@ -229,7 +225,6 @@ export default function AgentDetailScreen() {
               )}
             </View>
 
-            {/* Progress bar */}
             {(agent.status === 'running' || agent.status === 'waiting') && (
               <View className="mb-3">
                 <ProgressBar progress={agent.progress} />
@@ -246,7 +241,6 @@ export default function AgentDetailScreen() {
               </View>
             )}
 
-            {/* Current action */}
             {agent.currentAction ? (
               <View className="flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/8">
                 <Zap size={11} color={colors.agentActive} />
@@ -262,7 +256,6 @@ export default function AgentDetailScreen() {
           </Card>
         </Animated.View>
 
-        {/* Controls */}
         {isControllable && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(60)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">Controls</Text>
@@ -306,7 +299,6 @@ export default function AgentDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Run Artifacts */}
         {agent.artifacts && agent.artifacts.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(80)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
@@ -341,7 +333,6 @@ export default function AgentDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Tool Call Log */}
         {agent.toolCalls && agent.toolCalls.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(100)} className="mb-4">
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
@@ -353,7 +344,6 @@ export default function AgentDetailScreen() {
           </Animated.View>
         )}
 
-        {/* Steps */}
         {agent.steps && agent.steps.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(120)}>
             <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">

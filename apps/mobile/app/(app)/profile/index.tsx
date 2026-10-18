@@ -171,9 +171,6 @@ export default function ProfileScreen() {
             gap: 12,
           }}
         >
-          {/* Reads the signed-in account's photo, which this screen previously
-              ignored while the Account screen rendered it, the same user saw
-              their picture on one screen and a grey letter tile here. */}
           <UserAvatar
             size={76}
             uri={clerkUser?.imageUrl}

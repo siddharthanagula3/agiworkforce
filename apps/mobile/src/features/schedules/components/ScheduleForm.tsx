@@ -187,7 +187,6 @@ export function ScheduleForm({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Name */}
         <View className="mb-4 mt-4">
           <Input
             label="Schedule Name"
@@ -202,7 +201,6 @@ export function ScheduleForm({
           />
         </View>
 
-        {/* Prompt */}
         <View className="mb-4">
           <Text className="text-sm text-white/70 mb-1.5">Prompt</Text>
           <View
@@ -238,7 +236,6 @@ export function ScheduleForm({
           </View>
         </View>
 
-        {/* Model selector */}
         <View className="mb-4">
           <Text className="text-sm text-white/70 mb-1.5">Model</Text>
           <PressableBox
@@ -255,7 +252,6 @@ export function ScheduleForm({
 
         <Separator className="my-2" />
 
-        {/* Recurrence picker */}
         <View className="mb-4 mt-2">
           <RecurrencePicker
             value={recurrence}
@@ -278,7 +274,6 @@ export function ScheduleForm({
 
         <Separator className="my-2" />
 
-        {/* Timezone */}
         <View className="mb-6 mt-2">
           <TimezonePickerField
             value={timezone}
@@ -297,7 +292,6 @@ export function ScheduleForm({
           </View>
         ) : null}
 
-        {/* Action buttons */}
         <View className="gap-3">
           <Button
             title={isEditing ? 'Save Changes' : 'Create Schedule'}
@@ -317,7 +311,6 @@ export function ScheduleForm({
             className="w-full"
           />
 
-          {/* Delete button for editing */}
           {isEditing && onDelete && (
             <>
               <Separator className="my-2" />
@@ -334,7 +327,6 @@ export function ScheduleForm({
         </View>
       </ScrollView>
 
-      {/* Model picker bottom sheet */}
       <ModelPickerSheet sheetRef={modelPickerRef} modelScope="cloud" onSelect={setModel} />
     </KeyboardAvoidingView>
   );

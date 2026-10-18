@@ -138,7 +138,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   if (showManualEntry) {
     return (
       <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: colors.surfaceBase }}>
-        {/* Header */}
         <View className="flex-row items-center justify-between">
           <Text variant="subheading">Enter Pairing Code</Text>
           <PressableBox
@@ -160,7 +159,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           a phone, and enter the 12-character code shown below the QR code.
         </Text>
 
-        {/* Code input */}
         <View className="gap-3">
           <TextInput
             value={manualCode}
@@ -233,14 +231,10 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         onBarcodeScanned={handleBarCodeScanned}
       />
 
-      {/* Overlay darkening */}
       <View style={StyleSheet.absoluteFill} className="items-center justify-center">
-        {/* Top overlay */}
         <View className="absolute top-0 left-0 right-0 bg-black/60" style={{ height: '25%' }} />
-        {/* Bottom overlay */}
         <View className="absolute bottom-0 left-0 right-0 bg-black/60" style={{ height: '35%' }} />
 
-        {/* Viewfinder frame */}
         <View
           style={{
             width: VIEWFINDER_SIZE,
@@ -264,7 +258,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             style={[styles.cornerBottomRight, { borderColor: colors.cameraScanRegionBorder }]}
           />
 
-          {/* Scanning line */}
           <Animated.View
             style={[
               {
@@ -284,13 +277,11 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           />
         </View>
 
-        {/* Instruction text below viewfinder */}
         <Text className="text-sm mt-6 text-center" style={{ color: colors.cameraOverlayText }}>
           Point your camera at the QR code{'\n'}on your desktop app
         </Text>
       </View>
 
-      {/* Top bar: close + flash */}
       <View className="absolute top-16 left-4 right-4 flex-row items-center justify-between">
         <PressableBox
           onPress={onClose}
@@ -315,7 +306,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         </PressableBox>
       </View>
 
-      {/* Bottom: manual entry link */}
       <View className="absolute bottom-12 left-0 right-0 items-center gap-3">
         <PressableBox
           onPress={() => setShowManualEntry(true)}

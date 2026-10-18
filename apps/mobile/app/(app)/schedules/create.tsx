@@ -221,7 +221,6 @@ export default function CreateScheduleScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <PressableBox
           onPress={handleCancel}
@@ -235,7 +234,6 @@ export default function CreateScheduleScreen() {
         </Text>
       </View>
 
-      {/* Form */}
       <ScheduleForm
         initialData={existingSchedule ?? selectedTemplate?.initialData}
         onSubmit={handleSubmit}

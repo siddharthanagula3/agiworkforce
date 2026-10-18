@@ -505,7 +505,6 @@ function HeroScreen({
         Chat, write, code, research, and organize projects in one place.
       </Text>
 
-      {/* Primary CTA, full-width pill */}
       <PressableBox
         testID="hero-start-chatting-btn"
         onPress={onStartChatting}
@@ -669,7 +668,6 @@ function DeviceTierScreen({
 
       <Text style={[styles.tierSubhead, { color: colors.textMuted }]}>{deviceSummary}</Text>
 
-      {/* Recommended model card */}
       <View
         style={[
           styles.modelCard,
@@ -702,7 +700,6 @@ function DeviceTierScreen({
         )}
       </View>
 
-      {/* Cellular toggle is off by default so large model downloads prefer Wi-Fi. */}
       {model.needsDownload && (
         <PressableBox
           testID="device-tier-cellular-toggle"
@@ -719,7 +716,6 @@ function DeviceTierScreen({
         </PressableBox>
       )}
 
-      {/* Primary CTA */}
       <PressableBox
         testID="device-tier-download-btn"
         onPress={() => onDownload(cellularEnabled)}
@@ -732,7 +728,6 @@ function DeviceTierScreen({
         </Text>
       </PressableBox>
 
-      {/* Secondary: model picker */}
       <PressableBox
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"

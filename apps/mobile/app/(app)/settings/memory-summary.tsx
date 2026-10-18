@@ -144,7 +144,6 @@ export default function MemorySummaryScreen() {
         ))
       )}
 
-      {/* Provenance, states exactly what this view was built from and when. */}
       <Text
         style={{
           color: colors.textMuted,

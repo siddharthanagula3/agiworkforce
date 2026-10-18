@@ -1072,7 +1072,6 @@ export default function ChatTabScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {/* Add to Chat bottom sheet */}
       <AddToChatSheet
         ref={addToChatRef}
         onCamera={handleSheetCamera}
@@ -1089,7 +1088,6 @@ export default function ChatTabScreen() {
 
       <StyleSelector openSignal={styleSelectorOpenSignal} />
 
-      {/* Model picker bottom sheet */}
       <ModelPickerSheet
         sheetRef={modelPickerRef}
         openSignal={modelPickerOpenSignal}
@@ -1099,7 +1097,6 @@ export default function ChatTabScreen() {
         offerRoutingProfiles
       />
 
-      {/* First-run voice intro + recording disclosure, gating the overlay below */}
       <VoiceOnboardingSheet
         visible={voiceIntroVisible}
         mode={voiceOnboardingMode}
@@ -1121,7 +1118,6 @@ export default function ChatTabScreen() {
         onExit={handleExitInlineVoice}
       />
 
-      {/* First-run voice picker, between the intro and the live conversation */}
       <VoicePickerSheet
         visible={voicePickerVisible}
         onStart={handleVoicePickerStart}

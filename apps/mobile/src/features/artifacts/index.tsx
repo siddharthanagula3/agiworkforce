@@ -177,7 +177,6 @@ export function ArtifactsGalleryScreen({
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
-      {/* Header bar */}
       <View className="h-12 flex-row items-center px-3 gap-2">
         <Pressable
           testID="artifacts-open-drawer"
@@ -322,7 +321,6 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
       accessibilityLabel={`Open artifact ${artifact.title}`}
       accessibilityRole="button"
     >
-      {/* Preview thumbnail */}
       <View
         className="rounded-2xl border overflow-hidden"
         style={{
@@ -331,14 +329,12 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
           borderColor: c.border,
         }}
       >
-        {/* Type badge, top-left overlay */}
         <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
           <KindIcon size={12} color={artifact.accentColor} />
           <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />
           <ArtifactAudienceChip artifactId={artifact.id} />
         </View>
 
-        {/* Code / text preview area */}
         {isImage ? (
           <ArtifactImagePreview artifact={artifact} width={width} height={previewHeight} />
         ) : (
@@ -366,7 +362,6 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         )}
       </View>
 
-      {/* Title */}
       <Text
         className="text-[15px] leading-[20px] mt-2.5 font-semibold"
         style={{ color: c.textPrimary }}
@@ -375,7 +370,6 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         {artifact.title}
       </Text>
 
-      {/* Timestamp */}
       <Text className="text-[12px] mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>

@@ -365,7 +365,6 @@ function ApprovalCard({ request }: ApprovalCardProps) {
           backgroundColor: RISK_BG_COLORS[request.riskLevel],
         }}
       >
-        {/* Header row: type icon + tool name + risk badge */}
         <View className="flex-row items-center gap-2 px-3 pt-3 pb-2">
           <View
             className="w-7 h-7 rounded-lg items-center justify-center"
@@ -386,14 +385,12 @@ function ApprovalCard({ request }: ApprovalCardProps) {
 
         <View style={{ height: 1, backgroundColor: RISK_BORDER_COLORS[request.riskLevel] }} />
 
-        {/* Description, what the tool will do */}
         <View className="px-3 py-2.5">
           <Text className="text-xs text-white/70 leading-[16px]" numberOfLines={4}>
             {request.description}
           </Text>
         </View>
 
-        {/* Countdown badge (time until auto-timeout) */}
         {secondsLeft !== null && (
           <View className="px-3 pb-2 flex-row items-center gap-1.5">
             <Clock size={10} color={colors.textMuted} />
@@ -405,7 +402,6 @@ function ApprovalCard({ request }: ApprovalCardProps) {
           </View>
         )}
 
-        {/* Approve / Reject buttons, prominently color coded */}
         <View className="flex-row gap-2 px-3 pb-3">
           <PressableBox
             onPress={handleApprove}
@@ -492,7 +488,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           variant={isSelected ? 'elevated' : 'default'}
           style={isSelected ? { borderColor: colors.accentBorder } : undefined}
         >
-          {/* Header row */}
           <View className="flex-row items-center justify-between mb-2">
             <View className="flex-row items-center gap-2.5 flex-1">
               <AgentStatusIcon status={agent.status} />
@@ -513,7 +508,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           </View>
 
-          {/* Model + Time */}
           <View className="flex-row items-center gap-3 mb-2">
             <Text className="text-xs text-white/40">{getDisplayName(agent.model)}</Text>
             <Text className="text-xs text-white/40">{timeElapsed}</Text>
@@ -525,7 +519,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             )}
           </View>
 
-          {/* Current action indicator */}
           {agent.currentAction ? (
             <View className="flex-row items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg bg-blue-500/8">
               <Zap size={10} color={colors.agentActive} />
@@ -539,7 +532,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </Text>
           ) : null}
 
-          {/* Progress bar with step count */}
           {agent.status === 'running' && (
             <View className="mb-2">
               <ProgressBar progress={agent.progress} />
@@ -556,7 +548,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Agent control buttons (only for running/waiting/paused agents when selected) */}
           {(agent.status === 'running' || agent.status === 'waiting') && isSelected && (
             <View className="flex-row gap-2 mt-1 flex-wrap">
               {agent.status === 'running' ? (
@@ -597,7 +588,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Run artifacts (compact, shown when selected) */}
           {isSelected && agent.artifacts && agent.artifacts.length > 0 && (
             <>
               <Separator className="mt-3 mb-0" />
@@ -605,7 +595,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </>
           )}
 
-          {/* Steps accordion (shown when selected) */}
           {isSelected && agent.steps && agent.steps.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
@@ -638,7 +627,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Tool call log (shown when selected and expanded) */}
           {isSelected && agent.toolCalls && agent.toolCalls.length > 0 && (
             <View className="mt-2">
               <Separator className="mb-3" />
@@ -646,7 +634,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Live execution stream, shown inline when agent is running and selected */}
           {isSelected && agent.status === 'running' && agent.toolCalls.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
@@ -657,7 +644,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
             </View>
           )}
 
-          {/* Quick actions, shown when selected */}
           {isSelected && (
             <View className="mt-3">
               <Separator className="mb-3" />
@@ -665,7 +651,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                 Quick Actions
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {/* View Thread */}
                 <PressableBox
                   onPress={onViewDetail}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 active:bg-white/10"
@@ -676,7 +661,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   <Text className="text-xs text-white/60 font-medium">View Thread</Text>
                 </PressableBox>
 
-                {/* Stop Agent, shown for running agents */}
                 {agent.status === 'running' && (
                   <PressableBox
                     onPress={() => {
@@ -841,10 +825,8 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                   )}
                 </View>
 
-                {/* Expanded detail */}
                 {isExpanded && (
                   <View className="mt-3">
-                    {/* Summary stats */}
                     <View className="flex-row gap-4 mb-2">
                       {agent.totalSteps != null && (
                         <View>
@@ -870,7 +852,6 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                       )}
                     </View>
 
-                    {/* Last step message as summary */}
                     {agent.steps && agent.steps.length > 0 && (
                       <View className="px-2 py-1.5 rounded-lg bg-white/4">
                         <Text className="text-xs text-white/50" numberOfLines={3}>
@@ -879,7 +860,6 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                       </View>
                     )}
 
-                    {/* File artifacts produced */}
                     {agent.artifacts && agent.artifacts.length > 0 && (
                       <View className="mt-2">
                         <RunArtifactsList artifacts={agent.artifacts} maxVisible={3} />
@@ -1012,13 +992,11 @@ export function AgentDashboard() {
           <View>
             <FileResultsSection agents={agents} />
             <TaskResultsSection agents={agents} />
-            {/* Bottom padding accounts for emergency stop button */}
             <View style={{ height: hasRunningAgents ? 64 : 0 }} />
           </View>
         }
       />
 
-      {/* Emergency stop, only shown when there are active agents */}
       {hasRunningAgents && (
         <Animated.View
           entering={FadeIn.duration(motion.quick)}

@@ -306,7 +306,6 @@ export default function ScanScreen() {
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <View style={styles.flex}>
-          {/* Photo */}
           <Image
             source={{ uri: capturedUri }}
             style={StyleSheet.absoluteFill}
@@ -317,7 +316,6 @@ export default function ScanScreen() {
             }}
           />
 
-          {/* Teal bounding rect overlays */}
           {imgNaturalSize && regions.length > 0 && (
             <OcrOverlay
               regions={regions}
@@ -330,7 +328,6 @@ export default function ScanScreen() {
             />
           )}
 
-          {/* Top bar */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
               <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
@@ -359,10 +356,8 @@ export default function ScanScreen() {
             </View>
           </SafeAreaView>
 
-          {/* Bottom: copy + composer */}
           <SafeAreaView style={styles.promptSafeArea} edges={['bottom']}>
             <View style={styles.bottomStack}>
-              {/* Copy-text pill, only if OCR found text */}
               {extractedText.trim().length > 0 && (
                 <PressableBox
                   onPress={handleCopy}
@@ -377,7 +372,6 @@ export default function ScanScreen() {
                 </PressableBox>
               )}
 
-              {/* Composer */}
               <View style={styles.promptContainer}>
                 <TextInput
                   value={promptText}
@@ -421,7 +415,6 @@ export default function ScanScreen() {
         onCameraReady={handleCameraReady}
       />
 
-      {/* Scan-guide frame */}
       <View style={styles.scanGuide} pointerEvents="none">
         <View style={styles.scanCornerTL} />
         <View style={styles.scanCornerTR} />
@@ -429,7 +422,6 @@ export default function ScanScreen() {
         <View style={styles.scanCornerBR} />
       </View>
 
-      {/* Top bar */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
           <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
@@ -467,7 +459,6 @@ export default function ScanScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Hint */}
       <View style={styles.hintBadge} pointerEvents="none">
         <Text style={styles.hintText}>
           {cameraReady
@@ -478,7 +469,6 @@ export default function ScanScreen() {
         </Text>
       </View>
 
-      {/* Bottom: shutter */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
           <PressableBox

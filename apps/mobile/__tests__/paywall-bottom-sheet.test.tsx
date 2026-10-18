@@ -142,10 +142,10 @@ describe('PaywallBottomSheet rendering', () => {
     const { getByText, queryByTestId } = render(
       <PaywallBottomSheet
         {...defaultProps}
-        primaryActionUnavailableMessage="Plan changes aren't available in the app yet. Check back soon."
+        primaryActionUnavailableMessage="Plan changes aren't available in this app right now."
       />,
     );
-    expect(getByText(/Plan changes aren't available in the app yet/i)).toBeTruthy();
+    expect(getByText(/Plan changes aren't available in this app right now/i)).toBeTruthy();
     expect(queryByTestId('paywall-action-button')).toBeNull();
   });
 

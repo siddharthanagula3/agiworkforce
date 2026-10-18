@@ -173,7 +173,6 @@ export function PairingStatus({
       <Text className="text-sm flex-1" style={{ color: config.color }} numberOfLines={2}>
         {config.label}
       </Text>
-      {/* Connection quality indicator, only shown when connected */}
       {status === 'connected' && connectionQuality != null && (
         <ConnectionQualityBadge quality={connectionQuality} latencyMs={latencyMs} />
       )}

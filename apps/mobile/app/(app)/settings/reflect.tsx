@@ -197,7 +197,6 @@ export default function ReflectScreen() {
           open this screen.
         </Text>
 
-        {/* Range picker */}
         <View style={{ flexDirection: 'row', gap: 6, marginBottom: 16 }}>
           {REFLECT_RANGES.map((option) => {
             const selected = option.value === range;
@@ -352,7 +351,6 @@ export default function ReflectScreen() {
               </View>
             </Card>
 
-            {/* Stats */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
               {[
                 { label: 'Conversations', value: String(recap.stats.totalConversations) },
@@ -384,7 +382,6 @@ export default function ReflectScreen() {
               ))}
             </View>
 
-            {/* Daily activity, the same trailing 60 active days web charts. */}
             {recap.dailyActivity.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
@@ -429,7 +426,6 @@ export default function ReflectScreen() {
               </View>
             )}
 
-            {/* Topics */}
             {recap.topics.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text
@@ -550,7 +546,6 @@ export default function ReflectScreen() {
               </View>
             )}
 
-            {/* Insights */}
             {recap.insights.length > 0 && (
               <View style={{ marginTop: 18 }}>
                 <Text style={{ fontSize: typeScale.body, fontWeight: '600', color: c.textPrimary }}>

@@ -102,7 +102,6 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             }}
           />
 
-          {/* Header */}
           <View
             style={{
               flexDirection: 'row',
@@ -132,7 +131,6 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
             <View style={{ width: 28 }} />
           </View>
 
-          {/* Options */}
           <View
             style={{ paddingHorizontal: dialogPadding, gap: 4 }}
             accessibilityRole="radiogroup"
@@ -159,7 +157,6 @@ export function StyleSelector({ openSignal }: StyleSelectorProps) {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isSelected }}
                 >
-                  {/* Radio circle */}
                   <View
                     style={{
                       width: 20,

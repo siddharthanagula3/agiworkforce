@@ -443,7 +443,6 @@ export function ArtifactFullScreen({
           backgroundColor: colors.background,
         }}
       >
-        {/* ── Header ── */}
         <View
           style={{
             paddingTop: insets.top + 8,
@@ -454,9 +453,7 @@ export function ArtifactFullScreen({
             backgroundColor: colors.surfaceBase,
           }}
         >
-          {/* Row 1: toggle (left) + title·type (flex) + action buttons (right) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {/* Preview / Source segmented toggle, only for previewable artifacts */}
             {canPreview ? (
               <View
                 style={{
@@ -499,7 +496,6 @@ export function ArtifactFullScreen({
               </View>
             ) : null}
 
-            {/* Title · TYPE */}
             <Text
               style={{
                 flex: 1,
@@ -513,12 +509,10 @@ export function ArtifactFullScreen({
               {titleLabel}
             </Text>
 
-            {/* Privacy badge when manifest present */}
             {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel ? (
               <Badge label={generatedFileSummary.privacyShortLabel} color="gray" />
             ) : null}
 
-            {/* Publish to a public link, only kinds the public renderer supports */}
             {canPublish(artifact, activeContent) ? (
               <PressableBox
                 onPress={handlePublish}
@@ -557,7 +551,6 @@ export function ArtifactFullScreen({
               </PressableBox>
             ) : null}
 
-            {/* Download / export */}
             <PressableBox
               onPress={handleDownload}
               style={{
@@ -573,7 +566,6 @@ export function ArtifactFullScreen({
               <Download size={17} color={colors.textSecondary} />
             </PressableBox>
 
-            {/* Share generated file (only when manifest present) */}
             {hasGeneratedFileManifest ? (
               <PressableBox
                 onPress={handleShare}
@@ -589,7 +581,6 @@ export function ArtifactFullScreen({
               </PressableBox>
             ) : null}
 
-            {/* Refresh, re-generate the artifact (only when handler is wired) */}
             {onRegenerate ? (
               <PressableBox
                 onPress={() => {
@@ -634,7 +625,6 @@ export function ArtifactFullScreen({
               </PressableBox>
             ) : null}
 
-            {/* Close */}
             <PressableBox
               {...chrome.close}
               style={{
@@ -649,7 +639,6 @@ export function ArtifactFullScreen({
             </PressableBox>
           </View>
 
-          {/* Row 2: version navigation over the store's real edit history */}
           {versionCount > 1 ? (
             <View
               style={{
@@ -772,7 +761,6 @@ export function ArtifactFullScreen({
               Private. Only you can open it until you publish it.
             </Text>
           ) : null}
-          {/* Row 3: the hosted link, once published */}
           {publishedUrl ? (
             <View
               style={{
@@ -835,7 +823,6 @@ export function ArtifactFullScreen({
           ) : null}
         </View>
 
-        {/* ── Content ── */}
         {showChanges && previousVersionContent !== undefined ? (
           <ArtifactChangesView
             previous={previousVersionContent}
@@ -916,14 +903,12 @@ export function ArtifactFullScreen({
             showsVerticalScrollIndicator
             horizontal={false}
           >
-            {/* Generated-file provenance header */}
             {hasGeneratedFileManifest ? (
               <View style={{ marginBottom: 16 }}>
                 <GeneratedFileCard presentation={generatedFileSummary} />
               </View>
             ) : null}
 
-            {/* Email metadata header */}
             {artifact.type === 'email' && artifact.metadata != null && (
               <View
                 style={{
@@ -957,17 +942,12 @@ export function ArtifactFullScreen({
               </View>
             )}
 
-            {/* Language label for code/previewable content */}
             {isMonospace && artifact.language ? (
               <View style={{ marginBottom: 6 }}>
                 <Badge label={artifact.language} color="teal" />
               </View>
             ) : null}
 
-            {/* Main content, horizontally scrollable monospace for code, formatted
-             * markdown for prose artifacts. Prose previously shared the monospace
-             * path's single flat Text, which printed heading/list/emphasis markers
-             * literally instead of rendering them. */}
             {isMonospace ? (
               <ScrollView
                 horizontal
@@ -1017,7 +997,6 @@ export function ArtifactFullScreen({
               </View>
             )}
 
-            {/* Research citations */}
             {artifact.type === 'research' && artifact.metadata?.citations != null && (
               <View style={{ marginTop: 16 }}>
                 <Text

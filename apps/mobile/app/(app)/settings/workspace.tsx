@@ -430,7 +430,6 @@ export default function WorkspaceScreen() {
           </Card>
         )}
 
-        {/* Entitled, but no workspace exists yet. Creation stays on web. */}
         {state.kind === 'ready' && canManage && !workspace && (
           <Card>
             <View className="items-center py-8 gap-3">

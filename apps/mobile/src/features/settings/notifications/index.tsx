@@ -182,7 +182,6 @@ function TimePickerModal({
                 width: modalWidth,
               }}
             >
-              {/* Header */}
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-[15px] font-semibold" style={{ color: colors.textPrimary }}>
                   {field === 'start' ? 'Quiet Hours Start' : 'Quiet Hours End'}
@@ -200,7 +199,6 @@ function TimePickerModal({
                 </Pressable>
               </View>
 
-              {/* Text input: 24h HH:MM */}
               <View
                 className="rounded-xl px-4 py-3 mb-4 flex-row items-center"
                 style={{ backgroundColor: colors.surfaceElevated }}
@@ -226,7 +224,6 @@ function TimePickerModal({
                 />
               </View>
 
-              {/* Quick times */}
               <View className="flex-row flex-wrap gap-2 mb-4">
                 {QUICK_TIMES.map((t) => (
                   <Pressable
@@ -251,7 +248,6 @@ function TimePickerModal({
                 ))}
               </View>
 
-              {/* Actions */}
               <View style={{ marginTop: 8 }}>
                 <Pressable
                   accessibilityLabel="Set Time"
@@ -529,7 +525,6 @@ export default function NotificationPreferencesScreen() {
         onEnable={() => void handleEnablePush()}
       />
 
-      {/* Categories */}
       <View className="mt-3 mb-2">
         <Text
           className="text-xs uppercase mb-3"
@@ -623,7 +618,6 @@ export default function NotificationPreferencesScreen() {
                 : 'Applied by the server before it sends, on every device on this account.'}
       </Text>
 
-      {/* Quiet hours */}
       <View className="mt-6 mb-2">
         <Text
           className="text-xs uppercase mb-3"
@@ -633,7 +627,6 @@ export default function NotificationPreferencesScreen() {
         </Text>
       </View>
       <Card>
-        {/* Master toggle */}
         <View className="flex-row items-center justify-between py-3 px-1">
           <View className="flex-row items-center gap-3">
             <Moon size={18} color={colors.textSecondary} />
@@ -704,7 +697,6 @@ export default function NotificationPreferencesScreen() {
               )}
             </View>
             <Separator />
-            {/* Start time */}
             <Pressable
               onPress={() => handleOpenTimePicker('start')}
               className="flex-row items-center justify-between py-3 px-1 rounded-lg"
@@ -730,7 +722,6 @@ export default function NotificationPreferencesScreen() {
               </View>
             </Pressable>
             <Separator />
-            {/* End time */}
             <Pressable
               onPress={() => handleOpenTimePicker('end')}
               className="flex-row items-center justify-between py-3 px-1 rounded-lg"

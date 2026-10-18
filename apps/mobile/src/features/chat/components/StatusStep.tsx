@@ -109,7 +109,6 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
           className="flex-row items-start gap-2.5 px-3 py-2 rounded-lg my-0.5"
           style={{ backgroundColor: colors.surfaceOverlay }}
         >
-          {/* Icon */}
           <View className="mt-0.5">
             {step.status === 'running' ? (
               <Loader2 size={16} color={iconColor} />
@@ -118,9 +117,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
             )}
           </View>
 
-          {/* Content */}
           <View className="flex-1">
-            {/* Message row */}
             <View className="flex-row items-center gap-2">
               <Text
                 className="text-[13px] flex-1 flex-shrink"
@@ -132,7 +129,6 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
               <StepStatusIndicator status={step.status} colors={colors} />
             </View>
 
-            {/* Step counter */}
             {stepNumber != null && totalSteps != null ? (
               <Text
                 variant="caption"
@@ -143,7 +139,6 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
               </Text>
             ) : null}
 
-            {/* Progress bar */}
             {step.progress != null ? (
               <View
                 className="h-1 rounded-full mt-1.5 overflow-hidden"
@@ -159,7 +154,6 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
               </View>
             ) : null}
 
-            {/* Expandable detail */}
             {hasDetail ? (
               <View className="flex-row items-center gap-1 mt-1">
                 {expanded ? (

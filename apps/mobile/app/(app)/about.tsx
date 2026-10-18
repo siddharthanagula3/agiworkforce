@@ -132,7 +132,6 @@ export default function AboutScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-      {/* Header */}
       <View
         style={{
           height: 48,
@@ -168,7 +167,6 @@ export default function AboutScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 14 }}
       >
-        {/* Logo + identity */}
         <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 2, gap: 8 }}>
           <View
             style={{
@@ -201,7 +199,6 @@ export default function AboutScreen() {
           </Text>
         </View>
 
-        {/* Build info */}
         <Card style={{ padding: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Info size={14} color={c.textMuted} />
@@ -216,7 +213,6 @@ export default function AboutScreen() {
           <InfoRow label="Runtime" value={RUNTIME} />
         </Card>
 
-        {/* Links */}
         <Card style={{ padding: 14 }}>
           <Text
             variant="caption"
@@ -253,7 +249,6 @@ export default function AboutScreen() {
           />
         </Card>
 
-        {/* Support */}
         <Card style={{ padding: 14 }}>
           <Text
             variant="caption"
@@ -309,7 +304,6 @@ export default function AboutScreen() {
           />
         </Card>
 
-        {/* Footer */}
         <View style={{ alignItems: 'center', paddingTop: 8 }}>
           <Text style={{ color: c.textMuted, fontSize: typeScale.caption }}>
             AGI Automation LLC · USA

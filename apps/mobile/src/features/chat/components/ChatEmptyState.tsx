@@ -71,7 +71,6 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
     <View
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}
     >
-      {/* Desktop pairing banner (first launch only) */}
       {bannerVisible && (
         <Animated.View
           entering={reducedMotion ? undefined : FadeInDown.duration(motion.moved).delay(400)}
@@ -116,7 +115,6 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Animated.View>
       )}
 
-      {/* Display headline */}
       <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal)}>
         <Text
           style={{
@@ -133,7 +131,6 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Text>
       </Animated.View>
 
-      {/* Subtitle, only shown when no display name, otherwise headline is already personal */}
       {!displayName && (
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal).delay(150)}

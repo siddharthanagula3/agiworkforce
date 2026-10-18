@@ -37,13 +37,10 @@ export default function AppLayout() {
           swipeMinDistance: gestures.swipeMinDistance,
         }}
       >
-        {/* Redirect index */}
         <Drawer.Screen name="index" options={HIDDEN} />
 
-        {/* Tab navigator (retained for route compatibility) */}
         <Drawer.Screen name="(tabs)" options={HIDDEN} />
 
-        {/* New drawer-level routes */}
         <Drawer.Screen name="chats/index" options={HIDDEN} />
         <Drawer.Screen name="search" options={HIDDEN} />
         <Drawer.Screen name="artifacts/index" options={HIDDEN} />
@@ -57,30 +54,23 @@ export default function AppLayout() {
         <Drawer.Screen name="skills/index" options={HIDDEN} />
         <Drawer.Screen name="reports/index" options={HIDDEN} />
 
-        {/* Chat detail */}
         <Drawer.Screen name="chat/[id]" options={HIDDEN} />
 
-        {/* Project detail */}
         <Drawer.Screen name="projects/[id]" options={HIDDEN} />
 
-        {/* Agent routes */}
         <Drawer.Screen name="tasks" options={HIDDEN} />
 
-        {/* Companion */}
         <Drawer.Screen name="companion/index" options={HIDDEN} />
         <Drawer.Screen name="companion/agent/[id]" options={HIDDEN} />
         <Drawer.Screen name="companion/code/[threadId]" options={HIDDEN} />
         <Drawer.Screen name="cloud-code/index" options={HIDDEN} />
         <Drawer.Screen name="cloud-code/[sessionId]" options={HIDDEN} />
 
-        {/* Profile */}
         <Drawer.Screen name="profile/index" options={HIDDEN} />
 
-        {/* Schedules */}
         <Drawer.Screen name="schedules/index" options={HIDDEN} />
         <Drawer.Screen name="schedules/create" options={HIDDEN} />
 
-        {/* Settings sub-pages */}
         <Drawer.Screen name="settings/index" options={HIDDEN} />
         <Drawer.Screen name="settings/account-security" options={HIDDEN} />
         <Drawer.Screen name="settings/memory" options={HIDDEN} />
@@ -91,10 +81,8 @@ export default function AppLayout() {
         <Drawer.Screen name="settings/capabilities" options={HIDDEN} />
         <Drawer.Screen name="settings/auto-approve" options={HIDDEN} />
 
-        {/* Notifications */}
         <Drawer.Screen name="notifications/index" options={HIDDEN} />
 
-        {/* Standalone screens */}
         <Drawer.Screen name="support/index" options={HIDDEN} />
         <Drawer.Screen name="support/[ticketId]" options={HIDDEN} />
         <Drawer.Screen name="feedback" options={HIDDEN} />

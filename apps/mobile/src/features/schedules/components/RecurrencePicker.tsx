@@ -134,7 +134,6 @@ export function RecurrencePicker({
 
   return (
     <View className="gap-4">
-      {/* Recurrence type chips */}
       <View>
         <Text className="text-sm text-white/70 mb-2">Recurrence</Text>
         <View className="flex-row flex-wrap gap-2">
@@ -175,7 +174,6 @@ export function RecurrencePicker({
         ) : null}
       </View>
 
-      {/* Weekly: Day circles */}
       {value === 'weekly' && (
         <View>
           <Text className="text-sm text-white/70 mb-2">Days</Text>
@@ -207,7 +205,6 @@ export function RecurrencePicker({
         </View>
       )}
 
-      {/* Monthly: Day of month picker */}
       {value === 'monthly' && (
         <View>
           <Text className="text-sm text-white/70 mb-2">Day of Month</Text>
@@ -243,7 +240,6 @@ export function RecurrencePicker({
         </View>
       )}
 
-      {/* Once: Date input */}
       {value === 'once' && (
         <ScheduleDateTimeField
           mode="date"
@@ -254,7 +250,6 @@ export function RecurrencePicker({
         />
       )}
 
-      {/* Time picker (HH:MM) */}
       {isMobileScheduleRecurrenceSupported(value) && (
         <ScheduleDateTimeField
           mode="time"

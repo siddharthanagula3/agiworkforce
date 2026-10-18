@@ -225,7 +225,6 @@ export function ReportFlagButton({
                   can also email it to support below.
                 </Text>
 
-                {/* Category picker */}
                 <View style={styles.categoryList}>
                   {CATEGORIES.map((cat) => (
                     <PressableBox
@@ -263,7 +262,6 @@ export function ReportFlagButton({
                   ))}
                 </View>
 
-                {/* Optional note */}
                 <Text style={[styles.noteLabel, { color: colors.textSecondary }]}>
                   Additional details (optional)
                 </Text>
@@ -287,7 +285,6 @@ export function ReportFlagButton({
                   accessibilityLabel="Additional details about the issue"
                 />
 
-                {/* Email hand-off opt-in, the only path off this device */}
                 <PressableBox
                   testID="report-email-toggle"
                   onPress={() => setSendEmail((v) => !v)}

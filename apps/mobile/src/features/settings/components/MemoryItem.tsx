@@ -126,7 +126,6 @@ export function MemoryItem({
     <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.quick)}>
       <Swipeable renderRightActions={renderRightActions} overshootRight={false}>
         <Card variant="default" className="mb-2">
-          {/* Top row: fact text + actions */}
           <View className="flex-row items-start gap-2">
             <Pressable
               onPress={toggleExpand}

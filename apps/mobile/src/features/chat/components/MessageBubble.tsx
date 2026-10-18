@@ -1120,7 +1120,6 @@ export const MessageBubble = memo(function MessageBubble({
         onAccessibilityAction={handleAccessibilityAction}
       >
         <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-          {/* Offline queued badge (user messages only) */}
           {isUser && message.isQueued && (
             <View
               style={{
@@ -1203,10 +1202,8 @@ export const MessageBubble = memo(function MessageBubble({
                 : { width: '100%' }
             }
           >
-            {/* User attachments: images and files sent with the message */}
             {isUser && message.attachments && message.attachments.length > 0 && (
               <View className="mt-1">
-                {/* Image attachments */}
                 <View className="flex-row flex-wrap gap-2">
                   {message.attachments
                     .filter((a) => a.mimeType.startsWith('image/'))
@@ -1232,7 +1229,6 @@ export const MessageBubble = memo(function MessageBubble({
                     ))}
                 </View>
 
-                {/* File attachments (non-image) */}
                 {message.attachments.filter((a) => !a.mimeType.startsWith('image/')).length > 0 && (
                   <View className="gap-1 mt-2">
                     {message.attachments
@@ -1297,7 +1293,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {/* Inline thinking chip (before main content, assistant only) */}
             {canonicalActivity ? (
               <AgentActivityTimeline
                 messageId={message.id}
@@ -1320,7 +1315,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {/* Status steps */}
             {isAssistant && !canonicalActivity && message.steps && message.steps.length > 0 ? (
               <View style={{ gap: 2 }}>
                 {message.steps.map((step, index) => (
@@ -1334,7 +1328,6 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Tool calls, unified connected timeline (Claude-style inline tool use) */}
             {isAssistant &&
             !canonicalActivity &&
             message.toolCalls &&
@@ -1357,7 +1350,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ))}
 
-            {/* Main text content with inline markdown */}
             {contentElements.length > 0 ? (
               <View>
                 {contentElements}
@@ -1374,7 +1366,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {/* Image generation progress indicator */}
             {isAssistant && (message.isGeneratingImage || message.imageGenStatus === 'failed') && (
               <ImageGenProgress
                 prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
@@ -1386,7 +1377,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             )}
 
-            {/* Generated image */}
             {isAssistant && (message.type === 'image' || message.imageUrl) && message.imageUrl && (
               <GeneratedImage
                 imageUrl={message.imageUrl}
@@ -1397,7 +1387,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             )}
 
-            {/* Video generation progress */}
             {isAssistant &&
               (message.isGeneratingVideo ||
                 message.videoGenStatus === 'failed' ||
@@ -1444,7 +1433,6 @@ export const MessageBubble = memo(function MessageBubble({
               </PressableBox>
             ) : null}
 
-            {/* Generated video */}
             {isAssistant && (message.type === 'video' || message.videoUrl) && message.videoUrl && (
               <GeneratedVideo
                 videoUrl={message.videoUrl}
@@ -1559,7 +1547,6 @@ export const MessageBubble = memo(function MessageBubble({
               <ResearchSourcesAppendix sources={researchSources} />
             ) : null}
 
-            {/* Citations: chips for 1-3, collapsible card for 4+ */}
             {isAssistant && !research && message.citations && message.citations.length > 0 ? (
               message.citations.length <= 3 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
@@ -1578,7 +1565,6 @@ export const MessageBubble = memo(function MessageBubble({
               )
             ) : null}
 
-            {/* Inline artifacts */}
             {isAssistant && inlineArtifacts.length > 0 ? (
               <View style={{ gap: 4 }}>
                 {inlineArtifacts.map((artifact) => (
@@ -1709,7 +1695,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {/* Provenance badge: local or cloud provider context */}
             {provenance && (
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}
@@ -1760,7 +1745,6 @@ export const MessageBubble = memo(function MessageBubble({
                 />
               )}
 
-            {/* Report/flag, Google Play GenAI policy: required on every assistant turn */}
             {isAssistant && !message.isStreaming && message.content.trim() && (
               <ReportFlagButton
                 messageId={message.id}
@@ -1848,7 +1832,6 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       ) : null}
 
-      {/* Artifact full-screen modal */}
       <ArtifactFullScreen
         artifact={expandedArtifact}
         switchable={conversationArtifacts}
@@ -1859,7 +1842,6 @@ export const MessageBubble = memo(function MessageBubble({
         conversationId={message.conversationId}
       />
 
-      {/* Full-screen image viewer */}
       <ImageFullScreen
         imageUrl={fullScreenImageUrl}
         prompt={message.imageGenPrompt ?? message.revisedPrompt}
@@ -1886,7 +1868,6 @@ export const MessageBubble = memo(function MessageBubble({
           raw provider/tool JSON alert. */}
       <ToolCallDetailsSheet tool={accessibilityTool} onClose={() => setAccessibilityTool(null)} />
 
-      {/* File export bottom sheet (assistant messages only) */}
       {isAssistant && (
         <FileExportButton
           content={message.content}
@@ -1911,7 +1892,6 @@ export const MessageBubble = memo(function MessageBubble({
         onQuoteSelection={onQuoteSelection ? (text) => onQuoteSelection(message, text) : undefined}
       />
 
-      {/* Edit message modal */}
       <MessageEditModal
         visible={editModalVisible}
         text={editText}

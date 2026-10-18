@@ -127,7 +127,6 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
       layout={LinearTransition.springify()}
       className="flex-row items-start gap-2.5 mb-2.5"
     >
-      {/* Timeline connector + status dot */}
       <View className="items-center" style={{ width: TIMELINE_GUTTER_WIDTH }}>
         <View
           className="w-5 h-5 rounded-full items-center justify-center"
@@ -141,7 +140,6 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
             <XCircle size={11} color={statusColor} />
           )}
         </View>
-        {/* Connector line below (only if not latest) */}
         {!isLatest && (
           <View
             style={{
@@ -155,7 +153,6 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
         )}
       </View>
 
-      {/* Content */}
       <View className="flex-1 pb-1">
         <View className="flex-row items-center gap-1.5 mb-0.5">
           <ToolIcon name={call.name} />
@@ -168,14 +165,12 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
           )}
         </View>
 
-        {/* Brief result */}
         {call.output && isTerminalToolStatus(call.status) && (
           <Text className="text-xs text-white/40 leading-4" numberOfLines={2}>
             {call.output}
           </Text>
         )}
 
-        {/* File path hint */}
         {call.filePath && (
           <Text className="text-xs mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
             {call.filePath}
@@ -258,7 +253,6 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
 
   return (
     <Card variant="elevated">
-      {/* Header row */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">
           {agent.status === 'running' ? (
@@ -275,14 +269,12 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
           </Text>
         </View>
 
-        {/* Elapsed timer */}
         <View className="flex-row items-center gap-1">
           <Clock size={10} color={colors.textMuted} />
           <Text className="text-xs text-white/40">{elapsedLabel}</Text>
         </View>
       </View>
 
-      {/* Current action pill */}
       {agent.currentAction && agent.status === 'running' && (
         <Animated.View
           entering={FadeIn.duration(motion.quick)}
@@ -298,7 +290,6 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
         </Animated.View>
       )}
 
-      {/* Tool call timeline */}
       {toolCalls.length > 0 ? (
         <View>
           {hiddenCount > 0 && (
@@ -346,7 +337,6 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
         </View>
       )}
 
-      {/* Completion banner */}
       {isTerminal && <CompletionBanner status={agent.status as 'completed' | 'failed'} />}
     </Card>
   );

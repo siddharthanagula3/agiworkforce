@@ -89,7 +89,6 @@ export function ImageGenProgress({
             : { min: 0, max: 100, now: normalizedProgress }
         }
       >
-        {/* Header row: icon + title */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           {isFailed ? (
             <AlertCircle size={20} color={colors.agentError} />
@@ -113,11 +112,9 @@ export function ImageGenProgress({
             </Text>
           </View>
 
-          {/* Spinner for active generation */}
           {status === 'generating' && <Loader2 size={16} color={colors.textMuted} />}
         </View>
 
-        {/* Prompt preview */}
         <Text
           style={{
             fontSize: typeScale.caption,
@@ -129,7 +126,6 @@ export function ImageGenProgress({
           {prompt}
         </Text>
 
-        {/* Pending state */}
         {isPending && (
           <Animated.View style={pulseStyle}>
             <Text
@@ -143,10 +139,8 @@ export function ImageGenProgress({
           </Animated.View>
         )}
 
-        {/* Generating state: progress bar + stats */}
         {status === 'generating' && normalizedProgress !== undefined && (
           <View style={{ gap: 6 }}>
-            {/* Progress bar */}
             <View
               style={{
                 height: 4,
@@ -167,7 +161,6 @@ export function ImageGenProgress({
               />
             </View>
 
-            {/* Progress text */}
             <View
               style={{
                 flexDirection: 'row',
@@ -225,7 +218,6 @@ export function ImageGenProgress({
           </PressableBox>
         ) : null}
 
-        {/* Failed state: error message + retry button */}
         {isFailed && (
           <View style={{ gap: 8 }}>
             {errorMessage ? (

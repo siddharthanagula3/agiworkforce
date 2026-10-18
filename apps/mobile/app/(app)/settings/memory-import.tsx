@@ -190,7 +190,6 @@ export default function MemoryImportScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable
           accessibilityLabel="Go back"
@@ -213,7 +212,6 @@ export default function MemoryImportScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Privacy notice */}
         <Animated.View entering={FadeIn.duration(motion.moved)} className="mb-5 mt-2">
           <View
             className="rounded-xl px-4 py-3"
@@ -234,7 +232,6 @@ export default function MemoryImportScreen() {
           </View>
         </Animated.View>
 
-        {/* Supported sources */}
         <Text
           className="text-xs uppercase font-semibold mb-3"
           style={{ color: colors.textMuted, letterSpacing: 0 }}
@@ -262,7 +259,6 @@ export default function MemoryImportScreen() {
           </Card>
         ))}
 
-        {/* Result display */}
         {state.status === 'done' && (
           <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
             <View
@@ -337,7 +333,6 @@ export default function MemoryImportScreen() {
           </Animated.View>
         )}
 
-        {/* Main CTA */}
         {(state.status === 'idle' || isProcessing) && (
           <View className="mt-6">
             {isProcessing ? (

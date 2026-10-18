@@ -21,6 +21,7 @@ import {
 } from 'lucide-react-native';
 import type { CloudCodePullRequestStatus } from '@agiworkforce/cloud-contracts';
 import {
+  CLOUD_CODE_LIMITS,
   cloudCodePullRequestLabel,
   cloudCodeRepositoryLabel,
   type CloudCodeSession,
@@ -35,8 +36,6 @@ import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   CLOUD_CODE_CHANGES_COPY as COPY,
   CLOUD_CODE_CHANGE_STATE_LABELS,
-  CLOUD_CODE_COMMAND_LIMIT,
-  CLOUD_CODE_COMMIT_MESSAGE_LIMIT,
   cloudCodeCommitChosenLabel,
   cloudCodeDiffByPath,
   cloudCodeDiffLineKind,
@@ -497,7 +496,7 @@ export function CloudCodeChangesSheet({
                 <TextInput
                   value={commitMessage}
                   onChangeText={setCommitMessage}
-                  maxLength={CLOUD_CODE_COMMIT_MESSAGE_LIMIT}
+                  maxLength={CLOUD_CODE_LIMITS.commitMessage}
                   editable={!busy}
                   accessibilityLabel={COPY.commitLabel}
                   style={{ ...inputStyle, flex: undefined }}
@@ -636,7 +635,7 @@ export function CloudCodeChangesSheet({
                   onChangeText={setCommand}
                   placeholder={COPY.commandPlaceholder}
                   placeholderTextColor={colors.textMuted}
-                  maxLength={CLOUD_CODE_COMMAND_LIMIT}
+                  maxLength={CLOUD_CODE_LIMITS.command}
                   autoCapitalize="none"
                   autoCorrect={false}
                   editable={canRun && !busy}

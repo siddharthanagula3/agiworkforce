@@ -139,7 +139,6 @@ export default function WidgetSetupScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View
         className="flex-row items-center px-3 h-12"
         style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
@@ -162,7 +161,6 @@ export default function WidgetSetupScreen() {
         contentContainerClassName="pb-10 gap-5"
         showsVerticalScrollIndicator={false}
       >
-        {/* Intro */}
         <View className="items-center pt-5 pb-2 gap-3">
           <View
             className="w-16 h-16 rounded-2xl items-center justify-center"
@@ -182,7 +180,6 @@ export default function WidgetSetupScreen() {
 
         {isIOS ? (
           <>
-            {/* iOS Section 1: Siri & Shortcuts */}
             <Card>
               <SectionHeader icon={Mic} title="Siri & Shortcuts" step={1} />
               <Text className="text-xs text-fg-muted mb-3">
@@ -217,7 +214,6 @@ export default function WidgetSetupScreen() {
               ))}
             </Card>
 
-            {/* iOS Section 2: native Share Extension */}
             <Card>
               <SectionHeader icon={Share2} title="Share Sheet" step={2} />
               <Text className="text-xs text-fg-muted mb-3">
@@ -250,7 +246,6 @@ export default function WidgetSetupScreen() {
           </>
         ) : (
           <>
-            {/* Android Section 1: Share sheet */}
             <Card>
               <SectionHeader icon={Share2} title="Share From Any App" step={1} />
               <Text className="text-xs text-fg-muted mb-3">
@@ -281,7 +276,6 @@ export default function WidgetSetupScreen() {
               </View>
             </Card>
 
-            {/* Android Section 2: Selected text action */}
             <Card>
               <SectionHeader icon={TextCursorInput} title="Act On Selected Text" step={2} />
               <Text className="text-xs text-fg-muted mb-3">
@@ -295,7 +289,6 @@ export default function WidgetSetupScreen() {
           </>
         )}
 
-        {/* Both platforms: links open in the app */}
         <Card>
           <SectionHeader icon={Link2} title="Links Open In The App" step={3} />
           <Text className="text-xs text-fg-muted">

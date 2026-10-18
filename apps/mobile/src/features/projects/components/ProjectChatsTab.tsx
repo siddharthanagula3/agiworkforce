@@ -90,7 +90,6 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
 
   return (
     <View className="flex-1">
-      {/* New chat button */}
       <View className="px-4 pt-4 pb-2">
         <PressableBox
           onPress={handleNewChat}
@@ -131,7 +130,6 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
               accessibilityRole="button"
               accessibilityLabel={`Open chat: ${convo.title}`}
             >
-              {/* Icon */}
               <View
                 className="w-9 h-9 rounded-lg items-center justify-center mt-0.5"
                 style={{ backgroundColor: `${colors.textMuted}14` }}
@@ -139,7 +137,6 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
                 <MessageSquare size={17} color={colors.textMuted} />
               </View>
 
-              {/* Title + meta */}
               <View className="flex-1">
                 <Text
                   className="text-[14px] font-medium"

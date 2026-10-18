@@ -350,7 +350,6 @@ export default function ProjectsTabScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }} edges={['top']}>
       <StatusBar style={statusBarStyle} />
-      {/* Header */}
       <View className="flex-row items-center px-3 h-12 gap-2">
         <DrawerButton onPress={handleOpenDrawer} />
         <View className="flex-row items-center gap-2 flex-1">
@@ -388,7 +387,6 @@ export default function ProjectsTabScreen() {
         </Pressable>
       </View>
 
-      {/* Active project indicator */}
       {activeProjectId && (
         <View
           className="mx-4 mb-2 px-3 py-2 rounded-lg flex-row items-center gap-2"
@@ -418,7 +416,6 @@ export default function ProjectsTabScreen() {
         </View>
       )}
 
-      {/* Project list or empty state */}
       {projects.length === 0 ? (
         <ScrollView
           testID="projects-empty-scroll"
@@ -570,7 +567,6 @@ export default function ProjectsTabScreen() {
         </>
       ) : null}
 
-      {/* Create/Edit Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -583,7 +579,6 @@ export default function ProjectsTabScreen() {
           className="flex-1"
           style={{ backgroundColor: colors.background }}
         >
-          {/* Modal header */}
           <View
             className="flex-row items-center justify-between px-4 h-14 border-b"
             style={{ borderBottomColor: colors.border }}
@@ -623,7 +618,6 @@ export default function ProjectsTabScreen() {
                   : 'Keep related chats and instructions together in one place.'}
               </Text>
             ) : null}
-            {/* Name field */}
             <View className="mb-5">
               <Text
                 className="text-[13px] font-medium mb-2"
@@ -707,7 +701,6 @@ export default function ProjectsTabScreen() {
               </View>
             ) : null}
 
-            {/* Description field */}
             <View className="mb-5">
               <Text
                 className="text-[13px] font-medium mb-2"
@@ -734,7 +727,6 @@ export default function ProjectsTabScreen() {
               />
             </View>
 
-            {/* Instructions field */}
             <View className="mb-5">
               <Text
                 className="text-[13px] font-medium mb-2"

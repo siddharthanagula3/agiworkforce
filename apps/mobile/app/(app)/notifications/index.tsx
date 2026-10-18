@@ -146,7 +146,6 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
             borderColor: item.read ? colors.borderLight : priorityTone.border,
           }}
         >
-          {/* Header row */}
           <View className="flex-row items-start gap-2.5 mb-1">
             <View style={{ marginTop: 1 }}>
               <PriorityIcon priority={item.priority} color={priorityTone.color} />
@@ -178,7 +177,6 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
             <ChevronRight size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
           </View>
 
-          {/* Footer row: priority badge + time + mark read */}
           <View className="flex-row items-center gap-2 mt-2 pl-6">
             <Badge
               label={getPriorityLabel(item.priority)}
@@ -341,7 +339,6 @@ export default function NotificationCenterScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}
@@ -393,7 +390,6 @@ export default function NotificationCenterScreen() {
         )}
       </View>
 
-      {/* Content */}
       {rows.length === 0 && account.loading ? (
         <View
           className="flex-1 items-center justify-center"

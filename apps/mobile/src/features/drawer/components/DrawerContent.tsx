@@ -116,22 +116,12 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
   },
-  // Library is the single place generated media and files live. "Artifacts"
-  // was a second grid over the same material, and a worse one, since its
-  // tiles rendered no thumbnails, so it is de-listed here rather than kept as
-  // a competing entry point (founder 2026-08-13). The `/(app)/artifacts`
-  // route still exists and is still reachable from an artifact card in a
-  // message; only the drawer row is gone.
   {
     key: 'library',
     label: 'Library',
     icon: BookImage,
     route: '/(app)/library',
   },
-  // Collateral damage from the 2026-08-13 consolidation, not a deliberate
-  // de-listing like Artifacts/Tasks above: FEATURES.skills is still on, the
-  // /(app)/skills route and its Clerk-gated Managed Cloud catalog screen are
-  // still live, and nothing replaced this row's function. Restored.
   {
     key: 'reports',
     label: 'Reports',
@@ -168,13 +158,8 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: MonitorSmartphone,
     route: '/(app)/companion',
   },
-  // AGI Work NAVIGATES; it does not toggle (founder 2026-08-13). A drawer row
-  // that silently flipped a session stance gave no feedback about what it had
-  // changed and no way to see the work it produced. `workMode` is a property of
-  // a cloud agent RUN (cloud-contracts/cloud-agent-runs.ts), not of a
-  // conversation, so "the AGI Work chats" are exactly the runs list at
-  // /(app)/tasks, which is also why no separate "Tasks" row sits beside this
-  // one showing the same records.
+  // workMode belongs to a cloud agent run, not a conversation, so AGI Work opens
+  // the runs list instead of toggling a session stance.
   {
     key: 'tasks',
     label: 'AGI Work',
@@ -313,8 +298,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const usageLoading = useCloudUsageStore((s) => s.loading);
   const usageError = useCloudUsageStore((s) => s.error);
   const refreshUsage = useCloudUsageStore((s) => s.refresh);
-  // Same gate the [+] sheet applied before this moved: Cloud-only, and only
-  // where the capability document grants AGI Work. The server is still authoritative.
+  // Cloud-only, and only where the capability document grants AGI Work; the
+  // server still decides.
   const showAgiWork = appMode === 'cloud' && grantedCapabilities.includes('canUseAgiWork');
 
   const { usesPersistentDrawer } = useTabletLayout();
@@ -384,10 +369,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [navigate]);
 
   const historyConversations = useMemo(() => {
-    // Each mode's history comes from the store that owns it. Cloud rows live in
-    // useChatCloudMessageStore (where loadConversations writes the server list);
-    // filtering the local store for `executionMode: 'cloud'` returned a stale
-    // MMKV mirror that server responses never touched.
+    // Cloud rows live only in the cloud store; the local store holds a stale
+    // mirror that server responses never update.
     const source = appMode === 'cloud' ? cloudConversations : conversations;
     return source.filter(
       (conversation) =>
@@ -398,8 +381,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const displayedProjects = useMemo(() => {
     if (!FEATURES.projects) return [];
-    // Cloud mode: read from the cloud projects store (synced via cloudSyncEngine).
-    // Only show non-tombstoned projects. Local mode: read from local store as before.
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
       return source
@@ -497,8 +478,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const visiblePrimaryItems = useMemo(
     () =>
       PRIMARY_ITEMS.filter((item) => {
-        // Cloud mode exposes the shared cloud surfaces (Tasks, Schedules). Local
-        // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'skills' && !FEATURES.skills) return false;
         if (item.key === 'reports' && !FEATURES.research) return false;
@@ -554,10 +533,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           >
             AGI
           </Text>
-          {/* Icon-only, fixed at 34pt. The founder's complaint was that the old
-              drawer search field's placeholder text widened it; deleting the
-              entry point entirely over-corrected and cost an extra navigation
-              to reach search at all. A circular glyph cannot widen. */}
+          {/* Icon-only at a fixed 34pt so search never widens the header. */}
           <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
               thumb-and-eye-level home), not dropped to a bottom pill. */}

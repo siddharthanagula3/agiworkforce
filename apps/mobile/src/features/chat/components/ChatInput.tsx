@@ -859,7 +859,6 @@ ${current}`
         </View>
       ) : null}
 
-      {/* Attachment preview strip */}
       <AttachmentPreview
         attachments={attachments}
         onRemove={handleRemoveAttachment}
@@ -882,7 +881,6 @@ ${current}`
         </Text>
       ) : null}
 
-      {/* Command palette -- shown when input starts with "/" */}
       <CommandPalette
         visible={showCommandPalette}
         query={text}

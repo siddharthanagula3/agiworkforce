@@ -318,7 +318,6 @@ export function QuickSchedule({
               className="absolute bottom-0 left-0 right-0 rounded-t-3xl"
               style={{ backgroundColor: colors.surfaceOverlay }}
             >
-              {/* Header */}
               <View className="flex-row items-center justify-between px-4 pt-5 pb-3">
                 <View className="flex-row items-center gap-2">
                   <Zap size={18} color={colors.teal} />
@@ -333,7 +332,6 @@ export function QuickSchedule({
               </View>
 
               <View className="px-4 pb-8">
-                {/* Natural language input */}
                 <Text className="text-[12px] text-white/50 mb-2">When should it run?</Text>
                 <View
                   className="rounded-xl px-3 py-3 mb-3 flex-row items-center"
@@ -358,7 +356,6 @@ export function QuickSchedule({
                   )}
                 </View>
 
-                {/* Parsed preview */}
                 {parsed && (
                   <View
                     className="flex-row items-center gap-2 px-3 py-2 rounded-lg mb-3"
@@ -371,7 +368,6 @@ export function QuickSchedule({
                   </View>
                 )}
 
-                {/* Suggestion chips */}
                 <View className="flex-row flex-wrap gap-2 mb-4">
                   {SUGGESTIONS.map((s) => (
                     <PressableBox
@@ -394,7 +390,6 @@ export function QuickSchedule({
                   ))}
                 </View>
 
-                {/* Prompt input */}
                 <Text className="text-[12px] text-white/50 mb-2">What should the AI do?</Text>
                 <View
                   className="rounded-xl px-3 py-3 mb-3"
@@ -420,10 +415,8 @@ export function QuickSchedule({
                   />
                 </View>
 
-                {/* Error */}
                 {error ? <Text className="text-[12px] text-red-400 mb-3">{error}</Text> : null}
 
-                {/* Create button */}
                 <PressableBox
                   onPress={handleCreate}
                   disabled={loading || !parsed || !prompt.trim()}

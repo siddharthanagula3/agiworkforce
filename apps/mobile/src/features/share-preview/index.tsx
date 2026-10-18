@@ -186,7 +186,6 @@ export default function SharePreviewScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
-      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
@@ -218,7 +217,6 @@ export default function SharePreviewScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
-        {/* Truncation warning */}
         {truncated && (
           <View
             style={{
@@ -292,7 +290,6 @@ export default function SharePreviewScreen() {
           </View>
         )}
 
-        {/* Preview box */}
         {rawText.trim().length > 0 && (
           <View
             style={{
@@ -356,7 +353,6 @@ export default function SharePreviewScreen() {
         </Text>
       </ScrollView>
 
-      {/* Action bar */}
       <View
         style={{
           flexDirection: 'row',

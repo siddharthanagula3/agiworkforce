@@ -245,7 +245,6 @@ function AttachmentThumbnail({
         </View>
       )}
 
-      {/* Remove button, hitSlop 12 lifts the 20pt circle to a 44pt target */}
       <PressableBox
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
@@ -348,7 +347,6 @@ function AttachmentThumbnail({
         </View>
       ) : null}
 
-      {/* Privacy chip, outbound destination per attachment */}
       {privacyShortLabel ? (
         <View
           accessibilityLabel={`Outbound destination: ${privacyShortLabel}`}
@@ -419,7 +417,6 @@ export function AttachmentPreview({
           ))}
         </ScrollView>
 
-        {/* Badge showing count if multiple */}
         {attachments.length > 1 && (
           <View
             className="ml-1 px-2 py-0.5 rounded-full"

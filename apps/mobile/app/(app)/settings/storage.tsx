@@ -215,7 +215,6 @@ export default function StorageManagerScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      {/* Header */}
       <View
         className="flex-row items-center px-3 h-12"
         style={{
@@ -240,7 +239,6 @@ export default function StorageManagerScreen() {
         </Text>
       </View>
 
-      {/* Full-screen wipe overlay */}
       {isWiping && (
         <View
           className="absolute inset-0 z-50 items-center justify-center"
@@ -260,7 +258,6 @@ export default function StorageManagerScreen() {
       >
         <StorageScopeNotice />
 
-        {/* Device storage summary */}
         <Card>
           <View className="flex-row items-center gap-3 mb-3">
             <HardDrive size={18} color={c.teal} />
@@ -303,7 +300,6 @@ export default function StorageManagerScreen() {
           </View>
         </Card>
 
-        {/* Download policy */}
         <Card>
           <View className="flex-row items-center gap-3">
             <Signal size={18} color={c.teal} />
@@ -324,7 +320,6 @@ export default function StorageManagerScreen() {
           </View>
         </Card>
 
-        {/* Downloaded models */}
         <Card>
           <View className="flex-row items-center justify-between mb-3">
             <View className="flex-row items-center gap-2">
@@ -374,7 +369,6 @@ export default function StorageManagerScreen() {
           )}
         </Card>
 
-        {/* Privacy actions */}
         <Card>
           <Text
             className="text-xs uppercase font-semibold mb-3"
@@ -383,7 +377,6 @@ export default function StorageManagerScreen() {
             Privacy
           </Text>
 
-          {/* Export my data */}
           <Pressable
             onPress={handleExport}
             disabled={isExporting}
@@ -413,7 +406,6 @@ export default function StorageManagerScreen() {
 
           <Separator />
 
-          {/* Clear cache */}
           <Pressable
             onPress={handleClearCache}
             className="flex-row items-center gap-3 py-3 active:opacity-70"
@@ -432,7 +424,6 @@ export default function StorageManagerScreen() {
           </Pressable>
         </Card>
 
-        {/* Danger zone */}
         <Card style={{ borderColor: c.agentError, borderWidth: 1 }}>
           <View className="flex-row items-center gap-2 mb-3">
             <AlertTriangle size={16} color={c.agentError} />

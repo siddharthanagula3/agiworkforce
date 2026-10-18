@@ -121,7 +121,6 @@ export function GeneratedImage({
         accessibilityRole="image"
         accessibilityHint="Tap to view full screen, long press to share"
       >
-        {/* Loading skeleton */}
         {loadState === 'loading' && (
           <View
             style={{
@@ -137,7 +136,6 @@ export function GeneratedImage({
           </View>
         )}
 
-        {/* Image, opacity controlled by loadState, expo-image handles its own transition */}
         <View
           style={{
             opacity: loadState === 'loaded' ? 1 : 0,
@@ -162,7 +160,6 @@ export function GeneratedImage({
         </View>
       </PressableBox>
 
-      {/* Revised prompt text */}
       {revisedPrompt && loadState === 'loaded' ? (
         <Text
           style={{

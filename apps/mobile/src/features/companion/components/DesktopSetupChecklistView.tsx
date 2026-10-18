@@ -110,7 +110,6 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           </Text>
         </View>
 
-        {/* Steps sit ABOVE the CTA, the whole point of this screen. */}
         <PairingChecklist
           className="mb-8"
           steps={[
@@ -128,7 +127,6 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
           className="w-full"
         />
 
-        {/* Directly beneath the pair button, before any pairing action. */}
         <PairingRiskDisclosure className="mt-4" />
 
         <PressableBox

@@ -205,7 +205,6 @@ function MiniChart({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="image"
     >
-      {/* Grid lines */}
       {gridY.map((y, i) => (
         <Line
           key={i}
@@ -219,7 +218,6 @@ function MiniChart({
         />
       ))}
 
-      {/* Y-axis labels */}
       {gridLabels.map((label, i) => (
         <SvgText
           key={i}
@@ -233,15 +231,12 @@ function MiniChart({
         </SvgText>
       ))}
 
-      {/* Unit label */}
       <SvgText x={PAD_L} y={height - 2} fontSize={9} fill={gridColor} textAnchor="start">
         {unit}
       </SvgText>
 
-      {/* Data line */}
       {data.length > 1 && <Polyline points={points} fill="none" stroke={color} strokeWidth={1.5} />}
 
-      {/* Data dots */}
       {data.length > 0 &&
         data.map((v, i) => {
           const step = data.length > 1 ? chartW / (data.length - 1) : chartW;
@@ -473,7 +468,6 @@ export default function PerformanceScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
@@ -503,7 +497,6 @@ export default function PerformanceScreen() {
           Performance
         </Text>
 
-        {/* Live thermal dot in header */}
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <View
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
@@ -530,9 +523,6 @@ export default function PerformanceScreen() {
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ---------------------------------------------------------------- */}
-        {/* 1. Device Tier Card */}
-        {/* ---------------------------------------------------------------- */}
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Cpu size={16} color={c.teal} />
@@ -640,9 +630,6 @@ export default function PerformanceScreen() {
           ) : null}
         </Card>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 2. Loaded Model Card */}
-        {/* ---------------------------------------------------------------- */}
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Zap size={16} color={c.teal} />
@@ -822,9 +809,6 @@ export default function PerformanceScreen() {
           )}
         </Card>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 3. Tok/s chart */}
-        {/* ---------------------------------------------------------------- */}
         {toksData.length > 0 && (
           <Card>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -854,9 +838,6 @@ export default function PerformanceScreen() {
           </Card>
         )}
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 4. TTFT chart */}
-        {/* ---------------------------------------------------------------- */}
         {ttftData.length > 0 && (
           <Card>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -880,9 +861,6 @@ export default function PerformanceScreen() {
           </Card>
         )}
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 5. Benchmark CTA */}
-        {/* ---------------------------------------------------------------- */}
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <PlayCircle size={16} color={c.teal} />
@@ -925,9 +903,6 @@ export default function PerformanceScreen() {
           </Pressable>
         </Card>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 6. Thermal-state detail */}
-        {/* ---------------------------------------------------------------- */}
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Thermometer size={16} color={tIndicator.dot} />
@@ -992,9 +967,6 @@ export default function PerformanceScreen() {
           </View>
         </Card>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* 7. Settings toggles */}
-        {/* ---------------------------------------------------------------- */}
         <Card>
           <Text
             accessibilityRole="header"

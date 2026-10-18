@@ -49,10 +49,8 @@ describe('FeatureUnavailable', () => {
 
   it('shows the feature-specific unavailable message', () => {
     const { getByText } = render(<FeatureUnavailable feature="Scheduled tasks" />);
-    expect(getByText('Scheduled tasks isn’t available yet')).toBeTruthy();
-    expect(
-      getByText('This feature is coming in a future update. It isn’t enabled in this build.'),
-    ).toBeTruthy();
+    expect(getByText('Scheduled tasks isn’t available in this build')).toBeTruthy();
+    expect(getByText('It isn’t enabled in this build of the app.')).toBeTruthy();
   });
 
   it('falls back to a generic message when no feature name is given', () => {

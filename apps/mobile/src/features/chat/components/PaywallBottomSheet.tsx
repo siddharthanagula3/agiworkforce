@@ -181,7 +181,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             paddingBottom: 36,
           }}
         >
-          {/* Header row */}
           <View
             style={{
               flexDirection: 'row',
@@ -190,7 +189,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               marginBottom: 16,
             }}
           >
-            {/* Icon + title */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
               <View
                 style={{
@@ -217,7 +215,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               </Text>
             </View>
 
-            {/* Close button, 44pt touch target per iOS HIG */}
             <PressableBox
               onPress={handleDismiss}
               style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -229,7 +226,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </PressableBox>
           </View>
 
-          {/* Body copy */}
           <Text
             style={{
               fontSize: typeScale.body,
@@ -264,7 +260,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             </View>
           ) : null}
 
-          {/* CTA follows the server-derived recovery action. */}
           {hasPrimaryAction ? (
             <Button
               title={primaryActionLabel}

@@ -149,7 +149,6 @@ export function FileExportButton({
             onPress={() => undefined}
             accessible={false}
           >
-            {/* Header */}
             <View
               style={{
                 flexDirection: 'row',
@@ -177,7 +176,6 @@ export function FileExportButton({
               </PressableBox>
             </View>
 
-            {/* Action list */}
             <View style={{ gap: 4 }}>
               {ACTIONS.map((action) => {
                 const isLoading = loading === action.key;
@@ -206,7 +204,6 @@ export function FileExportButton({
                           opacity: loading !== null && !isLoading ? 0.4 : 1,
                         }}
                       >
-                        {/* Icon / spinner / check */}
                         <View
                           style={{
                             width: 40,
@@ -226,7 +223,6 @@ export function FileExportButton({
                           )}
                         </View>
 
-                        {/* Label */}
                         <View style={{ flex: 1 }}>
                           <Text
                             style={{

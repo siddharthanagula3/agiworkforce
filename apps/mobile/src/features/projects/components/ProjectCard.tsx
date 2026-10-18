@@ -52,7 +52,6 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
         accessibilityHint="Tap to open, long press for options"
       >
         <View className="p-4 gap-2.5">
-          {/* Top row: icon + name + active indicator */}
           <View className="flex-row items-center gap-3">
             <View
               className="w-10 h-10 rounded-xl items-center justify-center"
@@ -85,7 +84,6 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             )}
           </View>
 
-          {/* Description */}
           {project.description ? (
             <Text
               variant="caption"
@@ -97,7 +95,6 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             </Text>
           ) : null}
 
-          {/* Footer: last updated */}
           <View className="flex-row items-center justify-between pt-1">
             <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
               Updated {formatRelativeTime(project.updatedAt)}

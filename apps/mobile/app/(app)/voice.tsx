@@ -331,7 +331,6 @@ export default function VoiceScreen() {
       <StatusBar barStyle="light-content" />
       <DarkGradientBg />
 
-      {/* Close button */}
       <PressableBox
         onPress={handleClose}
         style={[styles.closeBtn, { top: insets.top + 10 }]}
@@ -345,7 +344,6 @@ export default function VoiceScreen() {
         style={styles.keyboardContent}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Main content */}
         <View style={styles.content}>
           <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel)}</Text>
 
@@ -377,7 +375,6 @@ export default function VoiceScreen() {
             </Text>
           ) : null}
 
-          {/* Model badge */}
           <Animated.View entering={FadeIn.duration(motion.moved)} style={styles.modelBadge}>
             <Text style={styles.modelLabel}>{modelLabel.toUpperCase()}</Text>
             <Text testID="voice-processing-badge" style={styles.onDeviceBadge}>
@@ -385,7 +382,6 @@ export default function VoiceScreen() {
             </Text>
           </Animated.View>
 
-          {/* Transcription latency, only for a capture the user chose to stop */}
           {lastResponseMs !== undefined && (
             <Animated.View entering={FadeIn.duration(motion.moved)}>
               <Text testID="voice-stt-latency" style={styles.latencyLabel}>
@@ -474,10 +470,8 @@ export default function VoiceScreen() {
           </Text>
         ) : null}
 
-        {/* Bottom controls */}
         {!isTyping ? (
           <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
-            {/* Mute */}
             <PressableBox
               onPress={toggleMute}
               style={[
@@ -494,7 +488,6 @@ export default function VoiceScreen() {
               )}
             </PressableBox>
 
-            {/* Push-to-talk mode toggle */}
             <PressableBox
               testID="voice-companion-ptt-toggle"
               onPress={handlePttToggle}
@@ -511,7 +504,6 @@ export default function VoiceScreen() {
               <Hand size={22} color={pttMode ? colors.agentThinking : colors.textSecondary} />
             </PressableBox>
 
-            {/* TTS indicator, static, shows TTS is always on-device */}
             <View style={styles.controlBtn}>
               <Volume2 size={22} color={colors.terraCotta} />
             </View>

@@ -40,10 +40,6 @@ export interface ExportResult {
   uri: string;
   format: ExportFormat;
   fileName: string;
-  /**
-   * The same file the web and the desktop describe. The phone used to return a
-   * bare uri, so an export taken here had no identity anything else recognised.
-   */
   file: ManagedFile;
 }
 

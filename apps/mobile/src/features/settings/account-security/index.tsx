@@ -601,7 +601,6 @@ export default function AccountSecurityScreen() {
         />
       </SettingsGroup>
 
-      {/* Security activity, the same account audit trail web shows. */}
       <SettingsInfo
         title="Recent security activity"
         body="Sign-ins and account changes recorded for this account, newest first."

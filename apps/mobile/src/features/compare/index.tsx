@@ -365,7 +365,6 @@ export default function CompareScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* ---- Header ---- */}
         <View
           style={{
             flexDirection: 'row',
@@ -423,7 +422,6 @@ export default function CompareScreen() {
           </View>
         ) : (
           <>
-            {/* ---- Model Selector Pills ---- */}
             <View className="flex-row gap-3 px-4 py-3 border-b border-white/8">
               <ModelPill
                 slot="A"
@@ -444,14 +442,12 @@ export default function CompareScreen() {
               />
             </View>
 
-            {/* ---- Results Area ---- */}
             <ScrollView
               className="flex-1"
               contentContainerStyle={{ padding: 16, gap: 12 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Empty state */}
               {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
                 <View className="flex-1 items-center justify-center py-16 px-8">
                   <Text className="text-fg-muted text-center text-sm leading-5">
@@ -461,7 +457,6 @@ export default function CompareScreen() {
                 </View>
               )}
 
-              {/* Response columns, stacked on narrow screens */}
               {(lastPrompt ||
                 stateA.isStreaming ||
                 stateB.isStreaming ||
@@ -474,13 +469,11 @@ export default function CompareScreen() {
               )}
             </ScrollView>
 
-            {/* ---- Input ---- */}
             <ChatInput onSend={handleSend} isStreaming={isAnyStreaming} onStop={handleStop} />
           </>
         )}
       </KeyboardAvoidingView>
 
-      {/* ---- Model Picker Sheets ---- */}
       {/* Rendered outside KeyboardAvoidingView so they overlay correctly */}
       {isCloudMode && availableModels ? (
         <>
@@ -530,7 +523,6 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
       accessibilityRole="button"
     >
       <View className="flex-row items-center gap-2">
-        {/* Slot badge */}
         <View
           className="w-5 h-5 rounded-md items-center justify-center"
           style={{ backgroundColor: `${slotColor}30` }}
@@ -580,7 +572,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
 
   return (
     <Card variant="outline" className="border-white/8">
-      {/* Panel header */}
       <View className="flex-row items-center gap-2 pb-3 border-b border-white/6 mb-3">
         <View
           className="w-5 h-5 rounded-md items-center justify-center"
@@ -594,7 +585,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
           {displayName}
         </Text>
 
-        {/* Winner badge */}
         {winner && (
           <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
             <Trophy size={10} color="#f59e0b" />
@@ -605,7 +595,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         )}
       </View>
 
-      {/* Streaming indicator */}
       {state.isStreaming && (
         <View className="flex-row items-center gap-2 mb-3">
           <ActivityIndicator size="small" color={slotColor} />
@@ -613,7 +602,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         </View>
       )}
 
-      {/* Response content */}
       {state.errorMessage ? (
         <View className="bg-red-500/10 rounded-lg px-3 py-2">
           <Text className="text-[12px] text-red-400">{state.errorMessage}</Text>
@@ -626,7 +614,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         <Text className="text-[12px] text-fg-muted italic">No response yet.</Text>
       ) : null}
 
-      {/* Stats footer */}
       {(state.isDone || state.tokenCount > 0) && (
         <View className="flex-row gap-4 mt-3 pt-2 border-t border-white/6">
           {state.ttftMs !== null && (

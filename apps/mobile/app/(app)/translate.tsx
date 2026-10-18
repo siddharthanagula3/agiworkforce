@@ -156,7 +156,6 @@ export default function TranslateScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Header */}
         <View
           style={{
             flexDirection: 'row',
@@ -191,7 +190,6 @@ export default function TranslateScreen() {
           </Text>
         </View>
 
-        {/* Language selector bar */}
         <View
           style={{
             flexDirection: 'row',
@@ -237,7 +235,6 @@ export default function TranslateScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Source pane */}
           <View
             style={{
               backgroundColor: colors.surfaceElevated,
@@ -284,7 +281,6 @@ export default function TranslateScreen() {
             )}
           </View>
 
-          {/* Translate button */}
           <Pressable
             onPress={handleTranslate}
             disabled={!canTranslate}
@@ -319,7 +315,6 @@ export default function TranslateScreen() {
             )}
           </Pressable>
 
-          {/* Target pane */}
           {(displayedTranslation.length > 0 || state.errorMessage || state.isTranslating) && (
             <View
               style={{
@@ -390,7 +385,6 @@ export default function TranslateScreen() {
                 </View>
               )}
 
-              {/* Performance chip */}
               {backendLabel && (
                 <View
                   style={{
@@ -412,7 +406,6 @@ export default function TranslateScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Language picker modal */}
       <Modal
         visible={langPickerFor !== null}
         transparent

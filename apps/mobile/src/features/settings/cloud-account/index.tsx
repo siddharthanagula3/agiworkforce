@@ -395,7 +395,6 @@ export default function CloudAccountScreen() {
   return (
     <SettingsScreenShell title="Account">
       {stepUpModal}
-      {/* Avatar + name/email header, mirrors desktop/website account header */}
       <View
         style={{
           flexDirection: 'row',
@@ -536,7 +535,6 @@ export default function CloudAccountScreen() {
         </View>
       </View>
 
-      {/* Profile summary */}
       <SettingsInfo
         title="Session management and account security"
         body={userEmail ? `Signed in as ${userEmail}` : 'Manage your AGI Cloud account.'}
@@ -553,7 +551,6 @@ export default function CloudAccountScreen() {
         />
       </SettingsGroup>
 
-      {/* Current session */}
       <SettingsGroup>
         <SettingsRow label="Current session" icon={Smartphone} value="Active" isLast />
       </SettingsGroup>
@@ -581,7 +578,6 @@ export default function CloudAccountScreen() {
         />
       ) : null}
 
-      {/* User ID copy row */}
       {userId && (
         <SettingsGroup>
           <SettingsRow
@@ -594,7 +590,6 @@ export default function CloudAccountScreen() {
         </SettingsGroup>
       )}
 
-      {/* Sign out */}
       <SettingsGroup>
         <SettingsRow
           label={loggingOut ? 'Signing out…' : 'Log Out'}

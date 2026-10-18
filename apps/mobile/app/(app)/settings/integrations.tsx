@@ -148,7 +148,6 @@ export default function IntegrationsScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable
           onPress={handleBack}
@@ -168,23 +167,16 @@ export default function IntegrationsScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Description */}
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
           Manage device features that can provide context to AI assistants. Data stays on your
           device and is only shared when you start a chat.
         </Text>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* SECTION 1: Device Integrations                                       */}
-        {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Device" colors={colors} />
           <DeviceIntegrationStatus />
         </View>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* SECTION 2: Permission toggles (Calendar)                             */}
-        {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Permissions" colors={colors} />
 
@@ -203,7 +195,6 @@ export default function IntegrationsScreen() {
 
           {!isChecking && (
             <View className="gap-4">
-              {/* Calendar */}
               <Card>
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-3">
@@ -247,7 +238,6 @@ export default function IntegrationsScreen() {
           )}
         </View>
 
-        {/* System settings link */}
         <Pressable
           onPress={openSystemSettings}
           className="flex-row items-center justify-center gap-2 py-3 active:opacity-70"

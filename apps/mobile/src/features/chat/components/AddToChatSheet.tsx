@@ -456,7 +456,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View
           style={{
             flexDirection: 'row',
@@ -489,7 +488,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </PressableBox>
         </View>
 
-        {/* Section 1: Attachment Row */}
         <View
           style={{
             flexDirection: 'row',
@@ -677,7 +675,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </View>
         ) : null}
 
-        {/* Divider */}
         <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
         {/* Model sits directly under the attachment cards and ABOVE Create:
@@ -1001,7 +998,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               ) : null}
             </View>
 
-            {/* Divider */}
             <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
           </>
         ) : null}
@@ -1039,7 +1035,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </>
         ) : null}
 
-        {/* Section 3: Tool availability */}
         {showToolSection ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
             {showResearchToggle ? (
@@ -1056,12 +1051,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           </View>
         ) : null}
 
-        {/* Divider */}
         {showToolSection ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
         ) : null}
 
-        {/* Section 4: Config Links */}
         <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
           {/* Project assignment for the current chat -- both modes. The picker
               itself is ProjectSelectorBar's modal, opened by the host screen;

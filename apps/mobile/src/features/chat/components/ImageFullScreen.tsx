@@ -218,7 +218,6 @@ export function ImageFullScreen({
             backgroundColor: colors.black,
           }}
         >
-          {/* Header */}
           <View
             style={{
               flexDirection: 'row',
@@ -280,7 +279,6 @@ export function ImageFullScreen({
               </PressableBox>
             ) : null}
 
-            {/* Share button */}
             <PressableBox
               onPress={handleShare}
               style={{
@@ -311,7 +309,6 @@ export function ImageFullScreen({
               )}
             </PressableBox>
 
-            {/* Close button */}
             <PressableBox
               onPress={handleClose}
               style={{
@@ -326,7 +323,6 @@ export function ImageFullScreen({
             </PressableBox>
           </View>
 
-          {/* Zoomable image area */}
           <View
             style={{
               flex: 1,
@@ -370,7 +366,6 @@ export function ImageFullScreen({
             </GestureDetector>
           </View>
 
-          {/* Prompt footer */}
           {prompt || settingsCaption ? (
             <View
               style={{

@@ -182,7 +182,6 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
           justifyContent: 'flex-end',
         }}
       >
-        {/* Dismiss tap zone (above the card) */}
         <PressableBox
           style={{ flex: 1 }}
           onPress={handleSkip}
@@ -190,7 +189,6 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
           accessibilityRole="button"
         />
 
-        {/* Bottom sheet tooltip card */}
         <Animated.View
           entering={SlideInDown.duration(motion.moved).springify()}
           exiting={SlideOutDown.duration(motion.moved)}
@@ -206,7 +204,6 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             maxWidth: screenWidth,
           }}
         >
-          {/* Handle + dismiss row */}
           <View className="flex-row items-center justify-between mb-5">
             <View className="w-10 h-1 rounded-full bg-white/20 mx-auto" style={{ flex: 0 }} />
             <View style={{ flex: 1 }} />
@@ -220,7 +217,6 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             </PressableBox>
           </View>
 
-          {/* Step icon */}
           <View className="items-center mb-5">
             <View
               className="w-16 h-16 rounded-2xl items-center justify-center mb-3"
@@ -241,13 +237,11 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             </View>
           </View>
 
-          {/* Content */}
           <Text className="text-[17px] font-bold text-white text-center mb-3">{step.title}</Text>
           <Text className="text-sm text-white/60 text-center leading-5 mb-4">
             {step.description}
           </Text>
 
-          {/* Hint pill */}
           <View className="flex-row items-start gap-2 px-4 py-3 rounded-xl bg-white/5 mb-6">
             <Text className="text-xs font-semibold mt-0.5" style={{ color: colors.teal }}>
               TIP
@@ -255,9 +249,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             <Text className="text-xs text-white/50 flex-1 leading-4">{step.hint}</Text>
           </View>
 
-          {/* Navigation */}
           <View className="flex-row items-center gap-3">
-            {/* Prev button, only shown after first step */}
             {currentStep > 0 ? (
               <PressableBox
                 onPress={handlePrev}
@@ -269,12 +261,10 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
               </PressableBox>
             ) : null}
 
-            {/* Step dots */}
             <View className="flex-1 items-center">
               <StepDots total={DEMO_STEPS.length} current={currentStep} />
             </View>
 
-            {/* Next / Finish button */}
             <PressableBox
               onPress={handleNext}
               className="flex-row items-center gap-2 px-5 py-3 rounded-xl active:opacity-80"

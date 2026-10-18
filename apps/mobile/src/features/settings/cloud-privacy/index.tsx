@@ -87,7 +87,6 @@ export default function CloudPrivacyScreen() {
         icon={Shield}
       />
 
-      {/* Privacy guarantees */}
       <View style={{ marginBottom: 18, gap: 10 }}>
         {PRIVACY_ITEMS.map((item) => (
           <View
@@ -190,7 +189,6 @@ export default function CloudPrivacyScreen() {
 
       <ProductAnalyticsConsentGroup />
 
-      {/* External links */}
       <SettingsGroup>
         <SettingsRow
           label="Privacy Policy"

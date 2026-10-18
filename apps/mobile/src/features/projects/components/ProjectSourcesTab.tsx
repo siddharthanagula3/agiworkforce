@@ -94,7 +94,6 @@ function SourceRow({
         borderColor: colors.border,
       }}
     >
-      {/* File icon */}
       <View
         className="w-9 h-9 rounded-lg items-center justify-center"
         style={{ backgroundColor: `${colors.teal}18` }}
@@ -102,7 +101,6 @@ function SourceRow({
         <FileText size={18} color={colors.teal} />
       </View>
 
-      {/* Name + meta */}
       <View className="flex-1">
         <Text
           className="text-[14px] font-medium"
@@ -116,7 +114,6 @@ function SourceRow({
         </Text>
       </View>
 
-      {/* Remove */}
       <PressableBox
         onPress={handleRemove}
         className="p-2 rounded-lg"
@@ -412,7 +409,6 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
 
   return (
     <View className="flex-1">
-      {/* Add sources button */}
       <View className="px-4 pt-4 pb-2">
         <PressableBox
           onPress={() => void handleAddSources()}

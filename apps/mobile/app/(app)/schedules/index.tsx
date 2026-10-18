@@ -206,7 +206,6 @@ export default function SchedulesScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <Header
         onBackPress={handleBack}
         onCreatePress={canCreateSchedule ? handleCreate : undefined}
@@ -229,7 +228,6 @@ export default function SchedulesScreen() {
         </PressableBox>
       ) : null}
 
-      {/* Error banner */}
       {error && (
         <View className="mx-4 mb-3 bg-red-500/10 rounded-lg p-3 flex-row items-center justify-between">
           <Text className="text-sm text-red-400 flex-1">{error}</Text>
@@ -328,7 +326,6 @@ export default function SchedulesScreen() {
         </View>
       ) : null}
 
-      {/* Schedule list or empty state */}
       {schedules.length === 0 ? (
         <EmptyState
           onCreatePress={handleCreate}

@@ -77,7 +77,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
         overflow: 'hidden',
       }}
     >
-      {/* Toggle header */}
       <PressableBox
         onPress={toggleExpanded}
         style={{
@@ -119,7 +118,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
         )}
       </PressableBox>
 
-      {/* Expandable source list */}
       <Animated.View style={listStyle}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 2 }}>
           {sources.map((source, index) => (
@@ -142,7 +140,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                     backgroundColor: pressed ? hoverBg : themeColors.transparent,
                   }}
                 >
-                  {/* Number badge */}
                   <View
                     style={{
                       width: 20,
@@ -165,7 +162,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                     </Text>
                   </View>
 
-                  {/* Source info */}
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Globe size={12} color={themeColors.textMuted} />
@@ -204,7 +200,6 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                     ) : null}
                   </View>
 
-                  {/* External link indicator */}
                   <ExternalLink size={12} color={themeColors.textMuted} style={{ marginTop: 3 }} />
                 </View>
               )}

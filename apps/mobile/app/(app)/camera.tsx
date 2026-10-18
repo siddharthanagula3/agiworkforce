@@ -251,10 +251,8 @@ export default function CameraScreen() {
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <View style={styles.previewContainer}>
-          {/* Captured photo fills screen */}
           <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
 
-          {/* Top controls */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
               <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
@@ -268,7 +266,6 @@ export default function CameraScreen() {
             </View>
           </SafeAreaView>
 
-          {/* Bottom prompt overlay */}
           <SafeAreaView style={styles.promptSafeArea} edges={['bottom']}>
             <View style={styles.promptContainer}>
               <TextInput
@@ -313,7 +310,6 @@ export default function CameraScreen() {
         onCameraReady={handleCameraReady}
       />
 
-      {/* Top bar: close + flash */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
           <PressableBox {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
@@ -372,7 +368,6 @@ export default function CameraScreen() {
         </Text>
       </View>
 
-      {/* Bottom: capture button */}
       <SafeAreaView style={styles.bottomBarSafeArea} edges={['bottom']}>
         <View style={styles.bottomBar}>
           <PressableBox

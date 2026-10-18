@@ -1704,7 +1704,6 @@ export default function ChatScreen() {
             borderBottomColor: colors.border,
           }}
         >
-          {/* Hamburger, opens drawer */}
           <Pressable
             onPress={handleOpenDrawer}
             hitSlop={6}
@@ -1722,7 +1721,6 @@ export default function ChatScreen() {
             <Menu size={18} color={colors.textSecondary} />
           </Pressable>
 
-          {/* Active project chip, tappable, navigates to project detail */}
           {conversationExecutionMode === 'local' && activeProjectId && activeProject ? (
             <Pressable
               onPress={() =>
@@ -1755,7 +1753,6 @@ export default function ChatScreen() {
             </Pressable>
           ) : null}
 
-          {/* ModeToggle, flex:1 ensures true center regardless of left/right widths */}
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
               mode={currentAppMode}
@@ -1766,7 +1763,6 @@ export default function ChatScreen() {
             />
           </View>
 
-          {/* Right side: new-chat + conversation menu */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />
             <Pressable
@@ -1804,7 +1800,6 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {/* Offline banner */}
         {!isOnline && conversationExecutionMode === 'cloud' && (
           <View
             style={{
@@ -1825,10 +1820,8 @@ export default function ChatScreen() {
           </View>
         )}
 
-        {/* Temporary chat explainer, shown once per app session */}
         <TemporaryChatBanner />
 
-        {/* Messages */}
         {isLoadingMessages && conversationMessages.length === 0 ? (
           <MessageSkeleton />
         ) : (
@@ -1856,7 +1849,6 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* Quoted reply bar */}
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
 
         {/* Context-budget warning. The component computes its own threshold and
@@ -1907,14 +1899,12 @@ export default function ChatScreen() {
           onDismiss={() => setDismissedUsageWarning(usageWarningKey)}
         />
 
-        {/* Named-provider consent gate, specific, with an inline opt-in */}
         <ProviderConsentBanner
           state={providerConsentError}
           onEnabled={handleProviderConsentEnabled}
           onDismiss={handleProviderConsentDismiss}
         />
 
-        {/* Send/stream failure banner with retry, surfaces store.error (was silent) */}
         <SendErrorBanner
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
@@ -1980,7 +1970,6 @@ export default function ChatScreen() {
           />
         )}
 
-        {/* Add to Chat bottom sheet */}
         <AddToChatSheet
           ref={addToChatRef}
           onCamera={handleSheetCamera}
@@ -1997,7 +1986,6 @@ export default function ChatScreen() {
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
-        {/* Picker modal only -- the trigger lives in the "+" sheet. */}
         <ProjectSelectorBar
           openSignal={projectPickerOpenSignal}
           {...(conversation && id
@@ -2039,7 +2027,6 @@ export default function ChatScreen() {
           onDismiss={handleVoicePickerDismiss}
         />
 
-        {/* The only voice presentation, identical to the new-chat tab's. */}
         <VoiceInlineBar
           visible={voiceInlineVisible}
           phase={inlineVoicePhase}
@@ -2064,7 +2051,6 @@ export default function ChatScreen() {
           onStartWorkTask={handleVoiceStartWorkTask}
         />
 
-        {/* Conversation export bottom sheet */}
         <ConversationExportSheet
           visible={exportSheetVisible}
           onClose={() => setExportSheetVisible(false)}
@@ -2080,7 +2066,6 @@ export default function ChatScreen() {
           onStartFreshChat={handleNewChat}
         />
 
-        {/* Billing recovery sheet, preserves upgrade/subscribe/inactive semantics. */}
         <PaywallBottomSheet
           ref={paywallSheetRef}
           feature={paywallError?.feature ?? 'token_cap'}
@@ -2094,7 +2079,6 @@ export default function ChatScreen() {
           onDismiss={clearPaywallError}
         />
 
-        {/* Mid-conversation mode-switch confirmation */}
         <ModeSwitchModal
           visible={modeSwitchState.visible}
           fromMode={modeSwitchState.fromMode}

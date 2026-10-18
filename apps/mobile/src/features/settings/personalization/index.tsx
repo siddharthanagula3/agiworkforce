@@ -380,7 +380,6 @@ export default function PersonalizationScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center justify-between px-3 h-12">
         <View className="flex-row items-center">
           <Pressable
@@ -420,7 +419,6 @@ export default function PersonalizationScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Text Fields */}
         <Card className="gap-4 mt-2">
           <LabeledInput
             label="Full Name"
@@ -511,7 +509,6 @@ export default function PersonalizationScreen() {
           />
         </Card>
 
-        {/* Response Style dials */}
         <View>
           <Text
             className="text-xs uppercase tracking-wider font-semibold mb-3 px-1"
@@ -544,7 +541,6 @@ export default function PersonalizationScreen() {
           </Text>
         </Pressable>
 
-        {/* Note */}
         <View
           className="mx-1 px-3 py-2.5 rounded-lg"
           style={{

@@ -228,7 +228,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         accessibilityRole="button"
       >
         <Card variant="elevated">
-          {/* Row 1: Name + Toggle */}
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-[15px] font-semibold text-white flex-1 mr-3" numberOfLines={1}>
               {schedule.name}
@@ -236,12 +235,10 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Switch value={schedule.isActive} onValueChange={() => onToggle(schedule.id)} />
           </View>
 
-          {/* Row 2: Prompt (truncated) */}
           <Text className="text-sm text-white/50 mb-2.5 leading-[18px]" numberOfLines={2}>
             {schedule.prompt}
           </Text>
 
-          {/* Row 3: Recurrence */}
           <View className="flex-row items-center gap-1.5 mb-2.5">
             <Clock size={13} color={colors.textMuted} />
             <Text className="text-xs text-white/60">{formatRecurrence(schedule)}</Text>
@@ -259,7 +256,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </Text>
           ) : null}
 
-          {/* Row 4: Model + Last run status */}
           <View className="flex-row items-center gap-2 mb-2">
             <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
@@ -270,7 +266,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             ) : null}
           </View>
 
-          {/* Footer: Next run + history toggle + delete */}
           <View className="flex-row items-center justify-between mt-1">
             <Text className="text-xs text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
@@ -288,7 +283,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 <Play size={11} color={colors.textMuted} />
                 <Text className="text-xs text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
               </PressableBox>
-              {/* History toggle */}
               <PressableBox
                 onPress={handleToggleHistory}
                 hitSlop={8}
@@ -321,7 +315,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </Text>
           ) : null}
 
-          {/* Expandable run history */}
           {historyExpanded && (
             <>
               <Separator className="mt-3 mb-3" />

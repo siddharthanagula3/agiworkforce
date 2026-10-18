@@ -485,7 +485,6 @@ export default function MemoryScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable
           onPress={() =>
@@ -554,7 +553,6 @@ export default function MemoryScreen() {
         </SettingsGroup>
       </View>
 
-      {/* Count subtitle */}
       <View className="px-4 mb-2 gap-0.5">
         <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
@@ -564,7 +562,6 @@ export default function MemoryScreen() {
         </Text>
       </View>
 
-      {/* Error banner */}
       {error && (
         <Animated.View entering={FadeIn.duration(motion.quick)} className="mx-4 mb-2">
           <View
@@ -592,7 +589,6 @@ export default function MemoryScreen() {
           memoryEnabled ? undefined : 'Memory is off. Saved memories are not used in chats.'
         }
       >
-        {/* Search bar */}
         <View
           className="mx-4 mb-3 flex-row items-center gap-2 rounded-xl px-3 py-2"
           style={{
@@ -626,7 +622,6 @@ export default function MemoryScreen() {
           )}
         </View>
 
-        {/* Category filter chips */}
         <View className="mb-3">
           <ScrollView
             horizontal
@@ -664,7 +659,6 @@ export default function MemoryScreen() {
           </ScrollView>
         </View>
 
-        {/* Memory list */}
         {loading && entries.length === 0 ? (
           <LoadingSkeleton colors={colors} />
         ) : displayedEntries.length === 0 ? (
@@ -708,7 +702,6 @@ export default function MemoryScreen() {
         )}
       </View>
 
-      {/* Floating action button */}
       {!addSheetOpen ? (
         <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: zIndex.control }}>
           <Pressable
@@ -732,7 +725,6 @@ export default function MemoryScreen() {
         </View>
       ) : null}
 
-      {/* Add/Edit bottom sheet */}
       <AddMemorySheet
         editingMemory={editingMemory}
         onClose={handleCloseEditor}

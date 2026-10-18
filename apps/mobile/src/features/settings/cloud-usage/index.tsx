@@ -698,7 +698,6 @@ export default function CloudUsageScreen() {
 
       {!isCloudModeActive && <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />}
 
-      {/* Live usage */}
       {isCloudModeActive && (
         <>
           {loading && !snapshot && (
@@ -830,7 +829,6 @@ export default function CloudUsageScreen() {
                 </>
               )}
 
-              {/* Primary card, percentage only, Claude-style */}
               <View
                 style={{
                   borderRadius: 14,
@@ -891,7 +889,6 @@ export default function CloudUsageScreen() {
                   />
                 </View>
 
-                {/* Footer, refresh */}
                 <View
                   style={{
                     padding: 12,

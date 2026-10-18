@@ -245,7 +245,6 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
 
   return (
     <Animated.View entering={FadeIn.duration(motion.quick)}>
-      {/* Section header */}
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-xs text-white/40 uppercase tracking-wider">Run History</Text>
         <Pressable
@@ -262,7 +261,6 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
         </Pressable>
       </View>
 
-      {/* Runs or empty state */}
       {loading && runs.length === 0 ? (
         <View className="py-3 items-center">
           <ActivityIndicator size="small" color={colors.textMuted} />

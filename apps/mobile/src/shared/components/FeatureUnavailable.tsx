@@ -26,7 +26,7 @@ function headingFor(reason: UnavailableReason, feature?: string): string {
   if (reason === 'permission') return `${named} needs permission you do not have`;
   if (reason === 'entitlement') return `${named} is not on your plan`;
   if (reason === 'policy') return `${named} is turned off for this workspace`;
-  return feature ? `${feature} isn’t available yet` : 'Not available in this version';
+  return feature ? `${feature} isn’t available in this build` : 'Not available in this version';
 }
 
 function bodyFor(reason: UnavailableReason): string {
@@ -39,7 +39,7 @@ function bodyFor(reason: UnavailableReason): string {
   if (reason === 'policy') {
     return 'An administrator turned it off for everyone here. Nothing you have already made is affected.';
   }
-  return 'This feature is coming in a future update. It isn’t enabled in this build.';
+  return 'It isn’t enabled in this build of the app.';
 }
 
 export function FeatureUnavailable({ feature, reason = 'unsupported' }: FeatureUnavailableProps) {

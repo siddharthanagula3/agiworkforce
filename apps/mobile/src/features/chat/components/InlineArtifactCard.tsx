@@ -169,7 +169,6 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         hasGeneratedFileManifest ? 'Tap for file details and download options' : 'Tap to expand'
       }
     >
-      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
@@ -217,7 +216,6 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         <ExternalLink size={12} color={colors.textMuted} />
       </View>
 
-      {/* Preview content */}
       <View
         style={{
           paddingHorizontal: 12,

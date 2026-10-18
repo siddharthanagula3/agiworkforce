@@ -221,7 +221,6 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
         )}
       </View>
 
-      {/* Project picker modal */}
       <Modal
         visible={dropdownVisible}
         transparent
@@ -300,7 +299,6 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
                 </Text>
               </View>
 
-              {/* Header */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -338,7 +336,6 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
                 </Pressable>
               </View>
 
-              {/* "No project" option */}
               <Pressable
                 onPress={() => {
                   setActiveProject(null);
@@ -382,7 +379,6 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
                 {!activeProjectId && <Check size={16} color={colors.textMuted} />}
               </Pressable>
 
-              {/* Project list */}
               <FlatList
                 data={projects}
                 keyExtractor={(item) => item.id}

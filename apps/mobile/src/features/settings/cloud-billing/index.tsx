@@ -198,11 +198,10 @@ export default function CloudBillingScreen() {
       : 'manage_billing';
   const paywallUnavailableMessage =
     paywallRecoveryAction === 'manage_billing'
-      ? "Billing management isn't available in the app yet. Please try again later."
-      : "Plan changes aren't available in the app yet. Check back soon.";
-  // Checklist rule 55: a plan change is either possible or it says so before the
-  // tap. A row that opens a sheet whose only content is an apology is the
-  // failure-after-effort this forbids (MOBILE-037).
+      ? "Billing management isn't available in this app right now. Try again later."
+      : "Plan changes aren't available in this app right now.";
+  // A plan change is either possible or says so before the tap, never as a sheet
+  // whose only content is an apology.
   const canChangePlanInApp = canBuyNativeSubscription || subscriptionGuard.blocked;
 
   const purchaseFromStore = useCallback(
@@ -348,7 +347,6 @@ export default function CloudBillingScreen() {
 
       {!isCloudModeActive && <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />}
 
-      {/* Current plan card */}
       <View
         style={{
           borderRadius: 14,
@@ -359,7 +357,6 @@ export default function CloudBillingScreen() {
           marginBottom: 18,
         }}
       >
-        {/* Plan header */}
         <View
           style={{
             padding: 14,
@@ -381,7 +378,6 @@ export default function CloudBillingScreen() {
           </Text>
         </View>
 
-        {/* Plan identity */}
         <View
           style={{
             padding: 16,
@@ -426,7 +422,6 @@ export default function CloudBillingScreen() {
           </View>
         </View>
 
-        {/* Action row */}
         <View
           style={{
             padding: 14,

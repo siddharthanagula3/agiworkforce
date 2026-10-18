@@ -160,7 +160,6 @@ export function ConversationExportSheet({
             onPress={() => undefined}
             accessible={false}
           >
-            {/* Header */}
             <View
               style={{
                 flexDirection: 'row',
@@ -192,7 +191,6 @@ export function ConversationExportSheet({
               </PressableBox>
             </View>
 
-            {/* Options */}
             <View style={{ paddingTop: 8, paddingBottom: 16 }}>
               {EXPORT_OPTIONS.map((option, index) => {
                 const isLoading = loadingKey === option.key;
@@ -242,7 +240,6 @@ export function ConversationExportSheet({
                           borderBottomColor: colors.border,
                         }}
                       >
-                        {/* Icon container */}
                         <View
                           style={{
                             width: 36,
@@ -264,7 +261,6 @@ export function ConversationExportSheet({
                           )}
                         </View>
 
-                        {/* Label + description */}
                         <View style={{ flex: 1 }}>
                           <Text
                             style={{

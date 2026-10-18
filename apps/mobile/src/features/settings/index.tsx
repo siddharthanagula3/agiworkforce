@@ -430,9 +430,6 @@ export default function SettingsTabScreen() {
 
   const cloudAccessTag = !isClerkLoaded ? 'Checking' : isClerkSignedIn ? 'Cloud' : 'Sign in';
   const accountValue = !isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in';
-  // One account state, one style. Three of the five Account rows drew it as a
-  // yellow pill, which reads as a status badge beside the same words in plain
-  // text on the other two.
   const accountStateValue = accountValue ?? 'Signed in';
 
   const sections = useMemo<SettingsSection[]>(
@@ -456,8 +453,6 @@ export default function SettingsTabScreen() {
             value: accountStateValue,
             onPress: openCloudRoute('/(app)/settings/account-security'),
           },
-          // Sole entry point to cloud-billing. A duplicate Cloud > Billing row
-          // reached the same screen behind a generic tag instead of the plan.
           {
             key: 'account-subscription',
             label: 'Subscription',
@@ -633,9 +628,6 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/cloud-connectors'),
           },
-          // Plugins remains unshipped on Mobile, so no dead-end settings row is
-          // rendered. Skills now has a supported top-level Cloud catalog in the
-          // drawer and is intentionally not duplicated as a settings control.
         ],
       },
       {

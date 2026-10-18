@@ -177,8 +177,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     expect(props).toMatchObject({
       recoveryAction: 'subscribe',
       onPrimaryAction: undefined,
-      primaryActionUnavailableMessage:
-        "Plan changes aren't available in the app yet. Check back soon.",
+      primaryActionUnavailableMessage: "Plan changes aren't available in this app right now.",
     });
   });
 
@@ -871,7 +870,7 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     const props = mockPaywallBottomSheet.mock.calls.at(-1)?.[0] as
       Record<string, unknown> | undefined;
     expect(props?.['primaryActionUnavailableMessage']).toBe(
-      "Plan changes aren't available in the app yet. Check back soon.",
+      "Plan changes aren't available in this app right now.",
     );
   });
 

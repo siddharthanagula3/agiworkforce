@@ -88,8 +88,8 @@ export default function NotificationCategoryDetailScreen({
       </SettingsGroup>
 
       <SettingsInfo
-        title="No hidden email preference"
-        body="Email delivery is not available yet, so this screen does not save a switch that nothing reads. It can be added after an account-bound sender and unsubscribe path ship."
+        title="No email for this category"
+        body="AGI does not send email for these notifications, so there is no email setting to change."
         icon={Mail}
       />
     </SettingsScreenShell>

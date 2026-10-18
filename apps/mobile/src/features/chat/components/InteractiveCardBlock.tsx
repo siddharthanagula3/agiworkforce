@@ -171,7 +171,6 @@ function MapTiles({
       })}
       style={{ height: FRAME_HEIGHT, overflow: 'hidden', backgroundColor: colors.surfaceOverlay }}
     >
-      {/* Origin pinned to the frame's centre; children carry signed offsets. */}
       <View style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
         {tiles.map((tile) => (
           <Image

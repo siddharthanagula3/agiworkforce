@@ -114,7 +114,7 @@ describe('notification category settings', () => {
 
     expect(screen.getByText('Task and approval updates')).toBeTruthy();
     expect(screen.getByLabelText('Email notifications. Unavailable')).toBeTruthy();
-    expect(screen.getByText('No hidden email preference')).toBeTruthy();
+    expect(screen.getByText('No email for this category')).toBeTruthy();
 
     fireEvent(screen.getByRole('switch'), 'valueChange', false);
 

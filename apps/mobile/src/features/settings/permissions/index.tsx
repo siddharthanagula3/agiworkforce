@@ -158,7 +158,6 @@ export default function PermissionsScreen() {
         </Text>
       </View>
 
-      {/* Permission card */}
       <View
         style={{
           borderRadius: 18,
@@ -179,7 +178,6 @@ export default function PermissionsScreen() {
         ))}
       </View>
 
-      {/* Footer info */}
       <View
         style={{
           marginTop: 16,
