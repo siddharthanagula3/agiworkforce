@@ -24,9 +24,6 @@ export function isLocalModelServerId(value: string): value is LocalModelServerId
   return (LOCAL_MODEL_SERVERS as readonly string[]).includes(value);
 }
 
-export const LOCAL_CHAT_TIMEOUT_DEFAULT_MS = 300_000;
-export const LOCAL_CHAT_TIMEOUT_MAX_MS = 1_800_000;
-
 /**
  * The prefix that separates a model running on this machine from every model
  * the managed catalogue publishes.

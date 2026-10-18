@@ -1,9 +1,7 @@
 import {
-  ConnectorConnectionSchema,
   ConnectorOAuthStartResponseSchema,
   ConnectorPolicyListsSchema,
   ConnectorPolicyResponseSchema,
-  ConnectorToolPermissionSchema,
   CreatedCustomConnectorSchema,
   CustomConnectorSchema,
   ListConnectorToolPermissionsResponseSchema,
@@ -57,12 +55,6 @@ const ConnectorPolicyBodySchema = ConnectorPolicyResponseSchema.pick({ configure
     }),
   });
 
-export function parseConnectedConnector(value: unknown): ConnectedConnector {
-  const parsed = ConnectorConnectionSchema.safeParse(value);
-  if (!parsed.success) throw new ConnectorResponseError(INVALID_CONNECTORS);
-  return parsed.data;
-}
-
 export interface ParsedConnectorList {
   connectors: ConnectedConnector[];
   available: string[];
@@ -82,12 +74,6 @@ export function parseConnectorPolicy(value: unknown): ConnectorAccessPolicy | nu
   const parsed = ConnectorPolicyBodySchema.safeParse(value);
   if (!parsed.success || parsed.data.configured === false) return null;
   return parsed.data.policy;
-}
-
-export function parseConnectorToolPermission(value: unknown): ConnectorToolPermission {
-  const parsed = ConnectorToolPermissionSchema.safeParse(value);
-  if (!parsed.success) throw new ConnectorResponseError(INVALID_PERMISSIONS);
-  return parsed.data;
 }
 
 export function parseConnectorToolPermissions(value: unknown): ConnectorToolPermission[] {

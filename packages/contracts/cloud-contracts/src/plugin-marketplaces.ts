@@ -85,12 +85,6 @@ export function isPluginMarketplaceContentHash(value: unknown): value is string 
 
 export type PluginMarketplaceSourceKind = 'repository' | 'upload' | 'authored';
 
-export const PLUGIN_MARKETPLACE_SOURCE_KINDS: readonly PluginMarketplaceSourceKind[] = [
-  'repository',
-  'upload',
-  'authored',
-] as const;
-
 export type PluginMarketplaceSourceStatus = 'active' | 'error';
 
 export const PLUGIN_MARKETPLACE_SOURCE_STATUSES: readonly PluginMarketplaceSourceStatus[] = [

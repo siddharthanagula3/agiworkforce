@@ -1,4 +1,4 @@
-export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect';
+export { isTauri, isCloudWeb, isTest } from './detect';
 
 export { resolveClientChatExecutionMode } from './mode';
 

@@ -53,11 +53,7 @@ export type RetryTelemetryEvent =
     };
 
 export type RetryStopReason =
-  | 'terminal'
-  | 'not-idempotent'
-  | 'attempts-exhausted'
-  | 'budget-exhausted'
-  | 'aborted';
+  'terminal' | 'not-idempotent' | 'attempts-exhausted' | 'budget-exhausted' | 'aborted';
 
 export class RetryStoppedError extends Error {
   constructor(
@@ -119,23 +115,6 @@ export function createRetryBudget(config: {
   };
 }
 
-const NAMED_BUDGETS = new Map<string, RetryBudget>();
-
-export function retryBudgetFor(
-  name: string,
-  config?: { capacity: number; refillPerSecond: number },
-): RetryBudget {
-  const existing = NAMED_BUDGETS.get(name);
-  if (existing) return existing;
-  const created = createRetryBudget(config ?? { capacity: 100, refillPerSecond: 10 });
-  NAMED_BUDGETS.set(name, created);
-  return created;
-}
-
-export function resetRetryBudgets(): void {
-  NAMED_BUDGETS.clear();
-}
-
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 const NEVER_SENT_PATTERNS =
@@ -155,8 +134,7 @@ function readNumber(value: unknown): number | undefined {
 
 function readStatus(error: unknown): number | undefined {
   const source = error as
-    | { status?: unknown; statusCode?: unknown; response?: { status?: unknown } }
-    | undefined;
+    { status?: unknown; statusCode?: unknown; response?: { status?: unknown } } | undefined;
   return (
     readNumber(source?.status) ??
     readNumber(source?.statusCode) ??

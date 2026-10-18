@@ -1,9 +1,4 @@
-export {
-  describePluginPermissionExpansion,
-  diffPluginPermissions,
-  normalizePluginPermissions,
-  pluginPermissionsExpand,
-} from './permissions';
+export { diffPluginPermissions, normalizePluginPermissions } from './permissions';
 export type { PluginPermissionDiff } from './permissions';
 
 export {

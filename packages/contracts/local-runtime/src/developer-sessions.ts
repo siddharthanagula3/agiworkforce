@@ -65,10 +65,6 @@ export const DEVELOPER_SESSION_COMMANDS = [
 
 export type DeveloperSessionCommand = (typeof DEVELOPER_SESSION_COMMANDS)[number];
 
-export function isDeveloperSessionCommand(value: string): value is DeveloperSessionCommand {
-  return (DEVELOPER_SESSION_COMMANDS as readonly string[]).includes(value);
-}
-
 /**
  * Which surface opened a session, as the CLI recorded it from the client name
  * given at `initialize`. This shell calls itself `agi-desktop`, which is what

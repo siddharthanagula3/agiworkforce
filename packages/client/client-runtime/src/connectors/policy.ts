@@ -127,19 +127,6 @@ export function evaluatePluginAccess(
   return ALLOWED;
 }
 
-/** True when the policy would deny at least one thing. */
-export function connectorPolicyRestrictsAnything(policy: ConnectorAccessPolicy | null): boolean {
-  if (!policy) return false;
-  return (
-    policy.allowedConnectors.length > 0 ||
-    policy.blockedConnectors.length > 0 ||
-    !policy.allowCustomConnectors ||
-    (policy.allowedPlugins?.length ?? 0) > 0 ||
-    (policy.blockedPlugins?.length ?? 0) > 0 ||
-    (policy.allowedMcpHosts?.length ?? 0) > 0
-  );
-}
-
 /**
  * `notResponding` ranks below reauthorization, whose expired grant is the
  * actionable cause, and above `connected`, which it contradicts.

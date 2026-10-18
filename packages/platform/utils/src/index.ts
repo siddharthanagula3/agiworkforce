@@ -74,8 +74,6 @@ export {
   classifyRetryError,
   computeRetryDelayMs,
   createRetryBudget,
-  retryBudgetFor,
-  resetRetryBudgets,
   readRetryAfterMs,
   RetryStoppedError,
   RetryAbortedError,

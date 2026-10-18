@@ -27,15 +27,3 @@ export function diffPluginPermissions(
   const removed = [...before].filter((permission) => !after.has(permission));
   return { added, removed, expands: added.length > 0 };
 }
-
-export function pluginPermissionsExpand(
-  approved: readonly string[] | null | undefined,
-  next: readonly string[] | null | undefined,
-): boolean {
-  return diffPluginPermissions(approved, next).expands;
-}
-
-export function describePluginPermissionExpansion(diff: PluginPermissionDiff): string {
-  if (!diff.expands) return 'This update does not ask for anything new.';
-  return `This update asks for permissions you have not approved: ${diff.added.join(', ')}.`;
-}

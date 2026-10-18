@@ -23,7 +23,6 @@ export type {
 } from './types';
 
 export {
-  connectorPolicyRestrictsAnything,
   evaluateConnectorAccess,
   evaluateMcpHostAccess,
   evaluatePluginAccess,
@@ -33,11 +32,9 @@ export {
 
 export {
   ConnectorResponseError,
-  parseConnectedConnector,
   parseConnectorList,
   parseConnectorOAuthStart,
   parseConnectorPolicy,
-  parseConnectorToolPermission,
   parseConnectorToolPermissions,
   parseCustomConnector,
 } from './parse';

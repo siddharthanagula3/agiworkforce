@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  connectorPolicyRestrictsAnything,
   evaluateConnectorAccess,
   evaluateMcpHostAccess,
   evaluatePluginAccess,
@@ -113,17 +112,6 @@ describe('evaluateConnectorAccess', () => {
   });
 });
 
-describe('connectorPolicyRestrictsAnything', () => {
-  it('reports a saved but permissive policy as governing nothing', () => {
-    expect(connectorPolicyRestrictsAnything(policy())).toBe(false);
-    expect(connectorPolicyRestrictsAnything(null)).toBe(false);
-  });
-
-  it('counts the custom-connector switch as a restriction', () => {
-    expect(connectorPolicyRestrictsAnything(policy({ allowCustomConnectors: false }))).toBe(true);
-  });
-});
-
 describe('evaluateMcpHostAccess', () => {
   it('matches exact hosts and strict subdomain wildcards', () => {
     expect(mcpHostMatches('mcp.corp.example', 'MCP.corp.example')).toBe(true);
@@ -159,7 +147,6 @@ describe('evaluateMcpHostAccess', () => {
         url: 'https://mcp.other.example/sse',
       }).allowed,
     ).toBe(true);
-    expect(connectorPolicyRestrictsAnything(restricted)).toBe(true);
   });
 });
 
