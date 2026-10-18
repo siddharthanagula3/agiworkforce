@@ -1,5 +1,6 @@
 'use client';
 
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@agiworkforce/ui';
 
@@ -37,7 +38,7 @@ const REFERENCE_LINKS = [
     description: 'Every model your plan can call, with its capabilities and context',
   },
   {
-    href: '/settings/usage',
+    href: settingsSectionPath('usage'),
     label: 'Usage',
     description: 'Credits used this period by chats and API calls',
   },

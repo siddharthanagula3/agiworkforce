@@ -95,3 +95,7 @@ export function resolveWebSettingsSection(value: string, hosted = false): string
 }
 
 export const SETTINGS_DEEP_LINK_QUERY_KEY = 'settings';
+
+export function settingsSectionPath(section: WebSettingsContentSection): string {
+  return `/settings/${section}`;
+}

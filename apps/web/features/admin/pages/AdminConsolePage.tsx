@@ -1,3 +1,4 @@
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import {
   Activity,
   BadgeDollarSign,
@@ -173,7 +174,7 @@ const ADMIN_CONTROLS: ReadonlyArray<{
   },
   {
     name: 'Enterprise SSO',
-    href: '/settings/team',
+    href: settingsSectionPath('team'),
     service: '/api/admin/sso',
     detail:
       'SAML and OIDC connections, DNS domain verification, and activation. Owner-only writes, gated on enterprise_controls.',

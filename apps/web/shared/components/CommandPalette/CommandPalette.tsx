@@ -1,5 +1,6 @@
 'use client';
 
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-space-available';
 import { usePathname, useRouter } from 'next/navigation';
@@ -219,7 +220,7 @@ function useCommands(
       title: 'Go to Settings',
       group: 'Actions',
       icon: Settings,
-      action: () => router.push('/settings/general'),
+      action: () => router.push(settingsSectionPath('general')),
     },
     {
       id: 'go-billing',

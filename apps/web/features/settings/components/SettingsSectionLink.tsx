@@ -2,6 +2,10 @@
 
 import Link from 'next/link';
 import {
+  settingsSectionPath,
+  type WebSettingsContentSection,
+} from '@/features/settings/lib/web-settings-sections';
+import {
   createContext,
   useContext,
   useMemo,
@@ -41,7 +45,7 @@ export function SettingsSectionLink({
   className,
   style,
 }: {
-  section: string;
+  section: WebSettingsContentSection;
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -50,7 +54,7 @@ export function SettingsSectionLink({
 
   if (!navigation) {
     return (
-      <Link href={`/settings/${section}`} className={className} style={style}>
+      <Link href={settingsSectionPath(section)} className={className} style={style}>
         {children}
       </Link>
     );

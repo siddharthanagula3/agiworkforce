@@ -1,5 +1,6 @@
 'use client';
 
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ShieldAlert } from 'lucide-react';
@@ -14,7 +15,7 @@ export const WORKSPACE_MFA_REQUIREMENT_QUERY_KEY = [
 ] as const;
 
 const REQUIREMENT_STALE_MS = 60_000;
-const ENROLLMENT_PATH = '/settings/security';
+const ENROLLMENT_PATH = settingsSectionPath('security');
 
 async function readWorkspaceMfaRequirement(): Promise<boolean> {
   const token = await getAuthToken();

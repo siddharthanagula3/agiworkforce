@@ -1,3 +1,4 @@
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import {
   buildVsCodeCloudTaskHandoffUri,
   buildVsCodeDeveloperSessionHandoffUri,
@@ -20,12 +21,12 @@ export const CODE_ROUTES = {
   root: CLOUD_CODE_PAGE_ROUTE,
   chat: '/chat',
   artifacts: '/chat/library?surface=artifact',
-  customize: '/settings/capabilities',
+  customize: settingsSectionPath('capabilities'),
   routines: '/chat/schedules',
   editorExtension: '/vscode-extension',
   desktop: '/download',
   connectors: '/connectors',
-  usage: '/settings/usage',
+  usage: settingsSectionPath('usage'),
   githubInstall: '/api/github/install/start',
 } as const;
 

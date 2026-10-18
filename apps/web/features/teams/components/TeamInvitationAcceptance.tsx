@@ -1,5 +1,6 @@
 'use client';
 
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/lib/identity/client';
 import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
@@ -148,7 +149,11 @@ export function TeamInvitationAcceptance() {
                 </div>
                 {completion.action === 'accept' ? (
                   <ButtonRow>
-                    <a href="/settings/team" className="agi-ds-btn" data-variant="primary">
+                    <a
+                      href={settingsSectionPath('team')}
+                      className="agi-ds-btn"
+                      data-variant="primary"
+                    >
                       Open team settings
                     </a>
                   </ButtonRow>

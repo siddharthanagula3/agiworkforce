@@ -1,5 +1,6 @@
 'use client';
 
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import Link from 'next/link';
 import {
   getBillingPlanPricing,
@@ -155,7 +156,7 @@ export function WorkspaceBillingSummary() {
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/settings/billing"
+              href={settingsSectionPath('billing')}
               className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
             >

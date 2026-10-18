@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildFreeTrialPaywallSlot, useFreeTrialStore } from './freeTrialStore';
+import { isFreeTrialErrorCode, useFreeTrialStore } from './freeTrialStore';
 
 describe('free trial client state', () => {
   beforeEach(() => {
@@ -21,7 +21,11 @@ describe('free trial client state', () => {
     expect(useFreeTrialStore.getState().limitReached).toBe(false);
   });
 
-  it('offers the shared Basic tier when free hosted usage is exhausted', () => {
-    expect(buildFreeTrialPaywallSlot('free_trial_token_budget_reached').requiredTier).toBe('basic');
+  it('recognises exactly the free-trial quota codes the billing catalog defines', () => {
+    expect(isFreeTrialErrorCode('free_trial_token_budget_reached')).toBe(true);
+    expect(isFreeTrialErrorCode('free_trial_model_only')).toBe(true);
+    expect(isFreeTrialErrorCode('free_trial_feature_unavailable')).toBe(true);
+    expect(isFreeTrialErrorCode('rate_limited')).toBe(false);
+    expect(isFreeTrialErrorCode(undefined)).toBe(false);
   });
 });

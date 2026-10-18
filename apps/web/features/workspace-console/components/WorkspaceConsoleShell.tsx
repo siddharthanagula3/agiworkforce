@@ -1,3 +1,4 @@
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Building2, AlertTriangle, Lock } from 'lucide-react';
@@ -77,7 +78,7 @@ export function WorkspaceConsoleShell({
         icon={<Building2 aria-hidden className="h-5 w-5" />}
         title="No workspace selected"
         body="This console administers a shared workspace. You are currently in your personal account, which has no members, roles, or shared resources to administer. Switch to a workspace, or create one from Team settings."
-        action={<PrimaryLink href="/settings/team">Go to Team settings</PrimaryLink>}
+        action={<PrimaryLink href={settingsSectionPath('team')}>Go to Team settings</PrimaryLink>}
       />
     );
   }
