@@ -12,7 +12,6 @@ import {
   describeArtifactFailure,
 } from './artifactPresentation';
 
-export const ARTIFACTS_VIEW_ID = 'agi-workforce.artifacts';
 export const ARTIFACTS_REFRESH_INTERVAL_MS = 60_000;
 const ARTIFACTS_PAGE_LIMIT = 100;
 

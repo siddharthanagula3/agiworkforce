@@ -1696,10 +1696,10 @@ export function getSettingsWebviewContent(
             </div>
             <div class="setting-row">
               <div>
-                <label class="setting-name" for="setting-telemetry">Share usage events and crash reports</label>
-                <span class="setting-description">Send product usage events, such as a stopped response or an accepted edit, to your AGI account when its product analytics choice allows them, and scrubbed crash reports. Never your prompts, code or file names.</span>
+                <label class="setting-name" for="setting-telemetry">Share usage events</label>
+                <span class="setting-description">Send product usage events, such as a stopped response or an accepted edit, to your AGI account when its product analytics choice allows them. Never your prompts, code or file names.</span>
               </div>
-              <label class="toggle" title="Usage events and crash reports">
+              <label class="toggle" title="Usage events">
                 <input
                   id="setting-telemetry"
                   data-setting="telemetryEnabled"
@@ -1708,21 +1708,6 @@ export function getSettingsWebviewContent(
                 />
                 <span class="toggle-track" aria-hidden="true"></span>
               </label>
-            </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-telemetry-endpoint">Telemetry endpoint</label>
-                <span class="setting-description">User-scoped destination for extension telemetry.</span>
-              </div>
-              <input
-                class="text-input"
-                id="setting-telemetry-endpoint"
-                data-setting="telemetryEndpoint"
-                data-kind="string"
-                type="url"
-                autocomplete="off"
-                spellcheck="false"
-              />
             </div>
             <div class="setting-row">
               <div>
@@ -2024,7 +2009,6 @@ ${capabilityAvailabilityRows}
           'agent.mode': 'Agent mode',
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
-          telemetryEndpoint: 'Telemetry endpoint',
           activateOnStartup: 'Startup connection'
         };
 

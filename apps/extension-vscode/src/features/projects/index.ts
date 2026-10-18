@@ -1,7 +1,6 @@
 export {
   OPEN_PROJECT_COMMAND,
   PROJECTS_REFRESH_INTERVAL_MS,
-  PROJECTS_VIEW_ID,
   ProjectTreeItem,
   ProjectsTreeProvider,
   REFRESH_PROJECTS_COMMAND,

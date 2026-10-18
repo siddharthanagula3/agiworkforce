@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
-import * as telemetry from './telemetry';
 import { trackProductEvent } from '../features/analytics/productAnalytics';
 import {
   classifyCloudUtilityFailure,
@@ -126,7 +125,6 @@ export async function runInlineCommand(
 
   if (failure === undefined) return;
   if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
-  telemetry.logError(failure instanceof Error ? failure : String(failure), { command });
   await showCloudUtilityErrorActions(failure, {
     title: `AGI Workforce: ${commandLabel(command)} failed`,
     retry: () => runInlineCommand(context, command, targetRange),

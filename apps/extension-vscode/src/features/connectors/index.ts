@@ -1,6 +1,5 @@
 export {
   CONNECTORS_REFRESH_INTERVAL_MS,
-  CONNECTORS_VIEW_ID,
   ConnectorTreeItem,
   ConnectorsTreeProvider,
   MANAGE_CONNECTORS_COMMAND,

@@ -12,7 +12,6 @@ import {
   projectTooltipLines,
 } from './projectPresentation';
 
-export const PROJECTS_VIEW_ID = 'agi-workforce.projects';
 export const PROJECTS_REFRESH_INTERVAL_MS = 60_000;
 
 export const OPEN_PROJECT_COMMAND = 'agi-workforce.openProject';

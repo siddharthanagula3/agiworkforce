@@ -7,7 +7,6 @@ import {
   cloudRunTooltipLines,
 } from './cloudRunPresentation';
 
-export const CLOUD_TASKS_VIEW_ID = 'agi-workforce.cloudTasks';
 export const CLOUD_TASKS_REFRESH_INTERVAL_MS = 15_000;
 const CLOUD_TASKS_PAGE_LIMIT = 25;
 

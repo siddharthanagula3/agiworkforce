@@ -22,7 +22,6 @@ const validValues: MutableConfigValues = {
   'agent.mode': 'auto',
   'agent.effort': 'medium',
   'agent.thinking': false,
-  telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
 };
 
 describe('settings webview protocol', () => {

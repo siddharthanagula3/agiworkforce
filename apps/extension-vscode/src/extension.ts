@@ -46,8 +46,6 @@ import {
 import { setupCommands } from './core/commandSetup';
 import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostNotices';
 import { markInUse, whenInUse } from './core/startupWork';
-import * as telemetry from './core/telemetry';
-import { installGlobalErrorReporting } from './core/errorReporting';
 import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
@@ -85,13 +83,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   initSubsystemHealth(context);
 
-  runBoot('telemetry', () => {
-    context.subscriptions.push(telemetry.activate(context));
+  runBoot('product-analytics', () => {
     context.subscriptions.push(activateProductAnalytics(context));
-  });
-
-  runBoot('error-reporting', () => {
-    context.subscriptions.push(installGlobalErrorReporting());
   });
 
   runBoot('model-metrics', () => {

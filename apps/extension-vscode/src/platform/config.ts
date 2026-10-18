@@ -46,7 +46,6 @@ export interface MutableConfigValues {
   'agent.mode': ExtensionAgentMode;
   'agent.effort': ExtensionAgentEffort;
   'agent.thinking': boolean;
-  telemetryEndpoint: string;
   activateOnStartup: boolean;
 }
 
@@ -79,7 +78,6 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'composer.followUpBehavior',
   'editorContext.autoAttach',
   'respectGitIgnore',
-  'telemetryEndpoint',
   'activateOnStartup',
 ] as const satisfies readonly MutableConfigKey[];
 
@@ -108,7 +106,6 @@ const DEFAULTS = {
   editorContextAutoAttach: true,
   respectGitIgnore: true,
   telemetryEnabled: false,
-  telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   currentTier: 'unknown',
   cliPath: 'agi',
   activateOnStartup: false,
@@ -203,9 +200,6 @@ export const Config = {
   telemetryEnabled(): boolean {
     return getUserScoped<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
   },
-  telemetryEndpoint(): string {
-    return getUserScoped<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
-  },
 
   currentTier(): string {
     const inspected = vscode.workspace
@@ -243,7 +237,6 @@ export const Config = {
         'agent.mode': this.agentMode(),
         'agent.effort': this.agentEffort(),
         'agent.thinking': this.agentThinking(),
-        telemetryEndpoint: this.telemetryEndpoint(),
         activateOnStartup: this.activateOnStartup(),
         currentTier: this.currentTier(),
         currentTierLabel: currentTierLabel(this.currentTier()),

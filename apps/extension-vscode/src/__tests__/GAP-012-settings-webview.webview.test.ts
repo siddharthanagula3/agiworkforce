@@ -24,7 +24,6 @@ const initialState: SettingsPanelState = {
     'agent.mode': 'auto',
     'agent.effort': 'medium',
     'agent.thinking': false,
-    telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
     currentTier: 'pro',
   },
   workspaceOverrides: [],

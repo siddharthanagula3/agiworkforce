@@ -38,7 +38,7 @@ import {
   MINIMUM_API_VERSION_RESPONSE_HEADER,
   type EffectiveCapabilityDocumentWire,
 } from '@agiworkforce/cloud-contracts';
-import { Config } from '../platform/config';
+import { Config, __CONFIG_DEFAULTS } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export interface LlmChatMessage {
@@ -183,7 +183,7 @@ const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
-const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
+const DEFAULT_ENDPOINT = __CONFIG_DEFAULTS.apiEndpoint;
 
 export async function getApiKey(secrets: vscode.SecretStorage): Promise<string | undefined> {
   return secrets.get(SECRET_KEY);
@@ -389,15 +389,8 @@ export function validateEndpointUrl(raw: string): string | undefined {
   return raw.replace(/\/+$/, '');
 }
 
-function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
-  const config = vscode.workspace.getConfiguration(section);
-  const inspected = config.inspect<T>(key);
-  return inspected?.globalValue ?? inspected?.defaultValue ?? defaultValue;
-}
-
 function getCloudApiEndpoint(): string {
-  const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
-  return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
+  return validateEndpointUrl(Config.apiEndpoint()) ?? DEFAULT_ENDPOINT;
 }
 
 export function getCloudWebOrigin(): string {
@@ -413,9 +406,7 @@ export function getCloudGatewayOrigin(): string {
 }
 
 function getModel(): string {
-  return normalizeConfiguredModelId(
-    getGlobalConfig<string | undefined>('agiWorkforce', 'model', undefined),
-  );
+  return normalizeConfiguredModelId(Config.model());
 }
 
 export function buildCloudUtilityChatCompletionRequest(

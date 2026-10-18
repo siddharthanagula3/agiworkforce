@@ -142,7 +142,10 @@ import {
   openSchedulesSurface,
   openWorkSurface,
 } from '../features/surfaces';
-import { signIn as signInPreferringCli } from '../features/surfaces/accountAccess';
+import {
+  resolveAccountPresence,
+  signIn as signInPreferringCli,
+} from '../features/surfaces/accountAccess';
 import { rememberForRepository } from '../features/surfaces/repositoryMemory';
 import {
   manageSessionWorktrees,
@@ -217,7 +220,7 @@ import { exportVsCodeDiagnostics } from '../features/diagnostics';
 
 const execFileAsync = promisify(execFile);
 
-const UPGRADE_URL = 'https://agiworkforce.com/pricing';
+const upgradeUrl = (): string => `${getCloudWebOrigin()}/pricing`;
 const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
@@ -763,7 +766,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       return;
     }
     if (lock.kind === 'upgrade') {
-      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
+      await vscode.env.openExternal(vscode.Uri.parse(upgradeUrl()));
       return;
     }
     await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
@@ -1136,7 +1139,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.openUpgrade', async () => {
-      await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
+      await vscode.env.openExternal(vscode.Uri.parse(upgradeUrl()));
     }),
 
     register('agi-workforce.openReferrals', async () => {
@@ -1252,7 +1255,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           'Cancel',
         );
         if (choice === 'Upgrade') {
-          await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
+          await vscode.env.openExternal(vscode.Uri.parse(upgradeUrl()));
         }
         return;
       }
@@ -2080,6 +2083,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           counter.settleQueuedBilling(context.secrets),
         ]);
       const accountToken = await getAccountToken(context.secrets);
+      const cliAccount =
+        accountToken === undefined
+          ? await resolveAccountPresence(context.secrets, cliCapabilities)
+          : undefined;
       const authInvalidated = capturedAccountToken !== undefined && accountToken === undefined;
       if (authInvalidated || accountToken === undefined) {
         await clearAccountTierCache(context);
@@ -2279,6 +2286,32 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: "Cloud connectors do not replace this workspace's local MCP configuration",
           action: 'connectors',
         });
+      } else if (cliAccount?.source === 'cli') {
+        const cliPlan = planDisplayLabel(cliAccount.cli?.tier);
+        items.push(
+          {
+            label: '$(verified-filled) AGI Cloud connected',
+            description: [cliAccount.cli?.email ?? 'AGI CLI account', cliPlan]
+              .filter((part) => part !== undefined)
+              .join(' · '),
+            detail: 'Signed in through the AGI CLI on this machine',
+          },
+          {
+            label: '$(sign-out) Sign out of AGI Cloud',
+            description: 'Sign out the AGI CLI on this machine',
+            action: 'sign-out',
+          },
+          {
+            label: '$(graph) Manage Cloud usage on Web',
+            description: 'Plan usage, reset windows, and billing details',
+            action: 'manage-usage',
+          },
+          {
+            label: '$(credit-card) Manage billing & subscription',
+            description: 'Invoices, payment method, and subscription controls',
+            action: 'manage-billing',
+          },
+        );
       } else {
         items.push({
           label: '$(cloud) Sign in to AGI Cloud',
@@ -2323,11 +2356,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await vscode.commands.executeCommand('agi-workforce.comparePlans');
       } else if (pick?.action === 'manage-usage') {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/settings/usage?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/usage?from=vscode-extension`),
         );
       } else if (pick?.action === 'manage-billing') {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/billing?from=vscode-extension`),
         );
       } else if (pick?.action === 'add-credits') {
         await vscode.env.openExternal(
@@ -2337,17 +2370,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       } else if (pick?.action === 'connectors') {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/connectors?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/connectors?from=vscode-extension`),
         );
       } else if (pick?.action === 'teams') {
         const teamsPath =
           tier === 'team' || tier === 'enterprise'
-            ? 'https://agiworkforce.com/settings/team?from=vscode-extension'
-            : 'https://agiworkforce.com/teams?from=vscode-extension';
+            ? `${getCloudWebOrigin()}/settings/team?from=vscode-extension`
+            : `${getCloudWebOrigin()}/teams?from=vscode-extension`;
         await vscode.env.openExternal(vscode.Uri.parse(teamsPath));
       } else if (pick?.action === 'permission-docs') {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/docs?topic=permissions&from=vscode-extension`),
         );
       } else if (pick?.action === 'edit-profile') {
         await vscode.env.openExternal(
@@ -2355,7 +2388,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       } else if (pick?.action === 'privacy-settings') {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/settings/privacy?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/privacy?from=vscode-extension`),
         );
       } else if (pick?.action === 'reset-counter') {
         counter.reset();

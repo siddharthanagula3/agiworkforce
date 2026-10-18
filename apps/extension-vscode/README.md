@@ -122,7 +122,7 @@ The most used ones:
 | `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
 | `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
-| `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events and crash reports, also subject to VS Code's own telemetry setting.         |
+| `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
 
 Run **AGI Workforce: Open Settings** for the full list with inline
 explanations.

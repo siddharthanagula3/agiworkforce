@@ -207,11 +207,11 @@ async function showPaywallActions(
       feature: error.feature,
     });
     await vscode.env.openExternal(
-      vscode.Uri.parse(`https://agiworkforce.com/pricing?${query.toString()}`),
+      vscode.Uri.parse(`${getCloudWebOrigin()}/pricing?${query.toString()}`),
     );
   } else if (choice === 'Manage billing') {
     await vscode.env.openExternal(
-      vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension-paywall'),
+      vscode.Uri.parse(`${getCloudWebOrigin()}/settings/billing?from=vscode-extension-paywall`),
     );
   }
 }

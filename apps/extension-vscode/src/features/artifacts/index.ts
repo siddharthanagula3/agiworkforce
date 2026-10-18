@@ -1,6 +1,5 @@
 export {
   ARTIFACTS_REFRESH_INTERVAL_MS,
-  ARTIFACTS_VIEW_ID,
   ArtifactTreeItem,
   ArtifactsTreeProvider,
   OPEN_ARTIFACT_COMMAND,

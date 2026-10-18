@@ -10,7 +10,6 @@ import {
   pendingConnectorDescription,
 } from './connectorPresentation';
 
-export const CONNECTORS_VIEW_ID = 'agi-workforce.connectors';
 export const CONNECTORS_REFRESH_INTERVAL_MS = 120_000;
 
 export const MANAGE_CONNECTORS_COMMAND = 'agi-workforce.manageConnectors';
@@ -21,8 +20,7 @@ export interface ConnectorListClient {
 }
 
 export type ConnectorListClientResolution =
-  | { status: 'ready'; client: ConnectorListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ConnectorListClient } | { status: 'signed-out' };
 
 export function connectorsWebUrl(webOrigin: string): string {
   return `${webOrigin}/settings/connectors?from=vscode-extension`;

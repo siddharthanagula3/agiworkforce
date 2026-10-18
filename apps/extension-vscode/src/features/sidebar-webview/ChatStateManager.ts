@@ -1224,21 +1224,21 @@ export class ChatStateManager {
 
       case 'openPermissionDocs': {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/docs?topic=permissions&from=vscode-extension`),
         );
         break;
       }
 
       case 'openHelp': {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/help?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/help?from=vscode-extension`),
         );
         break;
       }
 
       case 'openPrivacySettings': {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/settings/privacy?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/privacy?from=vscode-extension`),
         );
         break;
       }
@@ -1483,13 +1483,13 @@ export class ChatStateManager {
       }
 
       case 'upgradeClicked': {
-        await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+        await vscode.env.openExternal(vscode.Uri.parse(`${getCloudWebOrigin()}/pricing`));
         break;
       }
 
       case 'manageBilling': {
         await vscode.env.openExternal(
-          vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension'),
+          vscode.Uri.parse(`${getCloudWebOrigin()}/settings/billing?from=vscode-extension`),
         );
         break;
       }

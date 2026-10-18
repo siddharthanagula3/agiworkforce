@@ -54,7 +54,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, CLI path, model boundary, auto-apply, telemetry endpoint, startup connection, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, auto-apply, startup connection, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
@@ -62,7 +62,6 @@
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
-        "agiWorkforce.telemetryEndpoint",
         "agiWorkforce.activateOnStartup"
       ]
     },
@@ -1198,7 +1197,7 @@
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI Workforce account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them, and scrubbed crash reports. Also subject to VS Code's telemetry setting."
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI Workforce account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting."
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
@@ -1279,12 +1278,6 @@
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
-        },
-        "agiWorkforce.telemetryEndpoint": {
-          "type": "string",
-          "default": "https://telemetry.agiworkforce.com/v1/events",
-          "scope": "machine",
-          "description": "Endpoint URL for scrubbed crash reports"
         },
         "agiWorkforce.currentTier": {
           "type": "string",

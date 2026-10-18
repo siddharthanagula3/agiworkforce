@@ -13,8 +13,6 @@ declare function suite(name: string, fn: () => void): void;
 declare function test(name: string, fn: () => void | Promise<void>): void;
 declare function suiteSetup(fn: () => void | Promise<void>): void;
 
-const CLOUD_TASKS_VIEW_ID = 'agi-workforce.cloudTasks';
-
 const TWO_MINUTES_MS = 120_000;
 
 const RUN = {
@@ -49,10 +47,7 @@ suite('AGI Workforce cloud tasks', () => {
     if (!extension.isActive) await extension.activate();
   });
 
-  test('the cloud tasks view is contributed and its commands are registered', async () => {
-    await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
-    await vscode.commands.executeCommand(`${CLOUD_TASKS_VIEW_ID}.focus`);
-
+  test('the cloud tasks commands are registered', async () => {
     const commands = await vscode.commands.getCommands(true);
     for (const command of [
       'agi-workforce.showCloudTasks',

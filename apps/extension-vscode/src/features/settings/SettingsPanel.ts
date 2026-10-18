@@ -5,6 +5,7 @@ import {
   fetchTierInfo,
   fetchUsageHistory,
   getAccountAuthState,
+  getCloudWebOrigin,
   type TierInfo,
   type UsageHistoryResult,
 } from '../../utils/api';
@@ -39,18 +40,17 @@ import {
 } from '../instructions';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 
-const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
-  manageUsage: 'https://agiworkforce.com/settings/usage?from=vscode-extension',
-  manageBilling: 'https://agiworkforce.com/settings/billing?from=vscode-extension',
-  viewPlans: 'https://agiworkforce.com/pricing?from=vscode-extension',
-  manageConnectors: 'https://agiworkforce.com/connectors?from=vscode-extension',
-  manageTeam: 'https://agiworkforce.com/teams?from=vscode-extension',
-  openDocs: 'https://agiworkforce.com/docs?from=vscode-extension',
-  openConfigDocs: 'https://agiworkforce.com/docs?topic=configuration&from=vscode-extension',
-  openInstructionDocs:
-    'https://agiworkforce.com/docs?topic=custom-instructions&from=vscode-extension',
-  openPrivacySettings: 'https://agiworkforce.com/settings/privacy?from=vscode-extension',
-  openSubprocessors: 'https://agiworkforce.com/subprocessors?from=vscode-extension',
+const EXTERNAL_DESTINATION_PATHS: Partial<Record<SettingsCommand, string>> = {
+  manageUsage: '/settings/usage?from=vscode-extension',
+  manageBilling: '/settings/billing?from=vscode-extension',
+  viewPlans: '/pricing?from=vscode-extension',
+  manageConnectors: '/connectors?from=vscode-extension',
+  manageTeam: '/teams?from=vscode-extension',
+  openDocs: '/docs?from=vscode-extension',
+  openConfigDocs: '/docs?topic=configuration&from=vscode-extension',
+  openInstructionDocs: '/docs?topic=custom-instructions&from=vscode-extension',
+  openPrivacySettings: '/settings/privacy?from=vscode-extension',
+  openSubprocessors: '/subprocessors?from=vscode-extension',
 };
 
 function buildPlanUsage(tierInfo: TierInfo, accountPlanName?: string): SettingsPlanUsage {
@@ -277,9 +277,9 @@ export class SettingsPanel {
 
   private async runCommand(command: SettingsCommand): Promise<void> {
     try {
-      const destination = EXTERNAL_DESTINATIONS[command];
-      if (destination !== undefined) {
-        await vscode.env.openExternal(vscode.Uri.parse(destination));
+      const destinationPath = EXTERNAL_DESTINATION_PATHS[command];
+      if (destinationPath !== undefined) {
+        await vscode.env.openExternal(vscode.Uri.parse(`${getCloudWebOrigin()}${destinationPath}`));
         return;
       }
 

@@ -9,7 +9,6 @@ import {
   scheduleTooltipLines,
 } from './schedulePresentation';
 
-export const SCHEDULES_VIEW_ID = 'agi-workforce.schedules';
 export const SCHEDULES_REFRESH_INTERVAL_MS = 30_000;
 const SCHEDULES_PAGE_LIMIT = 25;
 
@@ -25,8 +24,7 @@ export interface ScheduleListClient {
 }
 
 export type ScheduleListClientResolution =
-  | { status: 'ready'; client: ScheduleListClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ScheduleListClient } | { status: 'signed-out' };
 
 export class ScheduleTreeItem extends vscode.TreeItem {
   constructor(readonly task: ManagedCloudScheduleTask) {

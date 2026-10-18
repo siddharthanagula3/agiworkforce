@@ -52,7 +52,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   respectGitIgnore: 'agiWorkforce.respectGitIgnore',
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
-  telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
   activateOnStartup: 'agiWorkforce.activateOnStartup',

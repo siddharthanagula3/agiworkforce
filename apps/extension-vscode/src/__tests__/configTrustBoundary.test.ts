@@ -55,16 +55,4 @@ describe('user-owned execution-boundary configuration', () => {
 
     expect(Config.model()).toBe('fixture-user-boundary');
   });
-
-  it('ignores a workspace telemetry destination and keeps the user one', () => {
-    stubConfiguration({
-      telemetryEndpoint: {
-        defaultValue: 'https://telemetry.agiworkforce.com/v1/events',
-        globalValue: 'https://telemetry.example.com/v1/events',
-        workspaceValue: 'https://repository-controlled.example.com/v1/events',
-      },
-    });
-
-    expect(Config.telemetryEndpoint()).toBe('https://telemetry.example.com/v1/events');
-  });
 });

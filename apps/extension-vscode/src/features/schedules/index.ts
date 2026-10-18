@@ -2,7 +2,6 @@ export {
   OPEN_SCHEDULE_COMMAND,
   REFRESH_SCHEDULES_COMMAND,
   SCHEDULES_REFRESH_INTERVAL_MS,
-  SCHEDULES_VIEW_ID,
   ScheduleTreeItem,
   SchedulesTreeProvider,
   readScheduleCommandArgument,
