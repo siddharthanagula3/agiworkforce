@@ -3300,7 +3300,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"agiworkforce\""
+          "text": "\"name\": \"AGI Workforce\""
         },
         {
           "kind": "test",

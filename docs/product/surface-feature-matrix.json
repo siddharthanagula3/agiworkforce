@@ -192,7 +192,7 @@
         "chrome": {
           "state": "present",
           "via": "import",
-          "entry": "apps/extension/src/features/side-panel/projectsDrawer.ts",
+          "entry": "apps/extension/src/features/cloud-bridge/projectsClient.ts",
           "mount": "apps/extension/src/side_panel.ts"
         },
         "api": {
@@ -242,7 +242,7 @@
         "chrome": {
           "state": "present",
           "via": "import",
-          "entry": "apps/extension/src/features/side-panel/artifactsDrawer.ts",
+          "entry": "apps/extension/src/features/side-panel/artifactPanel.ts",
           "mount": "apps/extension/src/side_panel.ts"
         },
         "api": {
@@ -1792,7 +1792,7 @@
           "state": "present",
           "via": "import",
           "entry": "apps/extension/src/features/side-panel/schedulesSection.ts",
-          "mount": "apps/extension/src/features/side-panel/cloudRunsPanel.ts"
+          "mount": "apps/extension/src/options.ts"
         },
         "api": {
           "state": "present",

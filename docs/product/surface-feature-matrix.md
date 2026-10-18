@@ -176,7 +176,7 @@ this document.
 - **mobile**: present. `apps/mobile/app/(app)/(tabs)/projects.tsx`, reached by `apps/mobile/app/(app)/(tabs)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/cloud/projects.rs`, reached by `apps/cli/src/cloud/mod.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/features/projects/projectsTree.ts`, reached by `apps/extension-vscode/src/features/projects/index.ts` (import).
-- **chrome**: present. `apps/extension/src/features/side-panel/projectsDrawer.ts`, reached by `apps/extension/src/side_panel.ts` (import).
+- **chrome**: present. `apps/extension/src/features/cloud-bridge/projectsClient.ts`, reached by `apps/extension/src/side_panel.ts` (import).
 - **api**: present. `apps/web/app/api/projects/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 
 ### Files and artifacts
@@ -186,7 +186,7 @@ this document.
 - **mobile**: present. `apps/mobile/app/(app)/artifacts/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/cloud/artifacts.rs`, reached by `apps/cli/src/cloud/mod.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/features/artifacts/artifactsTree.ts`, reached by `apps/extension-vscode/src/features/artifacts/index.ts` (import).
-- **chrome**: present. `apps/extension/src/features/side-panel/artifactsDrawer.ts`, reached by `apps/extension/src/side_panel.ts` (import).
+- **chrome**: present. `apps/extension/src/features/side-panel/artifactPanel.ts`, reached by `apps/extension/src/side_panel.ts` (import).
 - **api**: present. `apps/web/app/api/artifacts/index/route.ts`, reached by `apps/web/app/layout.tsx` (route).
 
 ### Library
@@ -546,7 +546,7 @@ this document.
 - **mobile**: present. `apps/mobile/app/(app)/schedules/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: present. `apps/cli/src/schedules.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: present. `apps/extension-vscode/src/features/schedules/schedulesTree.ts`, reached by `apps/extension-vscode/src/features/schedules/index.ts` (import).
-- **chrome**: present. `apps/extension/src/features/side-panel/schedulesSection.ts`, reached by `apps/extension/src/features/side-panel/cloudRunsPanel.ts` (import).
+- **chrome**: present. `apps/extension/src/features/side-panel/schedulesSection.ts`, reached by `apps/extension/src/options.ts` (import).
 - **api**: present. `apps/web/lib/services/schedule-service.ts`, reached by `apps/web/app/api/schedules/route.ts` (import).
 
 ### Hooks
