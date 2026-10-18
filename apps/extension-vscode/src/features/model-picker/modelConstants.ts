@@ -604,6 +604,4 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
   ),
 };
 
-export const CHARS_PER_TOKEN = 4;
-
 export { DEFAULT_CONTEXT_LIMIT };

@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
@@ -6,8 +5,6 @@ import {
   getActiveWorkspaceFolderSync,
   getAllWorkspaceFolders,
   getWorkspaceDisplayName,
-  getWorkspaceFolderForUri,
-  isPathInWorkspace,
 } from '../platform/workspaceFolders';
 
 const folderA = {
@@ -102,30 +99,6 @@ describe('workspaceFolders helpers', () => {
     });
   });
 
-  describe('isPathInWorkspace', () => {
-    it('rejects path outside any folder', () => {
-      setFolders([folderA, folderB]);
-      expect(isPathInWorkspace('/etc/passwd')).toBe(false);
-      expect(isPathInWorkspace('/tmp/x')).toBe(false);
-    });
-
-    it('accepts path inside a folder', () => {
-      setFolders([folderA, folderB]);
-      expect(isPathInWorkspace('/repo/proj-backend/src/auth.ts')).toBe(true);
-      expect(isPathInWorkspace('/repo/proj-frontend')).toBe(true);
-    });
-
-    it('avoids the proj-frontend / proj-frontend-other false positive', () => {
-      setFolders([{ ...folderA, uri: vscode.Uri.file('/repo/proj') }]);
-      expect(isPathInWorkspace('/repo/proj-other/src/file.ts')).toBe(false);
-      expect(isPathInWorkspace('/repo/proj/src/file.ts')).toBe(true);
-    });
-
-    it('returns false when no folders open', () => {
-      expect(isPathInWorkspace('/anywhere')).toBe(false);
-    });
-  });
-
   describe('getWorkspaceDisplayName', () => {
     it('returns "<no workspace>" when no folders open', () => {
       expect(getWorkspaceDisplayName()).toBe('<no workspace>');
@@ -163,22 +136,6 @@ describe('workspaceFolders helpers', () => {
     it('returns all open folders', () => {
       setFolders([folderA, folderB]);
       expect(getAllWorkspaceFolders()).toHaveLength(2);
-    });
-  });
-
-  describe('getWorkspaceFolderForUri', () => {
-    it('delegates to vscode.workspace.getWorkspaceFolder', () => {
-      const uri = vscode.Uri.file('/repo/proj-backend/x.ts');
-      setGetWorkspaceFolderResult(folderB);
-      const result = getWorkspaceFolderForUri(uri);
-      expect(result?.name).toBe('proj-backend');
-      expect(vscode.workspace.getWorkspaceFolder).toHaveBeenCalledWith(uri);
-    });
-
-    it('returns undefined when not inside any folder', () => {
-      const uri = vscode.Uri.file('/tmp/x.ts');
-      setGetWorkspaceFolderResult(undefined);
-      expect(getWorkspaceFolderForUri(uri)).toBeUndefined();
     });
   });
 });

@@ -114,7 +114,7 @@ export class ContextBuilder {
         relativePath: vscode.workspace.asRelativePath(document.uri),
         languageId: document.languageId,
         selectedText,
-        cursorLine: selection.active.line + 1, // 1-based for human readability
+        cursorLine: selection.active.line + 1,
         cursorCharacter: selection.active.character + 1,
         lineCount: document.lineCount,
       };
@@ -160,18 +160,15 @@ export class ContextBuilder {
       let statusOutput = '';
       try {
         const result = await execFileAsync('git', ['status', '--porcelain'], execOpts);
-        statusOutput = result.stdout.trim();
+        statusOutput = result.stdout.trimEnd();
       } catch {
         return '';
       }
 
-      let diffOutput = '';
-      try {
-        const result = await execFileAsync('git', ['diff', '--stat'], execOpts);
-        diffOutput = result.stdout.trim();
-      } catch (err) {
-        void err;
-      }
+      const diffOutput = await execFileAsync('git', ['diff', '--stat'], execOpts).then(
+        (result) => result.stdout.trim(),
+        () => '',
+      );
 
       if (statusOutput === '' && diffOutput === '') {
         return 'Git: clean working tree, no changes.';
@@ -180,7 +177,7 @@ export class ContextBuilder {
       const parts: string[] = ['Git status:'];
 
       if (statusOutput !== '') {
-        const lines = statusOutput.split('\n');
+        const lines = statusOutput.split('\n').filter((line) => line.length > 3);
         const staged: string[] = [];
         const modified: string[] = [];
         const untracked: string[] = [];
@@ -247,7 +244,7 @@ export class ContextBuilder {
       return diagnostics.map((d) => ({
         severity: this._severityToString(d.severity),
         message: d.message,
-        line: d.range.start.line + 1, // 1-based
+        line: d.range.start.line + 1,
         column: d.range.start.character + 1,
         source: d.source ?? '',
       }));
