@@ -13,7 +13,6 @@ import {
   getTierMapping,
   isPriceIdRegistered,
 } from '@/lib/price-tier-mapping';
-import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import {
   getPlanUsageBudgetCents,
@@ -527,12 +526,10 @@ export async function upsertSubscriptionFromSession(
                 'FALLBACK: Resolved user_id from email - storing customer_id for future',
               );
 
-              await db
-                .execute('update profiles set stripe_customer_id = $1 where id = $2', [
-                  stripeCustomerId,
-                  resolvedUserId,
-                ])
-                .catch(() => undefined);
+              await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+                stripeCustomerId,
+                resolvedUserId,
+              ]);
 
               logger.info(
                 { userId: resolvedUserId, customerId: stripeCustomerId },
@@ -589,17 +586,10 @@ export async function upsertSubscriptionFromSession(
 
   const stripeCustomerId = session.customer as string | null;
   if (stripeCustomerId) {
-    await db
-      .execute('update profiles set stripe_customer_id = $1 where id = $2', [
-        stripeCustomerId,
-        resolvedUserId,
-      ])
-      .catch((updateError: unknown) => {
-        logger.error(
-          { error: updateError, userId: resolvedUserId, customerId: stripeCustomerId },
-          'Failed to store stripe_customer_id in profiles table',
-        );
-      });
+    await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+      stripeCustomerId,
+      resolvedUserId,
+    ]);
     logger.info(
       { userId: resolvedUserId, customerId: stripeCustomerId },
       'Stored stripe_customer_id in profiles table (enables proper customer lookup)',
@@ -607,11 +597,10 @@ export async function upsertSubscriptionFromSession(
   }
 
   if (customerEmail) {
-    const profileRows = await db
-      .query<{
-        email: string | null;
-      }>('select email from profiles where id = $1 limit 1', [resolvedUserId])
-      .catch(() => [] as { email: string | null }[]);
+    const profileRows = await db.query<{ email: string | null }>(
+      'select email from profiles where id = $1 limit 1',
+      [resolvedUserId],
+    );
 
     const storedProfile = profileRows[0];
     if (storedProfile?.email && storedProfile.email !== customerEmail) {
@@ -956,72 +945,45 @@ export async function upsertSubscriptionFromSession(
   const data = upserted[0];
 
   if (data && currentPeriodStart && currentPeriodEnd) {
-    let lastError: unknown = null;
-
-    for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
-      try {
-        if (replacedEntitlement && replacedEntitlement.id === data.id) {
-          await SubscriptionService.carryCreditsForUpgradePeriod(
-            resolvedUserId,
-            data.id,
-            replacedEntitlement.planTier,
-            planTier,
-            new Date(currentPeriodStart),
-            new Date(currentPeriodEnd),
-            db,
-            { next: catalogVersion },
-          );
-        } else {
-          await SubscriptionService.allocateCreditsForPeriod(
-            resolvedUserId,
-            data.id,
-            planTier,
-            new Date(currentPeriodStart),
-            new Date(currentPeriodEnd),
-            { db, catalogVersion },
-          );
-        }
-        logger.info(
-          {
-            userId: resolvedUserId,
-            subscriptionId: data.id,
-            planTier,
-            attempt,
-            carriedUsage: !!replacedEntitlement,
-          },
-          replacedEntitlement
-            ? 'Usage carried into paid replacement subscription'
-            : 'Credits allocated for new subscription',
+    try {
+      if (replacedEntitlement && replacedEntitlement.id === data.id) {
+        await SubscriptionService.carryCreditsForUpgradePeriod(
+          resolvedUserId,
+          data.id,
+          replacedEntitlement.planTier,
+          planTier,
+          new Date(currentPeriodStart),
+          new Date(currentPeriodEnd),
+          db,
+          { next: catalogVersion },
         );
-        lastError = null;
-        break;
-      } catch (creditError) {
-        lastError = creditError;
-        logger.warn(
-          {
-            error: creditError,
-            userId: resolvedUserId,
-            subscriptionId: data.id,
-            attempt,
-            maxRetries: WEBHOOK_MAX_RETRIES,
-          },
-          `Credit allocation attempt ${attempt}/${WEBHOOK_MAX_RETRIES} failed`,
+      } else {
+        await SubscriptionService.allocateCreditsForPeriod(
+          resolvedUserId,
+          data.id,
+          planTier,
+          new Date(currentPeriodStart),
+          new Date(currentPeriodEnd),
+          { db, catalogVersion },
         );
-
-        if (attempt < WEBHOOK_MAX_RETRIES) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, WEBHOOK_RETRY_BASE_DELAY_MS * Math.pow(2, attempt)),
-          );
-        }
       }
-    }
-
-    if (lastError) {
-      logger.error(
-        { error: lastError, userId: resolvedUserId, subscriptionId: data.id, planTier },
-        'CRITICAL: Failed to allocate credits after all retries - user may need manual sync',
+      logger.info(
+        {
+          userId: resolvedUserId,
+          subscriptionId: data.id,
+          planTier,
+          carriedUsage: !!replacedEntitlement,
+        },
+        replacedEntitlement
+          ? 'Usage carried into paid replacement subscription'
+          : 'Credits allocated for new subscription',
       );
-      throw lastError;
+    } catch (creditError) {
+      logger.error(
+        { error: creditError, userId: resolvedUserId, subscriptionId: data.id, planTier },
+        'Failed to allocate or carry credits for new subscription',
+      );
+      throw creditError;
     }
   }
 }
@@ -1392,12 +1354,10 @@ export async function updateSubscriptionFromStripeSubscription(
                 );
                 resolvedUserId = emailProfile.id;
 
-                await db
-                  .execute('update profiles set stripe_customer_id = $1 where id = $2', [
-                    stripeCustomerId,
-                    emailProfile.id,
-                  ])
-                  .catch(() => undefined);
+                await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+                  stripeCustomerId,
+                  emailProfile.id,
+                ]);
               } else {
                 logger.error(
                   { stripeCustomerId, stripeSubId },
@@ -1478,17 +1438,10 @@ export async function updateSubscriptionFromStripeSubscription(
         await ensureProfileExists(db, resolvedUserId, customerEmailForProfile);
 
         if (stripeCustomerId) {
-          await db
-            .execute('update profiles set stripe_customer_id = $1 where id = $2', [
-              stripeCustomerId,
-              resolvedUserId,
-            ])
-            .catch((updateError: unknown) => {
-              logger.error(
-                { error: updateError, userId: resolvedUserId, customerId: stripeCustomerId },
-                'Failed to store stripe_customer_id in profiles table',
-              );
-            });
+          await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+            stripeCustomerId,
+            resolvedUserId,
+          ]);
           logger.info(
             { userId: resolvedUserId, customerId: stripeCustomerId },
             'Stored stripe_customer_id in profiles table',
