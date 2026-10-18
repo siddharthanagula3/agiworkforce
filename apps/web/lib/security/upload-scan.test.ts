@@ -393,6 +393,16 @@ describe('credential material in an upload', () => {
     expect(result).toEqual({ ok: true, findings: [] });
   });
 
+  it('scans a textual type declared with parameters or in capitals', () => {
+    const body = bytesOf(`STRIPE_SECRET_KEY=sk_live_${'EXAMPLE'.repeat(4)}\n`);
+
+    for (const mime of ['application/json; charset=utf-8', 'Application/JSON']) {
+      expect(
+        scanUploadForCredentials(body, mime, 'keys.json').map((finding) => finding.code),
+      ).toContain('credential_material');
+    }
+  });
+
   it('does not scan binary bytes for credentials', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 

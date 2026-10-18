@@ -21,6 +21,18 @@ function isBrowserExecutableContentType(contentType: string): boolean {
   return mime.endsWith('+xml');
 }
 
+const UNQUOTABLE_FILENAME_CHARACTERS = /[^\x20-\x7e]|["\\]/g;
+
+function filenameParameters(filename: string): string {
+  const quoted = filename.replace(UNQUOTABLE_FILENAME_CHARACTERS, '_');
+  if (quoted === filename) return `; filename="${quoted}"`;
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `; filename="${quoted}"; filename*=UTF-8''${encoded}`;
+}
+
 export interface ServedByteHeaders {
   contentType: string;
   contentDisposition: string;
@@ -33,7 +45,7 @@ export function servedByteHeaders(params: {
 }): ServedByteHeaders {
   const executable = isBrowserExecutableContentType(params.contentType);
   const disposition = executable || params.forceAttachment ? 'attachment' : 'inline';
-  const filenamePart = params.filename ? `; filename="${params.filename}"` : '';
+  const filenamePart = params.filename ? filenameParameters(params.filename) : '';
   return {
     contentType: executable ? 'application/octet-stream' : params.contentType,
     contentDisposition: `${disposition}${filenamePart}`,

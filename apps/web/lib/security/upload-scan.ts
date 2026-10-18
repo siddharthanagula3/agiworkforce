@@ -165,7 +165,12 @@ const TEXTUAL_MIMES: ReadonlySet<string> = new Set([
 ]);
 const CREDENTIAL_SCAN_BYTES = 256_000;
 
-function isTextualMime(mime: string): boolean {
+function essenceOf(declaredMime: string): string {
+  return declaredMime.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
+function isTextualMime(declaredMime: string): boolean {
+  const mime = essenceOf(declaredMime);
   return TEXTUAL_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix)) || TEXTUAL_MIMES.has(mime);
 }
 
@@ -219,7 +224,7 @@ export function uploadFindingRejects(finding: UploadScanFinding): boolean {
 }
 
 export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): UploadScanResult {
-  const mime = declaredMime.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const mime = essenceOf(declaredMime);
   const findings: UploadScanFinding[] = [];
 
   for (const signature of EXECUTABLE_SIGNATURES) {
