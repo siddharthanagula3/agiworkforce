@@ -9,17 +9,12 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   contextBudgetRank,
-  contextClassesInvalidatedBy,
   contextPrecedenceRank,
-  orderContextLoaders,
   orderLoadersByBudgetPriority,
   resolveContext,
-  staleManifestClasses,
-  withActualTokenCount,
 } from '../engine';
 import { OPEN_ORGANIZATION_CONTEXT_POLICY } from '../permissions';
 import {
-  UNVERSIONED_CONTEXT,
   type ContextActor,
   type ContextCandidate,
   type ContextSourceLoader,
@@ -81,10 +76,6 @@ describe('assembly order', () => {
     const reversed = [...CONTEXT_SOURCE_PRECEDENCE]
       .reverse()
       .map((sourceClass) => loader(sourceClass, [`text for ${sourceClass}`]));
-
-    expect(orderContextLoaders(reversed).map((entry) => entry.sourceClass)).toEqual([
-      ...CONTEXT_SOURCE_PRECEDENCE,
-    ]);
 
     const resolution = await resolveContext({
       turnId: 'turn-order',
@@ -343,53 +334,6 @@ describe('the request token budget', () => {
   });
 });
 
-describe('invalidation', () => {
-  it('names the classes a trigger outdates, from what each class declared', () => {
-    expect(contextClassesInvalidatedBy('memory_changed')).toEqual(['account_memory']);
-    for (const sourceClass of contextClassesInvalidatedBy('policy_changed')) {
-      expect(contextSourceClassPolicy(sourceClass).invalidatedBy).toContain('policy_changed');
-    }
-  });
-
-  it('marks a manifest entry stale when the version it was built against moves', async () => {
-    const resolution = await resolveContext({
-      turnId: 'turn-versions',
-      actor: ACTOR,
-      policy: OPEN_ORGANIZATION_CONTEXT_POLICY,
-      loaders: [loader('account_memory', ['m']), loader('security_policy', ['s'])],
-      versions: { ...UNVERSIONED_CONTEXT, memory: '7' },
-    });
-
-    expect(resolution.manifest.versions.memory).toBe('7');
-    expect(staleManifestClasses(resolution.manifest, UNVERSIONED_CONTEXT)).toEqual([
-      'account_memory',
-    ]);
-    expect(
-      staleManifestClasses(resolution.manifest, { ...UNVERSIONED_CONTEXT, memory: '7' }),
-    ).toEqual([]);
-    expect(
-      staleManifestClasses(resolution.manifest, {
-        ...UNVERSIONED_CONTEXT,
-        memory: '7',
-        policy: '2',
-      }),
-    ).toEqual(['security_policy', 'account_memory']);
-  });
-
-  it('records the provider count against the estimate that drove the turn', async () => {
-    const resolution = await resolveContext({
-      turnId: 'turn-actual',
-      actor: ACTOR,
-      policy: OPEN_ORGANIZATION_CONTEXT_POLICY,
-      loaders: [loader('account_memory', ['m'.repeat(40)])],
-      budget: budget(100),
-    });
-
-    expect(resolution.manifest.actualTokenCount).toBeNull();
-    expect(withActualTokenCount(resolution.manifest, 137).actualTokenCount).toBe(137);
-  });
-});
-
 describe('what is read first and what is kept longest are different questions', () => {
   const UPLOAD = 'u'.repeat(200);
   const MEMORY = 'm'.repeat(200);
@@ -431,10 +375,6 @@ describe('what is read first and what is kept longest are different questions', 
     expect(orderLoadersByBudgetPriority(loaders).map((entry) => entry.sourceClass)).toEqual([
       'user_upload',
       'account_memory',
-    ]);
-    expect(orderContextLoaders(loaders).map((entry) => entry.sourceClass)).toEqual([
-      'account_memory',
-      'user_upload',
     ]);
     expect(contextBudgetRank('user_upload')).toBeLessThan(contextBudgetRank('account_memory'));
     expect(contextPrecedenceRank('account_memory')).toBeLessThan(

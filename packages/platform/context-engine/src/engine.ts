@@ -4,7 +4,6 @@ import {
   CONTEXT_SOURCE_PRECEDENCE,
   contextSourceClassPolicy,
   contextTrustLevel,
-  type ContextInvalidationTrigger,
   type ContextSourceClass,
 } from '@agiworkforce/context';
 import {
@@ -77,16 +76,6 @@ function stableSortBy<T>(values: readonly T[], rank: (value: T) => number): T[] 
 }
 
 /**
- * One order on every surface and for every model, so the same sources assembled
- * for the same turn produce the same prompt wherever the turn was started.
- */
-export function orderContextLoaders(
-  loaders: readonly ContextSourceLoader[],
-): readonly ContextSourceLoader[] {
-  return stableSortBy(loaders, (loader) => contextPrecedenceRank(loader.sourceClass));
-}
-
-/**
  * The order the budget is spent in. A source read last can still be the one the
  * question is about, so it is not enough to walk the assembly order backwards.
  */
@@ -94,31 +83,6 @@ export function orderLoadersByBudgetPriority(
   loaders: readonly ContextSourceLoader[],
 ): readonly ContextSourceLoader[] {
   return stableSortBy(loaders, (loader) => contextBudgetRank(loader.sourceClass));
-}
-
-export function contextClassesInvalidatedBy(
-  trigger: ContextInvalidationTrigger,
-): readonly ContextSourceClass[] {
-  return CONTEXT_SOURCE_PRECEDENCE.filter((sourceClass) =>
-    contextSourceClassPolicy(sourceClass).invalidatedBy.includes(trigger),
-  );
-}
-
-/** Which of a manifest's entries a newer version vector has already outdated. */
-export function staleManifestClasses(
-  manifest: ContextManifest,
-  versions: ContextVersions,
-): readonly ContextSourceClass[] {
-  const changed = new Set<ContextInvalidationTrigger>();
-  if (manifest.versions.policy !== versions.policy) changed.add('policy_changed');
-  if (manifest.versions.memory !== versions.memory) changed.add('memory_changed');
-  if (manifest.versions.project !== versions.project) changed.add('project_changed');
-  if (manifest.versions.retrieval !== versions.retrieval) changed.add('conversation_changed');
-  return manifest.entries
-    .map((entry) => entry.sourceClass)
-    .filter((sourceClass) =>
-      contextSourceClassPolicy(sourceClass).invalidatedBy.some((trigger) => changed.has(trigger)),
-    );
 }
 
 function scopeOf(actor: ContextActor, candidates: readonly ContextCandidate[]): ContextScope {
@@ -354,14 +318,6 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
     itemsOf: (sourceClass) =>
       orderedItems.filter((item) => item.source.sourceClass === sourceClass),
   };
-}
-
-/** The count the provider reported, recorded against the estimate that drove the turn. */
-export function withActualTokenCount(
-  manifest: ContextManifest,
-  actualTokenCount: number,
-): ContextManifest {
-  return { ...manifest, actualTokenCount: Math.max(0, Math.floor(actualTokenCount)) };
 }
 
 /** Derived, not random, so a replay of one turn lands on the same manifest id. */
