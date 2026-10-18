@@ -822,11 +822,6 @@ function hasValidGeneratedImageStructure(
   return hasValidWebpStructure(bytes);
 }
 
-export function sha256HexFromBase64(b64: string): string {
-  const payload = b64.includes(',') ? (b64.split(',').pop() ?? '') : b64;
-  return createHash('sha256').update(Buffer.from(payload, 'base64')).digest('hex');
-}
-
 export function sha256HexFromBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }

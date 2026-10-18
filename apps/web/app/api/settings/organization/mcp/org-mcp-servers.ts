@@ -92,20 +92,6 @@ export async function listOrgMcpServers(
   return rows.map(toOrgMcpServer);
 }
 
-/** What a member's connector catalog reads: published, not retired, nothing else. */
-export async function listPublishedOrgMcpServers(
-  db: DatabaseAdapter,
-  organizationId: string,
-): Promise<OrgMcpServer[]> {
-  const rows = await db.query<OrgMcpServerRow>(
-    `select ${COLUMNS} from public.organization_mcp_servers
-      where organization_id = $1 and published and retired_at is null
-      order by name asc`,
-    [organizationId],
-  );
-  return rows.map(toOrgMcpServer);
-}
-
 // 'p' for published: keeps these ids out of the 0086 org-shared short-id space
 // so both kinds can share the one orgmcp- server id namespace.
 function shortId(): string {

@@ -53,7 +53,6 @@ vi.mock('./adapter-factory', () => ({
   buildPerplexityAdapter: vi.fn(),
   buildQwenAdapter: vi.fn(),
   buildVercelGatewayAdapter: vi.fn(),
-  buildWorkersAiAdapter: vi.fn(),
   buildXAIAdapter: vi.fn(),
   buildZhipuAdapter: vi.fn(),
 }));

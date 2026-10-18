@@ -60,7 +60,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
       : undefined;
   if (
     surfaceValue !== undefined &&
-    (typeof surfaceValue !== 'string' || !(surfaceValue in DEVICE_SURFACES))
+    (typeof surfaceValue !== 'string' || !Object.hasOwn(DEVICE_SURFACES, surfaceValue))
   ) {
     return NextResponse.json({ error: 'Invalid device surface' }, { status: 400 });
   }

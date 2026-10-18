@@ -158,7 +158,7 @@ describe('recordAuditEvent, writes a real security_audit_logs row', () => {
   });
 
   it('takes the RIGHTMOST x-forwarded-for hop, never the spoofable leftmost one', async () => {
-    const request = new Request('https://app.example.com/api/auth/set-token', {
+    const request = new Request('https://app.example.com/api/auth/desktop/redeem', {
       method: 'POST',
       headers: { 'x-forwarded-for': '1.2.3.4, 198.51.100.22' },
     });
@@ -169,7 +169,7 @@ describe('recordAuditEvent, writes a real security_audit_logs row', () => {
   });
 
   it('prefers the platform-set x-real-ip header', async () => {
-    const request = new Request('https://app.example.com/api/auth/set-token', {
+    const request = new Request('https://app.example.com/api/auth/desktop/redeem', {
       method: 'POST',
       headers: { 'x-real-ip': '198.51.100.99', 'x-forwarded-for': '1.2.3.4' },
     });

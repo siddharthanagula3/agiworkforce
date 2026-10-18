@@ -100,10 +100,6 @@ export function parseAgiWorkGoal(raw: unknown): AgiWorkGoal | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function agiWorkGoalHeadline(goal: AgiWorkGoal): string {
-  return goal.goal;
-}
-
 export function agiWorkPlanningDirective(goal: AgiWorkGoal): string {
   const excluded = new Set(goal.excludedTools ?? []);
   const tools = [

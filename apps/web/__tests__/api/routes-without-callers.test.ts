@@ -61,11 +61,6 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   // Another surface or the browser reaches these without naming the path in
   // committed source.
   {
-    url: '/api/auth/set-token',
-    why: 'stores a verified session token as an httpOnly cookie, covered by b2-set-token.test.ts',
-  },
-  { url: '/api/auth/clear-token', why: 'the sign-out half of the set-token pair' },
-  {
     url: '/api/uploads/chat-attachment/put',
     why: 'the browser PUTs to the signed url this issues',
   },

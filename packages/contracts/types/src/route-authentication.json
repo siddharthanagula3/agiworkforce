@@ -101,7 +101,6 @@
   "sessionLifecycle": {
     "apps/web/app/api/auth/desktop/redeem/route.ts": "exchanges a one-time desktop sign-in grant, proven with the app's verifier, for a sign-in token that every later request is gated on",
     "apps/web/app/api/auth/logout/route.ts": "revokes the caller's own device session; gating it would strand the live tokens of exactly the accounts a suspension wants cut off",
-    "apps/web/app/api/auth/set-token/route.ts": "exchanges a verified provider token for the session cookie every gated route then reads",
     "apps/web/app/api/auth/device/token/route.ts": "exchanges an approved device code for a token that every later request is gated on",
     "apps/web/app/api/auth/device/refresh/route.ts": "rotates a device refresh token; the token it mints is gated on every use",
     "apps/web/app/api/device/poll/route.ts": "the device code is the credential here, and the token it returns is gated on every use",

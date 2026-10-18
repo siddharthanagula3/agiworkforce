@@ -103,14 +103,6 @@ export async function buildToolLoopStream(
   });
 }
 
-export async function buildAnthropicToolLoopStream(
-  processed: ProcessedRequest,
-  stepRequest: ProcessedRequest['llmRequest'],
-  responseModel: string,
-): Promise<ReadableStream> {
-  return buildToolLoopStream('anthropic', processed, stepRequest, responseModel);
-}
-
 /**
  * Wrap a provider adapter's `AsyncIterable<StreamChunk>` as an OpenAI-shaped
  * SSE byte stream via a FRESH `OpenAIWireAssembler` per call. Fresh is

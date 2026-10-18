@@ -54,7 +54,6 @@ import {
   buildPerplexityAdapter,
   buildQwenAdapter,
   buildVercelGatewayAdapter,
-  buildWorkersAiAdapter,
   buildXAIAdapter,
   buildZhipuAdapter,
 } from './adapter-factory';
@@ -75,7 +74,6 @@ const SERVER_PROVIDER_BUILDERS: ReadonlyArray<{
   { providerId: 'perplexity', build: buildPerplexityAdapter },
   { providerId: 'groq', build: buildGroqAdapter },
   { providerId: 'nvidia_nim', build: buildNvidiaNimAdapter },
-  { providerId: 'workers_ai', build: buildWorkersAiAdapter },
   { providerId: 'vercel_gateway', build: buildVercelGatewayAdapter },
 ];
 

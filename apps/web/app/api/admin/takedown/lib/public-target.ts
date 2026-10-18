@@ -14,11 +14,6 @@ export interface PublicContentTarget {
   createdAt: string;
 }
 
-export const PUBLIC_CONTENT_PATHS: Readonly<Record<PublicContentKind, string>> = {
-  'conversation-share': '/share',
-  'published-artifact': '/shared-artifact',
-};
-
 export function normalizeToken(raw: string): string | null {
   const withoutQuery = raw.trim().split(/[?#]/)[0] ?? '';
   const candidate = withoutQuery.split('/').filter(Boolean).pop() ?? '';

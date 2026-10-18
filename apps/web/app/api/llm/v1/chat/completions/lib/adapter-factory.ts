@@ -125,10 +125,6 @@ export function buildNvidiaNimAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('nvidia_nim');
 }
 
-export function buildWorkersAiAdapter(): ProviderAdapter {
-  return buildServerProviderAdapter('workers_ai');
-}
-
 export function buildVercelGatewayAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('vercel_gateway');
 }

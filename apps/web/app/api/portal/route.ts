@@ -270,7 +270,6 @@ async function handlePortal(request: NextRequest) {
           'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
       } else {
-        // TODO(2026-Q3): Remove email fallback entirely. Track via DEPRECATION_PORTAL_EMAIL_FALLBACK metric.
         const { email: userEmail } = await getClerkAuthUser(request);
         if (!userEmail) {
           throw createError.validation('User has no email address and no customer_id stored');
