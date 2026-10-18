@@ -904,8 +904,10 @@ mod tests {
     #[test]
     fn a_provider_tool_alone_sends_no_tools_and_no_tool_choice() {
         let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
-        let mut request =
-            LLMRequest::new(vec![message("user", "news")], "fixture-managed-model".into());
+        let mut request = LLMRequest::new(
+            vec![message("user", "news")],
+            "fixture-managed-model".into(),
+        );
         request.tools = Some(vec![tool("web_search")]);
         request.tool_choice = Some(ToolChoice::Auto);
 
@@ -950,7 +952,10 @@ mod tests {
         let adaptive = body_for(ThinkingParameter::Adaptive {
             thinking_type: "adaptive".to_string(),
         });
-        assert_eq!(adaptive["thinking"], serde_json::json!({ "type": "adaptive" }));
+        assert_eq!(
+            adaptive["thinking"],
+            serde_json::json!({ "type": "adaptive" })
+        );
     }
 
     #[test]

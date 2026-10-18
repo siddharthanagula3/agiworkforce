@@ -428,10 +428,7 @@ mod tests {
         .expect("create OAuth2 client for test");
 
         let result = client.exchange_code("auth_code", None).await;
-        assert!(
-            result.is_err(),
-            "a token redirect must not be followed"
-        );
+        assert!(result.is_err(), "a token redirect must not be followed");
 
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         // Leak first: when this fires it prints the bytes that escaped, which is

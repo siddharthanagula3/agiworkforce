@@ -1833,7 +1833,9 @@ fn bubblewrap_prefix_with_scope(
         .iter()
         .map(|path| resolve_existing_prefix(path))
         .filter(|path| {
-            bound.iter().any(|root| path.starts_with(root) && path != root)
+            bound
+                .iter()
+                .any(|root| path.starts_with(root) && path != root)
                 && !bound.iter().any(|root| root.starts_with(path))
         })
         .collect();

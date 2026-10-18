@@ -384,9 +384,11 @@ pub fn credential_locations() -> Vec<PathBuf> {
     let mut locations = Vec::new();
     if let Some(home) = dirs::home_dir() {
         locations.extend(agiworkforce_sandbox_policy::credential_paths(&home));
-        locations.extend(agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(
-            &home.join(".agiworkforce"),
-        ));
+        locations.extend(
+            agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(
+                &home.join(".agiworkforce"),
+            ),
+        );
     }
     locations.extend(crate::sys::utils::app_data_dir().ok());
     locations

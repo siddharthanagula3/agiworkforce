@@ -280,7 +280,6 @@ impl McpClient {
     pub fn get_connected_servers(&self) -> Vec<String> {
         self.sessions.read().keys().cloned().collect()
     }
-
 }
 
 impl Default for McpClient {

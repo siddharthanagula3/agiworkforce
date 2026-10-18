@@ -486,8 +486,7 @@ impl ComputerUseSession {
 
     /// Captures a screenshot and stores it according to config.
     fn capture_screenshot(&self, suffix: &str) -> Result<Option<ScreenshotRef>> {
-        let captured = capture_display(None)
-            .context("Failed to capture screenshot")?;
+        let captured = capture_display(None).context("Failed to capture screenshot")?;
         self.store_screenshot(suffix, captured)
     }
 

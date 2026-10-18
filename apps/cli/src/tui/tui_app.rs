@@ -8098,7 +8098,10 @@ mod tests {
         assert!(apply_mode(&mut app, InteractionMode::Plan));
         app.session.plan_approved = true;
         assert!(apply_mode(&mut app, InteractionMode::Plan));
-        assert!(app.session.plan_approved, "staying in plan keeps its approval");
+        assert!(
+            app.session.plan_approved,
+            "staying in plan keeps its approval"
+        );
 
         assert!(apply_mode(&mut app, InteractionMode::Chat));
         assert!(apply_mode(&mut app, InteractionMode::Plan));

@@ -1044,7 +1044,9 @@ impl CliError {
             CliError::RateLimited { .. }
             | CliError::Network { .. }
             | CliError::ModelUnavailable { .. } => true,
-            CliError::Api { status, .. } => agiworkforce_llm::error::is_retryable_api_status(*status),
+            CliError::Api { status, .. } => {
+                agiworkforce_llm::error::is_retryable_api_status(*status)
+            }
             CliError::StreamError { is_retryable, .. } => *is_retryable,
             // The protocol already decides which of these a caller may send
             // again; a second table here would let the two drift.

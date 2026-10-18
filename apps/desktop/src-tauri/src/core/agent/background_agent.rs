@@ -1683,7 +1683,9 @@ async fn prepare_run(
     agent: &BackgroundAgent,
     app_handle: Option<&AppHandle>,
 ) -> Result<PreparedRun, String> {
-    let app = app_handle.cloned().ok_or_else(|| MODELS_NOT_READY.to_string())?;
+    let app = app_handle
+        .cloned()
+        .ok_or_else(|| MODELS_NOT_READY.to_string())?;
     let trust_mode = boundary_of(&agent.context)?;
     let managed = managed_boundary_for(
         trust_mode,
@@ -1728,7 +1730,13 @@ fn goal_ended(
             failure_reason(outcome, timeout_secs).unwrap_or_default()
         }
     };
-    HookEvent::goal_error(session_id, goal_id, goal.to_string(), priority.to_string(), error)
+    HookEvent::goal_error(
+        session_id,
+        goal_id,
+        goal.to_string(),
+        priority.to_string(),
+        error,
+    )
 }
 
 /// Why a run failed, in the words the person reads, or `None` when it did not.
@@ -2059,14 +2067,21 @@ mod tests {
         let stopped = |reason| outcome_of(UnattendedTurnEnd::Stopped, Vec::new(), reason);
         assert_eq!(stopped(Some(StopReason::Cancelled)), RunOutcome::Cancelled);
         assert_eq!(stopped(Some(StopReason::Paused)), RunOutcome::Paused);
-        assert_eq!(stopped(Some(StopReason::AppClosing)), RunOutcome::Interrupted);
+        assert_eq!(
+            stopped(Some(StopReason::AppClosing)),
+            RunOutcome::Interrupted
+        );
         assert_eq!(stopped(None), RunOutcome::Cancelled);
         assert_eq!(
             outcome_of(UnattendedTurnEnd::TimedOut, Vec::new(), None),
             RunOutcome::TimedOut
         );
         assert_eq!(
-            outcome_of(UnattendedTurnEnd::Failed("No model".to_string()), Vec::new(), None),
+            outcome_of(
+                UnattendedTurnEnd::Failed("No model".to_string()),
+                Vec::new(),
+                None
+            ),
             RunOutcome::Failed("No model".to_string())
         );
         assert_eq!(

@@ -1983,8 +1983,7 @@ mod tests {
         for tool in advertised_chat_tools() {
             for (form, required_only) in [("required", true), ("declared", false)] {
                 let arguments = schema_arguments(&tool, required_only);
-                if let Err(error) = guard.validate_tool_call(&tool.name, &arguments).await
-                {
+                if let Err(error) = guard.validate_tool_call(&tool.name, &arguments).await {
                     refused.push(format!(
                         "{} with its {form} parameters {arguments}: {error}",
                         tool.name

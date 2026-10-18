@@ -440,8 +440,8 @@ pub fn user_mcp_rules() -> Result<Vec<(String, PolicyDecision)>> {
     };
     let contents = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    let policy: WorkspacePolicy = toml::from_str(&contents)
-        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    let policy: WorkspacePolicy =
+        toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
     Ok(policy
         .rules
         .into_iter()

@@ -318,8 +318,11 @@ fn delete_project(conn: &Connection, id: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to delete project: {}", e))?;
     tx.execute("DELETE FROM project_settings WHERE project_id = ?1", [id])
         .map_err(|e| format!("Failed to delete project settings: {}", e))?;
-    tx.execute("UPDATE conversations SET project_id = NULL WHERE project_id = ?1", [id])
-        .map_err(|e| format!("Failed to move the project's chats out of it: {}", e))?;
+    tx.execute(
+        "UPDATE conversations SET project_id = NULL WHERE project_id = ?1",
+        [id],
+    )
+    .map_err(|e| format!("Failed to move the project's chats out of it: {}", e))?;
     tx.execute("DELETE FROM projects WHERE id = ?1", [id])
         .map_err(|e| format!("Failed to delete project: {}", e))?;
     tx.commit()

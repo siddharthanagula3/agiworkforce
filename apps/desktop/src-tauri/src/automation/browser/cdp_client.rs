@@ -541,8 +541,11 @@ impl CdpClient {
             .and_then(Value::as_i64)
             .ok_or_else(|| Error::Other("The history entry has no id".to_string()))?;
 
-        self.send_command("Page.navigateToHistoryEntry", json!({ "entryId": entry_id }))
-            .await?;
+        self.send_command(
+            "Page.navigateToHistoryEntry",
+            json!({ "entryId": entry_id }),
+        )
+        .await?;
         Ok(())
     }
 

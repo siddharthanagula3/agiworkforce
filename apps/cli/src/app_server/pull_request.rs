@@ -249,8 +249,8 @@ pub async fn create(
                     "The push was not approved and nothing left this machine",
                 )
             })?;
-        let profile = crate::permissions::PermissionStore::load_or_ask()
-            .code_permission_profile(None);
+        let profile =
+            crate::permissions::PermissionStore::load_or_ask().code_permission_profile(None);
         GitApi::at(root)
             .push(&plan.clone().approved(consent), &profile)
             .await
@@ -300,9 +300,9 @@ pub async fn create(
                 "The pull request could not be opened ({gh_failure}), and the remote address could not be read: {failure}"
             ))
         })?;
-    let Some(url) = github_repository(remote_url.trim())
-        .and_then(|(owner, repo)| compare_url(&owner, &repo, &base, &plan.destination, title, body))
-    else {
+    let Some(url) = github_repository(remote_url.trim()).and_then(|(owner, repo)| {
+        compare_url(&owner, &repo, &base, &plan.destination, title, body)
+    }) else {
         return Err(DeveloperSessionHostError::conflict(format!(
             "The pull request could not be opened: {gh_failure}"
         )));

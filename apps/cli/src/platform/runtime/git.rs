@@ -1406,7 +1406,10 @@ pub fn parse_branch_list(text: &str) -> Vec<BranchRef> {
             let refname = fields.next().unwrap_or_default().trim();
             let (name, is_remote) = match refname.strip_prefix("refs/remotes/") {
                 Some(remote) => (remote, true),
-                None => (refname.strip_prefix("refs/heads/").unwrap_or(refname), false),
+                None => (
+                    refname.strip_prefix("refs/heads/").unwrap_or(refname),
+                    false,
+                ),
             };
             if name.is_empty() {
                 return None;
@@ -2460,11 +2463,7 @@ impl GitApi {
         let restoring = operation == StashOperation::Pop;
         let dropping = matches!(operation, StashOperation::Drop { .. });
         let saving = matches!(operation, StashOperation::Push { .. });
-        let top_before = if saving {
-            self.stash_top().await
-        } else {
-            None
-        };
+        let top_before = if saving { self.stash_top().await } else { None };
         let stdout = self.run_checked(GitOperation::Stash(operation)).await?;
         if listing {
             return Ok(StashOutcome::Listed {

@@ -21,18 +21,12 @@ use crate::core::agent::approval::ApprovalController;
 use crate::data::db::migrations;
 use crate::data::settings::SettingsService;
 use crate::sys::commands::{
-    master_password::MasterPasswordState,
-    mcp_extensions::McpExtensionsState,
-    mcp_server::McpServerState,
-    project_memory::ProjectMemoryState,
-    research::ResearchState,
-    security::SecretManagerState,
-    skills::SkillsState,
-    tool_confirmation::ToolConfirmationState,
-    undo::UndoState,
-    ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState, DocumentState,
-    FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState, SchedulerState,
-    SettingsServiceState, SettingsState, ShortcutsState, VoiceState,
+    master_password::MasterPasswordState, mcp_extensions::McpExtensionsState,
+    mcp_server::McpServerState, project_memory::ProjectMemoryState, research::ResearchState,
+    security::SecretManagerState, skills::SkillsState, tool_confirmation::ToolConfirmationState,
+    undo::UndoState, ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState,
+    DocumentState, FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState,
+    SchedulerState, SettingsServiceState, SettingsState, ShortcutsState, VoiceState,
 };
 use crate::sys::security::SecretManager;
 use crate::sys::telemetry;

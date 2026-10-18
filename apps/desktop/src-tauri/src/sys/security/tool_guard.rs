@@ -2730,8 +2730,13 @@ impl ToolExecutionGuard {
         parameters: &Value,
         granted: &[PathBuf],
     ) -> std::result::Result<(), SecurityError> {
-        self.validate_call(tool_name, parameters, FolderGrants::Enforced(granted), false)
-            .await
+        self.validate_call(
+            tool_name,
+            parameters,
+            FolderGrants::Enforced(granted),
+            false,
+        )
+        .await
     }
 
     async fn validate_call(
@@ -8484,7 +8489,10 @@ mod tests {
             .await
             .is_err());
         guard
-            .validate_tool_call("file_read", &json!({ "path": granted.path().join("notes.txt") }))
+            .validate_tool_call(
+                "file_read",
+                &json!({ "path": granted.path().join("notes.txt") }),
+            )
             .await
             .expect("a file in the granted folder is granted");
     }

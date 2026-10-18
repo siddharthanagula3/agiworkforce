@@ -1563,7 +1563,10 @@ mod tests {
         let message = uninstalled_message("github", Some("@modelcontextprotocol/server-github"));
         assert!(message.contains("still installed"), "{message}");
         assert!(message.contains("npm uninstall -g @modelcontextprotocol/server-github"));
-        assert_eq!(uninstalled_message("remote", None), "Removed MCP server 'remote'.");
+        assert_eq!(
+            uninstalled_message("remote", None),
+            "Removed MCP server 'remote'."
+        );
     }
 
     fn parse_official_fixture(json: &str) -> Vec<McpBundle> {

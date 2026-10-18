@@ -180,7 +180,10 @@ fn render_search(
         let marketplace = sources
             .iter()
             .find(|source| source.id == entry.source_id)
-            .map_or_else(|| sanitize(&entry.source_id), |source| sanitize(&source.name));
+            .map_or_else(
+                || sanitize(&entry.source_id),
+                |source| sanitize(&source.name),
+            );
         lines.push(format!(
             "  {}@{}  {}",
             sanitize(&entry.name),
@@ -192,7 +195,8 @@ fn render_search(
         }
     }
     lines.push(
-        "Install one on your account with `agi marketplace get <plugin>@<marketplace>`.".to_string(),
+        "Install one on your account with `agi marketplace get <plugin>@<marketplace>`."
+            .to_string(),
     );
     lines.join("\n")
 }

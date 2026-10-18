@@ -212,7 +212,10 @@ pub async fn chat_pop_pending_message(
     // repeated withdrawal gets the same answer.
     let withdrawal = withdraw_pending_message(&request.pending_message_id, request.conversation_id);
     if withdrawal.was_consumed() {
-        info!("[Chat] Steer {} was already sent to the model", request.pending_message_id);
+        info!(
+            "[Chat] Steer {} was already sent to the model",
+            request.pending_message_id
+        );
     }
     Ok(match withdrawal {
         Withdrawal::Withdrawn(message) | Withdrawal::AlreadyRemoved(message) => Some(message),

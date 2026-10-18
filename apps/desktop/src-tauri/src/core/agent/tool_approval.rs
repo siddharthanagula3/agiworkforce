@@ -252,11 +252,7 @@ mod tests {
     async fn gate_refuses_write_tools_in_safe_mode() {
         let app = managed_app(AgentMode::Safe);
 
-        for tool_name in [
-            "terminal_execute",
-            "file_delete",
-            "email_send",
-        ] {
+        for tool_name in ["terminal_execute", "file_delete", "email_send"] {
             let error = require_tool_approval(app.handle(), tool_name, &json!({}), None)
                 .await
                 .unwrap_err()

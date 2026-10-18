@@ -237,8 +237,8 @@ pub async fn ensure_local_model_available(
         );
     }
 
-    let ollama_default_tag = (provider == "ollama" && !model.contains(':'))
-        .then(|| format!("{model}:latest"));
+    let ollama_default_tag =
+        (provider == "ollama" && !model.contains(':')).then(|| format!("{model}:latest"));
     if probe.models.iter().any(|candidate| {
         candidate.id == model || ollama_default_tag.as_deref() == Some(candidate.id.as_str())
     }) {

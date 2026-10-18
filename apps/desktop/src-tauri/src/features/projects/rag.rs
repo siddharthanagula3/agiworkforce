@@ -264,7 +264,6 @@ impl RAGEngine {
 
         final_results
     }
-
 }
 
 #[cfg(test)]

@@ -363,8 +363,7 @@ impl Default for DOMSemanticGraph {
 
 pub struct SelfHealingFinder;
 
-impl SelfHealingFinder {
-}
+impl SelfHealingFinder {}
 
 pub struct SemanticElementFinder;
 

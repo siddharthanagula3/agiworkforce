@@ -1362,11 +1362,11 @@ mod tests {
         load_cloud_credential, normalize_device_user_code, refresh_token_change,
         renewed_cloud_session, saved_cloud_refresh_token, store_cloud_credential,
         validate_api_base_url, validate_api_base_url_for_build, withhold_refresh_token,
-        CloudCredentialVault, DeviceAuthorizationHttpResponse,
-        ManagedAuthSessionIdentity, OsCloudCredentialVault, RefreshTokenChange, RenewalRefusal,
-        SessionRenewal, UserProfile, CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
-        CLOUD_ACCESS_TOKEN_SECRET_KEY, CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
-        CLOUD_REFRESH_TOKEN_SECRET_KEY, PRODUCTION_API_BASE_URL,
+        CloudCredentialVault, DeviceAuthorizationHttpResponse, ManagedAuthSessionIdentity,
+        OsCloudCredentialVault, RefreshTokenChange, RenewalRefusal, SessionRenewal, UserProfile,
+        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT, CLOUD_ACCESS_TOKEN_SECRET_KEY,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT, CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        PRODUCTION_API_BASE_URL,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;

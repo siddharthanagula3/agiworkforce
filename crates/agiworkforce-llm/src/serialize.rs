@@ -85,7 +85,9 @@ fn anthropic_document(name: &str, mime: &str, data_b64: &str) -> Result<Value, S
             }
         }));
     }
-    Err(format!("Anthropic reads PDF and plain-text documents only; {name} is {mime}"))
+    Err(format!(
+        "Anthropic reads PDF and plain-text documents only; {name} is {mime}"
+    ))
 }
 
 /// The first document in `messages` Anthropic cannot accept, as a sentence
@@ -115,7 +117,8 @@ pub fn convert_message_to_anthropic(m: &Message) -> Value {
         MessageContent::Blocks(blocks) => {
             let content: Vec<Value> = blocks
                 .iter()
-                .map(|b| match b {
+                .map(|b| {
+                    match b {
                     ContentBlock::Text { text } => serde_json::json!({
                         "type": "text", "text": text
                     }),
@@ -150,6 +153,7 @@ pub fn convert_message_to_anthropic(m: &Message) -> Value {
                         "type": "tool_result", "tool_use_id": tool_use_id,
                         "content": content, "is_error": is_error
                     }),
+                }
                 })
                 .collect();
             serde_json::json!({ "role": m.role, "content": content })
@@ -475,7 +479,7 @@ pub fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, Strin
                         |placeholder| serde_json::json!({ "text": placeholder["text"] }),
                     ),
                     ContentBlock::Unknown => serde_json::json!({ "text": UNKNOWN_BLOCK }),
-                    // Gemini 3 answers 400 when a replayed functionCall lacks
+                    // Gemini answers 400 when a replayed functionCall lacks
                     // its thought signature. The wire types do not carry the
                     // signature yet, so send Google's documented sentinel.
                     ContentBlock::ToolUse { name, input, .. } => {

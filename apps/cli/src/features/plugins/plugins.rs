@@ -651,10 +651,8 @@ impl PluginsManager {
     }
     fn load_from_dir(&mut self, dir: &Path, from_project_dir: bool) -> Result<()> {
         let disabled = load_disabled_plugins();
-        let account_refusal = crate::tier_cache::capability_refusal(
-            crate::tier_cache::PLUGINS_CAPABILITY,
-            "Plugins",
-        );
+        let account_refusal =
+            crate::tier_cache::capability_refusal(crate::tier_cache::PLUGINS_CAPABILITY, "Plugins");
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if !path.is_dir() {

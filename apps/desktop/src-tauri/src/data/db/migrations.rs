@@ -4574,9 +4574,7 @@ fn apply_migration_v51(conn: &Connection) -> Result<()> {
         [],
     )?;
 
-    tracing::info!(
-        "Applied migration v51: Created master_password tables"
-    );
+    tracing::info!("Applied migration v51: Created master_password tables");
 
     Ok(())
 }

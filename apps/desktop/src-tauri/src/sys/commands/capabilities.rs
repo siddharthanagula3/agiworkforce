@@ -531,11 +531,7 @@ mod tests {
             "these tools answer to a capability with no settings row: {unknown:?}"
         );
 
-        for name in [
-            "mcp__filesystem__read_text_file",
-            "undo_last",
-            "git_status",
-        ] {
+        for name in ["mcp__filesystem__read_text_file", "undo_last", "git_status"] {
             let capability = tool_to_capability(name).expect("governed");
             assert!(known.contains(&capability), "{name} -> {capability}");
         }

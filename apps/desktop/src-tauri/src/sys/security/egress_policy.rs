@@ -741,8 +741,8 @@ mod tests {
     #[test]
     fn public_client_pins_the_addresses_it_validated() {
         let resolver = StubResolver::new(&[("api.agiworkforce.com", "216.198.79.1")]);
-        let client = PublicHttpClient::without_redirects(reqwest::Client::builder())
-            .expect("client builds");
+        let client =
+            PublicHttpClient::without_redirects(reqwest::Client::builder()).expect("client builds");
 
         let _request = client
             .request_with_resolver(
@@ -790,8 +790,8 @@ mod tests {
 
     #[test]
     fn public_client_refuses_an_internal_initial_url_before_building_a_request() {
-        let client = PublicHttpClient::without_redirects(reqwest::Client::builder())
-            .expect("client builds");
+        let client =
+            PublicHttpClient::without_redirects(reqwest::Client::builder()).expect("client builds");
         assert!(matches!(
             client.request(reqwest::Method::GET, "http://127.0.0.1/latest/meta-data/"),
             Err(EgressDenial::InternalDestination(_))

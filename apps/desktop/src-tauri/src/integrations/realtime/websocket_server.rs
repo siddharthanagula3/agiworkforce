@@ -2499,11 +2499,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_native_message_rejects_invalid_payload() {
-        let result = RealtimeServer::execute_native_message(
-            json!({ "type": "unknown_type" }),
-            None,
-        )
-        .await;
+        let result =
+            RealtimeServer::execute_native_message(json!({ "type": "unknown_type" }), None).await;
 
         assert!(result.is_err());
         assert!(result

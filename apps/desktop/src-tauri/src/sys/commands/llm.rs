@@ -309,10 +309,7 @@ async fn route_plain_llm_request(
     }
 
     let provider_name = request.provider.clone();
-    let provider = request
-        .provider
-        .as_deref()
-        .and_then(Provider::from_string);
+    let provider = request.provider.as_deref().and_then(Provider::from_string);
 
     let model = request.model.clone().unwrap_or_else(default_model);
 

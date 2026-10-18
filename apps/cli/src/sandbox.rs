@@ -812,13 +812,15 @@ fn resolve_environment_policy(scrub: bool, filter_credentials: bool) -> Environm
 /// Windows matches environment names without regard to case, so its `Path`
 /// is the allowlist's `PATH`.
 fn inherited_by_name(name: &str) -> bool {
-    agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.iter().any(|allowed| {
-        if cfg!(windows) {
-            allowed.eq_ignore_ascii_case(name)
-        } else {
-            *allowed == name
-        }
-    })
+    agiworkforce_mcp::INHERITED_ENV_ALLOWLIST
+        .iter()
+        .any(|allowed| {
+            if cfg!(windows) {
+                allowed.eq_ignore_ascii_case(name)
+            } else {
+                *allowed == name
+            }
+        })
 }
 
 /// What `policy` gives a command of `variables`, with `passed` the names a
@@ -1176,9 +1178,8 @@ pub fn credential_locations() -> Vec<PathBuf> {
         .map(|home| agiworkforce_sandbox_policy::credential_paths(&home))
         .unwrap_or_default();
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        locations.extend(agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(
-            &config_dir,
-        ));
+        locations
+            .extend(agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(&config_dir));
     }
     locations
 }
