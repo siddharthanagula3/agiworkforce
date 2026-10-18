@@ -66,8 +66,6 @@ async function handleCloseLiveSession(
   request: NextRequest,
   context: { params: Promise<{ sessionId: string }> },
 ) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');

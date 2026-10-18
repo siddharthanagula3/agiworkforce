@@ -4,6 +4,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/read-json-body';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -113,13 +114,7 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
-    throw createError.validation('Invalid JSON body');
-  }
-  const parsed = SettingsSyncPushRequestSchema.safeParse(rawBody);
+  const parsed = SettingsSyncPushRequestSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid settings sync payload', parsed.error);
   }

@@ -68,8 +68,6 @@ function describeSpeechFailure(status: number): string {
 }
 
 async function handleSpeech(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-speech');

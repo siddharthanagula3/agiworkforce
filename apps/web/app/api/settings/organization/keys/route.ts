@@ -48,8 +48,6 @@ const DescriptorSchema = z
   })
   .strict();
 
-const ProvisionSchema = DescriptorSchema.strict();
-
 const ChangeSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('rotate') }).strict(),
   z
@@ -151,7 +149,7 @@ async function handleProvision(request: NextRequest): Promise<NextResponse | Res
   );
 
   const idempotencyKey = readIdempotencyKey(request);
-  const parsed = ProvisionSchema.safeParse(await readJsonBody(request));
+  const parsed = DescriptorSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid encryption key', parsed.error.issues);
   }

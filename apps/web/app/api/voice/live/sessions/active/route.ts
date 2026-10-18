@@ -20,8 +20,6 @@ import {
 // What a reconnect or a second device reads to pick a session back up: the
 // settings it ran with and the transcript turn it had already delivered.
 async function handleReadVoiceSession(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');
   if (rateLimitResponse) return rateLimitResponse;
   const { userId } = await getClerkAuthUser(request);

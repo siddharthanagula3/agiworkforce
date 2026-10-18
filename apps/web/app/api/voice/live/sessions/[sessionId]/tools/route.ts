@@ -19,8 +19,6 @@ async function handleVoiceToolCall(
   request: NextRequest,
   context: { params: Promise<{ sessionId: string }> },
 ) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const { userId } = await getClerkAuthUser(request);

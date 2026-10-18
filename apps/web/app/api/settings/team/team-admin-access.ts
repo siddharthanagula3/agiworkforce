@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
-import { AppError, type ErrorCodeValue } from '@/lib/errors';
+import { AppError, createError, type ErrorCodeValue } from '@/lib/errors';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
 import {
   resolveOrganizationEntitlementPlan,
@@ -63,11 +63,7 @@ async function assertOrganizationMember(
     [organizationId, userId],
   );
   if (rows.length === 0) {
-    throw new AppError(
-      'FORBIDDEN' as ErrorCodeValue,
-      'You are not a member of this organization',
-      403,
-    );
+    throw createError.forbidden('You are not a member of this organization');
   }
 }
 

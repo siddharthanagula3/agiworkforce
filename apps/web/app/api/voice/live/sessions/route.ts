@@ -164,8 +164,6 @@ function upstreamErrorCode(body: string): string {
 }
 
 async function handleCreateLiveSession(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const rateLimitResponse = await withRateLimit(request, 'voice-live-session');

@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
+import { readValidatedSearchParams } from '@/lib/read-json-body';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveComplianceCaller } from '@/lib/server/compliance-caller';
@@ -28,17 +29,6 @@ const QuerySchema = z.object({
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 });
-
-function readParams(request: NextRequest): Record<string, string> {
-  const out: Record<string, string> = {};
-  // new URL(request.url) rather than request.nextUrl: the latter exists only on
-  // a real NextRequest, so reading it makes the handler untestable with a plain
-  // Request and turns a bad query string into a 500 instead of a 400.
-  new URL(request.url).searchParams.forEach((value, key) => {
-    if (value !== '') out[key] = value;
-  });
-  return out;
-}
 
 /**
  * Streams the workspace's audit trail as JSONL.
@@ -65,11 +55,7 @@ async function handleGet(request: NextRequest): Promise<Response> {
   const userId = caller.actorUserId;
   const membership = { organizationId: caller.organizationId, role: caller.role };
 
-  const parsed = QuerySchema.safeParse(readParams(request));
-  if (!parsed.success) {
-    throw createError.validation('Invalid audit export query', parsed.error.issues);
-  }
-  const q = parsed.data;
+  const q = readValidatedSearchParams(request, QuerySchema, 'Invalid audit export query');
 
   if (q.from && q.to && new Date(q.from) > new Date(q.to)) {
     throw createError.validation('The start of the range must not be after its end.');

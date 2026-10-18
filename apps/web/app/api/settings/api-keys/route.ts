@@ -17,6 +17,8 @@ import { requireStepUp } from '@/lib/server/step-up-auth';
 import { readLiveDeveloperProject } from '@/lib/services/developer-project-service';
 import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
 
+const MAX_ACTIVE_API_KEYS = 20;
+
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
   scopes: z
@@ -84,8 +86,10 @@ async function handleCreate(request: NextRequest) {
     [userId],
   );
   const activeCount = parseInt(countRow?.count ?? '0', 10);
-  if (activeCount >= 20) {
-    throw createError.validation('You may not have more than 20 active API keys at once');
+  if (activeCount >= MAX_ACTIVE_API_KEYS) {
+    throw createError.validation(
+      `You may not have more than ${MAX_ACTIVE_API_KEYS} active API keys at once`,
+    );
   }
 
   await requireStepUp({

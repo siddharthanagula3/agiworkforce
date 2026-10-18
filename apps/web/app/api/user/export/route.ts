@@ -26,11 +26,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
 async function handleExportUserData(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) {
-    return preflightResponse;
-  }
-
   const rateLimitResponse = await withRateLimit(request, 'user-data-export');
   if (rateLimitResponse) {
     return rateLimitResponse;
