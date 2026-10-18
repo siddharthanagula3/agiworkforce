@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -40,8 +40,23 @@ import {
   type AutoModeDef,
   type ModelDef,
 } from '@/src/features/model-picker/service';
+import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
+import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+
+function establishedCloudModel(
+  conversationId: string,
+  cloudUnlocked: boolean,
+  subscriptionTier: string,
+): ModelDef | undefined {
+  const messages =
+    getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
+  const answered = [...messages].reverse().find((message) => message.role === 'assistant');
+  if (!answered?.model || isAutoMode(answered.model)) return undefined;
+  const model = getModelByIdForCloudAccess(answered.model, cloudUnlocked, subscriptionTier);
+  return model?.surface === 'cloud_managed' ? model : undefined;
+}
 
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',
@@ -456,6 +471,26 @@ export function ModelPickerSheet({
         return;
       }
 
+      const establishedModel =
+        chosenModel.surface === 'cloud_managed' && conversationId
+          ? establishedCloudModel(conversationId, cloudUnlocked, subscriptionTier)
+          : undefined;
+      if (
+        establishedModel &&
+        guardProviderSwitch(establishedModel.provider, chosenModel.provider, subscriptionTier) ===
+          'upgrade-required'
+      ) {
+        Alert.alert(
+          'Start a new chat for this model',
+          `This chat uses ${establishedModel.providerLabel}. Switching to ${chosenModel.providerLabel} in the same chat needs the Max plan. You can use it in a new chat.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'See plans', onPress: openUpgrade },
+          ],
+        );
+        return;
+      }
+
       const installStatus = statusForModel(chosenModel);
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
@@ -479,6 +514,7 @@ export function ModelPickerSheet({
     },
     [
       cloudUnlocked,
+      conversationId,
       subscriptionTier,
       openInvite,
       openUpgrade,
