@@ -21,6 +21,7 @@ export interface JoinWaitlistResult {
 
 const JOIN_FAILED_MESSAGE = 'Failed to join waitlist. Please try again.';
 const PUBLIC_WAITLIST_TOKEN_DEADLINE_MS = 10_000;
+const PUBLIC_WAITLIST_JOIN_DEADLINE_MS = 15_000;
 
 // The public waitlist is served without identity, so its token comes from the same route and
 // is bound to the anonymous session. The token /api/csrf mints for a signed-in visitor is
@@ -54,6 +55,7 @@ export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWait
         consent: entry.consent ?? [],
         consentSurface: entry.consentSurface ?? 'web-waitlist-inline',
       }),
+      signal: AbortSignal.timeout(PUBLIC_WAITLIST_JOIN_DEADLINE_MS),
     });
 
     if (!res.ok) {
