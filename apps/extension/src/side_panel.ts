@@ -718,6 +718,7 @@ interface UsageBanner {
 }
 
 let usageBanner: UsageBanner | null = null;
+const FULL_ACCESS_NOTICE_DISMISSED_KEY = 'agi.notice.full-access-dismissed';
 const quotaWarnedStreamIds = new Set<string>();
 const MODEL_USAGE_ROW_LIMIT = 5;
 
@@ -4138,6 +4139,16 @@ function injectStyles(): void {
     }
     .sp-autonomy-chip:hover { filter: brightness(1.12); }
     .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
+    .sp-autonomy-heading {
+      padding: 4px 9px 6px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 600;
+    }
+    .sp-autonomy-learn-more { margin: 4px 9px 2px; }
+    .sp-autonomy-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-full-access-notice { color: var(--agi-ext-text); }
 
     /* Per-row provenance badge in the history drawer. */
     .sp-drawer-history-badge {
@@ -17084,8 +17095,15 @@ function buildUI(): void {
   const autonomyPopover = el('div', {
     id: 'sp-autonomy-popover',
     role: 'menu',
-    'aria-label': 'Browser action approvals',
+    'aria-labelledby': 'sp-autonomy-heading',
   });
+  autonomyPopover.appendChild(
+    el(
+      'div',
+      { id: 'sp-autonomy-heading', class: 'sp-autonomy-heading', role: 'presentation' },
+      t('spAutonomyMenuHeading'),
+    ),
+  );
   const askFirstOption = el('button', {
     class: 'sp-autonomy-option',
     type: 'button',
@@ -17112,6 +17130,12 @@ function buildUI(): void {
   fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
   autonomyPopover.appendChild(fullAccessOption);
+  const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
+  autonomyLearnMore.classList.add('sp-autonomy-learn-more');
+  autonomyLearnMore.setAttribute('role', 'menuitem');
+  autonomyLearnMore.addEventListener('click', () => closeAutonomyPopover());
+  autonomyPopover.appendChild(autonomyLearnMore);
+  wireMenuArrowKeys(autonomyPopover);
   autonomyControl.appendChild(autonomyChip);
   autonomyControl.appendChild(autonomyPopover);
   composerBarStart.appendChild(autonomyControl);
@@ -17168,8 +17192,41 @@ function buildUI(): void {
     }
   });
 
+  const fullAccessNotice = el('div', {
+    id: 'sp-full-access-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  fullAccessNotice.appendChild(el('span', {}, t('spFullAccessNotice')));
+  const fullAccessNoticeDismiss = el('button', {
+    class: 'sp-composer-notice-dismiss',
+    type: 'button',
+    'aria-label': t('spFullAccessNoticeDismiss'),
+  });
+  fullAccessNoticeDismiss.appendChild(renderIcon(X, 12));
+  fullAccessNoticeDismiss.addEventListener('click', () => {
+    fullAccessNotice.classList.remove('visible');
+    void chrome.storage.local.set({ [FULL_ACCESS_NOTICE_DISMISSED_KEY]: true }).catch(() => {});
+    autonomyChip.focus();
+  });
+  fullAccessNotice.appendChild(fullAccessNoticeDismiss);
+
+  async function discloseFullAccess(): Promise<void> {
+    let dismissed = false;
+    try {
+      const stored = await chrome.storage.local.get(FULL_ACCESS_NOTICE_DISMISSED_KEY);
+      dismissed = stored[FULL_ACCESS_NOTICE_DISMISSED_KEY] === true;
+    } catch {
+      dismissed = false;
+    }
+    if (autonomyChip.getAttribute('data-mode') !== 'full') return;
+    fullAccessNotice.classList.toggle('visible', !dismissed);
+  }
+
   askFirstOption.addEventListener('click', () => {
     renderAutonomyChip(true);
+    fullAccessNotice.classList.remove('visible');
     void chrome.storage.local.set({ agi_cu_ask_before_acting: true });
     closeAutonomyPopover(true);
   });
@@ -17177,12 +17234,16 @@ function buildUI(): void {
     renderAutonomyChip(false);
     void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
     closeAutonomyPopover(true);
+    void discloseFullAccess();
   });
   autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeAutonomyPopover(true);
+      return;
     }
+    if (event.key === 'Tab') closeAutonomyPopover();
   });
   document.addEventListener('click', (event: MouseEvent) => {
     if (!autonomyControl.contains(event.target as Node)) closeAutonomyPopover();
@@ -17193,6 +17254,7 @@ function buildUI(): void {
     const change = changes['agi_cu_ask_before_acting'];
     if (!change) return;
     renderAutonomyChip(change.newValue !== false);
+    if (change.newValue !== false) fullAccessNotice.classList.remove('visible');
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -17343,6 +17405,7 @@ function buildUI(): void {
   freePlanNotices = buildFreePlanNotices();
   inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
+  inputArea.appendChild(fullAccessNotice);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);
   inputArea.appendChild(memoryNotice);

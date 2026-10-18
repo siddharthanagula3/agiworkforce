@@ -4601,5 +4601,21 @@
   "spQuotaFreeUpgrade": {
     "message": "Upgrade",
     "description": "Single action a Free account sees on its usage card and when it reaches the Free limit; matches the web Free branch."
+  },
+  "spAutonomyMenuHeading": {
+    "message": "How should AGI act in your browser?",
+    "description": "Heading and accessible name of the approval-mode menu beside the + button."
+  },
+  "spAutonomyLearnMore": {
+    "message": "Learn more",
+    "description": "Link at the foot of the approval-mode menu to the tool approvals help article."
+  },
+  "spFullAccessNotice": {
+    "message": "Full access is on. AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "description": "One-time composer notice after choosing Full access. Lists only always-ask reasons approvalPolicy.ts enforces."
+  },
+  "spFullAccessNoticeDismiss": {
+    "message": "Dismiss the full access notice",
+    "description": "Accessible label of the X that closes the Full access notice for good."
   }
 }
