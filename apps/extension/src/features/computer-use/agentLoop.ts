@@ -1395,10 +1395,18 @@ async function dispatchToolCall(
 ): Promise<AgentMessage> {
   const toolName = toolCall.function.name;
   let args: Record<string, unknown> = {};
-  try {
-    args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-  } catch {
-    /* noop */
+  let argumentsError: string | null = null;
+  if (toolCall.function.arguments.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(toolCall.function.arguments);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      } else {
+        argumentsError = `The arguments for ${toolName} must be a JSON object. Send the call again.`;
+      }
+    } catch (error) {
+      argumentsError = `The arguments for ${toolName} were not valid JSON (${error instanceof Error ? error.message : 'parse error'}). Send the call again.`;
+    }
   }
 
   const attempt = startAutomationAttempt({
@@ -1417,6 +1425,18 @@ async function dispatchToolCall(
   };
 
   await assertRunOwnership(options);
+  if (argumentsError) {
+    const actionOutcome = await settle({ claim: 'refused', reason: argumentsError }, null);
+    await assertRunOwnership(options);
+    options.onProgress?.({
+      kind: 'tool_result',
+      stepNumber,
+      toolName,
+      toolResult: argumentsError,
+      actionOutcome,
+    });
+    return { role: 'tool', content: argumentsError, tool_call_id: toolCall.id, name: toolName };
+  }
   options.onProgress?.({
     kind: 'tool_call',
     stepNumber,
