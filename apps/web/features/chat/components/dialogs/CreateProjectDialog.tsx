@@ -130,12 +130,10 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
         </DialogHeader>
 
         <div className="p-6 pb-5">
-          {/* Title row */}
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-h3 text-foreground">Create project</h2>
           </div>
 
-          {/* Project name input */}
           <div className="space-y-1.5">
             <Label
               htmlFor="create-project-name"
@@ -144,9 +142,6 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
               Project name
             </Label>
 
-            {/* Input with a leading decorative icon. (Not a button, an emoji
-                picker is not implemented, so a clickable no-op would be a dead
-                control; this is a non-interactive affordance instead.) */}
             <div className="relative">
               <span
                 aria-hidden="true"
@@ -206,9 +201,6 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
             />
           </div>
 
-          {/* Template picker. Selecting one fills the name field if the user has
-              not typed their own, so the common path is: pick a template, press
-              Enter. */}
           <fieldset className="mt-4">
             <legend className="mb-2 text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Start from
@@ -247,7 +239,6 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
             </p>
           </fieldset>
 
-          {/* Tip box */}
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-border/50 bg-muted/30 px-4 py-3">
             <Lightbulb
               className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
@@ -260,7 +251,6 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end border-t border-border/60 px-6 py-4">
           <Button
             onClick={() => void handleSubmit()}

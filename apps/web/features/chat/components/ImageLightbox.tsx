@@ -105,9 +105,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
       className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      {/* Toolbar */}
       <div className="absolute top-4 right-4 z-[var(--z-control)] flex items-center gap-2">
-        {/* Position in the set. Only meaningful with somewhere to go. */}
         {canNavigate && (
           <span
             className="mr-1 min-w-[3.5rem] text-center text-xs font-medium text-white/70"
@@ -117,7 +115,6 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           </span>
         )}
 
-        {/* Zoom out */}
         <button
           type="button"
           onClick={() => setZoom((z) => Math.max(z - ZOOM_STEP, MIN_ZOOM))}
@@ -132,12 +129,10 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           <ZoomOut className="h-4 w-4" />
         </button>
 
-        {/* Zoom indicator */}
         <span className="min-w-[3rem] text-center text-xs font-medium text-white/70">
           {Math.round(zoom * 100)}%
         </span>
 
-        {/* Zoom in */}
         <button
           type="button"
           onClick={() => setZoom((z) => Math.min(z + ZOOM_STEP, MAX_ZOOM))}
@@ -152,7 +147,6 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           <ZoomIn className="h-4 w-4" />
         </button>
 
-        {/* Reset zoom */}
         <button
           type="button"
           onClick={() => setZoom(DEFAULT_ZOOM)}
@@ -165,10 +159,8 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           <RotateCcw className="h-4 w-4" />
         </button>
 
-        {/* Separator */}
         <div className="mx-1 h-5 w-px bg-white/20" />
 
-        {/* Download */}
         <button
           type="button"
           onClick={handleDownload}
@@ -181,7 +173,6 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           <Download className="h-4 w-4" />
         </button>
 
-        {/* Close */}
         <button
           type="button"
           onClick={onClose}
@@ -228,7 +219,6 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
         </>
       )}
 
-      {/* Image container */}
       <div className="flex max-h-[90vh] max-w-[90vw] items-center justify-center overflow-auto">
         <img
           key={current.src}

@@ -207,7 +207,6 @@ export function RecipeCard({ content }: RecipeCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-6 pt-5">
-        {/* Ingredients */}
         {recipe.ingredients.length > 0 && (
           <section aria-labelledby="recipe-ingredients-heading">
             <h4
@@ -246,7 +245,6 @@ export function RecipeCard({ content }: RecipeCardProps) {
           </section>
         )}
 
-        {/* Instructions */}
         {recipe.instructions.length > 0 && (
           <section aria-labelledby="recipe-instructions-heading">
             <h4

@@ -114,7 +114,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
           'mt-[2px] h-3 w-3 shrink-0',
           step.status === 'completed' && 'text-primary',
           step.status === 'failed' && 'text-danger',
-          step.status === 'running' && 'animate-spin text-primary',
+          step.status === 'running' && 'motion-safe:animate-spin text-primary',
           step.status === 'pending' && 'text-muted-foreground',
           step.status === 'dropped' && 'text-muted-foreground',
         )}
@@ -502,7 +502,7 @@ export function ResearchActivity({
               aria-label="Retry this research run"
             >
               <RotateCw
-                className={cn('h-3 w-3', isRetrying && 'animate-spin')}
+                className={cn('h-3 w-3', isRetrying && 'motion-safe:animate-spin')}
                 aria-hidden="true"
               />
               {isRetrying ? 'Retrying…' : 'Retry'}

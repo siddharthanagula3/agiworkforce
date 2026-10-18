@@ -51,7 +51,7 @@ export function ImageTranscriptRecoveryNotice({
           className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-warning-fill/30 bg-surface-elevated px-2.5 py-1 text-xs font-medium text-warning-text transition-colors hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60"
         >
           <RefreshCw
-            className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`}
+            className={`h-3.5 w-3.5 ${retrying ? 'motion-safe:animate-spin' : ''}`}
             aria-hidden="true"
           />
           {retrying

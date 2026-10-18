@@ -9,6 +9,7 @@ import {
   detectProviderFromModelId,
   formatProviderModeLabel,
   getProviderSurface,
+  isAutoModeModelId,
   providerSurfaceToProviderMode,
   type ProviderMode,
 } from '@agiworkforce/types';
@@ -20,7 +21,6 @@ export const WEB_HANDOFF_PREVIEW_MAX_CHARS = 90_000;
 
 const LOCAL_MODEL_PREFIXES = ['ollama/', 'ollama:', 'lmstudio/', 'lm-studio/', 'lmstudio:'];
 const BYOK_MODEL_PREFIXES = ['open_router/', 'openrouter/', 'nvidia_nim/', 'nvidia/'];
-const AUTO_MODE_IDS = new Set(['auto', 'auto-economy', 'auto-balanced', 'auto-premium']);
 
 export interface WebHandoffContextCandidate extends HandoffPreviewContextItem {
   content: string;
@@ -47,7 +47,7 @@ function inferProviderFromModelId(modelId: string | null | undefined): string | 
   if (detected) return detected;
 
   const lower = canonicalModelId.toLowerCase();
-  if (AUTO_MODE_IDS.has(lower)) return 'managed_cloud';
+  if (isAutoModeModelId(lower)) return 'managed_cloud';
   if (LOCAL_MODEL_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
     return lower.startsWith('lm') ? 'lmstudio' : 'ollama';
   }

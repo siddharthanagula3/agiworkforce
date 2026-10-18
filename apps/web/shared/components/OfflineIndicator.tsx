@@ -105,14 +105,16 @@ export function OfflineIndicator({
   const getIcon = () => {
     switch (state.state) {
       case SyncState.SYNCING:
-        return <Loader className={`w-4 h-4 animate-spin ${iconColor}`} />;
+        return (
+          <Loader className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`} aria-hidden="true" />
+        );
       case SyncState.ERROR:
         return <AlertCircle className={`w-4 h-4 ${iconColor}`} />;
       case SyncState.OFFLINE:
         return <WifiOff className={`w-4 h-4 ${iconColor}`} />;
       case SyncState.ONLINE:
         return state.queuedCount > 0 ? (
-          <Loader className={`w-4 h-4 animate-spin ${iconColor}`} />
+          <Loader className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`} aria-hidden="true" />
         ) : (
           <Check className={`w-4 h-4 ${iconColor}`} />
         );
@@ -151,7 +153,6 @@ export function OfflineIndicator({
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="flex gap-2 flex-shrink-0">
           {state.state === SyncState.ERROR && (
             <button

@@ -152,7 +152,10 @@ export function ReflectSection() {
             onClick={() => setRefreshVersion((value) => value + 1)}
             aria-label="Refresh recap"
           >
-            <RefreshCw className={`me-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`me-2 h-4 w-4 ${loading ? 'motion-safe:animate-spin' : ''}`}
+              aria-hidden="true"
+            />
             Refresh
           </Button>
         </div>

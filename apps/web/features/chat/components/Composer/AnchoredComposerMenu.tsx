@@ -1,22 +1,12 @@
 'use client';
 
 /**
- * AnchoredComposerMenu: a composer popover that cannot be clipped away.
+ * A composer popover that cannot be clipped away.
  *
- * WHY THIS EXISTS
- *
- * Every composer menu was an `absolute bottom-full` div rendered inside the
- * composer. The composer sits at the bottom of a column of `overflow-hidden`
- * flex containers (the chat shell clips its own scroll regions), so a popover
- * taller than the space above the composer is not scrolled or flipped, it is
- * silently CUT OFF, and the clipped rows stop receiving pointer events.
- *
- * That was not theoretical. At a 670px-tall viewport the "+" menu is 392px and
- * opened with its top 34px outside the clip rect, which removed the FIRST row.
- * "Add photos & files", from the product. `document.elementFromPoint` over
- * that row returned the shell div, not the button. There was no way to attach a
- * file to a message from the web composer at all: the hidden `<input
- * type="file">` was still in the DOM, still wired, and unreachable.
+ * The composer sits at the bottom of a column of `overflow-hidden` flex
+ * containers (the chat shell clips its own scroll regions), so an in-place
+ * `absolute bottom-full` popover taller than the space above the composer is
+ * cut off, and the clipped rows stop receiving pointer events.
  *
  * `position: fixed` alone does not fix it either, the composer sets
  * `backdrop-blur` below `md`, and a backdrop-filter ancestor becomes the
@@ -178,11 +168,8 @@ export function AnchoredComposerMenu({
     };
   }, [open, mounted, reposition]);
 
-  // The panel opened with no focus inside it and no Escape handling, so a
-  // keyboard user could open it and neither reach its contents nor dismiss it.
-  // Synchronous (not a setTimeout(0) passive effect): a key pressed right
-  // after open, before the deferred timer ever ran, used to find no item
-  // holding focus and misfire the wrap-around math against index -1.
+  // Synchronous, not a deferred effect: a key pressed right after open must
+  // find an item holding focus, or the wrap-around math runs against index -1.
   const focusedOnOpenRef = useRef(false);
   useLayoutEffect(() => {
     if (!open) {

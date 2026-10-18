@@ -81,7 +81,7 @@ export function AuditLogPanel() {
             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${logsQuery.isFetching ? 'animate-spin' : ''}`}
+              className={`h-3.5 w-3.5 ${logsQuery.isFetching ? 'motion-safe:animate-spin' : ''}`}
               aria-hidden="true"
             />
           </button>

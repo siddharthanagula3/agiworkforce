@@ -9,12 +9,13 @@ import {
   DialogFooter,
   Button,
   Input,
+  Spinner,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
-import { FileText, FileJson, FileCode, Download, Check, Loader2 } from 'lucide-react';
+import { FileText, FileJson, FileCode, Download, Check } from 'lucide-react';
 import type { ChatSession, ChatMessage } from '../../types';
 import { ChatExportService } from '../../services/conversation-export';
 import {
@@ -178,7 +179,6 @@ function EnhancedExportDialogImpl({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Format Selection */}
           <div className="space-y-3">
             <Label className="text-sm font-semibold">Export Format</Label>
             <div className="grid grid-cols-2 gap-3">
@@ -209,7 +209,6 @@ function EnhancedExportDialogImpl({
             </div>
           </div>
 
-          {/* Custom Filename */}
           <div className="space-y-2">
             <Label htmlFor="filename" className="text-sm">
               Filename (Optional)
@@ -228,7 +227,6 @@ function EnhancedExportDialogImpl({
             </div>
           </div>
 
-          {/* Export Options */}
           {selectedFormat !== 'json' && (
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Options</Label>
@@ -253,7 +251,6 @@ function EnhancedExportDialogImpl({
             </div>
           )}
 
-          {/* Preview Info */}
           {session && (
             <div className="rounded-lg bg-muted p-4 text-sm">
               <p className="mb-2 font-semibold">Export Preview</p>
@@ -279,7 +276,7 @@ function EnhancedExportDialogImpl({
           <Button onClick={handleExport} disabled={isExporting || !session}>
             {isExporting ? (
               <>
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                <Spinner size="sm" className="me-2" aria-hidden="true" />
                 Exporting...
               </>
             ) : (

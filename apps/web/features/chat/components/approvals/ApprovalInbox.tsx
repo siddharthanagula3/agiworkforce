@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { Check, ChevronRight, Loader2, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronRight, ShieldCheck, X } from 'lucide-react';
 import {
   Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Spinner,
   Textarea,
   translateUiPlural,
 } from '@agiworkforce/ui';
@@ -248,7 +249,7 @@ export function ApprovalInbox({
                           aria-label={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${item.label}`}
                         >
                           {resolving ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            <Spinner className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : (
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
                           )}
@@ -263,7 +264,7 @@ export function ApprovalInbox({
                           aria-label={`${TOOL_APPROVAL_ACTION_LABELS.approve} ${item.label}`}
                         >
                           {resolving ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            <Spinner className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : (
                             <Check className="h-3.5 w-3.5" aria-hidden="true" />
                           )}

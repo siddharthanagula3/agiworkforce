@@ -8,6 +8,7 @@ import {
   CardTitle,
   Button,
   Input,
+  Spinner,
 } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
@@ -19,7 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@shared/ui/form';
-import { Save, Loader2, Key, Eye, EyeOff } from 'lucide-react';
+import { Save, Key, Eye, EyeOff } from 'lucide-react';
 import type {
   SecuritySettingsFormData,
   ChangePasswordFormData,
@@ -101,7 +102,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
           <div className="flex justify-end">
             <Button type="submit" disabled={isSaving || !securityForm.formState.isDirty}>
               {isUpdateSettingsPending ? (
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                <Spinner size="sm" className="me-2" aria-hidden="true" />
               ) : (
                 <Save className="me-2 h-4 w-4" />
               )}
@@ -195,6 +196,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       <Input
                         {...field}
                         type={showConfirmPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
                         className="border-border bg-background pe-10 text-foreground"
                         placeholder="Confirm new password"
                       />
@@ -233,7 +235,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               className="w-full border-border"
             >
               {isChangePasswordPending ? (
-                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                <Spinner size="sm" className="me-2" aria-hidden="true" />
               ) : (
                 <Key className="me-2 h-4 w-4" />
               )}

@@ -26,25 +26,15 @@ import {
 const MESSAGE_INPUT_LABEL = 'Message input';
 
 /**
- * M11, extended by the composer parity wave. The resting composer ran to
- * ~131px at 390px against ChatGPT's ~87px, so every vertical value below the
- * `sm` breakpoint is its own step. The row heights below feed a one-row
- * rest state (plus, textbox, right cluster all on one flex-nowrap line): a
- * 36px content row plus the card's compact inset lands inside the 48-52px
- * rest-height target in an existing chat; the empty (home) row stays
- * 40px, its own second row (mode toggle) absorbed separately.
+ * The row heights feed a one-row rest state (plus, textbox, right cluster all
+ * on one flex-nowrap line): a 36px content row plus the card's compact inset
+ * lands inside the 48-52px rest-height target in an existing chat; the empty
+ * (home) row stays 40px from `sm`, its second row (mode toggle) absorbed
+ * separately.
  */
 export const COMPOSER_INPUT_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[36px] sm:py-1.5';
 export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px] sm:py-1.5';
 
-/**
- * `block`: a `<textarea>` is inline-level by default, so its bottom edge in a
- * block wrapper carries the wrapper's own font descender as phantom space
- * (the classic "gap under an inline replaced element"). That gap silently
- * inflated the composer's rest height once the plus/model/mic/send controls
- * moved into the SAME row and needed the textbox's rendered height, not just
- * its own box, to match the row's other controls.
- */
 /**
  * The placeholder is pinned to one line. The input's height is fixed at rest,
  * so a placeholder long enough to wrap does not grow the box, it renders a
@@ -53,14 +43,17 @@ export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px]
  */
 const INPUT_PLACEHOLDER_CLASS =
   'placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-muted-foreground';
+/**
+ * `block`: an inline-level `<textarea>` carries its wrapper's font descender
+ * as phantom space under it, which makes the textbox taller than the controls
+ * that share its row.
+ */
 const INPUT_SHARED_CLASS =
   'relative z-[var(--z-control)] block w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
 const INPUT_RESTING_HEIGHT_CLASS = 'max-h-[240px]';
 const INPUT_EXPANDED_HEIGHT_CLASS = 'h-[min(60dvh,40rem)] max-h-[min(60dvh,40rem)]';
 const INPUT_END_INSET_CLASS = 'pe-9';
-/** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
 const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
-const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
 
 /**
  * The editor owns its own box through `composer-editor.css`, which is not
@@ -111,7 +104,6 @@ export interface ComposerInputProps {
   placeholder: string | undefined;
   disabled: boolean;
   maxLength: number;
-  /** New-chat surface: a larger type size and a shorter resting height. */
   emptyState: boolean;
   expanded: boolean;
   reserveEndInset: boolean;
@@ -157,7 +149,7 @@ function ComposerTextarea({
         INPUT_SHARED_CLASS,
         INPUT_PLACEHOLDER_CLASS,
         emptyState ? COMPOSER_INPUT_EMPTY_ROW_CLASS : COMPOSER_INPUT_ROW_CLASS,
-        emptyState ? INPUT_EMPTY_TEXT_SIZE_CLASS : INPUT_TEXT_SIZE_CLASS,
+        INPUT_TEXT_SIZE_CLASS,
         expanded ? INPUT_EXPANDED_HEIGHT_CLASS : INPUT_RESTING_HEIGHT_CLASS,
         reserveEndInset && INPUT_END_INSET_CLASS,
       )}
