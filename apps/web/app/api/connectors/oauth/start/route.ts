@@ -52,7 +52,6 @@ import {
   isConnectorTokenStorageAvailable,
 } from '@/lib/custom-connector-crypto';
 import {
-  ConnectorOAuthStoreUnavailableError,
   markAppReturn,
   createPendingAuthorization,
   listConnectorAccounts,
@@ -94,7 +93,6 @@ function connectorDisplayName(connectorId: string): string {
 
 const NOT_CONFIGURED_MESSAGE =
   'This connector has no OAuth application configured in this deployment.';
-const BROKER_UNAVAILABLE_MESSAGE = 'Connector authorization is not available in this environment.';
 const OPEN_SERVER_MESSAGE = 'This connector needs no authorization.';
 
 interface DiscoveredServer {
@@ -341,33 +339,22 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const state = generateOAuthState();
   const pkce = generatePkcePair();
 
-  try {
-    await createPendingAuthorization({
-      userId,
-      connectorId,
-      state,
-      codeVerifier: pkce.verifier,
-      codeChallengeMethod: 'S256',
-      redirectUri,
-      requestedScopes,
-      returnPath,
-      ttlSeconds: sensitiveDataConnector(connectorId)?.authorizationTtlSeconds,
-      issuer: registryAuth.context.issuer,
-      resourceUrl: registryAuth.context.resource,
-      ...(registryAuth.context.discoveryState
-        ? { discoveryState: registryAuth.context.discoveryState }
-        : {}),
-    });
-  } catch (error) {
-    if (error instanceof ConnectorOAuthStoreUnavailableError) {
-      logger.warn(
-        { connectorId },
-        '[connector-oauth] broker tables are not migrated; refusing to start a flow',
-      );
-      return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, BROKER_UNAVAILABLE_MESSAGE);
-    }
-    throw error;
-  }
+  await createPendingAuthorization({
+    userId,
+    connectorId,
+    state,
+    codeVerifier: pkce.verifier,
+    codeChallengeMethod: 'S256',
+    redirectUri,
+    requestedScopes,
+    returnPath,
+    ttlSeconds: sensitiveDataConnector(connectorId)?.authorizationTtlSeconds,
+    issuer: registryAuth.context.issuer,
+    resourceUrl: registryAuth.context.resource,
+    ...(registryAuth.context.discoveryState
+      ? { discoveryState: registryAuth.context.discoveryState }
+      : {}),
+  });
 
   const authorizeUrl = buildAuthorizationUrl({
     provider,

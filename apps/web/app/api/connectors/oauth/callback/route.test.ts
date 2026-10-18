@@ -8,12 +8,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 const mocks = vi.hoisted(() => {
-  class ConnectorOAuthStoreUnavailableError extends Error {
-    constructor() {
-      super('unavailable');
-      this.name = 'ConnectorOAuthStoreUnavailableError';
-    }
-  }
   class ConnectorOAuthTokenError extends Error {
     readonly status: number;
     readonly oauthError: string | null;
@@ -35,7 +29,6 @@ const mocks = vi.hoisted(() => {
     exchange: vi.fn(),
     audit: vi.fn(),
     warn: vi.fn(),
-    ConnectorOAuthStoreUnavailableError,
     ConnectorOAuthTokenError,
   };
 });
@@ -63,7 +56,6 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
-  ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: (...a: unknown[]) => mocks.upsertGrant(...a),
   createPendingAuthorization: vi.fn(),

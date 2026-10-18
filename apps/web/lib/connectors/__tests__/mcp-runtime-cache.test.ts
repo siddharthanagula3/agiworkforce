@@ -69,13 +69,13 @@ describe('stateless MCP persistent cache', () => {
     );
   });
 
-  it('fails open during an ordered schema rollout without leaking cache entries', async () => {
+  it('surfaces a missing cache table instead of reading it as an empty cache', async () => {
     mocks.query.mockRejectedValueOnce(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
     const store = new NeonMcpResponseCacheStore();
 
-    await expect(store.get({ method: 'tools/list' })).resolves.toBeUndefined();
+    await expect(store.get({ method: 'tools/list' })).rejects.toMatchObject({ code: '42P01' });
   });
 
   it('reads only the stamp column, not the value', async () => {
@@ -93,13 +93,15 @@ describe('stateless MCP persistent cache', () => {
     await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).resolves.toBeNull();
   });
 
-  it('treats a missing table as no stamp rather than an error', async () => {
+  it('surfaces a missing table when reading a stamp', async () => {
     mocks.query.mockRejectedValueOnce(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
     const store = new NeonMcpResponseCacheStore();
 
-    await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).resolves.toBeNull();
+    await expect(store.getStamp({ method: 'tools/list', params: 'v1' })).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 
   it('partitions persisted discovery by a hash of both endpoint and authorization context', async () => {
@@ -176,14 +178,14 @@ describe('cached MCP response bodies are reachable and expire', () => {
     expect(values).toEqual([1_700_000_000_000]);
   });
 
-  it('reports nothing swept when the cache table is not provisioned', async () => {
+  it('sweeps report nothing on a failed read, and a purge surfaces it', async () => {
     mocks.query.mockRejectedValue(Object.assign(new Error('missing'), { code: '42P01' }));
 
     await expect(sweepExpiredMcpResponseCache()).resolves.toBe(0);
     await expect(sweepExpiredMcpDiscoveryCache()).resolves.toBe(0);
     await expect(
       purgeMcpResponseCachePartitions([mcpAuthorizationContext.operatorConnector('github')]),
-    ).resolves.toBe(0);
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 
   it('gives each authorization context its own partition digest', () => {

@@ -16,7 +16,6 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import {
-  ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization,
   createPendingAuthorization,
   listPendingConnectorIds,
@@ -26,7 +25,6 @@ import {
   listRevocableConnectorTokens,
   revokeConnectorOAuthGrant,
   upsertConnectorOAuthGrant,
-  __resetConnectorAccountColumnProbeForTests,
 } from '../oauth-store';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 
@@ -127,7 +125,7 @@ describe('pending authorizations', () => {
     await expect(consumePendingAuthorization(STATE, 'user-1')).resolves.toBeNull();
   });
 
-  it('reports the broker as unavailable when the tables are not migrated', async () => {
+  it('surfaces a missing table instead of reporting the broker as unavailable', async () => {
     mockExecute.mockRejectedValue(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
@@ -143,7 +141,7 @@ describe('pending authorizations', () => {
         requestedScopes: [],
         returnPath: '/connectors',
       }),
-    ).rejects.toBeInstanceOf(ConnectorOAuthStoreUnavailableError);
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 });
 
@@ -246,14 +244,20 @@ describe('grants', () => {
     expect(JSON.stringify(summaries)).not.toMatch(/token_enc|accessToken|refreshToken/);
   });
 
-  it('degrades to empty rather than throwing when the tables are missing', async () => {
+  it('surfaces a missing table instead of reading it as no grants', async () => {
     mockQuery.mockRejectedValue(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
 
-    await expect(getUserConnectorOAuthGrantSummaries('user-1')).resolves.toEqual([]);
-    await expect(getConnectorOAuthGrant('user-1', 'linear')).resolves.toBeNull();
-    await expect(revokeConnectorOAuthGrant('user-1', 'linear')).resolves.toBe(false);
+    await expect(getUserConnectorOAuthGrantSummaries('user-1')).rejects.toMatchObject({
+      code: '42P01',
+    });
+    await expect(getConnectorOAuthGrant('user-1', 'linear')).rejects.toMatchObject({
+      code: '42P01',
+    });
+    await expect(revokeConnectorOAuthGrant('user-1', 'linear')).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 });
 
@@ -343,12 +347,14 @@ describe('credentials a disconnect has to hand back', () => {
     expect(tokens.map((token) => token.accountKey)).toEqual(['personal']);
   });
 
-  it('reports nothing rather than throwing when the table is absent', async () => {
+  it('surfaces a missing table instead of reporting nothing to revoke', async () => {
     mockQuery.mockRejectedValue(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
 
-    await expect(listRevocableConnectorTokens('user-1', 'gmail')).resolves.toEqual([]);
+    await expect(listRevocableConnectorTokens('user-1', 'gmail')).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 });
 
@@ -363,24 +369,9 @@ describe('listing unfinished authorizations', () => {
     expect(sql).toContain('expires_at > now()');
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user_1']);
   });
-
-  /**
-   * A deployment whose migration has not run yet still has to render the
-   * connectors pane; an unfinished-connection hint is not worth a 500.
-   */
-  it('reports nothing rather than throwing when the table is absent', async () => {
-    mockQuery.mockRejectedValue(
-      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
-    );
-    expect(await listPendingConnectorIds('user_1')).toEqual([]);
-  });
 });
 
 describe('multiple accounts per connector', () => {
-  beforeEach(() => {
-    __resetConnectorAccountColumnProbeForTests();
-  });
-
   it('keys a second account of the same connector on its own row', async () => {
     await upsertConnectorOAuthGrant(
       'user-1',
@@ -435,23 +426,5 @@ describe('multiple accounts per connector', () => {
     expect(accounts).toHaveLength(2);
     expect(accounts.map((account) => account.scope).sort()).toEqual(['personal', 'work']);
     expect(accounts.find((account) => account.scope === 'work')?.isDefault).toBe(false);
-  });
-
-  it('falls back to the single-account statements when 0253 is not applied', async () => {
-    mockExecute.mockRejectedValueOnce(
-      Object.assign(new Error('column "account_key" does not exist'), { code: '42703' }),
-    );
-
-    await upsertConnectorOAuthGrant('user-1', 'gmail', {
-      accessToken: 'token',
-      refreshToken: null,
-      tokenType: 'Bearer',
-      grantedScopes: [],
-      accessTokenExpiresAt: null,
-      tokenEndpoint: 'https://oauth2.googleapis.com/token',
-    });
-
-    const fallback = mockExecute.mock.calls.at(-1);
-    expect(String(fallback?.[0])).toContain('on conflict (user_id, connector_id) do update');
   });
 });

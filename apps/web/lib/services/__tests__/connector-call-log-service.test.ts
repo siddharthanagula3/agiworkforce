@@ -113,7 +113,7 @@ describe('readConnectorCallLog', () => {
     expect(capturedSql).toContain('limit 100');
   });
 
-  it('degrades to an empty log while the migration is pending', async () => {
+  it('surfaces a missing table instead of showing an empty log', async () => {
     const db = {
       query: vi.fn(async () => {
         throw Object.assign(new Error('relation "connector_call_events" does not exist'), {
@@ -121,7 +121,7 @@ describe('readConnectorCallLog', () => {
         });
       }),
     } as never;
-    await expect(readConnectorCallLog(db, 'user_1')).resolves.toEqual([]);
+    await expect(readConnectorCallLog(db, 'user_1')).rejects.toMatchObject({ code: '42P01' });
   });
 });
 
@@ -136,13 +136,15 @@ describe('readConnectorsNotResponding', () => {
     expect(Date.parse(String(values[1]))).toBe(NOW - CONNECTOR_FAILURE_RECENCY_MS);
   });
 
-  it('leaves every connector on its configured state while the migration is pending', async () => {
+  it('surfaces a missing table instead of reporting every connector healthy', async () => {
     const db = {
       query: vi.fn(async () => {
         throw Object.assign(new Error('does not exist'), { code: '42P01' });
       }),
     } as never;
-    await expect(readConnectorsNotResponding(db, 'user_1', NOW)).resolves.toEqual(new Set());
+    await expect(readConnectorsNotResponding(db, 'user_1', NOW)).rejects.toMatchObject({
+      code: '42P01',
+    });
   });
 });
 

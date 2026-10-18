@@ -15,15 +15,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { DEFAULT_CONNECTOR_ACCOUNT_KEY } from '@/lib/connectors/accounts';
 
 const DISCOVERY_TTL_MS = 24 * 60 * 60 * 1_000;
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isCacheSchemaUnavailable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
-
 function digest(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -47,93 +38,69 @@ interface CacheRow {
 
 export class NeonMcpResponseCacheStore implements ResponseCacheStore {
   async getStamp(key: CacheKey): Promise<number | null> {
-    const db = getNeonDb();
-    try {
-      const rows = await db.query<{ stamp: string | number }>(
-        `select stamp
-           from public.mcp_response_cache
-          where method = $1 and params_key = $2 and partition_key = $3`,
-        normalizedKey(key),
-      );
-      const row = rows[0];
-      return row ? Number(row.stamp) : null;
-    } catch (error) {
-      if (isCacheSchemaUnavailable(error)) return null;
-      throw error;
-    }
+    const rows = await getNeonDb().query<{ stamp: string | number }>(
+      `select stamp
+         from public.mcp_response_cache
+        where method = $1 and params_key = $2 and partition_key = $3`,
+      normalizedKey(key),
+    );
+    const row = rows[0];
+    return row ? Number(row.stamp) : null;
   }
 
   async get(key: CacheKey): Promise<CacheEntry | undefined> {
-    const db = getNeonDb();
-    try {
-      const rows = await db.query<CacheRow>(
-        `select value, stamp, expires_at_ms, scope
-           from public.mcp_response_cache
-          where method = $1 and params_key = $2 and partition_key = $3
-            and (expires_at_ms is null or expires_at_ms >= $4)`,
-        [...normalizedKey(key), Date.now()],
-      );
-      const row = rows[0];
-      if (!row) return undefined;
-      const expiresAt = row.expires_at_ms === null ? undefined : Number(row.expires_at_ms);
-      return {
-        value: row.value,
-        stamp: Number(row.stamp),
-        ...(Number.isFinite(expiresAt) ? { expiresAt } : {}),
-        ...(row.scope ? { scope: row.scope } : {}),
-      };
-    } catch (error) {
-      if (isCacheSchemaUnavailable(error)) return undefined;
-      throw error;
-    }
+    const rows = await getNeonDb().query<CacheRow>(
+      `select value, stamp, expires_at_ms, scope
+         from public.mcp_response_cache
+        where method = $1 and params_key = $2 and partition_key = $3
+          and (expires_at_ms is null or expires_at_ms >= $4)`,
+      [...normalizedKey(key), Date.now()],
+    );
+    const row = rows[0];
+    if (!row) return undefined;
+    const expiresAt = row.expires_at_ms === null ? undefined : Number(row.expires_at_ms);
+    return {
+      value: row.value,
+      stamp: Number(row.stamp),
+      ...(Number.isFinite(expiresAt) ? { expiresAt } : {}),
+      ...(row.scope ? { scope: row.scope } : {}),
+    };
   }
 
   async set(
     key: CacheKey,
     entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
   ): Promise<number> {
-    const db = getNeonDb();
-    try {
-      const rows = await db.query<{ stamp: string | number }>(
-        `insert into public.mcp_response_cache
-           (method, params_key, partition_key, value, expires_at_ms, scope)
-         values ($1, $2, $3, $4, $5, $6)
-         on conflict (method, params_key, partition_key) do update set
-           value = excluded.value,
-           expires_at_ms = excluded.expires_at_ms,
-           scope = excluded.scope,
-           stamp = nextval('public.mcp_response_cache_stamp_seq'),
-           updated_at = now()
-         returning stamp`,
-        [...normalizedKey(key), entry.value, entry.expiresAt ?? null, entry.scope ?? null],
-      );
-      return Number(rows[0]?.stamp ?? Date.now());
-    } catch (error) {
-      if (isCacheSchemaUnavailable(error)) return Date.now();
-      throw error;
-    }
+    const rows = await getNeonDb().query<{ stamp: string | number }>(
+      `insert into public.mcp_response_cache
+         (method, params_key, partition_key, value, expires_at_ms, scope)
+       values ($1, $2, $3, $4, $5, $6)
+       on conflict (method, params_key, partition_key) do update set
+         value = excluded.value,
+         expires_at_ms = excluded.expires_at_ms,
+         scope = excluded.scope,
+         stamp = nextval('public.mcp_response_cache_stamp_seq'),
+         updated_at = now()
+       returning stamp`,
+      [...normalizedKey(key), entry.value, entry.expiresAt ?? null, entry.scope ?? null],
+    );
+    return Number(rows[0]?.stamp ?? Date.now());
   }
 
   async insertIfAbsent(
     key: CacheKey,
     entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
   ): Promise<number | null> {
-    const db = getNeonDb();
-    try {
-      const rows = await db.query<{ stamp: string | number }>(
-        `insert into public.mcp_response_cache
-           (method, params_key, partition_key, value, expires_at_ms, scope)
-         values ($1, $2, $3, $4, $5, $6)
-         on conflict (method, params_key, partition_key) do nothing
-         returning stamp`,
-        [...normalizedKey(key), entry.value, entry.expiresAt ?? null, entry.scope ?? null],
-      );
-      const row = rows[0];
-      return row ? Number(row.stamp) : null;
-    } catch (error) {
-      if (isCacheSchemaUnavailable(error)) return null;
-      throw error;
-    }
+    const rows = await getNeonDb().query<{ stamp: string | number }>(
+      `insert into public.mcp_response_cache
+         (method, params_key, partition_key, value, expires_at_ms, scope)
+       values ($1, $2, $3, $4, $5, $6)
+       on conflict (method, params_key, partition_key) do nothing
+       returning stamp`,
+      [...normalizedKey(key), entry.value, entry.expiresAt ?? null, entry.scope ?? null],
+    );
+    const row = rows[0];
+    return row ? Number(row.stamp) : null;
   }
 
   async replaceIfStamp(
@@ -141,61 +108,41 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
     entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
     expectedStamp: number,
   ): Promise<number | null> {
-    const db = getNeonDb();
-    try {
-      const rows = await db.query<{ stamp: string | number }>(
-        `update public.mcp_response_cache set
-           value = $4,
-           expires_at_ms = $5,
-           scope = $6,
-           stamp = nextval('public.mcp_response_cache_stamp_seq'),
-           updated_at = now()
-         where method = $1 and params_key = $2 and partition_key = $3 and stamp = $7
-         returning stamp`,
-        [
-          ...normalizedKey(key),
-          entry.value,
-          entry.expiresAt ?? null,
-          entry.scope ?? null,
-          expectedStamp,
-        ],
-      );
-      const row = rows[0];
-      return row ? Number(row.stamp) : null;
-    } catch (error) {
-      if (isCacheSchemaUnavailable(error)) return null;
-      throw error;
-    }
+    const rows = await getNeonDb().query<{ stamp: string | number }>(
+      `update public.mcp_response_cache set
+         value = $4,
+         expires_at_ms = $5,
+         scope = $6,
+         stamp = nextval('public.mcp_response_cache_stamp_seq'),
+         updated_at = now()
+       where method = $1 and params_key = $2 and partition_key = $3 and stamp = $7
+       returning stamp`,
+      [
+        ...normalizedKey(key),
+        entry.value,
+        entry.expiresAt ?? null,
+        entry.scope ?? null,
+        expectedStamp,
+      ],
+    );
+    const row = rows[0];
+    return row ? Number(row.stamp) : null;
   }
 
   async delete(key: CacheKey): Promise<void> {
-    try {
-      await getNeonDb().execute(
-        `delete from public.mcp_response_cache
-          where method = $1 and params_key = $2 and partition_key = $3`,
-        normalizedKey(key),
-      );
-    } catch (error) {
-      if (!isCacheSchemaUnavailable(error)) throw error;
-    }
+    await getNeonDb().execute(
+      `delete from public.mcp_response_cache
+        where method = $1 and params_key = $2 and partition_key = $3`,
+      normalizedKey(key),
+    );
   }
 
   async evict(method: string): Promise<void> {
-    try {
-      await getNeonDb().execute('delete from public.mcp_response_cache where method = $1', [
-        method,
-      ]);
-    } catch (error) {
-      if (!isCacheSchemaUnavailable(error)) throw error;
-    }
+    await getNeonDb().execute('delete from public.mcp_response_cache where method = $1', [method]);
   }
 
   async clear(): Promise<void> {
-    try {
-      await getNeonDb().execute('delete from public.mcp_response_cache');
-    } catch (error) {
-      if (!isCacheSchemaUnavailable(error)) throw error;
-    }
+    await getNeonDb().execute('delete from public.mcp_response_cache');
   }
 
   async deleteServerEntries(
@@ -203,17 +150,13 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
     partitions: readonly string[],
     method?: string,
   ): Promise<void> {
-    try {
-      await getNeonDb().execute(
-        `delete from public.mcp_response_cache
-          where params_key like $1
-            and partition_key = any($2::text[])
-            and ($3::text is null or method = $3::text)`,
-        [`${serverKey}:%`, [...partitions], method ?? null],
-      );
-    } catch (error) {
-      if (!isCacheSchemaUnavailable(error)) throw error;
-    }
+    await getNeonDb().execute(
+      `delete from public.mcp_response_cache
+        where params_key like $1
+          and partition_key = any($2::text[])
+          and ($3::text is null or method = $3::text)`,
+      [`${serverKey}:%`, [...partitions], method ?? null],
+    );
   }
 }
 
@@ -301,7 +244,6 @@ export async function loadMcpPriorDiscovery(
     if (!discover || typeof discover !== 'object' || Array.isArray(discover)) return undefined;
     return { kind: 'modern', discover: discover as DiscoverResult };
   } catch (error) {
-    if (isCacheSchemaUnavailable(error)) return undefined;
     logger.warn({ error }, '[mcp-cache] failed to read persisted discovery result');
     return undefined;
   }
@@ -312,25 +254,21 @@ export async function saveMcpDiscovery(
   authorizationContext: string,
   discover: DiscoverResult,
 ): Promise<void> {
-  try {
-    await getNeonDb().execute(
-      `insert into public.mcp_discovery_cache
-         (server_key, authorization_context_key, discover_result, expires_at)
-       values ($1, $2, $3::jsonb, now() + ($4 * interval '1 millisecond'))
-       on conflict (server_key, authorization_context_key) do update set
-         discover_result = excluded.discover_result,
-         expires_at = excluded.expires_at,
-         updated_at = now()`,
-      [
-        normalizedServerKey(serverUrl),
-        digest(authorizationContext),
-        JSON.stringify(discover),
-        DISCOVERY_TTL_MS,
-      ],
-    );
-  } catch (error) {
-    if (!isCacheSchemaUnavailable(error)) throw error;
-  }
+  await getNeonDb().execute(
+    `insert into public.mcp_discovery_cache
+       (server_key, authorization_context_key, discover_result, expires_at)
+     values ($1, $2, $3::jsonb, now() + ($4 * interval '1 millisecond'))
+     on conflict (server_key, authorization_context_key) do update set
+       discover_result = excluded.discover_result,
+       expires_at = excluded.expires_at,
+       updated_at = now()`,
+    [
+      normalizedServerKey(serverUrl),
+      digest(authorizationContext),
+      JSON.stringify(discover),
+      DISCOVERY_TTL_MS,
+    ],
+  );
 }
 
 /**
@@ -365,18 +303,13 @@ export async function purgeMcpResponseCachePartitions(
 ): Promise<number> {
   const partitions = [...new Set(authorizationContexts.map(mcpResponseCachePartitionKey))];
   if (partitions.length === 0) return 0;
-  try {
-    const rows = await getNeonDb().query<{ partition_key: string }>(
-      `delete from public.mcp_response_cache
-        where partition_key = any($1::text[])
-        returning partition_key`,
-      [partitions],
-    );
-    return rows.length;
-  } catch (error) {
-    if (isCacheSchemaUnavailable(error)) return 0;
-    throw error;
-  }
+  const rows = await getNeonDb().query<{ partition_key: string }>(
+    `delete from public.mcp_response_cache
+      where partition_key = any($1::text[])
+      returning partition_key`,
+    [partitions],
+  );
+  return rows.length;
 }
 
 /**
@@ -393,7 +326,6 @@ export async function sweepExpiredMcpResponseCache(nowMs: number = Date.now()): 
     );
     return rows.length;
   } catch (error) {
-    if (isCacheSchemaUnavailable(error)) return 0;
     logger.warn({ error }, '[mcp-cache] expired response sweep failed');
     return 0;
   }
@@ -407,7 +339,6 @@ export async function sweepExpiredMcpDiscoveryCache(): Promise<number> {
     );
     return rows.length;
   } catch (error) {
-    if (isCacheSchemaUnavailable(error)) return 0;
     logger.warn({ error }, '[mcp-cache] expired discovery sweep failed');
     return 0;
   }

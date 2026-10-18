@@ -38,7 +38,6 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   markAppReturn: vi.fn(async () => true),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
-  ConnectorOAuthStoreUnavailableError: class extends Error {},
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
 }));

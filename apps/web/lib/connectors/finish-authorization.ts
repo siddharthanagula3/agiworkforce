@@ -11,7 +11,6 @@ import {
   isAllowedConnectorOAuthRedirectUri,
 } from '@/lib/connectors/oauth-registry';
 import {
-  ConnectorOAuthStoreUnavailableError,
   consumePendingAuthorization,
   upsertConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
@@ -47,15 +46,7 @@ export async function finishConnectorAuthorization(input: {
   providerError: string | null;
 }): Promise<ConnectorAuthorizationOutcome> {
   const { request, userId, state, code, iss, providerError } = input;
-  let pending;
-  try {
-    pending = await consumePendingAuthorization(state, userId);
-  } catch (error) {
-    if (error instanceof ConnectorOAuthStoreUnavailableError) {
-      return { returnPath: '/connectors', connectorId: '', status: 'unavailable' };
-    }
-    throw error;
-  }
+  const pending = await consumePendingAuthorization(state, userId);
   if (!pending) {
     logger.warn(
       '[connector-oauth] callback rejected: unknown, expired, replayed, or another account state',
@@ -162,13 +153,6 @@ export async function finishConnectorAuthorization(input: {
     );
     grantedScopes = tokens.grantedScopes;
   } catch (error) {
-    if (error instanceof ConnectorOAuthStoreUnavailableError) {
-      return {
-        returnPath: pending.returnPath,
-        connectorId: pending.connectorId,
-        status: 'unavailable',
-      };
-    }
     logger.warn(
       {
         connectorId: pending.connectorId,

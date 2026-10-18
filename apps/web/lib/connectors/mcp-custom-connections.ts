@@ -30,7 +30,6 @@ const CONNECTION_TIMEOUT_MS = 30_000;
 const SHORT_ID_BYTES = 5;
 const SHORT_ID_MAX_ATTEMPTS = 5;
 const APP_ONLY_TOOL_VISIBILITY = 'app';
-const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNIQUE_VIOLATION = '23505';
 const SHORT_ID_CONSTRAINT_FRAGMENT = 'short_id';
 const NO_CAPABILITIES_MESSAGE = 'The server did not advertise any supported MCP capabilities';
@@ -55,13 +54,6 @@ export function transportForUrl(url: URL, requested?: unknown): CustomConnectorT
 function pgErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined;
   return (error as Record<string, unknown>)['code'] as string | undefined;
-}
-
-export function isUndefinedTableError(error: unknown): boolean {
-  return (
-    pgErrorCode(error) === PG_UNDEFINED_TABLE ||
-    String((error as { message?: unknown })?.message ?? '').includes('does not exist')
-  );
 }
 
 function isUniqueViolation(error: unknown): boolean {

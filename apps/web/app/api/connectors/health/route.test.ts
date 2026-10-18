@@ -83,16 +83,11 @@ describe('GET /api/connectors/health', () => {
     expect(body.connectors.map((entry) => entry.connectorId)).toEqual(['slack']);
   });
 
-  it('answers with nothing measured rather than an error while the migration is pending', async () => {
-    mocks.query.mockRejectedValue(
-      Object.assign(new Error('relation "connector_call_events" does not exist'), {
-        code: '42P01',
-      }),
-    );
+  it('reports a failed read as an error, not as nothing measured', async () => {
+    mocks.query.mockRejectedValue(new Error('connection terminated'));
 
     const response = await GET(new NextRequest('http://localhost/api/connectors/health'));
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ connectors: [] });
+    expect(response.status).toBeGreaterThanOrEqual(500);
   });
 });

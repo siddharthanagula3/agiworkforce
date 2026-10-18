@@ -38,16 +38,6 @@ export const CONNECTOR_FAILURE_STREAK_THRESHOLD = 3;
 export const CONNECTOR_FAILURE_RECENCY_MS = 30 * 60 * 1000;
 
 const MAX_LOG_ENTRIES = 100;
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isMissingRelation(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  return (
-    record['code'] === PG_UNDEFINED_TABLE ||
-    String(record['message'] ?? '').includes('does not exist')
-  );
-}
 
 function clampDuration(durationMs: number | null | undefined): number | null {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) return null;
@@ -57,8 +47,7 @@ function clampDuration(durationMs: number | null | undefined): number | null {
 /**
  * Never awaited by the call it records and never able to fail it. A connector
  * tool that worked must not report an error because its own log line did not
- * land, and a deployment that has not applied 0223 yet keeps working without
- * the log rather than losing the connector.
+ * land.
  */
 export function recordConnectorCallOutcome(db: DatabaseAdapter, record: ConnectorCallRecord): void {
   if (!record.userId) return;
@@ -78,7 +67,6 @@ export function recordConnectorCallOutcome(db: DatabaseAdapter, record: Connecto
       ],
     )
     .catch((error: unknown) => {
-      if (isMissingRelation(error)) return;
       logger.warn({ error }, '[connector-call-log] a connector call was not logged');
     });
 }
@@ -116,21 +104,16 @@ export async function readConnectorCallLog(
     MAX_LOG_ENTRIES,
   );
   const connectorId = options.connectorId?.trim() || null;
-  try {
-    const rows = await db.query<CallRow>(
-      `select connector_id, tool_name, outcome, duration_ms, occurred_at
-         from public.connector_call_events
-        where user_id = $1
-          and ($2::text is null or connector_id = $2::text)
-        order by occurred_at desc
-        limit ${limit}`,
-      [userId, connectorId],
-    );
-    return rows.map(toEntry);
-  } catch (error) {
-    if (isMissingRelation(error)) return [];
-    throw error;
-  }
+  const rows = await db.query<CallRow>(
+    `select connector_id, tool_name, outcome, duration_ms, occurred_at
+       from public.connector_call_events
+      where user_id = $1
+        and ($2::text is null or connector_id = $2::text)
+      order by occurred_at desc
+      limit ${limit}`,
+    [userId, connectorId],
+  );
+  return rows.map(toEntry);
 }
 
 /**
@@ -173,19 +156,14 @@ export async function readConnectorsNotResponding(
   nowMs: number = Date.now(),
 ): Promise<Set<string>> {
   const since = new Date(nowMs - CONNECTOR_FAILURE_RECENCY_MS).toISOString();
-  try {
-    const rows = await db.query<CallRow>(
-      `select connector_id, tool_name, outcome, duration_ms, occurred_at
-         from public.connector_call_events
-        where user_id = $1
-          and occurred_at >= $2::timestamptz
-        order by occurred_at desc
-        limit ${MAX_LOG_ENTRIES * 5}`,
-      [userId, since],
-    );
-    return connectorsNotResponding(rows.map(toEntry), nowMs);
-  } catch (error) {
-    if (isMissingRelation(error)) return new Set();
-    throw error;
-  }
+  const rows = await db.query<CallRow>(
+    `select connector_id, tool_name, outcome, duration_ms, occurred_at
+       from public.connector_call_events
+      where user_id = $1
+        and occurred_at >= $2::timestamptz
+      order by occurred_at desc
+      limit ${MAX_LOG_ENTRIES * 5}`,
+    [userId, since],
+  );
+  return connectorsNotResponding(rows.map(toEntry), nowMs);
 }

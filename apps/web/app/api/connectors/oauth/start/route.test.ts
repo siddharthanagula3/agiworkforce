@@ -7,21 +7,12 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
   connectorsReleased: () => connectorRelease.released,
 }));
 
-const mocks = vi.hoisted(() => {
-  class ConnectorOAuthStoreUnavailableError extends Error {
-    constructor() {
-      super('unavailable');
-      this.name = 'ConnectorOAuthStoreUnavailableError';
-    }
-  }
-  return {
-    markAppReturn: vi.fn(async (..._args: unknown[]) => true),
-    authUser: vi.fn(),
-    createPending: vi.fn(),
-    listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
-    ConnectorOAuthStoreUnavailableError,
-  };
-});
+const mocks = vi.hoisted(() => ({
+  markAppReturn: vi.fn(async (..._args: unknown[]) => true),
+  authUser: vi.fn(),
+  createPending: vi.fn(),
+  listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
@@ -46,7 +37,6 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   markAppReturn: (...a: unknown[]) => mocks.markAppReturn(...a),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
-  ConnectorOAuthStoreUnavailableError: mocks.ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization: (...a: unknown[]) => mocks.createPending(...a),
   upsertConnectorOAuthGrant: vi.fn(),
 }));
@@ -226,16 +216,6 @@ describe('GET /api/connectors/oauth/start', () => {
 
     expect(new URL(response.headers.get('location') as string).pathname).toBe('/login');
     expect(mocks.createPending).not.toHaveBeenCalled();
-  });
-
-  it('reports honestly when the broker tables are not migrated', async () => {
-    configureLinear();
-    mocks.createPending.mockRejectedValue(new mocks.ConnectorOAuthStoreUnavailableError());
-
-    const response = await GET(request('?connectorId=linear&mode=json'));
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({ status: 'unavailable' });
   });
 
   it('names the widened scope as a re-consent instead of inheriting it', async () => {

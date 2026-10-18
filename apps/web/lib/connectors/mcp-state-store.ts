@@ -9,14 +9,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 
 const APP_PAYLOAD_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 const APP_PAYLOAD_MAX_BYTES = 2 * 1024 * 1024;
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function schemaUnavailable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
 
 export interface McpAppPayload {
   id: string;
@@ -64,9 +56,7 @@ export async function saveMcpAppPayload(params: {
     );
     return id;
   } catch (error) {
-    if (!schemaUnavailable(error)) {
-      logger.warn({ error }, '[mcp-app] could not persist app payload');
-    }
+    logger.warn({ error }, '[mcp-app] could not persist app payload');
     return null;
   }
 }
@@ -99,7 +89,7 @@ export async function loadMcpAppPayload(userId: string, id: string): Promise<Mcp
         }
       : null;
   } catch (error) {
-    if (!schemaUnavailable(error)) logger.warn({ error }, '[mcp-app] payload read failed');
+    logger.warn({ error }, '[mcp-app] payload read failed');
     return null;
   }
 }
@@ -122,7 +112,7 @@ export async function bindMcpTask(params: {
     );
     return true;
   } catch (error) {
-    if (!schemaUnavailable(error)) logger.warn({ error }, '[mcp-tasks] task binding failed');
+    logger.warn({ error }, '[mcp-tasks] task binding failed');
     return false;
   }
 }
@@ -143,7 +133,7 @@ export async function isMcpTaskBound(
     );
     return row?.exists === true;
   } catch (error) {
-    if (!schemaUnavailable(error)) logger.warn({ error }, '[mcp-tasks] task binding read failed');
+    logger.warn({ error }, '[mcp-tasks] task binding read failed');
     return false;
   }
 }

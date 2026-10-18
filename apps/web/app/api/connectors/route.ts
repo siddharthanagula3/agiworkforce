@@ -107,7 +107,6 @@ import {
   deleteCustomConnectorRows,
   edgeBlockedMessage,
   insertCustomConnector,
-  isUndefinedTableError,
   McpProbeError,
   probeMcpServer,
   type McpProbeResult,
@@ -237,23 +236,13 @@ async function handleGetConnectors(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
-  let rows: UserConnectorRow[];
-  try {
-    rows = await db.query<UserConnectorRow>(
-      `select id, connector_id, auth_type, connected_at, updated_at
-       from user_connectors
-       where user_id = $1 and is_active = true
-       order by connected_at desc`,
-      [userId],
-    );
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      logger.warn({ userId }, 'user_connectors table not migrated; returning empty connectors');
-      rows = [];
-    } else {
-      throw error;
-    }
-  }
+  const rows = await db.query<UserConnectorRow>(
+    `select id, connector_id, auth_type, connected_at, updated_at
+     from user_connectors
+     where user_id = $1 and is_active = true
+     order by connected_at desc`,
+    [userId],
+  );
 
   const operatorMappedIds = getOperatorMappedConnectorIds();
   const connectors: ConnectorConnection[] = rows
@@ -743,30 +732,18 @@ async function handleCreateConnector(request: NextRequest) {
 
   const now = new Date().toISOString();
 
-  let data: UserConnectorRow | undefined;
-  try {
-    [data] = await db.query<UserConnectorRow>(
-      `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
-       values ($1, $2, $3, true, $4, $5)
-       on conflict (user_id, connector_id)
-       do update set
-         auth_type = excluded.auth_type,
-         is_active = true,
-         connected_at = excluded.connected_at,
-         updated_at = excluded.updated_at
-       returning id, connector_id, auth_type, connected_at, updated_at`,
-      [userId, body.connectorId, authType, now, now],
-    );
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      logger.warn(
-        { userId, connectorId: body.connectorId },
-        'user_connectors table not migrated; connector save unavailable',
-      );
-      throw createError.serviceUnavailable('Connectors are not available in this environment');
-    }
-    throw error;
-  }
+  const [data] = await db.query<UserConnectorRow>(
+    `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
+     values ($1, $2, $3, true, $4, $5)
+     on conflict (user_id, connector_id)
+     do update set
+       auth_type = excluded.auth_type,
+       is_active = true,
+       connected_at = excluded.connected_at,
+       updated_at = excluded.updated_at
+     returning id, connector_id, auth_type, connected_at, updated_at`,
+    [userId, body.connectorId, authType, now, now],
+  );
 
   if (!data) {
     logger.error({ userId: userId, connectorId: body.connectorId }, 'Failed to save connector');
@@ -931,15 +908,10 @@ async function handleDeleteConnector(request: NextRequest) {
     // repository access intact. The installation is revoked first, and a
     // failure is surfaced rather than reported as a disconnect, exactly as
     // /api/github/installations does.
-    let installationRows: Array<{ installation_id: number }> = [];
-    try {
-      installationRows = await db.query<{ installation_id: number }>(
-        'select installation_id from github_installations where user_id = $1',
-        [userId],
-      );
-    } catch (error) {
-      if (!isUndefinedTableError(error)) throw error;
-    }
+    const installationRows = await db.query<{ installation_id: number }>(
+      'select installation_id from github_installations where user_id = $1',
+      [userId],
+    );
 
     for (const { installation_id: installationId } of installationRows) {
       const revocation = await deleteGitHubAppInstallation(installationId);
@@ -975,11 +947,7 @@ async function handleDeleteConnector(request: NextRequest) {
       }
     }
 
-    try {
-      await db.execute(`delete from github_installations where user_id = $1`, [userId]);
-    } catch (error) {
-      if (!isUndefinedTableError(error)) throw error;
-    }
+    await db.execute(`delete from github_installations where user_id = $1`, [userId]);
     await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID);
     await recordAuditEvent({
       userId,
@@ -994,20 +962,12 @@ async function handleDeleteConnector(request: NextRequest) {
     return NextResponse.json(disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)));
   }
 
-  try {
-    await db.execute(
-      `update user_connectors
-       set is_active = false, updated_at = $1
-       where user_id = $2 and connector_id = $3`,
-      [new Date().toISOString(), userId, connectorId],
-    );
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      logger.warn({ userId, connectorId }, 'user_connectors table not migrated; delete ignored');
-      throw createError.serviceUnavailable('Connectors are not available in this environment');
-    }
-    throw error;
-  }
+  await db.execute(
+    `update user_connectors
+     set is_active = false, updated_at = $1
+     where user_id = $2 and connector_id = $3`,
+    [new Date().toISOString(), userId, connectorId],
+  );
 
   await clearConnectorToolPermissions(db, userId, connectorId);
 

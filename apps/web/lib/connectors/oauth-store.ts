@@ -6,60 +6,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { hashOAuthState } from '@/lib/connectors/pkce';
-import {
-  DEFAULT_CONNECTOR_ACCOUNT_KEY,
-  normalizeConnectorAccountKey,
-} from '@/lib/connectors/accounts';
-
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
-
-function isUndefinedColumn(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN
-  );
-}
-
-/**
- * 0253 adds the account columns. Until it is applied every grant is the single
- * default personal account, which is exactly what the pre-0253 statements mean,
- * so the first undefined-column error switches this process over for good
- * rather than failing the connector.
- */
-let accountColumnsAvailable = true;
-
-async function withAccountColumns<T>(run: (accountAware: boolean) => Promise<T>): Promise<T> {
-  if (!accountColumnsAvailable) return run(false);
-  try {
-    return await run(true);
-  } catch (error) {
-    if (!isUndefinedColumn(error)) throw error;
-    accountColumnsAvailable = false;
-    return run(false);
-  }
-}
-
-export function __resetConnectorAccountColumnProbeForTests(): void {
-  accountColumnsAvailable = true;
-}
-
-export class ConnectorOAuthStoreUnavailableError extends Error {
-  constructor() {
-    super('Connector OAuth storage is not available in this environment');
-    this.name = 'ConnectorOAuthStoreUnavailableError';
-  }
-}
+import { normalizeConnectorAccountKey } from '@/lib/connectors/accounts';
 
 export const PENDING_AUTHORIZATION_TTL_SECONDS = 600;
 
@@ -105,14 +52,20 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
   const db = getNeonDb();
   const ttlSeconds = input.ttlSeconds ?? PENDING_AUTHORIZATION_TTL_SECONDS;
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-  try {
-    await db.execute(
-      `delete from public.connector_oauth_authorizations
-        where user_id = $1
-          and (expires_at < now() or consumed_at is not null or connector_id = $2)`,
-      [input.userId, input.connectorId],
-    );
-    const values = [
+  await db.execute(
+    `delete from public.connector_oauth_authorizations
+      where user_id = $1
+        and (expires_at < now() or consumed_at is not null or connector_id = $2)`,
+    [input.userId, input.connectorId],
+  );
+  await db.execute(
+    `insert into public.connector_oauth_authorizations (
+       user_id, connector_id, state_hash, code_verifier_enc, code_challenge_method,
+       redirect_uri, requested_scopes, return_path, expires_at,
+       issuer, authorization_endpoint, token_endpoint, resource_url, mcp_url, client_id,
+       discovery_state, account_key, account_label, account_scope
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+    [
       input.userId,
       input.connectorId,
       hashOAuthState(input.state),
@@ -129,31 +82,11 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
       input.mcpUrl ?? null,
       input.clientId ?? null,
       input.discoveryState === undefined ? null : JSON.stringify(input.discoveryState),
-    ];
-    await withAccountColumns(async (accountAware) => {
-      await db.execute(
-        `insert into public.connector_oauth_authorizations (
-           user_id, connector_id, state_hash, code_verifier_enc, code_challenge_method,
-           redirect_uri, requested_scopes, return_path, expires_at,
-           issuer, authorization_endpoint, token_endpoint, resource_url, mcp_url, client_id,
-           discovery_state${accountAware ? ', account_key, account_label, account_scope' : ''}
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16${
-           accountAware ? ', $17, $18, $19' : ''
-         })`,
-        accountAware
-          ? [
-              ...values,
-              normalizeConnectorAccountKey(input.accountKey),
-              input.accountLabel ?? null,
-              input.accountScope ?? 'personal',
-            ]
-          : values,
-      );
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
-    throw error;
-  }
+      normalizeConnectorAccountKey(input.accountKey),
+      input.accountLabel ?? null,
+      input.accountScope ?? 'personal',
+    ],
+  );
 }
 
 export async function markAppReturn(userId: string, state: string): Promise<boolean> {
@@ -227,54 +160,34 @@ interface PendingAuthorizationRow {
  * the whole of the evidence that someone walked away mid-flow.
  */
 export async function listPendingConnectorIds(userId: string): Promise<string[]> {
-  const db = getNeonDb();
-  try {
-    const rows = await db.query<{ connector_id: string }>(
-      `select distinct connector_id
-         from public.connector_oauth_authorizations
-        where user_id = $1
-          and consumed_at is null
-          and expires_at > now()`,
-      [userId],
-    );
-    return rows.map((row) => row.connector_id);
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await getNeonDb().query<{ connector_id: string }>(
+    `select distinct connector_id
+       from public.connector_oauth_authorizations
+      where user_id = $1
+        and consumed_at is null
+        and expires_at > now()`,
+    [userId],
+  );
+  return rows.map((row) => row.connector_id);
 }
 
 export async function consumePendingAuthorization(
   state: string,
   userId: string,
 ): Promise<PendingAuthorization | null> {
-  const db = getNeonDb();
-  let rows: PendingAuthorizationRow[];
-  try {
-    rows = await withAccountColumns((accountAware) =>
-      db.query<PendingAuthorizationRow>(
-        `update public.connector_oauth_authorizations
-            set consumed_at = now()
-          where state_hash = $1
-            and consumed_at is null
-            and expires_at > now()
-            and user_id = $2
-          returning user_id, connector_id, code_verifier_enc, redirect_uri,
-                    requested_scopes, return_path, issuer, authorization_endpoint,
-                    token_endpoint, resource_url, mcp_url, client_id, discovery_state,
-                    ${
-                      accountAware
-                        ? 'account_key, account_label, account_scope'
-                        : `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key, ` +
-                          `null as account_label, 'personal' as account_scope`
-                    }`,
-        [hashOAuthState(state), userId],
-      ),
-    );
-  } catch (error) {
-    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
-    throw error;
-  }
+  const rows = await getNeonDb().query<PendingAuthorizationRow>(
+    `update public.connector_oauth_authorizations
+        set consumed_at = now()
+      where state_hash = $1
+        and consumed_at is null
+        and expires_at > now()
+        and user_id = $2
+      returning user_id, connector_id, code_verifier_enc, redirect_uri,
+                requested_scopes, return_path, issuer, authorization_endpoint,
+                token_endpoint, resource_url, mcp_url, client_id, discovery_state,
+                account_key, account_label, account_scope`,
+    [hashOAuthState(state), userId],
+  );
 
   const row = rows[0];
   if (!row) return null;
@@ -337,88 +250,58 @@ export async function upsertConnectorOAuthGrant(
   tokens: StoredGrantTokens,
   account: ConnectorAccountIdentity = {},
 ): Promise<void> {
-  const db = getNeonDb();
-  const accountKey = normalizeConnectorAccountKey(account.accountKey);
-  const values = [
-    userId,
-    connectorId,
-    encryptConnectorToken(tokens.accessToken, 'oauth-access-token'),
-    tokens.refreshToken ? encryptConnectorToken(tokens.refreshToken, 'oauth-refresh-token') : null,
-    tokens.tokenType,
-    tokens.grantedScopes,
-    tokens.accessTokenExpiresAt?.toISOString() ?? null,
-    tokens.tokenEndpoint,
-    tokens.issuer ?? null,
-    tokens.resourceUrl ?? null,
-    tokens.mcpUrl ?? null,
-  ];
-  try {
-    await withAccountColumns(async (accountAware) => {
-      if (!accountAware) {
-        await db.execute(
-          `insert into public.connector_oauth_grants (
-             user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
-             granted_scopes, access_token_expires_at, token_endpoint,
-             issuer, resource_url, mcp_url,
-             connected_at, revoked_at, updated_at
-           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), null, now())
-           on conflict (user_id, connector_id) do update set
-             access_token_enc = excluded.access_token_enc,
-             refresh_token_enc = excluded.refresh_token_enc,
-             token_type = excluded.token_type,
-             granted_scopes = excluded.granted_scopes,
-             access_token_expires_at = excluded.access_token_expires_at,
-             token_endpoint = excluded.token_endpoint,
-             issuer = excluded.issuer,
-             resource_url = excluded.resource_url,
-             mcp_url = excluded.mcp_url,
-             connected_at = now(),
-             revoked_at = null,
-             updated_at = now()`,
-          values,
-        );
-        return;
-      }
-      await db.execute(
-        `insert into public.connector_oauth_grants (
-           user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
-           granted_scopes, access_token_expires_at, token_endpoint,
-           issuer, resource_url, mcp_url,
-           account_key, account_label, account_scope, is_default,
-           connected_at, revoked_at, updated_at
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                   not exists (
-                     select 1 from public.connector_oauth_grants existing
-                      where existing.user_id = $1
-                        and existing.connector_id = $2
-                        and existing.account_key <> $12
-                        and existing.revoked_at is null
-                        and existing.is_default
-                   ),
-                   now(), null, now())
-         on conflict (user_id, connector_id, account_key) do update set
-           access_token_enc = excluded.access_token_enc,
-           refresh_token_enc = excluded.refresh_token_enc,
-           token_type = excluded.token_type,
-           granted_scopes = excluded.granted_scopes,
-           access_token_expires_at = excluded.access_token_expires_at,
-           token_endpoint = excluded.token_endpoint,
-           issuer = excluded.issuer,
-           resource_url = excluded.resource_url,
-           mcp_url = excluded.mcp_url,
-           account_label = coalesce(excluded.account_label, public.connector_oauth_grants.account_label),
-           account_scope = excluded.account_scope,
-           is_default = excluded.is_default or public.connector_oauth_grants.is_default,
-           connected_at = now(),
-           revoked_at = null,
-           updated_at = now()`,
-        [...values, accountKey, account.accountLabel ?? null, account.accountScope ?? 'personal'],
-      );
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
-    throw error;
-  }
+  await getNeonDb().execute(
+    `insert into public.connector_oauth_grants (
+       user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
+       granted_scopes, access_token_expires_at, token_endpoint,
+       issuer, resource_url, mcp_url,
+       account_key, account_label, account_scope, is_default,
+       connected_at, revoked_at, updated_at
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+               not exists (
+                 select 1 from public.connector_oauth_grants existing
+                  where existing.user_id = $1
+                    and existing.connector_id = $2
+                    and existing.account_key <> $12
+                    and existing.revoked_at is null
+                    and existing.is_default
+               ),
+               now(), null, now())
+     on conflict (user_id, connector_id, account_key) do update set
+       access_token_enc = excluded.access_token_enc,
+       refresh_token_enc = excluded.refresh_token_enc,
+       token_type = excluded.token_type,
+       granted_scopes = excluded.granted_scopes,
+       access_token_expires_at = excluded.access_token_expires_at,
+       token_endpoint = excluded.token_endpoint,
+       issuer = excluded.issuer,
+       resource_url = excluded.resource_url,
+       mcp_url = excluded.mcp_url,
+       account_label = coalesce(excluded.account_label, public.connector_oauth_grants.account_label),
+       account_scope = excluded.account_scope,
+       is_default = excluded.is_default or public.connector_oauth_grants.is_default,
+       connected_at = now(),
+       revoked_at = null,
+       updated_at = now()`,
+    [
+      userId,
+      connectorId,
+      encryptConnectorToken(tokens.accessToken, 'oauth-access-token'),
+      tokens.refreshToken
+        ? encryptConnectorToken(tokens.refreshToken, 'oauth-refresh-token')
+        : null,
+      tokens.tokenType,
+      tokens.grantedScopes,
+      tokens.accessTokenExpiresAt?.toISOString() ?? null,
+      tokens.tokenEndpoint,
+      tokens.issuer ?? null,
+      tokens.resourceUrl ?? null,
+      tokens.mcpUrl ?? null,
+      normalizeConnectorAccountKey(account.accountKey),
+      account.accountLabel ?? null,
+      account.accountScope ?? 'personal',
+    ],
+  );
 }
 
 export async function updateConnectorOAuthGrantTokens(
@@ -437,28 +320,21 @@ export async function updateConnectorOAuthGrantTokens(
     tokens.grantedScopes,
     tokens.accessTokenExpiresAt?.toISOString() ?? null,
   ];
-  try {
-    await withAccountColumns(async (accountAware) => {
-      const scoped = accountAware && accountKey !== undefined && accountKey !== null;
-      await db.execute(
-        `update public.connector_oauth_grants
-            set access_token_enc = $3,
-                refresh_token_enc = coalesce($4, refresh_token_enc),
-                token_type = $5,
-                granted_scopes = $6,
-                access_token_expires_at = $7,
-                refreshed_at = now(),
-                updated_at = now()
-          where user_id = $1 and connector_id = $2 and revoked_at is null${
-            scoped ? ' and account_key = $8' : ''
-          }`,
-        scoped ? [...values, normalizeConnectorAccountKey(accountKey)] : values,
-      );
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
-    throw error;
-  }
+  const scoped = accountKey !== undefined && accountKey !== null;
+  await db.execute(
+    `update public.connector_oauth_grants
+        set access_token_enc = $3,
+            refresh_token_enc = coalesce($4, refresh_token_enc),
+            token_type = $5,
+            granted_scopes = $6,
+            access_token_expires_at = $7,
+            refreshed_at = now(),
+            updated_at = now()
+      where user_id = $1 and connector_id = $2 and revoked_at is null${
+        scoped ? ' and account_key = $8' : ''
+      }`,
+    scoped ? [...values, normalizeConnectorAccountKey(accountKey)] : values,
+  );
 }
 
 export interface ConnectorOAuthGrant {
@@ -504,9 +380,6 @@ const GRANT_COLUMNS = `connector_id, access_token_enc, refresh_token_enc, token_
                 issuer, resource_url, mcp_url,
                 connected_at, updated_at`;
 const GRANT_ACCOUNT_COLUMNS = 'account_key, account_label, account_scope, is_default';
-const GRANT_ACCOUNT_DEFAULTS =
-  `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key, null as account_label, ` +
-  `'personal' as account_scope, true as is_default`;
 
 const PG_QUERY_CANCELED = '57014';
 const PG_LOCK_NOT_AVAILABLE = '55P03';
@@ -544,39 +417,28 @@ export async function withLockedConnectorOAuthGrant<T>(
   run: (locked: LockedConnectorOAuthGrant) => Promise<T>,
 ): Promise<T> {
   const key = normalizeConnectorAccountKey(accountKey);
-  try {
-    return await withAccountColumns((accountAware) =>
-      getNeonDb().transaction(async (tx) => {
-        let rows: GrantRow[];
-        try {
-          rows = await tx.query<GrantRow>(
-            `select ${GRANT_COLUMNS},
-                    ${accountAware ? GRANT_ACCOUNT_COLUMNS : GRANT_ACCOUNT_DEFAULTS}
-               from public.connector_oauth_grants
-              where user_id = $1 and connector_id = $2 and revoked_at is null${
-                accountAware ? ' and account_key = $3' : ''
-              }
-              limit 1
-              for update`,
-            accountAware ? [userId, connectorId, key] : [userId, connectorId],
-          );
-        } catch (error) {
-          if (isLockWaitCut(error)) throw new ConnectorGrantLockTimeoutError();
-          throw error;
-        }
-        const row = rows[0];
-        return run({
-          grant: row?.access_token_enc ? decodeGrantRow(row) : null,
-          saveTokens: (tokens) =>
-            updateConnectorOAuthGrantTokens(userId, connectorId, tokens, key, tx),
-          revoke: () => revokeConnectorOAuthGrant(userId, connectorId, key, tx),
-        });
-      }),
-    );
-  } catch (error) {
-    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
-    throw error;
-  }
+  return getNeonDb().transaction(async (tx) => {
+    let rows: GrantRow[];
+    try {
+      rows = await tx.query<GrantRow>(
+        `select ${GRANT_COLUMNS}, ${GRANT_ACCOUNT_COLUMNS}
+           from public.connector_oauth_grants
+          where user_id = $1 and connector_id = $2 and revoked_at is null and account_key = $3
+          limit 1
+          for update`,
+        [userId, connectorId, key],
+      );
+    } catch (error) {
+      if (isLockWaitCut(error)) throw new ConnectorGrantLockTimeoutError();
+      throw error;
+    }
+    const row = rows[0];
+    return run({
+      grant: row?.access_token_enc ? decodeGrantRow(row) : null,
+      saveTokens: (tokens) => updateConnectorOAuthGrantTokens(userId, connectorId, tokens, key, tx),
+      revoke: () => revokeConnectorOAuthGrant(userId, connectorId, key, tx),
+    });
+  });
 }
 
 export async function getConnectorOAuthGrant(
@@ -584,29 +446,19 @@ export async function getConnectorOAuthGrant(
   connectorId: string,
   accountKey?: string | null,
 ): Promise<ConnectorOAuthGrant | null> {
-  const db = getNeonDb();
-  let rows: GrantRow[];
-  try {
-    rows = await withAccountColumns((accountAware) => {
-      const scoped = accountAware && accountKey !== undefined && accountKey !== null;
-      return db.query<GrantRow>(
-        `select ${GRANT_COLUMNS},
-                ${accountAware ? GRANT_ACCOUNT_COLUMNS : GRANT_ACCOUNT_DEFAULTS}
-           from public.connector_oauth_grants
-          where user_id = $1 and connector_id = $2 and revoked_at is null${
-            scoped ? ' and account_key = $3' : ''
-          }
-          ${accountAware ? 'order by is_default desc, connected_at desc' : ''}
-          limit 1`,
-        scoped
-          ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
-          : [userId, connectorId],
-      );
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) return null;
-    throw error;
-  }
+  const scoped = accountKey !== undefined && accountKey !== null;
+  const rows = await getNeonDb().query<GrantRow>(
+    `select ${GRANT_COLUMNS}, ${GRANT_ACCOUNT_COLUMNS}
+       from public.connector_oauth_grants
+      where user_id = $1 and connector_id = $2 and revoked_at is null${
+        scoped ? ' and account_key = $3' : ''
+      }
+      order by is_default desc, connected_at desc
+      limit 1`,
+    scoped
+      ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+      : [userId, connectorId],
+  );
 
   const row = rows[0];
   if (!row?.access_token_enc) return null;
@@ -688,26 +540,17 @@ async function queryGrantSummaries(
   userId: string,
   connectorId?: string | null,
 ): Promise<ConnectorOAuthGrantSummary[]> {
-  const db = getNeonDb();
-  try {
-    const rows = await withAccountColumns((accountAware) =>
-      db.query<GrantSummaryRow>(
-        `select connector_id, granted_scopes, access_token_expires_at,
-                refresh_token_enc, connected_at, updated_at,
-                ${accountAware ? GRANT_ACCOUNT_COLUMNS : GRANT_ACCOUNT_DEFAULTS}
-           from public.connector_oauth_grants
-          where user_id = $1 and revoked_at is null
-            and ($2::text is null or connector_id = $2::text)
-          order by connected_at desc`,
-        [userId, connectorId ?? null],
-      ),
-    );
-    const now = Date.now();
-    return rows.map((row) => toGrantSummary(row, now));
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await getNeonDb().query<GrantSummaryRow>(
+    `select connector_id, granted_scopes, access_token_expires_at,
+            refresh_token_enc, connected_at, updated_at, ${GRANT_ACCOUNT_COLUMNS}
+       from public.connector_oauth_grants
+      where user_id = $1 and revoked_at is null
+        and ($2::text is null or connector_id = $2::text)
+      order by connected_at desc`,
+    [userId, connectorId ?? null],
+  );
+  const now = Date.now();
+  return rows.map((row) => toGrantSummary(row, now));
 }
 
 export async function getUserConnectorOAuthGrantSummaries(
@@ -772,27 +615,17 @@ export async function listRevocableConnectorTokens(
   connectorId: string,
   accountKey?: string | null,
 ): Promise<RevocableConnectorToken[]> {
-  const db = getNeonDb();
-  let rows: RevocableGrantRow[];
-  try {
-    rows = await withAccountColumns((accountAware) => {
-      const scoped = accountAware && accountKey !== undefined && accountKey !== null;
-      return db.query<RevocableGrantRow>(
-        `select access_token_enc, refresh_token_enc, issuer, mcp_url,
-                ${accountAware ? 'account_key' : `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key`}
-           from public.connector_oauth_grants
-          where user_id = $1 and connector_id = $2 and revoked_at is null${
-            scoped ? ' and account_key = $3' : ''
-          }`,
-        scoped
-          ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
-          : [userId, connectorId],
-      );
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const scoped = accountKey !== undefined && accountKey !== null;
+  const rows = await getNeonDb().query<RevocableGrantRow>(
+    `select access_token_enc, refresh_token_enc, issuer, mcp_url, account_key
+       from public.connector_oauth_grants
+      where user_id = $1 and connector_id = $2 and revoked_at is null${
+        scoped ? ' and account_key = $3' : ''
+      }`,
+    scoped
+      ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+      : [userId, connectorId],
+  );
 
   const tokens: RevocableConnectorToken[] = [];
   for (const row of rows) {
@@ -833,46 +666,38 @@ export async function revokeConnectorOAuthGrant(
   accountKey?: string | null,
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<boolean> {
-  try {
-    return await withAccountColumns(async (accountAware) => {
-      const scoped = accountAware && accountKey !== undefined && accountKey !== null;
-      const values = scoped
-        ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
-        : [userId, connectorId];
-      const rows = await db.query<{ connector_id: string }>(
-        `update public.connector_oauth_grants
-            set revoked_at = now(),
-                access_token_enc = null,
-                refresh_token_enc = null,
-                ${accountAware ? 'is_default = false,' : ''}
-                updated_at = now()
-          where user_id = $1 and connector_id = $2 and revoked_at is null${
-            scoped ? ' and account_key = $3' : ''
-          }
-          returning connector_id`,
-        values,
-      );
-      if (rows.length === 0 || !accountAware) return rows.length > 0;
-      await db.execute(
-        `update public.connector_oauth_grants
-            set is_default = true, updated_at = now()
-          where id = (
-            select id from public.connector_oauth_grants
-             where user_id = $1 and connector_id = $2 and revoked_at is null
-             order by connected_at desc
-             limit 1
-          )
-            and not exists (
-              select 1 from public.connector_oauth_grants live
-               where live.user_id = $1 and live.connector_id = $2
-                 and live.revoked_at is null and live.is_default
-            )`,
-        [userId, connectorId],
-      );
-      return true;
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) return false;
-    throw error;
-  }
+  const scoped = accountKey !== undefined && accountKey !== null;
+  const rows = await db.query<{ connector_id: string }>(
+    `update public.connector_oauth_grants
+        set revoked_at = now(),
+            access_token_enc = null,
+            refresh_token_enc = null,
+            is_default = false,
+            updated_at = now()
+      where user_id = $1 and connector_id = $2 and revoked_at is null${
+        scoped ? ' and account_key = $3' : ''
+      }
+      returning connector_id`,
+    scoped
+      ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+      : [userId, connectorId],
+  );
+  if (rows.length === 0) return false;
+  await db.execute(
+    `update public.connector_oauth_grants
+        set is_default = true, updated_at = now()
+      where id = (
+        select id from public.connector_oauth_grants
+         where user_id = $1 and connector_id = $2 and revoked_at is null
+         order by connected_at desc
+         limit 1
+      )
+        and not exists (
+          select 1 from public.connector_oauth_grants live
+           where live.user_id = $1 and live.connector_id = $2
+             and live.revoked_at is null and live.is_default
+        )`,
+    [userId, connectorId],
+  );
+  return true;
 }

@@ -51,9 +51,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
-  ConnectorOAuthStoreUnavailableError: class ConnectorOAuthStoreUnavailableError extends Error {},
   PENDING_AUTHORIZATION_TTL_SECONDS: 600,
-  __resetConnectorAccountColumnProbeForTests: vi.fn(),
   consumePendingAuthorization: vi.fn(),
   createPendingAuthorization: vi.fn(),
   getConnectorOAuthGrant: vi.fn(),
