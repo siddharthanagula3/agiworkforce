@@ -255,6 +255,32 @@ function quoteShell(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
+const RECALCULABLE_FUNCTIONS: ReadonlySet<string> = new Set([
+  'SUM',
+  'AVERAGE',
+  'MIN',
+  'MAX',
+  'COUNT',
+  'COUNTA',
+  'IF',
+  'IFERROR',
+  'IFNA',
+  'AND',
+  'OR',
+  'NOT',
+  'ABS',
+  'ROUND',
+  'ROUNDUP',
+  'ROUNDDOWN',
+  'SUMIF',
+  'SUMIFS',
+  'COUNTIF',
+  'COUNTIFS',
+  'MEDIAN',
+  'PRODUCT',
+  'SUMPRODUCT',
+]);
+
 export async function recalculateManagedWorkbook(
   data: Buffer,
   executor: E2BExecutor,
@@ -280,33 +306,8 @@ export async function recalculateManagedWorkbook(
         const body = decodedXmlText(formula[1] ?? '');
         if (/\[|\]|\\|\||:\/\/|file:/i.test(body))
           throw new ManagedOfficeProcessingError('External workbook formulas are not supported.');
-        const supported = new Set([
-          'SUM',
-          'AVERAGE',
-          'MIN',
-          'MAX',
-          'COUNT',
-          'COUNTA',
-          'IF',
-          'IFERROR',
-          'IFNA',
-          'AND',
-          'OR',
-          'NOT',
-          'ABS',
-          'ROUND',
-          'ROUNDUP',
-          'ROUNDDOWN',
-          'SUMIF',
-          'SUMIFS',
-          'COUNTIF',
-          'COUNTIFS',
-          'MEDIAN',
-          'PRODUCT',
-          'SUMPRODUCT',
-        ]);
         for (const call of body.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)) {
-          if (!supported.has(call[1]!.toUpperCase()))
+          if (!RECALCULABLE_FUNCTIONS.has(call[1]!.toUpperCase()))
             throw new ManagedOfficeProcessingError(
               'This workbook function is not supported by the managed recalculation contract.',
             );

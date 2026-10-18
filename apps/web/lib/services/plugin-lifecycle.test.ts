@@ -311,4 +311,41 @@ describe('repointing the entry at a version', () => {
       algorithm: 'ed25519',
     });
   });
+
+  it('drops the old signature when a version is republished with a new digest', async () => {
+    const world = freshWorld();
+    const nextDigest = 'c'.repeat(64);
+
+    await publishPluginVersion(adapterFor(world), {
+      pluginId: PLUGIN_ID,
+      version: '1.1.0',
+      actorUserId: 'user_admin',
+      sha256: nextDigest,
+    });
+
+    expect(world.entry).toEqual({
+      version: '1.1.0',
+      sha256: nextDigest,
+      signature: null,
+      algorithm: null,
+    });
+  });
+
+  it('keeps the signature when a version is republished on the digest it signs', async () => {
+    const world = freshWorld();
+
+    await publishPluginVersion(adapterFor(world), {
+      pluginId: PLUGIN_ID,
+      version: '1.1.0',
+      actorUserId: 'user_admin',
+      changelog: 'Clarified the description.',
+    });
+
+    expect(world.entry).toEqual({
+      version: '1.1.0',
+      sha256: SIGNED_DIGEST,
+      signature: signatureFor('1.1.0', SIGNED_DIGEST),
+      algorithm: 'ed25519',
+    });
+  });
 });

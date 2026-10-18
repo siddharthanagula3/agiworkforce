@@ -6,6 +6,7 @@ import {
   DEFAULT_WORKSPACE_CONTROLS,
   SECRET_HANDLING_MODE_DEFAULT,
   WORKSPACE_FEATURES,
+  WORKSPACE_REASONING_EFFORTS,
   isWorkspaceReasoningEffort,
   DEFAULT_WORKSPACE_CODE_CONTROLS,
   WORKSPACE_CODE_TOGGLE_KEYS,
@@ -148,9 +149,9 @@ const MAX_CODE_RETENTION_DAYS = 3650;
  * rather than inside it, so that a policy PATCH that rewrites the workspace
  * controls object cannot drop them by omission.
  */
-export const WORKSPACE_CODE_CONTROLS_METADATA_KEY = 'codeControls';
+const WORKSPACE_CODE_CONTROLS_METADATA_KEY = 'codeControls';
 
-export function parseCodeHostList(value: unknown): readonly string[] | undefined {
+function parseCodeHostList(value: unknown): readonly string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return [
     ...new Set(
@@ -170,7 +171,7 @@ function parseRetentionDays(value: unknown): number | null | undefined {
   return Math.min(value, MAX_CODE_RETENTION_DAYS);
 }
 
-export function parseWorkspaceCodeControlsLayer(value: unknown): WorkspaceCodeControlsLayer {
+function parseWorkspaceCodeControlsLayer(value: unknown): WorkspaceCodeControlsLayer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
   const layer: WorkspaceCodeControlsLayer = {};
@@ -291,7 +292,7 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
   };
 }
 
-export function organizationPolicyHasOverrides(row: Pick<AdminPolicyRow, 'override_count'>) {
+function organizationPolicyHasOverrides(row: Pick<AdminPolicyRow, 'override_count'>) {
   return toCount(row.override_count) > 0;
 }
 
@@ -501,8 +502,6 @@ const RESTRICTIVE_WHEN_TRUE: readonly string[] = [
   'zeroDataRetentionOnly',
 ];
 
-const REASONING_EFFORT_ORDER: readonly string[] = ['low', 'medium', 'high'];
-
 function listDirection(
   from: unknown,
   to: unknown,
@@ -517,7 +516,7 @@ function listDirection(
   }
   const removed = [...before].some((entry) => !after.has(entry));
   const added = [...after].some((entry) => !before.has(entry));
-  if (removed && !added) return allowListSemantics ? 'narrows' : 'narrows';
+  if (removed && !added) return 'narrows';
   if (added && !removed) return 'widens';
   return 'changes';
 }
@@ -555,6 +554,14 @@ function featureAccessImpacts(from: unknown, to: unknown): PolicyChangeImpact[] 
   return impacts;
 }
 
+function reasoningCapDirection(from: unknown, to: unknown): PolicyChangeDirection {
+  if (!isWorkspaceReasoningEffort(to)) return 'widens';
+  if (!isWorkspaceReasoningEffort(from)) return 'narrows';
+  return WORKSPACE_REASONING_EFFORTS.indexOf(to) < WORKSPACE_REASONING_EFFORTS.indexOf(from)
+    ? 'narrows'
+    : 'widens';
+}
+
 function controlsImpacts(from: unknown, to: unknown): PolicyChangeImpact[] {
   const before = (from ?? {}) as Record<string, unknown>;
   const after = (to ?? {}) as Record<string, unknown>;
@@ -572,14 +579,11 @@ function controlsImpacts(from: unknown, to: unknown): PolicyChangeImpact[] {
   if (
     JSON.stringify(before['maxReasoningEffort']) !== JSON.stringify(after['maxReasoningEffort'])
   ) {
-    const wasIndex = REASONING_EFFORT_ORDER.indexOf(String(before['maxReasoningEffort']));
-    const nowIndex = REASONING_EFFORT_ORDER.indexOf(String(after['maxReasoningEffort']));
     impacts.push({
       key: 'controls.maxReasoningEffort',
       from: before['maxReasoningEffort'] ?? null,
       to: after['maxReasoningEffort'] ?? null,
-      direction:
-        nowIndex === -1 ? 'widens' : wasIndex === -1 || nowIndex < wasIndex ? 'narrows' : 'widens',
+      direction: reasoningCapDirection(before['maxReasoningEffort'], after['maxReasoningEffort']),
     });
   }
 

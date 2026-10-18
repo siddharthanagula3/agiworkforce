@@ -352,6 +352,10 @@ export async function publishPluginVersion(
   const version = VersionSchema.parse(input.version);
   const existing = await readVersion(db, pluginId, version);
   if (existing) assertTransition(existing.status, 'published');
+  const keepsSignedDigest = input.sha256 == null || input.sha256 === existing?.sha256;
+  const signature = input.signature ?? (keepsSignedDigest ? existing?.signature : null) ?? null;
+  const signatureAlgorithm =
+    input.signatureAlgorithm ?? (keepsSignedDigest ? existing?.signatureAlgorithm : null) ?? null;
 
   const rows = await db.query<PluginVersionRow>(
     `insert into public.plugin_registry_versions
@@ -376,8 +380,8 @@ export async function publishPluginVersion(
       version,
       input.manifestUrl ?? existing?.manifestUrl ?? null,
       input.sha256 ?? existing?.sha256 ?? null,
-      input.signature ?? existing?.signature ?? null,
-      input.signatureAlgorithm ?? existing?.signatureAlgorithm ?? null,
+      signature,
+      signatureAlgorithm,
       JSON.stringify(input.declaredSkills ?? existing?.declaredSkills ?? []),
       JSON.stringify(input.permissions ?? existing?.permissions ?? []),
       input.changelog ?? existing?.changelog ?? '',

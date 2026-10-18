@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   googleVideoOutputHostDisposition,
+  isRunwayVideoOutputHost,
   providerApiUrl,
   RUNWAY_API_BASE,
   RUNWAY_API_VERSION,
@@ -383,7 +384,7 @@ function validateProviderUrl(
   const allowed =
     provider === 'google'
       ? googleVideoOutputHostDisposition(hostname, redirect) !== null
-      : hostname === 'dnznrvs05pmza.cloudfront.net' || hostname.endsWith('.runwayml.com');
+      : isRunwayVideoOutputHost(hostname);
   if (!allowed) {
     throw new VideoProviderOutputError('The video provider returned an untrusted host.', false);
   }

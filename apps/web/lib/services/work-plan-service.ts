@@ -228,7 +228,6 @@ export function applyWorkPlanRevision(
   return { ...revised, version: plan.version + 1 };
 }
 
-/** The first step whose dependencies are all satisfied, or null while none is. */
 function observeWorkPlan(shape: WorkPlanShape, plan: WorkPlan): void {
   recordWorkPlanSize({
     shape,
@@ -237,6 +236,7 @@ function observeWorkPlan(shape: WorkPlanShape, plan: WorkPlan): void {
   });
 }
 
+/** The first step whose dependencies are all satisfied, or null while none is. */
 export function nextRunnableStep(plan: WorkPlan): WorkPlanStep | null {
   const completed = new Set(
     plan.steps.filter((step) => step.status === 'completed').map((step) => step.id),

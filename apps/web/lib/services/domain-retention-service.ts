@@ -33,7 +33,7 @@ const DOMAIN_HOLD_RESOURCE: Partial<Record<RetentionDomain, LegalHoldResourceTyp
   research: 'conversation',
 };
 
-export function domainHoldResource(domain: RetentionDomain): LegalHoldResourceType | null {
+function domainHoldResource(domain: RetentionDomain): LegalHoldResourceType | null {
   return DOMAIN_HOLD_RESOURCE[domain] ?? null;
 }
 
@@ -76,7 +76,7 @@ function isHeld(alias: string): string {
 }
 
 export const DOMAIN_RETENTION_BATCH = 200;
-export const DOMAIN_RETENTION_MAX_BATCHES = 10;
+const DOMAIN_RETENTION_MAX_BATCHES = 10;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -469,7 +469,7 @@ interface ResolvedRetentionWindow {
 
 // A workspace's shorter Code session retention wins, floored so a typo cannot purge overnight.
 // An unreadable policy keeps the longer window: deleting early on a read error cannot be undone.
-export async function resolveDomainRetentionWindow(
+async function resolveDomainRetentionWindow(
   db: DatabaseAdapter,
   organizationId: string,
   domain: RetentionDomain,

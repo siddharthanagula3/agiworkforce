@@ -62,10 +62,6 @@ function planRank(tier: string | null | undefined): number {
   return (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).indexOf(tier ?? '');
 }
 
-function isEntitledStatus(status: string | undefined): boolean {
-  return status === 'active' || status === 'trialing';
-}
-
 // A top-up is credited to the subscription the buyer pays for themselves, so the
 // catalog offers one and the ledger grants one on exactly this answer.
 export function ownsPaidPlanForTopUp(
@@ -73,7 +69,7 @@ export function ownsPaidPlanForTopUp(
 ): boolean {
   return (
     subscription != null &&
-    isEntitledStatus(subscription.status) &&
+    isEntitledSubscriptionStatus(subscription.status) &&
     !isFreeBillingPlanTier(subscription.plan_tier)
   );
 }
@@ -532,7 +528,7 @@ async function grantVerifiedMobileIapPurchase(input: {
     // plan or an auto-renew choice recorded since.
     if (
       subscription?.current_period_end &&
-      isEntitledStatus(subscription.status) &&
+      isEntitledSubscriptionStatus(subscription.status) &&
       ownsStoreSubscriptionRow(subscription, input) &&
       new Date(subscription.current_period_end).getTime() >= input.verified.expiresAt!.getTime()
     ) {

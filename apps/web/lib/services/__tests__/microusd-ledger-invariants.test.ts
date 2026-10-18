@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
-import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
+import { MICROUSD_PER_CREDIT, listCanonicalModels } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -25,7 +25,7 @@ import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calc
 const PLANS = ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
 
 /** A cheap real catalog model, so the arithmetic runs against published prices. */
-const MODEL = LLMCostCalculator.getAvailableModels()[0] as string;
+const MODEL = listCanonicalModels()[0]?.id as string;
 
 function usageOf(promptTokens: number, completionTokens: number): TokenUsage {
   return { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };

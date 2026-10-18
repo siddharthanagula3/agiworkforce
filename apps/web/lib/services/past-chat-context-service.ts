@@ -28,7 +28,7 @@ const FRESH_MATCH_MIN_TERMS = 3;
 const RESTATEMENT_OVERLAP = 0.8;
 
 /** A chat nobody has touched in this long is context about the past, not the present. */
-export const PAST_CHAT_FRESHNESS_MS = 90 * 86_400_000;
+const PAST_CHAT_FRESHNESS_MS = 90 * 86_400_000;
 
 const RECENT_CHATS_WINDOW_HOURS = 24;
 const RECENT_CHATS_CANDIDATE_LIMIT = 80;
@@ -137,7 +137,7 @@ function isoDay(value: string): string | null {
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString().slice(0, 10);
 }
 
-export function pastChatQueryTerms(query: string): string[] {
+function pastChatQueryTerms(query: string): string[] {
   const terms = (query.toLowerCase().match(/[\p{L}\p{N}_-]+/gu) ?? [])
     .filter((term) => term.length >= 3 && !STOP_WORDS.has(term))
     .sort((left, right) => right.length - left.length);

@@ -6,7 +6,6 @@ import {
   getProviderConfig,
   getProviderReasoningTokenBillingClass,
   isModelPromoExpired,
-  listCanonicalModels,
   normalizeModelId,
   resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
@@ -157,7 +156,7 @@ export class UnpricedModelError extends Error {
   }
 }
 
-export function resolveUnpricedModelPolicy(): UnpricedModelPolicy {
+function resolveUnpricedModelPolicy(): UnpricedModelPolicy {
   return getOptionalEnv(UNPRICED_MODEL_POLICY_ENV_VAR) === UNPRICED_MODEL_POLICY_WARN
     ? UNPRICED_MODEL_POLICY_WARN
     : UNPRICED_MODEL_POLICY_REFUSE;
@@ -191,7 +190,6 @@ function resolveUnpricedFallback(provider: string, model: string): ModelPricing 
 }
 const DEFAULT_ESTIMATED_COMPLETION_TOKENS = 1000;
 
-const runtimePricingOverrides: Record<string, ModelPricing> = {};
 const PROVIDER_ALIASES: Record<string, string> = {
   grok: 'xai',
   x_ai: 'xai',
@@ -270,23 +268,6 @@ export class LLMCostCalculator {
     const list = this.listPriceRoute(model);
     if (!list) return null;
     return this.calculateCost(list.provider, model, usage, now, list.routeId);
-  }
-
-  static estimateListCost(
-    model: string,
-    estimatedPromptTokens: number,
-    estimatedCompletionTokens?: number,
-    now: Date = new Date(),
-  ): number | null {
-    const list = this.listPriceRoute(model);
-    if (!list) return null;
-    return this.estimateCost(
-      list.provider,
-      model,
-      estimatedPromptTokens,
-      estimatedCompletionTokens,
-      now,
-    );
   }
 
   /**
@@ -379,14 +360,11 @@ export class LLMCostCalculator {
     routeId?: string | null,
   ): number {
     try {
-      if (!provider || typeof provider !== 'string') {
-        logger.warn({ provider, model }, 'LLM cost calculator: Invalid provider, using fallback');
-        return this.calculateWithFallbackDollars(usage);
-      }
-
-      if (!model || typeof model !== 'string') {
-        logger.warn({ provider, model }, 'LLM cost calculator: Invalid model, using fallback');
-        return this.calculateWithFallbackDollars(usage);
+      if (!provider || typeof provider !== 'string' || !model || typeof model !== 'string') {
+        return this.calculateWithFallbackDollars(
+          usage,
+          resolveUnpricedFallback(String(provider), String(model)),
+        );
       }
 
       if (
@@ -519,12 +497,12 @@ export class LLMCostCalculator {
     }
   }
 
-  private static calculateWithFallbackDollars(usage: TokenUsage): number {
+  private static calculateWithFallbackDollars(usage: TokenUsage, pricing: ModelPricing): number {
     const promptTokens = Math.max(0, usage?.promptTokens || 0);
     const completionTokens = Math.max(0, usage?.completionTokens || 0);
 
-    const inputCost = (promptTokens / 1_000_000) * FALLBACK_PRICING.inputCostPer1MTokens;
-    const outputCost = (completionTokens / 1_000_000) * FALLBACK_PRICING.outputCostPer1MTokens;
+    const inputCost = (promptTokens / 1_000_000) * pricing.inputCostPer1MTokens;
+    const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
 
     return inputCost + outputCost;
   }
@@ -622,10 +600,6 @@ export class LLMCostCalculator {
   ): ModelPricing {
     try {
       const canonicalModelId = normalizeModelId(model);
-      if (canonicalModelId && runtimePricingOverrides[canonicalModelId]) {
-        return runtimePricingOverrides[canonicalModelId];
-      }
-
       const providerId = normalizeProviderId(provider);
       const resolvedModelId = canonicalModelId ?? model;
 
@@ -672,7 +646,8 @@ export class LLMCostCalculator {
       return resolveUnpricedFallback(provider, model);
     } catch (error) {
       if (error instanceof UnpricedModelError) throw error;
-      return FALLBACK_PRICING;
+      logger.error({ error, provider, model }, 'LLM cost calculator: price lookup failed');
+      return resolveUnpricedFallback(provider, model);
     }
   }
 
@@ -742,19 +717,5 @@ export class LLMCostCalculator {
       if (error instanceof UnpricedModelError) throw error;
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }
-  }
-
-  static addModelPricing(model: string, inputCost: number, outputCost: number): void {
-    const canonicalModelId = normalizeModelId(model) ?? model;
-    runtimePricingOverrides[canonicalModelId] = {
-      inputCostPer1MTokens: inputCost,
-      outputCostPer1MTokens: outputCost,
-    };
-  }
-
-  static getAvailableModels(): string[] {
-    const modelIds = new Set(listCanonicalModels().map((model) => model.id));
-    Object.keys(runtimePricingOverrides).forEach((modelId) => modelIds.add(modelId));
-    return [...modelIds];
   }
 }

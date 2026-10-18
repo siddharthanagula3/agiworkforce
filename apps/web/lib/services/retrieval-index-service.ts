@@ -23,7 +23,7 @@ import {
 } from '@/lib/services/retrieval-embedding-service';
 
 export const RETRIEVAL_MAX_ATTEMPTS = 5;
-export const RETRIEVAL_DISPATCH_BATCH = 50;
+const RETRIEVAL_DISPATCH_BATCH = 50;
 const MAX_SOURCE_CHARS = 200_000;
 const MAX_CHUNKS_PER_DOCUMENT = 400;
 const MAX_CONVERSATION_MESSAGES = 400;
@@ -301,7 +301,7 @@ function nextRetryMinutes(attempts: number): number {
   return RETRY_BASE_MINUTES * 2 ** Math.max(0, attempts - 1);
 }
 
-export async function claimRetrievalDocument(
+async function claimRetrievalDocument(
   db: DatabaseAdapter,
   documentId: string,
   workflowRunId: string,

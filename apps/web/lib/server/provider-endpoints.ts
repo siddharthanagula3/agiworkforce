@@ -38,6 +38,17 @@ const PROVIDER_ENDPOINTS: Record<ManagedProviderId, ProviderEndpointConvention> 
 export const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 export const RUNWAY_API_VERSION = '2024-11-06';
 
+const RUNWAY_VIDEO_OUTPUT_HOST = 'dnznrvs05pmza.cloudfront.net';
+const RUNWAY_VIDEO_OUTPUT_DOMAIN_SUFFIX = '.runwayml.com';
+
+export function isRunwayVideoOutputHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === RUNWAY_VIDEO_OUTPUT_HOST ||
+    normalized.endsWith(RUNWAY_VIDEO_OUTPUT_DOMAIN_SUFFIX)
+  );
+}
+
 export type GoogleVideoOutputHostDisposition = 'api' | 'redirect' | null;
 
 export function googleVideoOutputHostDisposition(

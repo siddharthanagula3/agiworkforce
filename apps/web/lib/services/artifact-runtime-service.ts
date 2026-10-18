@@ -47,6 +47,7 @@ import {
   hasObservedProviderUsage,
   observedProviderUsageLedgerMicrousd,
   type ObservedProviderUsage,
+  type ProviderUsagePricingContext,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
   finalizeManagedUsageRequest,
@@ -72,7 +73,7 @@ import {
 import { logger } from '@/lib/logger';
 
 export { ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES, ARTIFACT_STORAGE_VALUE_LIMIT_BYTES };
-export const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
+const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
 
 const MAX_OUTPUT_TOKENS = 4_096;
 
@@ -449,15 +450,29 @@ async function runArtifactCompletion(
     promptTokens: response.promptTokens,
     completionTokens: response.completionTokens,
     totalTokens: response.totalTokens,
-    costMicrousd: LLMCostCalculator.calculateCostMicrousd(route.provider, route.modelKey, {
-      promptTokens: response.promptTokens,
-      completionTokens: response.completionTokens,
-      totalTokens: response.totalTokens,
-      cacheReadInputTokens: response.cachedInputTokens,
-      cacheCreationInputTokens: response.cacheCreationInputTokens,
-      cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
-    }),
+    costMicrousd: LLMCostCalculator.calculateCostMicrousd(
+      route.provider,
+      route.modelKey,
+      {
+        promptTokens: response.promptTokens,
+        completionTokens: response.completionTokens,
+        totalTokens: response.totalTokens,
+        cacheReadInputTokens: response.cachedInputTokens,
+        cacheCreationInputTokens: response.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+      },
+      undefined,
+      route.routeId,
+    ),
     toolCalls: 0,
+  };
+}
+
+function toolLoopPricing(route: ArtifactRuntimeRoute): ProviderUsagePricingContext {
+  return {
+    provider: dispatchProviderForSelectedRoute(route),
+    model: route.modelKey,
+    routeId: route.routeId,
   };
 }
 
@@ -543,10 +558,7 @@ async function runArtifactToolLoop(input: {
     completionTokens: input.usage.outputTokens,
     totalTokens: input.usage.inputTokens + input.usage.outputTokens,
     costMicrousd: hasObservedProviderUsage(input.usage)
-      ? observedProviderUsageLedgerMicrousd(input.usage, {
-          provider: dispatchProvider,
-          model: input.route.modelKey,
-        })
+      ? observedProviderUsageLedgerMicrousd(input.usage, toolLoopPricing(input.route))
       : 0,
     toolCalls,
   };
@@ -652,10 +664,7 @@ export async function completeArtifactPrompt(input: {
   } catch (error) {
     if (!providerCompleted) {
       const observedCostMicrousd = hasObservedProviderUsage(observedUsage)
-        ? observedProviderUsageLedgerMicrousd(observedUsage, {
-            provider: route.provider,
-            model: route.modelKey,
-          })
+        ? observedProviderUsageLedgerMicrousd(observedUsage, toolLoopPricing(route))
         : 0;
       await finalizeManagedUsageRequest({
         ...reservation,

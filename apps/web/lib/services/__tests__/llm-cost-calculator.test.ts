@@ -820,6 +820,16 @@ describe('AGI_PRICING_UNPRICED_POLICY, refuse (default)', () => {
     }
   });
 
+  it('refuses a call that names no provider or model instead of billing the fallback price', () => {
+    const usage = { promptTokens: 1_000, completionTokens: 1_000, totalTokens: 2_000 };
+    expect(() => LLMCostCalculator.calculateCostDollars('', UNPRICED_MODEL, usage)).toThrow(
+      UnpricedModelError,
+    );
+    expect(() => LLMCostCalculator.calculateCostMicrousd(UNPRICED_PROVIDER, '', usage)).toThrow(
+      UnpricedModelError,
+    );
+  });
+
   it('never returns the literal fallback dollar figures for an unpriced model', () => {
     vi.stubEnv('AGI_PRICING_UNPRICED_POLICY', 'warn');
     const fallback = LLMCostCalculator.getPricing(UNPRICED_PROVIDER, UNPRICED_MODEL);
@@ -857,6 +867,12 @@ describe('AGI_PRICING_UNPRICED_POLICY=warn', () => {
       usage,
     );
     expect(dollars).toBe(5.0);
+  });
+
+  it('counts a call that names no provider as an unpriced fallback', () => {
+    const usage = { promptTokens: 1_000_000, completionTokens: 1_000_000, totalTokens: 2_000_000 };
+    expect(LLMCostCalculator.calculateCostDollars('', UNPRICED_MODEL, usage)).toBe(5.0);
+    expect(getUnpricedModelFallbackCount()).toBe(1);
   });
 
   it('increments the fallback counter every time an unpriced model is resolved', () => {

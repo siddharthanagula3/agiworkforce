@@ -252,6 +252,29 @@ describe('blast radius of a policy change', () => {
     }
   });
 
+  it('orders a reasoning cap on every effort level, with no cap as the widest', () => {
+    const capped = (maxReasoningEffort: AdminPolicy['controls']['maxReasoningEffort']) =>
+      policy({ controls: { ...DEFAULT_WORKSPACE_CONTROLS, maxReasoningEffort } });
+    const direction = (
+      from: AdminPolicy['controls']['maxReasoningEffort'],
+      to: AdminPolicy['controls']['maxReasoningEffort'],
+    ) => {
+      const result = simulateAdminPolicyChange(capped(from), capped(to));
+      if (result.narrowing.some((impact) => impact.key === 'controls.maxReasoningEffort')) {
+        return 'narrows';
+      }
+      return result.widening.some((impact) => impact.key === 'controls.maxReasoningEffort')
+        ? 'widens'
+        : 'unreported';
+    };
+
+    expect(direction('medium', 'minimal')).toBe('narrows');
+    expect(direction(null, 'none')).toBe('narrows');
+    expect(direction('high', 'xhigh')).toBe('widens');
+    expect(direction('xhigh', 'max')).toBe('widens');
+    expect(direction('max', null)).toBe('widens');
+  });
+
   it('treats a first save as the change it is, against the shipped defaults', () => {
     const result = simulateAdminPolicyChange(null, policy({ allowManagedCompute: true }));
     expect(result.widening.map((impact) => impact.key)).toContain('allowManagedCompute');
