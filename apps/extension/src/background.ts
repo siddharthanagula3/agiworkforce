@@ -52,6 +52,7 @@ import {
   SHORTCUT_REPLAY_CLIENT_ID,
   type BackgroundChatDelivery,
 } from './features/background/background-results';
+import { settleDetachedAssistantTurn } from './features/background/conversation-history';
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
@@ -272,9 +273,41 @@ interface ActiveChatStream {
   cancellation?: Promise<ExtensionResponse>;
   requestId?: string;
   cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+  streamId?: string;
+  historyConversationId?: string;
+  assistantMessageId?: string;
+  visibleText?: string;
+  panelDetached?: boolean;
+  settlement?: Promise<void>;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
+const adoptedChatStreamKeys = new Map<string, string>();
+let stopDetachedChatHeartbeat: (() => void) | null = null;
+
+function syncDetachedChatHeartbeat(): void {
+  const detached = [...activeChatStreams.values()].some((active) => active.panelDetached);
+  if (detached && !stopDetachedChatHeartbeat) {
+    stopDetachedChatHeartbeat = beginScheduledTaskHeartbeat();
+  } else if (!detached && stopDetachedChatHeartbeat) {
+    stopDetachedChatHeartbeat();
+    stopDetachedChatHeartbeat = null;
+  }
+}
+
+function releaseChatStream(streamKey: string, activeStream: ActiveChatStream): void {
+  if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+  for (const [alias, original] of adoptedChatStreamKeys) {
+    if (original === streamKey && !activeChatStreams.has(original)) {
+      adoptedChatStreamKeys.delete(alias);
+    }
+  }
+  syncDetachedChatHeartbeat();
+}
+
+function resolveChatStreamKey(streamKey: string): string {
+  return adoptedChatStreamKeys.get(streamKey) ?? streamKey;
+}
 const scheduledTaskExecutions = new ScheduledTaskExecutionCoordinator();
 interface ActiveScheduledRecovery {
   taskId: string;
@@ -942,13 +975,10 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
     }
   });
   port.onDisconnect.addListener(() => {
-    for (const [streamKey, active] of activeChatStreams) {
-      if (active.clientInstanceId !== clientInstanceId) continue;
-      active.cancelRequested = true;
-      active.controller.abort();
-      activeChatStreams.delete(streamKey);
-      void cancelManagedCloudRunWithCapturedCredential(active);
+    for (const active of activeChatStreams.values()) {
+      if (active.clientInstanceId === clientInstanceId) active.panelDetached = true;
     }
+    syncDetachedChatHeartbeat();
   });
 }
 
@@ -3867,6 +3897,48 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'ADOPT_CHAT_TURN': {
+      const adoptMsg = message as import('./types').AdoptChatTurnMessage;
+      const owner = normalizeManagedCloudOwner(adoptMsg.owner);
+      if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
+      if (typeof adoptMsg.historyConversationId !== 'string') {
+        return { success: false, error: 'Invalid conversation identifier' } as ExtensionResponse;
+      }
+      for (const [streamKey, active] of activeChatStreams) {
+        if (
+          !active.panelDetached ||
+          !active.streamId ||
+          active.historyConversationId !== adoptMsg.historyConversationId ||
+          !sameManagedCloudOwner(active.owner, owner)
+        )
+          continue;
+        let adoptedKey: string;
+        try {
+          adoptedKey = createChromeManagedStreamKey(adoptMsg.clientInstanceId, active.streamId);
+        } catch {
+          return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+        }
+        if (active.settlement) {
+          await active.settlement;
+          return { success: true } as ExtensionResponse;
+        }
+        active.clientInstanceId = adoptMsg.clientInstanceId;
+        active.panelDetached = false;
+        adoptedChatStreamKeys.set(adoptedKey, streamKey);
+        syncDetachedChatHeartbeat();
+        return {
+          success: true,
+          adopted: {
+            id: active.streamId,
+            text: active.visibleText ?? '',
+            ...(active.cloudRun ? { cloudRun: { ...active.cloudRun } } : {}),
+            ...(active.assistantMessageId ? { assistantMessageId: active.assistantMessageId } : {}),
+          },
+        } as ExtensionResponse;
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'RESOLVE_CHAT_APPROVAL': {
       const approvalMsg = message as import('./types').ResolveChatApprovalMessage;
       const owner = normalizeManagedCloudOwner(approvalMsg.owner);
@@ -3899,7 +3971,9 @@ async function handleMessageAsync(
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       let streamKey: string;
       try {
-        streamKey = createChromeManagedStreamKey(cancelMsg.clientInstanceId, cancelMsg.id);
+        streamKey = resolveChatStreamKey(
+          createChromeManagedStreamKey(cancelMsg.clientInstanceId, cancelMsg.id),
+        );
       } catch {
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
@@ -5813,6 +5887,12 @@ async function handleChatMessage(
     cancelRequested: false,
     cancelNotified: false,
     ...(delivery?.requestId ? { requestId: delivery.requestId } : {}),
+    streamId: id,
+    visibleText: '',
+    ...(!delivery && message.historyConversationId
+      ? { historyConversationId: message.historyConversationId }
+      : {}),
+    ...(message.assistantMessageId ? { assistantMessageId: message.assistantMessageId } : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
   const abortForAdmission = (): void => {
@@ -5825,8 +5905,33 @@ async function handleChatMessage(
   const transcript: string[] = [];
   const onStreamText = (text: string): void => {
     if (activeChatStreams.get(streamKey) !== activeStream) return;
+    activeStream.visibleText += text;
     if (delivery && text) transcript.push(text);
     publishManagedChatChunk(streamKey, activeStream, id, { text, done: false });
+  };
+  const settleClosedPanelTurn = async (errorText?: string): Promise<void> => {
+    const conversationId = activeStream.historyConversationId;
+    if (
+      !activeStream.panelDetached ||
+      activeStream.cancelRequested ||
+      !conversationId ||
+      activeStream.cloudRun?.detachable === true
+    )
+      return;
+    const content = activeStream.visibleText ?? '';
+    const failure = errorText ?? (content.trim() ? undefined : t('spEmptyResponse'));
+    activeStream.settlement = settleDetachedAssistantTurn(owner, conversationId, {
+      content,
+      ...(failure ? { errorText: failure } : {}),
+      ...(activeStream.assistantMessageId
+        ? { cloudMessageId: activeStream.assistantMessageId }
+        : {}),
+    })
+      .then(() => undefined)
+      .catch((error) => {
+        logger.warn('The reply of a closed side panel could not be saved', error);
+      });
+    await activeStream.settlement;
   };
   let backgroundDeliveryAttempted = false;
   let backgroundDeliveryFailure: string | null = null;
@@ -5977,6 +6082,7 @@ async function handleChatMessage(
     );
 
     if (result.status === 'success') {
+      await settleClosedPanelTurn();
       if (!activeStream.cancelNotified) {
         publishManagedChatChunk(streamKey, activeStream, id, {
           text: '',
@@ -5989,6 +6095,7 @@ async function handleChatMessage(
       return result;
     }
 
+    await settleClosedPanelTurn(result.message);
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
       // A spent allowance still needs the account panel refreshed, but the
@@ -6024,6 +6131,7 @@ async function handleChatMessage(
       code: 'server_error',
       message: messageText,
     } as const;
+    await settleClosedPanelTurn(messageText);
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
       publishManagedChatChunk(streamKey, activeStream, id, {
@@ -6037,7 +6145,7 @@ async function handleChatMessage(
     return result;
   } finally {
     admissionSignal?.removeEventListener('abort', abortForAdmission);
-    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+    releaseChatStream(streamKey, activeStream);
   }
 }
 
@@ -6074,6 +6182,16 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
       error: '__AUTH_REQUIRED__',
     });
     return;
+  }
+  for (const [detachedKey, detached] of activeChatStreams) {
+    if (
+      detached.panelDetached &&
+      detached.cloudRun?.runId === message.cloudRun.runId &&
+      sameManagedCloudOwner(detached.owner, credential.owner)
+    ) {
+      detached.controller.abort();
+      releaseChatStream(detachedKey, detached);
+    }
   }
   if (activeChatStreams.has(streamKey)) {
     broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
@@ -6156,7 +6274,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
       await invalidateRejectedManagedCloudCredential(activeStream);
     }
   } finally {
-    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+    releaseChatStream(streamKey, activeStream);
   }
 }
 
@@ -6314,7 +6432,7 @@ async function handleResolveChatApproval(
       await invalidateRejectedManagedCloudCredential(activeStream);
     }
   } finally {
-    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+    releaseChatStream(streamKey, activeStream);
   }
 }
 
@@ -6430,7 +6548,7 @@ async function handleInPagePrompt(
       true,
     );
   } finally {
-    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+    releaseChatStream(streamKey, activeStream);
   }
 
   if (result.status === 'success') {

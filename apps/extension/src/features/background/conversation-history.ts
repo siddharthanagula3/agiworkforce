@@ -1257,6 +1257,53 @@ export async function appendBackgroundTurn(
   });
 }
 
+export interface DetachedTurnSettlement {
+  content: string;
+  errorText?: string;
+  cloudMessageId?: string;
+}
+
+export async function settleDetachedAssistantTurn(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  settlement: DetachedTurnSettlement,
+): Promise<boolean> {
+  assertManagedCloudOwner(owner);
+  if (!isSafeConversationId(conversationId)) return false;
+  return mutateStore(async (store) => {
+    const entry = store.conversations.find(
+      (candidate) =>
+        candidate.id === conversationId && sameManagedCloudOwner(candidate.owner, owner),
+    );
+    const index = entry ? entry.messages.length - 1 : -1;
+    const turn = entry?.messages[index];
+    if (!entry || turn?.role !== 'assistant' || turn.streaming !== true) return false;
+    const settled: HistoryMessage = { ...turn };
+    delete settled.streaming;
+    const content =
+      settlement.content.length >= turn.content.length ? settlement.content : turn.content;
+    const messages = [...entry.messages];
+    messages[index] = {
+      ...settled,
+      content,
+      ...(settlement.errorText ? { error: true, errorText: settlement.errorText } : {}),
+      ...(settlement.cloudMessageId && !turn.cloudMessageId
+        ? { cloudMessageId: settlement.cloudMessageId }
+        : {}),
+    };
+    const updated: ConversationEntry = {
+      ...entry,
+      messages: normalizeMessages(messages),
+      savedAt: Date.now(),
+    };
+    store.conversations = store.conversations.map((candidate) =>
+      candidate === entry ? updated : candidate,
+    );
+    await writeStore(store);
+    return true;
+  });
+}
+
 function normalizeBackgroundAnswer(value: string): string {
   const answer = value.trim();
   if (answer.length <= MAX_HISTORY_CONTENT_CHARS) return answer;

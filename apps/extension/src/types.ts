@@ -53,6 +53,7 @@ export type NativeMessageType =
   | 'CHAT_MESSAGE'
   | 'CANCEL_STREAM'
   | 'RESUME_CHAT_RUN'
+  | 'ADOPT_CHAT_TURN'
   | 'RESOLVE_CHAT_APPROVAL'
   | 'RESOLVE_CHAT_INPUT'
   | 'CANCEL_COMPUTER_USE'
@@ -530,6 +531,7 @@ export interface ChatMessageMessage extends BaseMessage {
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
   conversationId?: string;
+  historyConversationId?: string;
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
 }
@@ -558,6 +560,20 @@ export interface ResumeChatRunMessage extends BaseMessage {
   cloudRun: ManagedCloudAgentRunReference;
   alreadyVisibleText: string;
   routing?: ChromeManagedRoutingMetadata;
+}
+
+export interface AdoptChatTurnMessage extends BaseMessage {
+  type: 'ADOPT_CHAT_TURN';
+  owner: ManagedCloudOwner;
+  clientInstanceId: string;
+  historyConversationId: string;
+}
+
+export interface AdoptedChatTurn {
+  id: string;
+  text: string;
+  cloudRun?: ManagedCloudAgentRunReference;
+  assistantMessageId?: string;
 }
 
 export interface ResolveChatApprovalMessage extends BaseMessage {
@@ -605,6 +621,12 @@ export interface ChatChunkMessage {
 export interface ChatMessageResponse {
   success: boolean;
   error?: string;
+}
+
+export interface AdoptChatTurnResponse {
+  success: boolean;
+  error?: string;
+  adopted?: AdoptedChatTurn;
 }
 
 export type InPagePromptOutcome =
@@ -1148,6 +1170,7 @@ export type ExtensionMessage =
   | ChatMessageMessage
   | CancelStreamMessage
   | ResumeChatRunMessage
+  | AdoptChatTurnMessage
   | ResolveChatApprovalMessage
   | ResolveChatInputMessage
   | InPagePromptMessage
@@ -1227,6 +1250,7 @@ export type ExtensionResponse =
   | RunPageActionsResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
+  | AdoptChatTurnResponse
   | InPagePromptResponse
   | GetAccessibilityTreeResponse
   | RecordingResponse
