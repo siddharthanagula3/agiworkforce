@@ -196,6 +196,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
   MAX_DEVICE_STEPS_PER_PAUSE,
   cloudAgentRunSteerProgressId,
   type ToolApprovalReviewWire,
@@ -384,7 +385,6 @@ import { invalidToolArgumentsMessage, toolArgumentProblem } from './tool-argumen
 import {
   generateManagedOfficeFile,
   isManagedOfficeFileTool,
-  MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { searchToolsByKeyword } from '@/lib/connectors/tool-search';
 import { executeFileTool, isFileSearchTool } from '@/lib/server/tools/file-search-tool';

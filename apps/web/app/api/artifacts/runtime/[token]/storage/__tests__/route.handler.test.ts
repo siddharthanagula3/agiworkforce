@@ -63,14 +63,11 @@ vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', () => ({
-  ARTIFACT_STORAGE_LIST_LIMIT: 1_000,
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),
   describeArtifactConnectors: vi.fn(),
   selectArtifactRuntimeRoute: vi.fn(),
-  ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES: 20 * 1024 * 1024,
-  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES: 4 * 1024 * 1024,
   readRunnableArtifact: mocks.readRunnableArtifact,
   readArtifactStorageValue: mocks.readArtifactStorageValue,
   writeArtifactStorageValue: mocks.writeArtifactStorageValue,

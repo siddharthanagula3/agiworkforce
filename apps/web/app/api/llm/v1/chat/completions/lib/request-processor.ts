@@ -3,7 +3,10 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+  ManagedCloudMessageMetadataSchema,
+} from '@agiworkforce/cloud-contracts';
 import type {
   ManagedMemoryCitation,
   ResearchDeliverableSpec,
@@ -436,10 +439,7 @@ import {
   type ChatSetup,
   type ModelSelection,
 } from './capability-preamble';
-import {
-  createManagedOfficeFileToolDefinition,
-  MANAGED_OFFICE_FILE_TOOL_NAME,
-} from '@/lib/services/managed-office-file-service';
+import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 import {
   createMapSearchToolDefinition,
   hasMapSearchIntent,
@@ -3472,7 +3472,7 @@ async function processAdmittedRequest(
               is_temporary: boolean;
               selected_route_id: string | null;
             }>(
-              `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id
+              `select c.id, c.project_id, c.is_temporary, c.selected_route_id
                    from web_conversations c
                   where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                   limit 1`,

@@ -72,7 +72,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
-export { ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES, ARTIFACT_STORAGE_VALUE_LIMIT_BYTES };
 const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
 
 const MAX_OUTPUT_TOKENS = 4_096;

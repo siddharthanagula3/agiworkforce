@@ -13,9 +13,9 @@ import { requireMemberPermission } from '@/lib/services/organization-permission-
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
   readOrganizationUsage,
-  resolveUsageWindow,
   type OrganizationUsage,
 } from '@/lib/services/organization-usage-service';
+import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
 
 export const runtime = 'nodejs';
 

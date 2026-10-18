@@ -42,8 +42,6 @@ import { buildWorkbook, type WorkbookSheet } from './managed-workbook-builder';
 import { MANAGED_OFFICE_FILE_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
 
-export { MANAGED_OFFICE_FILE_TOOL_NAME };
-
 export function isManagedOfficeFileTool(name: string): boolean {
   return name === MANAGED_OFFICE_FILE_TOOL_NAME;
 }

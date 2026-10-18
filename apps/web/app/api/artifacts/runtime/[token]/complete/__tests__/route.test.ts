@@ -87,9 +87,6 @@ vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', () => ({
-  ARTIFACT_STORAGE_LIST_LIMIT: 1_000,
-  ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES: vi.fn(),
-  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES: vi.fn(),
   deleteArtifactStorageValue: vi.fn(),
   describeArtifactConnectors: vi.fn(),
   listArtifactStorageKeys: vi.fn(),

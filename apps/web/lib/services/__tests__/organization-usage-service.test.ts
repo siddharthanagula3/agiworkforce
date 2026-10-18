@@ -4,11 +4,8 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
-import {
-  readOrganizationUsage,
-  resolveUsageWindow,
-  USAGE_MAX_WINDOW_DAYS,
-} from '../organization-usage-service';
+import { readOrganizationUsage } from '../organization-usage-service';
+import { resolveUsageWindow, USAGE_MAX_WINDOW_DAYS } from '../usage-aggregation';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const NOW = new Date('2026-08-23T00:00:00.000Z');

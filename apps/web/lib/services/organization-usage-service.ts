@@ -44,13 +44,6 @@ import {
  * this ever does read that table, those columns stay out of the response.
  */
 
-export type {
-  UsageBreakdownRow,
-  UsageDayRow,
-  UsageFreshness,
-  UsageTotals,
-} from '@/lib/services/usage-aggregation';
-
 export interface WorkloadSessionUsage {
   workload: UsageWorkload;
   sessions: number;
@@ -75,12 +68,6 @@ export interface OrganizationUsage {
   daily: UsageDayRow[];
   freshness: UsageFreshness;
 }
-
-export {
-  USAGE_DEFAULT_WINDOW_DAYS,
-  USAGE_MAX_WINDOW_DAYS,
-  resolveUsageWindow,
-} from '@/lib/services/usage-aggregation';
 
 interface WorkloadRow extends AggregateRow {
   sessions: string | number | null;

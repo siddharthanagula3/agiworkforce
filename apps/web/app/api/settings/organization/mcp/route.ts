@@ -27,10 +27,7 @@ import {
 } from '@/lib/connectors/mcp-custom-connections';
 import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
-import {
-  evaluateMcpHostAccess,
-  type ConnectorAccessPolicy,
-} from '@/lib/services/connector-policy-evaluator';
+import { evaluateMcpHostAccess, type ConnectorAccessPolicy } from '@agiworkforce/client-runtime';
 import {
   listOrgMcpServers,
   publishOrgMcpServer,

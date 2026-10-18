@@ -15,6 +15,8 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES,
   ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
+} from '@agiworkforce/cloud-contracts';
+import {
   deleteArtifactStorageValue,
   listArtifactStorageKeys,
   readArtifactStorageValue,
