@@ -71,21 +71,6 @@ export {
 export type { GitHead, GitOperation, GitStatusCounts } from './git';
 
 export {
-  CODE_DOCTOR_STATUSES,
-  doctorReportIsHealthy,
-  formatDoctorReport,
-  parseDoctorReport,
-  parseDoctorStatus,
-  summarizeDoctorChecks,
-} from './doctor';
-export type {
-  CodeDoctorCheck,
-  CodeDoctorReport,
-  CodeDoctorStatus,
-  CodeDoctorSummary,
-} from './doctor';
-
-export {
   appendTerminalOutput,
   describeTerminalOutsideWorkspace,
   emptyTerminalCapture,

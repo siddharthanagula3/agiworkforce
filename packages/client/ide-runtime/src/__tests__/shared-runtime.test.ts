@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   countPorcelainStatus,
-  doctorReportIsHealthy,
-  formatDoctorReport,
   GIT_OPERATION_PROBES,
   globToRegExp,
   grepLines,
@@ -12,8 +10,6 @@ import {
   looksBinary,
   matchesGlob,
   parseAheadBehind,
-  parseDoctorReport,
-  summarizeDoctorChecks,
   toPosixPath,
 } from '../index';
 
@@ -116,67 +112,5 @@ describe('git semantics', () => {
   it('reads a head with no branch as detached', () => {
     expect(isDetachedHead({ branch: null, headSha: 'abc' })).toBe(true);
     expect(isDetachedHead({ branch: 'main', headSha: 'abc' })).toBe(false);
-  });
-});
-
-describe('doctor report', () => {
-  const payload = {
-    version: '1.7.1',
-    generated_at: '2026-09-18T00:00:00Z',
-    cwd: '/work/project',
-    summary: { overall: 'warn', pass: 1, warn: 1, fail: 0, unknown: 0 },
-    checks: [
-      { id: 'runtime.git', title: 'runtime dependency: git', status: 'pass', message: 'found' },
-      {
-        id: 'git.repository',
-        title: 'git repository',
-        status: 'warn',
-        message: 'HEAD detached at 1a2b3c4',
-        details: ['root: /work/project'],
-      },
-    ],
-  };
-
-  it('reads the report the CLI serialises, snake_case field included', () => {
-    const report = parseDoctorReport(payload);
-    expect(report?.generatedAt).toBe('2026-09-18T00:00:00Z');
-    expect(report?.checks).toHaveLength(2);
-    expect(report?.checks[0]?.details).toEqual([]);
-    expect(report?.summary.overall).toBe('warn');
-    expect(doctorReportIsHealthy(report!)).toBe(false);
-  });
-
-  it('recomputes a missing summary instead of defaulting to healthy', () => {
-    const report = parseDoctorReport({ ...payload, summary: undefined });
-    expect(report?.summary).toEqual({ overall: 'warn', pass: 1, warn: 1, fail: 0, unknown: 0 });
-  });
-
-  it('treats an unknown status as unknown and drops a check with no id', () => {
-    const report = parseDoctorReport({
-      checks: [{ id: 'a', title: 'A', status: 'exploded', message: '' }, { title: 'no id' }],
-    });
-    expect(report?.checks).toHaveLength(1);
-    expect(report?.checks[0]?.status).toBe('unknown');
-    expect(report?.summary.overall).toBe('unknown');
-    expect(parseDoctorReport({ checks: 'not an array' })).toBeNull();
-  });
-
-  it('renders the text the CLI prints so a panel and a terminal read alike', () => {
-    const text = formatDoctorReport(parseDoctorReport(payload)!);
-    expect(text).toContain('AGI doctor');
-    expect(text).toContain('  overall: Warn');
-    expect(text).toContain('[Pass] runtime dependency: git - found');
-    expect(text).toContain('[Warn] git repository - HEAD detached at 1a2b3c4');
-    expect(text).toContain('  - root: /work/project');
-  });
-
-  it('lets the worst status decide the overall one', () => {
-    expect(
-      summarizeDoctorChecks([
-        { id: 'a', title: 'A', status: 'pass', message: '', details: [] },
-        { id: 'b', title: 'B', status: 'unknown', message: '', details: [] },
-        { id: 'c', title: 'C', status: 'fail', message: '', details: [] },
-      ]).overall,
-    ).toBe('fail');
   });
 });
