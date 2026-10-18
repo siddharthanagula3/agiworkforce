@@ -60,7 +60,6 @@ const AUTHORIZATION_CALLS = [
   'getRequestIdentity',
   'assertAccountActive',
   'createClaimedUserScopedDb',
-  'requireOrganizationAdmin',
   'runAuthGate',
 ];
 

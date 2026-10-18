@@ -50,7 +50,6 @@ export const ASSERTING_TERMINALS = [
   ['apps/web/lib/services/org-sharing-service.ts', 'requireProjectSharingRight'],
   ['apps/web/lib/services/organization-membership-service.ts', 'requireOrganizationOwner'],
   ['apps/web/lib/services/organization-delegation.ts', 'assertDelegatedScope'],
-  ['apps/web/lib/server/service-principals/caller.ts', 'resolveServicePrincipalCaller'],
 ];
 
 /** Hands back the grid's answer; the handler still has to act on it. */
