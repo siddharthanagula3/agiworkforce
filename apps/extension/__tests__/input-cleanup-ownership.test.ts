@@ -58,7 +58,6 @@ function harness() {
       tabId,
       url: state.url,
       origin: new URL(state.url).origin,
-      profileId: null,
     }),
     isOriginApprovedForAutomation: () => state.approved,
     hasBrowserControlConsent: async () => state.granted,

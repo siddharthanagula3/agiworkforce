@@ -53,8 +53,6 @@ vi.stubGlobal('chrome', {
 
 const { runDesktopBrowserCommand, MAX_DESKTOP_PAGE_TEXT_CHARS } =
   await import('../src/features/native-bridge/desktopCommands');
-const { BROWSER_PROFILE_SCOPE_STORAGE_KEY, BROWSER_PROFILE_STORAGE_KEY } =
-  await import('../src/features/options/site-permission-policy');
 
 function request(command: string, args: Record<string, unknown> = {}): BrowserCommandRequest {
   return {
@@ -271,7 +269,7 @@ describe('desktop-issued browser commands', () => {
     expect(navigate).toHaveBeenCalledWith(TAB_ID, `${SITE}/next`);
   });
 
-  it.each(['unapproved', 'control', 'profile'] as const)(
+  it.each(['unapproved', 'control'] as const)(
     'refuses a destination without its %s grant',
     async (missing) => {
       approveSite();
@@ -280,35 +278,13 @@ describe('desktop-issued browser commands', () => {
         store['agi_site_allowlist'] = [SITE, destination];
         grantedOrigins.add(`${destination}/*`);
       }
-      if (missing === 'profile') {
-        store['agi_cu_browser_control_consent'] = [SITE, destination];
-        store[BROWSER_PROFILE_SCOPE_STORAGE_KEY] = {
-          userId: 'qa-owner',
-          workspaceId: 'qa-workspace',
-        };
-        store[BROWSER_PROFILE_STORAGE_KEY] = [
-          {
-            id: 'qa-profile',
-            label: 'Original site',
-            userId: 'qa-owner',
-            workspaceId: 'qa-workspace',
-            sites: [SITE],
-            capabilities: ['automation'],
-            createdAtMs: Date.now(),
-            expiresAtMs: null,
-            revokedAtMs: null,
-          },
-        ];
-      }
       const navigate = vi.fn(() => Promise.resolve());
       const result = await runDesktopBrowserCommand(
         request('browser_navigate', { url: `${destination}/next` }),
         context(vi.fn(), navigate),
       );
       expect(result.ok).toBe(false);
-      expect(result.error).toMatch(
-        missing === 'unapproved' ? /approved-sites/ : missing === 'control' ? /control/ : /profile/,
-      );
+      expect(result.error).toMatch(missing === 'unapproved' ? /approved-sites/ : /control/);
       expect(navigate).not.toHaveBeenCalled();
     },
   );

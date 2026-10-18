@@ -233,51 +233,6 @@ export const formUtils = {
     const fields = context.querySelectorAll('input, select, textarea');
     return Array.from(fields) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
   },
-
-  fillField(
-    field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
-    value: string,
-  ): boolean {
-    try {
-      if (field instanceof HTMLInputElement) {
-        field.value = value;
-
-        field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-
-        return true;
-      } else if (field instanceof HTMLSelectElement) {
-        field.value = value;
-        field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        return true;
-      } else if (field instanceof HTMLTextAreaElement) {
-        field.value = value;
-        field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logger.error('Failed to fill form field', error);
-      return false;
-    }
-  },
-
-  submitForm(form: HTMLFormElement | null): boolean {
-    if (!form) return false;
-    try {
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-      } else {
-        form.submit();
-      }
-      return true;
-    } catch (error) {
-      logger.error('Failed to submit form', error);
-      return false;
-    }
-  },
 };
 
 export const storageUtils = {

@@ -867,6 +867,10 @@
       }
     }
   },
+  "spStreamCancellationUnconfirmed": {
+    "message": "Local streaming stopped. Cancellation was interrupted and could not be confirmed. Use Retry to retry Stop, or start a new chat.",
+    "description": "Error shown on a reply whose Stop request was interrupted before it was confirmed"
+  },
   "spStreamTryAgainIn": {
     "message": "$ERROR$ Try again in $WAIT$.",
     "description": "Failed turn sentence with the provider-stated wait appended",

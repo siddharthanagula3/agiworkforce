@@ -64,7 +64,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 interface CloudSyncTombstone {
   accountId: string;
   cloudConversationId: string;
-  organizationId?: string | null;
+  organizationId: string | null;
   queuedAt: number;
 }
 
@@ -264,9 +264,7 @@ async function flushEligibleConversation(
 
   const client = createExtensionCloudChatClient(owner);
   let organizationId = entry.cloudSync?.organizationId;
-  // Tracked alongside the binding rather than re-read from `entry`, which is a
-  // snapshot taken before the create and would make an accepted project look
-  // unsynced on every later flush.
+  // `entry` predates the create, so re-reading it would make an accepted project look unsynced.
   let syncedProjectId = entry.cloudSync?.syncedProjectId ?? null;
   const createAcknowledged = entry.cloudSync?.createAcknowledged;
 
@@ -538,18 +536,18 @@ async function readTombstones(): Promise<CloudSyncTombstone[]> {
       if (typeof cloudConversationId !== 'string' || !UUID_PATTERN.test(cloudConversationId)) {
         continue;
       }
-      if (
-        rawOrganizationId !== undefined &&
-        rawOrganizationId !== null &&
-        (typeof rawOrganizationId !== 'string' || !UUID_PATTERN.test(rawOrganizationId))
-      ) {
-        continue;
-      }
+      const organizationId =
+        rawOrganizationId === null
+          ? null
+          : typeof rawOrganizationId === 'string' && UUID_PATTERN.test(rawOrganizationId)
+            ? rawOrganizationId
+            : undefined;
+      if (organizationId === undefined) continue;
       if (typeof queuedAt !== 'number' || !Number.isFinite(queuedAt) || queuedAt < 0) continue;
       records.push({
         accountId,
         cloudConversationId,
-        ...(rawOrganizationId !== undefined ? { organizationId: rawOrganizationId } : {}),
+        organizationId,
         queuedAt,
       });
     }
@@ -729,10 +727,6 @@ export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Pr
   const client = createExtensionCloudChatClient(owner);
   const settled = new Set<string>();
   for (const tombstone of mine) {
-    if (tombstone.organizationId === undefined) {
-      logger.debug('Legacy cloud deletion is waiting for a proven workspace binding');
-      continue;
-    }
     const controller = new AbortController();
     try {
       await client.deleteConversation(tombstone.cloudConversationId, {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateGatewayUrl } from '../src/background/policy';
+import {
+  DOM_MUTATION_MESSAGE_TYPES,
+  getMessagePolicy,
+  validateGatewayUrl,
+} from '../src/background/policy';
 import { renderMarkdown, sanitizeHtml } from '../src/features/side-panel/markdown';
 
 describe('C-1 + M-02 validateGatewayUrl, exact-match allowlist', () => {
@@ -128,14 +132,6 @@ describe('H-1 DISCOVERY_MESSAGE_TYPES is empty', () => {
   });
 });
 
-const DOM_MUTATION_MESSAGE_TYPES = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-]);
-
 describe('H-2 EVALUATE_SCRIPT absent from DOM_MUTATION_MESSAGE_TYPES', () => {
   it('EVALUATE_SCRIPT is NOT in the mutation guard set', () => {
     expect(DOM_MUTATION_MESSAGE_TYPES.has('EVALUATE_SCRIPT')).toBe(false);
@@ -144,41 +140,7 @@ describe('H-2 EVALUATE_SCRIPT absent from DOM_MUTATION_MESSAGE_TYPES', () => {
   it('legitimate mutation types are still present', () => {
     expect(DOM_MUTATION_MESSAGE_TYPES.has('TYPE')).toBe(true);
     expect(DOM_MUTATION_MESSAGE_TYPES.has('CLICK')).toBe(true);
-    expect(DOM_MUTATION_MESSAGE_TYPES.has('SUBMIT_FORM')).toBe(true);
-  });
-});
-
-const ALLOWED_SCRIPT_OPERATION_KEYS = new Set<string>([
-  'navigateTo',
-  'scrollTo',
-  'scrollBy',
-  'scrollIntoView',
-  'getScrollPosition',
-  'getViewportSize',
-  'getComputedStyle',
-  'getBoundingRect',
-  'focusElement',
-  'blurElement',
-  // getLocalStorage / setLocalStorage / clearLocalStorage intentionally absent (H-3 fix)
-]);
-
-describe('H-3 localStorage operations removed from ALLOWED_SCRIPT_OPERATIONS', () => {
-  it('getLocalStorage is NOT an allowed script operation', () => {
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('getLocalStorage')).toBe(false);
-  });
-
-  it('setLocalStorage is NOT an allowed script operation', () => {
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('setLocalStorage')).toBe(false);
-  });
-
-  it('clearLocalStorage is NOT an allowed script operation', () => {
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('clearLocalStorage')).toBe(false);
-  });
-
-  it('benign DOM ops are still available', () => {
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('focusElement')).toBe(true);
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('scrollTo')).toBe(true);
-    expect(ALLOWED_SCRIPT_OPERATION_KEYS.has('navigateTo')).toBe(true);
+    expect(DOM_MUTATION_MESSAGE_TYPES.has('FILL_FIELDS')).toBe(true);
   });
 });
 
@@ -244,44 +206,24 @@ describe('M-1 renderMarkdown link text entity-encoding (live module)', () => {
   });
 });
 
-const DOM_MUTATION_MESSAGE_TYPES_V2 = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-  'SELECT_OPTION',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
-  'EXECUTE_SCRIPT',
-  'RUN_PAGE_ACTIONS',
-  'AUTO_FILL_JOB_APPLICATION',
-]);
-
 describe('CHROME-NEW-005 compound mutation types are guarded', () => {
   it('RUN_PAGE_ACTIONS is in the mutation guard set', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V2.has('RUN_PAGE_ACTIONS')).toBe(true);
+    expect(DOM_MUTATION_MESSAGE_TYPES.has('RUN_PAGE_ACTIONS')).toBe(true);
   });
 
   it('AUTO_FILL_JOB_APPLICATION is in the mutation guard set', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V2.has('AUTO_FILL_JOB_APPLICATION')).toBe(true);
+    expect(DOM_MUTATION_MESSAGE_TYPES.has('AUTO_FILL_JOB_APPLICATION')).toBe(true);
   });
 
   it('every simple mutation type is still gated', () => {
-    for (const t of ['TYPE', 'CLICK', 'SUBMIT_FORM', 'SET_LOCAL_STORAGE', 'EXECUTE_SCRIPT']) {
-      expect(DOM_MUTATION_MESSAGE_TYPES_V2.has(t)).toBe(true);
+    for (const t of ['TYPE', 'CLICK', 'FILL_FIELDS', 'SET_LOCAL_STORAGE', 'CLEAR_LOCAL_STORAGE']) {
+      expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(true);
     }
   });
 
   it('non-mutation types are NOT in the set (recording, queries are read-only)', () => {
     for (const t of ['START_RECORDING', 'STOP_RECORDING', 'GET_PAGE_INFO', 'PING']) {
-      expect(DOM_MUTATION_MESSAGE_TYPES_V2.has(t)).toBe(false);
+      expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(false);
     }
   });
 });
@@ -607,83 +549,17 @@ describe('M-13 console-patch removed', () => {
   });
 });
 
-const DOM_MUTATION_MESSAGE_TYPES_V3 = new Set<string>([
-  'TYPE',
-  'CLICK',
-  'SET_LOCAL_STORAGE',
-  'CLEAR_LOCAL_STORAGE',
-  'SUBMIT_FORM',
-  'SELECT_OPTION',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
-  'EXECUTE_SCRIPT',
-  'RUN_PAGE_ACTIONS',
-  'AUTO_FILL_JOB_APPLICATION',
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
-  'FILL_FORM',
-]);
-
-function senderTabAllowedToMutateV3(
-  senderTabId: number | undefined,
-  targetTabId: number | undefined,
-): boolean {
-  if (typeof targetTabId !== 'number') return true;
-  return senderTabId === targetTabId;
-}
-
-describe('P0-D cross-tab mutation guard, DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM', () => {
-  it('DOUBLE_CLICK is in the mutation guard set', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('DOUBLE_CLICK')).toBe(true);
-  });
-
-  it('RIGHT_CLICK is in the mutation guard set', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('RIGHT_CLICK')).toBe(true);
-  });
-
-  it('FILL_FORM is in the mutation guard set', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('FILL_FORM')).toBe(true);
-  });
-
-  it('cross-tab DOUBLE_CLICK is rejected by senderTabAllowedToMutate (sender=10, target=99)', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('DOUBLE_CLICK')).toBe(true);
-    expect(senderTabAllowedToMutateV3(10, 99)).toBe(false);
-  });
-
-  it('same-tab DOUBLE_CLICK is allowed', () => {
-    expect(senderTabAllowedToMutateV3(42, 42)).toBe(true);
-  });
-
-  it('DOUBLE_CLICK with no tabId is always allowed (sender acts on own tab)', () => {
-    expect(senderTabAllowedToMutateV3(10, undefined)).toBe(true);
-  });
-
-  it('cross-tab RIGHT_CLICK is rejected', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('RIGHT_CLICK')).toBe(true);
-    expect(senderTabAllowedToMutateV3(5, 100)).toBe(false);
-  });
-
-  it('cross-tab FILL_FORM is rejected', () => {
-    expect(DOM_MUTATION_MESSAGE_TYPES_V3.has('FILL_FORM')).toBe(true);
-    expect(senderTabAllowedToMutateV3(3, 77)).toBe(false);
-  });
-
-  it('all prior mutation types are still present in V3', () => {
+describe('P0-D cross-tab mutation guard covers every live mutation type', () => {
+  it('pins each live DOM mutation type to the sender tab', () => {
     for (const t of [
       'TYPE',
       'CLICK',
-      'SUBMIT_FORM',
-      'EXECUTE_SCRIPT',
+      'FILL_FIELDS',
       'RUN_PAGE_ACTIONS',
       'AUTO_FILL_JOB_APPLICATION',
     ]) {
-      expect(DOM_MUTATION_MESSAGE_TYPES_V3.has(t)).toBe(true);
+      expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(true);
+      expect(getMessagePolicy(t).allowsCrossTab).toBe(false);
     }
   });
 });

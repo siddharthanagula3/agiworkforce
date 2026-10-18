@@ -256,13 +256,9 @@ describe('policy, DOM_MUTATION_MESSAGE_TYPES', () => {
     for (const t of [
       'TYPE',
       'CLICK',
-      'DOUBLE_CLICK',
-      'RIGHT_CLICK',
-      'SUBMIT_FORM',
-      'FILL_FORM',
+      'FILL_FIELDS',
       'RUN_PAGE_ACTIONS',
       'AUTO_FILL_JOB_APPLICATION',
-      'EXECUTE_SCRIPT',
     ]) {
       expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(true);
     }

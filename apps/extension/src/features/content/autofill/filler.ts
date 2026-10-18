@@ -85,7 +85,7 @@ function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string
     dispatchFillEvents(el);
     return { success: true, skipped: false };
   } catch {
-    return { success: false, skipped: false, reason: 'Fill function returned false' };
+    return { success: false, skipped: false, reason: 'Field rejected the value' };
   }
 }
 
@@ -94,7 +94,7 @@ function fillFieldElement(el: Element, value: string): FillOutcome {
     const success = fillSelectField(el, value);
     return success
       ? { success, skipped: false }
-      : { success, skipped: false, reason: 'Fill function returned false' };
+      : { success, skipped: false, reason: 'No matching option' };
   }
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     return fillTextField(el, value);
@@ -133,15 +133,6 @@ function normaliseBooleanValue(value: boolean | string | undefined): string {
   return String(value ?? '');
 }
 
-/**
- * Extracts the string value from a JobApplicationProfile for a given normalised key.
- * Supports dot-notation for nested keys (e.g. "files.resume").
- * Returns null when the profile has no value for the key.
- *
- * EXPORTED so the content-script AGI_RUN_AUTOFILL handler can build the
- * profileValues map needed by makeEscalationDecision() without duplicating
- * the resolution logic.
- */
 export function resolveProfileValue(
   profile: JobApplicationProfile,
   key: string,
@@ -199,84 +190,6 @@ export function resolveProfileValue(
   }
 }
 
-export async function fillFields(
-  fields: DetectedField[],
-  profile: JobApplicationProfile,
-  delayMs: number = 80,
-): Promise<FillResult[]> {
-  const results: FillResult[] = [];
-
-  for (const field of fields) {
-    if (field.fieldType === 'file') {
-      results.push({
-        key: field.key,
-        selector: field.selector,
-        success: false,
-        skipped: true,
-        reason: FILE_INPUT_SKIP_REASON,
-      });
-      continue;
-    }
-
-    const profileValue = resolveProfileValue(profile, field.key);
-    if (profileValue === null || profileValue === undefined || profileValue === '') {
-      results.push({
-        key: field.key,
-        selector: field.selector,
-        success: false,
-        skipped: true,
-        reason: 'No value in profile for this field',
-      });
-      continue;
-    }
-
-    const stringValue = sanitizeProfileValue(String(profileValue));
-    const el = document.querySelector(field.selector);
-
-    if (!el) {
-      results.push({
-        key: field.key,
-        selector: field.selector,
-        success: false,
-        skipped: false,
-        reason: 'Element not found in DOM',
-      });
-      continue;
-    }
-
-    const isReadonly =
-      (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly;
-    const isDisabled =
-      el instanceof HTMLInputElement ||
-      el instanceof HTMLTextAreaElement ||
-      el instanceof HTMLSelectElement
-        ? el.disabled
-        : false;
-    if (isReadonly || isDisabled) {
-      results.push({
-        key: field.key,
-        selector: field.selector,
-        success: false,
-        skipped: true,
-        reason: isReadonly ? 'Field is readonly' : 'Field is disabled',
-      });
-      continue;
-    }
-
-    results.push({
-      key: field.key,
-      selector: field.selector,
-      ...fillFieldElement(el, stringValue),
-    });
-
-    if (delayMs > 0) {
-      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-
-  return results;
-}
-
 export async function autofillLinkedIn(
   profile: JobApplicationProfile,
   delayMs: number = 80,
@@ -321,7 +234,7 @@ export async function autofillLinkedIn(
     }
 
     const { element, selector } = match;
-    const stringValue = String(profileValue);
+    const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
@@ -391,7 +304,7 @@ export async function autofillLever(
     }
 
     const { element, selector } = match;
-    const stringValue = String(profileValue);
+    const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 
     try {
@@ -440,7 +353,7 @@ export async function autofillLever(
         continue;
       }
 
-      const stringValue = String(profileValue);
+      const stringValue = sanitizeProfileValue(String(profileValue));
       let outcome: FillOutcome = { success: false, skipped: false };
       try {
         outcome = fillFieldElement(el, stringValue);

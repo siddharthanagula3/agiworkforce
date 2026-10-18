@@ -219,14 +219,6 @@ function completeToolCalls(
   return readCompleteToolCalls(calls, ids, tools) ?? invalidBrowserAction(status);
 }
 
-/**
- * Call the AGI Cloud gateway with a message history and tool definitions.
- * Streams the response and returns the fully-assembled CloudAgentResponse.
- *
- * @param messages  Full conversation history including the new user turn.
- * @param token     Bearer token (from getAuthToken()).
- * @param gatewayBase  Gateway origin (default https://api.agiworkforce.com).
- */
 export async function callCloud(
   messages: AgentMessage[],
   token: string,

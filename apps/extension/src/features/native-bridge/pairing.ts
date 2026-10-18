@@ -230,7 +230,7 @@ async function getBridgeBaseUrl(): Promise<string> {
       });
     });
     const stored = (result['agi_bridge_url'] as string | undefined)?.trim();
-    return stored ?? DEFAULT_BRIDGE_URL;
+    return stored || DEFAULT_BRIDGE_URL;
   } catch {
     return DEFAULT_BRIDGE_URL;
   }

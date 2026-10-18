@@ -228,7 +228,7 @@ export function detectFieldTriggers(
  * Combines structural and field-level trigger detection into a single
  * EscalationDecision. Returns shouldEscalate=true when any triggers are found.
  *
- * @param fillResults     Results from fillFields() / autofillGreenhouse() / etc.
+ * @param fillResults     Results from the autofill* platform fillers.
  * @param detectedFields  Fields from detectJobApplication().
  * @param profileValues   Map of fieldKey → intended string value (for read-back).
  * @param platform        Detected platform string (for goal construction).

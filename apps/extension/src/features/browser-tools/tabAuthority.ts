@@ -3,12 +3,6 @@ import {
   hasBrowserControlConsent,
 } from '../computer-use/browserControlConsent';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
-import {
-  profileGateFor,
-  readBrowserPermissionProfiles,
-  readBrowserProfileScope,
-  type SitePermissionPolicyStorage,
-} from '../options/site-permission-policy';
 import { assertSiteAccess, readAdminSitePolicy } from '../site-policy/store';
 import { hasOneTimeSiteGrant } from '../computer-use/oneTimeSiteGrants';
 import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
@@ -22,40 +16,6 @@ export interface AuthorizedTab {
   readonly tabId: number;
   readonly origin: string;
   readonly url: string;
-  /** The permission profile this tab runs under, when the person holds any. */
-  readonly profileId: string | null;
-}
-
-function localStorageArea(): SitePermissionPolicyStorage {
-  return {
-    get: (key) => chrome.storage.local.get(key) as Promise<Record<string, unknown>>,
-    set: (items) => chrome.storage.local.set(items),
-  };
-}
-
-/**
- * A profile is a durable grant with an expiry, not the live tab. Holding one
- * makes it the authority for this origin; holding none leaves the site policy
- * and the per-origin browser-control grant deciding, which is what they did
- * before profiles existed.
- */
-async function profileForTab(
-  url: string,
-  storage: SitePermissionPolicyStorage,
-  capability: BrowserProfileCapability,
-): Promise<string | null> {
-  const [profiles, viewer] = await Promise.all([
-    readBrowserPermissionProfiles(storage),
-    readBrowserProfileScope(storage),
-  ]);
-  const decision = profileGateFor(profiles, viewer, {
-    url,
-    capability,
-    nowMs: Date.now(),
-  });
-  if (!decision) return null;
-  if (!decision.allowed) throw new Error(decision.message);
-  return decision.profile.id;
 }
 
 /**
@@ -68,10 +28,7 @@ async function profileForTab(
  * origin, so a tab that navigated off an approved origin after the panel
  * rendered fails here instead of leaking the new origin's page data.
  */
-export async function authorizeBrowserToolTab(
-  tabId: number,
-  storage: SitePermissionPolicyStorage = localStorageArea(),
-): Promise<AuthorizedTab> {
+export async function authorizeBrowserToolTab(tabId: number): Promise<AuthorizedTab> {
   let tab: chrome.tabs.Tab;
   try {
     tab = await chrome.tabs.get(tabId);
@@ -80,8 +37,8 @@ export async function authorizeBrowserToolTab(
   }
   const url = typeof tab.url === 'string' ? tab.url : '';
   if (!url) throw new Error('Tab has no URL.');
-  const { origin, profileId } = await authorizeBrowserToolUrl(url, storage);
-  return { tabId, origin, url, profileId };
+  const { origin } = await authorizeBrowserToolUrl(url);
+  return { tabId, origin, url };
 }
 
 /**
@@ -89,11 +46,8 @@ export async function authorizeBrowserToolTab(
  * page's injected text would carry data off to a site nobody approved, so the
  * destination must be admitted exactly as the tab it leaves.
  */
-export async function authorizeBrowserToolUrl(
-  url: string,
-  storage: SitePermissionPolicyStorage = localStorageArea(),
-): Promise<Omit<AuthorizedTab, 'tabId'>> {
-  const authorized = await authorizeBrowserToolCapability(url, 'automation', storage);
+export async function authorizeBrowserToolUrl(url: string): Promise<Omit<AuthorizedTab, 'tabId'>> {
+  const authorized = await authorizeBrowserToolCapability(url, 'automation');
 
   let granted = false;
   try {
@@ -109,7 +63,6 @@ export async function authorizeBrowserToolUrl(
 export async function authorizeBrowserToolCapability(
   url: string,
   capability: BrowserProfileCapability,
-  storage: SitePermissionPolicyStorage = localStorageArea(),
 ): Promise<Omit<AuthorizedTab, 'tabId'>> {
   const parsed = new URL(url);
   if (parsed.username || parsed.password)
@@ -128,5 +81,5 @@ export async function authorizeBrowserToolCapability(
     await assertSiteAccess(url, capability, notApproved);
   }
 
-  return { origin, url, profileId: await profileForTab(url, storage, capability) };
+  return { origin, url };
 }

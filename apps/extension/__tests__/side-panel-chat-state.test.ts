@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   applyCanonicalAgentEvent,
@@ -150,6 +150,7 @@ describe('side-panel chat state', () => {
   });
 
   it('restores a pending Stop as unconfirmed with a visible retry path', () => {
+    vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key } });
     const restored = hydrateStoredChatMessage(
       {
         role: 'assistant',
@@ -166,8 +167,8 @@ describe('side-panel chat state', () => {
       error: true,
       streamCancellation: 'unconfirmed',
     });
-    expect(restored.errorText).toContain('could not be confirmed');
-    expect(restored.errorText).toContain('Use Retry to retry Stop');
+    expect(restored.errorText).toBe('spStreamCancellationUnconfirmed');
+    vi.unstubAllGlobals();
   });
 
   it('projects canonical activity while excluding private reasoning from the visible log', () => {

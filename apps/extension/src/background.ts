@@ -3337,9 +3337,7 @@ async function assertComputerUseInputCleanupOwnership(
     currentTab.url !== authorized.url ||
     currentTab.windowId !== tab.windowId
   )
-    throw new Error(
-      'The original browser page or permission profile changed before input cleanup.',
-    );
+    throw new Error('The original browser page changed before input cleanup.');
   const origin = new URL(tab.url).origin;
   if (!isOriginApprovedForAutomation(origin) || !(await hasBrowserControlConsent(origin)))
     throw new Error('Browser input cleanup no longer has site and control consent.');

@@ -1,4 +1,3 @@
-
 import { describe, expect, test } from 'vitest';
 import {
   DOM_MUTATION_MESSAGE_TYPES,
@@ -23,7 +22,7 @@ describe('L1 Security - Data Isolation (sender-class gating)', () => {
   });
 
   test('SECURITY: DOM-mutation types are pinned to the sender tab (no cross-tab)', () => {
-    for (const type of ['TYPE', 'CLICK', 'SUBMIT_FORM', 'EXECUTE_SCRIPT', 'RUN_PAGE_ACTIONS']) {
+    for (const type of ['TYPE', 'CLICK', 'FILL_FIELDS', 'RUN_PAGE_ACTIONS']) {
       const policy = getMessagePolicy(type);
       expect(policy.allowsCrossTab).toBe(false);
       expect(DOM_MUTATION_MESSAGE_TYPES.has(type)).toBe(true);

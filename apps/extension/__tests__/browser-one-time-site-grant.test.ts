@@ -28,11 +28,6 @@ function permissions(granted: boolean): BrowserControlPermissions {
   };
 }
 
-const policyStorage = {
-  get: async () => ({}),
-  set: async () => undefined,
-};
-
 afterEach(() => {
   removeOneTimeSiteGrant('site_once_test-grant-a');
   removeOneTimeSiteGrant('site_once_test-grant-b');
@@ -75,7 +70,7 @@ describe('one-time site grants', () => {
     vi.spyOn(sitePolicy, 'readAdminSitePolicy').mockResolvedValue(null);
     addOneTimeSiteGrant('site_once_test-grant-a', ACME, true);
     await expect(
-      authorizeBrowserToolCapability(`${ACME}/form`, 'automation', policyStorage),
+      authorizeBrowserToolCapability(`${ACME}/form`, 'automation'),
     ).resolves.toMatchObject({ origin: ACME });
     expect(assertSiteAccess).not.toHaveBeenCalled();
   });
@@ -87,9 +82,9 @@ describe('one-time site grants', () => {
       allowlist: [],
     });
     addOneTimeSiteGrant('site_once_test-grant-a', ACME, true);
-    await expect(
-      authorizeBrowserToolCapability(`${ACME}/form`, 'automation', policyStorage),
-    ).rejects.toThrow(/organization/);
+    await expect(authorizeBrowserToolCapability(`${ACME}/form`, 'automation')).rejects.toThrow(
+      /organization/,
+    );
   });
 
   it('does not stretch a one-time grant to uploads or downloads', async () => {
@@ -97,9 +92,9 @@ describe('one-time site grants', () => {
       .spyOn(sitePolicy, 'assertSiteAccess')
       .mockRejectedValue(new Error('not approved'));
     addOneTimeSiteGrant('site_once_test-grant-a', ACME, true);
-    await expect(
-      authorizeBrowserToolCapability(`${ACME}/form`, 'download', policyStorage),
-    ).rejects.toThrow('not approved');
+    await expect(authorizeBrowserToolCapability(`${ACME}/form`, 'download')).rejects.toThrow(
+      'not approved',
+    );
     expect(assertSiteAccess).toHaveBeenCalledOnce();
   });
 });
