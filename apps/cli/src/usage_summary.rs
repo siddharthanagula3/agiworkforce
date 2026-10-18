@@ -90,6 +90,14 @@ pub struct AccountUsage {
     pub credits: Option<UsageCredits>,
 }
 
+impl AccountUsage {
+    pub fn entitled_plan_tier(&self) -> &str {
+        self.effective_plan_tier
+            .as_deref()
+            .unwrap_or(self.plan_tier.as_str())
+    }
+}
+
 pub fn parse_account_usage(body: &str) -> Result<AccountUsage, serde_json::Error> {
     serde_json::from_str(body)
 }
@@ -240,7 +248,7 @@ pub fn usage_limit_context_from(
     now: DateTime<Utc>,
 ) -> UsageLimitContext {
     let alternative_model = if code == FLAGSHIP_LIMIT_CODE {
-        tier_cache::parse_tier(&usage.plan_tier)
+        tier_cache::parse_tier(usage.entitled_plan_tier())
             .and_then(|tier| crate::model_catalog::standard_model_for_tier(&tier))
     } else {
         None
@@ -349,12 +357,7 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
     let body = fetch_account_body(jwt, USAGE_PATH).await?;
     let usage =
         parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
-    tier_cache::adopt_server_plan(
-        usage
-            .effective_plan_tier
-            .as_deref()
-            .unwrap_or(usage.plan_tier.as_str()),
-    );
+    tier_cache::adopt_server_plan(usage.entitled_plan_tier());
     Ok(usage)
 }
 
@@ -523,7 +526,7 @@ fn unavailable_lines(reason: &str) -> Vec<String> {
 pub fn render_account_usage(usage: &AccountUsage, now: DateTime<Utc>) -> Vec<String> {
     let mut lines = vec![
         "Account usage".to_string(),
-        format!("  Plan: {}", plan_label(&usage.plan_tier)),
+        format!("  Plan: {}", plan_label(usage.entitled_plan_tier())),
     ];
 
     lines.extend(subscription_lines(usage.subscription_status.as_deref()));

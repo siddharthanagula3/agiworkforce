@@ -237,7 +237,11 @@ pub async fn ensure_local_model_available(
         );
     }
 
-    if probe.models.iter().any(|candidate| candidate.id == model) {
+    let ollama_default_tag = (provider == "ollama" && !model.contains(':'))
+        .then(|| format!("{model}:latest"));
+    if probe.models.iter().any(|candidate| {
+        candidate.id == model || ollama_default_tag.as_deref() == Some(candidate.id.as_str())
+    }) {
         return Ok(probe.base_url);
     }
 

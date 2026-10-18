@@ -507,6 +507,11 @@ impl CliError {
                 "{provider} rejected the request with HTTP {status}. Check `agi \
                  auth-status` and the request payload for invalid fields."
             ),
+            CliError::Auth { provider, .. }
+                if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
+            {
+                "Run `agi login` to sign in to your AGI Workforce account again.".to_string()
+            }
             CliError::Auth { provider, .. } => format!(
                 "Run `agi login {provider}` to refresh credentials, or set the \
                  corresponding API key environment variable."
