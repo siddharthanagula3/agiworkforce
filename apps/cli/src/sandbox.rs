@@ -1199,30 +1199,10 @@ pub fn credential_locations() -> Vec<PathBuf> {
         .map(|home| agiworkforce_sandbox_policy::credential_paths(&home))
         .unwrap_or_default();
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        locations.extend(
-            [
-                "auth.json",
-                "auth.toml",
-                "secrets",
-                "history.txt",
-                crate::runtime::session_control::MANAGED_SESSION_DIR_NAME,
-                crate::sessions::SESSION_METADATA_DIR_NAME,
-            ]
-            .map(|name| config_dir.join(name)),
-        );
+        locations.extend(agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(
+            &config_dir,
+        ));
     }
-    locations.extend(
-        [
-            crate::config::CliConfig::config_path(),
-            crate::hooks::hooks_path(),
-            crate::mcp::McpOAuthStore::store_path(),
-            crate::mcp::registry::McpRegistry::default_path(),
-            crate::ecosystem::global_mcp_config_path(),
-            crate::conversations::conversations_dir(),
-        ]
-        .into_iter()
-        .flatten(),
-    );
     locations
 }
 

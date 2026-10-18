@@ -11,8 +11,8 @@ pub mod resolve;
 pub mod wrap;
 
 pub use full_read::{
-    credential_paths, full_read_program, full_read_program_guarding, full_read_program_protecting,
-    FullReadSpec, ProtectedProgram,
+    agiworkforce_home_secret_entries, credential_paths, full_read_program,
+    full_read_program_guarding, full_read_program_protecting, FullReadSpec, ProtectedProgram,
 };
 pub use host_path::{sandbox_launcher, verify_writable_root};
 pub use launch_env::{

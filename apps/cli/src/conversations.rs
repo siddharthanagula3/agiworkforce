@@ -59,7 +59,7 @@ pub struct ConversationStats {
 // ---------------------------------------------------------------------------
 
 /// Directory where conversations are stored: ~/.agiworkforce/conversations/
-pub(crate) fn conversations_dir() -> Result<PathBuf> {
+fn conversations_dir() -> Result<PathBuf> {
     let dir = CliConfig::config_dir()?.join("conversations");
     Ok(dir)
 }

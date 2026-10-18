@@ -404,25 +404,6 @@ pub fn full_read_sandbox_program(
     )
 }
 
-/// The entries of the CLI folder shared with this app that hold a key, a
-/// token or the user's conversations. The rest of that folder stays readable,
-/// so a hook script kept there still runs.
-const SHARED_CLI_SECRET_ENTRIES: [&str; 13] = [
-    "auth.json",
-    "auth.toml",
-    "secrets",
-    "config.toml",
-    "hooks.json",
-    "hooks.yaml",
-    "mcp.json",
-    ".mcp.json",
-    "mcp-oauth.json",
-    "history.txt",
-    "conversations",
-    "managed_sessions",
-    "managed_session_metadata",
-];
-
 /// Where this user's credentials are kept: the locations
 /// [`agiworkforce_sandbox_policy::credential_paths`] names under the home
 /// folder, the secret entries of the shared CLI folder, and this app's data
@@ -431,8 +412,9 @@ pub fn credential_locations() -> Vec<PathBuf> {
     let mut locations = Vec::new();
     if let Some(home) = dirs::home_dir() {
         locations.extend(agiworkforce_sandbox_policy::credential_paths(&home));
-        let shared = home.join(".agiworkforce");
-        locations.extend(SHARED_CLI_SECRET_ENTRIES.map(|name| shared.join(name)));
+        locations.extend(agiworkforce_sandbox_policy::agiworkforce_home_secret_entries(
+            &home.join(".agiworkforce"),
+        ));
     }
     locations.extend(crate::sys::utils::app_data_dir().ok());
     locations

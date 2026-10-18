@@ -182,6 +182,34 @@ pub fn credential_paths(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// The entries of the AGI Workforce CLI folder that hold a key, a token or the
+/// user's conversations. The rest of that folder stays readable, so a hook
+/// script or a server kept there still runs.
+const AGIWORKFORCE_HOME_SECRET_ENTRIES: [&str; 13] = [
+    "auth.json",
+    "auth.toml",
+    "secrets",
+    "config.toml",
+    "hooks.json",
+    "hooks.yaml",
+    "mcp.json",
+    ".mcp.json",
+    "mcp-oauth.json",
+    "history.txt",
+    "conversations",
+    "managed_sessions",
+    "managed_session_metadata",
+];
+
+/// The secret entries of `folder`, the AGI Workforce CLI folder as the host
+/// resolves it, for [`full_read_program_guarding`].
+pub fn agiworkforce_home_secret_entries(folder: &Path) -> Vec<PathBuf> {
+    AGIWORKFORCE_HOME_SECRET_ENTRIES
+        .iter()
+        .map(|name| folder.join(name))
+        .collect()
+}
+
 /// [`credential_paths`] under this user's home folder, which every sandbox
 /// profile keeps unreadable; empty without a home folder.
 pub(crate) fn home_credential_paths() -> Vec<PathBuf> {
