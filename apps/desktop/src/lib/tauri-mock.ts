@@ -905,20 +905,14 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'error_get_logs':
       return [] as T;
 
-    case 'shortcuts_list':
-    case 'shortcuts_get_defaults':
     case 'shortcuts_reset':
       return [] as T;
 
-    case 'shortcuts_register':
-    case 'shortcuts_unregister':
     case 'shortcuts_register_global':
     case 'shortcuts_unregister_global':
-    case 'shortcuts_trigger':
       return undefined as T;
 
     case 'shortcuts_update':
-    case 'shortcuts_apply_quick_query_preferences':
       return {
         id: 'mock_shortcut',
         key: 'CommandOrControl+K',
@@ -927,9 +921,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         enabled: true,
         is_global: false,
       } as T;
-
-    case 'shortcuts_check_key':
-      return false as T;
 
     case 'artifact_get':
     case 'artifact_update':
@@ -991,7 +982,13 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       } as T;
 
     case 'memory_import_json_string':
-      return { memories_imported: 0, logs_imported: 0, skipped: 0, errors: [] } as T;
+      return {
+        memories_imported: 0,
+        memories_skipped: 0,
+        memories_replaced: 0,
+        logs_imported: 0,
+        errors: [],
+      } as T;
 
     case 'chat_configure_memory_injection':
       return undefined as T;
@@ -1081,8 +1078,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'unregister_trigger':
     case 'toggle_trigger':
     case 'save_custom_instructions':
-    case 'log_tool_execution':
-    case 'log_workflow_execution':
     case 'approve_request':
     case 'reject_request':
     case 'cancel_tool_execution':

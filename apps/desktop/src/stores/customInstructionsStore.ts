@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauriContext } from '../lib/tauri-mock';
@@ -56,6 +57,12 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
             await invoke('save_custom_instructions', { instructions });
           } catch (error) {
             console.error('Failed to save custom instructions to backend:', error);
+            toast.error(
+              'Your custom instructions were not saved, so new chats will not use them.',
+              {
+                description: error instanceof Error ? error.message : String(error),
+              },
+            );
           }
         },
 

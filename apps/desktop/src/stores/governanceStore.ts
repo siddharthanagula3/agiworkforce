@@ -71,7 +71,6 @@ export interface ApprovalStatistics {
 
 interface GovernanceState {
   auditEvents: AuditEvent[];
-  auditFilters: AuditFilters;
   auditIntegrityReport: AuditIntegrityReport | null;
   isLoadingAudit: boolean;
   auditError: string | null;
@@ -82,47 +81,18 @@ interface GovernanceState {
   approvalError: string | null;
 
   fetchAuditEvents: (filters?: AuditFilters) => Promise<void>;
-  verifyAuditEvent: (eventId: string) => Promise<boolean>;
   verifyAuditIntegrity: () => Promise<void>;
-  logToolExecution: (
-    userId: string | null,
-    teamId: string | null,
-    toolName: string,
-    success: boolean,
-    metadata?: Record<string, unknown>,
-  ) => Promise<void>;
-  logWorkflowExecution: (
-    userId: string | null,
-    teamId: string | null,
-    workflowId: string,
-    status: string,
-    metadata?: Record<string, unknown>,
-  ) => Promise<void>;
-
-  createApprovalRequest: (
-    requesterId: string,
-    teamId: string | null,
-    action: ApprovalAction,
-    riskLevel: string,
-    justification: string | null,
-    timeoutMinutes: number,
-  ) => Promise<string>;
   fetchPendingApprovals: (teamId?: string) => Promise<void>;
   approveRequest: (requestId: string, reviewerId: string, reason?: string) => Promise<void>;
   rejectRequest: (requestId: string, reviewerId: string, reason: string) => Promise<void>;
-  requiresApproval: (action: ApprovalAction) => Promise<boolean>;
-  calculateRiskLevel: (action: ApprovalAction) => Promise<string>;
   fetchApprovalStatistics: (teamId?: string) => Promise<void>;
   expireTimedOutRequests: () => Promise<number>;
-
-  setAuditFilters: (filters: AuditFilters) => void;
 }
 
 export const useGovernanceStore = create<GovernanceState>()(
   devtools(
     subscribeWithSelector((set, get) => ({
       auditEvents: [],
-      auditFilters: {},
       auditIntegrityReport: null,
       isLoadingAudit: false,
       auditError: null,
@@ -136,7 +106,7 @@ export const useGovernanceStore = create<GovernanceState>()(
         set({ isLoadingAudit: true, auditError: null });
         try {
           const events = await invoke<AuditEvent[]>('get_audit_events', {
-            filters: filters || get().auditFilters,
+            filters: filters ?? {},
           });
           set({ auditEvents: events, isLoadingAudit: false });
         } catch (error) {
@@ -144,16 +114,6 @@ export const useGovernanceStore = create<GovernanceState>()(
             auditError: error instanceof Error ? error.message : 'Failed to fetch audit events',
             isLoadingAudit: false,
           });
-        }
-      },
-
-      verifyAuditEvent: async (eventId: string): Promise<boolean> => {
-        try {
-          const isValid = await invoke<boolean>('verify_audit_event', { eventId });
-          return isValid;
-        } catch (error) {
-          console.error('Failed to verify audit event:', error);
-          return false;
         }
       },
 
@@ -167,71 +127,6 @@ export const useGovernanceStore = create<GovernanceState>()(
             auditError: error instanceof Error ? error.message : 'Failed to verify audit integrity',
             isLoadingAudit: false,
           });
-        }
-      },
-
-      logToolExecution: async (
-        userId: string | null,
-        teamId: string | null,
-        toolName: string,
-        success: boolean,
-        metadata?: Record<string, unknown>,
-      ) => {
-        try {
-          await invoke('log_tool_execution', {
-            userId,
-            teamId,
-            toolName,
-            success,
-            metadata: metadata || null,
-          });
-        } catch (error) {
-          console.error('Failed to log tool execution:', error);
-        }
-      },
-
-      logWorkflowExecution: async (
-        userId: string | null,
-        teamId: string | null,
-        workflowId: string,
-        status: string,
-        metadata?: Record<string, unknown>,
-      ) => {
-        try {
-          await invoke('log_workflow_execution', {
-            userId,
-            teamId,
-            workflowId,
-            status,
-            metadata: metadata || null,
-          });
-        } catch (error) {
-          console.error('Failed to log workflow execution:', error);
-        }
-      },
-
-      createApprovalRequest: async (
-        requesterId: string,
-        teamId: string | null,
-        action: ApprovalAction,
-        riskLevel: string,
-        justification: string | null,
-        timeoutMinutes: number,
-      ): Promise<string> => {
-        try {
-          const requestId = await invoke<string>('create_approval_request', {
-            requesterId,
-            teamId,
-            action,
-            riskLevel,
-            justification,
-            timeoutMinutes,
-          });
-          return requestId;
-        } catch (error) {
-          throw new Error(
-            error instanceof Error ? error.message : 'Failed to create approval request',
-          );
         }
       },
 
@@ -279,26 +174,6 @@ export const useGovernanceStore = create<GovernanceState>()(
         }
       },
 
-      requiresApproval: async (action: ApprovalAction): Promise<boolean> => {
-        try {
-          const required = await invoke<boolean>('requires_approval', { action });
-          return required;
-        } catch (error) {
-          console.error('Failed to check if approval is required:', error);
-          return false;
-        }
-      },
-
-      calculateRiskLevel: async (action: ApprovalAction): Promise<string> => {
-        try {
-          const riskLevel = await invoke<string>('calculate_risk_level', { action });
-          return riskLevel;
-        } catch (error) {
-          console.error('Failed to calculate risk level:', error);
-          return 'medium';
-        }
-      },
-
       fetchApprovalStatistics: async (teamId?: string) => {
         try {
           const stats = await invoke<ApprovalStatistics>('get_approval_statistics', {
@@ -306,23 +181,14 @@ export const useGovernanceStore = create<GovernanceState>()(
           });
           set({ approvalStatistics: stats });
         } catch (error) {
-          console.error('Failed to fetch approval statistics:', error);
+          set({
+            approvalError:
+              error instanceof Error ? error.message : 'Failed to fetch approval statistics',
+          });
         }
       },
 
-      expireTimedOutRequests: async (): Promise<number> => {
-        try {
-          const count = await invoke<number>('expire_timed_out_requests');
-          return count;
-        } catch (error) {
-          console.error('Failed to expire timed-out requests:', error);
-          return 0;
-        }
-      },
-
-      setAuditFilters: (filters: AuditFilters) => {
-        set({ auditFilters: filters });
-      },
+      expireTimedOutRequests: () => invoke<number>('expire_timed_out_requests'),
     })),
     { name: 'GovernanceStore', enabled: import.meta.env.DEV },
   ),

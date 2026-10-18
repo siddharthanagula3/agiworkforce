@@ -106,6 +106,13 @@ export const MOBILE_COMPANION_SESSION_ENDED_EVENT = 'mobile-companion:session-en
 export const MOBILE_DISPATCH_UPDATE_REQUIRED =
   'This phone is running an older AGI Workforce build and cannot secure the connection. Update the app on your phone, then scan a new pairing QR.';
 
+/**
+ * Shown when the signed control channel could not be keyed. The phone stays
+ * paired for screen sharing, but every control it sends would be dropped.
+ */
+export const MOBILE_DISPATCH_SECURE_FAILED =
+  'The connection to your phone could not be secured, so its controls will not reach this Desktop. Scan a new pairing QR to try again.';
+
 function isCurrentManagedGeneration(generation: number, boundary: ManagedCloudBoundary): boolean {
   if (generation !== connectionGeneration || activeManagedBoundary !== boundary) {
     return false;
@@ -452,17 +459,17 @@ export const useConnectionStore = create<MobileCompanionState>()(
                 } catch (error) {
                   if (!isCurrentPeerSession()) return;
                   console.warn('[dispatch] session init failed:', error);
+                  set({ error: MOBILE_DISPATCH_SECURE_FAILED });
                 }
               } else {
                 console.warn(
                   '[dispatch] peer_ready received without a pairing code and out-of-band secret',
                 );
+                set({ error: MOBILE_DISPATCH_SECURE_FAILED });
               }
             } else {
-              console.warn(
-                '[dispatch] peer_ready metadata missing dispatchSalt, ' +
-                  'mobile may need update before 2026-06-05 cutoff.',
-              );
+              console.warn('[dispatch] peer_ready metadata missing dispatchSalt');
+              set({ error: MOBILE_DISPATCH_UPDATE_REQUIRED });
             }
 
             if (!isCurrentPeerSession()) return;

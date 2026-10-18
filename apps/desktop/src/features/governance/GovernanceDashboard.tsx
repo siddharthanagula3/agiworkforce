@@ -347,6 +347,8 @@ export const GovernanceDashboard: React.FC = () => {
       } else {
         toast.success('No timed-out requests to expire');
       }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not expire timed-out requests');
     } finally {
       setIsExpiringRequests(false);
     }

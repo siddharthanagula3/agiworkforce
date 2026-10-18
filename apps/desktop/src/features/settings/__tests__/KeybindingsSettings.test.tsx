@@ -33,8 +33,6 @@ const mockReset = vi.fn();
 vi.mock('../../../stores/shortcutStore', () => ({
   useShortcutStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      init: vi.fn().mockResolvedValue(undefined),
-      cleanup: vi.fn(),
       update: mockUpdate,
       reset: mockReset,
     }),

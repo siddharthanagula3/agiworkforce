@@ -154,17 +154,8 @@ export function KeybindingsSettings() {
   const resetCustomKeybinding = useSettingsStore((state) => state.resetCustomKeybinding);
   const resetAllCustomKeybindings = useSettingsStore((state) => state.resetAllCustomKeybindings);
 
-  const shortcutStoreInit = useShortcutStore((s) => s.init);
-  const shortcutStoreCleanup = useShortcutStore((s) => s.cleanup);
   const shortcutStoreUpdate = useShortcutStore((s) => s.update);
   const shortcutStoreReset = useShortcutStore((s) => s.reset);
-
-  useEffect(() => {
-    void shortcutStoreInit();
-    return () => {
-      shortcutStoreCleanup();
-    };
-  }, [shortcutStoreInit, shortcutStoreCleanup]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

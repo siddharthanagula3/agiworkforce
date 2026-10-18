@@ -56,10 +56,6 @@ export const useAppModeStore = create<AppModeState>()(
             toast.error('Finish the current response before switching modes');
             return;
           }
-          if (mode === 'cloud') {
-            set({ mode }, undefined, 'appMode/setMode');
-            return;
-          }
           set({ mode }, undefined, 'appMode/setMode');
         },
 
