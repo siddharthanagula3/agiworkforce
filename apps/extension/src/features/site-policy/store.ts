@@ -66,12 +66,6 @@ export async function readAdminSitePolicy(): Promise<SitePolicyAdminState> {
   return readAdminPolicyFrom(localArea(), null);
 }
 
-export function adminSitePolicyFromChange(value: unknown): SitePolicyAdminState {
-  if (value === undefined || value === null) return null;
-  const parsed = parseAdminSitePolicy(value);
-  return parsed.ok ? parsed.policy : SITE_POLICY_ADMIN_UNAVAILABLE;
-}
-
 export async function readUserSiteAllowlist(): Promise<string[]> {
   const area = localArea();
   if (!area) return [];

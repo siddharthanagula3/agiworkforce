@@ -11,19 +11,6 @@ export function isAshbyUrl(url: string): boolean {
   return matchesAtsHostRules(url, ASHBY_HOST_RULES);
 }
 
-export async function awaitAshbyFormReady(timeoutMs = 4000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const el =
-      document.querySelector('[name^="_systemfield_"]') ??
-      document.querySelector('[data-testid*="application"]') ??
-      document.querySelector('form[data-ashby-form]');
-    if (el) return true;
-    await new Promise<void>((r) => setTimeout(r, 150));
-  }
-  return false;
-}
-
 export const ASHBY_SELECTORS: Record<string, string[]> = {
   firstName: [
     '[name="_systemfield_first_name"]',

@@ -2573,5 +2573,3 @@ export async function getFieldValue(
     signal,
   );
 }
-
-export const readDom = getPageContent;

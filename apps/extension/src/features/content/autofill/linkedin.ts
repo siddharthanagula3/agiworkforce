@@ -1,6 +1,3 @@
-
-import type { DetectedField } from './detector';
-
 export const LINKEDIN_SELECTORS: Record<string, string[]> = {
   firstName: [
     'input[name="firstName"]',
@@ -126,30 +123,6 @@ export const LINKEDIN_SELECTORS: Record<string, string[]> = {
   ],
 };
 
-export const LINKEDIN_EASY_APPLY_NEXT_BUTTON_SELECTOR =
-  'button[aria-label*="Continue to next step" i],' +
-  'button[aria-label*="Next" i][data-easy-apply-next-btn],' +
-  '.jobs-easy-apply-modal button[type="submit"],' +
-  '.artdeco-button--primary[data-easy-apply-next-btn]';
-
-export function isLinkedInEasyApplyModalOpen(): boolean {
-  const modal =
-    document.querySelector('.jobs-easy-apply-modal') ??
-    document.querySelector('[aria-label*="Apply" i][role="dialog"]') ??
-    document.querySelector('.artdeco-modal--layer-default');
-  return modal !== null;
-}
-
-export function getLinkedInEasyApplyStep(): number | null {
-  const progress =
-    document.querySelector('.jobs-easy-apply-header__progress-count') ??
-    document.querySelector('[aria-label*="Step" i]');
-  if (!progress) return null;
-  const text = progress.textContent ?? '';
-  const match = /(\d+)\s*\//.exec(text);
-  return match?.[1] !== undefined ? parseInt(match[1], 10) : null;
-}
-
 export function resolveLinkedInSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
@@ -159,37 +132,4 @@ export function resolveLinkedInSelector(
     if (el) return { element: el, selector: sel };
   }
   return null;
-}
-
-export function collectResolvableLinkedInFields(): DetectedField[] {
-  const result: DetectedField[] = [];
-  for (const [key, selectors] of Object.entries(LINKEDIN_SELECTORS)) {
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const fieldType =
-          el instanceof HTMLTextAreaElement
-            ? 'textarea'
-            : el instanceof HTMLSelectElement
-              ? 'select'
-              : el instanceof HTMLInputElement && el.type === 'file'
-                ? 'file'
-                : el instanceof HTMLInputElement && el.type === 'email'
-                  ? 'email'
-                  : el instanceof HTMLInputElement && el.type === 'tel'
-                    ? 'tel'
-                    : 'text';
-
-        result.push({
-          key,
-          selector: sel,
-          label: key,
-          fieldType,
-          required: (el as HTMLInputElement).required ?? false,
-        });
-        break;
-      }
-    }
-  }
-  return result;
 }

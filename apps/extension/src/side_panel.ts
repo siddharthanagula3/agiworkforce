@@ -13044,9 +13044,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (nowConnected !== _ctx.isConnected) {
       _ctx.isConnected = nowConnected;
       updateNativeBridgeAvailabilityUI();
-      if (nowConnected) {
-        chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
-      }
     }
     return;
   }
@@ -13396,9 +13393,6 @@ async function probeBridgeStatus(): Promise<void> {
     if (connected !== _ctx.isConnected) {
       _ctx.isConnected = connected;
       updateNativeBridgeAvailabilityUI();
-    }
-    if (connected) {
-      chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
     }
   } catch {
     // A restarting native worker never blocks Managed Cloud chat.

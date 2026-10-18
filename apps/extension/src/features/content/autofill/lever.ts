@@ -1,4 +1,3 @@
-
 import type { DetectedField } from './detector';
 
 export const LEVER_SELECTORS: Record<string, string[]> = {
@@ -153,13 +152,6 @@ export function detectLeverCustomFields(container: Element): LeverCustomField[] 
   return results;
 }
 
-export const LEVER_EEO_SELECTORS: Record<string, string> = {
-  eeoGender: '#eeo_gender',
-  eeoRace: '#eeo_race',
-  eeoVeteran: '#eeo_veteran',
-  eeoDisability: '#eeo_disability',
-};
-
 export function resolveLeverSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
@@ -169,37 +161,4 @@ export function resolveLeverSelector(
     if (el) return { element: el, selector: sel };
   }
   return null;
-}
-
-export function collectResolvableLeverFields(): DetectedField[] {
-  const result: DetectedField[] = [];
-  for (const [key, selectors] of Object.entries(LEVER_SELECTORS)) {
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const fieldType: DetectedField['fieldType'] =
-          el instanceof HTMLTextAreaElement
-            ? 'textarea'
-            : el instanceof HTMLSelectElement
-              ? 'select'
-              : el instanceof HTMLInputElement && el.type === 'file'
-                ? 'file'
-                : el instanceof HTMLInputElement && el.type === 'email'
-                  ? 'email'
-                  : el instanceof HTMLInputElement && el.type === 'tel'
-                    ? 'tel'
-                    : 'text';
-
-        result.push({
-          key,
-          selector: sel,
-          label: key,
-          fieldType,
-          required: (el as HTMLInputElement).required ?? false,
-        });
-        break;
-      }
-    }
-  }
-  return result;
 }

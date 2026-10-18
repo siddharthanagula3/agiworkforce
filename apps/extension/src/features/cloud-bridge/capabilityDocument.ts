@@ -46,34 +46,3 @@ export function capabilityAllowed(
 ): boolean {
   return resolveCapabilityDocumentDecision(document, capability)?.allowed ?? false;
 }
-
-async function readAccountError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as Record<string, unknown>;
-    const error = body['error'];
-    const message =
-      typeof error === 'string'
-        ? error
-        : error && typeof error === 'object'
-          ? (error as Record<string, unknown>)['message']
-          : body['message'];
-    if (typeof message === 'string' && message.trim()) return message.trim();
-  } catch {
-    return `Your name could not be saved (${response.status}).`;
-  }
-  return `Your name could not be saved (${response.status}).`;
-}
-
-export async function saveAccountDisplayName(token: string, displayName: string): Promise<void> {
-  const response = await fetch(`${FREE_TRIAL_GATEWAY}${ACCOUNT_ME_PATH}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      ...platformRequestHeaders(),
-    },
-    body: JSON.stringify({ display_name: displayName }),
-  });
-  if (!response.ok) throw new Error(await readAccountError(response));
-}

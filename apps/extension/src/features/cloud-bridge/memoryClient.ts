@@ -1,17 +1,11 @@
 import {
-  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
-  managedCloudPreferencesNamespacePath,
-} from '@agiworkforce/cloud-contracts';
-import {
   MANAGED_MEMORY_COMMAND_STATUSES,
   MANAGED_MEMORY_MAX_CONTENT_CHARS,
   MANAGED_MEMORY_MAX_PAGE_SIZE,
   parseManagedMemoryCommandResponse,
-  parseManagedMemoryConflictsResponse,
   parseManagedMemoryItemResponse,
   parseManagedMemoryListResponse,
   parseManagedMemoryRecord,
-  parseManagedMemoryRestoreResponse,
   type ManagedMemoryCommandRequest,
   type ManagedMemoryCommandStatus,
   type ManagedMemoryRecord,
@@ -33,12 +27,6 @@ export interface AccountMemoryPage {
   hasMore: boolean;
 }
 
-export interface AccountMemoryConflict {
-  id: string;
-  content: string;
-  keptContent: string;
-}
-
 export type MemoryCommandKind = 'remember' | 'forget';
 
 export type MemoryCommandStatus = ManagedMemoryCommandStatus | 'failed';
@@ -52,27 +40,9 @@ export interface MemoryCommandResult {
 
 export type MemoryCommandRequest = ManagedMemoryCommandRequest;
 
-export interface MemoryPreferences {
-  memory: boolean;
-  searchPastChats: boolean;
-  organizationAllows: boolean;
-}
-
-export interface ActiveMemoryWorkspace {
-  scope: 'personal' | 'organization';
-  name: string | null;
-}
-
 export const ACCOUNT_MEMORY_PATH = '/api/memory';
-export const ACCOUNT_MEMORY_CONFLICTS_PATH = '/api/memory/conflicts';
 export const ACCOUNT_MEMORY_COMMANDS_PATH = '/api/memory/commands';
 export const MEMORY_COMMAND_HINT = /\b(remember(?:ing)?|forget|memor(?:y|ies|i[sz]e))\b/i;
-export const ACCOUNT_WORKSPACES_PATH = '/api/settings/workspaces';
-export const MEMORY_PREFERENCES_NAMESPACE = 'memory';
-export const MEMORY_CAPABILITIES_NAMESPACE = 'capabilities';
-export const MEMORY_EXCLUSION_MIN_CHARS = 3;
-export const MEMORY_EXCLUSION_MAX_CHARS = 100;
-export const MEMORY_EXCLUSION_MAX_TERMS = 50;
 export const ACCOUNT_MEMORY_CACHE_KEY = 'agi_account_memory_cache';
 export const ACCOUNT_MEMORY_PAGE_SIZE = MANAGED_MEMORY_MAX_PAGE_SIZE;
 export const ACCOUNT_MEMORY_MAX_CONTENT_CHARS = MANAGED_MEMORY_MAX_CONTENT_CHARS;
@@ -118,21 +88,6 @@ export function parseAccountMemoryPage(value: unknown): AccountMemoryPage {
 
 export function parseAccountMemoryList(value: unknown): AccountMemory[] {
   return parseAccountMemoryPage(value).memories;
-}
-
-export function normalizeMemoryExclusions(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  const terms = new Set<string>();
-  for (const entry of value) {
-    if (typeof entry !== 'string') continue;
-    const term = entry.trim().toLowerCase();
-    if (term.length < MEMORY_EXCLUSION_MIN_CHARS || term.length > MEMORY_EXCLUSION_MAX_CHARS) {
-      continue;
-    }
-    terms.add(term);
-    if (terms.size >= MEMORY_EXCLUSION_MAX_TERMS) break;
-  }
-  return [...terms];
 }
 
 function headers(token: string, sendsBody: boolean): Record<string, string> {
@@ -189,81 +144,6 @@ export async function fetchAccountMemories(
   return parseAccountMemoryPage(body);
 }
 
-export async function fetchAccountMemoryConflicts(token: string): Promise<AccountMemoryConflict[]> {
-  const parsed = parseManagedMemoryConflictsResponse(
-    await send(token, ACCOUNT_MEMORY_CONFLICTS_PATH, { method: 'GET' }),
-  );
-  if (!parsed) throw new Error('Memory response was missing its conflicts');
-  return parsed.conflicts.map((conflict) => ({
-    id: conflict.id,
-    content: conflict.content,
-    keptContent: conflict.kept.content,
-  }));
-}
-
-export async function restoreAccountMemory(token: string, id: string): Promise<void> {
-  const body = await send(token, `${ACCOUNT_MEMORY_PATH}/${encodeURIComponent(id)}/restore`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  if (!parseManagedMemoryRestoreResponse(body)) {
-    throw new Error('Memory response did not confirm the restore');
-  }
-}
-
-export async function fetchMemoryExclusions(token: string): Promise<string[]> {
-  const body = await send(
-    token,
-    managedCloudPreferencesNamespacePath(MEMORY_PREFERENCES_NAMESPACE),
-    { method: 'GET' },
-  );
-  const settings = (body as Record<string, unknown> | null)?.['settings'];
-  return normalizeMemoryExclusions(
-    settings && typeof settings === 'object'
-      ? (settings as Record<string, unknown>)['excludedTerms']
-      : undefined,
-  );
-}
-
-export async function saveMemoryExclusions(token: string, terms: readonly string[]): Promise<void> {
-  await send(token, MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
-    method: 'PUT',
-    body: JSON.stringify({
-      namespace: MEMORY_PREFERENCES_NAMESPACE,
-      patch: { excludedTerms: normalizeMemoryExclusions(terms) },
-    }),
-  });
-}
-
-export async function fetchMemoryPreferences(token: string): Promise<MemoryPreferences> {
-  const body = (await send(
-    token,
-    managedCloudPreferencesNamespacePath(MEMORY_CAPABILITIES_NAMESPACE),
-    { method: 'GET' },
-  )) as Record<string, unknown> | null;
-  const settings = body?.['settings'];
-  const record =
-    settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
-  return {
-    memory: record['memory'] === true,
-    searchPastChats: record['searchPastChats'] === true,
-    organizationAllows: body?.['organizationMemoryAllowed'] !== false,
-  };
-}
-
-export async function saveMemoryPreferences(
-  token: string,
-  preferences: Pick<MemoryPreferences, 'memory' | 'searchPastChats'>,
-): Promise<void> {
-  await send(token, MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
-    method: 'PUT',
-    body: JSON.stringify({
-      namespace: MEMORY_CAPABILITIES_NAMESPACE,
-      patch: { memory: preferences.memory, searchPastChats: preferences.searchPastChats },
-    }),
-  });
-}
-
 export const MEMORY_COMMAND_KINDS: ReadonlySet<string> = new Set<MemoryCommandKind>([
   'remember',
   'forget',
@@ -291,26 +171,6 @@ export async function runAccountMemoryCommand(
     status: parsed.status ?? 'failed',
     message: message ? message : null,
     matches: parsed.requiresConfirmation === true ? (parsed.memories ?? []) : [],
-  };
-}
-
-export async function fetchActiveMemoryWorkspace(token: string): Promise<ActiveMemoryWorkspace> {
-  const body = (await send(token, ACCOUNT_WORKSPACES_PATH, { method: 'GET' })) as Record<
-    string,
-    unknown
-  > | null;
-  const workspaces = Array.isArray(body?.['workspaces']) ? (body['workspaces'] as unknown[]) : [];
-  const activeId = body?.['activeWorkspaceId'];
-  const active = workspaces.find(
-    (workspace) =>
-      workspace !== null &&
-      typeof workspace === 'object' &&
-      (workspace as Record<string, unknown>)['id'] === activeId,
-  ) as Record<string, unknown> | undefined;
-  const name = active?.['name'];
-  return {
-    scope: body?.['scope'] === 'organization' ? 'organization' : 'personal',
-    name: typeof name === 'string' && name.trim() ? name.trim() : null,
   };
 }
 

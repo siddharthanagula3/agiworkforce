@@ -281,17 +281,3 @@ export function makeEscalationDecision(
 
   return { shouldEscalate: true, triggers, agentGoal };
 }
-
-export interface EscalationEvent {
-  decision: EscalationDecision;
-  platform: string;
-  tabId?: number;
-}
-
-export function emitEscalationEvent(event: EscalationEvent): void {
-  try {
-    window.dispatchEvent(new CustomEvent('agi:escalate', { detail: event }));
-  } catch {
-    return;
-  }
-}

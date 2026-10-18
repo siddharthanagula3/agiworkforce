@@ -43,8 +43,3 @@ export function getExtensionSendQueue(): MessageQueue {
   });
   return cached;
 }
-
-export function __resetExtensionSendQueueForTests(): void {
-  cached = null;
-  cachedSnapshot = null;
-}

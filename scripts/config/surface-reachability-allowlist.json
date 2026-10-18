@@ -161,17 +161,7 @@
       "unreachableDebt": {
         "reason": "Pre-existing unreachable Chrome extension modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",
-        "paths": [
-          "apps/extension/src/core/index.ts",
-          "apps/extension/src/data/index.ts",
-          "apps/extension/src/features/background/index.ts",
-          "apps/extension/src/features/content/autofill/index.ts",
-          "apps/extension/src/features/native-bridge/index.ts",
-          "apps/extension/src/features/side-panel/index.ts",
-          "apps/extension/src/integrations/index.ts",
-          "apps/extension/src/platform/index.ts",
-          "apps/extension/src/ui/index.ts"
-        ]
+        "paths": []
       }
     },
     "vscode": {

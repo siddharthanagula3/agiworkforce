@@ -9,7 +9,6 @@ import { webDomainAllowed, type WebDomainRules } from '@agiworkforce/cloud-contr
 import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import { watchDownloadsStartedBy } from '../browser-tools/downloads';
-import { screenshot as captureTabThroughDebugger } from '../computer-use/cdpDriver';
 import type { NativeTypingReceipt } from '../computer-use/cdpDriver';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
@@ -44,10 +43,6 @@ export interface DesktopCommandContext {
     text: string,
     clear: boolean,
   ) => Promise<NativeTypingReceipt>;
-}
-
-export function captureThroughDebugger(tabId: number): Promise<string> {
-  return captureTabThroughDebugger(tabId);
 }
 
 function failed(id: string, error: string): BrowserCommandResult {
