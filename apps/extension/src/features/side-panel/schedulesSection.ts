@@ -27,7 +27,7 @@ import {
 import { t } from '../../i18n';
 import { el } from './dom';
 import { buildHelpArticleLink } from './helpLinks';
-import { renderMarkdown, sanitizeHtml } from './markdown';
+import { renderMarkdownInto } from './markdown';
 
 export const SCHEDULES_SECTION_CSS = `
   .sp-schedules {
@@ -926,7 +926,7 @@ export function buildSchedulesSection(
     if (timing) entry.appendChild(el('div', { class: 'sp-schedule-sub' }, timing.note));
     if (run.output?.trim()) {
       const answer = el('div', { class: 'sp-schedule-run-output' });
-      answer.innerHTML = sanitizeHtml(renderMarkdown(run.output));
+      renderMarkdownInto(answer, run.output);
       entry.appendChild(answer);
     } else if (run.status === 'success' && !timing?.skipped) {
       entry.appendChild(el('div', { class: 'sp-schedule-sub' }, t('spScheduleRunNoAnswer')));

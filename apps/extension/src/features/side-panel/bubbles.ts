@@ -46,7 +46,7 @@ import {
   RotateCcw,
 } from '../../assets/icons';
 import { t, tPlural } from '../../i18n';
-import { sanitizeHtml, renderMarkdown } from './markdown';
+import { renderMarkdownInto } from './markdown';
 import { el, formatTime } from './dom';
 import {
   answerSourceLists,
@@ -332,7 +332,7 @@ export function fillAnswerBubble(
   text: string,
   markers: readonly SidePanelSource[],
 ): void {
-  bubble.innerHTML = sanitizeHtml(renderMarkdown(text));
+  renderMarkdownInto(bubble, text);
   decorateCitations(bubble, markers);
 }
 

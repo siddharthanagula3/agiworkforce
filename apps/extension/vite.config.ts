@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   configureChromeManifest,
   resolveChromeBuildConfiguration,
@@ -51,9 +52,24 @@ export default defineConfig(({ mode }) => {
       'process.env.CLERK_SYNC_HOST': JSON.stringify(clerkSyncHost),
     },
     publicDir: false,
+    resolve: {
+      // @vscode/markdown-it-katex require()s katex, which resolves to the CJS
+      // build while our import resolves to the ESM one: two 270 kB copies.
+      alias: [
+        {
+          find: /^katex$/,
+          replacement: createRequire(import.meta.url)
+            .resolve('katex')
+            .replace(/katex\.js$/, 'katex.mjs'),
+        },
+      ],
+    },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      // The extension CSP has no data: in font-src, so a font inlined as a
+      // data URI is refused and KaTeX falls back to the wrong glyphs.
+      assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
       minify: 'terser',
       sourcemap: mode !== 'production',
       rollupOptions: {
@@ -77,6 +93,17 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: 'agi-katex-woff2-only',
+        enforce: 'pre',
+        transform(code, id) {
+          if (!/katex\/dist\/katex\.min\.css(?:\?|$)/.test(id)) return null;
+          return code.replace(
+            /,url\(fonts\/[^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g,
+            '',
+          );
+        },
+      },
       {
         name: 'agi-configured-chrome-manifest',
         generateBundle() {
