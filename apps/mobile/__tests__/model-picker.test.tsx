@@ -22,16 +22,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('../src/features/model-picker/service', () => {
-  const actual = jest.requireActual(
-    '../src/features/model-picker/service',
-  ) as typeof import('../src/features/model-picker/service');
-  return {
-    ...actual,
-    fetchModelCatalog: jest.fn(() => new Promise(() => {})),
-  };
-});
-
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium' },

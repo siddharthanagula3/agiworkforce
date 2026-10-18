@@ -3,6 +3,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import {
   ManagedCloudScheduleListResponseSchema,
+  ManagedCloudScheduleRecurrenceSchema,
   ManagedCloudScheduleResponseSchema,
   ManagedCloudScheduleRunApprovalResponseSchema,
   ManagedCloudScheduleDeleteResponseSchema,
@@ -39,14 +40,10 @@ function parseResponse<T>(
 }
 
 function recurrenceFromTask(task: ManagedCloudScheduleTask): ManagedCloudScheduleRecurrence {
-  const stored = task.metadata?.['productRecurrence'];
-  if (
-    ['once', 'daily', 'weekly', 'monthly', 'custom', 'interval', 'rrule', 'event'].includes(
-      String(stored),
-    )
-  ) {
-    return stored as ManagedCloudScheduleRecurrence;
-  }
+  const stored = ManagedCloudScheduleRecurrenceSchema.safeParse(
+    task.metadata?.['productRecurrence'],
+  );
+  if (stored.success) return stored.data;
   return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
 }
 

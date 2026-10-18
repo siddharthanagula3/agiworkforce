@@ -5,7 +5,11 @@ import {
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
 import { AGENT_TASK_STATE_LABELS, messageKindForAgentEvent } from '@agiworkforce/types';
-import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
+import type {
+  AgentEventApprovalDecision,
+  AgentEventEnvelope,
+  AgentTaskState,
+} from '@agiworkforce/types/protocol';
 import { TIME_GROUPS } from '@/lib/constants';
 import { formatAgeLabel } from '@/src/features/artifacts/store';
 import type { ColorScheme } from '@/src/ui/theme';
@@ -200,7 +204,7 @@ export interface CloudRunActivityLine {
   tone: CloudRunActivityTone;
 }
 
-const APPROVAL_DECISION_LABELS: Record<string, string> = {
+const APPROVAL_DECISION_LABELS: Record<AgentEventApprovalDecision, string> = {
   approved: 'Approved',
   'approved-for-session': 'Approved for this session',
   denied: 'Denied',

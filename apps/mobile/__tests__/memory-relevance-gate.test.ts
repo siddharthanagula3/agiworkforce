@@ -15,12 +15,10 @@ jest.mock('../storage/memory', () => ({
     const q = query.toLowerCase();
     return mockFacts.filter((f) => f.fact.toLowerCase().includes(q)).slice(0, k);
   }),
-  searchMemoryByEmbedding: jest.fn(async () => [] as string[]),
   insertMemoryFact: jest.fn(),
   deleteMemoryFact: jest.fn(),
   updateMemoryFact: jest.fn(),
   togglePinMemoryFact: jest.fn(),
-  updateEmbedding: jest.fn(),
 }));
 
 jest.mock('expo-crypto', () => ({

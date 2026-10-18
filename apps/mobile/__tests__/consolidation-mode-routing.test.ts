@@ -77,16 +77,6 @@ describe('consolidateFactsFromTurn, on-device (local) persistence', () => {
     );
   });
 
-  it('skips entirely when disabled (temporary/incognito chat)', async () => {
-    const res = await consolidateFactsFromTurn({
-      message: 'my name is Katherine Johnson',
-      conversationId: 'c',
-      enabled: false,
-    });
-    expect(res).toEqual({ extracted: 0, inserted: 0 });
-    expect(mockInsertMemoryFact).not.toHaveBeenCalled();
-  });
-
   describe('shouldConsolidateMemoryOnClient (call-site gate)', () => {
     it('consolidates on-device for a local, non-temporary turn', () => {
       expect(

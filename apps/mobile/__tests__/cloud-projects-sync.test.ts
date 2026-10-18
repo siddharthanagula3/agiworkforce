@@ -30,7 +30,6 @@ jest.mock('../storage/memory', () => ({
   updateMemoryFact: jest.fn().mockResolvedValue(undefined),
   togglePinMemoryFact: jest.fn().mockResolvedValue(undefined),
   searchMemoryByText: jest.fn().mockResolvedValue([]),
-  searchMemoryByEmbedding: jest.fn().mockResolvedValue([]),
 }));
 
 import { api } from '../services/api';

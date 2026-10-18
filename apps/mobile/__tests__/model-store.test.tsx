@@ -1,5 +1,3 @@
-
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -221,22 +219,6 @@ describe('modelStore', () => {
       getState().toggleFavorite(SELECTABLE_AUTO_MODE_ID!);
 
       expect(getState().favorites).toEqual([]);
-    });
-  });
-
-  describe('setProvider', () => {
-    it('keeps selectedProvider local before invite access', () => {
-      getState().setProvider('cloud_managed');
-
-      expect(getState().selectedProvider).toBe('local');
-    });
-
-    it('allows cloud provider after invite access', () => {
-      useWaitlistStore.setState({ cloudUnlocked: true });
-
-      getState().setProvider('cloud_managed');
-
-      expect(getState().selectedProvider).toBe('cloud_managed');
     });
   });
 

@@ -220,10 +220,6 @@ export function parsePlainText(text: string): ImportResult {
       skipped++;
       continue;
     }
-    if (!isNonEmpty(block)) {
-      skipped++;
-      continue;
-    }
     if (facts.length >= MAX_FACTS) {
       skipped++;
       continue;

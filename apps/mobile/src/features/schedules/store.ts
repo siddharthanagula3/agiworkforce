@@ -11,6 +11,7 @@ import {
   resolveScheduleRunApproval as apiResolveRunApproval,
 } from './service';
 import type {
+  ManagedCloudScheduleRecurrence,
   ManagedCloudScheduleRunApproval,
   ManagedCloudScheduleRunPendingApproval,
   ManagedCloudScheduleTask,
@@ -21,8 +22,7 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-export type RecurrenceType =
-  'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval' | 'rrule' | 'event';
+export type RecurrenceType = ManagedCloudScheduleRecurrence;
 
 export interface Schedule {
   id: string;

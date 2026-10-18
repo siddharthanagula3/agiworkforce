@@ -684,16 +684,20 @@ export async function settleLiveVoiceSession(
   backend: LiveVoiceBackendUsage | null = null,
 ): Promise<void> {
   try {
-    await apiFetch(`${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/close`, {
-      method: 'POST',
-      body: JSON.stringify({
-        seconds: closed.seconds ?? 0,
-        reason: closed.reason,
-        ...(backend ? { backend } : {}),
-      }),
-    });
-  } catch {
-    return;
+    const response = await apiFetch(
+      `${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/close`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          seconds: closed.seconds ?? 0,
+          reason: closed.reason,
+          ...(backend ? { backend } : {}),
+        }),
+      },
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  } catch (error) {
+    console.warn('[liveVoice] The live session close was not recorded:', error);
   }
 }
 

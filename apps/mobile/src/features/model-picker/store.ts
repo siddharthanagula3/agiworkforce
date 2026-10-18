@@ -63,11 +63,6 @@ function providerForModelId(modelId: string): string {
   return isCloudManagedModelId(modelId) ? CLOUD_PROVIDER_ID : 'local';
 }
 
-function normalizeProvider(providerId: string): string {
-  if (providerId === CLOUD_PROVIDER_ID && isCloudUnlocked()) return CLOUD_PROVIDER_ID;
-  return 'local';
-}
-
 function modelRequiresThinking(modelId: string): boolean {
   const reasoning = getModelReasoning(modelId);
   return reasoning.capable && reasoning.canDisableThinking === false;
@@ -83,7 +78,6 @@ interface ModelState {
   thinkingEnabledPerModel: Record<string, boolean>;
 
   setModel: (modelId: string) => void;
-  setProvider: (providerId: string) => void;
   setRoutingProfile: (profile: RoutingProfileChoice) => void;
   toggleFavorite: (modelId: string) => void;
   setThinkingMode: (enabled: boolean) => void;
@@ -123,10 +117,6 @@ export const useModelStore = create<ModelState>()(
           thinkingModeEnabled,
           thinkingEnabledPerModel,
         });
-      },
-
-      setProvider: (providerId: string) => {
-        set({ selectedProvider: normalizeProvider(providerId) });
       },
 
       setRoutingProfile: (profile: RoutingProfileChoice) => {
@@ -190,7 +180,7 @@ export const useModelStore = create<ModelState>()(
         if (get().selectedModel === resolvedModelId) {
           updates.thinkingModeEnabled = next[resolvedModelId] ?? false;
         }
-        set(updates as Partial<ModelState>);
+        set(updates);
       },
 
       isThinkingEnabledForSelected: () => {

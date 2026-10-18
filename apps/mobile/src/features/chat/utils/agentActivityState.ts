@@ -1,48 +1,88 @@
-import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import type {
+  AgentActivityEntry,
+  AgentActivityProgressEntry,
+  AgentActivityRunStatus,
+  AgentActivityState,
+  AgentActivityStepStatus,
+} from '@agiworkforce/client-runtime';
+import type {
+  AgentEventApprovalDecision,
+  AgentEventApprovalRiskLevel,
+  AgentEventStopReason,
+  AgentEventToolCategory,
+} from '@agiworkforce/types';
 
-const RUN_STATUSES = new Set([
-  'running',
-  'paused',
-  'awaiting-approval',
-  'completed',
-  'failed',
-  'cancelled',
-]);
-const ENTRY_KINDS = new Set(['progress', 'tool', 'sources', 'artifact', 'context', 'error']);
-const PROGRESS_STATUSES = new Set(['running', 'completed', 'failed', 'cancelled']);
-const STEP_STATUSES = new Set([
-  'pending',
-  'running',
-  'awaiting-approval',
-  'completed',
-  'failed',
-  'cancelled',
-]);
-const TOOL_CATEGORIES = new Set([
-  'web-search',
-  'web-fetch',
-  'code-execution',
-  'filesystem',
-  'shell',
-  'skill',
-  'memory',
-  'connector',
-  'mcp',
-  'computer-use',
-  'artifact',
-  'other',
-]);
-const STOP_REASONS = new Set([
-  'end-turn',
-  'max-tokens',
-  'tool-use',
-  'stop-sequence',
-  'refusal',
-  'cancelled',
-  'error',
-]);
-const APPROVAL_DECISIONS = new Set(['approved', 'approved-for-session', 'denied', 'cancelled']);
-const APPROVAL_RISK_LEVELS = new Set(['low', 'medium', 'high']);
+function memberSet<T extends string>(members: Record<T, true>): ReadonlySet<string> {
+  return new Set(Object.keys(members));
+}
+
+const RUN_STATUSES = memberSet<AgentActivityRunStatus>({
+  running: true,
+  paused: true,
+  'awaiting-approval': true,
+  'awaiting-device': true,
+  completed: true,
+  partial: true,
+  failed: true,
+  cancelled: true,
+});
+const ENTRY_KINDS = memberSet<AgentActivityEntry['kind']>({
+  progress: true,
+  tool: true,
+  sources: true,
+  artifact: true,
+  context: true,
+  error: true,
+});
+const PROGRESS_STATUSES = memberSet<AgentActivityProgressEntry['status']>({
+  running: true,
+  completed: true,
+  failed: true,
+  cancelled: true,
+});
+const STEP_STATUSES = memberSet<AgentActivityStepStatus>({
+  pending: true,
+  running: true,
+  'awaiting-approval': true,
+  'awaiting-device': true,
+  completed: true,
+  failed: true,
+  cancelled: true,
+});
+const TOOL_CATEGORIES = memberSet<AgentEventToolCategory>({
+  'web-search': true,
+  'web-fetch': true,
+  'code-execution': true,
+  filesystem: true,
+  shell: true,
+  skill: true,
+  memory: true,
+  connector: true,
+  mcp: true,
+  'computer-use': true,
+  artifact: true,
+  other: true,
+});
+const STOP_REASONS = memberSet<AgentEventStopReason>({
+  'end-turn': true,
+  'max-tokens': true,
+  'tool-use': true,
+  'stop-sequence': true,
+  refusal: true,
+  cancelled: true,
+  error: true,
+});
+const APPROVAL_DECISIONS = memberSet<AgentEventApprovalDecision>({
+  approved: true,
+  'approved-for-session': true,
+  denied: true,
+  cancelled: true,
+});
+const APPROVAL_RISK_LEVELS = memberSet<AgentEventApprovalRiskLevel>({
+  low: true,
+  medium: true,
+  high: true,
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

@@ -8,7 +8,6 @@ import {
   updateMemoryFact,
   togglePinMemoryFact,
   searchMemoryByText,
-  searchMemoryByEmbedding,
 } from '@/storage/memory';
 import type { MemoryFact, MemoryFactSource } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -34,22 +33,18 @@ interface MemoryState {
   loading: boolean;
   error: string | null;
   searchQuery: string;
-  syncing: boolean;
-  lastSyncAt: string | null;
 
   fetchMemories: () => Promise<void>;
-  addMemory: (fact: string, _category?: string) => Promise<void>;
+  addMemory: (fact: string) => Promise<void>;
   updateMemory: (id: string, fact: string) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
   resetMemories: () => Promise<boolean>;
   togglePin: (id: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
-  searchMemories: (query: string, embedding?: Float32Array) => Promise<void>;
   bulkInsert: (
     facts: string[],
     sourceName?: string,
   ) => Promise<{ inserted: number; skipped: number }>;
-  syncMemories: () => Promise<void>;
   clearError: () => void;
   resetVisibleState: () => void;
 }
@@ -110,8 +105,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   loading: false,
   error: null,
   searchQuery: '',
-  syncing: false,
-  lastSyncAt: null,
 
   fetchMemories: async () => {
     const operationScope = captureMemoryOperationScope();
@@ -158,7 +151,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }
   },
 
-  addMemory: async (fact, _category) => {
+  addMemory: async (fact) => {
     const operationScope = captureMemoryOperationScope();
     if (!operationScope) {
       set({ error: 'Sign in to manage Cloud memories' });
@@ -237,7 +230,8 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }
   },
 
-  updateMemory: async (id, fact) => {
+  updateMemory: async (id, rawFact) => {
+    const fact = rawFact.trim();
     const operationScope = captureMemoryOperationScope();
     if (!operationScope) {
       set({ error: 'Sign in to manage Cloud memories' });
@@ -268,13 +262,13 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         if (existing) {
           useCloudMemoryStore.getState().upsertCloudMemory({
             ...existing,
-            content: fact.trim(),
+            content: fact,
             updatedAt: new Date().toISOString(),
           });
           markMemoryForSync(id);
         }
       } else {
-        await updateMemoryFact(id, fact.trim());
+        await updateMemoryFact(id, fact);
       }
     } catch (err) {
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
@@ -309,8 +303,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           });
           markMemoryForSync(id);
         }
-        // If the entry is not in the cloud store (e.g. a local entry that leaked
-        // to the display list in a previous session), nothing to push.
       } else {
         await deleteMemoryFact(id);
       }
@@ -410,31 +402,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }));
   },
 
-  searchMemories: async (query, embedding) => {
-    if (!query.trim()) {
-      set({ filteredEntries: [], searchQuery: '' });
-      return;
-    }
-    set({ searchQuery: query, error: null });
-    try {
-      if (embedding) {
-        const ids = await searchMemoryByEmbedding(embedding);
-        const allEntries = get().entries;
-        const idSet = new Set(ids);
-        set({ filteredEntries: allEntries.filter((e) => idSet.has(e.id)) });
-      } else {
-        const results = await searchMemoryByText(query);
-        set({ filteredEntries: results });
-      }
-    } catch (err) {
-      const q = query.toLowerCase();
-      set((state) => ({
-        filteredEntries: state.entries.filter((e) => e.fact.toLowerCase().includes(q)),
-        error: 'Could not search memories. Showing local matches instead.',
-      }));
-    }
-  },
-
   bulkInsert: async (facts, sourceName = 'other') => {
     const operationScope = captureMemoryOperationScope();
     if (!operationScope) throw new Error('Sign in to manage Cloud memories');
@@ -481,10 +448,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     return { inserted, skipped };
   },
 
-  syncMemories: async () => {
-    await get().fetchMemories();
-  },
-
   clearError: () => set({ error: null }),
 
   resetVisibleState: () =>
@@ -494,8 +457,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       loading: false,
       error: null,
       searchQuery: '',
-      syncing: false,
-      lastSyncAt: null,
     }),
 }));
 
@@ -589,11 +550,7 @@ function memoryLexicalSimilarity(fact: string, query: string): number {
   return matchingWords / words.length;
 }
 
-export async function retrieveMemoryContext(
-  query: string,
-  k = 5,
-  embedding?: Float32Array,
-): Promise<MemoryFact[]> {
+export async function retrieveMemoryContext(query: string, k = 5): Promise<MemoryFact[]> {
   if (useChatAppModeStore.getState().appMode === 'cloud') {
     const queryKey = normalizeMemoryKey(query);
     const activeEntries = useCloudMemoryStore.getState().entries.filter((e) => !e.isDeleted);
@@ -633,19 +590,6 @@ export async function retrieveMemoryContext(
       .filter((e) => e.pinned)
       .slice(0, k)
       .map(toFact);
-  }
-
-  if (embedding) {
-    try {
-      const ids = await searchMemoryByEmbedding(embedding, k);
-      if (ids.length > 0) {
-        const allFacts = await listMemoryFacts({ limit: 500 });
-        const idSet = new Set(ids);
-        return allFacts.filter((f) => idSet.has(f.id)).slice(0, k);
-      }
-    } catch {
-      // fall through to text search
-    }
   }
 
   const textResults = await searchMemoryByText(query, k);

@@ -176,12 +176,9 @@ export function describeMemoryFreshness(
 export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;
-  enabled?: boolean;
   includeSensitiveTopics?: boolean;
 }): Promise<ConsolidationResult> {
-  const { message, conversationId, enabled = true, includeSensitiveTopics = false } = params;
-  if (!enabled) return { extracted: 0, inserted: 0 };
-
+  const { message, conversationId, includeSensitiveTopics = false } = params;
   try {
     const candidates = extractPassiveMemoryFacts(message);
     if (candidates.length === 0) return { extracted: 0, inserted: 0 };
@@ -206,12 +203,13 @@ export async function consolidateFactsFromTurn(params: {
           ...(result.outcome === 'inserted' ? [result.fact] : []),
         ];
         inserted += 1;
-      } catch {
-        // Skip a single failed insert; keep going.
+      } catch (error) {
+        console.warn('[memory] Could not save a learned fact:', error);
       }
     }
     return { extracted: candidates.length, inserted };
-  } catch {
+  } catch (error) {
+    console.warn('[memory] Could not learn from this turn:', error);
     return { extracted: 0, inserted: 0 };
   }
 }

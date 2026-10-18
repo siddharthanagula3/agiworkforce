@@ -433,11 +433,7 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
     }
     await db.execAsync('DELETE FROM settings;');
     await db.execAsync('DELETE FROM conversations;');
-    try {
-      await db.execAsync('DELETE FROM memory_vectors;');
-    } catch {
-      // sqlite-vec table may not exist
-    }
+    await db.execAsync('DELETE FROM memory_vectors;');
   });
 
   await closeDb();

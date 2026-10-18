@@ -19,19 +19,21 @@ export interface PersistedGeneratedFileMetadata {
   previewable?: boolean;
 }
 
-const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
-  'pdf',
-  'docx',
-  'xlsx',
-  'pptx',
-  'csv',
-  'json',
-  'markdown',
-  'html',
-  'image',
-  'archive',
-  'other',
-]);
+const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set(
+  Object.keys({
+    pdf: true,
+    docx: true,
+    xlsx: true,
+    pptx: true,
+    csv: true,
+    json: true,
+    markdown: true,
+    html: true,
+    image: true,
+    archive: true,
+    other: true,
+  } satisfies Record<GeneratedFileKind, true>),
+);
 
 export function dedupeGeneratedFileWire(files: GeneratedFileWire[]): GeneratedFileWire[] {
   const byId = new Map<string, GeneratedFileWire>();

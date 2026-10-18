@@ -153,7 +153,8 @@ export function parseResearchSearchSources(payload: unknown): ToolSearchResult[]
     const url = entry['url'];
     if (typeof url !== 'string' || !url) continue;
     const title = typeof entry['title'] === 'string' && entry['title'] ? entry['title'] : url;
-    const snippet = typeof entry['snippet'] === 'string' ? entry['snippet'] : undefined;
+    const wireSnippet = entry['encrypted_content'] ?? entry['snippet'];
+    const snippet = typeof wireSnippet === 'string' ? wireSnippet : undefined;
     results.push({ url, title, ...(snippet ? { snippet } : {}) });
   }
   return results;

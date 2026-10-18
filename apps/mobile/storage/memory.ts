@@ -33,36 +33,23 @@ function prefixedRow(row: Record<string, unknown>, prefix: string): Record<strin
 
 export async function insertMemoryFact(
   fact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean },
-  embedding?: Float32Array,
 ): Promise<void> {
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
-      `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at, updated_at, source, superseded_by, superseded_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        fact.id,
-        fact.fact,
-        fact.source_conversation_id ?? null,
-        fact.pinned ? 1 : 0,
-        fact.created_at,
-        fact.updated_at ?? fact.created_at,
-        fact.source ?? null,
-        fact.superseded_by ?? null,
-        fact.superseded_by ? fact.created_at : null,
-      ],
-    );
-    if (embedding) {
-      try {
-        await db.runAsync('INSERT INTO memory_vectors (fact_id, embedding) VALUES (?, ?);', [
-          fact.id,
-          embedding as unknown as string,
-        ]);
-      } catch {
-        // sqlite-vec not available.
-      }
-    }
-  });
+  await db.runAsync(
+    `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at, updated_at, source, superseded_by, superseded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      fact.id,
+      fact.fact,
+      fact.source_conversation_id ?? null,
+      fact.pinned ? 1 : 0,
+      fact.created_at,
+      fact.updated_at ?? fact.created_at,
+      fact.source ?? null,
+      fact.superseded_by ?? null,
+      fact.superseded_by ? fact.created_at : null,
+    ],
+  );
 }
 
 export async function listMemoryFacts(opts?: {
@@ -160,11 +147,7 @@ export async function deleteMemoryFact(id: string): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM memory_facts WHERE id = ?;', [id]);
-    try {
-      await db.runAsync('DELETE FROM memory_vectors WHERE fact_id = ?;', [id]);
-    } catch {
-      // sqlite-vec table may not exist.
-    }
+    await db.runAsync('DELETE FROM memory_vectors WHERE fact_id = ?;', [id]);
   });
 }
 
@@ -173,27 +156,9 @@ export async function deleteAllMemoryFacts(): Promise<number> {
   let deleted = 0;
   await db.withTransactionAsync(async () => {
     deleted = (await db.runAsync('DELETE FROM memory_facts;')).changes;
-    await db.runAsync('DELETE FROM memory_vectors;').catch(() => undefined);
+    await db.runAsync('DELETE FROM memory_vectors;');
   });
   return deleted;
-}
-
-export async function searchMemoryByEmbedding(
-  queryEmbedding: Float32Array,
-  k = 10,
-): Promise<string[]> {
-  const db = await getDb();
-  try {
-    const rows = await db.getAllAsync<{ fact_id: string }>(
-      `SELECT fact_id FROM memory_vectors
-       WHERE embedding MATCH ?
-       ORDER BY distance LIMIT ?;`,
-      [queryEmbedding as unknown as string, k],
-    );
-    return rows.map((r: { fact_id: string }) => r.fact_id);
-  } catch {
-    return [];
-  }
 }
 
 export async function updateMemoryFact(id: string, fact: string): Promise<void> {
@@ -219,16 +184,4 @@ export async function searchMemoryByText(query: string, k = 10): Promise<MemoryF
     [q, k],
   );
   return rows.map(row2fact);
-}
-
-export async function updateEmbedding(factId: string, embedding: Float32Array): Promise<void> {
-  const db = await getDb();
-  try {
-    await db.runAsync('INSERT OR REPLACE INTO memory_vectors (fact_id, embedding) VALUES (?, ?);', [
-      factId,
-      embedding as unknown as string,
-    ]);
-  } catch {
-    // sqlite-vec not available.
-  }
 }

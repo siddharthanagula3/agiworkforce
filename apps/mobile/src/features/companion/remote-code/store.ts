@@ -264,7 +264,7 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
               detail: event.detail,
             },
             (approval) => approval.requestId,
-            20,
+            REMOTE_CODE_LIMITS.pendingApprovals,
           ),
         };
       case 'approval-answered': {

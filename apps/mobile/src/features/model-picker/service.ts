@@ -57,12 +57,6 @@ export interface ModelDef {
   isNew?: boolean;
 }
 
-export interface ProviderDef {
-  id: string;
-  name: string;
-  icon: string;
-}
-
 export type AutoModeDef = MobileAutoModeDef;
 
 const LOCAL_PROVIDER_ID = 'local';
@@ -97,12 +91,6 @@ export function applyEnvironmentGate(
   return { ...def, availability: 'locked', lockReason: verdict.reason };
 }
 
-/**
- * Selectability lives in `./catalogSelectability` so a caller that only needs
- * the predicate (first-run onboarding) does not have to import this module and
- * trigger the catalog evaluation below. Re-exported here because this is where
- * every existing consumer looks for it.
- */
 export { isSelectableLocalCatalogModel } from './catalogSelectability';
 
 const SHIPPABLE_LOCAL_MODELS = getCatalogShippableModels().filter(isSelectableLocalCatalogModel);
@@ -115,31 +103,17 @@ const DEFAULT_LOCAL_MODEL =
   SHIPPABLE_LOCAL_MODELS.find((model) => model.id === catalogDefaultLocalModel.id) ??
   SHIPPABLE_LOCAL_MODELS.find((model) => model.role === 'default') ??
   SHIPPABLE_LOCAL_MODELS[0]!;
-const CLOUD_MODEL_SOURCE = Array.isArray(CLOUD_MODEL_LIST) ? CLOUD_MODEL_LIST : [];
 const MOBILE_CLOUD_PROVIDER_IDS = Array.from(
-  new Set(CLOUD_MODEL_SOURCE.map((model) => model.provider)),
+  new Set(CLOUD_MODEL_LIST.map((model) => model.provider)),
 );
-const cloudModelSourceById = new Map<string, CloudModelDef>(
-  CLOUD_MODEL_SOURCE.map((model) => [model.id, model]),
+const cloudModelSourceMap = new Map<string, CloudModelDef>(
+  CLOUD_MODEL_LIST.map((model) => [model.id, model]),
 );
 
 export const DEFAULT_LOCAL_MODEL_ID = DEFAULT_LOCAL_MODEL.id;
 
 export const AUTO_MODES: AutoModeDef[] = MOBILE_AUTO_MODES;
 export const DEFAULT_AUTO_MODE_ID = MOBILE_DEFAULT_AUTO_MODE_ID;
-
-export const PROVIDERS: ProviderDef[] = [
-  {
-    id: LOCAL_PROVIDER_ID,
-    name: 'On device',
-    icon: 'Cpu',
-  },
-  {
-    id: 'cloud_managed',
-    name: 'AGI Cloud',
-    icon: 'Cloud',
-  },
-];
 
 function tierForLocalModel(model: OnDeviceModel): ModelTier {
   switch (model.role) {
@@ -178,7 +152,7 @@ function maxOutputForContext(contextWindow: number): number {
 }
 
 function toLocalModelDef(model: OnDeviceModel): ModelDef {
-  const def: ModelDef = {
+  return {
     id: model.id,
     name: model.displayName,
     provider: LOCAL_PROVIDER_ID,
@@ -197,7 +171,6 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
     executorchPreset: model.executorchPreset,
     license: model.license,
   };
-  return applyEnvironmentGate(def, undefined);
 }
 
 function toCloudModelDef(
@@ -241,22 +214,18 @@ function toCloudModelDef(
     lockReason,
   };
 
-  const requiresEnvironment = getModelMetadataById(model.id)?.requiresEnvironment;
-  return applyEnvironmentGate(def, requiresEnvironment);
-}
-
-function firstCloudModelByProvider(providerId: string): CloudModelDef | undefined {
-  return CLOUD_MODEL_SOURCE.find((model) => model.provider === providerId);
+  return applyEnvironmentGate(def, metadata?.requiresEnvironment);
 }
 
 function cloudPreviewModelByProvider(providerId: string): CloudModelDef | undefined {
-  return firstCloudModelByProvider(providerId);
+  return CLOUD_MODEL_LIST.find((model) => model.provider === providerId);
 }
 
 export const LOCAL_MODEL_LIST: ModelDef[] = SHIPPABLE_LOCAL_MODELS.map(toLocalModelDef);
 
-export const LOCKED_CLOUD_MODELS: ModelDef[] = [...MOBILE_CLOUD_PROVIDER_IDS]
-  .map(cloudPreviewModelByProvider)
+export const LOCKED_CLOUD_MODELS: ModelDef[] = MOBILE_CLOUD_PROVIDER_IDS.map(
+  cloudPreviewModelByProvider,
+)
   .filter((model): model is CloudModelDef => Boolean(model))
   .map((model) => toCloudModelDef(model, false));
 
@@ -269,11 +238,7 @@ export function getDefaultCloudModelIdForTier(subscriptionTier?: string): string
 }
 
 const localModelMap = new Map<string, ModelDef>(LOCAL_MODEL_LIST.map((model) => [model.id, model]));
-const cloudModelSourceMap = cloudModelSourceById;
 const allModelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
-const providerMap = new Map<string, ProviderDef>(
-  PROVIDERS.map((provider) => [provider.id, provider]),
-);
 const autoModeMap = new Map<string, AutoModeDef>(AUTO_MODES.map((mode) => [mode.id, mode]));
 
 export function getModelById(id: string): ModelDef | undefined {
@@ -377,14 +342,6 @@ export function getModelListForCloudAccess(
   return [...LOCAL_MODEL_LIST, ...freeOfferings, ...cloudDefs];
 }
 
-export function getModelsByProvider(providerId: string): ModelDef[] {
-  return MODEL_LIST.filter((model) => model.provider === providerId);
-}
-
-export function getProviderById(id: string): ProviderDef | undefined {
-  return providerMap.get(id);
-}
-
 export function isAutoMode(id: string): boolean {
   return autoModeMap.has(id);
 }
@@ -419,8 +376,4 @@ export function getShortDisplayName(id: string, subscriptionTier?: string): stri
 export function getDefaultSelectableModelId(id?: string | null): string {
   if (id && isSelectableModelId(id)) return id;
   return DEFAULT_LOCAL_MODEL_ID;
-}
-
-export async function fetchModelCatalog(): Promise<ModelDef[]> {
-  return MODEL_LIST;
 }

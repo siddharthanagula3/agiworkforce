@@ -145,13 +145,9 @@ export function getMessageStreamErrorReference(
 }
 
 /**
- * The one sentence a failed turn ends on.
- *
- * A turn that produced nothing is not an incomplete response: prefixing the
- * gateway's "finished without returning a response" with "Response may be
- * incomplete" put two contradictory clauses in front of a reader who had no
- * response at all. The prefix is now what it claims to be, a note attached to
- * partial text that really is cut off.
+ * The one sentence a failed turn ends on. The "Response may be incomplete"
+ * prefix marks partial text only; a turn that produced nothing gets the
+ * gateway's sentence alone.
  *
  * The wait is stated only when the sentence itself names no figure, because
  * the gateway already inlines one whenever a provider supplied it, and the id

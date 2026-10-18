@@ -1,6 +1,3 @@
-// apps/mobile/src/features/tasks - Cloud agent runs (`cloud_agent_runs`), the
-// durable server-side work. Distinct from `src/features/companion`, which is
-// live WebRTC control of a paired desktop.
 export { CloudTasksScreen, CLOUD_TASK_LIST_POLL_INTERVAL_MS } from './CloudTasksScreen';
 export { CloudRunCard } from './components/CloudRunCard';
 export { CloudRunDetailSheet } from './components/CloudRunDetailSheet';

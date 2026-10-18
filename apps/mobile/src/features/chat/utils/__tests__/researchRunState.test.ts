@@ -53,6 +53,28 @@ describe('reduceResearchDelta', () => {
     expect(approvedResearchSteps(state?.steps)).toHaveLength(2);
   });
 
+  it('keeps the snippet the gateway sends in encrypted_content for a resume', () => {
+    const state = reduce([
+      { x_research_status: { phase: 'searching' } } as StreamDelta,
+      {
+        x_search_results: {
+          content: [
+            {
+              type: 'web_search_result',
+              url: 'https://a.example',
+              title: 'A',
+              encrypted_content: 'What the page says',
+            },
+          ],
+        },
+      } as StreamDelta,
+    ]);
+
+    expect(state?.sourcesForRetry).toEqual([
+      { url: 'https://a.example', title: 'A', snippet: 'What the page says' },
+    ]);
+  });
+
   it('tracks progress counts and accumulates deduped sources', () => {
     const state = reduce([
       { x_research_status: { phase: 'searching', iteration: 2, max_iterations: 6 } } as StreamDelta,

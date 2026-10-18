@@ -139,7 +139,7 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
-import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
+import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -415,7 +415,9 @@ export default function ChatScreen() {
     };
   }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
-  const { stop: stopSpeaking } = useVoicePlayback();
+  const stopSpeaking = useCallback(() => {
+    void VoiceOutput.stop();
+  }, []);
 
   useEffect(() => {
     return () => {
