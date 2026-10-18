@@ -166,7 +166,6 @@ const durableJobMocks = vi.hoisted(() => ({
   incidentAlert: vi.fn(),
   orphanSettlementAlert: vi.fn(),
   transcriptSync: vi.fn(),
-  storeReady: vi.fn(),
   current: undefined as Record<string, unknown> | undefined,
 }));
 
@@ -225,9 +224,6 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   listPendingVideoSettlementIncidentIds: vi.fn(),
   markVideoGenerationOutcomeUnknown: vi.fn(),
   recordVideoProviderCancellationAttempt: vi.fn(),
-}));
-vi.mock('@/lib/server/video-job-store-readiness', () => ({
-  isVideoJobStoreReady: (...args: unknown[]) => durableJobMocks.storeReady(...args),
 }));
 vi.mock('@/lib/server/video-generation-transcript', () => ({
   syncVideoGenerationTranscript: (...args: unknown[]) => durableJobMocks.transcriptSync(...args),
@@ -447,7 +443,6 @@ describe('POST /api/media/video/generate', () => {
     durableJobMocks.getByIdempotencyKey.mockResolvedValue(null);
     durableJobMocks.admit.mockResolvedValue(true);
     durableJobMocks.releaseAdmission.mockResolvedValue(undefined);
-    durableJobMocks.storeReady.mockResolvedValue(true);
     durableJobMocks.workflowStart.mockImplementation(async () => {
       durableJobMocks.current = {
         ...durableJobMocks.current,
@@ -1131,23 +1126,6 @@ describe('POST /api/media/video/generate', () => {
       expect(durableJobMocks.workflowOwnerStart).toHaveBeenCalledTimes(1);
       expect(durableJobMocks.beginSubmission).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('fails before reservation and provider egress when the durable job schema is unavailable', async () => {
-      durableJobMocks.storeReady.mockResolvedValue(false);
-
-      const response = await POST(
-        makeAuthedRequest({
-          prompt: 'a sunset',
-          provider: 'runway',
-          model: RUNWAY_MODEL_ID,
-        }),
-      );
-
-      expect(response.status).toBe(503);
-      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
-      expect(durableJobMocks.create).not.toHaveBeenCalled();
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('scopes admission to job setup rather than the whole invocation budget', async () => {

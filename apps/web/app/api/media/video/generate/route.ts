@@ -77,7 +77,6 @@ import {
   type VideoGenerationJob,
 } from '@/lib/server/video-generation-jobs';
 import { VIDEO_GENERATION_ADMISSION_SECONDS } from '@/lib/workflows/video-generation-timing';
-import { isVideoJobStoreReady } from '@/lib/server/video-job-store-readiness';
 import { syncVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import {
   failClaimedVideoGenerationJob,
@@ -1092,11 +1091,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   if (!isVideoStorageConfigured()) {
     throw createError.serviceUnavailable(
       'Video storage is temporarily unavailable. Please try again later.',
-    );
-  }
-  if (!(await isVideoJobStoreReady(scopedDb))) {
-    throw createError.serviceUnavailable(
-      'Durable video processing is temporarily unavailable. Please try again later.',
     );
   }
   const submission = await submitVideoCandidates({
