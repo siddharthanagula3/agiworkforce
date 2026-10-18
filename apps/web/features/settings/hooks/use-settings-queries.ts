@@ -337,13 +337,7 @@ export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
   });
 }
 
-/**
- * Parsed response from `DELETE /api/user/delete-account`.
- *
- * `scheduledFor` is `null` only on the columns-missing / immediate-erasure
- * fallback path in `app/api/user/delete-account/route.ts`, where the server
- * erases the account right away instead of scheduling a grace window.
- */
+/** Parsed response from `DELETE /api/user/delete-account`. */
 export interface DeleteAccountResult {
   message: string;
   scheduledFor: string | null;

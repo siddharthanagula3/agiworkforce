@@ -350,7 +350,7 @@ export function GeneralSection() {
         while (dirtyRef.current) {
           dirtyRef.current = false;
           const values = latestFormValuesRef.current;
-          const options = { keepalive: keepaliveRef.current };
+          const options = { keepalive: keepaliveRef.current, merge: true };
           const results = await Promise.allSettled([
             savePreferenceNamespace<GeneralSettings>(
               PREF_NAMESPACE,
