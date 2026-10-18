@@ -171,16 +171,19 @@ export function PublishedArtifactsSection() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     try {
       setArtifacts((await listPublishedSites(signal)).sites);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setLoadFailed(true);
       setError(toUserMessage(caught, 'Failed to load published artifacts'));
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -246,6 +249,11 @@ export function PublishedArtifactsSection() {
         </p>
       </div>
 
+      {error && !loadFailed ? (
+        <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
+          {error}
+        </div>
+      ) : null}
       {notice ? (
         <div role="status" style={{ color: 'var(--text-2)', fontSize: 13 }}>
           {notice}
@@ -265,7 +273,7 @@ export function PublishedArtifactsSection() {
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading published artifacts…
           </p>
-        ) : error ? (
+        ) : loadFailed ? (
           <div
             role="alert"
             style={{ padding: 'var(--space-5)', color: 'var(--text-2)', fontSize: 13 }}

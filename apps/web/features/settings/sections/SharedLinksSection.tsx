@@ -45,15 +45,18 @@ export function SharedLinksSection() {
   const [actionToken, setActionToken] = useState<string | null>(null);
   const [shareToRevoke, setShareToRevoke] = useState<SharedLinkSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     try {
       setShares(await listSharedLinks(signal));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setLoadFailed(true);
       setError(toUserMessage(caught, 'Failed to load shared links'));
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -159,7 +162,7 @@ export function SharedLinksSection() {
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading shared links…
           </p>
-        ) : error ? (
+        ) : loadFailed ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               Shared links could not be loaded

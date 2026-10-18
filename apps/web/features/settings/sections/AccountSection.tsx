@@ -36,7 +36,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 function formatDateTime(value: Date | null | undefined): string {
-  if (!value) return ', ';
+  if (!value) return 'an unknown date';
   return value.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -62,9 +62,9 @@ interface AccountSession {
 }
 
 function formatSessionDateTime(value: string | null): string {
-  if (!value) return ', ';
+  if (!value) return 'Unknown';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? ', ' : formatDateTime(date);
+  return Number.isNaN(date.getTime()) ? 'Unknown' : formatDateTime(date);
 }
 
 function readApiError(data: unknown, fallback: string): string {

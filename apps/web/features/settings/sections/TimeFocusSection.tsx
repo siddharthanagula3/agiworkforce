@@ -44,7 +44,9 @@ export function TimeFocusSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<StatusMessage | null>(null);
+  const locked = loading || saving || loadFailed;
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +59,7 @@ export function TimeFocusSection() {
       })
       .catch((error) => {
         if (!cancelled) {
+          setLoadFailed(true);
           setMessage({
             text: toUserMessage(error, 'Failed to load time and focus'),
             prefix: 'Load failed',
@@ -174,7 +177,7 @@ export function TimeFocusSection() {
         <select
           aria-label="Break reminder"
           value={draft.breakReminderMinutes ?? ''}
-          disabled={loading || saving}
+          disabled={locked}
           onChange={(event) => {
             const value = event.target.value;
             update({
@@ -228,7 +231,7 @@ export function TimeFocusSection() {
           <Switch
             aria-label="Enable quiet hours"
             checked={draft.quietHours.enabled}
-            disabled={loading || saving}
+            disabled={locked}
             onCheckedChange={(enabled) =>
               update({ ...draft, quietHours: { ...draft.quietHours, enabled } })
             }
@@ -246,7 +249,7 @@ export function TimeFocusSection() {
           }}
         >
           <fieldset
-            disabled={!draft.quietHours.enabled || loading || saving}
+            disabled={!draft.quietHours.enabled || locked}
             style={{ border: 0, margin: 0, padding: 0 }}
           >
             <legend
@@ -306,7 +309,7 @@ export function TimeFocusSection() {
                 type="time"
                 aria-label="Quiet hours start"
                 value={draft.quietHours.startTime}
-                disabled={!draft.quietHours.enabled || loading || saving}
+                disabled={!draft.quietHours.enabled || locked}
                 onChange={(event) =>
                   update({
                     ...draft,
@@ -336,7 +339,7 @@ export function TimeFocusSection() {
                 type="time"
                 aria-label="Quiet hours end"
                 value={draft.quietHours.endTime}
-                disabled={!draft.quietHours.enabled || loading || saving}
+                disabled={!draft.quietHours.enabled || locked}
                 onChange={(event) =>
                   update({
                     ...draft,
@@ -363,7 +366,7 @@ export function TimeFocusSection() {
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button
           type="button"
-          disabled={loading || saving || !dirty}
+          disabled={locked || !dirty}
           onClick={() => void save()}
           aria-label="Save time and focus settings"
         >

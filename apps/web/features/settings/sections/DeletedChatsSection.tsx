@@ -41,6 +41,7 @@ export function DeletedChatsSection() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
@@ -48,6 +49,7 @@ export function DeletedChatsSection() {
   const loadFirstPage = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     try {
       const page = await listDeletedConversations(0, signal);
       setConversations(page.conversations);
@@ -55,6 +57,7 @@ export function DeletedChatsSection() {
       setHasMore(page.hasMore);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setLoadFailed(true);
       setError(toUserMessage(caught, 'Failed to load deleted chats'));
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -167,7 +170,7 @@ export function DeletedChatsSection() {
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading deleted chats…
           </p>
-        ) : error ? (
+        ) : loadFailed ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               Deleted chats could not be loaded

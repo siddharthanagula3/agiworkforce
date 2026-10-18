@@ -25,7 +25,7 @@ function browserTimezone(): string {
 }
 
 function formatDate(dateKey: string | null): string {
-  if (!dateKey) return ', ';
+  if (!dateKey) return 'None';
   const date = new Date(`${dateKey}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return dateKey;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
@@ -52,7 +52,7 @@ function describeOngoingWork(item: {
 }
 
 function formatHour(hour: number | null): string {
-  if (hour === null) return ', ';
+  if (hour === null) return 'None';
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2026, 0, 1, hour));
 }
 

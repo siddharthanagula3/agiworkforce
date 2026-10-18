@@ -61,9 +61,9 @@ const CAPABILITY_LABELS: Array<[keyof DeviceCapabilities, string]> = [
 ];
 
 function formatDateTime(value: string | null): string {
-  if (!value) return ', ';
+  if (!value) return 'at an unknown time';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return ', ';
+  if (Number.isNaN(date.getTime())) return 'at an unknown time';
   return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -136,7 +136,6 @@ function readApiError(data: unknown, fallback: string): string {
 export function LinkedDevicesPanel() {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [devices, setDevices] = useState<LinkedDevice[]>([]);
-  const [credentialStateKnown, setCredentialStateKnown] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -152,9 +151,8 @@ export function LinkedDevicesPanel() {
       const response = await fetch('/api/settings/devices', { credentials: 'same-origin' });
       const data: unknown = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(readApiError(data, 'Unable to load linked devices.'));
-      const payload = data as { devices?: LinkedDevice[]; credentialStateKnown?: boolean };
+      const payload = data as { devices?: LinkedDevice[] };
       setDevices(Array.isArray(payload.devices) ? payload.devices : []);
-      setCredentialStateKnown(payload.credentialStateKnown !== false);
     } catch (error) {
       setLoadError(toUserMessage(error, 'Unable to load linked devices.'));
     } finally {
@@ -250,9 +248,8 @@ export function LinkedDevicesPanel() {
           Linked devices
         </p>
         <p style={{ margin: '0 0 var(--space-2)', fontSize: 12, color: 'var(--text-3)' }}>
-          {credentialStateKnown
-            ? "Unlinking revokes the device's stored credential and removes it from this list. The app signs out the next time it reaches the server."
-            : 'Sign-in state cannot be read on this deployment, so unlinking removes the device from this list without revoking its stored credential.'}
+          Unlinking revokes the device&apos;s stored credential and removes it from this list. The
+          app signs out the next time it reaches the server.
         </p>
 
         {loading ? (

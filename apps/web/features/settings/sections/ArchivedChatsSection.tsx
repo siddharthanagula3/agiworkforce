@@ -51,6 +51,7 @@ export function ArchivedChatsSection() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
@@ -61,6 +62,7 @@ export function ArchivedChatsSection() {
   const loadFirstPage = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     try {
       const page = await listArchivedConversations(0, signal);
       setConversations(page.conversations);
@@ -68,6 +70,7 @@ export function ArchivedChatsSection() {
       setHasMore(page.hasMore);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      setLoadFailed(true);
       setError(toUserMessage(caught, 'Failed to load archived chats'));
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -251,7 +254,7 @@ export function ArchivedChatsSection() {
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading archived chats…
           </p>
-        ) : error ? (
+        ) : loadFailed ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               Archived chats could not be loaded

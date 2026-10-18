@@ -99,9 +99,11 @@ export function MemoryConflicts() {
       {conflicts === null ? (
         <Spinner size="sm" />
       ) : conflicts.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-          No memory has replaced another.
-        </p>
+        error ? null : (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+            No memory has replaced another.
+          </p>
+        )
       ) : (
         <ul
           aria-label="Replaced memories"

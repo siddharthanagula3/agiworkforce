@@ -57,8 +57,10 @@ export function MemoryExclusions() {
   const [suppressedSources, setSuppressedSources] = useState<MemorySourceId[]>([]);
   const [draft, setDraft] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const editable = loaded && !loadFailed && !saving;
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +73,7 @@ export function MemoryExclusions() {
       })
       .catch((cause) => {
         if (!cancelled) {
+          setLoadFailed(true);
           setError(toUserMessage(cause, 'Could not load exclusions'));
         }
       })
@@ -165,7 +168,7 @@ export function MemoryExclusions() {
           }}
           placeholder="e.g. my home address"
           aria-label="Term to never remember"
-          disabled={!loaded || saving}
+          disabled={!editable}
           maxLength={100}
           style={{
             flex: 1,
@@ -181,7 +184,7 @@ export function MemoryExclusions() {
         <button
           type="button"
           onClick={addTerm}
-          disabled={!loaded || saving || draft.trim().length === 0}
+          disabled={!editable || draft.trim().length === 0}
           style={{
             height: 34,
             padding: '0 var(--space-3)',
@@ -206,7 +209,7 @@ export function MemoryExclusions() {
         </p>
       )}
 
-      {loaded && terms.length === 0 && (
+      {loaded && !loadFailed && terms.length === 0 && (
         <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           No exclusions yet. Everything the assistant learns is eligible to be remembered.
         </p>
@@ -247,7 +250,7 @@ export function MemoryExclusions() {
                       suppressedSources,
                     })
                   }
-                  disabled={saving}
+                  disabled={!editable}
                   aria-label={`Stop excluding ${term}`}
                   style={{
                     display: 'inline-flex',
@@ -308,7 +311,7 @@ export function MemoryExclusions() {
               <input
                 type="checkbox"
                 checked={suppressedSources.includes(source.id)}
-                disabled={!loaded || saving}
+                disabled={!editable}
                 onChange={() => toggleSource(source.id)}
               />
               Suppress: {source.label}
