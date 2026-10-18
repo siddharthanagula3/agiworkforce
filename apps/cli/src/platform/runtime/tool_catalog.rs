@@ -260,8 +260,6 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "TodoWrite" => "todo_write",
         "AskUser" | "AskUserQuestion" => "ask_user",
         "ReadManyFiles" => "read_many_files",
-        "TeamCreate" => "team_create",
-        "TeamDelete" => "team_delete",
         "CronCreate" => "cron_create",
         "CronDelete" => "cron_delete",
         "CronList" => "cron_list",
@@ -298,8 +296,6 @@ pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
         "todo_write" => &["TodoWrite"],
         "ask_user" => &["AskUser", "AskUserQuestion"],
         "read_many_files" => &["ReadManyFiles"],
-        "team_create" => &["TeamCreate"],
-        "team_delete" => &["TeamDelete"],
         "cron_create" => &["CronCreate"],
         "cron_delete" => &["CronDelete"],
         "cron_list" => &["CronList"],
@@ -371,7 +367,6 @@ fn tool_owner(name: &str) -> &'static str {
         "skill" => "cli-skills",
         "memory" => "cli-memory",
         "task" | "agent" => "cli-subagents",
-        "team_create" | "team_delete" => "cli-team-registry",
         "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",
         "enter_worktree" | "exit_worktree" | "list_worktrees" => "cli-worktree",
         "lsp_definition"
@@ -789,37 +784,6 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
             "Read multiple files at once. Returns concatenated contents with file boundaries.",
             serde_json::json!({"type":"object","properties":{"paths":{"type":"array","description":"Array of absolute file paths to read","items":{"type":"string"}}},"required":["paths"]}),
         ).read_only().with_size_cap(200_000).deferred(),
-        // -----------------------------------------------------------------------
-        // M18: Team management tools, create/delete named agent teams.
-        // -----------------------------------------------------------------------
-        def(
-            "team_create",
-            "Register a named team of agents. Records the team name and optional member list \
-             for later coordination via send_message / read_messages.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Unique team name."},
-                    "members": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Optional list of member names to pre-register."
-                    }
-                },
-                "required": ["name"]
-            }),
-        ).with_size_cap(2_000).deferred(),
-        def(
-            "team_delete",
-            "Remove a registered team. Does not terminate any running tasks assigned to it.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Team name to delete."}
-                },
-                "required": ["name"]
-            }),
-        ).with_size_cap(2_000).deferred(),
         // -----------------------------------------------------------------------
         // M18: Cron / schedule management tools.
         // -----------------------------------------------------------------------

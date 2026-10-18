@@ -54,8 +54,8 @@ use git::{
 use task_registry::{
     execute_advisor, execute_ask_user, execute_cron_create, execute_cron_delete, execute_cron_list,
     execute_lsp_completion, execute_lsp_definition, execute_lsp_diagnostics,
-    execute_lsp_document_symbols, execute_lsp_format, execute_lsp_hover, execute_team_create,
-    execute_team_delete, execute_todo_read, execute_todo_write,
+    execute_lsp_document_symbols, execute_lsp_format, execute_lsp_hover, execute_todo_read,
+    execute_todo_write,
 };
 #[cfg(test)]
 use web::is_private_or_internal_ip;
@@ -1119,8 +1119,6 @@ async fn execute_tool_with_scoped_permissions(
             .await
         }
         "read_many_files" => execute_read_many_files(&call.args).await,
-        "team_create" => execute_team_create(&call.args).await,
-        "team_delete" => execute_team_delete(&call.args).await,
         "cron_create" => execute_cron_create(&call.args, opts.privacy_mode).await,
         "cron_delete" => execute_cron_delete(&call.args, opts.privacy_mode).await,
         "cron_list" => execute_cron_list(&call.args, opts.privacy_mode).await,
