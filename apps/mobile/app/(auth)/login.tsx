@@ -124,7 +124,9 @@ export default function LoginScreen() {
             <Text
               style={{ color: colors.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}
             >
-              Review the Terms for AGI Cloud
+              {termsStatus === 'required'
+                ? 'Review the Terms for AGI Cloud'
+                : 'AGI Cloud sign-in could not finish'}
             </Text>
             <Text
               style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 21 }}
@@ -207,7 +209,7 @@ export default function LoginScreen() {
                   if (userId) void useTermsAcceptanceStore.getState().verify(userId);
                 }}
               >
-                <Text style={{ color: colors.teal, fontWeight: '700' }}>Retry Terms check</Text>
+                <Text style={{ color: colors.teal, fontWeight: '700' }}>Retry</Text>
               </Pressable>
             )}
             <Pressable accessibilityRole="button" onPress={handleDismiss}>

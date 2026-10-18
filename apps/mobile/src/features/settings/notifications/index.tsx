@@ -34,8 +34,10 @@ import {
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import {
   enablePushNotifications,
-  getPushPermissionStatus,
-  type PushPermissionStatus,
+  getPushDeliveryStatus,
+  getPushRegistrationIssue,
+  type PushDeliveryStatus,
+  type PushRegistrationIssue,
 } from '@/services/notifications';
 import { androidChannelVibrates } from '@/services/notificationChannels';
 import { useThemeColors } from '@/src/ui/theme';
@@ -311,7 +313,10 @@ function TimePickerModal({
   );
 }
 
-const PERMISSION_COPY: Record<PushPermissionStatus, { title: string; body: string }> = {
+const PERMISSION_COPY: Record<
+  Exclude<PushDeliveryStatus, 'unregistered'>,
+  { title: string; body: string }
+> = {
   granted: {
     title: 'Your device is delivering notifications',
     body: 'The settings below decide which of them AGI actually sends.',
@@ -326,18 +331,39 @@ const PERMISSION_COPY: Record<PushPermissionStatus, { title: string; body: strin
   },
 };
 
+const REGISTRATION_ISSUE_COPY: Record<PushRegistrationIssue, { title: string; body: string }> = {
+  device_token: {
+    title: 'AGI Cloud alerts cannot reach this device',
+    body: 'Notifications are allowed, but this device could not get a push address, so approvals, finished tasks and failures from AGI Cloud are not delivered here. Alerts this app raises itself still show.',
+  },
+  server: {
+    title: 'AGI Cloud alerts cannot reach this device',
+    body: 'Notifications are allowed, but AGI Cloud could not register this device, so approvals, finished tasks and failures are not delivered here yet.',
+  },
+};
+
 function PushPermissionCard({
   status,
+  issue,
   busy,
   onEnable,
 }: {
-  status: PushPermissionStatus;
+  status: PushDeliveryStatus;
+  issue: PushRegistrationIssue | null;
   busy: boolean;
   onEnable: () => void;
 }) {
   const colors = useThemeColors();
-  const copy = PERMISSION_COPY[status];
-  const actionLabel = status === 'undetermined' ? 'Turn on notifications' : 'Open Settings';
+  const copy =
+    status === 'unregistered'
+      ? REGISTRATION_ISSUE_COPY[issue ?? 'device_token']
+      : PERMISSION_COPY[status];
+  const actionLabel =
+    status === 'undetermined'
+      ? 'Turn on notifications'
+      : status === 'unregistered'
+        ? 'Try again'
+        : 'Open Settings';
   const Icon = status === 'granted' ? Bell : BellOff;
 
   return (
@@ -390,14 +416,14 @@ export default function NotificationPreferencesScreen() {
   const pushTimeFocus = timeFocusSync.push;
 
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
-  const [pushPermission, setPushPermission] = useState<PushPermissionStatus>('undetermined');
+  const [pushPermission, setPushPermission] = useState<PushDeliveryStatus>('undetermined');
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [channelOverridden, setChannelOverridden] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getPushPermissionStatus().then((status) => {
+      void getPushDeliveryStatus().then((status) => {
         if (!cancelled) setPushPermission(status);
       });
       if (Platform.OS === 'android') {
@@ -498,6 +524,7 @@ export default function NotificationPreferencesScreen() {
       </View>
       <PushPermissionCard
         status={pushPermission}
+        issue={pushPermission === 'unregistered' ? getPushRegistrationIssue() : null}
         busy={permissionBusy}
         onEnable={() => void handleEnablePush()}
       />

@@ -101,11 +101,27 @@ function accountContextIsCurrent(accountContext: PushNotificationAccountContext)
 
 let _accountContext: PushNotificationAccountContext | null = null;
 
+export type PushRegistrationIssue = 'device_token' | 'server';
+
+let _registrationIssue: PushRegistrationIssue | null = null;
+
+export function getPushRegistrationIssue(): PushRegistrationIssue | null {
+  return _registrationIssue;
+}
+
 export function setPushAccountContext(accountContext: PushNotificationAccountContext | null): void {
   _accountContext = accountContext;
+  if (!accountContext) _registrationIssue = null;
 }
 
 export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
+
+export type PushDeliveryStatus = PushPermissionStatus | 'unregistered';
+
+export async function getPushDeliveryStatus(): Promise<PushDeliveryStatus> {
+  const status = await getPushPermissionStatus();
+  return status === 'granted' && _registrationIssue ? 'unregistered' : status;
+}
 
 function toPushPermissionStatus(status: string): PushPermissionStatus {
   if (status === 'granted') return 'granted';
@@ -120,7 +136,7 @@ export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
 
 // The OS prompt fires exactly once per install, so it is spent from an explicit
 // user action after a primer, never from a lifecycle effect (MOBILE-021).
-export async function enablePushNotifications(): Promise<PushPermissionStatus> {
+export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
   const current = await getPushPermissionStatus();
   let status = current;
   if (status !== 'granted') {
@@ -135,7 +151,7 @@ export async function enablePushNotifications(): Promise<PushPermissionStatus> {
   if (_accountContext && accountContextIsCurrent(_accountContext)) {
     await registerForPushNotifications(_accountContext);
   }
-  return 'granted';
+  return _registrationIssue ? 'unregistered' : 'granted';
 }
 
 export async function registerForPushNotifications(
@@ -161,10 +177,16 @@ export async function registerForPushNotifications(
     const pushToken = tokenData.data;
 
     const registered = await sendTokenToBackend(pushToken, accountContext);
-    if (!registered || !accountContextIsCurrent(accountContext)) return null;
+    if (!accountContextIsCurrent(accountContext)) return null;
+    if (!registered) {
+      _registrationIssue = 'server';
+      return null;
+    }
 
+    _registrationIssue = null;
     return pushToken;
   } catch (err) {
+    if (accountContextIsCurrent(accountContext)) _registrationIssue = 'device_token';
     if (__DEV__) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('aps-environment')) {

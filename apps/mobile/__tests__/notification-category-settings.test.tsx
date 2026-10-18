@@ -25,6 +25,8 @@ jest.mock('expo-router', () => ({
 jest.mock('@/services/notifications', () => ({
   getPushPermissionStatus: jest.fn().mockResolvedValue('granted'),
   enablePushNotifications: jest.fn().mockResolvedValue('granted'),
+  getPushDeliveryStatus: jest.fn().mockResolvedValue('granted'),
+  getPushRegistrationIssue: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('@/services/notificationChannels', () => ({

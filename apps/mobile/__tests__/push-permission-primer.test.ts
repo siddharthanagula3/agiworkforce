@@ -1,6 +1,7 @@
 const mockApiPost = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockRequestPermissions = jest.fn();
+const mockGetExpoPushToken = jest.fn();
 
 jest.mock('../services/api', () => ({
   api: { post: (...args: unknown[]) => mockApiPost(...args) },
@@ -21,7 +22,7 @@ jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
   getPermissionsAsync: (...args: unknown[]) => mockGetPermissions(...args),
   requestPermissionsAsync: (...args: unknown[]) => mockRequestPermissions(...args),
-  getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[x]' }),
+  getExpoPushTokenAsync: (...args: unknown[]) => mockGetExpoPushToken(...args),
   setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
@@ -32,8 +33,11 @@ jest.mock('expo-notifications', () => ({
 
 import {
   enablePushNotifications,
+  getPushDeliveryStatus,
   getPushPermissionStatus,
+  getPushRegistrationIssue,
   registerForPushNotifications,
+  setPushAccountContext,
   type PushNotificationAccountContext,
 } from '../services/notifications';
 
@@ -50,6 +54,8 @@ beforeEach(() => {
   mockApiPost.mockReset().mockResolvedValue({ ok: true });
   mockGetPermissions.mockReset();
   mockRequestPermissions.mockReset();
+  mockGetExpoPushToken.mockReset().mockResolvedValue({ data: 'ExponentPushToken[x]' });
+  setPushAccountContext(null);
 });
 
 // The OS prompt is spent once per install. MOBILE-021: it used to be spent by a
@@ -104,5 +110,50 @@ describe('the push prompt belongs to a user action', () => {
 
     mockGetPermissions.mockResolvedValue({ status: 'denied' });
     await expect(getPushPermissionStatus()).resolves.toBe('denied');
+  });
+});
+
+describe('an allowed permission is not reported as delivery', () => {
+  it('reports unregistered when the device cannot produce a push token', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetExpoPushToken.mockRejectedValue(new Error('Default FirebaseApp is not initialized'));
+    setPushAccountContext(context());
+
+    await expect(enablePushNotifications()).resolves.toBe('unregistered');
+    expect(getPushRegistrationIssue()).toBe('device_token');
+    await expect(getPushDeliveryStatus()).resolves.toBe('unregistered');
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('reports unregistered when AGI Cloud refuses the token', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'granted' });
+    mockApiPost.mockRejectedValue(new Error('503'));
+    setPushAccountContext(context());
+
+    await expect(enablePushNotifications()).resolves.toBe('unregistered');
+    expect(getPushRegistrationIssue()).toBe('server');
+  });
+
+  it('clears the issue once a retry registers the token', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetExpoPushToken.mockRejectedValueOnce(new Error('no token'));
+    setPushAccountContext(context());
+
+    await expect(enablePushNotifications()).resolves.toBe('unregistered');
+    await expect(enablePushNotifications()).resolves.toBe('granted');
+    expect(getPushRegistrationIssue()).toBeNull();
+    await expect(getPushDeliveryStatus()).resolves.toBe('granted');
+  });
+
+  it('forgets the issue when the account context ends', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetExpoPushToken.mockRejectedValue(new Error('no token'));
+    setPushAccountContext(context());
+    await enablePushNotifications();
+
+    setPushAccountContext(null);
+
+    expect(getPushRegistrationIssue()).toBeNull();
+    await expect(getPushDeliveryStatus()).resolves.toBe('granted');
   });
 });
