@@ -2,6 +2,7 @@ import { setClientFailureSink, type ClientFailureReport } from '@agiworkforce/un
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { hasTelemetryConsent, readDocumentTelemetryConsent } from '@/lib/sentry-shared';
+import { recordDiagnosticEvent } from '@/lib/support/diagnostics/collect';
 
 import { CLIENT_FAILURE_MAX_BATCH } from './client-failures';
 
@@ -52,7 +53,13 @@ function flush(): void {
 }
 
 export function reportClientFailureToPlatform(report: ClientFailureReport): void {
-  if (typeof window === 'undefined' || sent >= CLIENT_FAILURE_PAGE_BUDGET) return;
+  if (typeof window === 'undefined') return;
+  recordDiagnosticEvent({
+    at: new Date().toISOString(),
+    kind: 'error',
+    message: report.detail ? `${report.failure}: ${report.detail}` : report.failure,
+  });
+  if (sent >= CLIENT_FAILURE_PAGE_BUDGET) return;
   if (!mayReport()) return;
   sent += 1;
   pending.push(report);

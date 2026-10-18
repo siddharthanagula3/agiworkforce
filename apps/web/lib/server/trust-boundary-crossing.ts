@@ -2,14 +2,12 @@ import 'server-only';
 
 import {
   createAuditEvent,
-  refuseTrustTransition,
   trustModeContract,
   trustModeOrStrictest,
   type AuditEvent,
   type AuditSurface,
   type KeyAttribution,
   type PrivacyMode,
-  type TrustTransitionRefusal,
 } from '@agiworkforce/types';
 
 import { scanForSecrets, type SecretDetection } from '@/lib/security/secrets-audit';
@@ -149,51 +147,6 @@ export function evaluateProviderEgress(request: ProviderEgressRequest): Crossing
         },
       },
       'allowed',
-    ),
-  };
-}
-
-export interface TrustTransitionOutcome {
-  readonly decision: CrossingDecision;
-  readonly refusal: TrustTransitionRefusal | null;
-  readonly audit: AuditEvent;
-}
-
-/**
- * Every change of trust mode is recorded, allowed or not: the record of a
- * refused downgrade is the evidence that the promise held.
- */
-export function evaluateTrustTransition(input: {
-  readonly from: PrivacyMode;
-  readonly to: PrivacyMode;
-  readonly approved?: boolean;
-  readonly surface: AuditSurface;
-  readonly userId: string | null;
-  readonly correlationId?: string;
-}): TrustTransitionOutcome {
-  const refusal = refuseTrustTransition({
-    from: input.from,
-    to: input.to,
-    ...(input.approved === undefined ? {} : { approved: input.approved }),
-  });
-  const decision: CrossingDecision = refusal === null ? 'allowed' : 'refused';
-
-  return {
-    decision,
-    refusal,
-    audit: crossingAudit(
-      {
-        surface: input.surface,
-        userId: input.userId,
-        resource: `trust-mode:${input.from}->${input.to}`,
-        ...(input.correlationId === undefined ? {} : { correlationId: input.correlationId }),
-        metadata: {
-          from: input.from,
-          to: input.to,
-          ...(refusal === null ? {} : { reason: refusal.reason }),
-        },
-      },
-      decision,
     ),
   };
 }

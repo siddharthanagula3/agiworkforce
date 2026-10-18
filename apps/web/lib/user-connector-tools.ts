@@ -20,8 +20,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { inspectConnectorToolDefs } from '@/lib/security/mcp-tool-inspection';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
-import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
-import { recordConnectorCallOutcome } from '@/lib/services/connector-call-log-service';
+import { meterConnectorCall, readConnectorGate } from '@/lib/connectors/health';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import {
   resolveActiveOrganizationId,
@@ -2741,7 +2740,7 @@ export function makeUserConnectorExecutor(
 
     const startedAtMs = Date.now();
     const log = (outcome: 'succeeded' | 'failed' | 'blocked'): void => {
-      recordConnectorCallOutcome(getNeonDb(), {
+      meterConnectorCall(getNeonDb(), {
         userId,
         organizationId: organizationId ?? null,
         connectorId: serverId,
@@ -2757,16 +2756,16 @@ export function makeUserConnectorExecutor(
       if (!connectorsReleased()) {
         return { handled: true, content: CONNECTORS_COMING_SOON_MESSAGE, isError: true };
       }
-      const meter = (result: ConnectorExecResult): ConnectorExecResult => {
-        if (result.handled) {
-          recordConnectorCall({
-            userId,
-            organizationId: organizationId ?? null,
-            connectorId: serverId,
-            toolName,
-          });
-          log(result.isError === true ? 'failed' : 'succeeded');
+      try {
+        const gate = await readConnectorGate(getNeonDb(), userId, { connectorId: serverId });
+        if (!gate.allowed) {
+          return { handled: true, content: gate.message ?? '', isError: true };
         }
+      } catch (error) {
+        logger.warn({ error, connectorId: serverId }, 'Connector gate could not be read');
+      }
+      const meter = (result: ConnectorExecResult): ConnectorExecResult => {
+        if (result.handled) log(result.isError === true ? 'failed' : 'succeeded');
         return result;
       };
       const verdict = await inspectOutboundContent({

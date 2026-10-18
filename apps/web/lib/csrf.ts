@@ -206,38 +206,11 @@ export async function validateCsrfFromRequest(
   return verifyCsrfToken(token, sid);
 }
 
-/**
- * AUDIT-008-006: Validate CSRF token and return error response if invalid
- *
- * Use this at the start of state-changing handlers (POST, PUT, DELETE).
- * Returns null if CSRF validation passes, or a 403 Response if it fails.
- *
- * @example
- * const csrfError = await requireCsrfToken(request);
- * if (csrfError) return csrfError;
- */
 export async function requireCsrfToken(
   request: Request,
   sessionId?: string,
 ): Promise<Response | null> {
-  const method = request.method.toUpperCase();
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    return null;
-  }
-
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const validBearer = await isBearerTokenValid(authHeader);
-    if (validBearer) {
-      return null;
-    }
-    // Invalid Bearer falls through to CSRF token check
-  }
-
-  const token = request.headers.get(CSRF_HEADER);
-  const sid = sessionId || (await getSessionIdFromRequest(request));
-
-  if (!verifyCsrfToken(token, sid)) {
+  if (!(await validateCsrfFromRequest(request, sessionId))) {
     return new Response(
       JSON.stringify({
         error: 'Invalid or missing CSRF token',

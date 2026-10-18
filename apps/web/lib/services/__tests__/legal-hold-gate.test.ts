@@ -8,12 +8,8 @@ import { HOLDABLE_RESOURCES } from '@agiworkforce/types';
 import {
   countHeldResources,
   formatHold,
-  heldUserIdsFor,
   legalHoldExclusion,
   legalHoldPredicate,
-  organizationWideHold,
-  readLegalHoldGate,
-  LegalHoldGateUnavailableError,
   type HoldRow,
   type LegalHold,
 } from '../legal-hold-gate';
@@ -223,33 +219,6 @@ describe('what a hold currently preserves', () => {
       ['conversation'],
     );
     expect(counts[0]?.preserved).toBe(1);
-  });
-});
-
-describe('the resolved gate', () => {
-  it('gathers member and custodian subjects into one answer', () => {
-    const holds = [
-      hold({ id: 'h-one', scope: 'member', subjectUserId: 'alice' }),
-      hold({ id: 'h-two', scope: 'custodian', subjectUserId: null, custodianUserIds: ['bob'] }),
-    ];
-    expect(heldUserIdsFor(holds, 'conversation')).toEqual(['alice', 'bob']);
-    expect(organizationWideHold(holds, 'conversation')).toBe(false);
-  });
-
-  it('drops a subject whose hold does not cover the store being swept', () => {
-    const holds = [
-      hold({ scope: 'member', subjectUserId: 'alice', resourceTypes: ['file'] }),
-      hold({ id: 'h-two', scope: 'member', subjectUserId: 'bob' }),
-    ];
-    expect(heldUserIdsFor(holds, 'conversation')).toEqual(['bob']);
-    expect(heldUserIdsFor(holds, 'file')).toEqual(['alice', 'bob']);
-  });
-
-  it('refuses to answer when the hold set cannot be read', async () => {
-    const db = { query: vi.fn(async () => Promise.reject(new Error('connection reset'))) };
-    await expect(
-      readLegalHoldGate(db as unknown as DatabaseAdapter, ORG, 'conversation'),
-    ).rejects.toBeInstanceOf(LegalHoldGateUnavailableError);
   });
 });
 

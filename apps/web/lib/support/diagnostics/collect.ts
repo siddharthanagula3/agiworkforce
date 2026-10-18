@@ -27,17 +27,13 @@ export interface DiagnosticsInput {
 const recentEvents: DiagnosticEvent[] = [];
 
 /**
- * A ring buffer the surfaces push into from their error boundaries and failed
- * requests. Bounded, so an error loop cannot grow it without limit, and oldest
- * first out, so a bundle carries what happened just before the user gave up.
+ * A ring buffer fed by every client failure report. Bounded, so an error loop
+ * cannot grow it without limit, and oldest first out, so a bundle carries what
+ * happened just before the user gave up.
  */
 export function recordDiagnosticEvent(event: DiagnosticEvent): void {
   recentEvents.push(event);
   while (recentEvents.length > MAX_DIAGNOSTIC_EVENTS) recentEvents.shift();
-}
-
-export function clearDiagnosticEvents(): void {
-  recentEvents.length = 0;
 }
 
 function readTimeZone(): string | null {

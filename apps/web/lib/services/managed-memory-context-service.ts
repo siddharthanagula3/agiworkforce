@@ -718,7 +718,7 @@ export async function memoryWriteAdmission(
       userId: write.userId,
       organizationId: write.organizationId ?? null,
     }));
-  return memoryPolicyDecision({
+  return memoryEligibilityGate({
     write,
     organizationPolicy: policies.organization,
     userPolicy: policies.user,

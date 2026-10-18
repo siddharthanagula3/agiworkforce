@@ -15,6 +15,7 @@ import {
   resetClientFailureTransport,
 } from '../client-failure-transport';
 import { CLIENT_FAILURE_MAX_BODY_BYTES } from '../client-failures';
+import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: HeadersInit) => ({
@@ -49,6 +50,17 @@ afterEach(() => {
   setClientFailureSink(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('support diagnostics', () => {
+  it('carries the failure into the next support bundle without consent or network', async () => {
+    reportClientFailureToPlatform({ failure: 'mermaid_render', detail: 'parse' });
+    await vi.runAllTimersAsync();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const { recentEvents } = collectDiagnostics({ surface: 'web' });
+    expect(recentEvents.at(-1)).toMatchObject({ kind: 'error', message: 'mermaid_render: parse' });
+  });
 });
 
 describe('consent decides whether this device is measured', () => {

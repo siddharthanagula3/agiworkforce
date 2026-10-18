@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  evaluateProviderEgress,
-  evaluateTrustTransition,
-  type ProviderEgressRequest,
-} from '../trust-boundary-crossing';
+import { evaluateProviderEgress, type ProviderEgressRequest } from '../trust-boundary-crossing';
 
 const BASE: ProviderEgressRequest = {
   mode: 'managed',
@@ -111,42 +107,5 @@ describe('provider egress', () => {
     expect(outcome.audit.correlationId).toBe('op_1');
     expect(outcome.audit.causationId).toBe('evt_0');
     expect(outcome.audit.operationRef).toBe('1:req_a:op_b:att_c');
-  });
-});
-
-describe('trust transitions', () => {
-  it('records a refused downgrade as the evidence the promise held', () => {
-    const outcome = evaluateTrustTransition({
-      from: 'local',
-      to: 'managed',
-      surface: 'web',
-      userId: 'usr_1',
-    });
-    expect(outcome.decision).toBe('refused');
-    expect(outcome.refusal?.reason).toBe('downgrade-needs-approval');
-    expect(outcome.audit.outcome).toBe('denied');
-    expect(outcome.audit.resource).toBe('trust-mode:local->managed');
-    expect(outcome.audit.retentionClass).toBe('security');
-  });
-
-  it('records an approved downgrade and a tightening alike', () => {
-    const approved = evaluateTrustTransition({
-      from: 'byok',
-      to: 'managed',
-      approved: true,
-      surface: 'web',
-      userId: 'usr_1',
-    });
-    expect(approved.decision).toBe('allowed');
-    expect(approved.audit.metadata).toMatchObject({ from: 'byok', to: 'managed' });
-
-    const tightened = evaluateTrustTransition({
-      from: 'managed',
-      to: 'local',
-      surface: 'web',
-      userId: 'usr_1',
-    });
-    expect(tightened.decision).toBe('allowed');
-    expect(tightened.refusal).toBeNull();
   });
 });

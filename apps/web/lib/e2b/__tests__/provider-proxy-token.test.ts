@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -62,6 +64,18 @@ describe('provider proxy token', () => {
     ).toString('base64url');
     expect(mod.verifyProviderProxyToken(`${forgedPayload}.${signature}`)).toBeNull();
     void payload;
+  });
+
+  it('signs with a key derived for this purpose, never with the CSRF secret itself', async () => {
+    const mod = await loadModule();
+    const token = mod.mintProviderProxyToken(
+      { sessionId: 'sess-1', userId: 'user-1', providerId: 'anthropic' },
+      60_000,
+    );
+    const [payload, signature] = token.split('.') as [string, string];
+    const rawSecretSignature = createHmac('sha256', SECRET).update(payload).digest('base64url');
+    expect(signature).not.toBe(rawSecretSignature);
+    expect(mod.verifyProviderProxyToken(`${payload}.${rawSecretSignature}`)).toBeNull();
   });
 
   it('rejects garbage input', async () => {

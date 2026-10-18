@@ -111,23 +111,14 @@ export function getSecurityHeaders(): Record<string, string> {
   };
 }
 
-/**
- * Handle CORS preflight request
- *
- * @param request - The incoming request
- * @param requireOrigin - If true, reject requests without Origin header (AUDIT-008-012)
- */
-export function handleCorsPreflightRequest(
-  request: NextRequest,
-  requireOrigin = false,
-): NextResponse | null {
+export function handleCorsPreflightRequest(request: NextRequest): NextResponse | null {
   if (request.method !== 'OPTIONS') {
     return null;
   }
 
   const origin = request.headers.get('origin');
 
-  if (!isOriginAllowed(origin, requireOrigin)) {
+  if (!isOriginAllowed(origin)) {
     logger.warn({ origin }, 'CORS preflight blocked from disallowed origin');
     return new NextResponse(null, {
       status: 403,
@@ -193,57 +184,4 @@ export function withCorsRoute<TArgs extends unknown[]>(
 ): (request: NextRequest, ...args: TArgs) => Promise<Response> {
   return async (request: NextRequest, ...args: TArgs): Promise<Response> =>
     withCorsAndSecurityHeaders(await handler(request, ...args), request);
-}
-
-export function jsonResponseWithCors(
-  request: NextRequest,
-  data: unknown,
-  options?: { status?: number; headers?: Record<string, string> },
-): NextResponse {
-  const response = NextResponse.json(data, {
-    status: options?.status,
-    headers: options?.headers,
-  });
-
-  return withCorsAndSecurityHeaders(response, request);
-}
-
-/**
- * AUDIT-008-012: Validate that a request has a valid Origin header
- * Use this for sensitive endpoints that should reject requests without Origin
- *
- * @returns NextResponse with 403 if origin is missing or invalid, null if valid
- */
-export function requireValidOrigin(request: NextRequest): NextResponse | null {
-  const origin = request.headers.get('origin');
-
-  if (!origin) {
-    logger.warn(
-      { url: request.url, method: request.method },
-      'Request rejected: missing Origin header on sensitive endpoint',
-    );
-    return new NextResponse(JSON.stringify({ error: 'Origin header required' }), {
-      status: 403,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getSecurityHeaders(),
-      },
-    });
-  }
-
-  if (!isOriginAllowed(origin, true)) {
-    logger.warn(
-      { origin, url: request.url },
-      'Request rejected: invalid Origin on sensitive endpoint',
-    );
-    return new NextResponse(JSON.stringify({ error: 'Invalid origin' }), {
-      status: 403,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getSecurityHeaders(),
-      },
-    });
-  }
-
-  return null;
 }
