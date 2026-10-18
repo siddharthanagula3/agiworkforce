@@ -899,14 +899,10 @@
       "canonicalOwner": "Guardian",
       "consumers": ["packages/guardian/github"],
       "deployability": "library",
-      "trustBoundary": "none; findings policy, dedupe, fingerprint, rank and verify",
+      "trustBoundary": "none; findings policy, dedupe, fingerprint and rank",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/guardian/core/src/policy.ts",
-        "packages/guardian/core/src/verify.ts",
-        ".agi-guardian.yml"
-      ]
+      "evidence": ["packages/guardian/core/src/policy.ts", ".agi-guardian.yml"]
     },
     {
       "path": "packages/guardian/github",

@@ -9,7 +9,6 @@
     "./schema": "./src/schema.ts",
     "./fingerprint": "./src/fingerprint.ts",
     "./config": "./src/config.ts",
-    "./verify": "./src/verify.ts",
     "./dedupe": "./src/dedupe.ts",
     "./rank": "./src/rank.ts",
     "./policy": "./src/policy.ts",

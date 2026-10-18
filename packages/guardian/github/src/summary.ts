@@ -16,12 +16,6 @@ export interface SummaryInput {
   scannerRuns: readonly ScannerRun[];
 }
 
-export function findSummaryComment<T extends { body?: string | null }>(
-  comments: readonly T[],
-): T | undefined {
-  return comments.find((c) => typeof c.body === 'string' && c.body.includes(SUMMARY_MARKER));
-}
-
 export function buildSummaryComment(input: SummaryInput): string {
   const { decision, findings, fixedSincePreviousRun, scannerRuns } = input;
   const ranked = rankFindings(findings);

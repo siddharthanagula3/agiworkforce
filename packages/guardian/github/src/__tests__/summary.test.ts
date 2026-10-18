@@ -1,7 +1,7 @@
 import { defaultGuardianConfig, evaluatePolicy } from '@agiworkforce/guardian-core';
 import { describe, expect, it } from 'vitest';
 
-import { SUMMARY_MARKER, buildSummaryComment, findSummaryComment } from '../summary.js';
+import { SUMMARY_MARKER, buildSummaryComment } from '../summary.js';
 import { makeFinding } from './helpers.js';
 
 describe('buildSummaryComment', () => {
@@ -50,20 +50,5 @@ describe('buildSummaryComment', () => {
     });
     expect(comment).toContain('Fixed since the previous run: 1');
     expect(comment).toContain('missing, not clean');
-  });
-});
-
-describe('findSummaryComment', () => {
-  it('finds the Guardian comment among PR comments by marker', () => {
-    const comments = [
-      { id: 1, body: 'LGTM' },
-      { id: 2, body: `${SUMMARY_MARKER}\n## AGI Guardian review` },
-      { id: 3, body: null },
-    ];
-    expect(findSummaryComment(comments)?.id).toBe(2);
-  });
-
-  it('returns undefined when Guardian has not commented yet', () => {
-    expect(findSummaryComment([{ body: 'hello' }])).toBeUndefined();
   });
 });

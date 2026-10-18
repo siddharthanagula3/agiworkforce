@@ -141,7 +141,6 @@
       "./schema": "universal",
       "./fingerprint": "server",
       "./config": "universal",
-      "./verify": "universal",
       "./dedupe": "universal",
       "./rank": "universal",
       "./policy": "universal",
@@ -149,9 +148,6 @@
     },
     "packages/guardian/github": {
       ".": "universal",
-      "./webhook": "server",
-      "./events": "universal",
-      "./commands": "universal",
       "./checks": "universal",
       "./summary": "universal"
     },

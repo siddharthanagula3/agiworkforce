@@ -169,18 +169,3 @@ export const ReviewRunSchema = z.object({
   created_at: z.iso.datetime(),
 });
 export type ReviewRun = z.infer<typeof ReviewRunSchema>;
-
-export function parseFinding(value: unknown): Finding {
-  return FindingSchema.parse(value);
-}
-
-export function safeParseFinding(
-  value: unknown,
-): { ok: true; finding: Finding } | { ok: false; error: string } {
-  const result = FindingSchema.safeParse(value);
-  if (result.success) return { ok: true, finding: result.data };
-  return {
-    ok: false,
-    error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-  };
-}

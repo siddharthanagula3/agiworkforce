@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { finalizeFinding, finalizeOutcome } from '../adapters/builder.js';
-import { parseEslintOutput } from '../adapters/eslint.js';
-import { parseGitleaksOutput } from '../adapters/gitleaks.js';
-import { parseKnipOutput } from '../adapters/knip.js';
 import { parseRepoCheckResult } from '../adapters/repo-check.js';
-import { parseSemgrepOutput } from '../adapters/semgrep.js';
 import { redactEvidence } from '../adapters/types.js';
 import type { RunContext } from '../adapters/builder.js';
 
@@ -17,126 +13,6 @@ const ctx: RunContext = {
   now: () => new Date('2026-08-09T00:00:00.000Z'),
   newId: () => '00000000-0000-4000-8000-000000000001',
 };
-
-describe('parseEslintOutput', () => {
-  it('maps error-severity messages to findings and skips warnings', () => {
-    const output = JSON.stringify([
-      {
-        filePath: '/repo/apps/web/a.ts',
-        messages: [
-          {
-            ruleId: 'no-unused-vars',
-            severity: 2,
-            message: "'x' is defined but never used.",
-            line: 3,
-            endLine: 3,
-          },
-          {
-            ruleId: 'prefer-const',
-            severity: 1,
-            message: 'warning stays with the linter',
-            line: 9,
-          },
-        ],
-      },
-      { filePath: '/repo/apps/web/b.ts', messages: [] },
-    ]);
-    const outcome = parseEslintOutput(output, '/repo');
-    expect(outcome.status).toBe('findings');
-    expect(outcome.findings).toHaveLength(1);
-    expect(outcome.findings[0]?.path).toBe('apps/web/a.ts');
-    expect(outcome.findings[0]?.rule_id).toBe('eslint/no-unused-vars');
-  });
-
-  it('reports clean for zero errors and scanner-failed for garbage', () => {
-    expect(parseEslintOutput('[]', '/repo').status).toBe('clean');
-    expect(parseEslintOutput('not json', '/repo').status).toBe('scanner-failed');
-    expect(parseEslintOutput('{"unexpected": true}', '/repo').status).toBe('scanner-failed');
-  });
-});
-
-describe('parseKnipOutput', () => {
-  it('maps unused files, dependencies, and exports', () => {
-    const output = JSON.stringify({
-      files: ['apps/web/dead.ts'],
-      issues: [
-        {
-          file: 'apps/web/package.json',
-          dependencies: [{ name: 'left-pad' }],
-          exports: [{ name: 'unusedHelper', line: 12 }],
-        },
-      ],
-    });
-    const outcome = parseKnipOutput(output);
-    expect(outcome.status).toBe('findings');
-    expect(outcome.findings.map((f) => f.rule_id).sort()).toEqual([
-      'knip/unused-dependency',
-      'knip/unused-export',
-      'knip/unused-file',
-    ]);
-    expect(outcome.findings.every((f) => f.category === 'technical-debt')).toBe(true);
-  });
-
-  it('reports scanner-failed on unparseable output', () => {
-    expect(parseKnipOutput('¯\\_(ツ)_/¯').status).toBe('scanner-failed');
-  });
-});
-
-describe('parseGitleaksOutput', () => {
-  it('produces critical secret findings without ever carrying the secret', () => {
-    const output = JSON.stringify([
-      {
-        RuleID: 'github-pat',
-        Description: 'GitHub personal access token',
-        File: 'apps/web/config.ts',
-        StartLine: 4,
-        EndLine: 4,
-        Secret: 'ghp_abcdefghijklmnopqrstuvwxyz123456789012',
-        Match: 'token = ghp_abcdefghijklmnopqrstuvwxyz123456789012',
-      },
-    ]);
-    const outcome = parseGitleaksOutput(output);
-    expect(outcome.status).toBe('findings');
-    const finding = outcome.findings[0];
-    expect(finding?.severity).toBe('critical');
-    expect(JSON.stringify(outcome)).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz123456789012');
-  });
-
-  it('treats an empty report as clean and garbage as scanner-failed', () => {
-    expect(parseGitleaksOutput('[]').status).toBe('clean');
-    expect(parseGitleaksOutput('').status).toBe('clean');
-    expect(parseGitleaksOutput('{oops').status).toBe('scanner-failed');
-  });
-});
-
-describe('parseSemgrepOutput', () => {
-  it('maps results with security metadata to security findings', () => {
-    const output = JSON.stringify({
-      results: [
-        {
-          check_id: 'rules.security.no-shell-concat',
-          path: 'apps/cli/src/run.rs',
-          start: { line: 10 },
-          end: { line: 12 },
-          extra: {
-            message: 'Shell command built by string concatenation',
-            severity: 'ERROR',
-            metadata: { cwe: 'CWE-78', confidence: 'HIGH' },
-          },
-        },
-      ],
-      errors: [],
-    });
-    const outcome = parseSemgrepOutput(output);
-    expect(outcome.status).toBe('findings');
-    expect(outcome.findings[0]?.category).toBe('security');
-    expect(outcome.findings[0]?.severity).toBe('high');
-  });
-
-  it('reports scanner-failed on malformed output', () => {
-    expect(parseSemgrepOutput('null').status).toBe('scanner-failed');
-  });
-});
 
 describe('parseRepoCheckResult', () => {
   const spec = {

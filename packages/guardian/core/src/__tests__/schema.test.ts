@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FindingSchema, SCHEMA_VERSION, safeParseFinding } from '../schema.js';
+import { FindingSchema, SCHEMA_VERSION } from '../schema.js';
 import { makeFinding } from './helpers.js';
 
 describe('FindingSchema v1', () => {
@@ -34,11 +34,5 @@ describe('FindingSchema v1', () => {
   it('rejects a malformed fingerprint', () => {
     const finding = makeFinding();
     expect(FindingSchema.safeParse({ ...finding, fingerprint: 'not-a-hash' }).success).toBe(false);
-  });
-
-  it('safeParseFinding reports readable errors instead of throwing', () => {
-    const result = safeParseFinding({ title: 'missing everything' });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('finding_id');
   });
 });

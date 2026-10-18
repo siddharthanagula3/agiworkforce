@@ -32,29 +32,3 @@ function stronger(a: Finding, b: Finding): Finding {
   if (b.source_type !== 'llm' && a.source_type === 'llm') return b;
   return a;
 }
-
-export interface Reconciliation {
-  fixed: Finding[];
-  persisting: Finding[];
-  introduced: Finding[];
-}
-
-export function reconcileRuns(
-  previous: readonly Finding[],
-  current: readonly Finding[],
-): Reconciliation {
-  const currentByFp = new Map(current.map((f) => [f.fingerprint, f]));
-  const previousFps = new Set(previous.map((f) => f.fingerprint));
-
-  const fixed = previous
-    .filter((f) => !currentByFp.has(f.fingerprint) && f.status === 'open')
-    .map((f) => ({ ...f, status: 'fixed' as const }));
-  const persisting = current
-    .filter((f) => previousFps.has(f.fingerprint))
-    .map((f) => ({ ...f, is_new: false }));
-  const introduced = current
-    .filter((f) => !previousFps.has(f.fingerprint))
-    .map((f) => ({ ...f, is_new: true }));
-
-  return { fixed, persisting, introduced };
-}
