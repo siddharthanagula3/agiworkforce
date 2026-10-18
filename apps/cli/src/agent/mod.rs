@@ -795,23 +795,6 @@ impl AgentSession {
         self.team_manager = Some(teams::TeamManager::new());
     }
 
-    /// Get a reference to the team manager.
-    #[allow(dead_code)]
-    pub fn team_manager(&self) -> Option<&teams::TeamManager> {
-        self.team_manager.as_ref()
-    }
-
-    /// Spawn a teammate into the team.
-    #[allow(dead_code)]
-    pub async fn spawn_teammate(&self, name: &str, role: &str, prompt: &str) -> Result<String> {
-        match &self.team_manager {
-            Some(tm) => Ok(tm.spawn_teammate(name, role, prompt).await?),
-            None => Err(anyhow::anyhow!(
-                "Team mode is not enabled. Use --team flag or AGI_TEAM=1."
-            )),
-        }
-    }
-
     pub fn approve_plan(&mut self) -> Result<(), &'static str> {
         if !matches!(
             self.permission_mode,
