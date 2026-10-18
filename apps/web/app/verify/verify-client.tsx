@@ -10,19 +10,10 @@ import {
   webSignInHref,
 } from '@/features/marketing/components/system/nav';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 
 const SESSION_CHECK_FAILED = 'Your session could not be confirmed. Reload this page and try again.';
 const DEVICE_REQUEST_FAILED = 'This device request could not be updated. Try again.';
-
-function getErrorMessage(data: { error?: unknown } | null): string {
-  const error = data?.error;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return DEVICE_REQUEST_FAILED;
-}
 
 export function VerifyDeviceClient({ code }: { code: string }) {
   const { isLoaded, isSignedIn } = useSession();
@@ -67,7 +58,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
       } | null;
 
       if (!res.ok) {
-        throw new Error(getErrorMessage(data));
+        throw new Error(apiErrorMessage(data, DEVICE_REQUEST_FAILED));
       }
 
       if (action === 'approve') {

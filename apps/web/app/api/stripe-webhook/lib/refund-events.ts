@@ -8,6 +8,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { Stripe } from '@/lib/stripe-types';
 import { duplicateRefundAmount, STRIPE_PAGE_SIZE } from './duplicate-subscription-settlement';
+import { stripeIdOf } from './stripe-ref';
 
 interface PlanPeriod {
   subscription_id: string;
@@ -15,17 +16,6 @@ interface PlanPeriod {
   plan_tier: string | null;
   current_period_start: string | Date | null;
   current_period_end: string | Date | null;
-}
-
-function customerIdOf(customer: Stripe.Charge['customer']): string | null {
-  if (typeof customer === 'string') return customer;
-  return customer?.id ?? null;
-}
-
-function paymentIntentIdOf(charge: Stripe.Charge): string | null {
-  const paymentIntent = charge.payment_intent;
-  if (typeof paymentIntent === 'string') return paymentIntent;
-  return paymentIntent?.id ?? null;
 }
 
 function isFullyRefunded(charge: Stripe.Charge): boolean {
@@ -72,12 +62,12 @@ async function currentPlanAllocation(
   if (periodEnd === null || periodStart === null) return null;
   if (
     !period.stripe_subscription_id ||
-    !customerIdOf(charge.customer) ||
+    !stripeIdOf(charge.customer) ||
     !Number.isSafeInteger(charge.amount) ||
     charge.amount <= 0
   )
     throw new Error('Plan refund charge allocation is invalid');
-  const paymentIntentId = paymentIntentIdOf(charge);
+  const paymentIntentId = stripeIdOf(charge.payment_intent);
   if (!paymentIntentId) throw new Error('Plan refund has no verifiable invoice-payment mapping');
   const payments = await stripe.invoicePayments.list({
     payment: { type: 'payment_intent', payment_intent: paymentIntentId },
@@ -98,9 +88,7 @@ async function currentPlanAllocation(
     if (
       payment.status !== 'paid' ||
       payment.payment.type !== 'payment_intent' ||
-      (typeof payment.payment.payment_intent === 'string'
-        ? payment.payment.payment_intent
-        : payment.payment.payment_intent?.id) !== paymentIntentId ||
+      stripeIdOf(payment.payment.payment_intent) !== paymentIntentId ||
       seen.has(payment.id) ||
       !payment.id ||
       paid === null ||
@@ -109,7 +97,7 @@ async function currentPlanAllocation(
       !invoice ||
       typeof invoice === 'string' ||
       invoice.deleted ||
-      customerIdOf(invoice.customer) !== customerIdOf(charge.customer) ||
+      stripeIdOf(invoice.customer) !== stripeIdOf(charge.customer) ||
       invoice.lines.has_more ||
       invoice.lines.data.length === 0
     ) {
@@ -117,8 +105,7 @@ async function currentPlanAllocation(
     }
     seen.add(payment.id);
     total += paid;
-    const reference = invoice.parent?.subscription_details?.subscription;
-    const subscription = typeof reference === 'string' ? reference : (reference?.id ?? null);
+    const subscription = stripeIdOf(invoice.parent?.subscription_details?.subscription);
     const current =
       subscription === period.stripe_subscription_id &&
       Math.max(...invoice.lines.data.map((line) => line.period.end)) === periodEnd;
@@ -252,7 +239,7 @@ export async function handleChargeRefunded(
   stripe: Stripe,
   charge: Stripe.Charge,
 ): Promise<void> {
-  const stripeCustomerId = customerIdOf(charge.customer);
+  const stripeCustomerId = stripeIdOf(charge.customer);
   const isTopUp = charge.metadata?.['type'] === 'credit_topup';
 
   logger.info(

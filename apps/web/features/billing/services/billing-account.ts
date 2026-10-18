@@ -7,7 +7,7 @@ import {
   type SelfServeIndividualPlanTier,
 } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { apiErrorCode, apiErrorMessage } from '../lib/api-error';
+import { apiErrorCode, apiErrorMessage } from '@shared/utils/api-error';
 import {
   AutoReloadSettingsSchema,
   BillingRefundSchema,

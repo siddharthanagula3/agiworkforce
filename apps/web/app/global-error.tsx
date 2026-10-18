@@ -5,6 +5,7 @@ import { getFriendlyError } from '@agiworkforce/utils';
 import { useUiTranslation } from '@agiworkforce/ui/i18n';
 import { languageFor } from '@agiworkforce/i18n/languages';
 import i18n from '@/app/i18n/index';
+import { logger } from '@shared/lib/logger';
 import { useFriendlyErrorCopy } from '@/shared/hooks/use-friendly-error-copy';
 
 export default function GlobalError({
@@ -15,7 +16,10 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
+    logger.error('Root layout error boundary caught', {
+      digest: error.digest,
+      message: error.message,
+    });
   }, [error]);
 
   const { t } = useUiTranslation('errors');

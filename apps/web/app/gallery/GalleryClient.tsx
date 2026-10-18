@@ -34,10 +34,6 @@ import { useMounted } from '@shared/hooks/useMounted';
 import { escapeHTML } from '@shared/utils/html-sanitizer';
 import { INSPIRATION, inspirationPath, type InspirationCard } from './inspiration';
 
-// ---------------------------------------------------------------------------
-// Category picker data
-// ---------------------------------------------------------------------------
-
 interface ArtifactCategory {
   id: string;
   label: string;
@@ -90,10 +86,6 @@ const ARTIFACT_CATEGORIES: ArtifactCategory[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function relativeTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -144,10 +136,6 @@ function languageLabel(lang: string): string {
   };
   return map[lang.toLowerCase()] ?? lang.charAt(0).toUpperCase() + lang.slice(1);
 }
-
-// ---------------------------------------------------------------------------
-// Search + filters
-// ---------------------------------------------------------------------------
 
 type TypeFilter = 'all' | ArtifactData['type'];
 type DateFilter = 'all' | '7d' | '30d';
@@ -215,10 +203,6 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton card
-// ---------------------------------------------------------------------------
-
 function SkeletonCard() {
   return (
     <div
@@ -276,10 +260,6 @@ function SkeletonCard() {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Card
-// ---------------------------------------------------------------------------
 
 type ThumbnailKind = 'frame' | 'excerpt' | 'diagram' | 'icon';
 
@@ -501,10 +481,6 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
   );
 }
 
-// ---------------------------------------------------------------------------
-// Category picker overlay
-// ---------------------------------------------------------------------------
-
 interface CategoryPickerProps {
   onClose: () => void;
   onSelect: (category: ArtifactCategory) => void;
@@ -620,10 +596,6 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Creation wizard
-// ---------------------------------------------------------------------------
 
 const WIZARD_STEPS = [
   {
@@ -839,10 +811,6 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Detail drawer (right-side panel)
-// ---------------------------------------------------------------------------
-
 interface ArtifactDrawerProps {
   artifact: Artifact | InspirationCard | null;
   onClose: () => void;
@@ -997,10 +965,6 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tab button
-// ---------------------------------------------------------------------------
-
 function TabButton({
   active,
   onClick,
@@ -1031,10 +995,6 @@ function TabButton({
     </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main client component
-// ---------------------------------------------------------------------------
 
 type TabId = 'yours' | 'inspiration';
 type OverlayState =
@@ -1149,12 +1109,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
 
   const [tabDefaulted, setTabDefaulted] = useState(false);
 
-  // The default view has to be something to look at. Deciding this before the
-  // index has settled would judge a signed-in visitor's history by a fetch
-  // that has not landed yet, so it waits for auth and the index to both
-  // report in, then decides once: a signed-out visitor, or one whose account
-  // has nothing yet, sees the curated examples instead of an empty box. It
-  // only runs once, so it never overrides a tab the visitor picked themself.
+  // Decided once, after auth and the index settle, so it never overrides a tab the visitor picked.
   useEffect(() => {
     if (tabDefaulted || !mounted || !authLoaded || !indexLoaded) return;
     if (!isSignedIn || sortedArtifacts.length === 0) {
@@ -1458,24 +1413,15 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     <ArtifactCard
                       key={artifact.id}
                       title={artifact.title}
-                      // Index rows carry no language for non-code types; fall
-                      // back to the artifact type so the badge still says
-                      // something true rather than rendering empty.
                       language={artifact.language ?? artifact.type}
                       subtitle={`Created ${relativeTime(artifact.createdAt)}`}
                       type={artifact.type}
                       content={artifact.content}
                       onClick={() => {
-                        // Derived locally on this device: open it in the preview
-                        // panel directly, since we hold the content.
                         if (artifact.local) {
                           setSelectedArtifact(artifact.local);
                           return;
                         }
-                        // Index-only: the content lives in the message that
-                        // produced it, so send the user there. Rendering the
-                        // conversation re-derives the artifact under this same
-                        // id and the panel opens on it.
                         if (artifact.conversationId) {
                           router.push(`/chat/${artifact.conversationId}`);
                         }

@@ -10,6 +10,7 @@ import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@shared/utils/api-error';
 import { buildLoginUrl, buildSignupUrl, type AuthRouteContext } from '@/features/auth/authRoutes';
 import {
   DeviceAuthorizationLookupResponseSchema,
@@ -22,17 +23,6 @@ function formatUserCode(value: string): string {
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, 8);
   return clean.length > 4 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : clean;
-}
-
-function getErrorMessage(body: unknown, fallback: string): string {
-  if (!body || typeof body !== 'object') return fallback;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
 }
 
 function getTermsAcceptanceUrl(body: unknown): string | null {
@@ -106,7 +96,7 @@ function DeviceForm() {
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as unknown;
         if (!response.ok)
-          throw new Error(getErrorMessage(body, i18n.t('auth:device.approvalFailed')));
+          throw new Error(apiErrorMessage(body, i18n.t('auth:device.approvalFailed')));
         const parsed = parseDeviceAuthorizationDetails(body);
         if (!parsed || parsed.user_code !== code) {
           throw new Error(i18n.t('auth:device.unverifiedRequest'));
@@ -165,7 +155,7 @@ function DeviceForm() {
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         setTermsReviewHref(getTermsAcceptanceUrl(body));
-        throw new Error(getErrorMessage(body, t('auth:device.approvalFailed')));
+        throw new Error(apiErrorMessage(body, t('auth:device.approvalFailed')));
       }
       setApproved(true);
     } catch (err) {

@@ -16,15 +16,8 @@ export const metadata: Metadata = {
 };
 
 /**
- * Deliberately NOT under /admin. That tree is the enterprise console, whose
- * layout admits any organisation owner or admin, a customer's own role. This
- * page reads every account and can reset another user's usage, so it sits on
- * its own route with its own allowlist. Nesting it under /admin would also have
- * bounced a platform operator who holds no organisation role, which is the
- * normal case for whoever runs the platform.
- *
- * The API behind it checks the same allowlist again: a page that renders is not
- * authorisation, only the route is.
+ * Not under /admin, whose layout admits any organisation owner or admin. The API
+ * checks the same allowlist again: rendering this page is not authorisation.
  */
 export default async function AdminDashboardPage() {
   const { subject: userId } = await getRequestIdentity();

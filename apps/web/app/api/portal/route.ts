@@ -23,6 +23,7 @@ import {
   waitlistAccessRequiredResponse,
 } from '@/lib/server/billing-waitlist-access';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
+import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 
 if (!process.env['STRIPE_SECRET_KEY']) {
   logger.warn(
@@ -33,70 +34,6 @@ if (!process.env['STRIPE_SECRET_KEY']) {
 const stripe = getStripeClientOrNull();
 
 const PORTAL_SCOPE = { resolveOrganization: false } as const;
-
-function getValidatedOrigin(request: Request): string {
-  const allowedOriginsEnv =
-    process.env['ALLOWED_ORIGINS'] || process.env['NEXT_PUBLIC_APP_URL'] || '';
-  const allowedOrigins = allowedOriginsEnv
-    .split(',')
-    .map((origin) => origin.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (process.env.NODE_ENV === 'development') {
-    allowedOrigins.push('http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000');
-  }
-
-  const headerOrigin = request.headers.get('origin')?.toLowerCase();
-
-  if (headerOrigin && allowedOrigins.includes(headerOrigin)) {
-    return headerOrigin;
-  }
-
-  const requestUrl = new URL(request.url);
-  const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`.toLowerCase();
-
-  if (allowedOrigins.includes(requestOrigin)) {
-    return requestOrigin;
-  }
-
-  const fallbackOrigin = allowedOrigins[0];
-
-  if (!fallbackOrigin) {
-    logger.error(
-      { headerOrigin, requestOrigin },
-      'No valid origin found and no allowed origins configured',
-    );
-    throw createError.validation('Invalid origin - no allowed origins configured');
-  }
-
-  try {
-    const fallbackUrl = new URL(fallbackOrigin);
-    const isLocalhost =
-      fallbackUrl.hostname === 'localhost' || fallbackUrl.hostname === '127.0.0.1';
-    if (fallbackUrl.protocol !== 'https:' && !isLocalhost) {
-      logger.error({ fallbackOrigin }, 'Fallback origin must use HTTPS (except localhost)');
-      throw createError.validation('Invalid fallback origin - must use HTTPS');
-    }
-  } catch (urlError) {
-    if (urlError instanceof Error && urlError.message.includes('Invalid')) {
-      throw urlError;
-    }
-    logger.error({ fallbackOrigin, error: urlError }, 'Fallback origin is not a valid URL');
-    throw createError.validation('Invalid fallback origin');
-  }
-
-  logger.warn(
-    {
-      headerOrigin,
-      requestOrigin,
-      allowedOrigins: allowedOrigins.length,
-      fallbackOrigin,
-    },
-    'Origin not in whitelist, using fallback',
-  );
-
-  return fallbackOrigin;
-}
 
 /**
  * Same-origin relative paths only.
@@ -346,7 +283,7 @@ async function handlePortal(request: NextRequest) {
         return waitlistAccessRequiredResponse();
       }
 
-      const origin = getValidatedOrigin(request);
+      const origin = resolveCheckoutReturnOrigin(request);
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: `${origin}${returnPath}`,
@@ -444,7 +381,7 @@ async function handlePortal(request: NextRequest) {
     );
   }
 
-  const origin = getValidatedOrigin(request);
+  const origin = resolveCheckoutReturnOrigin(request);
 
   try {
     let session;

@@ -183,10 +183,6 @@ export default function ProjectsPage() {
               alignItems: 'flex-start',
               justifyContent: 'space-between',
               gap: 'var(--space-4)',
-              // Without wrapping, the 177px sort control held its width against
-              // a 320px screen and squeezed the introduction into a 109px
-              // column 304px tall - one and two words per line - while its own
-              // right edge still fell outside the viewport.
               flexWrap: 'wrap',
             }}
           >
@@ -278,11 +274,6 @@ export default function ProjectsPage() {
               </button>
             )}
 
-            {/* Sort menu · the shared DropdownMenu owns Escape, arrow-key
-                roving, focus return and viewport collision. The hand-rolled
-                version it replaces had none of those, and styled its hover
-                state by mutating inline styles, so a keyboard user saw no
-                highlight at all. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -323,17 +314,6 @@ export default function ProjectsPage() {
             </DropdownMenu>
           </div>
 
-          {/*
-            Transparent, not a tinted slab.
-
-            This section painted `--agi-bg-3`, the marketing palette's warm
-            parchment (#ebe2d1 light / #1b1810 dark), across a 480px-tall
-            panel, with one small white project card floating inside it. Every
-            other in-app surface (Library, Schedules, Chat) renders cards
-            directly on the page background, so Projects read as a different,
-            half-finished product the moment you navigated to it. The panel is
-            now a plain layout container; the CARDS are the surfaces.
-          */}
           <section
             style={{
               padding: 'var(--space-1) 0 0',
@@ -428,7 +408,6 @@ export default function ProjectsPage() {
                             fontSize: 12,
                             color: 'var(--agi-ink-2)',
                             margin: 0,
-                            opacity: 0.7,
                           }}
                         >
                           Group conversations, attach files, and share instructions.
@@ -458,11 +437,6 @@ export default function ProjectsPage() {
                   <div
                     style={{
                       display: 'grid',
-                      // `min(260px, 100%)` keeps the 260px preferred column on
-                      // wide viewports but lets it shrink to fit rather than
-                      // forcing a horizontal scrollbar: a 320px phone has only
-                      // 256px of content width inside this page's 32px side
-                      // padding, 4px short of a bare 260px floor.
                       gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
                       gap: 'var(--space-3)',
                     }}

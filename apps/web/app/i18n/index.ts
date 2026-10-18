@@ -37,10 +37,7 @@ function readLanguageCache(): string | null {
   }
 }
 
-// Read before init(). init() with an explicit `lng` fires languageChanged, and
-// the detector caches that, overwriting the choice this device had stored: the
-// display language did not survive a reload until the bootstrap below put the
-// captured value back.
+// Read before init(): init() with an explicit `lng` makes the detector overwrite the stored choice.
 const cachedLanguageAtLoad = readLanguageCache();
 
 i18n

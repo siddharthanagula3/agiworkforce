@@ -134,15 +134,9 @@ export default async function RootLayout({
     >
       <body className="antialiased">
         {/*
-         * No explicit <head> element here on purpose. The App Router owns the
-         * document head, and a literal <head> in the root layout made the
-         * server stream its children into the BODY instead, landing on top of
-         * SkipLinks and failing hydration for the whole tree on every page.
-         *
-         * First child of <body> so it still executes before any page content is
-         * parsed, which is what keeps the first paint from using the wrong
-         * theme. Inline and blocking on purpose: an external or async script
-         * paints first and flips after.
+         * No literal <head>: the App Router owns it, and one here streams into
+         * <body> and breaks hydration. The theme script stays the first, inline,
+         * blocking child of <body> so the first paint uses the right theme.
          */}
         {/* THEME_INIT_SCRIPT is a build-time constant with no interpolation and no
             request-derived input, and a <script> body cannot be text-rendered.

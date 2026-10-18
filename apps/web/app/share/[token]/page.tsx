@@ -20,16 +20,7 @@ interface Props {
 
 export const runtime = 'nodejs';
 
-/**
- * Two audiences, in the order that leaks the least.
- *
- * The anonymous lookup answers only for rows still marked `public`, so a
- * workspace-only conversation never reaches this page through the token alone.
- * It then falls through to the signed-in read, where 0186's RLS policy, not
- * this function, decides whether the viewer's organization holds a grant. A
- * signed-out visitor gets `null` from that second call and the same 404 as a
- * revoked link.
- */
+/** Public rows first; workspace-only rows are left to the RLS-scoped read. */
 async function readSessionForViewer(
   token: string,
 ): Promise<{ session: OrgReadableSession; sharedBy: string | null } | null> {

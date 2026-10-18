@@ -43,96 +43,9 @@ export const metadata = buildMetadata({
   path: '/privacy',
 });
 
-/*
- * PRIVACY POLICY
- *
- * CLAIMS REMOVED HERE, DO NOT RESTORE WITHOUT THE IMPLEMENTATION:
- *
- *  - "RLS-enforced; only you can read your rows" as an absolute. Database RLS is
- *    defined and forced on user-scoped tables, but it only bites where the
- *    request identity is bound per connection, the user-scoped sync paths.
- *    Migration db/neon/0037_rls_user_isolation.sql states this caveat itself.
- *    The honest claim is two layers, and that is what section 01 now says.
- *  - "Google Tag Manager" and "IP-anonymized". No GTM container is loaded, the
- *    analytics component loads gtag.js directly, and the gtag config sets no
- *    IP-anonymisation option.
- *  - "anonymous ... via Sentry". Error reports retain a stable user id by design.
- *  - "Server logs: 30 days ... up to 180 days" and "Backups: encrypted, 30-day
- *    rolling; deletion propagates to backups within the same window". Nothing in
- *    this repository sets, enforces, or tests any of those numbers, and no code
- *    touches a backup during erasure. Vendor-governed windows are now described
- *    as vendor-governed.
- *  - "Org-level retention windows on Enterprise". CORRECTED 2026-09-12: this
- *    removal is no longer right, and the retention row that repeated it was
- *    denying a job that runs. `lib/services/retention-service.ts`
- *    `sweepOrganizationRetention()` deletes `web_conversations` past an
- *    organisation's `retention_days` once an owner sets `retention_enforced`
- *    in Settings, and `/api/cron/enforce-workspace-retention` is scheduled
- *    nightly in vercel.json. Section 05 now discloses it. Do not restore a
- *    denial: app/__tests__/legal-surface-claims.test.ts requires the
- *    disclosure and app/__tests__/legal-policy-set.test.ts bans the sentence
- *    that denied it.
- *  - "Material changes are announced via email". CORRECTED 2026-08-14: the
- *    original reason given here, "there is no transactional email provider in
- *    this repository", was FALSE. lib/support/handoff/resend-client.ts calls
- *    the Resend HTTP API over plain `fetch`, so no dependency grep could find
- *    it, and /subprocessors delisted the provider on that same bad reasoning
- *    while support transcripts were being emailed through it. The claim still
- *    cannot be made, for the narrower true reason: no mailing path here can
- *    reach an arbitrary list of customers. Say that, never the old sentence,
- *    a guard in app/__tests__/legal-policy-set.test.ts enforces it.
- *
- * CLAIM ADDED: billing-record retention (BIZ-046). The retention schedule had a
- * row for the account and none for the money. Erasure deletes `subscriptions`,
- * `credit_transactions`, `token_credits` and `usage_events`
- * (lib/server/account-erasure.ts USER_SCOPED_TABLES; the immediate
- * `delete_user_data()` path in db/neon/0020_functions.sql deletes the first
- * three), while `organization_usage_ledger.user_id` is nulled and the row kept
- * (ANONYMIZED_USER_COLUMNS), and `credit_idempotency_keys` /
- * `credit_settlement_jobs` are kept by BOTH paths (UNDELETED_USER_TABLES). None
- * of that was disclosed. The row says so.
- *
- * CLAIM ADDED 2026-08-17: maximum age on billing rows (BILL-35). The earlier
- * version of this row said no job ages billing rows out, which was true then.
- * `lib/billing/financial-record-retention.ts` is now the schedule and
- * `/api/cron/enforce-billing-retention` runs it daily from vercel.json. Every
- * window quoted in the row below is either read from that module or matches one
- * of its rules; the two tables it deliberately leaves ageless
- * (FINANCIAL_TABLES_WITHOUT_MAXIMUM_AGE) are named in the row as ageless. If a
- * rule changes, change the row, a guard in
- * __tests__/billing-record-retention-disclosure.test.ts fails otherwise.
- *
- * CLAIM CORRECTED 2026-08-17: audit-log immutability (DOCS-17). The row on what
- * survives erasure said the application role "is blocked from writing to" both
- * audit trails. That is false for `security_audit_logs`: app_rls holds INSERT
- * and SELECT, writing the entry is its job, and only UPDATE and DELETE were
- * revoked (db/neon/0043_audit_log_immutability.sql, backstopped by the
- * non-owner trigger in 0123). It is true only of `enterprise_audit_events`,
- * where 0087 revokes INSERT too and writes go through
- * record_enterprise_audit_event(). The row now states the two grants
- * separately; __tests__/audit-log-immutability-disclosure.test.ts derives the
- * privileges from the migrations and fails if the prose drifts from them.
- *
- * CLAIM CORRECTED: object storage. For uploads and generated files, clients
- * receive only the same-origin `/api/files/{mediaAssetId}` address from
- * `authenticatedMediaUrl()`. That route authenticates the caller, resolves the
- * active workspace, filters the catalog row by owner + workspace +
- * `deleted_at`, and returns `private, no-store`. Every new upload and generated
- * file, video or not, is written to the private bucket. The only public-bucket
- * writer is the avatar branch of `/api/uploads/presign`, which hands back the
- * public address that `/api/me` and the team roster then return; `putObject()`
- * has no caller. Public-bucket reads remain as a fallback for objects stored
- * before the private-bucket move, so those can still be public. Do not collapse
- * this into either absolute: __tests__/security/object-storage-exposure.test.ts
- * proves the avatar-only writer, and nothing in this repository proves what
- * the public bucket still holds.
- */
+/** Source tests pin these claims to the code; change a claim and its test together. */
 
-/**
- * Section list for the contents block. Must stay identical to the rendered
- * eyebrows, they are one piece of copy, not two, and drift makes the contents
- * describe a document that is not there.
- */
+/** Must match the rendered section eyebrows exactly. */
 const SECTIONS = [
   { label: 'Definitions', id: 's-definitions' },
   '00 · The mode decides the answer',

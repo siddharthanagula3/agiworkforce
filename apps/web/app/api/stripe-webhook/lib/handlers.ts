@@ -18,22 +18,19 @@ import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
 import { handleReferralChargeReversal, handleReferralInvoicePaid } from './referral-events';
 import { handleChargeRefunded } from './refund-events';
 import { recordWithdrawalConsent } from './withdrawal-consent-events';
+import { stripeIdOf } from './stripe-ref';
 import {
   endEnterpriseContractIfPresent,
   recordEnterpriseInvoiceEvent,
   syncEnterpriseContractFromSubscription,
 } from '@/lib/services/enterprise-billing-service';
 
-function getCustomerId(customer: Stripe.PaymentIntent['customer']): string | null {
-  if (typeof customer === 'string') return customer;
-  return customer?.id ?? null;
-}
-
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const current = invoice.parent?.subscription_details?.subscription;
-  if (typeof current === 'string') return current;
-  if (current?.id) return current.id;
-  return (invoice as unknown as { subscription?: string | null }).subscription ?? null;
+  return (
+    stripeIdOf(invoice.parent?.subscription_details?.subscription) ??
+    (invoice as unknown as { subscription?: string | null }).subscription ??
+    null
+  );
 }
 
 async function notifyInvoicePaymentFailed(
@@ -259,7 +256,7 @@ export async function dispatchStripeEvent(
       logger.info(
         {
           paymentIntentId: paymentIntent.id,
-          customerId: getCustomerId(paymentIntent.customer),
+          customerId: stripeIdOf(paymentIntent.customer),
           approvalRequested: preDebitWindow.approvalRequested,
           completesAt: preDebitWindow.completesAt,
         },
@@ -272,7 +269,7 @@ export async function dispatchStripeEvent(
       const mandateCode = readUnrecoverableMandateCode(paymentIntent.last_payment_error);
       if (!mandateCode) break;
 
-      const stripeCustomerId = getCustomerId(paymentIntent.customer);
+      const stripeCustomerId = stripeIdOf(paymentIntent.customer);
       logger.error(
         { paymentIntentId: paymentIntent.id, stripeCustomerId, mandateCode },
         'India e-mandate is no longer chargeable; Stripe retries cannot succeed until the customer authorizes a new mandate through a fresh subscription',
@@ -330,7 +327,7 @@ export async function dispatchStripeEvent(
       const chargeId = typeof warning.charge === 'string' ? warning.charge : warning.charge.id;
 
       const charge = await stripe.charges.retrieve(chargeId);
-      const stripeCustomerId = getCustomerId(charge.customer);
+      const stripeCustomerId = stripeIdOf(charge.customer);
 
       const profiles = stripeCustomerId
         ? await db.query<{ id: string; email: string | null }>(

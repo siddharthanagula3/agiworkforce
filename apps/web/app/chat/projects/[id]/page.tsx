@@ -56,14 +56,9 @@ const TAB_LABEL: Record<Tab, string> = {
   scheduled: 'Scheduled',
 };
 
-const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
-  'emerald',
-  'sky',
-  'amber',
-  'rose',
-  'violet',
-  'zinc',
-]);
+const VALID_ACCENT_COLORS: ReadonlySet<string> = new Set(
+  PROJECT_ACCENT_REGISTRY.map((accent) => accent.id),
+);
 
 const ACCENT_HEX_STOPS = PROJECT_ACCENT_REGISTRY.map((accent) => accent.hex);
 const CUSTOM_SWATCH_GRADIENT = `conic-gradient(from 0deg, ${[
@@ -73,9 +68,7 @@ const CUSTOM_SWATCH_GRADIENT = `conic-gradient(from 0deg, ${[
 
 function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
   if (!value) return null;
-  return VALID_ACCENT_COLORS.has(value as ProjectAccentColor)
-    ? (value as ProjectAccentColor)
-    : null;
+  return VALID_ACCENT_COLORS.has(value) ? (value as ProjectAccentColor) : null;
 }
 
 function formatChatDate(dateStr: string | undefined | null): string {
@@ -165,9 +158,6 @@ export default function ProjectDetailPage() {
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  // The identical menu on the projects LIST page closes on Escape and moves
-  // focus with the arrows through this hook; this one had outside-mousedown
-  // only, so the same control behaved differently on the two surfaces.
   useMenuKeyboard({
     open: menuOpen,
     onClose: closeMenu,
@@ -247,15 +237,9 @@ export default function ProjectDetailPage() {
           attachments,
           skillId,
           meta: {
-            // `workMode` comes from the composer, which already downgrades it to
-            // 'chat' for anyone without the AGI Work entitlement
-            // (`ChatComposerNew`: `workMode: canUseAgiWork ? workMode : 'chat'`).
-            // Projects are available on every plan but AGI Work is not, so
-            // forcing 'agiwork' here would 403 a free user's first project send.
-            //
-            // `projectId` IS still forced: the send happens on this project's
-            // page, so the project scope is a property of where the user is, not
-            // a composer preference.
+            // The composer already downgrades `workMode` for a plan without AGI
+            // Work, so it is passed through; the project scope is where the user
+            // is, so `projectId` is always this project.
             ...(meta ?? { workMode: 'chat', projectId: project.id }),
             projectId: project.id,
           },

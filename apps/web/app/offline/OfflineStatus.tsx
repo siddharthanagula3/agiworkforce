@@ -6,12 +6,6 @@ import { ButtonRow, Prose } from '@/features/marketing/components/system';
 
 const centeredStackStyle: CSSProperties = { alignItems: 'center' };
 
-/**
- * Reports the live connection state rather than a static "you are offline",
- * because by the time someone reads this page the network has often already
- * come back, and a stale message sends them looking for a fault that is no
- * longer there.
- */
 export function OfflineHeading() {
   const online = useOnlineStatus();
 

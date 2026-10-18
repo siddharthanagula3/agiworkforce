@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
-import { apiErrorMessage } from '@/features/billing/lib/api-error';
+import { apiErrorMessage } from '@shared/utils/api-error';
 
 interface TrialSummary {
   plan: string;

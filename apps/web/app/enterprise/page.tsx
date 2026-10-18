@@ -21,12 +21,7 @@ export const metadata = buildMetadata({
   path: '/enterprise',
 });
 
-/**
- * When the enterprise control and compliance rows below were last reviewed
- * against the codebase. Rendered on the page, an undated "honest as of today"
- * is the same defect /trust was rewritten to remove (it promised "claims with
- * dates" and rendered none). Change this when you change a row.
- */
+/** When the control rows were last checked against the code. Change it with any row. */
 const STATUS_AS_OF = '5 September 2026';
 
 /**
@@ -86,22 +81,10 @@ export default function EnterprisePage() {
         />
 
         {/*
-          Every control row below must match shipped code, in both directions:
-          never name a control we do not offer, and never call a shipped,
-          entitlement-gated control "roadmap". There is NO data-region-pinning
-          mechanism, so those rows stay cut. SSO/OIDC, SCIM directory sync, org
-          audit read + JSONL export, audit streaming, and per-workspace
-          retention are live, gated on the `enterprise_controls` /
-          `audit_export` capabilities. Retention enforcement is opt-in per
-          workspace and fails closed, so do not restore "you set them" phrasing
-          that implied it is unconditional; on a plan carrying
-          `enterprise_controls` the window is a contractual commitment and the
-          workspace console reports it as required and not yet enforced
-          (lib/server/retention/enforcement.ts), which is not the same as
-          deleting against it. The four-hour first response is a current
-          support commitment and nothing measures attainment; the uptime
-          numbers are PLANNED targets on /sla. Defer to /sla rather than
-          restating either. Re-verify each row against the code before editing.
+          Every control row must match shipped code in both directions. There is
+          no data-region pinning. Retention enforcement is opt-in per workspace
+          (lib/server/retention/enforcement.ts), so never describe it as
+          unconditional. Response and uptime figures belong to /sla.
         */}
         <Section id="contract-coverage" labelledBy="agi-enterprise-contract-title" rule>
           <Stack gap="loose">

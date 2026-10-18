@@ -6,11 +6,7 @@ import {
 } from '@/lib/billing/withdrawal-consent';
 import { logger } from '@/lib/logger';
 import type { Stripe } from '@/lib/stripe-types';
-
-function referenceOf(value: string | { id: string } | null | undefined): string | null {
-  if (!value) return null;
-  return typeof value === 'string' ? value : value.id;
-}
+import { stripeIdOf } from './stripe-ref';
 
 export async function recordWithdrawalConsent(
   stripe: Stripe,
@@ -24,8 +20,8 @@ export async function recordWithdrawalConsent(
     [WITHDRAWAL_CONSENT_VERSION_KEY]: version,
     [WITHDRAWAL_CONSENT_AT_KEY]: new Date(acceptedAtSeconds * 1000).toISOString(),
   };
-  const subscriptionId = referenceOf(session.subscription);
-  const paymentIntentId = referenceOf(session.payment_intent);
+  const subscriptionId = stripeIdOf(session.subscription);
+  const paymentIntentId = stripeIdOf(session.payment_intent);
   try {
     if (session.mode === 'subscription' && subscriptionId) {
       await stripe.subscriptions.update(subscriptionId, { metadata });

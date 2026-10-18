@@ -35,11 +35,11 @@ import {
   resolveSessionShareTarget,
   setSharedSessionVisibility,
   SHARE_IN_OTHER_WORKSPACE_MESSAGE,
+  SHARE_TOKEN_REGEX,
   shareSessionWithOrganization,
   unshareSessionFromOrganization,
 } from '@/lib/services/org-shared-session-service';
 
-const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
 
 function sharingUnavailableResponse(): NextResponse {
@@ -55,13 +55,7 @@ function sharingUnavailableResponse(): NextResponse {
 
 type RouteContext = { params: Promise<{ token: string }> };
 
-/**
- * Two audiences, in the order that leaks the least. The anonymous lookup
- * answers only for rows still marked `public`, so a workspace-only
- * conversation never serves on its token alone; it then falls through to the
- * signed-in read, where 0186's RLS policy decides whether the caller's
- * organization holds a grant.
- */
+/** Public rows first; workspace-only rows are left to the RLS-scoped read. */
 async function readSessionForCaller(token: string) {
   const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token).catch(() => null);
   if (publiclyVisible) return publiclyVisible;
@@ -74,7 +68,7 @@ async function readSessionForCaller(token: string) {
 async function handleGetShare(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
 
-  if (!TOKEN_REGEX.test(token)) {
+  if (!SHARE_TOKEN_REGEX.test(token)) {
     throw createError.notFound('Invalid token');
   }
 
@@ -118,7 +112,7 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
 async function handleDeleteShare(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
 
-  if (!TOKEN_REGEX.test(token)) {
+  if (!SHARE_TOKEN_REGEX.test(token)) {
     throw createError.notFound('Invalid token');
   }
 
@@ -186,7 +180,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
 async function handleSetVisibility(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
 
-  if (!TOKEN_REGEX.test(token)) {
+  if (!SHARE_TOKEN_REGEX.test(token)) {
     throw createError.notFound('Shared session not found');
   }
 

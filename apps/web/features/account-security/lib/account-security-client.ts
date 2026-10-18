@@ -39,6 +39,7 @@ import {
 import { DESKTOP_DEEP_LINK_SCHEME } from '@agiworkforce/local-runtime-contract';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 
 export type StepUpRunner = (
   send: (headers: Record<string, string>) => Promise<Response>,
@@ -57,10 +58,7 @@ export class AccountSecurityRequestError extends Error {
 }
 
 async function failure(response: Response, fallback: string): Promise<AccountSecurityRequestError> {
-  const body = (await response.json().catch(() => null)) as {
-    error?: { message?: unknown };
-  } | null;
-  const message = typeof body?.error?.message === 'string' ? body.error.message : fallback;
+  const message = apiErrorMessage(await response.json().catch(() => null), fallback);
   return new AccountSecurityRequestError(message, response.status);
 }
 

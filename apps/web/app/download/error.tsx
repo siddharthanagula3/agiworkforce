@@ -36,11 +36,8 @@ export default function DownloadError({
       )}
 
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        {/* `.agi-fl-cta*` only resolves under a `[data-design="agi"]` ancestor.
-            download/page.tsx sets that on its own root, but an error boundary
-            replaces that entire tree, so the class rendered these as bare
-            unstyled text. Plain semantic tokens match loading.tsx, the sibling
-            boundary for this same route, which already avoids the same trap. */}
+        {/* The boundary replaces the page's `[data-design="agi"]` root, so the
+            `.agi-*` classes do not resolve here; plain semantic tokens do. */}
         <button
           type="button"
           onClick={reset}

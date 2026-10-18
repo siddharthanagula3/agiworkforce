@@ -21,13 +21,12 @@ import {
   updateTrigger,
   type TriggerUpdateInput,
 } from '@/lib/triggers/trigger-service';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 function triggerIdFrom(value: string): string {
-  if (!UUID_RE.test(value)) throw createError.validation('triggerId must be a uuid');
+  if (!isUuid(value)) throw createError.validation('triggerId must be a uuid');
   return value;
 }
 

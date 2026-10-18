@@ -3,6 +3,7 @@
 import { MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH } from '@agiworkforce/cloud-contracts';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 
 export const PREFERENCE_NAMESPACE_SAVED_EVENT = 'agi:preference-namespace-saved';
 
@@ -47,11 +48,9 @@ async function requestPreferencesSnapshot(): Promise<Record<string, unknown>> {
     credentials: 'include',
   });
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-      message?: string;
-    };
-    throw new Error(data.error?.message ?? data.message ?? 'Failed to load settings');
+    throw new Error(
+      apiErrorMessage(await response.json().catch(() => null), 'Failed to load settings'),
+    );
   }
   const data = (await response.json()) as {
     settings?: unknown;
@@ -128,11 +127,9 @@ export async function saveDisplayName(displayName: string): Promise<void> {
     body: JSON.stringify({ display_name: displayName }),
   });
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-      message?: string;
-    };
-    throw new Error(data.error?.message ?? data.message ?? 'Failed to save your name');
+    throw new Error(
+      apiErrorMessage(await response.json().catch(() => null), 'Failed to save your name'),
+    );
   }
 }
 
@@ -180,11 +177,10 @@ export async function savePreferenceNamespace<T extends object>(
   });
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
       settings?: unknown;
       version?: unknown;
     };
-    const message = data.error?.message ?? 'Failed to save settings';
+    const message = apiErrorMessage(data, 'Failed to save settings');
     if (response.status === 412) {
       invalidatePreferencesSnapshot();
       throw new PreferenceVersionConflictError({

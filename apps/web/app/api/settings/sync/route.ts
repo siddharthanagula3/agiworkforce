@@ -44,7 +44,7 @@ export function scrubSecrets(value: unknown): unknown {
 /**
  * Project a namespace-keyed settings doc down to the cloud-safe allowlist, then scrub
  * secret-looking keys from the survivors. The only function that decides what crosses
- * the device boundary. Exported for direct unit testing.
+ * the device boundary.
  */
 export function filterCloudSafeSettings(
   settings: Record<string, unknown> | null | undefined,

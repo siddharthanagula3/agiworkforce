@@ -13,6 +13,7 @@ import { recordNotification } from '@/lib/services/notification-service';
 import { REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 import { referralDeviceOrNetworkBlock } from '@/lib/services/referral-service';
 import type { Stripe } from '@/lib/stripe-types';
+import { stripeIdOf } from './stripe-ref';
 
 const DAY_MS = 86_400_000;
 const MAX_LISTED_PAYMENTS = 10;
@@ -34,13 +35,8 @@ interface ReversibleReferral {
   referrer_reward_grant_id: string | null;
 }
 
-function stripeId(value: string | { id: string } | null | undefined): string | null {
-  if (typeof value === 'string') return value;
-  return value?.id ?? null;
-}
-
 function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  return stripeId(invoice.parent?.subscription_details?.subscription ?? null);
+  return stripeIdOf(invoice.parent?.subscription_details?.subscription ?? null);
 }
 
 function formatDate(date: Date): string {
@@ -56,7 +52,7 @@ async function paymentCardFingerprint(
   stripe: Stripe,
   payment: Stripe.InvoicePayment,
 ): Promise<string | null> {
-  const intentId = stripeId(payment.payment.payment_intent ?? null);
+  const intentId = stripeIdOf(payment.payment.payment_intent ?? null);
   if (intentId) {
     const intent = await stripe.paymentIntents.retrieve(intentId, { expand: ['payment_method'] });
     const method = intent.payment_method;
@@ -64,7 +60,7 @@ async function paymentCardFingerprint(
       ? (method.card?.fingerprint ?? null)
       : null;
   }
-  const chargeId = stripeId(payment.payment.charge ?? null);
+  const chargeId = stripeIdOf(payment.payment.charge ?? null);
   if (!chargeId) return null;
   const charge = await stripe.charges.retrieve(chargeId);
   return charge.payment_method_details?.card?.fingerprint ?? null;
@@ -119,7 +115,7 @@ export async function handleReferralInvoicePaid(
   stripe: Stripe,
   invoice: Stripe.Invoice,
 ): Promise<void> {
-  const customerId = stripeId(invoice.customer);
+  const customerId = stripeIdOf(invoice.customer);
   if (
     !invoice.id ||
     invoice.status !== 'paid' ||
@@ -203,8 +199,8 @@ export async function handleReferralChargeReversal(
   charge: Stripe.Charge,
   reason: 'refund' | 'dispute',
 ): Promise<void> {
-  const customerId = stripeId(charge.customer);
-  const paymentIntentId = stripeId(charge.payment_intent);
+  const customerId = stripeIdOf(charge.customer);
+  const paymentIntentId = stripeIdOf(charge.payment_intent);
   if (!customerId || !paymentIntentId) return;
 
   const [referral] = await db.query<ReversibleReferral>(
@@ -226,7 +222,7 @@ export async function handleReferralChargeReversal(
     limit: MAX_LISTED_PAYMENTS,
   });
   const reversesQualifyingInvoice = payments.data.some(
-    (payment) => stripeId(payment.invoice) === referral.qualifying_invoice_id,
+    (payment) => stripeIdOf(payment.invoice) === referral.qualifying_invoice_id,
   );
   if (!reversesQualifyingInvoice) return;
 

@@ -24,6 +24,7 @@ import {
   buildAiGeneratedProvenance,
   type AiGeneratedProvenance,
 } from '@/lib/compliance/ai-act';
+import { isUuid } from '@/lib/uuid';
 
 /**
  * Durable image job status.
@@ -38,8 +39,6 @@ import {
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
-const JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
@@ -51,7 +50,7 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
 
   const jobId = new URL(request.url).searchParams.get('job_id');
   if (!jobId) throw createError.validation('Missing required parameter: job_id');
-  if (!JOB_ID_PATTERN.test(jobId)) throw createError.validation('Invalid job_id');
+  if (!isUuid(jobId)) throw createError.validation('Invalid job_id');
 
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {

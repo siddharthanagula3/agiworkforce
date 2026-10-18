@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import type { Stripe } from '@/lib/stripe-types';
+import { stripeIdOf } from './stripe-ref';
 
 export const STRIPE_PAGE_SIZE = 100;
 const STRIPE_METADATA_VALUE_LIMIT = 500;
@@ -27,18 +28,13 @@ const CollectionSnapshotSchema = z.object({
 type CollectionSnapshot = z.infer<typeof CollectionSnapshotSchema>;
 type StripeRefundTarget = { payment_intent: string } | { charge: string };
 
-function stripeReference(value: string | { id: string } | null | undefined): string | null {
-  if (!value) return null;
-  return typeof value === 'string' ? value : value.id;
-}
-
 function refundTargetOf(payment: Stripe.InvoicePayment.Payment): StripeRefundTarget | null {
   if (payment.type === 'payment_intent') {
-    const paymentIntent = stripeReference(payment.payment_intent);
+    const paymentIntent = stripeIdOf(payment.payment_intent);
     return paymentIntent ? { payment_intent: paymentIntent } : null;
   }
   if (payment.type === 'charge') {
-    const charge = stripeReference(payment.charge);
+    const charge = stripeIdOf(payment.charge);
     return charge ? { charge } : null;
   }
   return null;
@@ -67,7 +63,7 @@ export function duplicateRefundAmount(
       return (
         !Number.isSafeInteger(refund.amount) ||
         refund.amount <= 0 ||
-        stripeReference(refund.charge) !== charge.id
+        stripeIdOf(refund.charge) !== charge.id
       );
     })
   ) {
@@ -116,7 +112,7 @@ async function refundDuplicateSubscriptionInvoice(
   stripe: Stripe,
   subscription: Stripe.Subscription,
 ): Promise<number> {
-  const invoiceId = stripeReference(subscription.latest_invoice);
+  const invoiceId = stripeIdOf(subscription.latest_invoice);
   if (!invoiceId) return 0;
   const payments = await stripe.invoicePayments.list({
     invoice: invoiceId,
@@ -225,8 +221,8 @@ async function captureCollectionSnapshot(
   incoming: Stripe.Subscription,
   kept: Stripe.Subscription,
 ): Promise<CollectionSnapshot> {
-  const customer = stripeReference(incoming.customer);
-  if (!customer || customer !== stripeReference(kept.customer))
+  const customer = stripeIdOf(incoming.customer);
+  if (!customer || customer !== stripeIdOf(kept.customer))
     throw new Error('Duplicate and kept subscriptions have different customers');
   const invoices = await stripe.invoices.list({
     customer,
@@ -237,11 +233,9 @@ async function captureCollectionSnapshot(
   if (
     invoices.data.some(
       (invoice) =>
-        stripeReference(invoice.customer) !== customer ||
-        (stripeReference(invoice.parent?.subscription_details?.subscription) !== null &&
-          !isStripeSubscriptionId(
-            stripeReference(invoice.parent?.subscription_details?.subscription),
-          )),
+        stripeIdOf(invoice.customer) !== customer ||
+        (stripeIdOf(invoice.parent?.subscription_details?.subscription) !== null &&
+          !isStripeSubscriptionId(stripeIdOf(invoice.parent?.subscription_details?.subscription))),
     )
   ) {
     throw new Error('Kept invoice does not belong to the tracked subscription and customer');
@@ -253,12 +247,12 @@ async function captureCollectionSnapshot(
       .filter(
         (invoice) =>
           invoice.auto_advance === true &&
-          stripeReference(invoice.parent?.subscription_details?.subscription) !== incoming.id &&
-          invoice.id !== stripeReference(incoming.latest_invoice),
+          stripeIdOf(invoice.parent?.subscription_details?.subscription) !== incoming.id &&
+          invoice.id !== stripeIdOf(incoming.latest_invoice),
       )
       .map((invoice) => ({
         id: invoice.id,
-        subscription: stripeReference(invoice.parent?.subscription_details?.subscription),
+        subscription: stripeIdOf(invoice.parent?.subscription_details?.subscription),
       })),
     refunds: 0,
     complete: false,
@@ -281,7 +275,7 @@ async function restoreCollectionSnapshot(
   incoming: Stripe.Subscription,
   snapshot: CollectionSnapshot,
 ): Promise<void> {
-  if (snapshot.customer !== stripeReference(incoming.customer))
+  if (snapshot.customer !== stripeIdOf(incoming.customer))
     throw new Error('Collection snapshot belongs to a different customer');
   const live = new Map<string, boolean>();
   for (const recorded of snapshot.invoices) {
@@ -289,8 +283,8 @@ async function restoreCollectionSnapshot(
       throw new Error('Collection snapshot includes the duplicate subscription');
     const invoice = await stripe.invoices.retrieve(recorded.id);
     if (
-      stripeReference(invoice.customer) !== snapshot.customer ||
-      stripeReference(invoice.parent?.subscription_details?.subscription) !== recorded.subscription
+      stripeIdOf(invoice.customer) !== snapshot.customer ||
+      stripeIdOf(invoice.parent?.subscription_details?.subscription) !== recorded.subscription
     ) {
       throw new Error('Invoice does not belong to its recorded customer and subscription');
     }
@@ -298,7 +292,7 @@ async function restoreCollectionSnapshot(
     if (hasCollectionRestoreReceipt(invoice, receipt)) continue;
     if (recorded.subscription !== null && !live.has(recorded.subscription)) {
       const subscription = await stripe.subscriptions.retrieve(recorded.subscription);
-      if (stripeReference(subscription.customer) !== snapshot.customer)
+      if (stripeIdOf(subscription.customer) !== snapshot.customer)
         throw new Error('Invoice subscription belongs to a different customer');
       live.set(
         recorded.subscription,

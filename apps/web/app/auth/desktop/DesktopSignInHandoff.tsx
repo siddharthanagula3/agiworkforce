@@ -12,6 +12,7 @@ import { AUTH_ERROR_CLASS, AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/aut
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSession } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@shared/utils/api-error';
 
 const GRANT_PATH = '/api/auth/desktop/grant';
 const HEADING = 'Return to AGI Cloud';
@@ -28,17 +29,6 @@ type HandoffState = { kind: 'preparing' } | { kind: 'ready' } | { kind: 'failed'
 
 type GrantResult = { kind: 'granted'; code: string } | { kind: 'passkey_required' };
 
-function readErrorMessage(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return null;
-}
-
 async function requestGrant(challenge: string): Promise<GrantResult> {
   const response = await fetch(GRANT_PATH, {
     method: 'POST',
@@ -50,7 +40,7 @@ async function requestGrant(challenge: string): Promise<GrantResult> {
   if (response.status === 403 && readPasskeyRequired(body)) return { kind: 'passkey_required' };
   const code = body && typeof body === 'object' ? (body as { code?: unknown }).code : undefined;
   if (!response.ok || typeof code !== 'string') {
-    throw new Error(readErrorMessage(body) ?? GRANT_FAILED);
+    throw new Error(apiErrorMessage(body, GRANT_FAILED));
   }
   return { kind: 'granted', code };
 }

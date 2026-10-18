@@ -10,6 +10,7 @@ import { logger } from '@shared/lib/logger';
 import { PRODUCT_HOME_PATH } from '@/features/desktop-host/lib/deep-links';
 import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';
 import { useFriendlyErrorCopy } from '@/shared/hooks/use-friendly-error-copy';
+import { LEGAL_ENTITY } from '@/lib/legal-constants';
 
 const SIGN_IN_HREF = '/login';
 
@@ -104,7 +105,7 @@ export default function Error({
         <div className="container mx-auto px-4 flex flex-col items-center gap-4">
           <AgiMark size={20} mono className="text-muted-foreground" />
           <div className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} AGI Automation LLC. All rights reserved.
+            &copy; {new Date().getFullYear()} {LEGAL_ENTITY}. All rights reserved.
           </div>
         </div>
       </footer>

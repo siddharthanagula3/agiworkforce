@@ -7,6 +7,7 @@ import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSession } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import {
   BILLING_ERROR_REASONS,
   REFUND_REQUEST_REASONS,
@@ -195,7 +196,7 @@ function AccountRefundRequestForm() {
           const body = await response.json().catch(() => null);
           if (!mounted.current) return;
           if (!response.ok) {
-            throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+            throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
           }
           setResult((body as { request: RefundRequestView }).request);
           setSelectedCharge('');

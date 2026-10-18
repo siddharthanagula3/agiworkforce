@@ -25,7 +25,7 @@ export default function PricingError({
         <AlertTriangle aria-hidden="true" className="h-10 w-10 text-danger" />
       </div>
 
-      <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Pricing</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-3">Unable to load pricing</h1>
       <p className="text-muted-foreground max-w-sm mx-auto mb-2">
         We could not load the pricing information. Please try again or check back shortly.
       </p>
@@ -41,21 +41,24 @@ export default function PricingError({
           className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <RefreshCw aria-hidden="true" className="h-4 w-4 me-2" />
-          Try Again
+          Try again
         </button>
         <Link
           href="/"
           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-muted transition-colors text-foreground"
         >
           <Home aria-hidden="true" className="h-4 w-4 me-2" />
-          Go Home
+          Go home
         </Link>
       </div>
 
       <div className="mt-12 pt-6 border-t border-border w-full max-w-sm">
         <p className="text-muted-foreground text-sm">
           If this problem persists,{' '}
-          <Link href="/contact" className="text-primary hover:opacity-80">
+          <Link
+            href="/contact"
+            className="text-foreground underline underline-offset-4 hover:no-underline"
+          >
             contact our support team
           </Link>
         </p>

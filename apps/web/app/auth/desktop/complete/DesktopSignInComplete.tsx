@@ -11,6 +11,7 @@ import {
   AUTH_STEP_LINKS_CLASS,
 } from '@/features/auth/authStyles';
 import { useIdentityTicketSignIn } from '@/features/auth/identityAuthAdapter';
+import { apiErrorMessage } from '@shared/utils/api-error';
 
 const REDEEM_PATH = '/api/auth/desktop/redeem';
 const SIGNING_IN = 'Signing you in';
@@ -33,17 +34,6 @@ function takeGrantFromLocation(): SignInGrant | null {
   return code && verifier ? { code, verifier } : null;
 }
 
-function readErrorMessage(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return null;
-}
-
 async function redeemGrant(grant: SignInGrant): Promise<string> {
   const response = await fetch(REDEEM_PATH, {
     method: 'POST',
@@ -55,7 +45,7 @@ async function redeemGrant(grant: SignInGrant): Promise<string> {
   const ticket =
     body && typeof body === 'object' ? (body as { ticket?: unknown }).ticket : undefined;
   if (!response.ok || typeof ticket !== 'string') {
-    throw new Error(readErrorMessage(body) ?? REDEEM_FAILED);
+    throw new Error(apiErrorMessage(body, REDEEM_FAILED));
   }
   return ticket;
 }

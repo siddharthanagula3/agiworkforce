@@ -164,8 +164,6 @@ const USAGE_WITHOUT_BASELINE_KEY: Partial<Record<ComparedPlan, string>> = {
   free: 'compareFreeUsage',
 };
 
-// AGI trains on no plan's content. The Free plan is served by providers' free
-// models, whose own terms may allow training, so its cell says so.
 const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
@@ -282,17 +280,8 @@ export default function PricingPage() {
   const accountSubscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   /**
-   * The plan is not current the moment /api/upgrade returns.
-   *
-   * That route answers `activation: 'webhook_pending'`, Stripe has charged, but
-   * plan_tier is only written when customer.subscription.updated arrives. A
-   * single refetch on confirm therefore races the webhook and usually re-reads
-   * the OLD plan, which is what left this page offering "Get Max" next to a
-   * toast saying the upgrade had succeeded.
-   *
-   * So poll, briefly, until the plan actually moves. Bounded because a webhook
-   * that never lands must not spin forever: the page then keeps the plan it last
-   * read, which the query's own refetch-on-focus corrects.
+   * /api/upgrade returns before the subscription webhook writes plan_tier, so
+   * poll a bounded number of times until the plan moves.
    */
   const settleUpgradedPlan = useCallback(async () => {
     const planBeforeUpgrade = billing?.plan;
@@ -312,8 +301,6 @@ export default function PricingPage() {
   const [waitlistRequest, setWaitlistRequest] = useState<UpgradeWaitlistRequest | null>(null);
   const [joinWaitlistOnOpen, setJoinWaitlistOnOpen] = useState(false);
   const [downgradePlan, setDowngradePlan] = useState<SelfServeIndividualPlanTier | null>(null);
-  // Team is billed per seat. Start at the contract minimum of two seats; the
-  // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
   const [teamPremiumSeatsChoice, setTeamPremiumSeatsChoice] = useState<number>(0);
   const [teamAnnualChoice, setTeamAnnualChoice] = useState<boolean | null>(null);
@@ -354,7 +341,6 @@ export default function PricingPage() {
   const basicPrice = localizedPricePerMonth(localizedPlans, 'basic', 'monthly', priceLocale);
   const maxPrice = localizedPricePerMonth(localizedPlans, 'max', 'monthly', priceLocale);
   const max15xPrice = localizedPricePerMonth(localizedPlans, 'max_15x', 'monthly', priceLocale);
-  // Per-seat unit price, and the total for the seats currently selected.
   const teamSeatPrice = localizedPricePerMonth(localizedPlans, 'team', 'monthly', priceLocale);
   const teamTotalPrice = formatLocalizedAmount(
     localizedPlans?.team.monthly,
@@ -473,15 +459,11 @@ export default function PricingPage() {
   function planRelationship(plan: CheckoutPlan): 'upgrade' | 'current' | 'lower' {
     if (!hasActivePaidPlan || !billing) return 'upgrade';
 
-    // A per-seat plan you already own is still actionable: the change on offer
-    // is MORE SEATS, which goes through the same mid-cycle upgrade path. Showing
-    // a disabled "Current plan" here would dead-end a growing team.
+    // An owned per-seat plan still offers more seats through the upgrade path.
     if (isPerSeatBillingPlan(plan) && isPerSeatBillingPlan(billing.plan)) return 'upgrade';
     if (billing.plan === plan) return 'current';
 
-    // Moving OFF a per-seat organization plan onto an individual plan is not an
-    // upgrade in any direction, it would convert an org subscription into a
-    // personal one and strand the other seats. Route it through billing.
+    // Leaving a per-seat plan for an individual one would strand the other seats.
     if (isPerSeatBillingPlan(billing.plan)) return 'lower';
 
     // Team has no rank on the individual ladder, but it IS reachable from any
@@ -497,12 +479,6 @@ export default function PricingPage() {
     return currentIndex < 0 || targetIndex < 0 || targetIndex < currentIndex ? 'lower' : 'upgrade';
   }
 
-  /**
-   * `openBillingPortal` navigates away on success, so reaching the catch means
-   * it failed. Surfacing it as a toast matters more here than elsewhere: this
-   * button is the ONLY exit from a plan the user wants to leave, and a silent
-   * failure would restore exactly the dead control it was added to remove.
-   */
   async function openPortalFromPricing() {
     if (portalPending) return;
     setPortalPending(true);
@@ -650,9 +626,7 @@ export default function PricingPage() {
       return;
     }
 
-    // A mid-cycle upgrade charges the saved card immediately with no Stripe
-    // screen, so it has to pass through an order screen that prices the
-    // proration, names the card and takes assent before anything is charged.
+    // A mid-cycle upgrade charges the saved card at once, so it needs explicit assent first.
     if (hasActivePaidPlan) {
       if (!billingPolicyReady) {
         toast.error('Billing details are still loading. Please try again in a moment.');

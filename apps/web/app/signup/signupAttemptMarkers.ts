@@ -1,19 +1,9 @@
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 /**
- * One sign-up attempt, written and cleared together so the optional
- * marketing-email choice can never outlive the attempt it was made in. The
- * terms marker and the choice each hold the policy version that was on
- * screen, so a revision published before the account exists reads as stale
- * rather than as agreement to text nobody saw. localStorage, not
- * sessionStorage: the terms marker has to survive the tab closing during the
- * provider round trip.
- *
- * That makes the choice browser-wide, so it is tied to its attempt by a random
- * id kept beside it and in this tab's sessionStorage. A choice whose id this
- * tab does not hold was made in another attempt and is never read as a grant.
- * A tab that still holds an id once the choice is gone had its choice removed
- * by another attempt, and is asked again rather than recorded without it.
+ * localStorage so the terms marker survives the provider round trip. The
+ * marketing choice is bound to this tab's attempt id and is never read as a
+ * grant from another attempt.
  */
 export const TERMS_GATE_STORAGE_KEY = 'agi.terms-accepted-version';
 export const MARKETING_EMAIL_CHOICE_STORAGE_KEY = 'agi.marketing-email-notice-version';

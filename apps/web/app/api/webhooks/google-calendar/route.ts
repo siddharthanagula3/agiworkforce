@@ -11,10 +11,9 @@ import {
   GOOGLE_CALENDAR_CHANNEL_SECRET_ENV,
   verifyGoogleCalendarChannelToken,
 } from '@/lib/triggers/trigger-signatures';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const RESOURCE_STATE_EVENTS: Readonly<Record<string, string>> = {
   exists: 'events.changed',
@@ -38,7 +37,7 @@ async function handleCalendarNotification(request: NextRequest): Promise<NextRes
   const channelId = request.headers.get('x-goog-channel-id') ?? '';
   const resourceState = request.headers.get('x-goog-resource-state') ?? '';
   const messageNumber = request.headers.get('x-goog-message-number') ?? '';
-  if (!UUID_RE.test(channelId)) {
+  if (!isUuid(channelId)) {
     return NextResponse.json({ error: 'Unknown channel' }, { status: 400 });
   }
 

@@ -11,10 +11,10 @@ import {
   EVENT_TRIGGER_SIGNING_SECRET_ENV,
   verifyConnectorTriggerSignature,
 } from '@/lib/triggers/trigger-signatures';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 128 * 1024;
 const EVENT_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/;
 const DELIVERY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$/;
@@ -34,7 +34,7 @@ async function handleConnectorEvent(
   if (rateLimited) return rateLimited;
 
   const { triggerId } = await context.params;
-  if (!UUID_RE.test(triggerId)) {
+  if (!isUuid(triggerId)) {
     return NextResponse.json({ error: 'Unknown trigger' }, { status: 400 });
   }
 

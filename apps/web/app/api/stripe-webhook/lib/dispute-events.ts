@@ -7,6 +7,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import type { Stripe } from '@/lib/stripe-types';
 import { recordNotification } from '@/lib/services/notification-service';
+import { stripeIdOf } from './stripe-ref';
 import { toStoredSubscriptionStatus } from './subscription-status';
 
 const MERCHANT_KEPT_FUNDS: ReadonlySet<string> = new Set(['won', 'warning_closed', 'prevented']);
@@ -33,11 +34,6 @@ interface Revocation {
 
 function chargeIdOf(dispute: Stripe.Dispute): string {
   return typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
-}
-
-function customerIdOf(customer: Stripe.Charge['customer']): string | null {
-  if (typeof customer === 'string') return customer;
-  return customer?.id ?? null;
 }
 
 function microusd(value: string | number | null | undefined): number {
@@ -76,7 +72,7 @@ interface DisputeParties {
 }
 
 async function resolveParties(db: DatabaseAdapter, charge: Stripe.Charge): Promise<DisputeParties> {
-  const stripeCustomerId = customerIdOf(charge.customer);
+  const stripeCustomerId = stripeIdOf(charge.customer);
   const userId = stripeCustomerId ? await findAccountByCustomer(db, stripeCustomerId) : null;
   return { chargeId: charge.id, stripeCustomerId, userId };
 }

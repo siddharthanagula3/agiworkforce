@@ -16,7 +16,7 @@ import {
 import {
   apiErrorCode as extractErrorCode,
   apiErrorMessage as extractErrorMessage,
-} from '../lib/api-error';
+} from '@shared/utils/api-error';
 import { rememberPendingCheckout } from '../lib/pending-checkout';
 import { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
 

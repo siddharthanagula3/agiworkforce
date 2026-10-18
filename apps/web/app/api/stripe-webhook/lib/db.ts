@@ -398,10 +398,8 @@ export async function grantCreditTopUp(
       throw new Error('No credit account found for user');
     }
 
-    // credits_remaining_cents is a get_credit_balance output column, not a
-    // column on token_credits; selecting it here threw and the verification
-    // below never ran. The remaining balance is the difference of the two
-    // columns that do exist, read in the unit the ledger settles in.
+    // token_credits has no remaining-balance column, so it is the difference of
+    // the two that exist, read in the unit the ledger settles in.
     const readRemainingMicrousd = async (): Promise<number> => {
       const [row] = await db.query<{ remaining_microusd: number | string | null }>(
         `select credits_allocated_microusd - credits_used_microusd as remaining_microusd
@@ -1169,16 +1167,9 @@ export async function updateSubscriptionFromStripeSubscription(
         return;
       }
 
-      // Normalized because the two sides arrive in different shapes. The row is
-      // TYPED `string | null` but the driver hands back a Date for a timestamptz
-      // column, while updateData.current_period_start is built as an ISO string
-      // (`new Date(periodStart * 1000).toISOString()`). Comparing them directly
-      // was `Date !== string`, i.e. ALWAYS true, so every subscription and
-      // invoice webhook took the isNewPeriod branch and called
-      // resetCreditsForNewPeriod, zeroing credits_used_cents mid-period and
-      // handing back a full allocation. Any benign event did it: a card swap, a
-      // seat change, a cancel-and-resume. The allocateCreditsForPeriod branch
-      // below was unreachable.
+      // The driver returns a Date for the timestamptz column despite its string
+      // type, and updateData carries an ISO string. Compared raw they always
+      // differ, and every benign webhook would reset mid-period usage.
       const isNewPeriod =
         toIsoTimestamp(existingSub.current_period_start) !==
         toIsoTimestamp(updateData.current_period_start);

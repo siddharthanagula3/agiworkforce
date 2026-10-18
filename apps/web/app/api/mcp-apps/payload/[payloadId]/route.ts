@@ -8,10 +8,9 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { loadMcpAppPayload } from '@/lib/connectors/mcp-state-store';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 async function handleGet(
   request: NextRequest,
@@ -20,7 +19,7 @@ async function handleGet(
   const limited = await withRateLimit(request, 'chat-conversation');
   if (limited) return limited;
   const { payloadId } = await context.params;
-  if (!UUID_RE.test(payloadId)) throw createError.validation('Invalid MCP App payload id');
+  if (!isUuid(payloadId)) throw createError.validation('Invalid MCP App payload id');
   const { userId } = await getUserScopedDb(request);
   const payload = await loadMcpAppPayload(userId, payloadId);
   if (!payload) throw createError.notFound('MCP App payload not found or expired');

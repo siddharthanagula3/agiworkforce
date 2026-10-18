@@ -11,9 +11,10 @@ import {
   type ReactNode,
 } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import { SITE_URL } from '@/lib/seo/site';
 import { SURFACE_STATUS } from '@/lib/surface-status';
 
-const INSTALL_COMMAND = 'curl -fsSL https://agiworkforce.com/install.sh | bash';
+const INSTALL_COMMAND = `curl -fsSL ${SITE_URL}/install.sh | bash`;
 
 const RELEASE_PUBLISHED_LABEL = 'Signed release published';
 

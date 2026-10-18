@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { TeamInvitationAcceptance } from '@/features/teams/components/TeamInvitationAcceptance';
 
 export const metadata: Metadata = {
-  title: 'Team invitation | AGI',
+  title: 'Team invitation',
   description: 'Accept or decline an invitation to an AGI Team workspace.',
 };
 

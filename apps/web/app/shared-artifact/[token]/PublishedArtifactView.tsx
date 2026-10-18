@@ -20,15 +20,6 @@ import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifa
 import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
 import { toUserMessage } from '@/lib/user-error-message';
 
-/**
- * Public viewer for a published artifact.
- *
- * Renders untrusted, publicly reachable content, so the kind branch here is the
- * security boundary, see `publishedArtifactRender.ts` for the rule. Scripted
- * kinds go through {@link SandboxedIframe} (cross-origin sandbox origin, or the
- * null-origin `srcDoc` fallback); everything else renders inert.
- */
-
 export interface PublishedArtifactViewProps {
   title: string;
   kind: PublishedArtifactKind;
@@ -57,6 +48,7 @@ function formatDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** Untrusted content: the kind branch is the security boundary (publishedArtifactRender.ts). */
 export function PublishedArtifactView({
   title,
   kind,

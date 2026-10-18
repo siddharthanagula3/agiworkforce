@@ -18,6 +18,7 @@ import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
 import { useCurrentUser } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 
 const SETTINGS_PATH = '/chat?settings=slack';
 const LOOKUP_FAILED =
@@ -29,17 +30,6 @@ type LookupState =
   | { kind: 'loading' }
   | { kind: 'failed'; message: string }
   | { kind: 'ready'; preview: ManagedCloudSlackLinkPreview };
-
-function errorMessage(body: unknown, fallback: string): string {
-  if (!body || typeof body !== 'object') return fallback;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === 'string' && error.trim()) return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
-}
 
 function SlackLinkForm() {
   const searchParams = useSearchParams();
@@ -72,7 +62,7 @@ function SlackLinkForm() {
     })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) throw new Error(errorMessage(body, LOOKUP_FAILED));
+        if (!response.ok) throw new Error(apiErrorMessage(body, LOOKUP_FAILED));
         const parsed = ManagedCloudSlackLinkPreviewSchema.safeParse(body);
         if (!parsed.success) throw new Error(LOOKUP_FAILED);
         if (!controller.signal.aborted) {
@@ -108,7 +98,7 @@ function SlackLinkForm() {
         body: JSON.stringify({ token, organizationId: workspace.id }),
       });
       const body = (await response.json().catch(() => null)) as unknown;
-      if (!response.ok) throw new Error(errorMessage(body, CONNECT_FAILED));
+      if (!response.ok) throw new Error(apiErrorMessage(body, CONNECT_FAILED));
       const confirmed = ManagedCloudSlackLinkConfirmedSchema.safeParse(body);
       if (!confirmed.success) throw new Error(CONNECT_FAILED);
       setConnectedTeam(confirmed.data.teamName);
