@@ -20,8 +20,6 @@ import { HEALTH_SPACE_KIND } from '@/lib/health-space';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const PG_UNDEFINED_COLUMN = '42703';
-
 const CARRIED_COLUMNS = [
   'icon_emoji',
   'accent_color',
@@ -34,11 +32,6 @@ const CARRIED_COLUMNS = [
   'uses_account_instructions',
   'uses_account_style',
 ] as const;
-
-function isSchemaNotReady(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code;
-  return code === '42P01' || code === '42703';
-}
 
 function copyName(original: string): string {
   const trimmed = original.trim() || 'Project';
@@ -81,71 +74,57 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     throw createError.validation(getProjectLimitErrorMessage(planTier));
   }
 
-  const baseColumns = [
+  // uses_global_memory is carried with the rest: defaulting it back to true
+  // would widen what the copy's chats can read.
+  const columns = [
     'user_id',
     'organization_id',
     'name',
     'description',
     'instructions',
     'color',
+    ...CARRIED_COLUMNS,
   ];
-  const baseValues: unknown[] = [
+  const values: unknown[] = [
     userId,
     organizationId,
     copyName(String(source['name'] ?? 'Project')),
     source['description'] ?? '',
     source['instructions'] ?? '',
     source['color'] ?? DEFAULT_PROJECT_COLOR,
+    ...CARRIED_COLUMNS.map((column) => source[column]),
   ];
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
-  // Everything below arrived after the base columns and is settable by the
-  // user, so a copy that drops it silently rewrites the project's behaviour.
-  // uses_global_memory is the one that matters most: defaulting it back to true
-  // would widen what the copy's chats can read.
-  const carriedColumns: string[] = [];
-  const carriedValues: unknown[] = [];
-  for (const column of CARRIED_COLUMNS) {
-    if (source[column] === undefined) continue;
-    carriedColumns.push(column);
-    carriedValues.push(source[column]);
-  }
-  const hasCarried = carriedColumns.length > 0;
-
-  function buildInsertSql(includeCarried: boolean): { sql: string; params: unknown[] } {
-    const columns = includeCarried ? [...baseColumns, ...carriedColumns] : [...baseColumns];
-    const values = includeCarried ? [...baseValues, ...carriedValues] : [...baseValues];
-    const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
-    return {
-      sql: `with inserted as materialized (
-         insert into user_projects (${columns.join(', ')})
-         values (${placeholders})
-         returning *
-       ), quota_guard as materialized (
-         select public.assert_user_resource_limit('projects', $1, $${values.length + 1})
-           from (select count(*) from inserted) as dependency
-       )
-       select inserted.* from inserted cross join quota_guard`,
-      params: [...values, projectLimit],
-    };
-  }
-
-  const insertCopy = async (includeCarried: boolean) => {
-    const { sql, params } = buildInsertSql(includeCarried);
-    const [row] = await db.query<Record<string, unknown>>(sql, params);
-    return row;
-  };
-
-  let created: Record<string, unknown> | undefined;
+  let copy: { created: Record<string, unknown> | undefined; copiedFiles: number };
   try {
-    try {
-      created = await insertCopy(hasCarried);
-    } catch (error) {
-      if (hasCarried && (error as { code?: string } | null)?.code === PG_UNDEFINED_COLUMN) {
-        created = await insertCopy(false);
-      } else {
-        throw error;
-      }
-    }
+    copy = await db.transaction(async (tx) => {
+      const [created] = await tx.query<Record<string, unknown>>(
+        `with inserted as materialized (
+           insert into user_projects (${columns.join(', ')})
+           values (${placeholders})
+           returning *
+         ), quota_guard as materialized (
+           select public.assert_user_resource_limit('projects', $1, $${values.length + 1})
+             from (select count(*) from inserted) as dependency
+         )
+         select inserted.* from inserted cross join quota_guard`,
+        [...values, projectLimit],
+      );
+      if (!created) return { created, copiedFiles: 0 };
+      const copiedFiles = await tx.query<{ id: string }>(
+        `insert into project_knowledge_files
+           (project_id, file_name, mime_type, byte_count, checksum_sha256, summary,
+            source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at)
+         select $1, file_name, mime_type, byte_count, checksum_sha256, summary,
+                source_surface, $2, storage_uri, extracted_text, extracted_at
+           from project_knowledge_files
+          where project_id = $3 and deleted_at is null and superseded_at is null
+         returning id`,
+        [created['id'], userId, id],
+      );
+      return { created, copiedFiles: copiedFiles.length };
+    });
   } catch (error) {
     if (isUserResourceLimitError(error)) {
       throw createError.validation(getProjectLimitErrorMessage(planTier));
@@ -153,30 +132,10 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     throw error;
   }
 
+  const { created, copiedFiles } = copy;
   if (!created) {
     logger.error({ userId, sourceProjectId: id }, 'Project duplicate returned no row');
     throw createError.internal('Failed to duplicate the project');
-  }
-
-  let copiedFiles = 0;
-  try {
-    const inserted = await db.query<{ id: string }>(
-      `insert into project_knowledge_files
-         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary,
-          source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at)
-       select $1, file_name, mime_type, byte_count, checksum_sha256, summary,
-              source_surface, $2, storage_uri,
-              to_jsonb(project_knowledge_files)->>'extracted_text', extracted_at
-         from project_knowledge_files
-        where project_id = $3 and deleted_at is null and superseded_at is null
-       returning id`,
-      [created['id'], userId, id],
-    );
-    copiedFiles = inserted.length;
-  } catch (error) {
-    if (!isSchemaNotReady(error)) {
-      logger.error({ error, userId, sourceProjectId: id }, 'Failed to copy knowledge files');
-    }
   }
 
   const duplicated: ManagedCloudProjectDuplicateResponse = {

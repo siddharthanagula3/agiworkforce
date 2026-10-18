@@ -236,17 +236,19 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       expect(db.execute).not.toHaveBeenCalled();
     });
 
-    it('answers 503 while the knowledge schema is not migrated', async () => {
+    it('fails instead of answering "unavailable" when the knowledge read errors', async () => {
       db.query.mockRejectedValue(Object.assign(new Error('no table'), { code: '42P01' }));
 
       const response = await del();
 
-      expect(response.status).toBe(503);
-      expect((await response.json()).error).toBe('knowledge_files_unavailable');
+      expect(response.status).toBe(500);
+      expect(db.execute).not.toHaveBeenCalled();
     });
 
     it('soft deletes the row and removes the stored object', async () => {
-      db.query.mockResolvedValue([{ storage_uri: 's3://b/k/report.pdf' }]);
+      db.query
+        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
+        .mockResolvedValue([]);
       db.execute.mockResolvedValue(undefined);
       mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 
@@ -259,8 +261,23 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledWith('k/report.pdf');
     });
 
+    it('keeps the stored object while a duplicated project still points at it', async () => {
+      db.query
+        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
+        .mockResolvedValueOnce([{ id: 'f-copy' }]);
+      db.execute.mockResolvedValue(undefined);
+
+      const response = await del();
+
+      expect(response.status).toBe(200);
+      expect(db.query.mock.calls[1]?.[1]).toEqual(['s3://b/k/report.pdf']);
+      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    });
+
     it('restores the row when the stored object cannot be removed', async () => {
-      db.query.mockResolvedValue([{ storage_uri: 's3://b/k/report.pdf' }]);
+      db.query
+        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
+        .mockResolvedValue([]);
       db.execute.mockResolvedValue(undefined);
       mocks.deleteProjectKnowledgeObject.mockRejectedValue(new Error('s3 down'));
 

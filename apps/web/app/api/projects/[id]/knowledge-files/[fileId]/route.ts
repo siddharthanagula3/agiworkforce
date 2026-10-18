@@ -18,15 +18,6 @@ import {
 } from '@/lib/server/project-knowledge-files';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
-
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
 async function ownedKnowledgeFile(
@@ -79,37 +70,24 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id: projectId, fileId } = await context.params;
-  let file: { storage_uri: string | null } | undefined;
-  try {
-    [file] = await db.query<{ storage_uri: string | null }>(
-      `select f.storage_uri
-         from project_knowledge_files f
-         join user_projects p on p.id = f.project_id
-        where f.id = $1
-          and f.project_id = $2
-          and f.deleted_at is null
-          and p.user_id = $3
-          and p.organization_id is not distinct from $4::uuid
-          and p.is_archived = false
-          and p.deleted_at is null
-        limit 1`,
-      [fileId, projectId, userId, organizationId],
-    );
-  } catch (error) {
-    if (isSchemaNotReady(error)) {
-      return NextResponse.json(
-        {
-          error: 'knowledge_files_unavailable',
-          message: 'Project sources are temporarily unavailable.',
-        },
-        { status: 503 },
-      );
-    }
-    throw error;
-  }
+  const [file] = await db.query<{ storage_uri: string | null }>(
+    `select f.storage_uri
+       from project_knowledge_files f
+       join user_projects p on p.id = f.project_id
+      where f.id = $1
+        and f.project_id = $2
+        and f.deleted_at is null
+        and p.user_id = $3
+        and p.organization_id is not distinct from $4::uuid
+        and p.is_archived = false
+        and p.deleted_at is null
+      limit 1`,
+    [fileId, projectId, userId, organizationId],
+  );
   if (!file) throw createError.notFound('Knowledge file not found');
 
   const objectKey = file.storage_uri ? objectKeyFromStorageUri(file.storage_uri) : null;
+  let objectStillReferenced = false;
   try {
     await db.execute(
       `update project_knowledge_files
@@ -117,21 +95,23 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
         where id = $1 and project_id = $2 and deleted_at is null`,
       [fileId, projectId],
     );
-  } catch (error) {
-    if (isSchemaNotReady(error)) {
-      return NextResponse.json(
-        {
-          error: 'knowledge_files_unavailable',
-          message: 'Knowledge files require Managed Cloud (pending migration apply)',
-        },
-        { status: 503 },
+    // A duplicated project copies storage_uri rather than the object, so the
+    // object stays while any live row still points at it.
+    if (objectKey) {
+      const [sharer] = await db.query<{ id: string }>(
+        `select id from project_knowledge_files
+          where storage_uri = $1 and deleted_at is null
+          limit 1`,
+        [file.storage_uri],
       );
+      objectStillReferenced = sharer !== undefined;
     }
+  } catch (error) {
     logger.error({ error, projectId, fileId }, 'Failed to delete knowledge file');
     throw createError.internal('Failed to delete knowledge file');
   }
 
-  if (objectKey) {
+  if (objectKey && !objectStillReferenced) {
     try {
       await deleteProjectKnowledgeObject(objectKey);
     } catch (error) {

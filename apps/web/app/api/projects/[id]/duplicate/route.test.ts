@@ -17,7 +17,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: async () => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      transaction: <T>(fn: (tx: { query: typeof mocks.query }) => Promise<T>) =>
+        fn({ query: (...args: unknown[]) => mocks.query(...args) } as never),
+    },
     userId: (await mocks.authUser()).userId,
     organizationId: await mocks.resolveActiveOrganizationId(),
   }),
@@ -130,20 +134,14 @@ describe('POST /api/projects/[id]/duplicate', () => {
     expect(insertParams[index]).toBe(false);
   });
 
-  it('falls back to the base columns on a database that predates them', async () => {
+  it('fails instead of dropping settings when a carried column is missing', async () => {
     const undefinedColumn = Object.assign(new Error('column does not exist'), { code: '42703' });
-    mocks.query
-      .mockResolvedValueOnce([SOURCE])
-      .mockRejectedValueOnce(undefinedColumn)
-      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
-      .mockResolvedValueOnce([]);
+    mocks.query.mockResolvedValueOnce([SOURCE]).mockRejectedValueOnce(undefinedColumn);
 
     const res = await call();
 
-    expect(res.status).toBe(200);
-    const [retrySql] = mocks.query.mock.calls[2] as [string, unknown[]];
-    expect(retrySql).toContain('insert into user_projects');
-    expect(retrySql).not.toContain('icon_emoji');
+    expect(res.status).toBe(500);
+    expect(mocks.query).toHaveBeenCalledTimes(2);
   });
 
   it('authorizes the source and binds the copy to the active workspace', async () => {
@@ -229,15 +227,13 @@ describe('POST /api/projects/[id]/duplicate', () => {
     expect(insertParams.at(-1)).toBe(getProjectLimit('free'));
   });
 
-  it('still returns the project when the file copy fails', async () => {
+  it('fails the whole duplicate instead of returning a copy without its files', async () => {
     mocks.query
       .mockResolvedValueOnce([SOURCE])
       .mockResolvedValueOnce([{ id: 'proj-2', name: 'x' }])
-      .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: '42P01' }));
+      .mockRejectedValueOnce(Object.assign(new Error('connection reset'), { code: '08006' }));
 
     const res = await call();
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { copiedKnowledgeFiles?: number };
-    expect(body.copiedKnowledgeFiles).toBe(0);
+    expect(res.status).toBe(500);
   });
 });
