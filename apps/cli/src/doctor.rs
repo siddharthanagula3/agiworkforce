@@ -397,8 +397,14 @@ fn writable_path_check(id: &str, title: &str, path: &Path) -> DoctorCheck {
     } else {
         PathBuf::from(".")
     };
-    let test_file = probe_dir.join(".agi-doctor-write-test");
-    match std::fs::write(&test_file, b"ok").and_then(|_| std::fs::remove_file(&test_file)) {
+    let test_file = probe_dir.join(format!(".agi-doctor-write-test-{}", uuid::Uuid::new_v4()));
+    let probe = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&test_file)
+        .map(drop)
+        .and_then(|()| std::fs::remove_file(&test_file));
+    match probe {
         Ok(()) => check(
             id,
             title,

@@ -1025,13 +1025,7 @@ pub(crate) fn is_agiworkforce_login_provider(provider: Option<&str>) -> bool {
 }
 
 pub async fn login_agiworkforce() -> Result<()> {
-    // Allow pointing the device-auth flow at a local `next dev` web server
-    // (AGI_AUTH_BASE=http://localhost:3000/api); defaults to the production web
-    // origin's API. The base must include `/api` (see AGIWORKFORCE_API_BASE).
-    let base = std::env::var("AGI_AUTH_BASE")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| AGIWORKFORCE_API_BASE.to_string());
+    let base = crate::app_server::account::device_auth_base();
     let entry = crate::oauth::device_code_login(&base).await?;
     save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)?;
     crate::device_registry::send_heartbeat().await;

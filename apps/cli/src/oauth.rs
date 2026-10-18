@@ -347,6 +347,7 @@ pub enum DeviceCodePoll {
     Pending,
     SlowDown,
     TermsRequired(String),
+    AccountUnavailable(String),
     Denied,
     Expired,
 }
@@ -426,6 +427,13 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
                 body.get("acceptance_url")
                     .and_then(|value| value.as_str())
                     .unwrap_or_default()
+                    .to_string(),
+            ),
+            (_, "account_unavailable") => DeviceCodePoll::AccountUnavailable(
+                body.get("error_description")
+                    .and_then(|value| value.as_str())
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or("This AGI Workforce account cannot sign in right now.")
                     .to_string(),
             ),
             (_, "access_denied") => DeviceCodePoll::Denied,
@@ -615,6 +623,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
                     }
                 }
             }
+            DeviceCodePoll::AccountUnavailable(reason) => anyhow::bail!(reason),
             DeviceCodePoll::Denied => {
                 anyhow::bail!("The sign-in was denied in the browser. Run /login to try again.")
             }

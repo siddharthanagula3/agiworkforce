@@ -359,7 +359,11 @@ fn output_preview(output: &str) -> String {
     if line_count > 3 {
         format!("{} lines", line_count)
     } else if output.len() > 80 {
-        format!("{}...", &output[..77])
+        let mut end = 77;
+        while !output.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &output[..end])
     } else {
         output.to_string()
     }

@@ -237,6 +237,7 @@ pub fn device_auth_base() -> String {
     std::env::var("AGI_AUTH_BASE")
         .ok()
         .filter(|base| !base.trim().is_empty())
+        .and_then(|base| tier_cache::resolve_agi_api_base(&base))
         .unwrap_or_else(|| crate::auth::agiworkforce_api_base().to_string())
 }
 

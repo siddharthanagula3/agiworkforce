@@ -4134,6 +4134,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     pending.interval += std::time::Duration::from_secs(5);
                     continue;
                 }
+                crate::oauth::DeviceCodePoll::AccountUnavailable(reason) => {
+                    return Ok(AccountLoginWaitResponse {
+                        outcome: AccountLoginOutcome::Failed,
+                        message: Some(reason),
+                        account: account_response(account::account_status(false).await),
+                    });
+                }
                 crate::oauth::DeviceCodePoll::Denied => {
                     return Ok(AccountLoginWaitResponse {
                         outcome: AccountLoginOutcome::Failed,

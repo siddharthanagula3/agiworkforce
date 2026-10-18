@@ -8334,31 +8334,3 @@ Counterguards and ownership: The finally reliably schedules reset/revoke for fai
 Acceptance target: Ensure temporary privilege setup and every failure path are enclosed by cleanup/rollback that restores the intended pre-probe role and privilege state.
 
 Severity and limits: Medium conditional impact: setup failure after a successful shared-role UPDATE/DELETE grant can bypass the script's revoke. Runtime/database state is unknown; the peer's sealed Low recommendation remains historical, with this separate root disposition. No original operational module, SQL/database role, installer, authored test/fixture, network/browser/native process, production action or product acceptance was executed. No source fix was made.
-
-## CLI-DOCTOR-FIXED-PROBE-CLOBBER-01
-
-Severity: Medium. Status: open source finding, October 11, 2026. Owner: CLI maintainers.
-
-`writable_path_check` selects the existing state directory or its fallback parent, writes `ok` to the fixed `.agi-doctor-write-test` name, and removes that same path after a successful write. It does not reserve a new file exclusively or establish ownership of an existing path. A preexisting writable regular file at that name therefore has its contents replaced and can then be deleted; if removal fails, the replacement contents remain. This is a source deduction, not an observed incident. Rust documents that [std::fs::write replaces existing file contents](https://doc.rust-lang.org/stable/std/fs/fn.write.html), checked October 11, 2026.
-
-Source: `apps/cli/src/doctor.rs:360-416`, captured SHA `96fd7b4dbf333a7a2dc53e1d3a325a692e42a618eb862be95789da3486676b12`. `run_doctor` calls `collect_doctor_report`; its state-directory checks pass the config, managed-session, cache and daemon-log directories to the probe. Full captured CLI/mobile reading (`audit/checklist/reviews/coverage-cli-mobile-source-2026-10-11-040.json`, untracked) and independent bounded cause assessment (`audit/checklist/evidence/coverage-cli040-independent-two-cause-assessment-2026-10-11.json`, untracked).
-
-Counterguards and ownership: An absent probe path is normally created and removed. A failed write prevents the `and_then` removal, and failed config-directory resolution reports failure. These branches do not preserve a preexisting writable file. The narrowly compared checkpoint parent-symlink defect concerns a different operation and trigger; no equivalent named cause was found in source-specific searches of the two canonical registers. Exhaustive semantic deduplication remains unknown.
-
-Acceptance target: Reserve a distinct probe file exclusively and remove only the file this invocation created. Preserve any preexisting same-name file and its bytes while retaining writable-directory diagnostics and failure reporting.
-
-Limits: No diagnostic, filesystem probe, Rust code or authored test was executed. The local caller chain is source-qualified; public dispatch, deployed applicability, concurrency and actual data loss remain unverified. Source code was not changed.
-
-## CLI-OUTPUT-PREVIEW-UTF8-BOUNDARY-01
-
-Severity: Medium. Status: open source finding, October 11, 2026. Owner: CLI maintainers.
-
-`output_preview` checks line count and byte length, then uses `&output[..77]` for outputs of at most three lines and more than 80 bytes. It does not establish a character boundary at byte 77. Valid multibyte output reaching that branch can panic. A single line of thirty three-byte characters is a derived, unexecuted witness: 90 bytes, with byte 77 inside a character. Rust's [string Range SliceIndex contract](https://doc.rust-lang.org/stable/std/slice/trait.SliceIndex.html) documents the non-character-boundary panic, checked October 11, 2026.
-
-Source: `apps/cli/src/conversations.rs:284-394`, captured SHA `76a6474a173fe9d1312b134b4d75a796dd41294c770ca91aa2df373f05bd25dd`. Markdown export passes message content to `render_message_content`; the ToolResult branch passes content directly to `output_preview`, including success and error results. Full captured CLI/mobile reading (`audit/checklist/reviews/coverage-cli-mobile-source-2026-10-11-040.json`, untracked) and independent bounded cause assessment (`audit/checklist/evidence/coverage-cli040-independent-two-cause-assessment-2026-10-11.json`, untracked).
-
-Counterguards and ownership: More than three lines uses a line-count summary; at most 80 bytes returns the original output. ASCII and a boundary exactly at 77 are safe. The neighboring `format_tool_args` derives a boundary with `char_indices`, but that guard is absent from `output_preview`. The installer stdout defect is a different token-transport mechanism; no equivalent named cause was found in source-specific searches of the two canonical registers. Exhaustive semantic deduplication remains unknown. The preserved root candidate's neighboring-function label `input_summary` was inaccurate and is excluded; the source name is `format_tool_args`.
-
-Acceptance target: Choose a character-safe preview boundary while preserving short-output and line-count behavior. Valid one-to-three-line multibyte tool output must not panic.
-
-Limits: No formatter, Rust code, transcript export or authored test was executed. The local export chain is source-qualified; public invocation, outer panic handling and deployed behavior remain unknown. Source code was not changed.
