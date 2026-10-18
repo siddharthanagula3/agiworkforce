@@ -41,8 +41,6 @@ import { recordVectorQuery } from '@/lib/services/infrastructure-cost';
 
 const VECTOR_STORE_PROVIDER = 'neon';
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_OBJECT = '42704';
 const CANDIDATE_MULTIPLIER = 4;
 const MAX_CANDIDATES = 100;
 const MAX_QUERY_TERMS = 16;
@@ -92,11 +90,6 @@ export function buildTsQuery(text: string, match: SearchRequest['match']): strin
   if (terms.length === 0) return null;
   if (match === 'any_term') return terms.join(' | ');
   return terms.map((term, index) => (index === terms.length - 1 ? `${term}:*` : term)).join(' & ');
-}
-
-function isRetrievalSchemaMissing(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null)?.code;
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_OBJECT;
 }
 
 function isFullAdapter(db: RetrievalSearchScope['db']): db is DatabaseAdapter {
@@ -331,13 +324,11 @@ export async function readIndexedSourceText(
   scope: Pick<RetrievalSearchScope, 'db' | 'userId' | 'organizationId' | 'healthSpaceProjectId'>,
   request: { sourceId: string; kinds: readonly SearchSourceKind[]; maxChars: number },
 ): Promise<IndexedSourceText | null> {
-  let rows: IndexedSourceChunkRow[];
-  try {
-    // Only the chunks that start inside the cap leave the database. Windows
-    // overlap, so a chunk's place is its start offset, not the characters
-    // before it, and document_end says whether the file goes on past them.
-    rows = await scope.db.query<IndexedSourceChunkRow>(
-      `with ${healthSpaceDocuments(5)},
+  // Only the chunks that start inside the cap leave the database. Windows
+  // overlap, so a chunk's place is its start offset, not the characters
+  // before it, and document_end says whether the file goes on past them.
+  const rows = await scope.db.query<IndexedSourceChunkRow>(
+    `with ${healthSpaceDocuments(5)},
       ordered as (
         select c.chunk_index, c.source_kind, c.title, c.content, c.start_offset, c.end_offset,
                ${retrievalDocumentGoogleUserDataSql({
@@ -379,20 +370,16 @@ export async function readIndexedSourceText(
         from positioned
        where position <= $6
        order by chunk_index`,
-      [
-        scope.userId,
-        scope.organizationId,
-        [...request.kinds],
-        request.sourceId,
-        scope.healthSpaceProjectId ?? null,
-        request.maxChars,
-        googleUserDataConnectorRefs(),
-      ],
-    );
-  } catch (error) {
-    if (isRetrievalSchemaMissing(error)) return null;
-    throw error;
-  }
+    [
+      scope.userId,
+      scope.organizationId,
+      [...request.kinds],
+      request.sourceId,
+      scope.healthSpaceProjectId ?? null,
+      request.maxChars,
+      googleUserDataConnectorRefs(),
+    ],
+  );
   const first = rows[0];
   if (!first || !isSearchSourceKind(first.source_kind)) return null;
 
@@ -446,43 +433,36 @@ export function createPostgresSearchProvider(scope: RetrievalSearchScope): Searc
         : null;
       const candidateLimit = Math.min(MAX_CANDIDATES, request.limit * CANDIDATE_MULTIPLIER);
 
-      let rows: CandidateRow[];
-      let semanticState: SemanticSearchState = 'unavailable';
-      try {
-        const embedding = await queryEmbedding(scope, request, kinds, strategy);
-        semanticState = embedding.state;
-        if (!tsQuery && !embedding.vector) return { hits: [], semantic: semanticState };
-        const params: unknown[] = [
-          scope.userId,
-          scope.organizationId,
-          kinds,
-          request.sourceIds && request.sourceIds.length > 0 ? [...request.sourceIds] : null,
-          candidateLimit,
-        ];
-        const lexicalParam = tsQuery ? params.push(tsQuery) : null;
-        const semanticParam = embedding.vector ? params.push(embedding.vector) : null;
-        const healthSpaceParam = scope.includeHealthSpaces
-          ? null
-          : params.push(scope.healthSpaceProjectId ?? null);
-        const googleRefsParam = params.push(googleUserDataConnectorRefs());
-        const sql = candidateSql({
-          lexicalParam,
-          semanticParam,
-          healthSpaceParam,
-          googleRefsParam,
-          excludeGoogleUserData: scope.googleUserData !== 'include',
+      const embedding = await queryEmbedding(scope, request, kinds, strategy);
+      const semanticState: SemanticSearchState = embedding.state;
+      if (!tsQuery && !embedding.vector) return { hits: [], semantic: semanticState };
+      const params: unknown[] = [
+        scope.userId,
+        scope.organizationId,
+        kinds,
+        request.sourceIds && request.sourceIds.length > 0 ? [...request.sourceIds] : null,
+        candidateLimit,
+      ];
+      const lexicalParam = tsQuery ? params.push(tsQuery) : null;
+      const semanticParam = embedding.vector ? params.push(embedding.vector) : null;
+      const healthSpaceParam = scope.includeHealthSpaces
+        ? null
+        : params.push(scope.healthSpaceProjectId ?? null);
+      const googleRefsParam = params.push(googleUserDataConnectorRefs());
+      const sql = candidateSql({
+        lexicalParam,
+        semanticParam,
+        healthSpaceParam,
+        googleRefsParam,
+        excludeGoogleUserData: scope.googleUserData !== 'include',
+      });
+      const rows = await scope.db.query<CandidateRow>(sql, params);
+      if (semanticParam !== null) {
+        recordVectorQuery({
+          userId: scope.userId,
+          organizationId: scope.organizationId,
+          provider: VECTOR_STORE_PROVIDER,
         });
-        rows = await scope.db.query<CandidateRow>(sql, params);
-        if (semanticParam !== null) {
-          recordVectorQuery({
-            userId: scope.userId,
-            organizationId: scope.organizationId,
-            provider: VECTOR_STORE_PROVIDER,
-          });
-        }
-      } catch (error) {
-        if (isRetrievalSchemaMissing(error)) return { hits: [], semantic: 'unavailable' };
-        throw error;
       }
 
       const candidates: SearchCandidate[] = rows

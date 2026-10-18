@@ -66,15 +66,6 @@ export interface SaveResearchReportInput {
   provider?: string | null;
 }
 
-const UNDEFINED_COLUMN_CODE = '42703';
-
-// The settled-cost column arrives with migration 0191. Until it is applied the
-// write must leave the report alone rather than fail the run that produced it.
-function isSettledCostColumnUnavailable(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null)?.code;
-  return code === UNDEFINED_COLUMN_CODE;
-}
-
 export type PersistedResearchReport = ResearchReport & {
   userId: string;
   requestId: string;
@@ -203,16 +194,12 @@ export async function recordResearchReportSettledCost(
   const requestId = input.requestId?.trim();
   if (!userId || !requestId) return;
   if (!Number.isFinite(input.settledCostMicrousd) || input.settledCostMicrousd < 0) return;
-  try {
-    await db.execute(
-      `update public.research_reports
-          set settled_cost_microusd = $3, updated_at = now()
-        where user_id = $1 and request_id = $2`,
-      [userId, requestId, Math.round(input.settledCostMicrousd)],
-    );
-  } catch (error) {
-    if (!isSettledCostColumnUnavailable(error)) throw error;
-  }
+  await db.execute(
+    `update public.research_reports
+        set settled_cost_microusd = $3, updated_at = now()
+      where user_id = $1 and request_id = $2`,
+    [userId, requestId, Math.round(input.settledCostMicrousd)],
+  );
 }
 
 export async function saveResearchReport(

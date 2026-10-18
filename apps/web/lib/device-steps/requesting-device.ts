@@ -2,7 +2,6 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
 import { resolveDeviceCredentialLink } from '@/lib/server/device-credential-link';
 
 const BY_CREDENTIAL_LINK = `
@@ -25,18 +24,13 @@ export async function readRequestingDevice(
 ): Promise<RequestingDevice | null> {
   const link = await resolveDeviceCredentialLink(request, userId);
   if (!link.identitySessionId && !link.credentialFamilyId) return null;
-  try {
-    const rows = await db.query<{ device_id: string; name: string | null }>(BY_CREDENTIAL_LINK, [
-      userId,
-      link.identitySessionId,
-      link.credentialFamilyId,
-    ]);
-    const row = rows[0];
-    return row ? { id: row.device_id, name: row.name } : null;
-  } catch (error) {
-    if (isRegistryMissing(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<{ device_id: string; name: string | null }>(BY_CREDENTIAL_LINK, [
+    userId,
+    link.identitySessionId,
+    link.credentialFamilyId,
+  ]);
+  const row = rows[0];
+  return row ? { id: row.device_id, name: row.name } : null;
 }
 
 export async function readRequestingDeviceId(

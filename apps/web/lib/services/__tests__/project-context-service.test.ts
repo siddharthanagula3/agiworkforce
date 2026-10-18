@@ -74,9 +74,7 @@ describe('loadProjectContext', () => {
     });
     expect(query.mock.calls[0]?.[0]).toContain('user_id = $2');
     expect(query.mock.calls[0]?.[1]).toEqual(['proj-1', 'user-1']);
-    expect(query.mock.calls[1]?.[0]).toContain(
-      "to_jsonb(project_knowledge_files)->>'extracted_text'",
-    );
+    expect(query.mock.calls[1]?.[0]).toContain('extracted_text, extracted_anchors');
     expect(context?.siblingChats).toEqual([
       { title: 'Pricing chat', preview: 'User: How much is Pro?' },
     ]);
@@ -95,7 +93,7 @@ describe('loadProjectContext', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it('still loads sibling chats when the knowledge-file schema is not ready', async () => {
+  it('surfaces a failed knowledge-file read instead of answering without the sources', async () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce([
@@ -108,32 +106,15 @@ describe('loadProjectContext', () => {
       ])
       .mockRejectedValueOnce(
         Object.assign(new Error('column "deleted_at" does not exist'), { code: '42703' }),
-      )
-      .mockResolvedValueOnce([
-        {
-          id: 'conv-launch',
-          title: 'Launch checklist',
-          updated_at: '2026-07-23T12:00:00.000Z',
-          role: 'assistant',
-          content: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
-          created_at: '2026-07-23T11:59:00.000Z',
-        },
-      ]);
+      );
 
-    const context = await loadProjectContext(
-      { query },
-      { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
-    );
-
-    expect(context?.knowledgeFiles).toEqual([]);
-    expect(context?.siblingChats).toEqual([
-      {
-        title: 'Launch checklist',
-        preview:
-          'Assistant: The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
-      },
-    ]);
-    expect(query).toHaveBeenCalledTimes(3);
+    await expect(
+      loadProjectContext(
+        { query },
+        { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
+      ),
+    ).rejects.toMatchObject({ code: '42703' });
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it('ranks a relevant past conversation ahead of a newer unrelated chat', async () => {

@@ -312,19 +312,6 @@ describe('settled research cost', () => {
     expect(db.execute.mock.calls[0]?.[1]).toEqual(['user-1', 'agi.chat.web.send.turn-1', 240_000]);
   });
 
-  it('leaves the run alone when the column has not been migrated in', async () => {
-    const db = database();
-    db.execute.mockRejectedValueOnce(Object.assign(new Error('no such column'), { code: '42703' }));
-
-    await expect(
-      recordResearchReportSettledCost(db, {
-        userId: 'user-1',
-        requestId: 'agi.chat.web.send.turn-1',
-        settledCostMicrousd: 240_000,
-      }),
-    ).resolves.toBeUndefined();
-  });
-
   it('rethrows any other write failure', async () => {
     const db = database();
     db.execute.mockRejectedValueOnce(

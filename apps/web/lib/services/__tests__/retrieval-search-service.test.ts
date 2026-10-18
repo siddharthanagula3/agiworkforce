@@ -297,18 +297,18 @@ describe('createPostgresSearchProvider', () => {
     ).rejects.toThrow(/public_web/);
   });
 
-  it('returns nothing rather than failing before the index migration is applied', async () => {
+  it('surfaces a missing index table instead of answering with no results', async () => {
     const { query, adapter } = scopedDb({ embeddingsPresent: false });
     query.mockRejectedValue(Object.assign(new Error('missing'), { code: '42P01' }));
 
-    const response = await createPostgresSearchProvider({
-      db: adapter,
-      userId: 'user-1',
-      organizationId: null,
-      semantic: true,
-    }).search({ text: 'pricing', limit: 5 });
-
-    expect(response.hits).toEqual([]);
+    await expect(
+      createPostgresSearchProvider({
+        db: adapter,
+        userId: 'user-1',
+        organizationId: null,
+        semantic: true,
+      }).search({ text: 'pricing', limit: 5 }),
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 });
 

@@ -136,7 +136,7 @@ describe('reading a device out of the registry', () => {
     expect(device?.presence).toBe('sleeping');
   });
 
-  it('degrades to no device while the registry table is still unapplied', async () => {
+  it('surfaces a missing registry table instead of reading it as no device', async () => {
     const missing = Object.assign(new Error('relation "device_registrations" does not exist'), {
       code: '42P01',
     });
@@ -148,7 +148,7 @@ describe('reading a device out of the registry', () => {
         installId: INSTALL_ID,
         now: NOW,
       }),
-    ).resolves.toBeNull();
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 
   it('propagates any other database failure rather than reading it as absence', async () => {
@@ -390,14 +390,14 @@ describe('stopping remote work on one device', () => {
     ).resolves.toBe(false);
   });
 
-  it('leaves a run unblocked while the registry table is still unapplied', async () => {
+  it('surfaces a missing registry table instead of reporting the device already stopped', async () => {
     const missing = Object.assign(new Error('relation "device_registrations" does not exist'), {
       code: '42P01',
     });
 
     await expect(
       stopRemoteWorkOnDevice(stoppable(missing), { userId: 'user-1', deviceId: DEVICE_ID }),
-    ).resolves.toBe(false);
+    ).rejects.toMatchObject({ code: '42P01' });
   });
 
   it('withdraws a device the next clearance reads, so a run in flight loses its tools', () => {

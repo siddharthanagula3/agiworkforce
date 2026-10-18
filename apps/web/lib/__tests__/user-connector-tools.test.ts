@@ -163,7 +163,7 @@ describe('loadUserConnectorToolDefs, github built-in gate', () => {
     ).toBe(false);
   });
 
-  it('keeps the connector catalog available while the ownership column is being deployed', async () => {
+  it('offers no connector tools when the GitHub installation read fails', async () => {
     mockNeonQuery.mockImplementation((sql: string) => {
       if (sql.includes('github_installations')) {
         return Promise.reject(

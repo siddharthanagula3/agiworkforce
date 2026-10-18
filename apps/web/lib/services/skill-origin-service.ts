@@ -9,7 +9,6 @@ import {
   SHADOW_SOURCE_NAME_PREFIX,
 } from '@/features/plugins/server/directory/constants';
 import { workspacePluginNameOf } from '@/features/plugins/server/directory/workspace-skill';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 
 const PLUGIN_SKILL_SOURCE = 'extra';
 const OWNED_SOURCE_KINDS = new Set(['upload', 'authored']);
@@ -78,25 +77,19 @@ async function marketplaceOrigins(
   pluginKeys: readonly string[],
 ): Promise<Map<string, ManagedSkillOrigin>> {
   if (pluginKeys.length === 0) return new Map();
-  let rows: MarketplaceOriginRow[];
-  try {
-    rows = await db.query<MarketplaceOriginRow>(
-      `select entries.plugin_key, entries.name, sources.name as source_name, sources.kind,
-              installation.installed_at
-         from public.plugin_marketplace_installations installation
-         join public.plugin_marketplace_entries entries on entries.id = installation.entry_id
-         join public.plugin_marketplace_sources sources on sources.id = entries.source_id
-        where installation.user_id = $1
-          and installation.enabled = true
-          and sources.user_id = $1
-          and entries.plugin_key = any($2::text[])
-        order by installation.installed_at asc`,
-      [userId, pluginKeys],
-    );
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return new Map();
-    throw error;
-  }
+  const rows = await db.query<MarketplaceOriginRow>(
+    `select entries.plugin_key, entries.name, sources.name as source_name, sources.kind,
+            installation.installed_at
+       from public.plugin_marketplace_installations installation
+       join public.plugin_marketplace_entries entries on entries.id = installation.entry_id
+       join public.plugin_marketplace_sources sources on sources.id = entries.source_id
+      where installation.user_id = $1
+        and installation.enabled = true
+        and sources.user_id = $1
+        and entries.plugin_key = any($2::text[])
+      order by installation.installed_at asc`,
+    [userId, pluginKeys],
+  );
   const origins = new Map<string, ManagedSkillOrigin>();
   for (const row of rows) {
     if (origins.has(row.plugin_key)) continue;

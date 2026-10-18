@@ -17,7 +17,6 @@ import {
   type DeviceStepCapability,
 } from '@agiworkforce/local-runtime-contract';
 import type { PlatformCapability } from '@agiworkforce/types';
-import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { logger } from '@/lib/logger';
 
@@ -91,17 +90,11 @@ export async function readRegisteredDevice(
   db: DatabaseAdapter,
   params: { userId: string; surface?: DeviceSurface | null; installId: string; now?: number },
 ): Promise<RegisteredDevice | null> {
-  let rows: RegistrationRow[];
-  try {
-    rows = await db.query<RegistrationRow>(BY_INSTALL, [
-      params.userId,
-      params.surface ?? null,
-      params.installId,
-    ]);
-  } catch (error) {
-    if (isRegistryMissing(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<RegistrationRow>(BY_INSTALL, [
+    params.userId,
+    params.surface ?? null,
+    params.installId,
+  ]);
   const row = rows[0];
   if (!row) return null;
   return {
@@ -135,18 +128,13 @@ export async function stopRemoteWorkOnDevice(
   db: DatabaseAdapter,
   params: { userId: string; deviceId: string },
 ): Promise<boolean> {
-  try {
-    const affected = await db.execute(
-      `update device_registrations
-          set remote_enabled = false, updated_at = now()
-        where id = $1 and user_id = $2 and remote_enabled`,
-      [params.deviceId, params.userId],
-    );
-    return affected > 0;
-  } catch (error) {
-    if (isRegistryMissing(error)) return false;
-    throw error;
-  }
+  const affected = await db.execute(
+    `update device_registrations
+        set remote_enabled = false, updated_at = now()
+      where id = $1 and user_id = $2 and remote_enabled`,
+    [params.deviceId, params.userId],
+  );
+  return affected > 0;
 }
 
 export const DEVICE_REVOCATION_REASONS = ['unlinked', 'lost', 'remote_work_stopped'] as const;

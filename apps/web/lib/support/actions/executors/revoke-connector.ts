@@ -5,23 +5,12 @@ import { logger } from '@/lib/logger';
 import { resolveSupportAccountContext } from '../../account/context-resolver';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
 
-const PG_UNDEFINED_TABLE = '42P01';
-
 export const CUSTOM_CONNECTOR_PREFIX = 'custom-';
 
 export const CUSTOM_CONNECTOR_CONTROL = Object.freeze({
   label: 'Settings → Connections',
   href: '/settings/connections',
 });
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
 
 function refuseCustomConnector(): never {
   throw new SupportActionRefusal(
@@ -65,29 +54,14 @@ export async function executeRevokeConnector(args: {
   if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
 
   if (connectorId === 'github') {
-    try {
-      await db.execute(`delete from github_installations where user_id = $1`, [userId]);
-    } catch (error) {
-      if (!isUndefinedTable(error)) throw error;
-    }
+    await db.execute(`delete from github_installations where user_id = $1`, [userId]);
   } else {
-    try {
-      await db.execute(
-        `update user_connectors
-            set is_active = false, updated_at = $1
-          where user_id = $2 and connector_id = $3`,
-        [new Date().toISOString(), userId, connectorId],
-      );
-    } catch (error) {
-      if (isUndefinedTable(error)) {
-        throw new SupportActionRefusal(
-          'SUPPORT_ACTION_UNAVAILABLE',
-          409,
-          'Connectors are not available in this environment.',
-        );
-      }
-      throw error;
-    }
+    await db.execute(
+      `update user_connectors
+          set is_active = false, updated_at = $1
+        where user_id = $2 and connector_id = $3`,
+      [new Date().toISOString(), userId, connectorId],
+    );
   }
 
   try {
@@ -96,12 +70,10 @@ export async function executeRevokeConnector(args: {
       [userId, connectorId],
     );
   } catch (error) {
-    if (!isUndefinedTable(error)) {
-      logger.warn(
-        { userId, connectorId, error },
-        'Support action revoked a connector but could not clear its saved tool permissions',
-      );
-    }
+    logger.warn(
+      { userId, connectorId, error },
+      'Support action revoked a connector but could not clear its saved tool permissions',
+    );
   }
 
   return {

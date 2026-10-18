@@ -81,8 +81,6 @@ const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_NAME_CHARS = 200;
 const MAX_FILE_CONTENT_CHARS = 16_000;
 const MAX_TOTAL_FILE_CONTENT_CHARS = 48_000;
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
 export const MAX_SIBLING_CHATS = 15;
 const MAX_SIBLING_CANDIDATES = 40;
 const MAX_SIBLING_EXCERPT_CHARS = 1_600;
@@ -187,12 +185,6 @@ function scoreKnowledgeFile(
   );
 }
 
-function isKnowledgeFileSchemaUnavailable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
-
 export async function loadProjectContext(
   db: ProjectContextDb,
   params: {
@@ -219,35 +211,20 @@ export async function loadProjectContext(
   );
   if (!project) return null;
 
-  let files: Array<{
+  const files = await db.query<{
     id: string;
     file_name: string;
     summary: string | null;
     extracted_text: string | null;
     extracted_anchors: unknown;
-  }> = [];
-  try {
-    files = await db.query<{
-      id: string;
-      file_name: string;
-      summary: string | null;
-      extracted_text: string | null;
-      extracted_anchors: unknown;
-    }>(
-      `select id,
-              file_name,
-              summary,
-              to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text,
-              to_jsonb(project_knowledge_files)->'extracted_anchors' as extracted_anchors
-         from project_knowledge_files
-        where project_id = $1 and deleted_at is null and superseded_at is null
-        order by added_at desc
-        limit ${MAX_KNOWLEDGE_FILES}`,
-      [params.projectId],
-    );
-  } catch (error) {
-    if (!isKnowledgeFileSchemaUnavailable(error)) throw error;
-  }
+  }>(
+    `select id, file_name, summary, extracted_text, extracted_anchors
+       from project_knowledge_files
+      where project_id = $1 and deleted_at is null and superseded_at is null
+      order by added_at desc
+      limit ${MAX_KNOWLEDGE_FILES}`,
+    [params.projectId],
+  );
 
   const siblingRows =
     params.includeChats === false

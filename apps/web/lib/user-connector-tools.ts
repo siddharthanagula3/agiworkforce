@@ -170,33 +170,6 @@ function resolveConnectorToolLimit(planTier: string | null | undefined): number 
 
 const GITHUB_SERVER_ID = 'github';
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
-
-function isGithubOwnershipSchemaUnavailable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as Record<string, unknown>;
-  if (
-    candidate['code'] === PG_UNDEFINED_TABLE ||
-    /relation\s+.+\s+does not exist/i.test(String(candidate['message'] ?? ''))
-  ) {
-    return true;
-  }
-  return (
-    candidate['code'] === PG_UNDEFINED_COLUMN &&
-    String(candidate['message'] ?? '').includes('ownership_verified_at')
-  );
-}
-
 export interface ConnectorExecResult {
   handled: boolean;
   content: string;
@@ -377,27 +350,14 @@ export async function getUserGithubInstallations(
   userId: string,
 ): Promise<{ installationId: number; login: string; verifiedRepositories: string[] | null }[]> {
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return [];
-  const db = getNeonDb();
-  let rows: GithubInstallationRow[];
-  try {
-    rows = await db.query<GithubInstallationRow>(
-      `select installation_id, account_login, verified_repositories
-         from github_installations
-        where user_id = $1
-          and ownership_verified_at is not null
-        order by created_at asc`,
-      [userId],
-    );
-  } catch (error) {
-    if (isGithubOwnershipSchemaUnavailable(error)) {
-      logger.warn(
-        { userId },
-        'GitHub installation ownership schema is unavailable; omitting GitHub from connector catalog',
-      );
-      return [];
-    }
-    throw error;
-  }
+  const rows = await getNeonDb().query<GithubInstallationRow>(
+    `select installation_id, account_login, verified_repositories
+       from github_installations
+      where user_id = $1
+        and ownership_verified_at is not null
+      order by created_at asc`,
+    [userId],
+  );
   return rows
     .map((r) => ({
       installationId: Number(r.installation_id),
@@ -635,17 +595,11 @@ function connectorOwnerDb(userId: string) {
 }
 
 async function getUserActiveConnectorIds(userId: string): Promise<Set<string>> {
-  const db = connectorOwnerDb(userId);
-  try {
-    const rows = await db.query<{ connector_id: string }>(
-      `select connector_id from user_connectors where user_id = $1 and is_active = true`,
-      [userId],
-    );
-    return new Set(rows.map((r) => r.connector_id));
-  } catch (error) {
-    if (isUndefinedTable(error)) return new Set();
-    throw error;
-  }
+  const rows = await connectorOwnerDb(userId).query<{ connector_id: string }>(
+    `select connector_id from user_connectors where user_id = $1 and is_active = true`,
+    [userId],
+  );
+  return new Set(rows.map((r) => r.connector_id));
 }
 
 interface RemoteCatalogState {
@@ -911,21 +865,15 @@ async function getUserCustomConnectorRows(
   userId: string,
   limit?: number,
 ): Promise<CustomConnectorRow[]> {
-  const db = connectorOwnerDb(userId);
-  try {
-    const rows = await db.query<CustomConnectorRow>(
-      `select id, short_id, name, url, transport, auth_header_enc
-         from user_custom_connectors
-        where user_id = $1 and disabled_by_plugin_at is null
-        order by created_at asc, id asc
-        limit $2`,
-      [userId, limit ?? null],
-    );
-    return limit === undefined ? rows : rows.slice(0, limit);
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await connectorOwnerDb(userId).query<CustomConnectorRow>(
+    `select id, short_id, name, url, transport, auth_header_enc
+       from user_custom_connectors
+      where user_id = $1 and disabled_by_plugin_at is null
+      order by created_at asc, id asc
+      limit $2`,
+    [userId, limit ?? null],
+  );
+  return limit === undefined ? rows : rows.slice(0, limit);
 }
 
 export interface UserCustomConnectorSummary {
@@ -955,42 +903,37 @@ export async function getUserCustomConnectorSummaries(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<UserCustomConnectorSummary[]> {
-  try {
-    const rows = await db.query<{
-      id: string;
-      short_id: string;
-      name: string;
-      url: string;
-      transport: CustomConnectorTransport;
-      auth_header_enc: string | null;
-      sign_in_required: boolean;
-      disabled_by_plugin_at: string | null;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `select id, short_id, name, url, transport, auth_header_enc, sign_in_required,
-              disabled_by_plugin_at, created_at, updated_at
-         from user_custom_connectors
-        where user_id = $1
-        order by created_at desc`,
-      [userId],
-    );
-    return rows.map((r) => ({
-      id: r.id,
-      shortId: r.short_id,
-      name: r.name,
-      url: r.url,
-      transport: r.transport,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-      signInRequired: r.sign_in_required,
-      ...(r.disabled_by_plugin_at ? { disabledByPlugin: true as const } : {}),
-      ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
-    }));
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await db.query<{
+    id: string;
+    short_id: string;
+    name: string;
+    url: string;
+    transport: CustomConnectorTransport;
+    auth_header_enc: string | null;
+    sign_in_required: boolean;
+    disabled_by_plugin_at: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `select id, short_id, name, url, transport, auth_header_enc, sign_in_required,
+            disabled_by_plugin_at, created_at, updated_at
+       from user_custom_connectors
+      where user_id = $1
+      order by created_at desc`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    shortId: r.short_id,
+    name: r.name,
+    url: r.url,
+    transport: r.transport,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    signInRequired: r.sign_in_required,
+    ...(r.disabled_by_plugin_at ? { disabledByPlugin: true as const } : {}),
+    ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
+  }));
 }
 
 export class ConnectorCredentialError extends Error {
@@ -1166,19 +1109,12 @@ async function executeCustomConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const db = connectorOwnerDb(userId);
-  let rows: CustomConnectorRow[];
-  try {
-    rows = await db.query<CustomConnectorRow>(
-      `select id, short_id, name, url, transport, auth_header_enc
-         from user_custom_connectors
-        where short_id = $1 and user_id = $2 and disabled_by_plugin_at is null`,
-      [shortId, userId],
-    );
-  } catch (error) {
-    if (isUndefinedTable(error)) rows = [];
-    else throw error;
-  }
+  const rows = await connectorOwnerDb(userId).query<CustomConnectorRow>(
+    `select id, short_id, name, url, transport, auth_header_enc
+       from user_custom_connectors
+      where short_id = $1 and user_id = $2 and disabled_by_plugin_at is null`,
+    [shortId, userId],
+  );
   const row = rows[0];
   if (!row) {
     return {
@@ -1675,25 +1611,19 @@ async function getOrgSharedConnectorRows(
   organizationId: string,
   limit?: number,
 ): Promise<OrgSharedConnectorRow[]> {
-  const db = getNeonDb();
-  try {
-    const rows = await db.query<OrgSharedConnectorRow>(
-      `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
-              s.organization_id, s.org_short_id
-         from public.organization_shared_connectors s
-         join public.user_custom_connectors c on c.id = s.connector_row_id
-        where s.organization_id = $1
-          and c.user_id <> $2
-          and c.disabled_by_plugin_at is null
-        order by s.created_at asc, s.connector_row_id asc
-        limit $3`,
-      [organizationId, userId, limit ?? null],
-    );
-    return limit === undefined ? rows : rows.slice(0, limit);
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await getNeonDb().query<OrgSharedConnectorRow>(
+    `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
+            s.organization_id, s.org_short_id
+       from public.organization_shared_connectors s
+       join public.user_custom_connectors c on c.id = s.connector_row_id
+      where s.organization_id = $1
+        and c.user_id <> $2
+        and c.disabled_by_plugin_at is null
+      order by s.created_at asc, s.connector_row_id asc
+      limit $3`,
+    [organizationId, userId, limit ?? null],
+  );
+  return limit === undefined ? rows : rows.slice(0, limit);
 }
 
 /**
@@ -1705,22 +1635,16 @@ async function getWorkspacePublishedMcpRows(
   organizationId: string,
   limit?: number,
 ): Promise<OrgSharedConnectorRow[]> {
-  const db = getNeonDb();
-  try {
-    const rows = await db.query<OrgSharedConnectorRow>(
-      `select id, short_id, name, url, transport, null::text as auth_header_enc,
-              organization_id, short_id as org_short_id
-         from public.organization_mcp_servers
-        where organization_id = $1 and published and retired_at is null
-        order by name asc, id asc
-        limit $2`,
-      [organizationId, limit ?? null],
-    );
-    return limit === undefined ? rows : rows.slice(0, limit);
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
+  const rows = await getNeonDb().query<OrgSharedConnectorRow>(
+    `select id, short_id, name, url, transport, null::text as auth_header_enc,
+            organization_id, short_id as org_short_id
+       from public.organization_mcp_servers
+      where organization_id = $1 and published and retired_at is null
+      order by name asc, id asc
+      limit $2`,
+    [organizationId, limit ?? null],
+  );
+  return limit === undefined ? rows : rows.slice(0, limit);
 }
 
 /** Every MCP server this member reaches through their workspace rather than their own account. */
@@ -1828,31 +1752,24 @@ async function executeOrgSharedConnectorTool(
     };
   }
 
-  const db = getNeonDb();
-  let rows: OrgSharedConnectorRow[];
-  try {
-    rows = await db.query<OrgSharedConnectorRow>(
-      `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
-              s.organization_id, s.org_short_id
-         from public.organization_shared_connectors s
-         join public.user_custom_connectors c on c.id = s.connector_row_id
-        where s.organization_id = $1
-          and s.org_short_id = $2
-          and c.disabled_by_plugin_at is null
-        union all
-       select p.id, p.short_id, p.name, p.url, p.transport, null::text as auth_header_enc,
-              p.organization_id, p.short_id as org_short_id
-         from public.organization_mcp_servers p
-        where p.organization_id = $1
-          and p.short_id = $2
-          and p.published
-          and p.retired_at is null`,
-      [organizationId, orgShortId],
-    );
-  } catch (error) {
-    if (isUndefinedTable(error)) rows = [];
-    else throw error;
-  }
+  const rows = await getNeonDb().query<OrgSharedConnectorRow>(
+    `select c.id, c.short_id, c.name, c.url, c.transport, c.auth_header_enc,
+            s.organization_id, s.org_short_id
+       from public.organization_shared_connectors s
+       join public.user_custom_connectors c on c.id = s.connector_row_id
+      where s.organization_id = $1
+        and s.org_short_id = $2
+        and c.disabled_by_plugin_at is null
+      union all
+     select p.id, p.short_id, p.name, p.url, p.transport, null::text as auth_header_enc,
+            p.organization_id, p.short_id as org_short_id
+       from public.organization_mcp_servers p
+      where p.organization_id = $1
+        and p.short_id = $2
+        and p.published
+        and p.retired_at is null`,
+    [organizationId, orgShortId],
+  );
 
   const row = rows[0];
   if (!row) {

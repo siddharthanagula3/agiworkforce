@@ -23,16 +23,6 @@ import { getIdentityUser } from '@/lib/server/identity';
 export const SUPPORT_API_KEY_CEILING = 20;
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
 
 function toIso(value: string | Date | null | undefined): string | null {
   if (!value) return null;
@@ -60,19 +50,13 @@ async function resolveConnectors(
 ): Promise<SupportAccountConnector[]> {
   const connectors: SupportAccountConnector[] = [];
 
-  let rows: { id: string; connector_id: string; connected_at: string }[] = [];
-  try {
-    rows = await db.query<{ id: string; connector_id: string; connected_at: string }>(
-      `select id, connector_id, connected_at
-         from user_connectors
-        where user_id = $1 and is_active = true
-        order by connected_at desc`,
-      [userId],
-    );
-  } catch (error) {
-    if (!isUndefinedTable(error)) throw error;
-    logger.warn({ userId }, 'user_connectors not migrated; support context reports no connectors');
-  }
+  const rows = await db.query<{ id: string; connector_id: string; connected_at: string }>(
+    `select id, connector_id, connected_at
+       from user_connectors
+      where user_id = $1 and is_active = true
+      order by connected_at desc`,
+    [userId],
+  );
 
   const operatorMapped = getOperatorMappedConnectorIds();
   for (const row of rows) {
