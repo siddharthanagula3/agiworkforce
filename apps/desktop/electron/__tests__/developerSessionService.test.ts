@@ -144,7 +144,12 @@ const BASE_CAPABILITIES = { threads: true, turns: true, streaming: true, approva
 const HANDSHAKE = {
   protocolVersion: 8,
   serverInfo: { name: 'agiworkforce-app-server', title: 'AGI', version: '1.7.1' },
-  capabilities: { ...BASE_CAPABILITIES, worktrees: true, checkpoints: true, threadDelete: true },
+  capabilities: {
+    ...BASE_CAPABILITIES,
+    managedWorktrees: true,
+    checkpoints: true,
+    threadDelete: true,
+  },
 };
 
 const thread = {
@@ -632,7 +637,7 @@ describe('developer session runtime', () => {
   it('hides what the running CLI said at initialize it cannot serve', async () => {
     const { service } = await loadService((method) =>
       method === 'initialize'
-        ? { ...HANDSHAKE, capabilities: { ...BASE_CAPABILITIES, worktrees: true } }
+        ? { ...HANDSHAKE, capabilities: { ...BASE_CAPABILITIES, managedWorktrees: true } }
         : defaultResponder(method),
     );
     await service.listDeveloperSessions();

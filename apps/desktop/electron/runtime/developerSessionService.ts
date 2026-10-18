@@ -1150,7 +1150,7 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     binary,
     approvals: capabilities['approvals'] === true,
     writerLease: capabilities['writerLease'] === true,
-    worktrees: capabilities['worktrees'] === true,
+    worktrees: capabilities['managedWorktrees'] === true,
     checkpoints: capabilities['checkpoints'] === true,
     threadDelete: capabilities['threadDelete'] === true,
     forkThroughTurn: capabilities['forkThroughTurn'] === true,
