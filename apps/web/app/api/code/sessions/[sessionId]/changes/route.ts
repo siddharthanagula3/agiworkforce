@@ -35,7 +35,7 @@ async function handleChanges(request: NextRequest, context: RouteContext) {
     );
   }
   if (!isManagedComputePrivateBetaEnabled()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }
@@ -97,7 +97,7 @@ async function handleDiscard(request: NextRequest, context: RouteContext) {
     );
   }
   if (!isManagedComputePrivateBetaEnabled()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }

@@ -34,7 +34,7 @@ async function handleList(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'files-serve', `user:${userId}`);
   if (limited) return limited;
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+    throw createError.capabilityUnavailable('Managed Code is not enabled for this deployment');
   }
   const { sessionId } = await context.params;
 
@@ -72,10 +72,10 @@ async function handleUpload(request: NextRequest, context: RouteContext) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+    throw createError.capabilityUnavailable('Managed Code is not enabled for this deployment');
   }
   if (!isManagedComputePrivateBetaEnabled()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }

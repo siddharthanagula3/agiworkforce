@@ -26,7 +26,7 @@ async function handleDownload(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'files-serve', `user:${userId}`);
   if (limited) return limited;
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+    throw createError.capabilityUnavailable('Managed Code is not enabled for this deployment');
   }
   const { sessionId, path } = await context.params;
   const entitlement = await resolveEntitlementBundle(db, userId);

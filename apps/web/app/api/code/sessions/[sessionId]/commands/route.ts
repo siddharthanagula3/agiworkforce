@@ -43,10 +43,10 @@ async function handleRun(request: NextRequest, context: RouteContext) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+    throw createError.capabilityUnavailable('Managed Code is not enabled for this deployment');
   }
   if (!isManagedComputePrivateBetaEnabled()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }

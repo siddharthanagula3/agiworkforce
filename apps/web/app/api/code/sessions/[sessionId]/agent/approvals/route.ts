@@ -66,7 +66,7 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
   if (csrfError) return csrfError as NextResponse;
 
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+    throw createError.capabilityUnavailable('Managed Code is not enabled for this deployment');
   }
 
   let body: unknown;
