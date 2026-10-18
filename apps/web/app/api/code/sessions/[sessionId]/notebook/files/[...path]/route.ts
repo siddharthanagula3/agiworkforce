@@ -52,7 +52,7 @@ async function handleDownload(request: NextRequest, context: RouteContext) {
       db,
       { userId, organizationId },
       sessionId,
-      path.map(decodeURIComponent).join('/'),
+      path.join('/'),
       planTier,
     );
     const filename = path[path.length - 1] ?? 'file';

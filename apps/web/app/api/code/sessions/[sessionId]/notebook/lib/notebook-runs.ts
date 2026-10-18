@@ -6,8 +6,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
-const PG_UNDEFINED_TABLE = '42P01';
-
 /** Weakest first: a run may demand at most what the session was created with. */
 const NETWORK_ACCESS_RANK: Readonly<Record<CloudCodeNetworkAccess, number>> = {
   none: 0,
@@ -97,7 +95,6 @@ export async function recordNotebookRun(
       ],
     );
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === PG_UNDEFINED_TABLE) return;
     logger.error(
       { error, sessionId: record.sessionId, runId: record.runId },
       'Notebook run provenance could not be recorded',
