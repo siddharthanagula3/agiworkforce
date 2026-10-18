@@ -35,13 +35,6 @@ pub struct CacheStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheSettings {
-    pub ttl_seconds: Option<u64>,
-    pub max_entries: Option<usize>,
-    pub enabled: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheAnalytics {
     pub most_cached_queries: Vec<CachedQueryInfo>,
     pub provider_breakdown: Vec<ProviderCacheBreakdown>,
@@ -173,28 +166,6 @@ pub async fn cache_get_size(db: State<'_, AppDatabase>) -> Result<f64, String> {
 
     let size_mb = total_bytes as f64 / (1024.0 * 1024.0);
     Ok(size_mb)
-}
-
-#[tauri::command]
-pub async fn cache_configure(
-    settings: CacheSettings,
-    _llm_state: State<'_, LLMState>,
-) -> Result<(), String> {
-    tracing::info!(
-        "Cache configuration request received: ttl={:?}s, max_entries={:?}, enabled={:?}",
-        settings.ttl_seconds,
-        settings.max_entries,
-        settings.enabled
-    );
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn cache_warmup(queries: Vec<String>) -> Result<(), String> {
-    tracing::info!("Cache warmup requested for {} queries", queries.len());
-
-    Ok(())
 }
 
 #[tauri::command]

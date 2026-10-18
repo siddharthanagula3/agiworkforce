@@ -472,29 +472,11 @@ impl TabManager {
             .and_then(|v| v.parse().ok())
             .unwrap_or(9222);
 
-        let screenshot_data = Self::capture_via_cdp(cdp_port, format_str, &options).await;
-
-        match screenshot_data {
-            Ok(bytes) => {
-                std::fs::write(&screenshot_path, bytes)?;
-                tracing::info!("CDP screenshot saved to: {:?}", screenshot_path);
-            }
-            Err(e) => {
-                tracing::warn!("CDP screenshot failed ({}), writing empty placeholder", e);
-                // Write a minimal valid PNG (1x1 transparent pixel) as fallback
-                // so callers always get a valid image file.
-                let placeholder_png: &[u8] = &[
-                    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-                    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00,
-                    0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
-                    0x9C, 0x62, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC, 0x00,
-                    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-                ];
-                std::fs::write(&screenshot_path, placeholder_png)?;
-                tracing::info!("Placeholder screenshot saved to: {:?}", screenshot_path);
-            }
-        }
+        let bytes = Self::capture_via_cdp(cdp_port, format_str, &options)
+            .await
+            .map_err(|error| Error::Other(format!("Screenshot failed: {error}")))?;
+        std::fs::write(&screenshot_path, bytes)?;
+        tracing::info!("CDP screenshot saved to: {:?}", screenshot_path);
 
         Ok(screenshot_path)
     }

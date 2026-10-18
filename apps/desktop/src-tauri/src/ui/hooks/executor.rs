@@ -472,12 +472,13 @@ impl HookExecutor {
                     crate::core::mcp::sandbox::sandbox_workspace().map_err(anyhow::Error::msg)?
                 }
             };
-            match crate::core::mcp::sandbox::full_read_sandbox_program(
+            match crate::core::mcp::sandbox::full_read_sandbox_program_guarding(
                 shell,
                 &shell_args,
                 &workspace,
                 &[],
                 &crate::core::mcp::sandbox::protected_config_paths(),
+                &crate::core::mcp::sandbox::credential_locations(),
                 agiworkforce_sandbox_policy::NetworkPolicy::Allow,
                 crate::core::mcp::sandbox::SandboxCaches::Shared,
                 &hook_env,

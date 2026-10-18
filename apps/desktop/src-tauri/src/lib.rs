@@ -1311,8 +1311,6 @@ pub fn run() {
             crate::sys::commands::cache_clear_by_type,
             crate::sys::commands::cache_clear_by_provider,
             crate::sys::commands::cache_get_size,
-            crate::sys::commands::cache_configure,
-            crate::sys::commands::cache_warmup,
             crate::sys::commands::cache_export,
             crate::sys::commands::cache_get_analytics,
             crate::sys::commands::cache_prune_expired,

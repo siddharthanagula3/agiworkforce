@@ -14,12 +14,6 @@ export interface CacheStats {
   total_savings_usd: number;
 }
 
-export interface CacheSettings {
-  ttl_seconds?: number;
-  max_entries?: number;
-  enabled?: boolean;
-}
-
 export interface CachedQueryInfo {
   prompt_hash: string;
   provider: string;

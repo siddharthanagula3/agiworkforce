@@ -1,5 +1,5 @@
 import { invoke } from '../lib/tauri-mock';
-import type { CacheAnalytics, CacheSettings, CacheStats, CacheType } from '../types/cache';
+import type { CacheAnalytics, CacheStats, CacheType } from '../types/cache';
 
 const DEFAULT_CACHE_TYPE_STATS = {
   hits: 0,
@@ -66,23 +66,6 @@ export async function getCacheSize(): Promise<number> {
   } catch (error) {
     console.warn('[CacheService] Failed to get cache size:', error);
     return 0;
-  }
-}
-
-export async function configureCache(settings: CacheSettings): Promise<void> {
-  try {
-    return await invoke('cache_configure', { settings });
-  } catch (error) {
-    console.error('[CacheService] Failed to configure cache:', error);
-    throw error;
-  }
-}
-
-export async function warmupCache(queries: string[]): Promise<void> {
-  try {
-    return await invoke('cache_warmup', { queries });
-  } catch (error) {
-    console.warn('[CacheService] Failed to warmup cache:', error);
   }
 }
 

@@ -184,12 +184,13 @@ pub(crate) fn sandboxed_terminal_launch(
     }
     let wrapped = match policy {
         SandboxPolicy::ReadOnly => read_only_program(&program, &args, workspace)?,
-        _ => crate::core::mcp::sandbox::full_read_sandbox_program(
+        _ => crate::core::mcp::sandbox::full_read_sandbox_program_guarding(
             &program,
             &args,
             workspace,
             &[],
             &crate::core::mcp::sandbox::protected_config_paths(),
+            &crate::core::mcp::sandbox::credential_locations(),
             NetworkPolicy::AllowExternal,
             crate::core::mcp::sandbox::SandboxCaches::Private,
             &|name| std::env::var(name).ok(),
