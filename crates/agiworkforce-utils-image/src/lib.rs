@@ -16,10 +16,30 @@ use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
 use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType;
-/// Maximum width used when resizing images before uploading.
-pub const MAX_WIDTH: u32 = 2048;
-/// Maximum height used when resizing images before uploading.
-pub const MAX_HEIGHT: u32 = 768;
+/// The most an image's longer edge keeps before uploading.
+pub const MAX_LONG_EDGE: u32 = 2048;
+/// The most an image's shorter edge keeps before uploading.
+pub const MAX_SHORT_EDGE: u32 = 768;
+
+/// The width and height an image of this shape is fitted within: a fixed
+/// width-by-height box would shrink a portrait screenshot to a sliver.
+fn bounds_for(width: u32, height: u32) -> (u32, u32) {
+    if width >= height {
+        (MAX_LONG_EDGE, MAX_SHORT_EDGE)
+    } else {
+        (MAX_SHORT_EDGE, MAX_LONG_EDGE)
+    }
+}
+
+fn fits_bounds(width: u32, height: u32) -> bool {
+    let (max_width, max_height) = bounds_for(width, height);
+    width <= max_width && height <= max_height
+}
+
+fn resize_to_bounds(image: &DynamicImage) -> DynamicImage {
+    let (max_width, max_height) = bounds_for(image.width(), image.height());
+    image.resize(max_width, max_height, FilterType::Triangle)
+}
 
 pub mod cache;
 pub mod error;
@@ -80,40 +100,39 @@ pub fn load_for_prompt_bytes(
 
         let (width, height) = dynamic.dimensions();
 
-        let encoded =
-            if mode == PromptImageMode::Original || (width <= MAX_WIDTH && height <= MAX_HEIGHT) {
-                if let Some(format) = format.filter(|format| can_preserve_source_bytes(*format)) {
-                    let mime = format_to_mime(format);
-                    EncodedImage {
-                        bytes: file_bytes,
-                        mime,
-                        width,
-                        height,
-                    }
-                } else {
-                    let (bytes, output_format) = encode_image(&dynamic, ImageFormat::Png)?;
-                    let mime = format_to_mime(output_format);
-                    EncodedImage {
-                        bytes,
-                        mime,
-                        width,
-                        height,
-                    }
+        let encoded = if mode == PromptImageMode::Original || fits_bounds(width, height) {
+            if let Some(format) = format.filter(|format| can_preserve_source_bytes(*format)) {
+                let mime = format_to_mime(format);
+                EncodedImage {
+                    bytes: file_bytes,
+                    mime,
+                    width,
+                    height,
                 }
             } else {
-                let resized = dynamic.resize(MAX_WIDTH, MAX_HEIGHT, FilterType::Triangle);
-                let target_format = format
-                    .filter(|format| can_preserve_source_bytes(*format))
-                    .unwrap_or(ImageFormat::Png);
-                let (bytes, output_format) = encode_image(&resized, target_format)?;
+                let (bytes, output_format) = encode_image(&dynamic, ImageFormat::Png)?;
                 let mime = format_to_mime(output_format);
                 EncodedImage {
                     bytes,
                     mime,
-                    width: resized.width(),
-                    height: resized.height(),
+                    width,
+                    height,
                 }
-            };
+            }
+        } else {
+            let resized = resize_to_bounds(&dynamic);
+            let target_format = format
+                .filter(|format| can_preserve_source_bytes(*format))
+                .unwrap_or(ImageFormat::Png);
+            let (bytes, output_format) = encode_image(&resized, target_format)?;
+            let mime = format_to_mime(output_format);
+            EncodedImage {
+                bytes,
+                mime,
+                width: resized.width(),
+                height: resized.height(),
+            }
+        };
 
         Ok(encoded)
     })
@@ -143,8 +162,8 @@ pub fn encode_rgba_for_prompt(
         },
     )?;
     let dynamic = DynamicImage::ImageRgba8(buffer);
-    let dynamic = if width > MAX_WIDTH || height > MAX_HEIGHT {
-        dynamic.resize(MAX_WIDTH, MAX_HEIGHT, FilterType::Triangle)
+    let dynamic = if !fits_bounds(width, height) {
+        resize_to_bounds(&dynamic)
     } else {
         dynamic
     };
@@ -250,11 +269,19 @@ mod rgba_tests {
 
     #[test]
     fn an_oversize_bitmap_is_resized_to_the_upload_bounds() {
-        let width = MAX_WIDTH + 10;
-        let height = MAX_HEIGHT + 10;
+        let width = MAX_LONG_EDGE + 10;
+        let height = MAX_SHORT_EDGE + 10;
         let rgba = vec![0u8; (width as usize) * (height as usize) * 4];
         let encoded = encode_rgba_for_prompt(width, height, rgba).expect("encodes");
-        assert!(encoded.width <= MAX_WIDTH && encoded.height <= MAX_HEIGHT);
+        assert!(encoded.width <= MAX_LONG_EDGE && encoded.height <= MAX_SHORT_EDGE);
+    }
+
+    #[test]
+    fn a_portrait_bitmap_keeps_its_long_edge_vertical() {
+        let rgba = vec![0u8; 1080 * 1920 * 4];
+        let encoded = encode_rgba_for_prompt(1080, 1920, rgba).expect("encodes");
+        assert_eq!(encoded.width, MAX_SHORT_EDGE);
+        assert!(encoded.height > MAX_SHORT_EDGE && encoded.height <= MAX_LONG_EDGE);
     }
 
     #[test]
@@ -320,8 +347,8 @@ mod tests {
             )
             .expect("process image");
 
-            assert!(processed.width <= MAX_WIDTH);
-            assert!(processed.height <= MAX_HEIGHT);
+            assert!(processed.width <= MAX_LONG_EDGE);
+            assert!(processed.height <= MAX_SHORT_EDGE);
             assert_eq!(processed.mime, mime);
 
             let detected_format =

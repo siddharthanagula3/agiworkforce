@@ -12,10 +12,6 @@ workspace = true
 name = "agiworkforce_execpolicy"
 path = "src/lib.rs"
 
-[[bin]]
-name = "agiworkforce-execpolicy"
-path = "src/main.rs"
-
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

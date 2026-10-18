@@ -32,11 +32,15 @@ pub async fn enter_worktree(
     repo: &Path,
     opts: WorktreeOptions,
 ) -> Result<Worktree> {
+    let workspace = Workspace::discover(runner, repo)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("{} is not inside a git working tree", repo.display()))?;
+    let top = workspace.top();
     let target = opts.target_dir.unwrap_or_else(|| {
-        let parent = repo.parent().unwrap_or(repo);
+        let parent = top.parent().unwrap_or(top);
         parent.join(format!(
             "{}-{}",
-            repo.file_name()
+            top.file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             opts.branch
@@ -57,8 +61,9 @@ pub async fn enter_worktree(
             anyhow::bail!("worktree base ref must not start with '-': {base:?}");
         }
     }
-    verify_repository_config(runner, repo, repo, ConfigUse::CONTENT).await?;
-    let mut cmd = git_command(repo).await?;
+    let pinned = workspace.runner(runner);
+    verify_repository_config(&pinned, top, top, ConfigUse::CONTENT).await?;
+    let mut cmd = git_command(top).await?;
     cmd.arg("worktree")
         .arg("add")
         .arg("-b")
@@ -70,7 +75,7 @@ pub async fn enter_worktree(
     if let Some(base) = opts.base {
         cmd.arg(base);
     }
-    let output = runner
+    let output = pinned
         .output(cmd, None, Some(GIT_TIMEOUT))
         .await
         .context("invoke git worktree add")?;
