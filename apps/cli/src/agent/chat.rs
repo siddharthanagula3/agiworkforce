@@ -613,16 +613,6 @@ impl AgentSession {
         self.cost_ledger.record_completions(completions);
     }
 
-    /// Send a user message and run the full agentic loop.
-    ///
-    /// This is the thin orchestrator (Wave 5e1): consent + privacy boundary,
-    /// context compaction, plan-mode prefixing, the user-message push, and the
-    /// pre-/post-turn hooks stay here (CLI-local, trust-boundary and
-    /// presentation concerns). The turn-loop MECHANICS, model-stream driving,
-    /// tool scheduling, runaway/iteration/budget guards, and event cadence.
-    /// live in `agiworkforce_agent_core::run_turn`, driven through the
-    /// `TurnHostAdapter` below. The public signature and the emitted event
-    /// cadence are byte-for-byte unchanged.
     /// Re-resolve the Auto route for an interactive turn
     /// (AUTO-ROUTER-MIGRATION-01, CLI clause). The pre-fix interactive path
     /// resolved Auto once at launch with a hardcoded Coding task; now every
@@ -1032,6 +1022,13 @@ impl AgentSession {
         result
     }
 
+    /// Send a user message and run the full agentic loop.
+    ///
+    /// Consent and the privacy boundary, context compaction, plan-mode
+    /// prefixing, the user-message push and the pre- and post-turn hooks stay
+    /// here. The loop itself (model streaming, tool scheduling, the runaway,
+    /// iteration and budget guards) is `agiworkforce_agent_core::run_turn`,
+    /// driven through the `TurnHostAdapter` below.
     pub async fn send(
         &mut self,
         config: &CliConfig,
@@ -1799,6 +1796,30 @@ impl TurnHostAdapter<'_> {
             },
             Err(error) => refuse(format!("{error:#}")),
         }
+    }
+
+    /// Ask whether a turn that looks stuck in a loop goes on. The surface's
+    /// approval channel answers when there is one (the TUI overlay, an
+    /// app-server client); a terminal prompt only when a person is at a plain
+    /// terminal. Anything else stops the loop.
+    async fn confirm_loop_continues(&self, repeated_action: String, question: &str) -> bool {
+        let request = crate::tui::approval_broker::ApprovalRequest::new(
+            crate::tui::approval_broker::ApprovalRequestKind::LoopDetection { repeated_action },
+            question,
+            Vec::new(),
+        );
+        let callback = self.session.recorded_approval_callback();
+        if let Some(decision) = crate::tools::request_approval(callback.as_ref(), request).await {
+            return crate::tools::approval_allows(decision);
+        }
+        if crate::tui::tui_active() || !crate::interactive::can_prompt() {
+            return false;
+        }
+        dialoguer::Confirm::new()
+            .with_prompt(question)
+            .default(false)
+            .interact()
+            .unwrap_or(false)
     }
 
     /// First completion: primary stream (or the `--demo` synthesized rate-limit)
@@ -3191,27 +3212,13 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        hooks::run_hooks(
-            &self.session.hooks_config,
-            hooks::HookEvent::PermissionRequest,
-            &hooks::HookInput {
-                event: "PermissionRequest".to_string(),
-                session_id: None,
-                model: Some(self.session.model.clone()),
-                tool_name: calls.first().map(|tc| tc.name.clone()),
-                tool_args: calls.first().map(|tc| tc.arguments.clone()),
-                tool_output: None,
-                message: Some("loop-detection confirmation".to_string()),
-                tool_execution: None,
-            },
-        )
-        .await;
-
-        let confirmed = dialoguer::Confirm::new()
-            .with_prompt("Continue with these tool calls?")
-            .default(false)
-            .interact()
-            .unwrap_or(false);
+        let repeated_action = calls
+            .first()
+            .map(|tc| tc.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let confirmed = self
+            .confirm_loop_continues(repeated_action, "Continue with these tool calls?")
+            .await;
 
         if !confirmed {
             narrate!("{}", "  Agentic loop stopped by user.".dimmed());
@@ -3260,11 +3267,12 @@ impl TurnHost for TurnHostAdapter<'_> {
             ))
         );
 
-        let confirmed = dialoguer::Confirm::new()
-            .with_prompt("Continue the agentic loop?")
-            .default(false)
-            .interact()
-            .unwrap_or(false);
+        let confirmed = self
+            .confirm_loop_continues(
+                "repeated assistant text".to_string(),
+                "Continue the agentic loop?",
+            )
+            .await;
 
         if !confirmed {
             narrate!("{}", "  Agentic loop stopped by user.".dimmed());
