@@ -4289,5 +4289,35 @@
   "spFreeModelPromotionDismiss": {
     "message": "Dismiss the free model promotion notice",
     "description": "Accessible name of the button that closes the free model promotion notice"
+  },
+  "spCodeCopy": {
+    "message": "Copy code",
+    "description": "Button that copies a code block in an answer"
+  },
+  "spCodeCopied": {
+    "message": "Copied",
+    "description": "Status after a code block was copied"
+  },
+  "spCodeCopyFailed": {
+    "message": "The code could not be copied. Try again.",
+    "description": "Status after copying a code block failed"
+  },
+  "spCodeCopyRetry": {
+    "message": "Retry copying code",
+    "description": "Code block copy button after a failed copy"
+  },
+  "spFootnotes": {
+    "message": "Footnotes",
+    "description": "Accessible name of the footnote list at the end of an answer"
+  },
+  "spFootnoteBackref": {
+    "message": "Back to reference $NUMBER$",
+    "description": "Accessible name of the link from a footnote back to where it is cited",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
   }
 }

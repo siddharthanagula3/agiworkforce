@@ -2033,7 +2033,9 @@ function injectStyles(): void {
       border-radius: var(--corner-surface);
       line-height: var(--type-body-height);
       font-size: var(--type-body-size);
-      word-break: break-word;
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
     .sp-bubble-user {
@@ -2474,6 +2476,45 @@ function injectStyles(): void {
       padding: 0;
       color: inherit;
     }
+    .sp-code-block { min-width: 0; max-width: 100%; margin: 4px 0; }
+    .sp-code-block > pre { margin: 0; }
+    .sp-code-block__bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      min-height: 24px;
+    }
+    .sp-code-block__status {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-code-block__copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-code-block__copy:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+    .sp-code-block__copy:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-code-block__copy[data-state="copied"] { color: var(--agi-ext-success-text); }
+    .sp-code-block__copy[data-state="failed"] { color: var(--agi-ext-danger-text); }
+    .sp-code-block__bar:has([data-state="failed"]) .sp-code-block__status { color: var(--agi-ext-danger-text); }
+    .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+    .sp-bubble-assistant section {
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-assistant section ol { padding-left: 16px; }
     .sp-bubble-assistant strong { color: var(--agi-ext-text); font-weight: 600; }
     .sp-bubble-assistant em { color: var(--agi-ext-text-muted); font-style: italic; }
     .sp-bubble-assistant a { color: var(--agi-ext-accent-text); text-decoration: underline; }
