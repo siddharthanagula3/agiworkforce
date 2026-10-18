@@ -43,7 +43,8 @@ import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-acce
 process.env[PLATFORM_ADMIN_ENV_VAR] = 'operator_1';
 
 import { NextRequest } from 'next/server';
-import { POST, BULK_RESET_CONFIRMATION } from '../route';
+import { BULK_RESET_CONFIRMATION } from '@/features/admin/lib/operator-actions';
+import { POST } from '../route';
 
 function post(body: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/operator', {

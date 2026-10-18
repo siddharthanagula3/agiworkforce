@@ -1,15 +1,11 @@
-import { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Reset Password',
   description: 'Recover your AGI account password.',
-  robots: {
-    index: false, // Don't index password reset page
-  },
-  alternates: {
-    canonical: 'https://agiworkforce.com/auth/reset-password',
-  },
-};
+  path: '/auth/reset-password',
+  robots: { index: false },
+});
 
 export default function ResetPasswordLayout({ children }: { children: React.ReactNode }) {
   return children;

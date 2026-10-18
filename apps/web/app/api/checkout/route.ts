@@ -398,11 +398,9 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         throw createError.serviceUnavailable(BILLING_UNVERIFIED_MESSAGE).asUserSafe();
       }
 
-      // A stored id Stripe does not recognise, which is what every customer
-      // created before the test-to-live migration became. Refusing here left
-      // those accounts unable to subscribe at all, and the guard below has
-      // nothing to protect: a customer this account does not have cannot be
-      // billing a subscription. Drop the dead link and start a fresh customer.
+      // A stored id Stripe does not recognise cannot be billing a subscription,
+      // so the guard below has nothing to protect. Refusing would leave the
+      // account unable to subscribe; drop the dead link and start a fresh customer.
       logger.warn(
         { userId: user.id, customerId: stripeCustomerId },
         'Stored Stripe customer does not exist in this account; replacing it',

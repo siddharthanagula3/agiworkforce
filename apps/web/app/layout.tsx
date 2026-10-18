@@ -17,7 +17,7 @@ import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetE
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
-import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
+import { OG_IMAGE, SITE_LEGAL_NAME, SITE_NAME, SITE_URL, TWITTER_HANDLE } from '@/lib/seo/site';
 import {
   organizationSchema,
   softwareApplicationSchema,
@@ -74,9 +74,9 @@ export const metadata: Metadata = {
     'no-code automation',
     'reversible AI',
   ],
-  authors: [{ name: 'AGI Automation LLC' }],
-  creator: 'AGI Automation LLC',
-  publisher: 'AGI Automation LLC',
+  authors: [{ name: SITE_LEGAL_NAME }],
+  creator: SITE_LEGAL_NAME,
+  publisher: SITE_LEGAL_NAME,
   formatDetection: {
     email: false,
     address: false,
@@ -89,7 +89,7 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: SITE_URL,
-    siteName: 'AGI',
+    siteName: SITE_NAME,
     title: 'AGI | One AI workspace across models and tools.',
     description:
       'A practical AI workspace for chat, code, research, files, tools, artifacts, connectors, and automation.',
@@ -107,7 +107,7 @@ export const metadata: Metadata = {
     title: 'AGI | One AI workspace across models and tools.',
     description:
       'Chat, code, research, files, artifacts, tools, connectors, and automation in one AGI workspace.',
-    creator: '@agiworkforce',
+    creator: TWITTER_HANDLE,
     images: [OG_IMAGE.url],
   },
   robots: {

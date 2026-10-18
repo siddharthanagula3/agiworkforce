@@ -635,7 +635,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
         </>
       )}
 
-      {/* Hidden file input for direct upload (legacy path, kept for keyboard users) */}
+      {/* Hidden file input for direct upload */}
       <input
         ref={fileInputRef}
         type="file"

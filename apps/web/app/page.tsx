@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 import { readFreeMediaOfferForRender } from '@/lib/server/free-media-offer-reader';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
 import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 
 const TITLE = 'AGI: ChatGPT, Claude, Gemini and more in one app';
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: TITLE,
     description: SHARE_DESCRIPTION,
     type: 'website',
-    url: 'https://agiworkforce.com',
+    url: SITE_URL,
     images: [OG_IMAGE],
   },
   twitter: {

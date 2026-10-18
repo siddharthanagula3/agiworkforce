@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Help Center',
   description:
     'Get help with AGI. Step-by-step guides and troubleshooting articles for AI automation, plus a contact route to a human.',
+  path: '/help',
   keywords: [
     'AGI help',
     'AI agent support',
@@ -12,33 +12,10 @@ export const metadata: Metadata = {
     'how to use AGI',
     'AI automation guide',
   ],
-  openGraph: {
-    title: 'Help Center',
-    description:
-      'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
-    type: 'website',
-    url: 'https://agiworkforce.com/help',
-    images: [
-      {
-        url: OG_IMAGE.url,
-        width: 1200,
-        height: 630,
-        alt: 'AGI Help Center',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Help Center',
-    description:
-      'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
-    images: [OG_IMAGE.url],
-    creator: '@agiworkforce',
-  },
-  alternates: {
-    canonical: '/help',
-  },
-};
+  ogDescription:
+    'Find answers fast. Guides, troubleshooting articles, and a contact route to a human.',
+  imageAlt: 'AGI Help Center',
+});
 
 export default function HelpLayout({ children }: { children: React.ReactNode }) {
   return children;

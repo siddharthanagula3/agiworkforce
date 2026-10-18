@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse, after } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ALLOWED_MANAGED_PROVIDER_HOSTS, validateBaseUrl } from '@agiworkforce/provider-runtime';
-import { getSlotForModel, normalizeModelId } from '@agiworkforce/types';
+import { isFlagshipModel, normalizeModelId } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -67,11 +67,6 @@ export const maxDuration = 300;
 const PROVIDER_CONNECT_TIMEOUT_MS = 30_000;
 
 type RouteContext = { params: Promise<{ sessionId: string; path: string[] }> };
-
-const FLAGSHIP_SLOTS: ReadonlySet<string> = new Set([
-  'flagship_coding_pro_plus',
-  'flagship_general_pro_plus',
-]);
 
 const PROXY_LEASE_SECONDS = 900;
 const MAX_IDEMPOTENCY_SESSION_CHARS = 64;
@@ -484,7 +479,7 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
         estimatedCostMicrousd,
         leaseSeconds: PROXY_LEASE_SECONDS,
         planTier: input.planTier,
-        isFlagship: FLAGSHIP_SLOTS.has(getSlotForModel(parsed.model) ?? ''),
+        isFlagship: isFlagshipModel(parsed.model),
         quotaFeature: CODE_HARNESS_QUOTA_FEATURE,
         attribution: { workload: 'code', sessionId: input.sessionId },
       });

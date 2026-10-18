@@ -1,13 +1,10 @@
-import type { Metadata } from 'next';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-const TITLE = 'Use cases: startups, consultants, sales, and IT providers';
-const DESCRIPTION =
-  'How AGI is used across startups, consulting firms, IT service providers, and sales teams: one page per job, each opening on the surface that job runs on.';
-
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
+export const metadata = buildMetadata({
+  title: 'Use cases: startups, consultants, sales, and IT providers',
+  description:
+    'How AGI is used across startups, consulting firms, IT service providers, and sales teams: one page per job, each opening on the surface that job runs on.',
+  path: '/use-cases',
   keywords: [
     'AI automation use cases',
     'AI for business',
@@ -17,31 +14,8 @@ export const metadata: Metadata = {
     'AI for sales teams',
     'enterprise AI automation',
   ],
-  openGraph: {
-    title: TITLE,
-    description: DESCRIPTION,
-    type: 'website',
-    url: 'https://agiworkforce.com/use-cases',
-    images: [
-      {
-        url: OG_IMAGE.url,
-        width: 1200,
-        height: 630,
-        alt: 'AGI use cases',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: TITLE,
-    description: DESCRIPTION,
-    images: [OG_IMAGE.url],
-    creator: '@agiworkforce',
-  },
-  alternates: {
-    canonical: '/use-cases',
-  },
-};
+  imageAlt: 'AGI use cases',
+});
 
 export default function UseCasesLayout({ children }: { children: React.ReactNode }) {
   return children;

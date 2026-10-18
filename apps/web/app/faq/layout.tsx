@@ -1,10 +1,10 @@
-import type { Metadata } from 'next';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Frequently Asked Questions',
   description:
     'Find answers to common questions about AGI: features, trust modes, platform support, security, and how to get started.',
+  path: '/faq',
   keywords: [
     'AGI FAQ',
     'AI automation questions',
@@ -12,32 +12,10 @@ export const metadata: Metadata = {
     'AI agents help',
     'workflow automation FAQ',
   ],
-  alternates: {
-    canonical: 'https://agiworkforce.com/faq',
-  },
-  openGraph: {
-    title: 'FAQ',
-    description: 'Find answers to common questions about AGI features, trust modes, and security.',
-    url: 'https://agiworkforce.com/faq',
-    siteName: 'AGI',
-    type: 'website',
-    images: [
-      {
-        url: OG_IMAGE.url,
-        width: 1200,
-        height: 630,
-        alt: 'AGI FAQ',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'FAQ',
-    description: 'Find answers to common questions about AGI.',
-    images: [OG_IMAGE.url],
-    creator: '@agiworkforce',
-  },
-};
+  ogTitle: 'FAQ',
+  ogDescription: 'Find answers to common questions about AGI features, trust modes, and security.',
+  imageAlt: 'AGI FAQ',
+});
 
 export default function FAQLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

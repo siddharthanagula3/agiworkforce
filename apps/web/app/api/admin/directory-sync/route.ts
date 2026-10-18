@@ -10,16 +10,13 @@ import type { DirectorySyncConnectionRow, DirectorySyncEventRow } from '@/lib/se
 import { readJsonBody } from '@/lib/read-json-body';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { revokeDirectorySyncGrants } from '@/lib/services/directory-sync-revocation';
+import { scimBaseUrl } from '@/lib/server/scim/scim-auth';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from './directory-sync-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const VALID_PROVIDERS = ['okta', 'azure_ad', 'google', 'onelogin', 'generic_scim'] as const;
-
-function scimBaseUrl(request: NextRequest): string {
-  return `${new URL(request.url).origin}/api/scim/v2`;
-}
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');

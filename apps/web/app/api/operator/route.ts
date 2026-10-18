@@ -14,6 +14,7 @@ import {
   isPlatformAdmin,
   PLATFORM_ADMIN_ENV_VAR,
 } from '@/features/admin/lib/platform-admin-access';
+import { BULK_RESET_CONFIRMATION } from '@/features/admin/lib/operator-actions';
 import {
   readOperatorOverview,
   readRecentFeedback,
@@ -119,7 +120,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export const BULK_RESET_CONFIRMATION = 'RESET ALL USAGE';
 const MAX_GRANT_CENTS = 50_000;
 
 /**

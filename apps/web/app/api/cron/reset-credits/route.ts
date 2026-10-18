@@ -31,13 +31,9 @@ type SubRow = Pick<
 >;
 
 /**
- * Paged, and newest rollover first.
- *
- * The unbounded `select` this replaces had no LIMIT, no ORDER BY and no
- * `maxDuration`, so on renewal night it was killed partway through at whatever
- * physical heap position it had reached, and, with no ordering, the next night
- * died at the same place. The subscriptions past that point never received
- * their period credits and those paying users opened the app to a zero balance.
+ * Paged, and newest rollover first, so a run that is cut off partway does not
+ * stop at the same place every night and leave the same paying accounts
+ * without their period credits.
  *
  * `current_period_start desc` puts the subscriptions that actually rolled over
  * most recently at the front, so a run that runs out of budget defers the ones

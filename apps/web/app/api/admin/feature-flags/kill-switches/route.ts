@@ -95,10 +95,8 @@ function versionDisable(input: EngageInput, range: RangeInput): FeatureVersionDi
 
 function switchTarget(input: EngageInput): { key: string; description: string } {
   if (input.scope === 'capability') {
-    const capability = capabilityForKillSwitchKey(`${CAPABILITY_FLAG_PREFIX}${input.subject}`);
-    if (!capability) throw createError.badRequest('No capability by that name');
     return {
-      key: capabilityKillSwitchKey(capability),
+      key: capabilityKillSwitchKey(capabilityNamed(input.subject)),
       description: `Open unless the ${input.subject} capability is switched off.`,
     };
   }

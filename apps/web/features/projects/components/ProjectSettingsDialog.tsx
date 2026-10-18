@@ -342,18 +342,6 @@ export function ProjectSettingsDialog({
               </label>
             </div>
 
-            {/*
-              Memory scope.
-
-              A decorative <select> used to sit here, one option, no onChange,
-              no persistence, implying per-project scoping the product did not
-              have. It was removed with a note to re-add a control only once
-              memories could actually be scoped. Migration 0135 added
-              `user_memories.project_id` and `user_projects.uses_global_memory`,
-              and both the read path (loadManagedMemoryContext) and the write
-              path (persistManagedAutoMemoryFacts) honour them, so this is a
-              real control now.
-            */}
             <div className="space-y-1.5">
               <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Memory

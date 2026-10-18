@@ -29,6 +29,7 @@ import UpgradeAccessPanel from '../components/UpgradeAccessPanel';
 import WaitlistPanel from '../components/WaitlistPanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCreditAmount, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
+import { BULK_RESET_CONFIRMATION } from '../lib/operator-actions';
 import { helpHref } from '@/lib/support/help-entry-points';
 
 const TABS = [
@@ -152,9 +153,10 @@ export function OperatorDashboardPage() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
-  // The shared AlertDialog rather than window.confirm: these are the most
-  // destructive controls in the product and they should not be gated by a
-  // browser chrome dialog that carries no severity styling and is suppressible.
+  const [bulkConfirmation, setBulkConfirmation] = useState('');
+  const [grantTarget, setGrantTarget] = useState<UserRow | null>(null);
+  const [grantAmount, setGrantAmount] = useState('');
+  const [grantReason, setGrantReason] = useState('');
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
   const load = useCallback(async (view: Tab) => {
@@ -190,13 +192,14 @@ export function OperatorDashboardPage() {
   }
 
   /**
-   * Fleet-wide reset is previewed first and then confirmed by typing the
-   * phrase, because it rewrites billing state for every active account and
-   * re-running it does not undo it. The preview is what makes the typed
-   * confirmation meaningful, the operator sees the real number before
+   * Fleet-wide reset takes the typed phrase first and then previews the blast
+   * radius, because it rewrites billing state for every active account and
+   * re-running it does not undo it. The operator sees the real number before
    * committing to it.
    */
   async function resetEveryone() {
+    const typed = bulkConfirmation.trim();
+    if (typed !== BULK_RESET_CONFIRMATION) return;
     setBulkBusy(true);
     setNotice(null);
     setError(null);
@@ -208,19 +211,16 @@ export function OperatorDashboardPage() {
         setNotice('No account has usage to clear right now.');
         return;
       }
-      // Two gates on purpose: the styled dialog states the blast radius with
-      // proper severity, and only then does the typed phrase confirm intent.
       confirmDestructive({
         title: 'Clear usage for every account?',
-        description: `This clears ${formatCreditAmount(cleared)} of usage across ${affected} account(s) and cannot be undone. You will be asked to type a confirmation next.`,
-        confirmLabel: 'Continue',
+        description: `This clears ${formatCreditAmount(cleared)} of usage across ${affected} account(s) and cannot be undone. Allocation is untouched.`,
+        confirmLabel: 'Clear usage',
         destructive: true,
         onConfirm: async () => {
-          const typed = window.prompt('Type RESET ALL USAGE to confirm.');
-          if (typed === null) return;
           setBulkBusy(true);
           try {
             const result = await operatorAction({ action: 'reset-all-usage', confirm: typed });
+            setBulkConfirmation('');
             setNotice(
               translateUiPlural(
                 'settings',
@@ -248,19 +248,24 @@ export function OperatorDashboardPage() {
     }
   }
 
+  function openGrant(user: UserRow) {
+    setGrantTarget(user);
+    setGrantAmount('');
+    setGrantReason('');
+    setNotice(null);
+    setError(null);
+  }
+
   async function grantCredits(user: UserRow) {
     const label = user.email ?? user.id;
-    const raw = window.prompt(`Grant goodwill credits to ${label}. Amount in credits:`, '2000');
-    if (raw === null) return;
-    const credits = Number(raw);
-    if (!Number.isFinite(credits) || credits <= 0) {
+    const credits = Number(grantAmount);
+    if (!grantAmount.trim() || !Number.isFinite(credits) || credits <= 0) {
       setError('Enter a positive number of credits.');
       return;
     }
     const amountCents = Math.ceil(centsFromCredits(credits));
-    const reason = window.prompt('Reason (recorded on the grant):', '');
-    if (reason === null) return;
-    if (!reason.trim()) {
+    const reason = grantReason.trim();
+    if (!reason) {
       setError('A reason is required so the grant is explainable later.');
       return;
     }
@@ -272,8 +277,9 @@ export function OperatorDashboardPage() {
         action: 'grant-credits',
         userId: user.id,
         amountCents,
-        reason: reason.trim(),
+        reason,
       });
+      setGrantTarget(null);
       const grantedCredits = typeof result['credits'] === 'number' ? result['credits'] : null;
       const expiresAt = typeof result['expiresAt'] === 'string' ? result['expiresAt'] : null;
       setNotice(
@@ -495,18 +501,90 @@ export function OperatorDashboardPage() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">Clear usage for everyone</p>
             <p className="text-xs text-muted-foreground">
-              Goodwill reset after an incident. Shows the exact blast radius first, then asks you to
-              type the confirmation. Allocation is untouched; only consumption is cleared.
+              Goodwill reset after an incident. Type the confirmation, then review the exact blast
+              radius before anything changes. Allocation is untouched; only consumption is cleared.
             </p>
           </div>
-          <button
-            onClick={() => void resetEveryone()}
-            disabled={bulkBusy}
-            className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void resetEveryone();
+            }}
           >
-            {bulkBusy ? 'Working…' : 'Reset all usage'}
-          </button>
+            <label htmlFor="operator-bulk-reset-confirmation" className="sr-only">
+              Type {BULK_RESET_CONFIRMATION} to continue
+            </label>
+            <input
+              id="operator-bulk-reset-confirmation"
+              value={bulkConfirmation}
+              onChange={(event) => setBulkConfirmation(event.target.value)}
+              placeholder={BULK_RESET_CONFIRMATION}
+              autoComplete="off"
+              className="rounded-full border border-border bg-background px-3 py-1.5 text-xs"
+            />
+            <button
+              type="submit"
+              disabled={bulkBusy || bulkConfirmation.trim() !== BULK_RESET_CONFIRMATION}
+              className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {bulkBusy ? 'Working…' : 'Reset all usage'}
+            </button>
+          </form>
         </div>
+      ) : null}
+
+      {tab === 'users' && grantTarget ? (
+        <form
+          className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void grantCredits(grantTarget);
+          }}
+        >
+          <p className="text-sm font-medium">
+            Grant goodwill credits to {grantTarget.email ?? grantTarget.id}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              Amount in credits
+              <input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={grantAmount}
+                onChange={(event) => setGrantAmount(event.target.value)}
+                className="w-40 rounded-compact border border-border bg-background px-3 py-1.5 text-sm text-foreground"
+              />
+            </label>
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted-foreground">
+              Reason, recorded on the grant
+              <input
+                value={grantReason}
+                onChange={(event) => setGrantReason(event.target.value)}
+                maxLength={280}
+                className="rounded-compact border border-border bg-background px-3 py-1.5 text-sm text-foreground"
+              />
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busyUserId === grantTarget.id || !grantAmount.trim() || !grantReason.trim()}
+              className="rounded-full border border-border px-4 py-1.5 text-xs font-medium transition-colors hover:border-foreground/30 disabled:opacity-50"
+            >
+              {busyUserId === grantTarget.id ? 'Granting…' : 'Grant credit'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGrantTarget(null)}
+              disabled={busyUserId === grantTarget.id}
+              className="rounded-full px-4 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       ) : null}
 
       {tab === 'users' ? (
@@ -553,7 +631,7 @@ export function OperatorDashboardPage() {
                         {busyUserId === user.id ? 'Resetting…' : 'Reset usage'}
                       </button>
                       <button
-                        onClick={() => void grantCredits(user)}
+                        onClick={() => openGrant(user)}
                         disabled={busyUserId === user.id}
                         className="ms-2 rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50"
                       >

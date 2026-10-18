@@ -25,10 +25,9 @@ const TOMBSTONE_RESWEEP_INTERVAL = '30 days';
  *
  * A failed erasure leaves `deletion_scheduled_for` where it was, deliberately,
  * because moving it would re-open the user's cancellation window on an account
- * whose data is already partly gone. Ordered by that column alone, a handful of
- * accounts that cannot be erased (a legal hold, a Clerk identity that will not
- * delete) held the head of the queue permanently and nobody else's deletion
- * ever ran. `erasure_tombstones.last_swept_at` is stamped by
+ * whose data is already partly gone. Ordered by that column alone, a few
+ * accounts that cannot be erased (a legal hold, an identity that will not
+ * delete) would hold the head of the queue for good. `erasure_tombstones.last_swept_at` is stamped by
  * `openErasureTombstone` on every attempt, succeeded or not, its own schema
  * calls it "the round-robin cursor", so it rotates the queue without touching
  * the user-facing schedule. Never-attempted accounts have no tombstone and sort
@@ -60,7 +59,7 @@ function scheduleStamp(value: string | Date | null): string {
  * of every tombstoned subject whose rows came back.
  *
  * The sweep only decides what is due; the erasure itself runs as a background
- * job (0208) so a subject whose deletion fails is retried with backoff and ends
+ * job so a subject whose deletion fails is retried with backoff and ends
  * up in the dead-letter list with the stage that refused, instead of silently
  * holding the head of a fixed per-run budget.
  */

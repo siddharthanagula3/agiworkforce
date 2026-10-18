@@ -165,9 +165,8 @@ async function handleGet(request: NextRequest) {
   const scheduledFor = row?.deletion_scheduled_for ?? null;
   const pending = scheduledFor !== null;
   const canCancel = pending && new Date(scheduledFor).getTime() > Date.now();
-  // The same outcome the audit row carries. Until it was returned here the
-  // account holder could see that a deletion existed and never what it had
-  // reached, which is the one question a receipt answers.
+  // The same outcome the audit row carries: what the deletion has reached is
+  // the one question a receipt answers.
   const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
 
   return NextResponse.json(

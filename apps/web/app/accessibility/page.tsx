@@ -5,7 +5,7 @@ import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/c
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { Ledger, type LedgerRow } from '@/features/marketing/components/system';
-import { POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
+import { CONTACT_EMAIL, POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
 import { ScanScope } from './ScanScope';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
@@ -56,7 +56,7 @@ const DONE: readonly LedgerRow[] = [
 const GAPS = [
   {
     title: 'Live transcripts',
-    body: 'Voice features in the desktop app do not yet ship live transcripts. Tracking it as a P1.',
+    body: 'Voice features in the desktop app do not yet ship live transcripts.',
   },
   {
     title: 'Colour-only signals',
@@ -81,7 +81,7 @@ export default function AccessibilityPage() {
             <>
               We aim for WCAG 2.1 AA across the web app and the marketing site. Below is what
               we&rsquo;ve done, what is in flight, and the known gaps. If you hit a barrier, email
-              contact@agiworkforce.com, and we treat it as a top priority. Last updated:{' '}
+              {CONTACT_EMAIL}, and we treat it as a top priority. Last updated:{' '}
               {POLICY_LAST_UPDATED.accessibility}. <PolicyVersionsLink policy="accessibility" />
             </>
           }
@@ -114,13 +114,13 @@ export default function AccessibilityPage() {
             </h2>
             <Prose>
               Signed in, open Settings, Help and choose Report an accessibility barrier; the ticket
-              and every reply stay there. Or email contact@agiworkforce.com. Either way we treat it
-              as a top priority.
+              and every reply stay there. Or email {CONTACT_EMAIL}. Either way we treat it as a top
+              priority.
             </Prose>
             <ButtonRow>
               <Button href="/settings/help">Report from Settings, Help</Button>
               <Button href={contactMailto()} variant="secondary">
-                Email contact@agiworkforce.com
+                Email {CONTACT_EMAIL}
               </Button>
               <Button href="/security" variant="secondary">
                 Security posture

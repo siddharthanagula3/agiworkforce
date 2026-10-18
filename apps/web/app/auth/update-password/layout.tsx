@@ -1,15 +1,11 @@
-import { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Update Password',
   description: 'Update your AGI account password.',
-  robots: {
-    index: false, // Don't index password update page
-  },
-  alternates: {
-    canonical: 'https://agiworkforce.com/auth/update-password',
-  },
-};
+  path: '/auth/update-password',
+  robots: { index: false },
+});
 
 export default function UpdatePasswordLayout({ children }: { children: React.ReactNode }) {
   return children;

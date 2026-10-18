@@ -234,8 +234,7 @@ async function handleToolApproval(
   }
 
   // The resumed step runs under the same workspace controls as the turn it
-  // continues: without them, a feature the administrator switched off, such as
-  // computer use, came back on every resume.
+  // continues, so a feature the administrator switched off stays off on resume.
   const workspaceControls = await resolveWorkspaceControlsForRequest(
     userId,
     request,
@@ -561,9 +560,8 @@ async function handleToolApproval(
       }).catch(() => undefined);
     }
     await releaseClaim(db, userId, claim);
-    // Reaching here now means BOTH transports refused, not merely the durable
-    // one -- `onDurableUnavailable: 'inline'` already absorbed a Workflow-platform
-    // failure. The lease is released so the approval stays claimable and the user
+    // Reaching here means both transports refused: `onDurableUnavailable:
+    // 'inline'` already absorbed a Workflow-platform failure. The lease is released so the approval stays claimable and the user
     // can retry rather than being stranded.
     logger.error(
       { error, userId, requestId: processed.requestId, runId: claim.checkpoint.runId },

@@ -35,7 +35,7 @@ import { escapeHTML } from '@shared/utils/html-sanitizer';
 import { INSPIRATION, inspirationPath, type InspirationCard } from './inspiration';
 
 // ---------------------------------------------------------------------------
-// Category picker data (Fix 35)
+// Category picker data
 // ---------------------------------------------------------------------------
 
 interface ArtifactCategory {
@@ -216,7 +216,7 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton card (Fix 38)
+// Skeleton card
 // ---------------------------------------------------------------------------
 
 function SkeletonCard() {
@@ -278,7 +278,7 @@ function SkeletonCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Card (Fix 34: iframe thumbnail for renderable types)
+// Card
 // ---------------------------------------------------------------------------
 
 type ThumbnailKind = 'frame' | 'excerpt' | 'diagram' | 'icon';
@@ -502,7 +502,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
 }
 
 // ---------------------------------------------------------------------------
-// Category picker overlay (Fix 35)
+// Category picker overlay
 // ---------------------------------------------------------------------------
 
 interface CategoryPickerProps {
@@ -622,7 +622,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Creation wizard (Fix 36)
+// Creation wizard
 // ---------------------------------------------------------------------------
 
 const WIZARD_STEPS = [
@@ -1264,7 +1264,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       >
         {/* Page header */}
         <div className="agi-ds-container" style={{ paddingTop: 'var(--space-8)' }}>
-          {/* Title row with New Artifact button (Fix 33) */}
+          {/* Title row with New Artifact button */}
           <div
             style={{
               display: 'flex',
@@ -1390,7 +1390,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
           {/* Your artifacts tab */}
           {activeTab === 'yours' && (
             <>
-              {/* Loading skeleton (Fix 38) */}
+              {/* Loading skeleton */}
               {!mounted ? (
                 <div style={cardGridStyle}>
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -1514,7 +1514,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         <ArtifactDrawer artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
       )}
 
-      {/* Category picker (Fix 35) */}
+      {/* Category picker */}
       {overlay.kind === 'category' && (
         <CategoryPicker
           onClose={() => setOverlay({ kind: 'none' })}
@@ -1522,7 +1522,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         />
       )}
 
-      {/* Creation wizard (Fix 36) */}
+      {/* Creation wizard */}
       {overlay.kind === 'wizard' && (
         <CreationWizard
           category={overlay.category}

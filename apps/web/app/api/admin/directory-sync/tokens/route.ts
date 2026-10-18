@@ -8,6 +8,7 @@ import { AppError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readJsonBody } from '@/lib/read-json-body';
 import type { DirectorySyncConnectionRow } from '@/lib/server/neon-types';
+import { scimBaseUrl } from '@/lib/server/scim/scim-auth';
 import { createScimToken, listScimTokens } from '@/lib/server/scim/scim-token-service';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from '../directory-sync-access';
 import { isUuid } from '@/lib/uuid';
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
           created_at: token.created_at,
         },
         raw_token: rawToken,
-        scim_base_url: `${new URL(request.url).origin}/api/scim/v2`,
+        scim_base_url: scimBaseUrl(request),
       },
       { status: 201 },
     );

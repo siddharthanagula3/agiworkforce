@@ -1,16 +1,12 @@
-import { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Payment Failed',
   description:
     'Your payment was not processed successfully. Please try again or contact support for assistance.',
-  robots: {
-    index: false, // Don't index payment pages
-  },
-  alternates: {
-    canonical: 'https://agiworkforce.com/payment-failure',
-  },
-};
+  path: '/payment-failure',
+  robots: { index: false },
+});
 
 export default function PaymentFailureLayout({ children }: { children: React.ReactNode }) {
   return children;

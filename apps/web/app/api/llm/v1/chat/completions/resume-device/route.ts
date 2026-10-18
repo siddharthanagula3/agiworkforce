@@ -220,8 +220,7 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   }
 
   // The resumed step runs under the same workspace controls as the turn it
-  // continues: without them, a feature the administrator switched off, such as
-  // computer use, came back on every resume.
+  // continues, so a feature the administrator switched off stays off on resume.
   const workspaceControls = await resolveWorkspaceControlsForRequest(
     userId,
     request,

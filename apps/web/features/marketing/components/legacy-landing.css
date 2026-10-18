@@ -1,4 +1,4 @@
-/* Restored 2026-08-28 landing layout (agi-fl, agi-dev, agi-dw, agi-ap).
+/* Landing layout (agi-fl, agi-dev, agi-dw, agi-ap).
    Colour, type and motion tokens stay owned by the [data-design='agi'] block
    in apps/web/app/globals.css, which also carries the light-theme override,
    so nothing here declares a colour of its own. */

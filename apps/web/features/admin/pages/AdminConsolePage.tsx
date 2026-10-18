@@ -319,9 +319,8 @@ export default function AdminConsolePage() {
             >
               Not a live health check. Every row is read from this deployment&apos;s policy
               constants and environment on page load, so it says what this build is configured to
-              do, not what any running system is currently doing. Rows that were a written
-              self-attestation rather than a read were removed. Use the security operations panel
-              above for live state.
+              do, not what any running system is currently doing. No row is a written
+              self-attestation. Use the security operations panel above for live state.
             </p>
           </div>
           <div className="overflow-x-auto">

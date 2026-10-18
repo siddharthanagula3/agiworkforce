@@ -15,7 +15,7 @@ export function createWebCloudTasksClient() {
 }
 
 /**
- * Archive is web-only for now: the shared page asks the host for it and paints
+ * Archive is web-only: the shared page asks the host for it and paints
  * nothing when the host cannot do it, so this stays beside the client rather
  * than in the shared run contract.
  */

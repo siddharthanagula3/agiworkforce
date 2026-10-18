@@ -15,20 +15,9 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 /**
- * Returns the quota held by a reservation whose turn is gone.
- *
- * `recover_stale_managed_usage_requests` was written for a per-minute caller,
- * and its own comment in migration 0056 says so. Its only scheduled caller was
- * `reconcile-credits`, which runs once a day: a reservation that went stale
- * just after that sweep held its quota for close to 24 hours, and a backlog
- * above the 500-row cap drained a day at a time. The visible symptom is a user
- * who sent a few messages being told their rolling limit is reached.
- *
- * Splitting it out leaves daily accounting where it belongs. Stripe
- * reconciliation and the COGS import are once-a-day work against a third
- * party; releasing a stranded reservation is a promise about how fast a user
- * gets their quota back, which is why this sits with the other reapers rather
- * than with the ledger.
+ * Returns the quota held by a reservation whose turn is gone, at reaper cadence
+ * rather than with the once-a-day ledger work: how fast a user gets a stranded
+ * reservation back is how soon a rolling limit stops refusing them.
  *
  * Ordering: this is safe at a high cadence only because the lease renews while
  * a turn is running (migration 0178); without that, every sweep would misfire

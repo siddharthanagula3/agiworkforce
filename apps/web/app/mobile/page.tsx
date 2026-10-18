@@ -11,19 +11,19 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { Reveal } from '@/features/marketing/components/Reveal';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { LAUNCH, NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
-import { OG_IMAGE } from '@/lib/seo/site';
+import { OG_IMAGE, absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
   title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
   description:
     'AGI Mobile is coming soon. The planned app is designed for on-device Local chat by default, with explicit managed-cloud continuation.',
-  alternates: { canonical: 'https://agiworkforce.com/mobile' },
+  alternates: { canonical: absoluteUrl('/mobile') },
   openGraph: {
     title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
     description:
       'AGI Mobile is not published. Preview the planned on-device Local experience and explicit cloud boundary.',
     type: 'website',
-    url: 'https://agiworkforce.com/mobile',
+    url: absoluteUrl('/mobile'),
     images: [{ url: OG_IMAGE.url, width: 1200, height: 630, alt: 'AGI app preview' }],
   },
   twitter: {
