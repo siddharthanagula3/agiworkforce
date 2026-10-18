@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedMediaModelAvailabilityResponseSchema } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
@@ -21,6 +21,8 @@ vi.mock('@/lib/logger', () => ({
 
 import { GET } from './route';
 
+const CLIENT_ORIGIN = 'https://agiworkforce.com';
+
 const validAvailability = {
   catalog_version: 'fixture-v1',
   image_storage_configured: true,
@@ -41,12 +43,12 @@ const validAvailability = {
 
 function request(): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/media/availability', {
-    headers: { origin: 'agi://cloud' },
+    headers: { origin: CLIENT_ORIGIN },
   });
 }
 
 function expectCrossSurfaceNoStore(response: Response): void {
-  expect(response.headers.get('access-control-allow-origin')).toBe('agi://cloud');
+  expect(response.headers.get('access-control-allow-origin')).toBe(CLIENT_ORIGIN);
   expect(response.headers.get('access-control-allow-credentials')).toBe('true');
   expect(response.headers.get('cache-control')).toContain('no-store');
   expect(response.headers.get('x-content-type-options')).toBe('nosniff');
@@ -55,9 +57,14 @@ function expectCrossSurfaceNoStore(response: Response): void {
 describe('GET /api/media/availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('ALLOWED_ORIGINS', CLIENT_ORIGIN);
     mocks.authUser.mockResolvedValue({ userId: 'user-fixture' });
     mocks.rateLimit.mockResolvedValue(null);
     mocks.resolveAvailability.mockResolvedValue(validAvailability);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('returns an authenticated response that satisfies the shared contract and is never cached', async () => {
