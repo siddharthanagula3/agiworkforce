@@ -4248,6 +4248,10 @@
     "message": "Extension settings",
     "description": "Main menu entry for user-facing extension settings"
   },
+  "spCodeBlockLabel": {
+    "message": "Code block",
+    "description": "Accessible name of a scrollable code block in an answer"
+  },
   "spCodeCopy": {
     "message": "Copy code",
     "description": "Button that copies a code block in an answer"

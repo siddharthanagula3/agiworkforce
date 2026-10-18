@@ -399,6 +399,9 @@ function addCodeCopyButtons(root: HTMLElement): void {
   for (const pre of root.querySelectorAll('pre')) {
     const block = el('div', { class: 'sp-code-block' });
     pre.replaceWith(block);
+    pre.tabIndex = 0;
+    pre.setAttribute('role', 'region');
+    pre.setAttribute('aria-label', t('spCodeBlockLabel'));
     block.append(buildCodeCopyButton(pre), pre);
   }
 }

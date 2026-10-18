@@ -2188,16 +2188,19 @@ function injectStyles(): void {
     /* ── Bubble action row (timestamp + copy) ── */
     .sp-bubble-actions {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 4px;
       min-height: 16px;
     }
     .sp-msg-user .sp-bubble-actions { justify-content: flex-end; }
+    .sp-msg-user .sp-timestamp { order: 1; }
     .sp-timestamp {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       padding: 0 3px;
+      white-space: nowrap;
     }
     .sp-copy-btn {
       display: inline-flex;
@@ -2207,7 +2210,10 @@ function injectStyles(): void {
       border: none;
       color: var(--agi-ext-text-muted);
       cursor: pointer;
-      padding: 2px;
+      min-width: 24px;
+      min-height: 24px;
+      margin-block: -4px;
+      padding: 0;
       border-radius: var(--corner-compact);
       opacity: 0;
       transition: opacity var(--duration-quick), color var(--duration-quick), background var(--duration-quick);
@@ -2233,6 +2239,7 @@ function injectStyles(): void {
     [data-math-source] { font-family: var(--type-code-family); }
     .sp-answer-meta {
       padding: 0 3px;
+      white-space: nowrap;
       color: var(--agi-ext-text-muted);
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
@@ -2705,6 +2712,8 @@ function injectStyles(): void {
     .sp-bubble-assistant th,
     .sp-bubble-assistant td {
       padding: 4px 10px;
+      overflow-wrap: normal;
+      word-break: normal;
       border: 1px solid var(--agi-ext-border);
       text-align: left;
       vertical-align: top;
@@ -4471,6 +4480,8 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent-text); opacity: 0.7; }
     .sp-model-option-auto .sp-model-option-sublabel { white-space: normal; }
@@ -4741,7 +4752,7 @@ function injectStyles(): void {
       border-radius: var(--corner-compact);
       background: transparent;
       cursor: pointer;
-      width: 100%;
+      flex: 1 1 0;
       text-align: left;
       font: inherit;
       color: inherit;
@@ -5538,6 +5549,7 @@ function injectStyles(): void {
       font-size: var(--type-label-size); line-height: var(--type-label-height);
       font-weight: 600;
       border-radius: var(--corner-pill);
+      min-height: 24px;
       padding: 2px 7px;
       white-space: nowrap;
       cursor: pointer;
@@ -5700,6 +5712,7 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
     }
     .sp-ob-row-text.danger { color: var(--agi-ext-danger-text); }
+    .sp-ob-privacy-row .sp-ob-row-text > strong { display: block; }
     .sp-ob-learn-more {
       color: var(--agi-ext-accent-text);
       text-decoration: underline;
@@ -5989,8 +6002,8 @@ function injectStyles(): void {
       gap: 4px;
       min-width: 0;
     }
-    .sp-composer-controls-start { flex: 1 1 auto; }
-    .sp-composer-controls-end { flex: 0 0 auto; }
+    .sp-composer-controls-start { flex: 0 0 auto; }
+    .sp-composer-controls-end { flex: 1 1 0; justify-content: flex-end; }
     .sp-attach-btn,
     #sp-mic-btn {
       width: var(--control-md);
@@ -6193,6 +6206,10 @@ function injectStyles(): void {
       white-space: nowrap;
     }
     #sp-model-effort-badge {
+      flex-shrink: 100;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       color: var(--agi-ext-text-muted);
       font-size: var(--type-body-size);
       line-height: var(--type-body-height);
@@ -10720,36 +10737,46 @@ function buildUI(): void {
       modelDropdownEl.appendChild(capability);
     }
 
-    appendEffortSection();
-    const quickEligible =
-      isAutoModeModelId(_ctx.selectedModel) && canUseManagedQuickRouting(managedModelAccess);
-    appendToggleRow(
-      'sp-quick-mode-toggle',
-      t('spQuickMode'),
-      t('spQuickModeDescription'),
-      quickEligible && _ctx.quickMode,
-      applyQuickMode,
-      !quickEligible,
-    );
-    const reasoning = getModelReasoning(_ctx.selectedModel);
-    if (reasoning.capable && reasoning.canDisableThinking !== false && reasoning.control !== 'none')
+    const appendSettings = (): void => {
+      appendEffortSection();
+      const quickEligible =
+        isAutoModeModelId(_ctx.selectedModel) && canUseManagedQuickRouting(managedModelAccess);
       appendToggleRow(
-        'sp-thinking-toggle',
-        t('spThinking'),
-        t('spThinkingDescription'),
-        _ctx.thinkingEnabled,
-        (next) => {
-          _ctx.thinkingEnabled = next;
-          chrome.storage.local.set({ agi_thinking_enabled: next }).catch(() => {});
-          renderModelDropdown();
-        },
+        'sp-quick-mode-toggle',
+        t('spQuickMode'),
+        t('spQuickModeDescription'),
+        quickEligible && _ctx.quickMode,
+        applyQuickMode,
+        !quickEligible,
       );
-    appendWorkModeRow();
+      const reasoning = getModelReasoning(_ctx.selectedModel);
+      if (
+        reasoning.capable &&
+        reasoning.canDisableThinking !== false &&
+        reasoning.control !== 'none'
+      )
+        appendToggleRow(
+          'sp-thinking-toggle',
+          t('spThinking'),
+          t('spThinkingDescription'),
+          _ctx.thinkingEnabled,
+          (next) => {
+            _ctx.thinkingEnabled = next;
+            chrome.storage.local.set({ agi_thinking_enabled: next }).catch(() => {});
+            renderModelDropdown();
+          },
+        );
+      appendWorkModeRow();
+    };
 
-    if (!modelCatalogueOpen) return;
+    if (!modelCatalogueOpen) {
+      appendSettings();
+      return;
+    }
     const allModels = filterManagedModelOptions(catalogue, modelSearchQuery, modelCapabilityFilter);
     if (allModels.length === 0) {
       modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsNoMatch')));
+      appendSettings();
       return;
     }
 
@@ -10778,6 +10805,7 @@ function buildUI(): void {
       );
       appendModelRows(options);
     }
+    appendSettings();
   }
   function renderModelTrigger(): void {
     updateModelBadge(_ctx.selectedModel);
