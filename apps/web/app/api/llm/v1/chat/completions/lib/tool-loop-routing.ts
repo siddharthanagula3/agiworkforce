@@ -45,18 +45,12 @@ export function functionToolName(tool: unknown): string {
 /**
  * Which offered tools this account's policy will not run unattended.
  *
- * `approvalMode` used to be `hasMcpTools ? 'manual' : 'auto'`, on the reasoning
- * that first-party tools sat inside "existing read-only or isolated safety
- * boundaries". They do not. `web_search` and `url_fetch` are both declared
- * `createsEgressPath`, and the Tool Approvals setting names web search by name
+ * First-party tools are not exempt: `web_search` and `url_fetch` are both
+ * declared `createsEgressPath`, and the Tool Approvals setting names web search
  * as something that "still asks first". In 'auto' mode `resolveToolCallGate`
- * returns `allow` without ever consulting the account policy, so the setting
- * governed connector and MCP calls only: a user who chose "Ask before every
- * action" watched web search run unprompted, twice out of two attempts in
- * browser QA. The control read as binding and was advisory.
- *
- * The mode now follows the policy applied to the tools actually offered. MCP
- * and connector tools still force manual on their own: they are undeclared in
+ * returns `allow` without consulting the account policy, so the mode follows
+ * the policy applied to the tools actually offered. MCP and connector tools
+ * force manual on their own: they are undeclared in
  * `PLATFORM_TOOL_METADATA`, so nothing auto-approves them under either policy.
  */
 function anyToolNeedsApproval(names: readonly string[], policy: ToolApprovalPolicy): boolean {

@@ -26,7 +26,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
  * Every query runs through `getUserScopedDb`, so 0120's FORCE'd RLS policy
  * enforces isolation in the DATABASE rather than only in this WHERE clause.
  *
- * The project is DERIVED, not stored (WEBE-24). An artifact belongs to whatever
+ * The project is DERIVED, not stored. An artifact belongs to whatever
  * project its source conversation belongs to, so a chat moved between projects
  * takes its artifacts with it and there is no second copy of the association to
  * drift. The join is to `web_conversations.project_id`, the column

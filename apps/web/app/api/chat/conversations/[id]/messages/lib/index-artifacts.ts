@@ -16,16 +16,11 @@ import { logger } from '@/lib/logger';
  * ---------------------------------------------------------------------------
  * Web artifacts are DERIVED from message markdown, and web has no artifact
  * editing, so every web artifact is re-derivable from content that already
- * syncs. Verified empirically on 2026-08-15: clearing `agi-artifacts-store`
- * from localStorage and reloading a conversation reproduced the artifact under
- * its identical deterministic id. Nothing is lost on a device change.
+ * syncs, under the same deterministic id on every device.
  *
- * What IS lost is completeness. The client only derives artifacts for
- * conversations it has actually rendered, so after a clear the gallery showed 1
- * artifact where the account had 4, the other three were waiting behind
- * conversations the device had not reopened yet.
- *
- * That is a discovery problem, so the fix is a metadata index. We deliberately
+ * What a device cannot derive is completeness: the client only derives
+ * artifacts for conversations it has rendered. That is a discovery problem, so
+ * this is a metadata index. We deliberately
  * do NOT store `content` here: the bytes stay in the message that produced
  * them, which means this table cannot drift out of sync with its own source.
  * It also keeps us on the right side of migration 0039's rule that re-derivable

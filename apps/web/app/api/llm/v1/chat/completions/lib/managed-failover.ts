@@ -35,15 +35,13 @@ import 'server-only';
  *
  * Deliberately NARROWER than the gateway in one dimension: once a provider has
  * minted tool-call ids for this turn, the turn stays on that provider. See
- * `toolStateBindsProvider` for what that does and does not cover. The reason
- * recorded here until 2026-09-08 was that tool definitions ride
- * `llmRequest.tools` in the provider's own wire shape and another provider
- * could not consume them; that is not true. `llmRequest` is the product's
- * canonical Chat-Completions shape and every adapter translates its tools
- * (`translateTool` in each provider's `translate.ts`); `rawVendorTools` is the
- * separate escape hatch for genuinely provider-native definitions. The real
- * bound state is the transcript, not the schema, which is why the pin starts at
- * the second provider step rather than at the request.
+ * `toolStateBindsProvider` for what that does and does not cover. Tool
+ * definitions do not bind: `llmRequest` is the product's canonical
+ * Chat-Completions shape and every adapter translates its tools (`translateTool`
+ * in each provider's `translate.ts`); `rawVendorTools` is the separate escape
+ * hatch for genuinely provider-native definitions. The bound state is the
+ * transcript, not the schema, which is why the pin starts at the second
+ * provider step rather than at the request.
  *
  * A request carrying any provider-native search tool, exempt or not, still
  * gets at most `MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST` candidates on
@@ -121,11 +119,10 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
 /**
  * Classes that must NEVER produce a rotation, whatever else says otherwise.
  *
- * `billing_exhausted` is the load-bearing member. Anthropic's "credit balance is
- * too low" used to classify as `auth`, and `CredentialFailoverState` treats any
- * `auth` as a bad credential worth rotating away from, so an AGIWorkforce
- * account that had simply run out of money would silently push the request onto
- * a DIFFERENT PAID provider and spend more there. An unfunded credential is a
+ * `billing_exhausted` is the load-bearing member. `CredentialFailoverState`
+ * treats any `auth` as a bad credential worth rotating away from, so an account
+ * that has run out of money, classified as `auth`, would silently push the
+ * request onto a DIFFERENT PAID provider and spend more there. An unfunded credential is a
  * valid credential; running out of money is an operator problem, not a routing
  * problem, and hiding it by spending elsewhere is the worst possible response.
  *
@@ -167,7 +164,7 @@ export function isNeverRotateCategory(category: string): boolean {
  * An unfunded account may not spend on a provider the user did not choose.
  *
  * The resolver's plan for a pinned model reaches other PROVIDERS of that same
- * model, so the plan alone no longer stops one, and this predicate is the rule
+ * model, so the plan alone does not stop one, and this predicate is the rule
  * that does: an explicit selection never crosses to another provider's bill
  * because the first one ran out of money.
  */

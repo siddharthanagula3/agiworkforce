@@ -1,18 +1,9 @@
 /**
  * The ONE primary-rail definition for the signed-in web app.
  *
- * Why this file exists: the rail used to be two hand-maintained arrays, one in
- * `WebChatPage` (the chat surface, which is also the app's default landing
- * screen) and one in `WebAppShell` (Projects / Library / Tasks). They drifted.
- * Verified live before this was extracted: `/chat` rendered 6 entries and
- * `/chat/library` rendered 7, so `Tasks` existed but was unreachable from the
- * screen most users never leave. `WebChatPage` also hardcoded
- * `isActive: true` for Chat and `false` for everything else, so the selection
- * was wrong the moment you opened `/chat/[sessionId]`.
- *
- * Both shells now call `buildAppNavItems`. Adding, removing, or reordering a
- * destination is a one-place change, and `isActive` is derived from the live
- * pathname instead of being asserted.
+ * `WebChatPage` and `WebAppShell` both call `buildAppNavItems`, so adding,
+ * removing, or reordering a destination is a one-place change, and `isActive`
+ * is derived from the live pathname instead of being asserted.
  *
  * NO router, store, or React import lives here, the caller supplies `navigate`
  * (its own `router.push`), which keeps this module a pure data definition
@@ -113,13 +104,8 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     hideable: true,
   },
   // Library, one destination for everything the account has produced or
-  // uploaded. Artifacts used to be a second rail entry over the same material:
-  // the server already tags every `media_assets` row `surface: 'artifact' |
-  // 'file'` in `classifyGeneratedFile`, and one generated file appeared in BOTH
-  // destinations under two ids that could never dedupe, so deleting it here left
-  // a stale card there. Library now carries that split as a filter instead, and
-  // `/chat/artifacts` redirects onto it. `/gallery` keeps the public,
-  // SEO-indexed gallery for signed-out visitors.
+  // uploaded. The artifact/file split is a filter inside it, and
+  // `/chat/artifacts` redirects onto it.
   {
     id: 'library',
     label: 'Library',

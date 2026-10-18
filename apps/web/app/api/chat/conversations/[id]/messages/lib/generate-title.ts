@@ -370,10 +370,6 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
  * the response, it holds the invocation open until the task settles, which a
  * detached promise does not: the platform can suspend the instance at flush and
  * the title is simply never written.
- *
- * This previously read a `waitUntil` member off the request, which NextRequest
- * does not declare and never carries, so the fallback was the only branch ever
- * taken.
  */
 export function scheduleConversationTitleGeneration(input: ScheduleTitleGenerationInput): void {
   after(

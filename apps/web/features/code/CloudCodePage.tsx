@@ -391,7 +391,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         replaceSession(body.session);
         setEntries(body.terminalEntries);
         // Merge rather than replace: this read races the turn running in this
-        // tab, and a response computed before that turn's row existed used to
+        // tab, and a response computed before that turn's row existed would
         // wipe it out of the transcript.
         setTurns((current) => {
           const stored = body.turns.map(toCodeTurnRecord);

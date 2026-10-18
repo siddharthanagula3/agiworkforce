@@ -35,11 +35,10 @@ export const maxDuration = 300;
  * `process_credit_settlement_queue` clamps to 500 itself; asking for more
  * would be silently ignored.
  *
- * This route is no longer the only caller of
- * `recover_stale_managed_usage_requests`. It runs once a day, which was far
- * too slow to be a reservation's only path back to the user's quota, so
- * `/api/cron/recover-reservations` now owns that cadence at four times an
- * hour. The drain here is the daily backstop that runs alongside Stripe
+ * `/api/cron/recover-reservations` owns the cadence of
+ * `recover_stale_managed_usage_requests` at four times an hour, because a
+ * daily run is too slow to be a reservation's path back to the user's quota.
+ * The drain here is the daily backstop that runs alongside Stripe
  * reconciliation, and both are safe to overlap: rows are taken with
  * `for update skip locked` and settlement is idempotent by key.
  */

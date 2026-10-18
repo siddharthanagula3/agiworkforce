@@ -4,12 +4,8 @@ import { classifyError, type ClassifiedError } from '@agiworkforce/provider-runt
 
 /**
  * One definition of "the model produced nothing" and one of "the turn did not
- * finish", for every server path that persists a turn.
- *
- * Three paths used to answer both questions their own way: the tool loop had a
- * detector, the managed-agent stream had another, and the plain chat path had
- * none at all, so whether an empty turn was recorded honestly depended on which
- * implementation served it.
+ * finish", for every server path that persists a turn: the tool loop, the
+ * managed-agent stream and the plain chat path.
  */
 
 const BLOCKED_FINISH_REASONS: ReadonlySet<string> = new Set(['refusal', 'content_filter']);

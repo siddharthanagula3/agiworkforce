@@ -1336,7 +1336,7 @@ export type ProcessedRequest = {
   originalModel: string;
   modelSelection?: ModelSelection;
   /**
-   * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
+   * The model Auto left, and why, when this turn escalated off
    * the conversation's pinned model. Null on every turn that did not move.
    */
   movedFromModel?: string;
@@ -2303,16 +2303,9 @@ const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
  *
  * Not a vendor boycott. These are the endpoints the model vendors run
  * themselves, outside the United States, and every model reachable through one
- * is also carried by a gateway that re-hosts it at the same published price.
- * Measured 2026-09-08 across 240 tier by task by alias combinations, exactly
- * one route was affected: the economy reasoning slot, which moves from
- * Alibaba's Singapore endpoint to a gateway and keeps the same model.
- *
- * The reason to do this before the residency map is complete is that it is
- * free. Excluding the models themselves would cost the whole reasoning ladder
- * and invert the coding escalation rung; excluding these transports costs
- * nothing, and it is the half of the answer that survives whatever the
- * remaining jurisdiction research concludes.
+ * is also carried by a gateway that re-hosts it at the same published price,
+ * so excluding these transports costs no model, where excluding the models
+ * themselves would cost the whole reasoning ladder.
  *
  * A model the user names is still served, through a permitted host: they chose
  * a model, not a datacentre.
@@ -2605,12 +2598,10 @@ export function resolveWebCloudModelRoute(
  * The route that summarises a conversation when it outgrows the window.
  *
  * This is a second provider call carrying the transcript itself, so it is
- * exactly the call a zero-retention workspace cannot afford to leak, and it
- * previously resolved with none of the admission the main turn gets: no
- * retention requirement, no workspace model policy, not even the set of
- * providers this deployment holds a credential for. A workspace that requires
- * zero data retention could have its whole conversation summarised by a
- * provider that retains it.
+ * exactly the call a zero-retention workspace cannot afford to leak, so it
+ * passes the same admission as the main turn: retention requirement, workspace
+ * model policy, and the set of providers this deployment holds a credential
+ * for.
  *
  * Named rather than inlined so the admission it passes is visible and testable.
  * Resolving nothing is safe here: the caller falls back to a mechanical trim,
@@ -4230,10 +4221,8 @@ async function processAdmittedRequest(
 
   const routeResolutionNowMs = Date.now();
   // The workspace policy is read BEFORE routing so the resolver can refuse a
-  // candidate the workspace may not run. Reading it after, as this path used to,
-  // meant the router could pick a blocked model and every later hop had to be
-  // filtered separately. One read serves the resolver, the primary gate and
-  // every downgrade below.
+  // candidate the workspace may not run. One read serves the resolver, the
+  // primary gate and every downgrade below.
   const [
     baseRouteHealthState,
     routeAffinity,

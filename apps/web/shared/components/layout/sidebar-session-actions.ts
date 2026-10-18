@@ -83,8 +83,8 @@ function quoted(label: string | null | undefined, fallback: string): string {
 }
 
 /**
- * agentic-modes-gap-07 / MEDIA-DELETE-11: the copy names what survives, and
- * every claim is checked against the server rather than assumed.
+ * The copy names what survives, and every claim is checked against the server
+ * rather than assumed.
  *
  * - DELETE /api/chat/conversations/[id] stamps `deleted_at` on the conversation
  *   only, so "removed from your chats" is the honest scope.
@@ -103,7 +103,7 @@ export function conversationDeleteConfirm(title: string | null | undefined) {
 }
 
 /**
- * WEB-130: DELETE /api/projects/[id] stamps `deleted_at` on the project, moves
+ * DELETE /api/projects/[id] stamps `deleted_at` on the project, moves
  * its conversations out, and soft-deletes its knowledge files while erasing the
  * stored source bytes, so the sources genuinely go, but the project row itself
  * is retained rather than erased, which is why nothing here promises a purge.

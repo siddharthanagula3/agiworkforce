@@ -8,13 +8,9 @@ import type { StreamChunk, StreamChunkErrorClassification } from '@agiworkforce/
  * `classifyError` in `@agiworkforce/provider-runtime` reads `status` AND
  * `retryAfterSeconds` off the thrown value. Every adapter already computes
  * `retryAfterSeconds` from the real provider headers and attaches it to the
- * error chunk, but this layer used to rebuild a bare `Error` carrying only
- * `status`, so by the time managed failover classified the error a second time
- * the header value was structurally unrecoverable and rotation happened with
- * zero backoff regardless of what `Retry-After` said.
- *
- * Carrying the field through is what makes honouring `Retry-After` possible at
- * all downstream.
+ * error chunk. A bare `Error` carrying only `status` would lose it before
+ * managed failover classifies the error a second time, and rotation would
+ * ignore `Retry-After`, so the field is carried through.
  */
 export interface UpstreamError extends Error {
   status?: number;

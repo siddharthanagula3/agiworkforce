@@ -56,19 +56,15 @@ import {
  *
  * NOT `preview.amount_due`. `invoices.createPreview` defaults to
  * `preview_mode: 'next'`, so its total also carries the NEXT period's recurring
- * subscription line, a line that is not billed today. Quoting it overstated the
- * charge by one full period of the new plan: pro -> max mid-cycle read "$140.00
- * today" against a $40.00 invoice.
+ * subscription line, a line that is not billed today, so quoting it overstates
+ * the charge by one full period of the new plan.
  *
  * `subscriptions.update` with `proration_behavior: 'always_invoice'` raises an
- * invoice containing the proration lines only. Confirmed against a real
- * Anthropic upgrade (Max 5x -> Max 20x, same day): the invoice held exactly
- * `$200.00` for the new plan over the remaining period and `-$99.89` unused time
- * on the old one, totalling `$100.11 + $6.61` tax = `$106.72`. No renewal line.
+ * invoice containing the proration lines only, with no renewal line.
  *
  * Stripe's guidance is to select `parent.subscription_item_details.proration`,
  * and tax is summed per line because the figure shown must be the amount taken,
- * which for that invoice was the tax-inclusive $106.72 rather than $100.11.
+ * which is tax-inclusive.
  */
 export interface UpgradeChargeBreakdown {
   /** One row per proration line, in Stripe's order, for an itemized receipt. */

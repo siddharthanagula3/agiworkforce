@@ -195,14 +195,11 @@ export default async function RootLayout({
            */}
           <Providers nonce={nonce}>{children}</Providers>
           {/*
-           * SIX-25: cookie consent.
-           *
            * The banner is the only thing that can turn analytics on, and
-           * `AnalyticsConsentGate` is the only thing that may mount GA4. GA4
-           * used to load for every visitor whenever NEXT_PUBLIC_GA_TRACKING_ID
-           * was set, contradicting the /cookies policy ("Analytics is opt-in").
-           * The single switch for that position is
-           * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
+           * `AnalyticsConsentGate` is the only thing that may mount GA4, as the
+           * /cookies policy promises ("Analytics is opt-in"). The single switch
+           * for that position is `ANALYTICS_REQUIRES_CONSENT` in
+           * shared/lib/cookie-consent.ts.
            */}
           <CookieConsent />
           <SupportWidgetEntry />

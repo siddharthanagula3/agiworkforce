@@ -192,8 +192,7 @@ function purgeStorageKeys(area: Storage | undefined, patterns: readonly RegExp[]
  * Central cleanup on sign-out. Resets every user-scoped store's in-memory
  * state AND clears its persisted payload, then sweeps any remaining app-owned
  * storage keys. Exported so BOTH sign-out paths (`useAuthStore.logout()` and
- * `useBillingStore.signOut()`) run the exact same cleanup, the two used to
- * carry "keep this in sync" comments and had already drifted apart.
+ * `useBillingStore.signOut()`) run the exact same cleanup.
  *
  * Every step is independent and runs through `Promise.allSettled`: this
  * function's whole purpose is preventing cross-user data leaks, so one module

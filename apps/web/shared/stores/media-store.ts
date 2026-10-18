@@ -30,10 +30,8 @@ interface MediaState {
 /**
  * In-flight media jobs for the current tab only. The finished work lives in the
  * transcript and the Library, which are the surfaces that survive a reload;
- * this store answers one question, whether a media job is running right now.
- * It used to persist completed jobs to localStorage, but the only selector
- * reads pending and generating, which persistence deliberately dropped, so
- * every rehydrated entry was unreadable by construction.
+ * this store answers one question, whether a media job is running right now,
+ * so it is not persisted.
  */
 export const useMediaStore = create<MediaState>()((set) => ({
   jobs: [],

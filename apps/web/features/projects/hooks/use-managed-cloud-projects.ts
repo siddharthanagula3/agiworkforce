@@ -14,10 +14,9 @@ import {
 import { webManagedCloudProjects } from '../services/managed-cloud-projects';
 
 /**
- * One page per request. The route caps limit at 100 and the list used to ask
- * for exactly that once, so an account past a hundred projects simply never saw
- * the rest. A shorter page keeps the first paint quick and makes the rest
- * reachable through the same control the sidebar recents use.
+ * One page per request, under the route's cap of 100. A shorter page keeps the
+ * first paint quick and the rest stays reachable through the same control the
+ * sidebar recents use.
  */
 export const MANAGED_CLOUD_PROJECTS_PAGE_SIZE = 50;
 

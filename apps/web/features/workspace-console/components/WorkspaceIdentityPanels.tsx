@@ -14,12 +14,8 @@ const noticeStyle = {
 } as const;
 
 /**
- * Identity administration belongs to the customer, not to a platform operator.
- *
- * Both panels below were previously reachable only through `/admin`, which is
- * gated on Clerk publicMetadata that no customer holds. The APIs behind them
- * were always org-scoped and entitlement-gated, so this moves the UI to the
- * population the authorization was already written for.
+ * Identity administration belongs to the customer, not to a platform operator:
+ * the APIs behind these panels are org-scoped and entitlement-gated.
  */
 export function WorkspaceIdentityPanels() {
   const overviewQuery = useOrganizationOverview();

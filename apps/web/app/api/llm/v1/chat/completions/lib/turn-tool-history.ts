@@ -8,10 +8,8 @@ import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
  * from the one it started in, and every counter in the tool loop is a local of
  * that request. Left alone the resumed request starts its search budget at
  * zero and numbers its first source `[1]` again, while the browser keeps
- * appending to the list it already has. Measured on 2026-09-13: one ordinary
- * question ran five requests, delivered thirty sources against a three-search
- * budget, and every `[n]` in the answer named a different page than the one it
- * opened.
+ * appending to the list it already has, so the search budget overruns and
+ * every `[n]` in the answer names a different page than the one it opened.
  *
  * The resume already carries the checkpoint's trusted messages, and a tool
  * result is only in them once that call actually ran, so they are the honest

@@ -119,10 +119,8 @@ async function handlePost(
     throw createError.serviceUnavailable(CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
   }
 
-  // Before the key is read out of the body, let alone stored. See
-  // lib/services/connector-policy-gate.ts: the policy used to apply only when
-  // tools were read for a chat turn, so a forbidden connector could be
-  // connected and its credential kept.
+  // Before the key is read out of the body, let alone stored, so a forbidden
+  // connector cannot be connected and its credential kept.
   // organizationId is omitted, not passed: this route reads the database on a
   // deliberately null-org scope, and the gate reads an explicit null as
   // "personal account, skip policy" before its own workspace lookup runs.

@@ -194,9 +194,8 @@ function useCommands(
 
   const actions: CommandOption[] = [
     ...pageActions,
-    // Code left the rail (it has its own sidebar and its own route), so
-    // `pageActions` no longer carries it and the palette has to name it
-    // itself or the surface becomes unreachable from here.
+    // Code is not on the rail, so `pageActions` does not carry it and the
+    // palette names it itself.
     ...(disabledFeatures.includes('code')
       ? []
       : [

@@ -21,7 +21,7 @@ import { webEntryHref, webSignInHref } from '@/features/marketing/components/sys
 import { toUserMessage } from '@/lib/user-error-message';
 
 /**
- * Public viewer for a published artifact (CAP-015 slice 2).
+ * Public viewer for a published artifact.
  *
  * Renders untrusted, publicly reachable content, so the kind branch here is the
  * security boundary, see `publishedArtifactRender.ts` for the rule. Scripted

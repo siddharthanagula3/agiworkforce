@@ -1,11 +1,8 @@
 'use client';
 
 /**
- * Free-plan chrome for the sidebar account footer, shared by both web shells:
- * WebChatPage's rich chat sidebar and the lighter WebAppShell behind /tasks,
- * /chat/library, /chat/projects and /chat/schedules. The shells owned separate
- * copies and only the chat one ever grew the nudge, so a free-tier user lost
- * the upgrade route the moment they left /chat (SHELL-NAV-IA-006).
+ * Free-plan chrome for the sidebar account footer, shared by both web shells,
+ * WebChatPage and WebAppShell.
  */
 
 export function SidebarFreePlanNudge({ onUpgrade }: { onUpgrade: () => void }) {

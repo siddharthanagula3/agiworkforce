@@ -18,9 +18,8 @@ const KNOWLEDGE_FILE_SIZE_LIMIT_MESSAGE =
 
 /**
  * The destination comes from the authorization this route verifies, never from
- * the request. A caller-supplied key let an object that had already passed
- * content inspection be overwritten with anything, so the registered row
- * described bytes the platform no longer held.
+ * the request. A caller-supplied key would let an object that had already
+ * passed content inspection be overwritten with anything.
  */
 async function handlePut(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getUserScopedDb(request);

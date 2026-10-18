@@ -116,7 +116,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid JSON in request body');
   }
 
-  // AUDIT-008-004: Validate input with Zod schema (max content length 100k chars)
   const validationResult = CreateMessageSchema.safeParse(rawBody);
   if (!validationResult.success) {
     throw createError.validation('Invalid request body', validationResult.error);
@@ -132,8 +131,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     parentId,
   } = validationResult.data;
 
-  // All web callers pass skipLlm: true (streaming is handled by /api/llm/v1/chat/completions).
-  // The skipLlm=false LLM-inline path was removed as it had zero production callers.
   if (!skipLlm) {
     logger.warn({ conversationId }, 'skipLlm=false is no longer supported; treating as true');
   }

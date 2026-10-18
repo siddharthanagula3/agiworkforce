@@ -66,12 +66,11 @@ export function streamErrorFrame(shape: UpstreamErrorShape, retryable: boolean):
 /**
  * What the caller asked for, which decides what the reader is told to do next.
  *
- * Seven of the messages below used to end in "choose Auto", and a request
- * already on Auto is the one that most often reaches them: Auto is what
- * rotates, so the copy lands only once the rotation is over. It told a user who
- * had already made the right choice to make it again. The Auto wording names
- * the one move left instead, and claims nothing about how far the rotation got,
- * which this boundary cannot see. `requestedModel` is the pre-routing
+ * A request already on Auto is the one that most often reaches these messages:
+ * Auto is what rotates, so the copy lands only once the rotation is over, and
+ * telling that user to "choose Auto" asks for a choice already made. The Auto
+ * wording names the one move left instead, and claims nothing about how far
+ * the rotation got, which this boundary cannot see. `requestedModel` is the pre-routing
  * selection, not the model that served, so it answers the question directly.
  */
 export interface UpstreamErrorContext {
@@ -453,9 +452,7 @@ function upstreamCopy(
     // not be quietly served from a different paid provider instead.
     // Marked degraded for the same reason a spent quota is: every subsequent
     // request to this provider fails identically until a human tops the account
-    // up, so the catalogue must stop presenting it as ready. Measured on
-    // 2026-09-12, when Anthropic answered every Claude route with a 400 "credit
-    // balance is too low" and the catalogue kept offering Claude as selectable.
+    // up, so the catalogue must stop presenting it as ready.
     case 'billing_exhausted':
       if (context?.isolatedCredential !== true) markProviderDegraded(provider, classified.category);
       return {

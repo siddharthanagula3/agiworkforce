@@ -1,23 +1,9 @@
 /**
  * Sidebar collapse state for the chat shell.
  *
- * PP-24 (sibling of `web-settings-store`): this store used to declare ~20
- * further members, `sidebarOpen`, a five-key `modals` map, `theme`,
- * `chatInterface`, `dashboard` and `notifications`, with all of their setters.
- * plus six selector hooks (`useSidebar`, `useModals`, `useTheme`,
- * `useChatInterface`, `useDashboard`, `useNotifications`). Not one of them had
- * a production reader or a production writer: the only consumer of this module
- * anywhere in the app is `features/chat/pages/WebChatPage.tsx:451-452`, which
- * reads `sidebarCollapsed`/`setSidebarCollapsed` and nothing else. The rest
- * were exercised only by `layout-store.test.ts` and re-exported by
- * `shared/stores/index.ts`, a barrel no file imports.
- *
- * Three of them were also duplicates that gave a second answer to a settled
- * question: `theme` (the real one is `ThemeContext`, reached through
- * `useAppTheme`), `notifications` (the real ones are persisted server-side by
- * `NotificationsSection`), and `modals.settings` (the settings modal is owned
- * by `SettingsModalProvider`). They were persisted to localStorage under
- * `agi-ui-store`, so they looked settable and durable while changing nothing.
+ * Theme, notifications and the settings modal have their own owners
+ * (`ThemeContext`, `NotificationsSection`, `SettingsModalProvider`); they do
+ * not belong here.
  *
  * Every member below must keep a production consumer. That is enforced by
  * `apps/web/__tests__/settings-store-fields-are-consumed.test.ts`, which reads

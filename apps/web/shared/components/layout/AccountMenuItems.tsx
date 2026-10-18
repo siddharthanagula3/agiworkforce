@@ -85,7 +85,6 @@ export function AccountMenuItems({
           <WorkspaceMenuItems onManage={onManageWorkspace} />
         </DropdownMenuSubContent>
       </DropdownMenuSub>
-      {/* CRIT-008: open in place; /settings/general only bounces to /chat. */}
       <DropdownMenuItem onClick={onOpenSettings}>
         <Settings className="me-2 h-4 w-4" />
         {t('common:settings')}
