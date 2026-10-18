@@ -34,15 +34,13 @@ export async function listUserBillingInvoices(
   if (!stripe) return [];
 
   type CustomerRow = Pick<SubscriptionRow, 'stripe_customer_id'>;
-  const [subscription] = await db
-    .query<CustomerRow>(
-      `select stripe_customer_id
+  const [subscription] = await db.query<CustomerRow>(
+    `select stripe_customer_id
        from public.subscriptions
-       where user_id = $1
-       limit 1`,
-      [userId],
-    )
-    .catch(() => [] as CustomerRow[]);
+      where user_id = $1
+      limit 1`,
+    [userId],
+  );
 
   if (!subscription?.stripe_customer_id) return [];
 
