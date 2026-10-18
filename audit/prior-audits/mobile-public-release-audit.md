@@ -21,8 +21,9 @@ not archived; git carries the history.
 
 Source baseline: `c86971ce48a7d0f81e3d660df2d305fe44491f63`, with release fixes
 isolated on `codex/mobile-store-release`. The free-first release preparation is
-committed at `93cf29b9247dca3fa67a3b70e2b1a1b9b1cf3298`. Subsequent auth-test and
-privacy-disclosure work remains separate from the active native build.
+committed at `93cf29b9247dca3fa67a3b70e2b1a1b9b1cf3298`. Source corrections and
+final mobile verification are recorded through `a1d2945ed7`; that later work is
+separate from the active native build.
 No successful signed build, binary upload, review acceptance, or public
 availability is established by the checks below.
 
@@ -72,10 +73,10 @@ Verified changes and checks:
   bytecode regression preserves rejection of that case. This gate remains
   blocking: no safe bounded fix was identified. Compilation alone does not
   establish release acceptance.
-- Release integrity, build-environment configuration, privacy declarations, and
-  TLS pin provisioning checks passed before the subsequent privacy-disclosure
-  edits. The disclosure changes have focused checks and the combined mobile
-  suite passing, but are not deployed. Web copy was also
+- Release integrity, privacy declarations and policy-version digests passed
+  again after the final disclosure edits. Build-environment configuration and
+  TLS pin provisioning checks also passed. The disclosure changes have focused
+  checks and the combined mobile suite passing, but are not deployed. Web copy was also
   edited but not deployed, and its tests are blocked by missing web/UI
   dependencies. Pinning remains report-only (MOBILE-085).
 - EAS production now has `EXPO_PUBLIC_API_URL=https://agiworkforce.com` alongside
@@ -123,11 +124,14 @@ network error; it provides no successful native-build evidence. EAS now
 discovers the share and widget extension targets before signing setup through
 explicit CNG metadata.
 
-Android build `8ed0a897-1c6a-4435-916a-a73d24d81db2`, version 0.0.1 (4), is
+Android build `8ed0a897-1c6a-4435-916a-a73d24d81db2`, version 0.0.1 (4), from
+`93cf29b924`, is
 `IN_PROGRESS`; the 19:24:42 CDT log on October 17 shows `RUN_GRADLEW` compiling
 ExecuTorch ARM64 code, with no native compiler error observed. Expo Doctor
 timed out and was skipped in that run, so this stage does not establish a clean
-Doctor result. No native artifact is available yet.
+Doctor result. No native artifact is available yet. The later disclosure
+corrections in `a1d2945ed7` are not part of this native-validation build; a final
+release candidate must include them.
 
 Store preparation and remaining acceptance gates:
 
