@@ -71,8 +71,6 @@
   "chatError.upgradePlan": "ترقية خطتك",
   "chatError.openSettings": "فتح الإعدادات",
   "chatError.switchModel": "تبديل النموذج",
-  "chatNotice.noEditorForDiagnostics": "لا يوجد محرر نشط لعرض التشخيصات.",
-  "chatNotice.noDiagnostics": "لم يتم العثور على تشخيصات في الملف النشط.",
   "chatNotice.modelNotOnPlan": "هذا النموذج غير متاح لخطتك الحالية أو لإعداد الموفّر لديك.",
   "chatNotice.trustBeforeResume": "يجب الوثوق بمساحة العمل هذه قبل استئناف جلسة تطوير.",
   "chatNotice.cloudSessionReadOnly": "تُفتح جلسة Code السحابية هذه هنا للقراءة فقط. تابعها على الويب، أو شغّل `agi code teleport` لنقلها إلى هذا الجهاز.",

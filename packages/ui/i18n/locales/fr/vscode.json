@@ -62,8 +62,6 @@
   "chatError.upgradePlan": "Mettre à niveau votre forfait",
   "chatError.openSettings": "Ouvrir les paramètres",
   "chatError.switchModel": "Changer de modèle",
-  "chatNotice.noEditorForDiagnostics": "Aucun éditeur actif pour les diagnostics.",
-  "chatNotice.noDiagnostics": "Aucun diagnostic trouvé dans le fichier actif.",
   "chatNotice.modelNotOnPlan": "Ce modèle n'est pas disponible avec votre forfait actuel ou votre configuration de fournisseur.",
   "chatNotice.trustBeforeResume": "Approuvez cet espace de travail avant de reprendre une session de développement.",
   "chatNotice.cloudSessionReadOnly": "Cette session Code cloud s'ouvre ici en lecture seule. Poursuivez-la sur le web, ou exécutez `agi code teleport` pour la ramener sur cette machine.",

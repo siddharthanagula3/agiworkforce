@@ -62,8 +62,6 @@
   "chatError.upgradePlan": "Fazer upgrade do plano",
   "chatError.openSettings": "Abrir configurações",
   "chatError.switchModel": "Trocar de modelo",
-  "chatNotice.noEditorForDiagnostics": "Nenhum editor ativo para diagnóstico.",
-  "chatNotice.noDiagnostics": "Nenhum diagnóstico encontrado no arquivo ativo.",
   "chatNotice.modelNotOnPlan": "Este modelo não está disponível para seu plano atual ou sua configuração de provedor.",
   "chatNotice.trustBeforeResume": "Confie neste espaço de trabalho antes de retomar uma sessão de desenvolvimento.",
   "chatNotice.cloudSessionReadOnly": "Esta sessão do Code na nuvem abre aqui somente para leitura. Continue-a na web ou execute `agi code teleport` para trazê-la para este computador.",

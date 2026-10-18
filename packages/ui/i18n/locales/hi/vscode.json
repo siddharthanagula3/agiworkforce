@@ -59,8 +59,6 @@
   "chatError.upgradePlan": "अपना प्लान अपग्रेड करें",
   "chatError.openSettings": "सेटिंग्स खोलें",
   "chatError.switchModel": "मॉडल बदलें",
-  "chatNotice.noEditorForDiagnostics": "निदान के लिए कोई सक्रिय संपादक नहीं है।",
-  "chatNotice.noDiagnostics": "सक्रिय फ़ाइल में कोई निदान नहीं मिला।",
   "chatNotice.modelNotOnPlan": "यह मॉडल आपके मौजूदा प्लान या प्रदाता सेटअप के लिए उपलब्ध नहीं है।",
   "chatNotice.trustBeforeResume": "डेवलपर सत्र फिर से शुरू करने से पहले इस कार्यस्थान पर विश्वास करें।",
   "chatNotice.cloudSessionReadOnly": "यह क्लाउड Code सत्र यहाँ केवल पढ़ने के लिए खुलता है। इसे वेब पर जारी रखें, या इसे इस मशीन पर लाने के लिए `agi code teleport` चलाएँ।",

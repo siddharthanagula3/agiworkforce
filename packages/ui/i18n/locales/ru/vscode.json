@@ -65,8 +65,6 @@
   "chatError.upgradePlan": "Повысить тариф",
   "chatError.openSettings": "Открыть параметры",
   "chatError.switchModel": "Сменить модель",
-  "chatNotice.noEditorForDiagnostics": "Нет активного редактора для диагностики.",
-  "chatNotice.noDiagnostics": "В активном файле не найдено диагностических сообщений.",
   "chatNotice.modelNotOnPlan": "Эта модель недоступна в вашем текущем тарифе или при текущих настройках поставщика.",
   "chatNotice.trustBeforeResume": "Прежде чем возобновить сессию разработки, отметьте эту рабочую область как доверенную.",
   "chatNotice.cloudSessionReadOnly": "Этот облачный сеанс Code открывается здесь только для чтения. Продолжите его в веб-версии или выполните `agi code teleport`, чтобы перенести его на этот компьютер.",

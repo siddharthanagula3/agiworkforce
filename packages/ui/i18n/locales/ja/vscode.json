@@ -56,8 +56,6 @@
   "chatError.upgradePlan": "プランをアップグレード",
   "chatError.openSettings": "設定を開く",
   "chatError.switchModel": "モデルを切り替える",
-  "chatNotice.noEditorForDiagnostics": "診断に使用するアクティブなエディターがありません。",
-  "chatNotice.noDiagnostics": "アクティブなファイルに診断が見つかりません。",
   "chatNotice.modelNotOnPlan": "このモデルは、現在のプランまたはプロバイダーの設定では利用できません。",
   "chatNotice.trustBeforeResume": "開発者セッションを再開する前に、このワークスペースを信頼してください。",
   "chatNotice.cloudSessionReadOnly": "このクラウド Code セッションはここでは読み取り専用で開きます。Web で続けるか、`agi code teleport` を実行してこのマシンに取り込んでください。",
