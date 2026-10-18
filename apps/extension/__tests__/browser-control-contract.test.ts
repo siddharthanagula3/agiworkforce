@@ -108,7 +108,7 @@ describe('putting a file into a page', () => {
   it('skips a file field during autofill instead of pretending it filled it', () => {
     const filler = readFileSync(join(APP_ROOT, 'src/features/content/autofill/filler.ts'), 'utf8');
 
-    expect(filler).toContain("field.fieldType === 'file'");
+    expect(filler).toContain("key.startsWith('files.')");
     expect(filler).toContain('FILE_INPUT_SKIP_REASON');
   });
 });

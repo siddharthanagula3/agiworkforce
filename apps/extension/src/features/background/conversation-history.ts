@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
+  isWorkspaceReasoningEffort,
   type Effort,
   type InteractiveCard,
   type RoutingTaskType,
@@ -29,6 +30,7 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
+import { ROUTING_TASK_TYPES } from '../cloud-bridge/managedChatRouting';
 import { isChromeVideoTaskId } from '../cloud-bridge/videoTaskId';
 import {
   CODE_EXECUTION_OUTPUT_MAX_CHARS,
@@ -192,29 +194,6 @@ const EMPTY_STORE: BrowserConversationStore = {
   activeOwner: null,
   conversations: [],
 };
-
-const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
-  'coding',
-  'reasoning',
-  'general',
-  'agentic',
-  'multimodal',
-  'research',
-  'computer-use',
-  'image_generation',
-  'creative_writing',
-  'long_context',
-  'simple_chat',
-]);
-const REASONING_EFFORTS: ReadonlySet<Effort> = new Set([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
 
 let mutationQueue: Promise<void> = Promise.resolve();
 
@@ -627,7 +606,7 @@ function normalizeRoutingState(value: unknown): ConversationRoutingState {
   ) {
     normalized.previousTaskType = routing['previousTaskType'] as RoutingTaskType;
   }
-  if (typeof routing['effort'] === 'string' && REASONING_EFFORTS.has(routing['effort'] as Effort)) {
+  if (isWorkspaceReasoningEffort(routing['effort'])) {
     normalized.effort = routing['effort'] as Effort;
   }
   return normalized;

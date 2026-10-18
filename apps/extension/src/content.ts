@@ -225,8 +225,8 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'GET_RECORDED_ACTIONS':
       return handleGetRecordedActions();
 
-    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']:
-      return handleSetRecordingValueCapture(message as unknown as { enabled?: unknown });
+    case 'SET_RECORDING_VALUE_CAPTURE':
+      return handleSetRecordingValueCapture(message);
 
     case 'WEBMCP_DISCOVER_TOOLS':
       return handleWebMCPDiscoverTools();
@@ -548,7 +548,6 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
     const capture = (await chrome.runtime.sendMessage({
       type: 'CAPTURE_SCREENSHOT',
       format: 'png',
-      quality: 80,
     })) as { success?: boolean; data?: string };
     if (capture?.success && typeof capture.data === 'string') {
       screenshot = capture.data;
@@ -1175,7 +1174,9 @@ function detachRecordingListeners(): void {
   }
 }
 
-function handleSetRecordingValueCapture(message: { enabled?: unknown }): ExtensionResponse {
+function handleSetRecordingValueCapture(
+  message: import('./types').SetRecordingValueCaptureMessage,
+): ExtensionResponse {
   const enabled = message.enabled === true;
   automationState.captureValues = enabled;
   if (automationState.isRecording) {

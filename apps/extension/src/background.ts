@@ -91,7 +91,7 @@ import {
   memoryDelete,
   type MemoryWriteResult,
 } from './background/memory-bridge';
-import { runAgentLoop } from './features/computer-use/agentLoop';
+import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agentLoop';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -931,25 +931,13 @@ const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
 const TAB_GROUP_NAME = 'AGI Workforce';
 
-export interface SharedBackgroundContext {
-  nativeReconnectTimer: ReturnType<typeof setTimeout> | null;
-  nativeReconnectAttempt: number;
-  nativeHandshakeInFlight: boolean;
-  nativeReconnectGaveUp: boolean;
-  nativeSuspendInProgress: boolean;
-}
-
-function createSharedBackgroundContext(): SharedBackgroundContext {
-  return {
-    nativeReconnectTimer: null,
-    nativeReconnectAttempt: 0,
-    nativeHandshakeInFlight: false,
-    nativeReconnectGaveUp: false,
-    nativeSuspendInProgress: false,
-  };
-}
-
-const _bgCtx: SharedBackgroundContext = createSharedBackgroundContext();
+const _bgCtx = {
+  nativeReconnectTimer: null as ReturnType<typeof setTimeout> | null,
+  nativeReconnectAttempt: 0,
+  nativeHandshakeInFlight: false,
+  nativeReconnectGaveUp: false,
+  nativeSuspendInProgress: false,
+};
 
 let nativeSessionSecret: ArrayBuffer | null = null;
 
@@ -1733,7 +1721,7 @@ async function taskNotificationsEnabled(): Promise<boolean> {
   }
 }
 
-export const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({
+const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({
   isEnabled: taskNotificationsEnabled,
   isUserLooking: () => isSidePanelInFocus(),
   show: showNotification,
@@ -1753,7 +1741,7 @@ async function notifyScheduledTaskRunning(
         chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
           type: 'basic',
           iconUrl: 'icons/icon48.png',
-          title: 'AGI Task Running',
+          title: t('notifyScheduledTaskRunningTitle'),
           message: taskName,
           priority: 0,
         });
@@ -1933,8 +1921,10 @@ async function handleReplayShortcut(
       if (notify) {
         const snippet = notificationSnippet(deliveredAnswer);
         showNotification(
-          'Shortcut Replayed',
-          snippet ? `"${shortcut.name}": ${snippet}` : `"${shortcut.name}" finished`,
+          t('notifyShortcutReplayedTitle'),
+          snippet
+            ? t('notifyShortcutAnswer', [shortcut.name, snippet])
+            : t('notifyShortcutFinished', [shortcut.name]),
           deliveredAnswer ? delivery?.conversationId : undefined,
           deliveredOwner,
         );
@@ -1962,7 +1952,10 @@ async function handleReplayShortcut(
     actions: shortcut.actions,
   } as ExtensionMessage);
   if (result.success && notify) {
-    showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
+    showNotification(
+      t('notifyShortcutReplayedTitle'),
+      t('notifyShortcutCompleted', [shortcut.name]),
+    );
   }
   return result;
 }
@@ -2715,7 +2708,7 @@ async function recoverScheduledTaskRun(
   }
 }
 
-export const MAINTENANCE_ALARM = 'agi-maintenance';
+const MAINTENANCE_ALARM = 'agi-maintenance';
 const MAINTENANCE_PERIOD_MINUTES = 1;
 
 /**
@@ -3098,7 +3091,7 @@ async function executeScheduledTask(
 // privileged commands. Extension pages stay trusted via the `!sender.tab` branch
 // of isAllowlistedSender(). PING and GET_AGI_BRIDGE_URL are not discovery-bypass
 // types: content scripts on arbitrary pages must not receive fingerprinting replies.
-export const SITE_NOT_APPROVED_MESSAGE =
+const SITE_NOT_APPROVED_MESSAGE =
   'This site is not on your AGI Workforce approved-sites list. ' +
   'Open the extension options and use the "Approved sites" section to add this origin, then reload.';
 
@@ -4103,32 +4096,6 @@ async function handleMessageAsync(
       return { success: true, consumed: true } as ExtensionResponse;
     }
 
-    case 'QUEUE_MESSAGE': {
-      let resolvedTabId = tabId;
-      if (!resolvedTabId) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        resolvedTabId = activeTab?.id;
-      }
-      if (!resolvedTabId) {
-        logger.warn('QUEUE_MESSAGE: no active tab');
-        return { success: false, error: 'No active tab' } as ExtensionResponse;
-      }
-      const msgEntry = message as import('./types').QueueMessageMessage;
-      try {
-        await sendNativeRequest({
-          type: 'QUEUE_MESSAGE',
-          id: msgEntry.id,
-          text: msgEntry.text,
-          tabId: resolvedTabId,
-          timestamp: msgEntry.timestamp,
-        });
-        return { success: true } as ExtensionResponse;
-      } catch (err: unknown) {
-        logger.warn('QUEUE_MESSAGE native send failed', err);
-        return { success: false, error: 'Native send failed' } as ExtensionResponse;
-      }
-    }
-
     case 'CHAT_MESSAGE': {
       const chatMsg = message as import('./types').ChatMessageMessage;
       const owner = normalizeManagedCloudOwner(chatMsg.owner);
@@ -4414,9 +4381,10 @@ async function handleMessageAsync(
           format?: 'png' | 'jpeg';
           quality?: number;
         };
-        const options: { format?: 'png' | 'jpeg'; quality?: number } = {
-          format: screenshotMsg.format ?? 'png',
-          quality: screenshotMsg.quality ?? 90,
+        const format = screenshotMsg.format ?? 'png';
+        const options: { format: 'png' | 'jpeg'; quality?: number } = {
+          format,
+          ...(format === 'jpeg' ? { quality: screenshotMsg.quality ?? 90 } : {}),
         };
         const canvas = await chrome.tabs.captureVisibleTab(visibleTab.windowId, options);
         if ((await visibleTabIn())?.id !== visibleTab.id) {
@@ -4455,7 +4423,7 @@ async function handleMessageAsync(
     case 'START_RECORDING':
     case 'STOP_RECORDING':
     case 'GET_RECORDED_ACTIONS':
-    case 'SET_RECORDING_VALUE_CAPTURE' as ExtensionMessage['type']: {
+    case 'SET_RECORDING_VALUE_CAPTURE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -5233,7 +5201,7 @@ async function handleMessageAsync(
             };
             const timeout = setTimeout(() => {
               finish(false);
-            }, 30_000);
+            }, APPROVAL_TIMEOUT_MS);
             function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
               if (
                 !isTrustedExtensionPageSender(
@@ -5846,8 +5814,6 @@ const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = 
   { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
   { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
-  // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
-  // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
 ];
 
 /**
@@ -6061,10 +6027,7 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
-      format: 'png',
-      quality: 90,
-    });
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
 
     const tabId = tab.id;
     await deliverPageCapture({
@@ -6948,7 +6911,3 @@ chrome.runtime.onSuspend.addListener(() => {
     logger.debug('Native disconnect on suspend failed', error);
   }
 });
-
-// keeping it exported would only have advertised a bridge guaranteed to be
-
-export { state, handleMessage, checkDesktopConnection };

@@ -17,7 +17,7 @@ const source = readFileSync(
 describe('Chrome side-panel demo surface', () => {
   it('opens recent chats as its own sheet from the header', () => {
     expect(source).toContain("id: 'sp-history-btn'");
-    expect(source).toContain("'aria-label': 'Recent chats'");
+    expect(source).toContain("'aria-label': t('spRecentsTitle')");
     expect(source).toContain("historyBtn.addEventListener('click', openRecents)");
     expect(source).toContain("id: 'sp-recents'");
     expect(source).toContain("id: 'sp-drawer-history-search'");

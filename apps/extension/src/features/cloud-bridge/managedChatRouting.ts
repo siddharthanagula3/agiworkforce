@@ -17,6 +17,20 @@ export interface ChromeManagedChatRoutingRequest {
   previousTaskType?: RoutingTaskType | null;
 }
 
+export const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
+  'coding',
+  'reasoning',
+  'general',
+  'agentic',
+  'multimodal',
+  'research',
+  'computer-use',
+  'image_generation',
+  'creative_writing',
+  'long_context',
+  'simple_chat',
+]);
+
 export const CHROME_MANAGED_RUNTIME_PROFILE = 'chrome/managed-chat';
 
 export function resolveChromeManagedChatRoute(

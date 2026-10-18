@@ -43,7 +43,6 @@ export type NativeMessageType =
   | 'CANCEL_CONTEXT_HANDOFF'
   | 'RUN_PAGE_ACTIONS'
   | 'AUTO_FILL_JOB_APPLICATION'
-  | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
   | 'CANCEL_STREAM'
   | 'RESUME_CHAT_RUN'
@@ -67,6 +66,7 @@ export type NativeMessageType =
   | 'START_RECORDING'
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
+  | 'SET_RECORDING_VALUE_CAPTURE'
   | 'FIND_ELEMENTS'
   | 'FILL_FIELDS'
   | 'BUILD_ACCESSIBILITY_TREE'
@@ -430,14 +430,6 @@ export interface RunPageActionsResponse {
   error?: string;
 }
 
-export interface QueueMessageMessage extends BaseMessage {
-  type: 'QUEUE_MESSAGE';
-  id: string;
-  text: string;
-  tabId?: number;
-  timestamp: number;
-}
-
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
   owner: ManagedCloudOwner;
@@ -657,6 +649,11 @@ export interface StopRecordingMessage extends BaseMessage {
 
 export interface GetRecordedActionsMessage extends BaseMessage {
   type: 'GET_RECORDED_ACTIONS';
+}
+
+export interface SetRecordingValueCaptureMessage extends BaseMessage {
+  type: 'SET_RECORDING_VALUE_CAPTURE';
+  enabled: boolean;
 }
 
 export interface RecordingResponse {
@@ -1070,7 +1067,6 @@ export type ExtensionMessage =
   | SyncPageContextMessage
   | RunPageActionsMessage
   | AutoFillJobApplicationMessage
-  | QueueMessageMessage
   | ChatMessageMessage
   | CancelStreamMessage
   | ResumeChatRunMessage
@@ -1088,6 +1084,7 @@ export type ExtensionMessage =
   | StartRecordingMessage
   | StopRecordingMessage
   | GetRecordedActionsMessage
+  | SetRecordingValueCaptureMessage
   | FindElementsMessage
   | FillFieldsMessage
   | BridgeUrlChangedMessage

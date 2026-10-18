@@ -867,6 +867,48 @@
       }
     }
   },
+  "spNewChatLabel": {
+    "message": "New chat",
+    "description": "Tooltip and accessible name of the header button that starts a new chat."
+  },
+  "spHistorySearchLabel": {
+    "message": "Search recent chats",
+    "description": "Placeholder and accessible name of the recent chats search box."
+  },
+  "spModelsMenuLabel": {
+    "message": "Available models",
+    "description": "Accessible name of the model picker menu."
+  },
+  "spHistoryEmpty": {
+    "message": "No saved conversations",
+    "description": "Shown in the recent chats list when there are no saved chats."
+  },
+  "spHistoryNoMatch": {
+    "message": "No matching conversations",
+    "description": "Shown in the recent chats list when the search matches nothing."
+  },
+  "spHistoryOpenChat": {
+    "message": "Open chat: $TITLE$",
+    "description": "Accessible name of a recent chat row.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Plan the Denver trip"
+      }
+    }
+  },
+  "spHistoryRefreshFailed": {
+    "message": "Account history could not be refreshed. Your saved chats remain on this device.",
+    "description": "Shown when the account chat list could not be refreshed."
+  },
+  "spAttachedTabChanged": {
+    "message": "An attached tab changed. Choose the tabs again before sending.",
+    "description": "Shown when a tab attached as context navigates before the message is sent."
+  },
+  "spAttachedTabClosed": {
+    "message": "An attached tab closed. Choose the tabs again before sending.",
+    "description": "Shown when a tab attached as context is closed before the message is sent."
+  },
   "spStreamCancellationUnconfirmed": {
     "message": "Local streaming stopped. Cancellation was interrupted and could not be confirmed. Use Retry to retry Stop, or start a new chat.",
     "description": "Error shown on a reply whose Stop request was interrupted before it was confirmed"
@@ -3675,6 +3717,48 @@
   "notifyTaskFinishedBody": {
     "message": "AGI finished your task. Select to see the result.",
     "description": "Chrome notification body when a browser task finishes. Never includes page content."
+  },
+  "notifyScheduledTaskRunningTitle": {
+    "message": "AGI Task Running",
+    "description": "Chrome notification title while a scheduled task runs in the background."
+  },
+  "notifyShortcutReplayedTitle": {
+    "message": "Shortcut Replayed",
+    "description": "Chrome notification title when a saved shortcut finishes running."
+  },
+  "notifyShortcutCompleted": {
+    "message": "\"$NAME$\" completed",
+    "description": "Chrome notification body when a recorded shortcut finishes.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily summary"
+      }
+    }
+  },
+  "notifyShortcutFinished": {
+    "message": "\"$NAME$\" finished",
+    "description": "Chrome notification body when a prompt shortcut finishes without an answer to show.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily summary"
+      }
+    }
+  },
+  "notifyShortcutAnswer": {
+    "message": "\"$NAME$\": $SNIPPET$",
+    "description": "Chrome notification body for a prompt shortcut, with the start of its answer.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Daily summary"
+      },
+      "snippet": {
+        "content": "$2",
+        "example": "Three new messages need a reply."
+      }
+    }
   },
   "notifyTaskFailedTitle": {
     "message": "Task stopped",

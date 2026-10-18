@@ -10,7 +10,6 @@ import type { InteractiveCard } from '@agiworkforce/types';
 import {
   buildInteractiveCardEl,
   buildBubbleWithTools,
-  buildToolCallEl,
   openInteractiveCardUrl,
   resolveManagedArtifactUrl,
 } from '../src/features/side-panel/bubbles';
@@ -189,13 +188,6 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     },
   );
 
-  it('renders an embedded tool call (parses the [TOOL:...] fence into a tool element)', () => {
-    const content = 'before\n[TOOL:bash:success] ran ls\ntotal 0\n[/TOOL]\nafter';
-    const node = buildBubbleWithTools(msg({ role: 'assistant', content }));
-    expect(node.textContent).toContain('bash');
-    expect(node.textContent).not.toContain('[TOOL:bash:success]');
-  });
-
   it('renders a generated artifact as an authenticated AGI open/download action', () => {
     const messages: SidePanelChatMessage[] = [];
     const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
@@ -313,19 +305,6 @@ describe('resolveManagedArtifactUrl', () => {
     );
     expect(resolveManagedArtifactUrl('javascript:alert(1)')).toBeNull();
     expect(resolveManagedArtifactUrl('http://downloads.example.com/report.pdf')).toBeNull();
-  });
-});
-
-describe('side-panel buildToolCallEl (real render)', () => {
-  it('renders a tool-call element carrying the name, summary, and state', () => {
-    const node = buildToolCallEl({
-      name: 'search',
-      summary: 'find files',
-      body: 'match.ts',
-      state: 'success',
-    });
-    expect(node.textContent).toContain('search');
-    expect(node.textContent).toContain('find files');
   });
 });
 

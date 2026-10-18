@@ -129,10 +129,10 @@ describe('failed stream presentation', () => {
 
   it('offers retry on a failure that also produced tool activity', () => {
     const onRetry = vi.fn();
-    const node = buildBubbleWithTools(
-      failedMessage({ content: '[TOOL:search:success]done[/TOOL]' }),
-      { onRetry },
-    );
+    const node = buildBubbleWithTools(failedMessage({ content: 'done' }), {
+      onRetry,
+      browserControls: document.createElement('div'),
+    });
 
     expect(node.querySelector('.sp-bubble-error-footer')).not.toBeNull();
     expect(node.querySelector('.sp-bubble-retry-btn')).not.toBeNull();
@@ -274,10 +274,14 @@ describe('a plan-limit failure', () => {
   it('keeps the recovery on a failure that also produced tool activity', () => {
     const node = buildBubbleWithTools(
       failedMessage({
-        content: '[TOOL:search:success]done[/TOOL]',
+        content: 'done',
         errorRecovery: { action: 'view_usage', href: '/settings/usage' },
       }),
-      { onRetry: vi.fn(), quotaRecovery: { label: () => 'View usage', open: vi.fn() } },
+      {
+        onRetry: vi.fn(),
+        quotaRecovery: { label: () => 'View usage', open: vi.fn() },
+        browserControls: document.createElement('div'),
+      },
     );
 
     expect(

@@ -778,86 +778,6 @@ function toolIcon(name: string): string {
   return Plug;
 }
 
-interface ToolCallBlock {
-  name: string;
-  summary: string;
-  body: string;
-  state: 'pending' | 'running' | 'success' | 'error';
-}
-
-function parseToolCalls(content: string): Array<string | ToolCallBlock> {
-  const segments: Array<string | ToolCallBlock> = [];
-  const re = /\[TOOL:([^:\]]+):?(pending|running|success|error)?\]([\s\S]*?)\[\/TOOL\]/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    if (m.index > last) segments.push(content.slice(last, m.index));
-    const name = m[1]!.trim();
-    const state = (m[2] ?? 'success') as ToolCallBlock['state'];
-    const inner = m[3] ?? '';
-    const newline = inner.indexOf('\n');
-    const summary = newline >= 0 ? inner.slice(0, newline).trim() : inner.trim();
-    const body = newline >= 0 ? inner.slice(newline + 1).trim() : '';
-    segments.push({ name, summary, body, state });
-    last = m.index + m[0].length;
-  }
-  if (last < content.length) segments.push(content.slice(last));
-  return segments;
-}
-
-export function buildToolCallEl(block: ToolCallBlock): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.className = `tool-call tool-call--${block.state}`;
-
-  const bar = document.createElement('div');
-  bar.className = 'tool-call__bar';
-  bar.setAttribute('role', 'button');
-  bar.setAttribute('aria-expanded', 'false');
-  bar.setAttribute('tabindex', '0');
-
-  const iconEl = renderIcon(
-    block.state === 'pending' || block.state === 'running' ? Loader2 : toolIcon(block.name),
-    14,
-    'tool-call__icon',
-  );
-  bar.appendChild(iconEl);
-
-  const label = document.createElement('span');
-  label.className = 'tool-call__label';
-  label.textContent = block.name;
-  bar.appendChild(label);
-
-  if (block.summary) {
-    const summary = document.createElement('span');
-    summary.className = 'tool-call__summary';
-    summary.textContent = block.summary;
-    bar.appendChild(summary);
-  }
-
-  const chevron = renderIcon(ChevronRight, 12, 'tool-call__chevron');
-  bar.appendChild(chevron);
-
-  const body = document.createElement('div');
-  body.className = 'tool-call__body';
-  body.textContent = block.body;
-
-  const toggle = (): void => {
-    const open = wrapper.classList.toggle('tool-call--open');
-    bar.setAttribute('aria-expanded', String(open));
-  };
-  bar.addEventListener('click', toggle);
-  bar.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      toggle();
-    }
-  });
-
-  wrapper.appendChild(bar);
-  wrapper.appendChild(body);
-  return wrapper;
-}
-
 function activityEntryStatus(entry: AgentActivityEntry): string {
   if (entry.kind === 'tool' || entry.kind === 'progress') return entry.status;
   if (entry.kind === 'error') return 'failed';
@@ -1264,28 +1184,15 @@ export function buildBubbleWithTools(
           }
         : undefined,
   };
-  const segments = parseToolCalls(msg.content);
-  const hasTools = segments.some((s) => typeof s !== 'string');
   const hasAgentActivity =
     msg.role === 'assistant' &&
     Boolean(msg.agentActivity || msg.browserActivity || options.browserControls);
-  if (!hasTools && !hasAgentActivity) return buildBubble(msg, options);
+  if (!hasAgentActivity) return buildBubble(msg, options);
 
   const wrapper = document.createElement('div');
   wrapper.className = `sp-msg sp-msg-${msg.role}`;
   wrapper.setAttribute('data-id', msg.id);
   wrapper.appendChild(buildAuthorLabel(msg.role));
-
-  const textParts: string[] = [];
-  const toolBlocks: ToolCallBlock[] = [];
-
-  for (const seg of segments) {
-    if (typeof seg === 'string') {
-      textParts.push(seg);
-    } else {
-      toolBlocks.push(seg);
-    }
-  }
 
   if (msg.browserActivity)
     wrapper.appendChild(
@@ -1302,8 +1209,7 @@ export function buildBubbleWithTools(
   if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);
 
-  const text = textParts.join('');
-  const prose = options.artifacts ? options.artifacts.prose(text) : text;
+  const prose = options.artifacts ? options.artifacts.prose(msg.content) : msg.content;
   if (
     shouldRenderTextBubble({
       text: prose,
@@ -1318,19 +1224,6 @@ export function buildBubbleWithTools(
   }
   if (msg.role === 'assistant' && options.artifacts?.cards) {
     wrapper.appendChild(options.artifacts.cards);
-  }
-
-  if (toolBlocks.length > 0) {
-    if (toolBlocks.length === 1) {
-      wrapper.appendChild(buildToolCallEl(toolBlocks[0]!));
-    } else {
-      const stack = document.createElement('div');
-      stack.className = 'tool-call-stack';
-      for (const block of toolBlocks) {
-        stack.appendChild(buildToolCallEl(block));
-      }
-      wrapper.appendChild(stack);
-    }
   }
 
   if (options.planReview) wrapper.appendChild(buildAgiWorkPlanReview(msg.id, options.planReview));
@@ -1349,7 +1242,7 @@ export function buildBubbleWithTools(
 
   const toolsReceipt = buildRouteReceipt(msg);
   if (toolsReceipt) wrapper.appendChild(toolsReceipt);
-  wrapper.appendChild(buildActionRow(msg, options, () => textParts.join('').trim() || msg.content));
+  wrapper.appendChild(buildActionRow(msg, options, () => msg.content));
   return wrapper;
 }
 

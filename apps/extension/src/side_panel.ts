@@ -98,6 +98,7 @@ import {
   type ConversationEntryChanges,
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
+import { ROUTING_TASK_TYPES } from './features/cloud-bridge/managedChatRouting';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import { SIDE_PANEL_PORT_NAME } from './features/side-panel/panelPresence';
 import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
@@ -823,20 +824,6 @@ function persistCurrentConversationOwner(): void {
     });
 }
 
-const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
-  'coding',
-  'reasoning',
-  'general',
-  'agentic',
-  'multimodal',
-  'research',
-  'computer-use',
-  'image_generation',
-  'creative_writing',
-  'long_context',
-  'simple_chat',
-]);
-
 function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
   if (
@@ -952,7 +939,6 @@ function managedTurnPersistencePayload(streamId: string): {
   };
 }
 
-// Provider display order in the grouped picker.
 const UNKNOWN_PROVIDER_KEY = 'unknown-provider';
 
 function modelGroupHeading(providerKey: string): string {
@@ -1636,7 +1622,6 @@ function injectStyles(): void {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     button:not(:disabled):active,
-    #sp-auth-save-btn:not(:disabled):active,
     #sp-cloud-gate-action:not(:disabled):active,
     #sp-mic-btn:not(:disabled):active,
     #sp-model-badge:not(:disabled):active,
@@ -1668,28 +1653,6 @@ function injectStyles(): void {
       font-size: var(--type-body-size);
       line-height: var(--type-body-height);
     }
-
-    #sp-tab-group-notice {
-      position: fixed;
-      top: 52px;
-      right: 10px;
-      z-index: var(--z-notice);
-      max-width: min(300px, calc(100vw - 20px));
-      padding: 8px 10px;
-      border: 1px solid var(--agi-ext-success-border);
-      border-radius: var(--corner-control);
-      background: var(--agi-ext-success-bg);
-      color: var(--agi-ext-success-text);
-      box-shadow: var(--agi-ext-elevation-3);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    #sp-tab-group-notice[data-kind='error'] {
-      border-color: var(--agi-ext-danger-border);
-      background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger-text);
-    }
-    #sp-tab-group-notice[hidden] { display: none; }
 
     /* ── Explicit Chrome → Desktop context handoff ── */
     .sp-context-handoff-overlay {
@@ -1954,7 +1917,6 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
     }
     #sp-blocked.visible { display: flex; }
-    .sp-blocked-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     #sp-blocked-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
 
     .sp-visually-hidden {
@@ -2010,8 +1972,7 @@ function injectStyles(): void {
       border-color: var(--agi-ext-danger-border);
       color: var(--agi-ext-danger-text);
     }
-    /* Failure footer: the reason plus a way to act on it. Previously the
-       reason was concatenated into the message text as "Error: <string>". */
+    /* Failure footer: the reason plus a way to act on it. */
     .sp-bubble-error-footer {
       display: flex;
       align-items: flex-start;
@@ -3023,90 +2984,7 @@ function injectStyles(): void {
     }
     .sp-interactive-card__action > .agi-icon { flex: 0 0 12px; opacity: 0.7; }
 
-    /* ── Cursor blink for streaming ── */
-    /* ── Inline tool-call UI (design-spec §4) ── */
-    .tool-call {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      font-size: var(--type-body-size);
-      line-height: var(--type-body-height);
-      color: var(--agi-ext-text-muted);
-    }
-    .tool-call__bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      height: 28px;
-      padding: 0 4px;
-      cursor: pointer;
-      user-select: none;
-      border-radius: var(--corner-control);
-      transition: background var(--duration-instant) var(--curve-standard);
-    }
-    .tool-call__bar:hover { background: var(--agi-ext-hover); }
-    .tool-call__icon {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-      color: var(--agi-ext-text-muted);
-    }
-    .tool-call__icon svg { width: 14px; height: 14px; }
-    .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .tool-call__summary {
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      margin-left: 4px;
-      max-width: 260px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .tool-call__chevron {
-      width: 12px;
-      height: 12px;
-      color: var(--agi-ext-text-muted);
-      margin-left: auto;
-      transition: transform var(--duration-quick) var(--curve-standard);
-      flex-shrink: 0;
-    }
-    .tool-call__chevron svg { width: 12px; height: 12px; }
-    .tool-call--open .tool-call__chevron { transform: rotate(90deg); }
-    .tool-call__body {
-      display: none;
-      background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      padding: 10px 12px;
-      font-family: var(--type-code-family);
-      font-size: var(--type-code-size);
-      line-height: var(--type-code-height);
-      color: var(--agi-ext-text);
-      overflow-x: auto;
-      max-height: 320px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .tool-call--open .tool-call__body { display: block; }
-    /* multi-step vertical guideline */
-    .tool-call-stack {
-      border-left: 1px solid var(--agi-ext-border);
-      padding-left: 10px;
-      margin-left: 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    /* spinner rotation for pending/running state */
-    .tool-call--running .tool-call__icon { color: var(--agi-ext-text-muted); }
-    .tool-call--running .tool-call__icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
-    @keyframes sp-spin { to { transform: rotate(360deg); }
-    }
-    .tool-call--error .tool-call__label { color: var(--agi-ext-danger-text); }
-    .tool-call--error .tool-call__icon { color: var(--agi-ext-danger-text); }
-    .tool-call--success .tool-call__icon { color: var(--agi-ext-success-text); }
+    @keyframes sp-spin { to { transform: rotate(360deg); } }
 
     .sp-agent-activity {
       width: min(100%, 420px);
@@ -3424,71 +3302,6 @@ function injectStyles(): void {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.4); opacity: 0.6; }
     }
-    .sp-shortcut-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text); flex: 1; }
-    .sp-shortcut-actions {
-      display: flex;
-      gap: 4px;
-    }
-    .sp-shortcut-action-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 2px 4px;
-      border-radius: var(--corner-compact);
-      transition: background var(--duration-instant);
-    }
-    .sp-shortcut-action-btn:hover { background: var(--agi-ext-overlay); }
-    .sp-shortcuts-status {
-      padding: 6px 10px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      border-top: 1px solid var(--agi-ext-border);
-    }
-    .sp-shortcuts-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
-    .sp-shortcuts-status[data-kind='success'] { color: var(--agi-ext-success-text); }
-    .sp-shortcuts-status:empty { display: none; }
-
-    .sp-shortcuts-empty {
-      padding: 10px 8px;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      text-align: center;
-    }
-    .sp-save-shortcut-row {
-      display: flex;
-      gap: 4px;
-      padding: 6px 4px 4px;
-      border-top: 1px solid var(--agi-ext-border);
-    }
-    .sp-save-shortcut-input {
-      flex: 1;
-      background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-compact);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 4px 6px;
-      outline: none;
-    }
-    .sp-save-shortcut-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-save-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-save-shortcut-btn {
-      background: var(--agi-ext-primary);
-      color: var(--agi-ext-on-primary);
-      border: none;
-      border-radius: var(--corner-compact);
-      padding: 4px 8px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .sp-save-shortcut-btn:hover { background: var(--agi-ext-primary-hover); }
-    .sp-save-shortcut-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Input row (composer §7) ── */
     #sp-input-area {
@@ -3821,7 +3634,6 @@ function injectStyles(): void {
       text-align: left;
     }
     .sp-attach-menu-item:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-attach-icon { font-size: 14px; flex-shrink: 0; }
     .sp-attach-file-input { display: none; }
 
     /* ── Attachment preview bar ── */
@@ -3990,38 +3802,6 @@ function injectStyles(): void {
     .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent-text); }
     .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info-text); }
     .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning-text); }
-    #sp-auth-input {
-      flex: 1;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 5px 9px;
-      outline: none;
-      font-family: inherit;
-      transition: border-color var(--duration-quick);
-      min-width: 0;
-    }
-    #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
-    #sp-auth-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    #sp-auth-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    #sp-auth-save-btn {
-      background: var(--agi-ext-primary);
-      color: var(--agi-ext-on-primary);
-      border: none;
-      border-radius: var(--corner-control);
-      padding: 5px 10px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background var(--duration-quick);
-      white-space: nowrap;
-    }
-    #sp-auth-save-btn:hover { background: var(--agi-ext-primary-hover); }
-    #sp-auth-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Bridge-offline notice (shown above composer when desktop not connected) ── */
     #sp-bridge-notice {
@@ -4111,7 +3891,6 @@ function injectStyles(): void {
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-model-option.selected { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: var(--type-caption-size); flex-shrink: 0; }
-    .sp-model-option-label { flex: 1; }
 
     /* ── Enhanced model picker ── */
     .sp-model-option-logo {
@@ -4170,19 +3949,6 @@ function injectStyles(): void {
       flex-shrink: 0;
       white-space: nowrap;
     }
-    .sp-model-upgrade-tag {
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--agi-ext-text-muted);
-      background: var(--agi-ext-hover);
-      border-radius: var(--corner-compact);
-      padding: 1px 5px;
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
 
     .sp-model-option-auto {
       border-bottom: 1px solid var(--agi-ext-border);
@@ -4217,19 +3983,14 @@ function injectStyles(): void {
       padding-top: 8px;
     }
 
-    /* ── Phase 2: Tab bar hidden (Workflows / CU are drawer launchers now) ──
-       Hidden on the chat view only. Workflows and Computer Use are entered from
-       the drawer but had NO exit: switchTab hides #sp-input-area and #sp-toolbar,
-       and this rule hid the one control that could call switchTab('chat'), so the
-       panel was a dead end recoverable only by closing and reopening it. The tab
-       bar comes back whenever we are off the chat view, so there is always a way
-       home. */
+    /* The tab bar is hidden on the chat view only. Workflows and Computer Use are
+       entered from the drawer and switchTab hides the composer there, so the bar
+       is the only control that can call switchTab('chat') and must show off the
+       chat view. */
     #sp-tab-bar { display: none; }
     #sp-tab-bar.sp-tab-bar-exit { display: flex; }
-    /* History sub-list inside the drawer.
-       CSP note (style-src 'self'): these rules used to be applied via
-       element.style.cssText at runtime, which Chrome blocks on extension
-       pages with a strict style-src, keep them here in the stylesheet. */
+    /* History sub-list inside the drawer. style-src 'self' blocks
+       element.style.cssText on extension pages, so these rules stay here. */
     #sp-drawer-history-list {
       margin-top: 6px;
       display: flex;
@@ -4422,46 +4183,6 @@ function injectStyles(): void {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
       }
-    }
-    .sp-cloud-token-row {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .sp-cloud-token-input {
-      flex: 1;
-      background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-code-size);
-      line-height: var(--type-code-height);
-      font-family: var(--type-code-family);
-      padding: 5px 8px;
-      outline: none;
-      min-width: 0;
-      transition: border-color var(--duration-quick);
-    }
-    .sp-cloud-token-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-cloud-token-save-btn {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-strong);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 600;
-      padding: 5px 9px;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background var(--duration-instant);
-    }
-    .sp-cloud-token-save-btn:hover { background: var(--agi-ext-hover); }
-    .sp-cloud-token-hint {
-      font-size: var(--type-caption-size);
-      color: var(--agi-ext-text-muted);
-      line-height: var(--type-caption-height);
     }
     /* ⋮ button in header */
     #sp-menu-btn {
@@ -5035,15 +4756,6 @@ function injectStyles(): void {
     }
     @media (forced-colors: active) {
       * { forced-color-adjust: auto; }
-      .sp-model-upgrade-tag {
-        color: HighlightText;
-        background: Highlight;
-        border: 1px solid CanvasText;
-      }
-      .sp-toggle-switch::after {
-        background: CanvasText;
-        box-shadow: none;
-      }
     }
 
     /* ── Panel chrome: More popover and conversation title row ── */
@@ -5091,32 +4803,24 @@ function injectStyles(): void {
     }
     .sp-title-status:empty { display: none; }
   `;
+  const stylesheet = [
+    cssText,
+    COMPUTER_USE_PANEL_CSS,
+    ARTIFACT_PANEL_CSS,
+    COMMAND_PALETTE_CSS,
+    AGIWORK_PLAN_REVIEW_CSS,
+    HELP_LINK_CSS,
+  ].join('\n');
   if (
     typeof CSSStyleSheet === 'function' &&
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
   ) {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(
-      cssText +
-        '\n' +
-        COMPUTER_USE_PANEL_CSS +
-        '\n' +
-        '\n' +
-        '\n' +
-        '\n' +
-        '\n' +
-        ARTIFACT_PANEL_CSS +
-        '\n' +
-        COMMAND_PALETTE_CSS +
-        '\n' +
-        AGIWORK_PLAN_REVIEW_CSS +
-        '\n' +
-        HELP_LINK_CSS,
-    );
+    sheet.replaceSync(stylesheet);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
     const fallback = document.createElement('style');
-    fallback.textContent = cssText;
+    fallback.textContent = stylesheet;
     document.head.appendChild(fallback);
   }
 }
@@ -8698,7 +8402,7 @@ function renderComposerDocumentChip(entry: ComposerDocument): HTMLElement {
     {
       class: 'sp-attachment-remove',
       type: 'button',
-      title: 'Remove',
+      title: t('spDocumentRemove', [entry.file.name]),
       'aria-label': t('spDocumentRemove', [entry.file.name]),
     },
     '×',
@@ -9025,7 +8729,7 @@ function buildUI(): void {
   const modelDropdownEl = el('div', {
     id: 'sp-model-dropdown',
     role: 'menu',
-    'aria-label': 'Available models',
+    'aria-label': t('spModelsMenuLabel'),
   });
   let modelCatalogueOpen = false;
   let modelSearchQuery = '';
@@ -9623,8 +9327,8 @@ function buildUI(): void {
   const historyBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-history-btn',
-    title: 'Recent chats',
-    'aria-label': 'Recent chats',
+    title: t('spRecentsTitle'),
+    'aria-label': t('spRecentsTitle'),
   });
   historyBtn.appendChild(renderIcon(Clock, 16));
   headerRight.appendChild(historyBtn);
@@ -9632,8 +9336,8 @@ function buildUI(): void {
   const newChatBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-new-chat-btn',
-    title: 'New chat',
-    'aria-label': 'New chat',
+    title: t('spNewChatLabel'),
+    'aria-label': t('spNewChatLabel'),
   });
   newChatBtn.appendChild(renderIcon(FilePen, 16));
   newChatBtn.addEventListener('click', () => {
@@ -9971,8 +9675,8 @@ function buildUI(): void {
   const drawerHistorySearch = el('input', {
     id: 'sp-drawer-history-search',
     type: 'search',
-    placeholder: 'Search recent chats',
-    'aria-label': 'Search recent chats',
+    placeholder: t('spHistorySearchLabel'),
+    'aria-label': t('spHistorySearchLabel'),
     maxlength: '200',
     autocomplete: 'off',
     hidden: '',
@@ -10529,8 +10233,8 @@ function buildUI(): void {
       const emptyLabel = showingArchived
         ? t('spHistoryArchivedEmpty')
         : entries.length === 0
-          ? 'No saved conversations'
-          : 'No matching conversations';
+          ? t('spHistoryEmpty')
+          : t('spHistoryNoMatch');
       const empty = el('div', { class: 'sp-drawer-history-empty' }, emptyLabel);
       drawerHistoryList.appendChild(empty);
       return;
@@ -10544,7 +10248,7 @@ function buildUI(): void {
         class: 'sp-drawer-history-open',
         type: 'button',
         'data-conversation-restore': 'true',
-        'aria-label': `Open chat: ${entry.title}`,
+        'aria-label': t('spHistoryOpenChat', [entry.title]),
         ...(active ? { 'aria-current': 'page' } : {}),
       }) as HTMLButtonElement;
       openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
@@ -10639,9 +10343,7 @@ function buildUI(): void {
           cloudHistoryOrganizationId = refreshed.organizationId;
       } catch {
         if (isCurrent() && !controller.signal.aborted)
-          showHistoryStatus(
-            'Account history could not be refreshed. Your saved chats remain on this device.',
-          );
+          showHistoryStatus(t('spHistoryRefreshFailed'));
       } finally {
         if (recentsRefreshAbort === controller) recentsRefreshAbort = null;
       }
@@ -10854,37 +10556,6 @@ function buildUI(): void {
     });
     titleRow.insertBefore(titleMenuWrap, titleStatus);
   };
-
-  async function drawerReadAllowlist(): Promise<string[]> {
-    try {
-      const res = await chrome.storage.local.get(SP_SITE_ALLOWLIST_KEY);
-      const list = (res as Record<string, unknown>)[SP_SITE_ALLOWLIST_KEY];
-      return Array.isArray(list) ? (list as string[]).filter((s) => typeof s === 'string') : [];
-    } catch {
-      return [];
-    }
-  }
-  async function drawerWriteAllowlist(next: string[]): Promise<void> {
-    const seen = new Set<string>();
-    const cleaned: string[] = [];
-    for (const raw of next) {
-      if (typeof raw !== 'string') continue;
-      const trimmed = raw.trim();
-      if (!trimmed) continue;
-      try {
-        const u = new URL(trimmed);
-        const origin = u.origin;
-        if (!seen.has(origin)) {
-          seen.add(origin);
-          cleaned.push(origin);
-        }
-      } catch {
-        /* drop malformed */
-      }
-    }
-    cleaned.sort();
-    await chrome.storage.local.set({ [SP_SITE_ALLOWLIST_KEY]: cleaned });
-  }
 
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -11492,7 +11163,7 @@ function buildUI(): void {
       if (!cuPanel.ownsRun(runId)) return;
       cuPanel.noteRunActivity();
       const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
-      cuPanel.showHandoffBanner(reason);
+      cuPanel.showHandoffBanner(reason, 'browser_error');
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
       if (!cuPanel.ownsRun(runId)) return;
@@ -11649,7 +11320,7 @@ function buildUI(): void {
       return;
     }
     const [allowlist, controlled] = await Promise.all([
-      drawerReadAllowlist(),
+      readUserSiteAllowlist(),
       hasBrowserControlConsent(origin).catch(() => false),
     ]);
     if (generation !== computerUseSiteGeneration) return;
@@ -11671,8 +11342,7 @@ function buildUI(): void {
         return;
       }
       try {
-        const list = await drawerReadAllowlist();
-        if (!list.includes(origin)) await drawerWriteAllowlist([...list, origin]);
+        await writeApprovedSite(origin);
         await grantBrowserControlConsent(origin);
       } catch (error) {
         await removeBrowserControlHostPermission(origin);
@@ -11914,8 +11584,7 @@ function buildUI(): void {
     if (!origin) return Promise.resolve(false);
     return requestApprovedSiteHostPermission(origin).then(async (granted) => {
       if (!granted) return false;
-      const list = await drawerReadAllowlist();
-      if (!list.includes(origin)) await drawerWriteAllowlist([...list, origin]);
+      await writeApprovedSite(origin);
       return true;
     });
   }
@@ -12204,7 +11873,7 @@ function buildUI(): void {
     };
     try {
       chrome.runtime.sendMessage(
-        { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
+        { type: 'CAPTURE_SCREENSHOT', format: 'png' },
         finishScreenshotCapture,
       );
     } catch {
@@ -13347,7 +13016,7 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
     (changeInfo.url !== undefined || changeInfo.status === 'loading')
   ) {
     clearPendingPageContext();
-    composerContextNotice = 'An attached tab changed. Choose the tabs again before sending.';
+    composerContextNotice = t('spAttachedTabChanged');
     updateContextButton();
     updateAttachmentPreview();
   }
@@ -13358,30 +13027,28 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
 chrome.tabs.onRemoved?.addListener((tabId) => {
   if (!pendingBrowserContextTabs.some((tab) => tab.tabId === tabId)) return;
   clearPendingPageContext();
-  composerContextNotice = 'An attached tab closed. Choose the tabs again before sending.';
+  composerContextNotice = t('spAttachedTabClosed');
   updateContextButton();
   updateAttachmentPreview();
 });
 refreshPageHostname();
 
-void (async () => {
-  Promise.all([
-    initialCloudAccountRefresh.then(() => {
-      if (_ctx.messages.length > 0) {
-        renderMessages();
-      }
-    }),
-    probeBridgeStatus(),
-  ])
-    .then(() => {
-      checkPendingChat();
-      void checkPendingContextHandoff();
-      void checkPendingBackgroundResult();
-    })
-    .catch((err) => {
-      console.error('[SidePanel] Boot initialization failed:', err);
-    });
-})();
+Promise.all([
+  initialCloudAccountRefresh.then(() => {
+    if (_ctx.messages.length > 0) {
+      renderMessages();
+    }
+  }),
+  probeBridgeStatus(),
+])
+  .then(() => {
+    checkPendingChat();
+    void checkPendingContextHandoff();
+    void checkPendingBackgroundResult();
+  })
+  .catch((err) => {
+    console.error('[SidePanel] Boot initialization failed:', err);
+  });
 
 async function probeBridgeStatus(): Promise<void> {
   try {

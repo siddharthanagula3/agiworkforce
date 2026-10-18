@@ -4,6 +4,7 @@ import {
   canUseBillingPlanCapability,
   getAutoRoutingProfileTiers,
   getModelMetadataById,
+  isWorkspaceReasoningEffort,
   resolveModelEffort,
   type Effort,
 } from '@agiworkforce/types';
@@ -44,7 +45,7 @@ import {
   imageDataUrlByteLength,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
 } from './freeTrialClient';
-import { resolveChromeManagedChatRoute } from './managedChatRouting';
+import { ROUTING_TASK_TYPES, resolveChromeManagedChatRoute } from './managedChatRouting';
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
 import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
 import { normalizeAnsweredModel } from './answeredModel';
@@ -78,28 +79,6 @@ function waitBeforeContinuationRetry(attempt: number, signal?: AbortSignal): Pro
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ROUTING_TASKS = new Set<RoutingTaskType>([
-  'coding',
-  'reasoning',
-  'general',
-  'agentic',
-  'multimodal',
-  'research',
-  'computer-use',
-  'image_generation',
-  'creative_writing',
-  'long_context',
-  'simple_chat',
-]);
-const REASONING_EFFORTS: ReadonlySet<Effort> = new Set([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-]);
 
 export function createChromeManagedStreamKey(clientInstanceId: string, streamId: string): string {
   if (!STREAM_ID_PATTERN.test(clientInstanceId)) {
@@ -295,10 +274,7 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
   ) {
     return 'Invalid memory command.';
   }
-  if (
-    request.effort !== undefined &&
-    (typeof request.effort !== 'string' || !REASONING_EFFORTS.has(request.effort))
-  ) {
+  if (request.effort !== undefined && !isWorkspaceReasoningEffort(request.effort)) {
     return 'Invalid reasoning effort.';
   }
   if (
@@ -435,7 +411,7 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
   if (
     request.previousTaskType !== undefined &&
     request.previousTaskType !== null &&
-    !ROUTING_TASKS.has(request.previousTaskType)
+    !ROUTING_TASK_TYPES.has(request.previousTaskType)
   ) {
     return 'Previous routing task is invalid.';
   }
@@ -522,7 +498,7 @@ export function normalizeChromeManagedRoutingMetadata(
     modelKey.length > MAX_IDENTIFIER_CHARS ||
     !getModelMetadataById(modelKey) ||
     typeof taskType !== 'string' ||
-    !ROUTING_TASKS.has(taskType as RoutingTaskType) ||
+    !ROUTING_TASK_TYPES.has(taskType as RoutingTaskType) ||
     typeof reason !== 'string' ||
     reason.length === 0 ||
     reason.length > 500
@@ -532,7 +508,7 @@ export function normalizeChromeManagedRoutingMetadata(
   if (
     requestedEffort !== undefined &&
     (typeof requestedEffort !== 'string' ||
-      !REASONING_EFFORTS.has(requestedEffort as Effort) ||
+      !isWorkspaceReasoningEffort(requestedEffort) ||
       resolveModelEffort(modelKey, requestedEffort) !== requestedEffort)
   ) {
     return null;

@@ -4,12 +4,13 @@ import type {
   GetComputerUseStateMessage,
 } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
-import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
+import { APPROVAL_TIMEOUT_MS, DEFAULT_MAX_AGENT_STEPS } from '../computer-use/agentLoop';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
+import { t } from '../../i18n';
 import { buildImageViewerButton } from './mediaViewer';
 import {
   uploadSelectedUserFiles,
@@ -640,19 +641,6 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 `;
 
-const TOOL_ICONS: Record<string, string> = {
-  screenshot: 'camera_icon',
-  click: 'cursor_icon',
-  scroll: 'scroll_icon',
-  type: 'keyboard_icon',
-  read_dom: 'document_icon',
-  navigate: 'globe_icon',
-  find: 'search_icon',
-  download_file: 'folder_icon',
-  read_console: 'terminal_icon',
-  read_network: 'plug_icon',
-};
-
 const TOOL_EMOJI: Record<string, string> = {
   screenshot: '\u{1F4F8}', // camera
   click: '\u{1F5B1}', // mouse
@@ -860,7 +848,7 @@ export function buildBrowserApprovalCard(options: BrowserApprovalCardOptions): B
     cardTitle.textContent = `Skipped (no response): ${toolName}`;
     cardDesc.textContent = upload
       ? `This approval expired. No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`
-      : 'This action timed out after 30 seconds and was skipped automatically.';
+      : `This action timed out after ${APPROVAL_TIMEOUT_MS / 1_000} seconds and was skipped automatically.`;
     if (shouldRestoreFocus) {
       card.tabIndex = -1;
       card.focus();
@@ -1397,7 +1385,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   void adoptBackgroundRun();
 
-  // via the exported refreshAuthChip() helper wired to the tab-switch event.
   const authChip = document.createElement('span');
   authChip.className = 'sp-cu-auth-chip unauthed';
   authChip.setAttribute('aria-live', 'polite');
@@ -1547,7 +1534,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   const usageStepsEl = document.createElement('span');
   usageStepsEl.className = 'sp-cu-usage-steps';
-  usageStepsEl.textContent = 'Steps: 0/20';
+  usageStepsEl.textContent = `Steps: 0/${DEFAULT_MAX_AGENT_STEPS}`;
 
   const barTrack = document.createElement('div');
   barTrack.className = 'sp-cu-usage-bar-track';
@@ -1689,6 +1676,14 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
           detailEl.classList.add('expanded');
         }
         stepEl.style.background = 'color-mix(in srgb, var(--agi-ext-success) 5%, transparent)';
+        break;
+      }
+      case 'injection_blocked': {
+        iconEl.textContent = KIND_EMOJI['error'] ?? '';
+        titleEl.textContent = t('spBrowserStepInjectionBlocked');
+        detailEl.textContent = step.errorMessage ?? '';
+        if (detailEl.textContent) makeExpandable();
+        stepEl.style.background = 'color-mix(in srgb, var(--agi-ext-danger) 5%, transparent)';
         break;
       }
       case 'screenshot': {
@@ -1871,8 +1866,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       usageTokensEl.textContent = '';
     }
   }
-
-  void TOOL_ICONS;
 
   return {
     panelEl,

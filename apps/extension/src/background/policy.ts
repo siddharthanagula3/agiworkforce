@@ -82,7 +82,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   ADD_TAB_TO_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
   REMOVE_TAB_FROM_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
-  QUEUE_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RECONNECT_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   UNPAIR_NATIVE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 

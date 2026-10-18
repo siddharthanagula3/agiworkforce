@@ -65,7 +65,7 @@ describe('handlers with no content-script sender are extension-page-only', () =>
   });
 
   it('gates the native-bridge control messages', () => {
-    for (const type of ['QUEUE_MESSAGE', 'RECONNECT_NATIVE']) {
+    for (const type of ['RECONNECT_NATIVE']) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type)).toBe(true);
     }
   });

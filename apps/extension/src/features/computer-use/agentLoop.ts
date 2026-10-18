@@ -54,6 +54,8 @@ import {
 import type { TaskTabs, TaskTabPlan, TaskWindowResizePlan } from '../browser-tools/taskTabs';
 import type { BrowserAgentSiteTools, BrowserSiteToolPlan } from '../tools/browserAgentSiteTools';
 
+export const DEFAULT_MAX_AGENT_STEPS = 20;
+
 export interface AgentLoopOptions {
   maxSteps?: number;
   /**
@@ -964,7 +966,7 @@ export async function runAgentLoop(
   tabId: number,
   options: AgentLoopOptions = {},
 ): Promise<AgentLoopResult> {
-  const maxSteps = options.maxSteps ?? 20;
+  const maxSteps = options.maxSteps ?? DEFAULT_MAX_AGENT_STEPS;
   const runId = options.runId ?? crypto.randomUUID();
 
   ensureOnDetachListener();
@@ -1100,7 +1102,7 @@ export async function runAgentLoop(
       const token = await resolveCredential(options);
       // Observations older than the newest few are resent verbatim otherwise,
       // so a 20-step run pays for every screenshot it ever took on every step.
-      const { message, isDone, tokensUsed } = await callCloud(
+      const { message, tokensUsed } = await callCloud(
         pruneObservationHistory(history),
         token,
         gatewayBase,
@@ -1172,8 +1174,6 @@ export async function runAgentLoop(
       for (const r of toolResults) {
         history.push(r);
       }
-
-      void isDone;
     }
 
     await assertRunOwnership(options);
@@ -1617,9 +1617,8 @@ async function dispatchToolCall(
         Promise.resolve(approval).then((decision) => finish(decision === true), fail);
       });
       await assertRunOwnership(options);
-    } catch (error) {
+    } catch {
       throwIfCancelled(options.signal);
-      void error;
       allowed = false;
     }
     if (!allowed) {
