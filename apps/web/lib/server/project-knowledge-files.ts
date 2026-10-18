@@ -6,7 +6,6 @@ import { logger } from '@/lib/logger';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import type { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveProjectWriteAccess } from '@/lib/services/org-sharing-service';
-import { MAX_KNOWLEDGE_FILES } from '@/lib/services/project-context-service';
 import {
   extractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError,
@@ -19,7 +18,7 @@ import {
   sealProjectKnowledgeObject,
 } from '@/lib/server/project-knowledge-object-storage';
 import { recordModerationEvent } from '@/lib/moderation';
-import { validateAttachmentMeta } from '@agiworkforce/types';
+import { MAX_PROJECT_KNOWLEDGE_FILES, validateAttachmentMeta } from '@agiworkforce/types';
 import { attachmentSizeRefusal } from '@/lib/server/attachment-allowance';
 import type { ManagedCloudProjectKnowledgeRegisterRequest } from '@agiworkforce/cloud-contracts';
 import type { ExternalResourceReferenceInput } from '@agiworkforce/types';
@@ -38,9 +37,6 @@ import {
   readProjectKnowledgeIndexStates,
 } from '@/lib/services/retrieval-index-service';
 import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval-index-workflow';
-
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
 
 export interface OwnedProjectKnowledgeFile {
   mimeType: string;
@@ -102,9 +98,7 @@ export async function readIndexStates(
   try {
     return await readProjectKnowledgeIndexStates(db, projectId, fileIds);
   } catch (error) {
-    if (!isSchemaNotReady(error)) {
-      logger.warn({ error }, '[knowledge-files] index state read failed');
-    }
+    logger.warn({ error }, '[knowledge-files] index state read failed');
     return new Map();
   }
 }
@@ -125,9 +119,7 @@ async function dispatchKnowledgeIndexing(
       },
     ]);
   } catch (error) {
-    if (!isSchemaNotReady(error)) {
-      logger.warn({ error, fileId }, '[knowledge-files] indexing was not dispatched');
-    }
+    logger.warn({ error, fileId }, '[knowledge-files] indexing was not dispatched');
   }
 }
 
@@ -176,20 +168,12 @@ function unreadableUploadSummary(mimeType: string, extractedText: string | null)
     : 'Not readable: no text could be extracted from this file, so only its name reaches the model.';
 }
 
-export function isSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
-
-export type ProjectKnowledgeRegistration =
-  | {
-      status: 'created';
-      file: ReturnType<typeof projectKnowledgeResponse>;
-      /** Why part of the file was not read, for the person who added it. */
-      notice?: string;
-    }
-  | { status: 'unavailable' };
+export type ProjectKnowledgeRegistration = {
+  status: 'created';
+  file: ReturnType<typeof projectKnowledgeResponse>;
+  /** Why part of the file was not read, for the person who added it. */
+  notice?: string;
+};
 
 export interface ProjectKnowledgeScope {
   db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
@@ -198,8 +182,7 @@ export interface ProjectKnowledgeScope {
   projectId: string;
 }
 
-export type ProjectKnowledgeCapacity =
-  { status: 'ready'; planTier: BillingPlanTier } | { status: 'unavailable' };
+export type ProjectKnowledgeCapacity = { status: 'ready'; planTier: BillingPlanTier };
 
 export async function checkProjectKnowledgeCapacity(
   scope: ProjectKnowledgeScope,
@@ -252,40 +235,27 @@ export async function checkProjectKnowledgeCapacity(
     throw createError.conflict('This project is archived. Unarchive it to add sources.');
   }
 
-  let activeCount = 0;
-  try {
-    const [countRow] = await db.query<{ count: number }>(
-      `select count(*)::int as count
-         from project_knowledge_files
-        where project_id = $1 and deleted_at is null and superseded_at is null`,
-      [projectId],
-    );
-    activeCount = countRow?.count ?? 0;
-  } catch (error) {
-    if (isSchemaNotReady(error)) {
-      return { status: 'unavailable' };
-    }
-    throw error;
-  }
-  if (activeCount >= MAX_KNOWLEDGE_FILES) {
+  const [countRow] = await db.query<{ count: number }>(
+    `select count(*)::int as count
+       from project_knowledge_files
+      where project_id = $1 and deleted_at is null and superseded_at is null`,
+    [projectId],
+  );
+  const activeCount = countRow?.count ?? 0;
+  if (activeCount >= MAX_PROJECT_KNOWLEDGE_FILES) {
     throw createError.conflict(
-      `This project already has the maximum of ${MAX_KNOWLEDGE_FILES} knowledge files. Remove a file before adding another.`,
+      `This project already has the maximum of ${MAX_PROJECT_KNOWLEDGE_FILES} knowledge files. Remove a file before adding another.`,
     );
   }
 
-  let duplicate: { id: string; file_name: string } | undefined;
-  try {
-    [duplicate] = await db.query<{ id: string; file_name: string }>(
-      `select id, file_name
-         from project_knowledge_files
-        where project_id = $1 and checksum_sha256 = $2 and deleted_at is null
-          and superseded_at is null
-        limit 1`,
-      [projectId, body.checksumSha256.trim()],
-    );
-  } catch (error) {
-    if (!isSchemaNotReady(error)) throw error;
-  }
+  const [duplicate] = await db.query<{ id: string; file_name: string }>(
+    `select id, file_name
+       from project_knowledge_files
+      where project_id = $1 and checksum_sha256 = $2 and deleted_at is null
+        and superseded_at is null
+      limit 1`,
+    [projectId, body.checksumSha256.trim()],
+  );
   if (duplicate) {
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
@@ -303,23 +273,17 @@ export async function findProjectKnowledgeFileByChecksum(
   checksumSha256: string,
 ): Promise<ReturnType<typeof projectKnowledgeResponse> | null> {
   const { db, userId, projectId } = scope;
-  let row: Record<string, unknown> | undefined;
-  try {
-    [row] = await db.query<Record<string, unknown>>(
-      `select *
-         from project_knowledge_files
-        where project_id = $1
-          and checksum_sha256 = $2
-          and added_by_user_id = $3
-          and deleted_at is null
-          and superseded_at is null
-        limit 1`,
-      [projectId, checksumSha256, userId],
-    );
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const [row] = await db.query<Record<string, unknown>>(
+    `select *
+       from project_knowledge_files
+      where project_id = $1
+        and checksum_sha256 = $2
+        and added_by_user_id = $3
+        and deleted_at is null
+        and superseded_at is null
+      limit 1`,
+    [projectId, checksumSha256, userId],
+  );
   if (!row) return null;
   const fileId = String(row['id'] ?? '');
   const indexStates = await readIndexStates(db, projectId, [fileId]);
@@ -332,26 +296,19 @@ export async function registerProjectKnowledgeFile(
   origin?: ExternalResourceReferenceInput,
 ): Promise<ProjectKnowledgeRegistration> {
   const { db, userId, organizationId, projectId } = scope;
-  const capacity = await checkProjectKnowledgeCapacity(scope, body);
-  if (capacity.status === 'unavailable') return capacity;
-  const { planTier } = capacity;
+  const { planTier } = await checkProjectKnowledgeCapacity(scope, body);
 
-  let supersedes: { id: string; version: number } | undefined;
-  try {
-    [supersedes] = await db.query<{ id: string; version: number }>(
-      `select id, version
-         from project_knowledge_files
-        where project_id = $1
-          and file_name = $2
-          and deleted_at is null
-          and superseded_at is null
-        order by version desc
-        limit 1`,
-      [projectId, body.fileName.trim()],
-    );
-  } catch (error) {
-    if (!isSchemaNotReady(error)) throw error;
-  }
+  const [supersedes] = await db.query<{ id: string; version: number }>(
+    `select id, version
+       from project_knowledge_files
+      where project_id = $1
+        and file_name = $2
+        and deleted_at is null
+        and superseded_at is null
+      order by version desc
+      limit 1`,
+    [projectId, body.fileName.trim()],
+  );
 
   let extraction: Awaited<ReturnType<typeof extractProjectKnowledgeFile>>;
   try {
@@ -504,9 +461,6 @@ export async function registerProjectKnowledgeFile(
       );
     }
   } catch (error) {
-    if (isSchemaNotReady(error)) {
-      return { status: 'unavailable' };
-    }
     logger.error({ error, projectId }, 'Failed to create knowledge file');
     throw createError.internal('Failed to create knowledge file');
   }

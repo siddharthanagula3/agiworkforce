@@ -185,9 +185,6 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
           accountKey: access.accountKey,
         },
       );
-      if (registration.status === 'unavailable') {
-        throw createError.capabilityUnavailable('Project sources are not available yet.');
-      }
       writtenKey = null;
       outcomes.push({
         fileId,

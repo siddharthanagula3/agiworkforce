@@ -25,7 +25,6 @@ const VIDEO_JOB_STATUS: Readonly<Record<string, MediaJobStatus>> = {
 };
 
 const RETRYABLE_IMAGE_OPERATION = 'generate';
-const UNDEFINED_TABLE = '42P01';
 
 interface ImageJobRow {
   id: string;
@@ -58,10 +57,6 @@ interface VideoJobRow {
 
 function iso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-}
-
-function isUndefinedTable(error: unknown): boolean {
-  return (error as { code?: unknown } | null)?.code === UNDEFINED_TABLE;
 }
 
 function inFlight(status: MediaJobStatus): boolean {
@@ -172,23 +167,14 @@ async function videoJobs(
   });
 }
 
-async function orEmpty(read: Promise<MediaJobEntry[]>): Promise<MediaJobEntry[]> {
-  try {
-    return await read;
-  } catch (error) {
-    if (isUndefinedTable(error)) return [];
-    throw error;
-  }
-}
-
 export async function listMediaJobHistory(
   db: DatabaseAdapter,
   userId: string,
   organizationId: string | null,
 ): Promise<MediaJobEntry[]> {
   const [images, videos] = await Promise.all([
-    orEmpty(imageJobs(db, userId, organizationId)),
-    orEmpty(videoJobs(db, userId, organizationId)),
+    imageJobs(db, userId, organizationId),
+    videoJobs(db, userId, organizationId),
   ]);
   return [...images, ...videos]
     .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))

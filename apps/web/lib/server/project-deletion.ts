@@ -5,19 +5,10 @@ import { logger } from '@/lib/logger';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 
-const PG_UNDEFINED_COLUMN = '42703';
-const PG_UNDEFINED_TABLE = '42P01';
-
 export interface DeletedProjectScope {
   projectId: string;
   userId: string;
   organizationId: string | null;
-}
-
-export function isProjectSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as { code?: string }).code;
-  return code === PG_UNDEFINED_COLUMN || code === PG_UNDEFINED_TABLE;
 }
 
 export async function releaseDeletedProjectContents(
@@ -74,20 +65,8 @@ export async function releaseTombstonedProject(
   db: Pick<DatabaseAdapter, 'transaction'>,
   scope: DeletedProjectScope,
 ): Promise<void> {
-  let storageUris: string[];
-  try {
-    storageUris = await db.transaction((tx) =>
-      releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: true }),
-    );
-  } catch (error) {
-    if (!isProjectSchemaNotReady(error)) throw error;
-    logger.warn(
-      { error, projectId: scope.projectId, userId: scope.userId },
-      'Knowledge-file schema not ready; releasing project chats without source cleanup',
-    );
-    storageUris = await db.transaction((tx) =>
-      releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: false }),
-    );
-  }
+  const storageUris = await db.transaction((tx) =>
+    releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: true }),
+  );
   await deleteDeletedProjectObjects(storageUris, scope);
 }

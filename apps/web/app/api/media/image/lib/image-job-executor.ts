@@ -450,7 +450,7 @@ async function persistGeneratedImages(input: {
         })),
         input.db,
       );
-      if (!inserted || inserted.length !== stagedImages.length) {
+      if (inserted.length !== stagedImages.length) {
         failures.push('media catalog is unavailable for the generated image batch');
       } else {
         stagedImages.forEach((staged, position) => {

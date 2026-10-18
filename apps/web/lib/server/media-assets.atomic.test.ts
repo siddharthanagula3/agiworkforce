@@ -148,10 +148,7 @@ describe('isMediaAssetStoreReady', () => {
     await expect(isMediaAssetStoreReady(dbMocks)).resolves.toBe(false);
   });
 
-  it('fails closed for a missing table or column while surfacing infrastructure errors', async () => {
-    dbMocks.query.mockRejectedValueOnce({ code: '42703' });
-    await expect(isMediaAssetStoreReady(dbMocks)).resolves.toBe(false);
-
+  it('surfaces a failed readiness query instead of reporting the catalog absent', async () => {
     dbMocks.query.mockRejectedValueOnce(new Error('database unavailable'));
     await expect(isMediaAssetStoreReady(dbMocks)).rejects.toThrow('database unavailable');
   });

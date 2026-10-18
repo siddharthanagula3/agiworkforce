@@ -126,21 +126,6 @@ describe('beta application intake', () => {
     expect(params[7]).toBe('user-1');
   });
 
-  it('says nothing was stored rather than claiming receipt when intake is not migrated', async () => {
-    mockQuery.mockRejectedValue(
-      Object.assign(new Error('relation "public.beta_applications" does not exist'), {
-        code: '42P01',
-      }),
-    );
-
-    const response = await POST(post(VALID));
-
-    expect(response.status).toBe(503);
-    const body = (await response.json()) as { error: string; message: string };
-    expect(body.error).toBe('intake_unavailable');
-    expect(body.message).toMatch(/nothing was stored/i);
-  });
-
   it('does not report a real database outage as intake being closed', async () => {
     mockQuery.mockRejectedValue(
       Object.assign(new Error('connection terminated'), { code: '08006' }),

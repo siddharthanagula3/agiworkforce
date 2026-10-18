@@ -227,9 +227,6 @@ async function finishKnowledgeFile(
       sourceSurface: session.sourceSurface,
       storageUri: session.key,
     });
-    if (registration.status === 'unavailable') {
-      throw createError.capabilityUnavailable('Project sources are not available yet.');
-    }
     return knowledgeFileCompletion(registration.file);
   } catch (error) {
     if (isAppError(error) && error.statusCode < 500) {

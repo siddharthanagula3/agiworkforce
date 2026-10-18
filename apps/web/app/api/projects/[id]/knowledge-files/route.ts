@@ -10,7 +10,6 @@ import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
-  isSchemaNotReady,
   projectKnowledgeResponse,
   readIndexStates,
   registerProjectKnowledgeFile,
@@ -83,15 +82,6 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
       [projectId],
     );
   } catch (error) {
-    if (isSchemaNotReady(error)) {
-      return NextResponse.json(
-        {
-          error: 'knowledge_files_unavailable',
-          message: 'Project sources are temporarily unavailable.',
-        },
-        { status: 503 },
-      );
-    }
     logger.error({ error, projectId }, 'Failed to fetch knowledge files');
     throw createError.internal('Failed to fetch knowledge files');
   }
@@ -143,15 +133,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     { db, userId, organizationId, projectId },
     body,
   );
-  if (registration.status === 'unavailable') {
-    return NextResponse.json(
-      {
-        error: 'knowledge_files_unavailable',
-        message: 'Knowledge files require Managed Cloud (pending migration apply)',
-      },
-      { status: 503 },
-    );
-  }
   return NextResponse.json(
     {
       file: registration.file,

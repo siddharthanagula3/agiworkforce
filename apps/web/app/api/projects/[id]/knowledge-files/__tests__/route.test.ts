@@ -123,16 +123,13 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
     expect(file['storageUri']).toBe('/api/projects/proj-1/knowledge-files/file-1');
   });
 
-  it('returns 503 when the knowledge schema is unavailable (42P01)', async () => {
+  it('reports a failed source read as a server error, not an unavailable feature', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
-    const pgError = { code: '42P01', message: 'relation does not exist' };
-    mockNeonQuery.mockRejectedValueOnce(pgError);
+    mockNeonQuery.mockRejectedValueOnce(new Error('connection terminated'));
 
     const res = await GET(makeGetRequest('proj-1'), routeContext('proj-1'));
 
-    expect(res.status).toBe(503);
-    const json = (await res.json()) as { error: string };
-    expect(json.error).toBe('knowledge_files_unavailable');
+    expect(res.status).toBe(500);
   });
 });
 
@@ -176,10 +173,9 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
   });
 
-  it('returns 503 when table does not exist (42P01)', async () => {
+  it('reports a failed registration read as a server error', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
-    const pgError = { code: '42P01', message: 'relation does not exist' };
-    mockNeonQuery.mockRejectedValueOnce(pgError);
+    mockNeonQuery.mockRejectedValueOnce(new Error('connection terminated'));
 
     const res = await POST(
       makePostRequest('proj-1', {
@@ -193,10 +189,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       routeContext('proj-1'),
     );
 
-    expect(res.status).toBe(503);
-    const json = (await res.json()) as { error: string; message: string };
-    expect(json.error).toBe('knowledge_files_unavailable');
-    expect(json.message).toContain('Knowledge files require Managed Cloud');
+    expect(res.status).toBe(500);
   });
 
   it('returns 201 with mapped file on valid input', async () => {

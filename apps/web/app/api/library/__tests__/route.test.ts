@@ -279,11 +279,9 @@ describe('GET /api/library', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
-  it('returns an empty page when the table has not been migrated yet', async () => {
-    mockQuery.mockRejectedValue(Object.assign(new Error('undefined table'), { code: '42P01' }));
+  it('reports a failed library read as a server error, not an empty library', async () => {
+    mockQuery.mockRejectedValue(new Error('connection terminated'));
     const res = await GET(makeRequest());
-    expect(res.status).toBe(200);
-    const body = await parsedBody(res);
-    expect(body).toEqual({ items: [], has_more: false, next_offset: null });
+    expect(res.status).toBe(500);
   });
 });

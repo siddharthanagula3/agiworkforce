@@ -10,9 +10,6 @@ import {
   getFileStorageLimitErrorMessage,
 } from '@/lib/services/free-plan-entitlements';
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
 export interface FileStorageScope {
   db: DatabaseAdapter;
   userId: string;
@@ -27,12 +24,6 @@ export interface FileStorageAllowance {
 export interface FileStorageMeter {
   usedBytes: number | null;
   limitBytes: number | null;
-}
-
-function isSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
 export async function sumFileStorageBytes(scope: FileStorageScope): Promise<number> {
@@ -73,13 +64,7 @@ export async function assertFileStorageAvailable(
 ): Promise<void> {
   const { planTier, limitBytes } = allowance ?? (await resolveFileStorageAllowance(scope));
   if (limitBytes === null) return;
-  let usedBytes: number;
-  try {
-    usedBytes = await sumFileStorageBytes(scope);
-  } catch (error) {
-    if (!isSchemaNotReady(error)) throw error;
-    usedBytes = 0;
-  }
+  const usedBytes = await sumFileStorageBytes(scope);
   if (usedBytes + incomingBytes > limitBytes) {
     throw createError.validation(getFileStorageLimitErrorMessage(planTier, limitBytes));
   }
@@ -96,9 +81,7 @@ export async function readFileStorageMeter(scope: FileStorageScope): Promise<Fil
   try {
     usedBytes = await sumFileStorageBytes(scope);
   } catch (error) {
-    if (!isSchemaNotReady(error)) {
-      logger.warn({ error, userId: scope.userId }, 'File storage meter: usage read failed');
-    }
+    logger.warn({ error, userId: scope.userId }, 'File storage meter: usage read failed');
   }
   return { usedBytes, limitBytes };
 }

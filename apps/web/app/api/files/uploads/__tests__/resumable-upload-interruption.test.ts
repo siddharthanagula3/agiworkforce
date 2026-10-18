@@ -58,7 +58,6 @@ vi.mock('@/lib/server/chat-attachment-completion', () => ({
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
   findOwnedProjectKnowledgeFile: vi.fn(),
-  isSchemaNotReady: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   checkProjectKnowledgeCapacity: vi.fn(),

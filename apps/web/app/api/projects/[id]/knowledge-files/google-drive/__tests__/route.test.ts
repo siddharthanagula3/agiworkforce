@@ -131,7 +131,6 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   checkProjectKnowledgeCapacity: vi.fn(),
   findOwnedProjectKnowledgeFile: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
-  isSchemaNotReady: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: mocks.registerProjectKnowledgeFile,
@@ -351,22 +350,6 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
       ],
     });
     expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
-  });
-
-  it('removes the stored object and answers 422 when registration is unavailable', async () => {
-    mocks.downloadGoogleDriveFile.mockResolvedValue(driveFile('notes.txt'));
-    mocks.registerProjectKnowledgeFile.mockResolvedValue({ status: 'unavailable' });
-
-    const response = await post({ fileIds: [DRIVE_A] });
-
-    expect(response.status).toBe(422);
-    const key = mocks.putPrivateObject.mock.calls[0]?.[0].key;
-    expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledWith(key);
-    expect((await response.json()).results[0]).toEqual({
-      fileId: DRIVE_A,
-      status: 'failed',
-      message: 'Project sources are not available yet.',
-    });
   });
 
   it('hides unexpected failure detail from the caller', async () => {

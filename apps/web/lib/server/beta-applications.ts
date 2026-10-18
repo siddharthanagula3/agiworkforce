@@ -17,18 +17,6 @@ export const BETA_SURFACES = ['web', 'desktop', 'mobile', 'chrome', 'vscode', 'c
 
 export const MAX_USE_CASE_LENGTH = 1500;
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-/** True only when migration 0131 has not been applied. */
-export function isIntakeTableMissing(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  return (
-    record['code'] === PG_UNDEFINED_TABLE ||
-    /relation .*beta_applications.* does not exist/.test(String(record['message'] ?? ''))
-  );
-}
-
 export type BetaSurface = (typeof BETA_SURFACES)[number];
 
 export interface BetaApplicationInput {

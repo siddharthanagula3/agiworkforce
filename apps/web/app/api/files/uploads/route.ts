@@ -46,13 +46,10 @@ async function handleCreateUpload(request: NextRequest): Promise<NextResponse> {
     );
   }
   if (body.kind === 'knowledge-file') {
-    const capacity = await checkProjectKnowledgeCapacity(
+    await checkProjectKnowledgeCapacity(
       { db, userId, organizationId, projectId: body.projectId },
       body,
     );
-    if (capacity.status === 'unavailable') {
-      throw createError.capabilityUnavailable('Project sources are not available yet.');
-    }
   }
 
   await admitAttachmentUpload({

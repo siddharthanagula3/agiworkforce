@@ -2,7 +2,6 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { LIBRARY_DEFAULT_SORT, type LibrarySort } from '@agiworkforce/cloud-contracts';
-import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
 import {
   legalHoldExclusion,
@@ -22,15 +21,6 @@ export {
   purgeTemporaryChatFiles,
   type TemporaryChatFilePurge,
 } from '@/lib/server/temporary-files';
-
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
 
 export interface MediaAsset {
   id: string;
@@ -94,81 +84,76 @@ const REQUIRED_MEDIA_ASSET_COLUMNS = [
 ] as const;
 
 export async function isMediaAssetStoreReady(db: MediaAssetQueryClient): Promise<boolean> {
-  try {
-    const [readiness] = await db.query<{ ready: boolean }>(
-      `select
-         to_regclass('public.media_assets') is not null
-         and not exists (
-           select 1
-             from jsonb_to_recordset($1::jsonb) as required(
-               column_name text,
-               udt_name text,
-               is_nullable text,
-               default_policy text
-             )
-            where not exists (
-              select 1
-                from information_schema.columns actual
-               where actual.table_schema = 'public'
-                 and actual.table_name = 'media_assets'
-                 and actual.column_name = required.column_name
-                 and actual.udt_name = required.udt_name
-                 and actual.is_nullable = required.is_nullable
-                 and case required.default_policy
-                   when 'required' then actual.column_default is not null
-                   when 'forbidden' then actual.column_default is null
-                   else false
-                 end
-            )
-         )
-         and exists (
-           select 1
-             from pg_constraint fk
-             join pg_attribute source_column
-               on source_column.attrelid = fk.conrelid
-              and source_column.attnum = any (fk.conkey)
-             join pg_attribute target_column
-               on target_column.attrelid = fk.confrelid
-              and target_column.attnum = any (fk.confkey)
-            where fk.conrelid = to_regclass('public.media_assets')
-              and fk.contype = 'f'
-              and source_column.attname = 'conversation_id'
-              and array_length(fk.conkey, 1) = 1
-              and array_length(fk.confkey, 1) = 1
-              and fk.confrelid = to_regclass('public.web_conversations')
-              and target_column.attname = 'id'
-              and fk.confdeltype = 'n'
-              and fk.convalidated
-         )
-         and 1 = (
-           select count(*)
-             from pg_constraint fk
-             join pg_attribute source_column
-               on source_column.attrelid = fk.conrelid
-              and source_column.attnum = any (fk.conkey)
-            where fk.conrelid = to_regclass('public.media_assets')
-              and fk.contype = 'f'
-              and source_column.attname = 'conversation_id'
-              and array_length(fk.conkey, 1) = 1
-         ) as ready`,
-      [
-        JSON.stringify(
-          REQUIRED_MEDIA_ASSET_COLUMNS.map(
-            ([column_name, udt_name, is_nullable, default_policy]) => ({
-              column_name,
-              udt_name,
-              is_nullable,
-              default_policy,
-            }),
-          ),
+  const [readiness] = await db.query<{ ready: boolean }>(
+    `select
+       to_regclass('public.media_assets') is not null
+       and not exists (
+         select 1
+           from jsonb_to_recordset($1::jsonb) as required(
+             column_name text,
+             udt_name text,
+             is_nullable text,
+             default_policy text
+           )
+          where not exists (
+            select 1
+              from information_schema.columns actual
+             where actual.table_schema = 'public'
+               and actual.table_name = 'media_assets'
+               and actual.column_name = required.column_name
+               and actual.udt_name = required.udt_name
+               and actual.is_nullable = required.is_nullable
+               and case required.default_policy
+                 when 'required' then actual.column_default is not null
+                 when 'forbidden' then actual.column_default is null
+                 else false
+               end
+          )
+       )
+       and exists (
+         select 1
+           from pg_constraint fk
+           join pg_attribute source_column
+             on source_column.attrelid = fk.conrelid
+            and source_column.attnum = any (fk.conkey)
+           join pg_attribute target_column
+             on target_column.attrelid = fk.confrelid
+            and target_column.attnum = any (fk.confkey)
+          where fk.conrelid = to_regclass('public.media_assets')
+            and fk.contype = 'f'
+            and source_column.attname = 'conversation_id'
+            and array_length(fk.conkey, 1) = 1
+            and array_length(fk.confkey, 1) = 1
+            and fk.confrelid = to_regclass('public.web_conversations')
+            and target_column.attname = 'id'
+            and fk.confdeltype = 'n'
+            and fk.convalidated
+       )
+       and 1 = (
+         select count(*)
+           from pg_constraint fk
+           join pg_attribute source_column
+             on source_column.attrelid = fk.conrelid
+            and source_column.attnum = any (fk.conkey)
+          where fk.conrelid = to_regclass('public.media_assets')
+            and fk.contype = 'f'
+            and source_column.attname = 'conversation_id'
+            and array_length(fk.conkey, 1) = 1
+       ) as ready`,
+    [
+      JSON.stringify(
+        REQUIRED_MEDIA_ASSET_COLUMNS.map(
+          ([column_name, udt_name, is_nullable, default_policy]) => ({
+            column_name,
+            udt_name,
+            is_nullable,
+            default_policy,
+          }),
         ),
-      ],
-    );
-    return readiness?.ready === true;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return false;
-    throw error;
-  }
+      ),
+    ],
+  );
+  return readiness?.ready === true;
 }
 
 // The flag is derived from the conversation, not trusted from the caller: a
@@ -333,45 +318,23 @@ export async function insertMediaAsset(
   p: InsertMediaAssetParams,
   db: MediaAssetQueryClient,
 ): Promise<string | null> {
-  try {
-    return await insertMediaAssetRow(db, p, p.organizationId);
-  } catch (error) {
-    if (isSchemaNotReady(error)) {
-      logger.warn(
-        { userId: p.userId, kind: p.kind },
-        'media_assets not provisioned; asset not recorded',
-      );
-      return null;
-    }
-    throw error;
-  }
+  return insertMediaAssetRow(db, p, p.organizationId);
 }
 
 export async function insertMediaAssetsAtomically(
   assets: readonly InsertMediaAssetParams[],
   db: DatabaseAdapter,
-): Promise<string[] | null> {
+): Promise<string[]> {
   if (assets.length === 0) return [];
-  try {
-    return await db.transaction(async (tx) => {
-      const ids: string[] = [];
-      for (const asset of assets) {
-        const id = await insertMediaAssetRow(tx, asset, asset.organizationId);
-        if (!id) throw new Error('Generated media asset insert returned no identity.');
-        ids.push(id);
-      }
-      return ids;
-    });
-  } catch (error) {
-    if (isSchemaNotReady(error)) {
-      logger.warn(
-        { userId: assets[0]?.userId, count: assets.length },
-        'media_assets not provisioned; generated image batch not recorded',
-      );
-      return null;
+  return db.transaction(async (tx) => {
+    const ids: string[] = [];
+    for (const asset of assets) {
+      const id = await insertMediaAssetRow(tx, asset, asset.organizationId);
+      if (!id) throw new Error('Generated media asset insert returned no identity.');
+      ids.push(id);
     }
-    throw error;
-  }
+    return ids;
+  });
 }
 
 export async function listMediaAssets(
@@ -380,30 +343,25 @@ export async function listMediaAssets(
   db: DatabaseAdapter,
 ): Promise<MediaAsset[]> {
   const limit = Math.min(Math.max(opts?.limit ?? 60, 1), 200);
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const params: unknown[] = [userId, organizationId];
-    let kindClause = '';
-    if (opts?.kind) {
-      params.push(opts.kind);
-      kindClause = `and kind = $${params.length}`;
-    }
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model, width, height, created_at
-         from public.media_assets
-        where user_id = $1
-          and organization_id is not distinct from $2::uuid
-          and not temporary_chat
-          and deleted_at is null ${kindClause}
-        order by created_at desc
-        limit ${limit}`,
-      params,
-    );
-    return rows.map(mapRow);
-  } catch (error) {
-    if (isSchemaNotReady(error)) return [];
-    throw error;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const params: unknown[] = [userId, organizationId];
+  let kindClause = '';
+  if (opts?.kind) {
+    params.push(opts.kind);
+    kindClause = `and kind = $${params.length}`;
   }
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model, width, height, created_at
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $2::uuid
+        and not temporary_chat
+        and deleted_at is null ${kindClause}
+      order by created_at desc
+      limit ${limit}`,
+    params,
+  );
+  return rows.map(mapRow);
 }
 
 export interface LibraryAssetRow {
@@ -474,61 +432,54 @@ export async function listLibraryAssets(
 ): Promise<LibraryAssetRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 24, 1), 200);
   const offset = Math.max(opts.offset ?? 0, 0);
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const params: unknown[] = [userId, organizationId];
-    const clauses: string[] = [];
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const params: unknown[] = [userId, organizationId];
+  const clauses: string[] = [];
 
-    if (opts.kinds && opts.kinds.length > 0) {
-      params.push(opts.kinds);
-      clauses.push(`and kind = any($${params.length}::text[])`);
-    }
-    if (opts.surface) {
-      params.push(opts.surface);
-      clauses.push(`and coalesce(metadata->>'surface', 'file') = $${params.length}`);
-    }
-    if (opts.origin === 'uploaded') {
-      clauses.push(
-        `and metadata->>'origin' in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`,
-      );
-    } else if (opts.origin === 'generated') {
-      clauses.push(
-        `and coalesce(metadata->>'origin', '') not in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`,
-      );
-    }
-    if (opts.search) {
-      params.push(`%${escapeIlike(opts.search)}%`);
-      clauses.push(
-        `and (coalesce(metadata->>'filename', '') ilike $${params.length} or coalesce(prompt, '') ilike $${params.length})`,
-      );
-    }
-
-    // A file attached to a temporary chat is never a Library file (0218): the
-    // chat promised not to keep it, and the Library is the thing that keeps it.
-    const lifecycleClause = opts.deleted
-      ? "and not temporary_chat and deleted_at is not null and deleted_at > now() - interval '30 days'"
-      : 'and not temporary_chat and deleted_at is null';
-    const orderClause = opts.deleted
-      ? DELETED_ORDER_CLAUSE
-      : ORDER_CLAUSE_BY_SORT[opts.sort ?? LIBRARY_DEFAULT_SORT];
-
-    params.push(limit, offset);
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at,
-              conversation_id
-         from public.media_assets
-        where user_id = $1
-          and organization_id is not distinct from $2::uuid
-          ${lifecycleClause} ${clauses.join(' ')}
-        order by ${orderClause}, id desc
-        limit $${params.length - 1} offset $${params.length}`,
-      params,
-    );
-    return rows.map(mapLibraryRow);
-  } catch (error) {
-    if (isSchemaNotReady(error)) return [];
-    throw error;
+  if (opts.kinds && opts.kinds.length > 0) {
+    params.push(opts.kinds);
+    clauses.push(`and kind = any($${params.length}::text[])`);
   }
+  if (opts.surface) {
+    params.push(opts.surface);
+    clauses.push(`and coalesce(metadata->>'surface', 'file') = $${params.length}`);
+  }
+  if (opts.origin === 'uploaded') {
+    clauses.push(`and metadata->>'origin' in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`);
+  } else if (opts.origin === 'generated') {
+    clauses.push(
+      `and coalesce(metadata->>'origin', '') not in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`,
+    );
+  }
+  if (opts.search) {
+    params.push(`%${escapeIlike(opts.search)}%`);
+    clauses.push(
+      `and (coalesce(metadata->>'filename', '') ilike $${params.length} or coalesce(prompt, '') ilike $${params.length})`,
+    );
+  }
+
+  // A file attached to a temporary chat is never a Library file (0218): the
+  // chat promised not to keep it, and the Library is the thing that keeps it.
+  const lifecycleClause = opts.deleted
+    ? "and not temporary_chat and deleted_at is not null and deleted_at > now() - interval '30 days'"
+    : 'and not temporary_chat and deleted_at is null';
+  const orderClause = opts.deleted
+    ? DELETED_ORDER_CLAUSE
+    : ORDER_CLAUSE_BY_SORT[opts.sort ?? LIBRARY_DEFAULT_SORT];
+
+  params.push(limit, offset);
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at,
+            conversation_id
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $2::uuid
+        ${lifecycleClause} ${clauses.join(' ')}
+      order by ${orderClause}, id desc
+      limit $${params.length - 1} offset $${params.length}`,
+    params,
+  );
+  return rows.map(mapLibraryRow);
 }
 
 export interface MediaAssetForServing {
@@ -547,33 +498,28 @@ export async function getMediaAssetById(
   id: string,
   db: MediaAssetQueryClient,
 ): Promise<MediaAssetForServing | null> {
-  try {
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
-              metadata, deleted_at
-         from public.media_assets
-        where id = $1
-        limit 1`,
-      [id],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return {
-      id: String(row['id']),
-      userId: String(row['user_id']),
-      kind: String(row['kind']),
-      mimeType: String(row['mime_type']),
-      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
-      storageUrl: String(row['storage_url']),
-      storagePathname: (row['storage_pathname'] as string | null) ?? null,
-      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
-      deletedAt:
-        row['deleted_at'] == null ? null : new Date(row['deleted_at'] as string).toISOString(),
-    };
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+            metadata, deleted_at
+       from public.media_assets
+      where id = $1
+      limit 1`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    userId: String(row['user_id']),
+    kind: String(row['kind']),
+    mimeType: String(row['mime_type']),
+    byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+    storageUrl: String(row['storage_url']),
+    storagePathname: (row['storage_pathname'] as string | null) ?? null,
+    metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+    deletedAt:
+      row['deleted_at'] == null ? null : new Date(row['deleted_at'] as string).toISOString(),
+  };
 }
 
 export async function getActiveWorkspaceMediaAssetById(
@@ -581,36 +527,31 @@ export async function getActiveWorkspaceMediaAssetById(
   id: string,
   db: DatabaseAdapter,
 ): Promise<MediaAssetForServing | null> {
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
-              metadata, deleted_at
-         from public.media_assets
-        where id = $1
-          and user_id = $2
-          and organization_id is not distinct from $3::uuid
-          and deleted_at is null
-        limit 1`,
-      [id, userId, organizationId],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return {
-      id: String(row['id']),
-      userId: String(row['user_id']),
-      kind: String(row['kind']),
-      mimeType: String(row['mime_type']),
-      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
-      storageUrl: String(row['storage_url']),
-      storagePathname: (row['storage_pathname'] as string | null) ?? null,
-      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
-      deletedAt: null,
-    };
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+            metadata, deleted_at
+       from public.media_assets
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3::uuid
+        and deleted_at is null
+      limit 1`,
+    [id, userId, organizationId],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    userId: String(row['user_id']),
+    kind: String(row['kind']),
+    mimeType: String(row['mime_type']),
+    byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+    storageUrl: String(row['storage_url']),
+    storagePathname: (row['storage_pathname'] as string | null) ?? null,
+    metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+    deletedAt: null,
+  };
 }
 
 export async function latestConversationImageAssetId(
@@ -618,23 +559,18 @@ export async function latestConversationImageAssetId(
   conversationId: string,
   db: DatabaseAdapter,
 ): Promise<string | null> {
-  try {
-    const rows = await db.query<{ id: string }>(
-      `select id
-         from public.media_assets
-        where user_id = $1
-          and conversation_id = $2
-          and kind = 'image'
-          and deleted_at is null
-        order by created_at desc
-        limit 1`,
-      [userId, conversationId],
-    );
-    return rows[0]?.id ?? null;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<{ id: string }>(
+    `select id
+       from public.media_assets
+      where user_id = $1
+        and conversation_id = $2
+        and kind = 'image'
+        and deleted_at is null
+      order by created_at desc
+      limit 1`,
+    [userId, conversationId],
+  );
+  return rows[0]?.id ?? null;
 }
 
 /**
@@ -651,37 +587,32 @@ export async function getMediaAssetByContentHash(
   db: MediaAssetQueryClient,
   temporaryChat = false,
 ): Promise<MediaAssetForServing | null> {
-  try {
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
-              metadata, deleted_at
-         from public.media_assets
-        where user_id = $1
-          and organization_id is not distinct from $3::uuid
-          and content_sha256 = $2
-          and temporary_chat = $4
-          and deleted_at is null
-        order by created_at asc
-        limit 1`,
-      [userId, contentSha256, organizationId, temporaryChat],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return {
-      id: String(row['id']),
-      userId: String(row['user_id']),
-      kind: String(row['kind']),
-      mimeType: String(row['mime_type']),
-      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
-      storageUrl: String(row['storage_url']),
-      storagePathname: (row['storage_pathname'] as string | null) ?? null,
-      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
-      deletedAt: null,
-    };
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+            metadata, deleted_at
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $3::uuid
+        and content_sha256 = $2
+        and temporary_chat = $4
+        and deleted_at is null
+      order by created_at asc
+      limit 1`,
+    [userId, contentSha256, organizationId, temporaryChat],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    userId: String(row['user_id']),
+    kind: String(row['kind']),
+    mimeType: String(row['mime_type']),
+    byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+    storageUrl: String(row['storage_url']),
+    storagePathname: (row['storage_pathname'] as string | null) ?? null,
+    metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+    deletedAt: null,
+  };
 }
 
 export async function getMediaAssetByStoragePathname(
@@ -691,36 +622,31 @@ export async function getMediaAssetByStoragePathname(
   db: MediaAssetQueryClient,
   temporaryChat = false,
 ): Promise<MediaAssetForServing | null> {
-  try {
-    const rows = await db.query<Record<string, unknown>>(
-      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
-              metadata, deleted_at
-         from public.media_assets
-        where user_id = $1
-          and organization_id is not distinct from $3::uuid
-          and storage_pathname = $2
-          and temporary_chat = $4
-          and deleted_at is null
-        limit 1`,
-      [userId, storagePathname, organizationId, temporaryChat],
-    );
-    const row = rows[0];
-    if (!row) return null;
-    return {
-      id: String(row['id']),
-      userId: String(row['user_id']),
-      kind: String(row['kind']),
-      mimeType: String(row['mime_type']),
-      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
-      storageUrl: String(row['storage_url']),
-      storagePathname: (row['storage_pathname'] as string | null) ?? null,
-      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
-      deletedAt: null,
-    };
-  } catch (error) {
-    if (isSchemaNotReady(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+            metadata, deleted_at
+       from public.media_assets
+      where user_id = $1
+        and organization_id is not distinct from $3::uuid
+        and storage_pathname = $2
+        and temporary_chat = $4
+        and deleted_at is null
+      limit 1`,
+    [userId, storagePathname, organizationId, temporaryChat],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: String(row['id']),
+    userId: String(row['user_id']),
+    kind: String(row['kind']),
+    mimeType: String(row['mime_type']),
+    byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+    storageUrl: String(row['storage_url']),
+    storagePathname: (row['storage_pathname'] as string | null) ?? null,
+    metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+    deletedAt: null,
+  };
 }
 
 export async function softDeleteMediaAsset(
@@ -728,22 +654,17 @@ export async function softDeleteMediaAsset(
   id: string,
   db: DatabaseAdapter,
 ): Promise<boolean> {
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const rows = await db.query<{ id: string }>(
-      `update public.media_assets
-         set deleted_at = now()
-       where id = $1 and user_id = $2
-         and organization_id is not distinct from $3::uuid
-         and deleted_at is null
-       returning id`,
-      [id, userId, organizationId],
-    );
-    return rows.length > 0;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return false;
-    throw error;
-  }
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const rows = await db.query<{ id: string }>(
+    `update public.media_assets
+       set deleted_at = now()
+     where id = $1 and user_id = $2
+       and organization_id is not distinct from $3::uuid
+       and deleted_at is null
+     returning id`,
+    [id, userId, organizationId],
+  );
+  return rows.length > 0;
 }
 
 export async function restoreMediaAsset(
@@ -751,23 +672,18 @@ export async function restoreMediaAsset(
   id: string,
   db: DatabaseAdapter,
 ): Promise<boolean> {
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const rows = await db.query<{ id: string }>(
-      `update public.media_assets
-         set deleted_at = null
-       where id = $1 and user_id = $2
-         and organization_id is not distinct from $3::uuid
-         and deleted_at is not null
-         and deleted_at > now() - interval '30 days'
-       returning id`,
-      [id, userId, organizationId],
-    );
-    return rows.length > 0;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return false;
-    throw error;
-  }
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const rows = await db.query<{ id: string }>(
+    `update public.media_assets
+       set deleted_at = null
+     where id = $1 and user_id = $2
+       and organization_id is not distinct from $3::uuid
+       and deleted_at is not null
+       and deleted_at > now() - interval '30 days'
+     returning id`,
+    [id, userId, organizationId],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -780,23 +696,18 @@ export async function saveTemporaryChatAssetToLibrary(
   id: string,
   db: DatabaseAdapter,
 ): Promise<boolean> {
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    const rows = await db.query<{ id: string }>(
-      `update public.media_assets
-         set temporary_chat = false
-       where id = $1 and user_id = $2
-         and organization_id is not distinct from $3::uuid
-         and temporary_chat
-         and deleted_at is null
-       returning id`,
-      [id, userId, organizationId],
-    );
-    return rows.length > 0;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return false;
-    throw error;
-  }
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const rows = await db.query<{ id: string }>(
+    `update public.media_assets
+       set temporary_chat = false
+     where id = $1 and user_id = $2
+       and organization_id is not distinct from $3::uuid
+       and temporary_chat
+       and deleted_at is null
+     returning id`,
+    [id, userId, organizationId],
+  );
+  return rows.length > 0;
 }
 
 // Both statements carry the predicate, so a hold placed between the read and
@@ -808,50 +719,45 @@ export async function permanentlyDeleteMediaAsset(
 ): Promise<boolean> {
   const held = legalHoldPredicate('file', { alias: 'asset', nextParamIndex: 4 });
   const exclusion = legalHoldExclusion('file', { alias: 'asset', nextParamIndex: 4 });
-  try {
-    const removed = await db.transaction(async (tx) => {
-      const organizationId = await resolveActiveOrganizationId(tx, userId);
-      const scope = `asset.id = $1 and asset.user_id = $2
-            and asset.organization_id is not distinct from $3::uuid
-            and asset.deleted_at is not null`;
+  const removed = await db.transaction(async (tx) => {
+    const organizationId = await resolveActiveOrganizationId(tx, userId);
+    const scope = `asset.id = $1 and asset.user_id = $2
+          and asset.organization_id is not distinct from $3::uuid
+          and asset.deleted_at is not null`;
 
-      const [asset] = await tx.query<{ storage_pathname: string | null; held: boolean }>(
-        `select asset.storage_pathname, ${held.sql} as held
-           from public.media_assets asset
-          where ${scope}
-          for update`,
-        [id, userId, organizationId, ...held.params],
-      );
-      if (!asset) return false;
-      if (asset.held) {
-        await refuseHeldDeletion({
-          resourceType: 'file',
-          resourceId: id,
-          userId,
-          organizationId,
-        });
-      }
+    const [asset] = await tx.query<{ storage_pathname: string | null; held: boolean }>(
+      `select asset.storage_pathname, ${held.sql} as held
+         from public.media_assets asset
+        where ${scope}
+        for update`,
+      [id, userId, organizationId, ...held.params],
+    );
+    if (!asset) return false;
+    if (asset.held) {
+      await refuseHeldDeletion({
+        resourceType: 'file',
+        resourceId: id,
+        userId,
+        organizationId,
+      });
+    }
 
-      if (asset.storage_pathname) {
-        await deleteStoredMedia(asset.storage_pathname);
-      }
+    if (asset.storage_pathname) {
+      await deleteStoredMedia(asset.storage_pathname);
+    }
 
-      const deleted = await tx.query<{ id: string }>(
-        `delete from public.media_assets asset
-          where ${scope}
-            and ${exclusion.sql}
-          returning asset.id`,
-        [id, userId, organizationId, ...exclusion.params],
-      );
-      if (deleted.length !== 1) {
-        throw new Error('The media asset changed while permanent deletion was in progress.');
-      }
-      return true;
-    });
-    if (removed) await purgeDerivedRecords(db, 'media_assets', [{ owner: userId, key: id }]);
-    return removed;
-  } catch (error) {
-    if (isSchemaNotReady(error)) return false;
-    throw error;
-  }
+    const deleted = await tx.query<{ id: string }>(
+      `delete from public.media_assets asset
+        where ${scope}
+          and ${exclusion.sql}
+        returning asset.id`,
+      [id, userId, organizationId, ...exclusion.params],
+    );
+    if (deleted.length !== 1) {
+      throw new Error('The media asset changed while permanent deletion was in progress.');
+    }
+    return true;
+  });
+  if (removed) await purgeDerivedRecords(db, 'media_assets', [{ owner: userId, key: id }]);
+  return removed;
 }

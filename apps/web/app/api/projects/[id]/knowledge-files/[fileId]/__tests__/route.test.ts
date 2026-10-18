@@ -93,7 +93,6 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
 vi.mock('@/lib/server/project-knowledge-files', () => ({
   checkProjectKnowledgeCapacity: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
-  isSchemaNotReady: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: vi.fn(),

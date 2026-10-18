@@ -12,7 +12,6 @@ import {
   BETA_ROLES,
   BETA_SURFACES,
   MAX_USE_CASE_LENGTH,
-  isIntakeTableMissing,
   recordBetaApplication,
 } from '@/lib/server/beta-applications';
 import { getOptionalAuthUser } from '@/lib/api-auth';
@@ -54,31 +53,17 @@ async function handleApply(request: NextRequest) {
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
   const data = parsed.data;
 
-  let alreadyReviewed: boolean;
-  try {
-    ({ alreadyReviewed } = await recordBetaApplication({
-      email: data.email.toLowerCase(),
-      fullName: data.fullName,
-      role: data.role,
-      company: data.company ?? null,
-      surfaces: [...new Set(data.surfaces)],
-      useCase: data.useCase ?? null,
-      discordHandle: data.discordHandle ?? null,
-      userId: userId ?? null,
-      source: request.headers.get('referer'),
-    }));
-  } catch (error) {
-    if (!isIntakeTableMissing(error)) throw error;
-    logger.error({ error }, 'Beta intake is not migrated; application was NOT stored');
-    return NextResponse.json(
-      {
-        error: 'intake_unavailable',
-        message:
-          'Applications are not open yet, so nothing was stored. Nothing about you was saved, try again later.',
-      },
-      { status: 503 },
-    );
-  }
+  const { alreadyReviewed } = await recordBetaApplication({
+    email: data.email.toLowerCase(),
+    fullName: data.fullName,
+    role: data.role,
+    company: data.company ?? null,
+    surfaces: [...new Set(data.surfaces)],
+    useCase: data.useCase ?? null,
+    discordHandle: data.discordHandle ?? null,
+    userId: userId ?? null,
+    source: request.headers.get('referer'),
+  });
 
   logger.info({ signedIn: userId !== null, alreadyReviewed }, 'Beta application recorded');
 
