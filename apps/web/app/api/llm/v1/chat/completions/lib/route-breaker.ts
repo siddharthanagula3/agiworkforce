@@ -7,11 +7,12 @@ import 'server-only';
  * the rotation path runs inside a live stream's failure handler, where a round
  * trip per candidate would put the store on a real user's latency budget.
  */
-import { isRouteBreakerOpen, type RouteRateBudget } from '@agiworkforce/routing';
+import { isRouteBreakerOpen } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import {
+  admitRouteRateBudgets,
   getCredentialCooldownSnapshot,
   getCredentialHealthSnapshot,
   getRouteHealthSnapshot,
@@ -75,15 +76,19 @@ export function recordCredentialRejection(provider: string): void {
 export async function resolveFailoverBreakerView(
   processed: ProcessedRequest,
   nowMs: number = Date.now(),
-  rateBudgets: Readonly<Record<string, RouteRateBudget>> = {},
 ): Promise<FailoverBreakerView> {
   const routeIds = candidateRouteIds(processed);
   const providerIds = [...new Set(routeIds.map(providerOfRouteId))];
 
-  const [routeSnapshots, credentialSnapshots, cooldownSnapshots] = await Promise.all([
+  const [routeSnapshots, credentialSnapshots, cooldownSnapshots, rateBudgets] = await Promise.all([
     getRouteHealthSnapshot(routeIds, nowMs),
     getCredentialHealthSnapshot(providerIds, nowMs),
     getCredentialCooldownSnapshot(providerIds, nowMs),
+    admitRouteRateBudgets(
+      buildServingRouteId(processed.provider, processed.chatRequest.model),
+      routeIds,
+      { nowMs, requestTokens: processed.estimatedPromptTokens },
+    ),
   ]);
 
   const openCredentialProviders = providerIds.filter((providerId) =>

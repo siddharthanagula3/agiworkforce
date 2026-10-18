@@ -6,15 +6,17 @@
  * provider has already answered 429, which costs a real turn to discover. This
  * is the other half, a ceiling the router holds itself to, so a route that is
  * out of budget is refused by name and the failover loop moves on rather than
- * spending an attempt learning the same thing from upstream.
+ * spending an attempt learning the same thing from upstream. The primary route
+ * is always admitted and counted; its ceiling is the provider's own limit.
  *
  * Authored in `packages/ai/model-registry/catalog/routing-policies.json` under
- * `rateLimits`; `ROUTE_RATE_LIMIT_POLICY` is the copy this package serves and
- * `rate-limits.test.ts` fails if the two drift.
+ * `rateLimits`; `ROUTE_RATE_LIMIT_POLICY` is that entry parsed.
  *
  * @module routing/rate-limits
  * @packageDocumentation
  */
+import routingPolicies from '@agiworkforce/model-registry/routing-policies.json' with { type: 'json' };
+
 import type { RouteHealthKeyValueStore, RouteHealthStoreFailure } from './route-health-store';
 
 export const ROUTE_RPM_REFUSAL = 'route_rpm_budget_exhausted';
@@ -46,17 +48,6 @@ const NONCE_START_INDEX = 2;
 const EVENT_FIELD_NOW = 'nowMs';
 const EVENT_FIELD_TOKENS = 'tokens';
 const EVENT_FIELD_NONCE = 'nonce';
-
-/**
- * The committed policy. Kept as a literal because the catalog file is not on an
- * export path any surface can import; the drift test is what keeps it honest.
- */
-export const ROUTE_RATE_LIMIT_POLICY: RouteRateLimitPolicy = {
-  windowMs: MINUTE_MS,
-  defaults: { requestsPerMinute: 600, tokensPerMinute: 2_000_000 },
-  byProvider: {},
-  byRoute: {},
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -90,6 +81,10 @@ export function parseRouteRateLimitPolicy(raw: unknown): RouteRateLimitPolicy {
     byRoute: readLimitMap(record['byRoute']),
   };
 }
+
+export const ROUTE_RATE_LIMIT_POLICY: RouteRateLimitPolicy = parseRouteRateLimitPolicy(
+  routingPolicies.rateLimits,
+);
 
 /**
  * Every way the authored policy would enforce nothing. An empty list means the

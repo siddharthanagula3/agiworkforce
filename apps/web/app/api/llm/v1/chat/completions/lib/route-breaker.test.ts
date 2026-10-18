@@ -19,8 +19,10 @@ const mockGetRouteHealthSnapshot = vi.fn();
 const mockGetCredentialHealthSnapshot = vi.fn();
 const mockGetCredentialCooldownSnapshot = vi.fn();
 const mockRecordCredentialOutcome = vi.fn();
+const mockAdmitRouteRateBudgets = vi.fn();
 
 vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
+  admitRouteRateBudgets: (...args: unknown[]) => mockAdmitRouteRateBudgets(...args),
   recordShadowRouteOutcome: vi.fn(async () => undefined),
   getRouteHealthSnapshot: (...args: unknown[]) => mockGetRouteHealthSnapshot(...args),
   getCredentialHealthSnapshot: (...args: unknown[]) => mockGetCredentialHealthSnapshot(...args),
@@ -64,6 +66,7 @@ beforeEach(() => {
   mockGetRouteHealthSnapshot.mockResolvedValue({});
   mockGetCredentialHealthSnapshot.mockResolvedValue({});
   mockGetCredentialCooldownSnapshot.mockResolvedValue({});
+  mockAdmitRouteRateBudgets.mockResolvedValue({});
   mockResolveProviderFromModel.mockImplementation(() => 'anthropic');
 });
 
@@ -109,7 +112,7 @@ describe('resolveFailoverBreakerView', () => {
 
   it('treats a candidate over its dispatch budget as unselectable, and names the refusal', async () => {
     const candidate = { modelKey: 'candidate-a', provider: 'openai' };
-    const view = await resolveFailoverBreakerView(makeProcessed(), NOW, {
+    mockAdmitRouteRateBudgets.mockResolvedValueOnce({
       'openai/candidate-a': {
         admitted: false,
         refusal: ROUTE_RPM_REFUSAL,
@@ -118,6 +121,13 @@ describe('resolveFailoverBreakerView', () => {
         tokensInWindow: 0,
       },
     });
+    const view = await resolveFailoverBreakerView(makeProcessed(), NOW);
+
+    expect(mockAdmitRouteRateBudgets).toHaveBeenCalledWith(
+      'anthropic/primary-model',
+      expect.arrayContaining(['anthropic/primary-model']),
+      expect.objectContaining({ nowMs: NOW }),
+    );
 
     expect(view.isCandidateBreakerOpen(candidate)).toBe(true);
     expect(view.rateLimitRefusal(candidate)).toBe(ROUTE_RPM_REFUSAL);
@@ -126,7 +136,7 @@ describe('resolveFailoverBreakerView', () => {
 
   it('admits a candidate inside its budget, and admits every candidate when no budget was read', async () => {
     const candidate = { modelKey: 'candidate-a', provider: 'openai' };
-    const withinBudget = await resolveFailoverBreakerView(makeProcessed(), NOW, {
+    mockAdmitRouteRateBudgets.mockResolvedValueOnce({
       'openai/candidate-a': {
         admitted: true,
         retryAfterMs: 0,
@@ -134,6 +144,7 @@ describe('resolveFailoverBreakerView', () => {
         tokensInWindow: 10,
       },
     });
+    const withinBudget = await resolveFailoverBreakerView(makeProcessed(), NOW);
     const noBudget = await resolveFailoverBreakerView(makeProcessed(), NOW);
 
     expect(withinBudget.isCandidateBreakerOpen(candidate)).toBe(false);

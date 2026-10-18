@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   createRouteHealthStore,
+  createRouteRateLimiter,
   emptyRuntimeState,
   providerRouteHealthConfig,
   resolveCredentialCooldownConfig,
@@ -13,6 +14,9 @@ import {
   type RouteHealthSnapshot,
   type RouteHealthStore,
   type RouteOutcome,
+  type RouteRateBudget,
+  type RouteRateKey,
+  type RouteRateLimiter,
   type RouteUnavailabilityReason,
   type RoutingRuntimeState,
   type RoutingTaskType,
@@ -676,6 +680,55 @@ function routeHealthStore(): RouteHealthStore {
   return routeHealthStoreInstance;
 }
 
+let routeRateLimiterInstance: RouteRateLimiter | null = null;
+
+function routeRateLimiter(): RouteRateLimiter {
+  routeRateLimiterInstance ??= createRouteRateLimiter({
+    store: getKeyValueStore(),
+    boundedRead: async <T>(read: Promise<T>): Promise<T | null> => {
+      const result = await readRedisWithinBudget(read);
+      return wasRedisReadAbandoned(result) ? null : result;
+    },
+    onFailure: (event) => {
+      logger.error(
+        { failure: event.failure, routeId: event.routeId, error: event.error },
+        '[route-rate] store degraded; every route reads within budget',
+      );
+    },
+  });
+  return routeRateLimiterInstance;
+}
+
+function routeRateKeyOf(routeId: string): RouteRateKey {
+  const provider = providerOfRouteId(routeId);
+  return { provider, modelKey: routeId.slice(provider.length + ROUTE_ID_SEPARATOR.length) };
+}
+
+/**
+ * Records this turn's dispatch against the primary route's budget and reads the
+ * other candidates' windows, keyed by route id, so failover skips a route that
+ * is already over its ceiling.
+ */
+export async function admitRouteRateBudgets(
+  primaryRouteId: string,
+  routeIds: readonly string[],
+  options: { nowMs?: number; requestTokens?: number } = {},
+): Promise<Readonly<Record<string, RouteRateBudget>>> {
+  const nowMs = options.nowMs ?? Date.now();
+  const limiter = routeRateLimiter();
+  const [primary, others] = await Promise.all([
+    limiter.admit(routeRateKeyOf(primaryRouteId), {
+      nowMs,
+      requestTokens: options.requestTokens ?? 0,
+    }),
+    limiter.budgets(
+      routeIds.filter((routeId) => routeId !== primaryRouteId).map(routeRateKeyOf),
+      nowMs,
+    ),
+  ]);
+  return { ...others, [primaryRouteId]: primary };
+}
+
 let cachedRouteHealthSnapshots: {
   key: string;
   snapshots: Readonly<Record<string, RouteHealthSnapshot>>;
@@ -685,6 +738,7 @@ let cachedRouteHealthSnapshots: {
 export function resetRouteHealthSnapshotCache(): void {
   cachedRouteHealthSnapshots = null;
   routeHealthStoreInstance = null;
+  routeRateLimiterInstance = null;
 }
 
 /**
