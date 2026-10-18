@@ -5,6 +5,8 @@ export const FEATURES = {
 
   billing: false,
 
+  nativePurchases: false,
+
   auth: true,
 
   cloudTasks: true,

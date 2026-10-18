@@ -2,19 +2,47 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-09-26
+Last updated: 2026-10-17
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
-Paste the body of this file into the **App content → App access → Instructions**
-field in Play Console.
-`store-listing/LISTING-METADATA-ANDROID.json` points
-`play_console_review_notes_file` here.
+Use only the text between the store-review markers below for **App content → App access → Instructions** in Play Console. Keep credentials in the secure App access fields. The rest of this canonical file is the operator and source-owner record. `LISTING-METADATA-ANDROID.json` points here and names the excerpt section.
 
-Every statement below is checked against shipped code in `apps/mobile` (and, for
+## Store-ready review notes
+
+<!-- BEGIN STORE REVIEW NOTES -->
+
+AGI Workforce has separate Local and AGI Cloud modes. This is a free-first release: there are no in-app purchases, paid upgrades, credit top-ups or external checkout links. Existing account entitlements and server usage limits remain in effect.
+
+LOCAL REVIEW
+
+1. Launch the app and complete the age and AI disclosures. Choose Local Mode; no account is required.
+2. Supported devices can use a system model. Otherwise, download a local model over an internet connection and wait for setup to finish. Model availability depends on the device.
+3. Send a Local chat message, then test with airplane mode. Local inference runs on-device and Local messages are not sent to AGI Cloud. Local chats are encrypted on the device.
+
+CLOUD REVIEW
+
+1. Choose Continue to Cloud or switch to AGI Cloud. Confirm age eligibility, sign in and accept the current Terms.
+2. Use the review account provided in Play Console's secure App access fields. Reviewer credentials must be supplied before submission and are not stored in this document. Free Cloud chat and web search require internet and remain subject to usage limits; no upgrade code or test purchase is needed.
+3. Send a message and try web search. Cloud messages and selected attachments are sent to AGI Cloud and the model provider serving the request. Switching modes does not upload Local history.
+
+PERMISSIONS AND SAFETY
+Camera and photo access are for attachments and document scanning; microphone/speech access is for voice input. Dictation transcribes on-device. Live Cloud voice, when available, streams microphone audio for that session. Calendar/reminders and biometric app lock are optional. Notifications are requested after Cloud sign-in for task alerts. Permissions can be declined; text chat remains usable. No location, Health or advertising-tracking permission is requested. Use Report on an assistant response to flag harmful AI output.
+
+DELETION AND EXPORT
+Settings > Account > Delete Account requests deletion of the Cloud account and its data. Erasure is normally scheduled 24 hours later; sign back in to cancel before erasure begins. Local data is separate: Settings > Storage > Delete all local data removes it after confirmation. Settings > Data Controls > Export Local Data exports on-device information without uploading it.
+
+Privacy: https://agiworkforce.com/privacy
+We do not claim full DPDP compliance; open gaps: https://agiworkforce.com/trust
+Support: support@agiworkforce.com
+<!-- END STORE REVIEW NOTES -->
+
+## Operator record and source disclosures
+
+The operator record below is checked against source code in `apps/mobile` (and, for
 server endpoints, `apps/web`). Each claim names the file it was verified in. When
 a behaviour changes, update this file in the same change, a Play reviewer reads
-it as a factual claim about the APK/AAB.
+it as a source record; the marked excerpt above describes this free-first APK/AAB.
 
 Paths are relative to `apps/mobile` unless they begin with `apps/web`.
 
@@ -49,9 +77,10 @@ an AGI managed-cloud host while Local Mode is active.
 web search, and image generation (`lib/v1FeatureFlags.ts` → `cloudChat`,
 `webSearch`, `imageGen` are all `true`). Sign-in is Clerk's native `AuthView`
 sheet, not a browser (`app/(auth)/login.tsx` → `<AuthView mode="signInOrUp" />`).
-Cloud is a public alpha whose Free plan is open to anyone who signs in, with no
-invite code or waitlist. Paid upgrades are opening in stages and need an access
-code. Play purchases require registered products and an enabled server catalog.
+Cloud is a public alpha whose Free plan is open to eligible signed-in users,
+with no invite code or waitlist. This free-first release offers no in-app
+purchases, paid upgrades or credit top-ups. Existing account entitlements and
+server usage limits remain in effect.
 
 ## How to review it
 
@@ -60,11 +89,11 @@ local chat. On devices without the supported system model, a local model must
 be downloaded before offline inference.
 
 Cloud features require sign-in. Before submission, provide an active review
-account and any required upgrade access code in Play Console's secure App access
-instructions; do not put credentials in this repository. The Cloud entry path
+account in Play Console's secure App access
+fields; do not put credentials in this repository. The Cloud entry path
 includes age confirmation, and a signed-in account must accept the current
-Terms before Cloud unlocks. If Play products are included, the review account
-must be able to see and test those products through Google Play Billing.
+Terms before Cloud unlocks. No upgrade code or Play test purchase is needed for
+this free-first review.
 
 ## Age gate and minor-safe mode
 
@@ -278,17 +307,33 @@ Local Mode is active, verified in `__tests__/egress-guard.test.ts`.
 
 ## Billing: please read
 
-**This build sells auto-renewing subscriptions and consumable credit top-ups
-through Google Play Billing. There is no card-entry form and no other in-app
-checkout.**
+**This release does not offer in-app purchases.**
 
-The `expo-iap` 5.8.1 integration is `src/features/billing/useMobileIap.ts`,
-rendered by `src/features/settings/cloud-billing/index.tsx`. It sells four
+`FEATURES.nativePurchases=false` in `apps/mobile/lib/v1FeatureFlags.ts` prevents
+the native store connection from mounting and hides purchase, restore, upgrade,
+credit top-up, access-code, waitlist, Contact Sales and plan-comparison controls.
+Billing shows the current account plan/status and usage without a checkout.
+Existing account entitlements and server limits remain in effect. A server
+catalog cannot override the binary gate.
+
+Current release gates: `src/features/settings/cloud-billing/index.tsx:324`
+returns the read-only Billing screen; `src/features/settings/plans/index.tsx:65`
+limits the direct Plans route to the current account plan.
+
+### Retained paid-release implementation, inactive in this release
+
+The following source inventory and test-purchase procedures apply only to a
+future release that explicitly enables native purchases. They are not
+instructions for this free-first submission. No live product or license-tester
+setup is claimed.
+
+The retained Google Play Billing integration uses `expo-iap` 5.8.1 and is `src/features/billing/useMobileIap.ts`,
+rendered by the gated paid flow in `src/features/settings/cloud-billing/index.tsx`. It defines four
 subscriptions (Basic, Pro, Max 5x, Max 20x, each with one monthly base plan) and
 four consumable credit top-ups; the product and base plan IDs are listed in
 `docs/runbooks/mobile-store-products.md`.
 
-How to buy during review:
+Future paid-release review procedure:
 
 1. Sign in with the review account and open Settings → Billing.
 2. Paid upgrades are opening in stages. The review account must either have
@@ -305,7 +350,7 @@ How to buy during review:
 5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
    credits do not expire.
 
-What the Billing screen shows:
+UI states in the retained paid-release flow, not this release:
 
 - Billing may first show **Loading native purchases**. Its plan-change row can
   read **Upgrade plan**, **Adjust plan**, or **Choose plan**; Team and
@@ -322,7 +367,8 @@ What the Billing screen shows:
   and the app does not offer a second recurring purchase. Such an account can
   still buy credit top-ups here.
 
-Every purchase path is behind one server answer from the server owner
+After the binary gate is enabled in a future release, every purchase path also
+requires a server answer from the server owner
 `mobile-iap-catalog.ts`, which requires the deployment to set
 `MOBILE_IAP_ENABLED` and to map product keys to Play product IDs. If no products
 appear, the screen shows **"Purchases are not available right now"** with one of
@@ -335,16 +381,16 @@ can be bought here." when the account has no upgrade access.
 A purchase made with a Play license-tester account is a test purchase and is
 not charged. The production service verifies it with Google Play and grants it
 only to an AGI account that has been allowed to receive test purchases; the
-review account supplied in Play Console is one. For any other account the
+review account would need that allowance before paid-release testing. For any other account the
 purchase is refused, the Billing screen says **"This purchase was made in the
 store's test environment, which this account is not set up to use. Nothing was
 charged."**, and it is left unacknowledged so Play cancels it.
 
-Before submitting (operator steps, not for the reviewer): the review account
+Before submitting a future paid release (operator steps): the review account
 must be allowed to receive test purchases (operator dashboard, Flags, Store test
 purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
 verify that allowance, the live deployment flag or Play Console product
-registration. All three must be in place before this build is submitted, and the
+registration. All three must be in place before that paid build is submitted, and the
 purchase, restore, renewal, refund, plan-change and pending-payment paths
 validated with Play test purchases.
 
@@ -354,20 +400,20 @@ This section identifies website, store, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Billing and account-management destinations.** Availability depends on
-the signed-in account and plan.
+**A. Billing and account-management destinations.** Rows A1–A5 belong to the
+paid Billing/paywall flow and are hidden by `FEATURES.nativePurchases=false`.
+Other account/workspace destinations remain subject to their stated conditions.
 
 | #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
 | --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:777`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:483`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:236`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:120` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:784`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
-| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
-| A9  | **Add a member** (Settings → Workspace)               | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:134`                    | **Android only.** The browser branch is taken when `Platform.OS !== 'ios'` (`:132`); on iOS the same tap opens a native prompt instead.                                                                                 |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:825`       | Hidden in this free-first release. In the retained paid flow, only website-billed accounts get this row.                                                                                                                |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:531`       | Hidden in this free-first release. Retained paid-flow condition: Team and Enterprise plans.                                                                                                                             |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:237`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
+| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:132` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
+| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:832`       | Hidden in this free-first release. Retained paid-flow destination: purchase support guidance.                                                                                                                           |
+| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:182`       | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
+| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:454`                    | Accounts with workspace-management access and **no workspace**.                                                                                                                                                         |
+| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:580`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
@@ -407,13 +453,13 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `Linking.openURL` targets in the app.
 
 **E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:273`), dead
+billing-portal link (`src/features/settings/cloud-billing/index.tsx:274`), dead
 behind `FEATURES.billing === false`.
 
 Users who subscribed to AGI on the web see their plan's features unlocked when
 they sign in here. The app never prices or initiates that purchase. **There is no
 alternative in-app payment path**, no web checkout, no UPI sheet, no card form.
-and none of the links above reaches one.
+The remaining account and workspace links are disclosed separately above.
 
 ## Account deletion and data export
 
@@ -421,8 +467,9 @@ In-app, no support ticket and no website visit:
 
 **Settings → Account → Delete Account** → confirmation alert → `DELETE
 /api/user/delete-account`. The confirmation states that the AGI Cloud account and
-all cloud data, chats, projects, memory, artifacts, are permanently deleted
-within 24 hours, that it cannot be undone, and that on-device Local Mode data
+all cloud data, chats, projects, memory, artifacts, are scheduled for deletion
+normally 24 hours later. The user can sign back in and cancel before erasure
+begins; after erasure begins it cannot be undone. On-device Local Mode data
 stays on the device and must be removed separately. Source:
 `src/features/settings/cloud-account/index.tsx`. The deletion is bound to the
 account epoch captured when the dialog opened, so a mid-flight account switch

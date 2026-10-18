@@ -85,7 +85,9 @@ export default function SchedulesScreen() {
   const openCreate = useCallback(
     (templateId?: ScheduleTemplate['id']) => {
       if (!canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (FEATURES.nativePurchases) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        }
         return;
       }
       if (hapticsEnabled) {
@@ -138,7 +140,14 @@ export default function SchedulesScreen() {
     (id: string) => {
       const schedule = schedules.find((item) => item.id === id);
       if (schedule && !schedule.isActive && !canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (FEATURES.nativePurchases) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        } else {
+          Alert.alert(
+            'Scheduled tasks unavailable',
+            'Your current plan cannot resume scheduled tasks. You can still pause or delete existing tasks.',
+          );
+        }
         return;
       }
       toggleSchedule(id);
@@ -216,15 +225,20 @@ export default function SchedulesScreen() {
 
       {!canCreateSchedule ? (
         <PressableBox
-          onPress={handleCreate}
+          onPress={FEATURES.nativePurchases ? handleCreate : undefined}
           className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
-          accessibilityRole="button"
-          accessibilityLabel="View plans for scheduled tasks"
+          accessibilityRole={FEATURES.nativePurchases ? 'button' : 'text'}
+          accessibilityLabel={
+            FEATURES.nativePurchases
+              ? 'View plans for scheduled tasks'
+              : 'Scheduled tasks unavailable on your plan'
+          }
         >
           <Text className="text-sm font-medium text-amber-300">Scheduled tasks require Basic</Text>
           <Text className="mt-1 text-xs leading-4 text-white/50">
-            Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or
-            delete them.
+            {FEATURES.nativePurchases
+              ? 'Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or delete them.'
+              : 'Scheduled tasks are unavailable on your plan. Existing tasks remain visible so you can pause or delete them.'}
           </Text>
         </PressableBox>
       ) : null}
@@ -458,16 +472,20 @@ function EmptyState({
         <Text className="text-white/50 text-center text-sm mb-6 leading-5">
           {canCreateSchedule
             ? 'Create recurring AI tasks that run during the daily AGI Cloud scheduling window.'
-            : 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'}
+            : FEATURES.nativePurchases
+              ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
+              : 'Scheduled tasks are unavailable on your plan. Free Cloud chat remains available.'}
         </Text>
 
-        <Button
-          title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
-          variant="primary"
-          size="lg"
-          onPress={onCreatePress}
-          className="w-full"
-        />
+        {canCreateSchedule || FEATURES.nativePurchases ? (
+          <Button
+            title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
+            variant="primary"
+            size="lg"
+            onPress={onCreatePress}
+            className="w-full"
+          />
+        ) : null}
       </Animated.View>
 
       {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}

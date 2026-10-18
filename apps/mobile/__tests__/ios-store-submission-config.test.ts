@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { getAgeThreshold } from '../src/features/auth/services/ageGate';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 jest.mock('@/lib/mmkv', () => ({ storage: {} }));
 
@@ -32,7 +33,9 @@ const appConfig = require('../app.config.js') as {
 
 const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
   description: string;
-  app_review_information: { notes_file: string };
+  promotional_text: string;
+  whats_new: string;
+  app_review_information: { notes_file: string; notes_section: string };
   pricing: {
     in_app_purchases: boolean;
     in_app_purchase_note: string;
@@ -48,6 +51,7 @@ const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json')
   pricing: { in_app_purchases: boolean };
   content_rating: { questionnaire: { in_app_purchases: boolean } };
   play_console_review_notes_file: string;
+  play_console_review_notes_section: string;
   target_audience: { age_group: string; play_age_bands: string[] };
   data_safety: { data_shared: boolean; data_collected_types: Array<{ type: string }> };
   in_app_products: { has_in_app_products: boolean; note: string };
@@ -257,19 +261,50 @@ describe('iOS submission config', () => {
     expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/Contact Sales/);
   });
 
-  it('declares in-app purchases on every listing answer, because the build sells them', () => {
-    const screen = readFileSync(
-      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
-      'utf8',
+  it('declares the free-first binary gate on every purchase answer', () => {
+    expect(FEATURES.nativePurchases).toBe(false);
+    expect(listingIos.pricing.in_app_purchases).toBe(FEATURES.nativePurchases);
+    expect(listingAndroid.pricing.in_app_purchases).toBe(FEATURES.nativePurchases);
+    expect(listingAndroid.in_app_products.has_in_app_products).toBe(FEATURES.nativePurchases);
+    expect(listingAndroid.content_rating.questionnaire.in_app_purchases).toBe(
+      FEATURES.nativePurchases,
     );
-    expect(screen).toContain('nativeIap.purchase(');
-    expect(listingIos.pricing.in_app_purchases).toBe(true);
-    expect(listingAndroid.pricing.in_app_purchases).toBe(true);
-    expect(listingAndroid.in_app_products.has_in_app_products).toBe(true);
-    expect(listingAndroid.content_rating.questionnaire.in_app_purchases).toBe(true);
     for (const description of [listingIos.description, listingAndroid.full_description]) {
-      expect(description).not.toMatch(/no in-app purchases/i);
-      expect(description).toMatch(/in-app purchases/i);
+      expect(description).toMatch(/does not offer in-app purchases/i);
+      expect(description).not.toMatch(/paid plans and credit top-ups are sold/i);
+    }
+    expect(listingIos.whats_new).toMatch(/No in-app purchases/i);
+    for (const file of CLAIM_SURFACES) {
+      expect(surfaceText(file)).toContain('FEATURES.nativePurchases=false');
+    }
+    expect(packageJson.dependencies).toHaveProperty('expo-iap');
+  });
+
+  it('scopes the short privacy promise to Local Mode after setup', () => {
+    expect(listingIos.promotional_text).toContain('Local Mode');
+    expect(listingIos.promotional_text).toMatch(/offline after setup/i);
+    expect(listingIos.promotional_text).toMatch(/Cloud needs sign-in and internet/i);
+    expect(listingIos.promotional_text).not.toMatch(/your conversations never leave/i);
+  });
+
+  it('keeps a store-ready reviewer excerpt within 4000 UTF-8 bytes', () => {
+    expect(listingIos.app_review_information.notes_section).toBe('Store-ready review notes');
+    expect(listingAndroid.play_console_review_notes_section).toBe('Store-ready review notes');
+    for (const file of REVIEWER_NOTES) {
+      const notes = surfaceText(file);
+      const start = '<!-- BEGIN STORE REVIEW NOTES -->';
+      const end = '<!-- END STORE REVIEW NOTES -->';
+      expect(notes.split(start)).toHaveLength(2);
+      expect(notes.split(end)).toHaveLength(2);
+      const excerpt = (notes.split(start)[1] ?? '').split(end)[0]?.trim() ?? '';
+      expect(Buffer.byteLength(excerpt, 'utf8')).toBeLessThanOrEqual(4000);
+      expect(excerpt).toMatch(/no in-app purchases/i);
+      expect(excerpt).toContain('LOCAL REVIEW');
+      expect(excerpt).toContain('CLOUD REVIEW');
+      expect(excerpt).toContain('PERMISSIONS AND SAFETY');
+      expect(excerpt).toContain('DELETION AND EXPORT');
+      expect(excerpt).toContain('secure');
+      expect(notes).toContain('Operator record and source disclosures');
     }
   });
 
@@ -283,19 +318,46 @@ describe('iOS submission config', () => {
     expect(screen).not.toMatch(/agiworkforce\.com\/pricing/);
   });
 
-  it('pins each billing link the reviewer notes cite to the line that opens it', () => {
-    const lines = readFileSync(
-      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
-      'utf8',
-    ).split('\n');
-    const cited: Array<[number, string]> = [
-      [777, "openExternalUrl('https://agiworkforce.com/billing')"],
-      [483, "openExternalUrl('https://agiworkforce.com/settings/team')"],
-      [236, 'openExternalUrl(managementUrl)'],
-      [784, 'openExternalUrl(PURCHASE_HELP_URL)'],
+  it('pins account and billing-link disclosures to their actual source lines', () => {
+    const citations = [
+      {
+        owner: 'src/features/settings/cloud-billing/index.tsx',
+        calls: [
+          "openExternalUrl('https://agiworkforce.com/billing')",
+          "openExternalUrl('https://agiworkforce.com/settings/team')",
+          'openExternalUrl(managementUrl)',
+          'openExternalUrl(PURCHASE_HELP_URL)',
+          'await openExternalUrl(url)',
+          'if (!FEATURES.nativePurchases) {',
+        ],
+      },
+      {
+        owner: 'src/features/settings/cloud-account/index.tsx',
+        calls: ["openExternalUrl('https://agiworkforce.com/settings/account')"],
+      },
+      {
+        owner: 'src/features/chat/components/PaywallBottomSheet.tsx',
+        calls: ['https://agiworkforce.com/contact-sales?plan='],
+      },
+      { owner: 'app/(app)/settings/workspace.tsx', calls: ['openExternalUrl(WEB_TEAM_URL)'] },
+      {
+        owner: 'src/features/settings/plans/index.tsx',
+        calls: ['const visiblePlans = FEATURES.nativePurchases'],
+      },
     ];
-    for (const [line, call] of cited) {
-      expect([line, lines[line - 1]?.includes(call)]).toEqual([line, true]);
+    for (const { owner, calls } of citations) {
+      const lines = readFileSync(join(mobileRoot, owner), 'utf8').split('\n');
+      for (const call of calls) {
+        const citedLines = lines.flatMap((source, index) =>
+          source.includes(call) ? [index + 1] : [],
+        );
+        expect([owner, call, citedLines.length > 0]).toEqual([owner, call, true]);
+        for (const line of citedLines) {
+          for (const file of REVIEWER_NOTES) {
+            expect(surfaceText(file)).toContain(`${owner}:${line}`);
+          }
+        }
+      }
     }
   });
 
@@ -341,16 +403,16 @@ describe('iOS submission config', () => {
     }
   });
 
-  it('discloses account and billing links reachable from the current app', () => {
+  it('retains account and gated billing-link ownership disclosures', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:777/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:483/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:236/],
-      ['paywall contact sales', /PaywallBottomSheet\.tsx:120/],
-      ['purchase help', /cloud-billing\/index\.tsx:784/],
-      ['cloud-account change email', /cloud-account\/index\.tsx:98/],
-      ['workspace empty state', /workspace\.tsx:438/],
-      ['workspace rename or delete', /workspace\.tsx:545/],
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:/],
+      ['paywall contact sales', /PaywallBottomSheet\.tsx:/],
+      ['purchase help', /cloud-billing\/index\.tsx:/],
+      ['cloud-account change email', /cloud-account\/index\.tsx:/],
+      ['workspace empty state', /workspace\.tsx:/],
+      ['workspace rename or delete', /workspace\.tsx:/],
       ['auth legal links', /app\/\(auth\)\/login\.tsx/],
       ['signup legal links', /MobileSignUp\.tsx/],
     ];
@@ -381,7 +443,7 @@ describe('iOS submission config', () => {
     }
   });
 
-  it('discloses the first-paint native-purchase loading block wherever the screen is enumerated', () => {
+  it('retains inactive native-purchase state disclosures for a future paid release', () => {
     for (const file of [...CLAIM_SURFACES]) {
       const text = surfaceText(file);
       expect([file, /Loading native purchases/.test(text)]).toEqual([file, true]);
@@ -389,7 +451,7 @@ describe('iOS submission config', () => {
     }
   });
 
-  it('names every plan-change row label the billing screen can render', () => {
+  it('names every retained paid-flow plan-change label', () => {
     const screen = readFileSync(
       join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
       'utf8',

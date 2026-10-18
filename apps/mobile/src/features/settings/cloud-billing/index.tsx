@@ -52,6 +52,7 @@ import {
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
 import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import { NATIVE_PURCHASES_UNAVAILABLE_MESSAGE } from '@/src/features/billing/nativePurchaseAvailability';
 import { storeDisplayName } from '@/src/features/release-state';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
@@ -316,6 +317,53 @@ export default function CloudBillingScreen() {
     return (
       <SettingsScreenShell title="Billing">
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (!FEATURES.nativePurchases) {
+    return (
+      <SettingsScreenShell title="Billing">
+        <SettingsInfo
+          title={isFreeTier ? 'Free plan' : `${tierLabel} plan`}
+          body={
+            isFreeTier || isEntitled
+              ? 'Your account access and usage limits apply in this app.'
+              : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
+          }
+          icon={CreditCard}
+        />
+        {!isCloudModeActive && (
+          <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+        )}
+        <SettingsGroup>
+          <SettingsRow label="Current plan" value={tierLabel} icon={CreditCard} />
+          {!isFreeTier ? (
+            <SettingsRow label="Subscription status" value={statusLabel} icon={Clock} />
+          ) : null}
+          {isEntitled && periodEndLabel ? (
+            <SettingsRow
+              label={
+                billingCancelsAtPeriodEnd ? 'Access ends' : isTrialing ? 'Trial ends' : 'Renews'
+              }
+              value={periodEndLabel}
+              icon={Clock}
+            />
+          ) : null}
+          <SettingsRow
+            label="Usage"
+            icon={ListChecks}
+            value={isCloudModeActive ? undefined : 'Available in AGI Cloud'}
+            onPress={
+              isCloudModeActive
+                ? () =>
+                    router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+                : undefined
+            }
+            isLast
+          />
+        </SettingsGroup>
+        <SettingsInfo title="Purchases unavailable" body={NATIVE_PURCHASES_UNAVAILABLE_MESSAGE} />
       </SettingsScreenShell>
     );
   }

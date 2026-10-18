@@ -21,6 +21,8 @@ import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { NATIVE_PURCHASES_UNAVAILABLE_MESSAGE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const INPUT_MODALITY_LABEL = {
   image: 'Images',
@@ -62,6 +64,13 @@ export function ModelRow({
 
   const isLocked = model.availability === 'locked';
   const isSignInLock = isLocked && model.lockReason === CLOUD_LOCK_REASON;
+  const isPurchaseUnavailable = isLocked && !isSignInLock && !FEATURES.nativePurchases;
+  const lockLabel = isSignInLock ? 'Sign in' : isPurchaseUnavailable ? 'Unavailable' : 'Upgrade';
+  const lockAccessibilityLabel = isSignInLock
+    ? 'sign in required'
+    : isPurchaseUnavailable
+      ? 'unavailable on your plan'
+      : 'upgrade required';
   const isLocal = model.surface === 'local';
   const reasoning = getModelReasoning(model.id);
   const requiresThinking = reasoning.capable && reasoning.canDisableThinking === false;
@@ -72,7 +81,7 @@ export function ModelRow({
   const isFailed = installStatus.status === 'failed';
   const isReady = installStatus.status === 'ready';
   const outage = useProviderOutage(model.provider, !isLocal && !isLocked);
-  const disabled = isDownloading || isUnavailable || outage !== null;
+  const disabled = isDownloading || isUnavailable || isPurchaseUnavailable || outage !== null;
   const metadata = isLocal ? undefined : getModelMetadataById(model.id);
   const inputModalities: readonly string[] =
     metadata?.inputModalities ?? (metadata?.capabilities.vision ? ['image'] : []);
@@ -125,13 +134,15 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : 'upgrade required'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${lockAccessibilityLabel}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
             ? isSignInLock
               ? 'Opens AGI Cloud sign-in'
-              : 'Opens plan upgrade options'
+              : isPurchaseUnavailable
+                ? NATIVE_PURCHASES_UNAVAILABLE_MESSAGE
+                : 'Opens plan upgrade options'
             : isUnavailable
               ? unavailableHint
               : outage
@@ -197,7 +208,7 @@ export function ModelRow({
             numberOfLines={1}
             style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
           >
-            {model.detailLabel}
+            {isPurchaseUnavailable ? 'Unavailable on your plan' : model.detailLabel}
           </Text>
           {!isLocal && model.contextWindow > 0 ? (
             <Text
@@ -242,7 +253,7 @@ export function ModelRow({
           {outage ? <Badge label="Unavailable" color="gray" /> : null}
           {isLocked ? (
             <>
-              <Badge label={isSignInLock ? 'Sign in' : 'Upgrade'} color="yellow" />
+              <Badge label={lockLabel} color="yellow" />
               <Lock size={14} color={colors.agentWarning} />
             </>
           ) : null}

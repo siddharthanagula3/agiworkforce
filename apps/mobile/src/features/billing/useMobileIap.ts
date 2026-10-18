@@ -30,6 +30,11 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { ApiHttpError } from '@/services/apiErrors';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import {
+  NATIVE_PURCHASES_UNAVAILABLE_MESSAGE,
+  rejectNativePurchases,
+} from './nativePurchaseAvailability';
 
 type StoreProduct = Product | ProductSubscription;
 type FinishTransaction = (input: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>;
@@ -109,7 +114,7 @@ function verificationFailureMessage(error: unknown): string {
     : UNVERIFIED_PURCHASE_MESSAGE;
 }
 
-export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
+function useEnabledMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
   const refreshTier = useTierStore((state) => state.refreshTier);
   const [catalog, setCatalog] = useState<MobileIapCatalogResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -675,6 +680,33 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     reload,
   };
 }
+
+async function unavailablePurchase(): Promise<never> {
+  return rejectNativePurchases();
+}
+
+const DISABLED_IAP_STATE: MobileIapState = {
+  connected: false,
+  loading: false,
+  restoring: false,
+  purchasingKey: null,
+  catalog: null,
+  storeProducts: new Map(),
+  priceFor: () => UNPRICED,
+  error: NATIVE_PURCHASES_UNAVAILABLE_MESSAGE,
+  lastResult: null,
+  awaitingApproval: new Set(),
+  scheduledProductKey: null,
+  purchase: unavailablePurchase,
+  restore: unavailablePurchase,
+  reload: unavailablePurchase,
+};
+
+function useDisabledMobileIap(): MobileIapState {
+  return DISABLED_IAP_STATE;
+}
+
+export const useMobileIap = FEATURES.nativePurchases ? useEnabledMobileIap : useDisabledMobileIap;
 
 export function mobileIapProductByKey(
   catalog: MobileIapCatalogResponse | null,

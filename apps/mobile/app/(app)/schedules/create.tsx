@@ -75,7 +75,9 @@ export default function CreateScheduleScreen() {
   const handleSubmit = useCallback(
     async (data: Partial<CreateScheduleInput>) => {
       if (!isEditing && !canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (FEATURES.nativePurchases) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        }
         return;
       }
       try {
@@ -159,18 +161,22 @@ export default function CreateScheduleScreen() {
             Scheduled tasks require Basic
           </Text>
           <Text className="mt-2 text-center text-sm leading-5 text-white/50">
-            Upgrade to create unattended tasks in the daily AGI Cloud scheduling window.
+            {FEATURES.nativePurchases
+              ? 'Upgrade to create unattended tasks in the daily AGI Cloud scheduling window.'
+              : 'Scheduled tasks are unavailable on your plan. Free Cloud chat remains available.'}
           </Text>
-          <PressableBox
-            onPress={() =>
-              router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
-            }
-            className="mt-6 min-h-[52px] min-w-[220px] items-center justify-center rounded-2xl bg-white"
-            accessibilityRole="button"
-            accessibilityLabel="View plans for scheduled tasks"
-          >
-            <Text className="font-semibold text-black">View Plans</Text>
-          </PressableBox>
+          {FEATURES.nativePurchases ? (
+            <PressableBox
+              onPress={() =>
+                router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
+              }
+              className="mt-6 min-h-[52px] min-w-[220px] items-center justify-center rounded-2xl bg-white"
+              accessibilityRole="button"
+              accessibilityLabel="View plans for scheduled tasks"
+            >
+              <Text className="font-semibold text-black">View Plans</Text>
+            </PressableBox>
+          ) : null}
         </View>
       </SafeAreaView>
     );

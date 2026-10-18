@@ -78,6 +78,16 @@ describe('Create schedule template handoff', () => {
     );
   });
 
+  it('blocks direct Free creation without advertising upgrades', () => {
+    useTierStore.setState({ tier: 'free' });
+    const screen = render(<CreateScheduleScreen />);
+    expect(screen.getByText('Scheduled tasks require Basic')).toBeTruthy();
+    expect(screen.queryByText('View Plans')).toBeNull();
+    expect(screen.queryByLabelText('View plans for scheduled tasks')).toBeNull();
+    expect(mockScheduleForm).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('ignores unknown template IDs', () => {
     mockSearchParams = { template: 'unknown-template' };
 

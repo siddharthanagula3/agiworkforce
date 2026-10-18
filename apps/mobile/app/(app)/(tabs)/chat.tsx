@@ -635,7 +635,9 @@ export default function ChatTabScreen() {
 
   const handleTapWorkMode = useCallback(() => {
     if (!canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
-      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+      if (FEATURES.nativePurchases) {
+        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+      }
       return;
     }
     if (!cloudUnlocked || !isClerkSignedIn) {
@@ -895,13 +897,19 @@ export default function ChatTabScreen() {
                 ? workMode
                 : 'chat';
             const selected = mode === eligibleWorkMode;
+            const disabled =
+              mode === 'agiwork' &&
+              !FEATURES.nativePurchases &&
+              !canUseBillingPlanCapability(subscriptionTier, 'agi_work');
             return (
               <Pressable
                 key={mode}
                 testID={`chat.work-mode.${mode}`}
                 accessibilityRole="tab"
                 accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
-                accessibilityState={{ selected }}
+                accessibilityState={{ selected, disabled }}
+                accessibilityHint={disabled ? 'Work is unavailable on your plan' : undefined}
+                disabled={disabled}
                 onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
                 style={{
                   minWidth: 72,

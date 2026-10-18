@@ -7,6 +7,10 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 
 const mockFetchCatalog = jest.fn();
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
+}));
 const mockVerifyPurchase = jest.fn();
 const mockRefreshTier = jest.fn().mockResolvedValue(true);
 const mockFinishTransaction = jest.fn().mockResolvedValue(undefined);

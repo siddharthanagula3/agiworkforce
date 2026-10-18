@@ -252,7 +252,7 @@ export default function ProfileScreen() {
                 icon={CreditCard}
                 label="Subscription"
                 onPress={handleManageSubscription}
-                value="Manage"
+                value="Details"
               />
               <ProfileRow
                 icon={Shield}

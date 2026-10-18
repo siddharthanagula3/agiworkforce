@@ -1,6 +1,6 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -320,15 +320,70 @@ describe('Schedules screen Cloud boundary', () => {
     ]);
   });
 
-  it('sends Free users to plan options instead of advertising an unavailable task', () => {
+  it('keeps Free scheduling unavailable without purchase controls', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'free' });
 
-    const { getByLabelText, queryByLabelText } = render(<SchedulesScreen />);
+    const { getByLabelText, queryByLabelText, queryByText } = render(<SchedulesScreen />);
 
     expect(queryByLabelText('Schedule a task')).toBeNull();
     expect(queryByLabelText('Use Daily focus template')).toBeNull();
-    fireEvent.press(getByLabelText('View plans for scheduled tasks'));
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(queryByLabelText('View plans for scheduled tasks')).toBeNull();
+    expect(queryByText('View Plans')).toBeNull();
+    fireEvent.press(getByLabelText('Scheduled tasks unavailable on your plan'));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('explains a refused Free resume while still allowing an existing task to be paused', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'free' });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const toggleSchedule = jest.fn();
+    const originalToggle = useScheduleStore.getState().toggleSchedule;
+    const base = {
+      name: 'Saved task',
+      prompt: 'Summarize inbox',
+      model: 'test-model-fixture',
+      recurrence: 'daily' as const,
+      scheduledAt: null,
+      timeOfDay: '09:00',
+      timezone: 'UTC',
+      lastRunAt: null,
+      lastRunStatus: null,
+      nextRunAt: null,
+      createdAt: '2026-07-17T09:00:00.000Z',
+      updatedAt: '2026-07-17T09:00:00.000Z',
+    };
+    useScheduleStore.setState({
+      schedules: [
+        { ...base, id: 'paused', isActive: false },
+        { ...base, id: 'active', isActive: true },
+      ],
+      toggleSchedule,
+    });
+    try {
+      const screen = render(<SchedulesScreen />);
+      const switches = screen.getAllByRole('switch');
+      fireEvent(
+        switches.find((item) => !item.props.value)!,
+        'valueChange',
+        true,
+      );
+      expect(toggleSchedule).not.toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledWith(
+        'Scheduled tasks unavailable',
+        'Your current plan cannot resume scheduled tasks. You can still pause or delete existing tasks.',
+      );
+      fireEvent(
+        switches.find((item) => item.props.value)!,
+        'valueChange',
+        false,
+      );
+      expect(toggleSchedule).toHaveBeenCalledWith('active');
+      expect(mockPush).not.toHaveBeenCalled();
+    } finally {
+      act(() => useScheduleStore.setState({ toggleSchedule: originalToggle }));
+      alert.mockRestore();
+    }
   });
 });

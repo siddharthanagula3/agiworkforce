@@ -1,5 +1,10 @@
 import { fireEvent, render } from '@testing-library/react-native';
 
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
+}));
+
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),

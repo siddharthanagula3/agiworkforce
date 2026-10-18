@@ -1,4 +1,8 @@
 const mockGet = jest.fn();
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
+}));
 const mockPost = jest.fn();
 
 jest.mock('@/services/api', () => ({

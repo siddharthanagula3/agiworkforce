@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { NATIVE_PURCHASES_UNAVAILABLE_MESSAGE } from '@/src/features/billing/nativePurchaseAvailability';
 import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 
@@ -80,8 +82,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise')
         ? requiredTier
         : null;
-    const title =
-      recoveryAction === 'manage_billing'
+    const title = !FEATURES.nativePurchases
+      ? 'Feature unavailable'
+      : recoveryAction === 'manage_billing'
         ? 'Update billing'
         : recoveryAction === 'subscribe'
           ? 'Choose a plan'
@@ -101,7 +104,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             ? 'Contact Sales'
             : 'View upgrade options';
     const hasPrimaryAction =
-      onPrimaryAction !== undefined || salesTier !== null || !primaryActionUnavailableMessage;
+      FEATURES.nativePurchases &&
+      (onPrimaryAction !== undefined || salesTier !== null || !primaryActionUnavailableMessage);
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -117,6 +121,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     }, []);
 
     const handlePrimaryAction = useCallback(() => {
+      if (!FEATURES.nativePurchases) return;
       sheetRef.current?.close();
       if (onPrimaryAction) {
         void onPrimaryAction();
@@ -136,8 +141,10 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       onChooseStandardModel?.();
     }, [onChooseStandardModel]);
 
-    const showPlanComparison = recoveryAction === 'upgrade' || recoveryAction === 'subscribe';
+    const showPlanComparison =
+      FEATURES.nativePurchases && (recoveryAction === 'upgrade' || recoveryAction === 'subscribe');
     const handleComparePlans = useCallback(() => {
+      if (!FEATURES.nativePurchases) return;
       sheetRef.current?.close();
       router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0]);
     }, [router]);
@@ -282,7 +289,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                 marginBottom: 4,
               }}
             >
-              {primaryActionUnavailableMessage}
+              {FEATURES.nativePurchases
+                ? primaryActionUnavailableMessage
+                : NATIVE_PURCHASES_UNAVAILABLE_MESSAGE}
             </Text>
           )}
           {onChooseStandardModel ? (

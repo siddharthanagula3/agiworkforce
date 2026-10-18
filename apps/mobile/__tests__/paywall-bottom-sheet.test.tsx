@@ -3,6 +3,14 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
+}));
+const mockFeatures = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as {
+  nativePurchases: boolean;
+};
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const mockBottomSheet = React.forwardRef(
@@ -192,4 +200,43 @@ describe('PaywallBottomSheet interactions', () => {
     // The onDismiss is called via BottomSheet.onChange(-1) which is mocked away.
     // What we CAN verify is that pressing "Try later" doesn't throw.
   });
+});
+
+describe('free-first paywall recovery', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFeatures.nativePurchases = false;
+  });
+  afterEach(() => {
+    mockFeatures.nativePurchases = true;
+  });
+
+  it.each(['upgrade', 'subscribe', 'manage_billing'] as const)(
+    'preserves the %s reason and standard-model recovery without commerce actions',
+    (recoveryAction) => {
+      const onPrimaryAction = jest.fn();
+      const onChooseStandardModel = jest.fn();
+      const screen = render(
+        <PaywallBottomSheet
+          {...defaultProps}
+          requiredTier="enterprise"
+          recoveryAction={recoveryAction}
+          onPrimaryAction={onPrimaryAction}
+          resetLabel="Resets tomorrow"
+          onChooseStandardModel={onChooseStandardModel}
+        />,
+      );
+      expect(screen.getByText('Feature unavailable')).toBeTruthy();
+      expect(screen.getByText(defaultProps.reason)).toBeTruthy();
+      expect(screen.getByText('Resets tomorrow')).toBeTruthy();
+      expect(screen.queryByTestId('paywall-action-button')).toBeNull();
+      expect(screen.queryByText('Compare plans')).toBeNull();
+      expect(screen.queryByText('Contact Sales')).toBeNull();
+      fireEvent.press(screen.getByText('Choose a standard model'));
+      expect(onChooseStandardModel).toHaveBeenCalledTimes(1);
+      expect(onPrimaryAction).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(openExternalUrl).not.toHaveBeenCalled();
+    },
+  );
 });

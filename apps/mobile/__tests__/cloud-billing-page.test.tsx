@@ -117,10 +117,12 @@ jest.mock('@/src/features/billing/service', () => ({
   fetchPortalSessionUrl: jest.fn().mockResolvedValue('https://example.com/portal'),
 }));
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { billing: false },
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
 }));
 const mockFeatures = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as {
   billing: boolean;
+  nativePurchases: boolean;
 };
 
 const mockRefreshTier = jest.fn().mockResolvedValue(undefined);
@@ -148,6 +150,7 @@ import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
 import * as releaseState from '../src/features/release-state';
 import { ApiHttpError } from '../services/apiErrors';
+import PlansScreen from '../src/features/settings/plans';
 
 describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
@@ -875,7 +878,7 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     );
   });
 
-  it('opens the Upgrade row as soon as the server catalog sells plans, with no build flag', () => {
+  it('opens the Upgrade row when native purchases are enabled even with Stripe billing disabled', () => {
     const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(iapState());
     const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
     iapSpy.mockRestore();
@@ -966,4 +969,105 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
       redeemSpy.mockRestore();
     }
   });
+});
+
+describe('free-first billing and direct plan routes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockFeatures, { billing: false, nativePurchases: false });
+    Object.assign(mockAuthState, { isClerkLoaded: true, isClerkSignedIn: true });
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+      billingSource: 'none',
+      billingCancelsAtPeriodEnd: false,
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  afterEach(() => {
+    mockFeatures.nativePurchases = true;
+    jest.restoreAllMocks();
+  });
+
+  it.each(['free', 'pro'])('shows the existing %s plan without any purchase controls', (tier) => {
+    Object.assign(mockTierState, {
+      tier,
+      billingTier: tier,
+      billingStatus: tier === 'free' ? 'none' : 'active',
+      billingSource: tier === 'free' ? 'none' : 'apple',
+    });
+    const state = iapState();
+    jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(state);
+    const screen = render(<CloudBillingScreen />);
+
+    expect(screen.getByText(tier === 'free' ? 'Free plan' : 'Pro plan')).toBeTruthy();
+    expect(screen.getByText('In-app purchases are not available in this version.')).toBeTruthy();
+    for (const label of [
+      'Upgrade plan',
+      'Adjust plan',
+      'Choose plan',
+      'Compare plans',
+      'Usage top-ups',
+      'Restore purchases',
+      'Upgrade access code',
+      'Unlock upgrades',
+      'View invoices',
+    ]) {
+      expect(screen.queryByText(label)).toBeNull();
+    }
+    expect(mockPaywallBottomSheet).not.toHaveBeenCalled();
+    expect(state.purchase).not.toHaveBeenCalled();
+    expect(state.restore).not.toHaveBeenCalled();
+    expect(openExternalUrl).not.toHaveBeenCalled();
+    expect(mockRefreshTier).toHaveBeenCalledTimes(1);
+    expect(mockTierState.tier).toBe(tier);
+    fireEvent.press(screen.getByLabelText('Usage'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-usage');
+  });
+
+  it('keeps an inactive paid subscription unavailable', () => {
+    Object.assign(mockTierState, { tier: 'free', billingTier: 'pro', billingStatus: 'past_due' });
+    jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(iapState());
+    const screen = render(<CloudBillingScreen />);
+    expect(
+      screen.getByText('Your Pro subscription is past due. Paid capabilities are unavailable.'),
+    ).toBeTruthy();
+    expect(mockTierState.tier).toBe('free');
+  });
+
+  it('does not refresh account data or open usage from Local mode', () => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+    jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(iapState());
+    const screen = render(<CloudBillingScreen />);
+    expect(screen.getByText('Chat is set to Local Mode')).toBeTruthy();
+    expect(screen.getByLabelText('Usage').props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText('Usage'));
+    expect(mockRefreshTier).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
+  it('requires sign-in before displaying account details', () => {
+    mockAuthState.isClerkSignedIn = false;
+    jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(iapState());
+    const screen = render(<CloudBillingScreen />);
+    expect(screen.getByText('Sign in to AGI Cloud')).toBeTruthy();
+    expect(screen.queryByText('Current plan')).toBeNull();
+    expect(mockRefreshTier).not.toHaveBeenCalled();
+  });
+
+  it.each(['free', 'pro'])(
+    'shows only current %s entitlement on the direct plans route',
+    (tier) => {
+      Object.assign(mockTierState, { tier });
+      const screen = render(<PlansScreen />);
+      expect(screen.getByText('Your current access')).toBeTruthy();
+      expect(screen.getByText(tier === 'free' ? 'Free' : 'Pro')).toBeTruthy();
+      expect(screen.queryByText(tier === 'free' ? 'Pro' : 'Free')).toBeNull();
+      expect(screen.queryByText('Max 5x')).toBeNull();
+      expect(screen.queryByText('Compare plans')).toBeNull();
+    },
+  );
 });

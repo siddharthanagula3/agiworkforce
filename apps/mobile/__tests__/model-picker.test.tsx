@@ -3,6 +3,14 @@
 import React from 'react';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  ...jest.requireActual('@/lib/v1FeatureFlags'),
+  FEATURES: { ...jest.requireActual('@/lib/v1FeatureFlags').FEATURES, nativePurchases: true },
+}));
+const mockFeatures = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as {
+  nativePurchases: boolean;
+};
+
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -599,6 +607,29 @@ describe('ModelPickerSheet', () => {
     expect(row.props.accessibilityHint).toBe('Opens plan upgrade options');
     expect(getAllByText('Upgrade').length).toBeGreaterThan(0);
     expect(queryByText('Sign in')).toBeNull();
+  });
+
+  it('keeps tier-locked models unavailable without an upgrade action in the free-first build', () => {
+    mockFeatures.nativePurchases = false;
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'pro' });
+    const selectedBefore = useModelStore.getState().selectedModel;
+
+    try {
+      const { getByTestId, queryByText } = renderPicker({ modelScope: 'cloud' });
+      const row = getByTestId(`model-row-${MAX_ONLY_MODEL.id}`);
+      expect(row.props.accessibilityState.disabled).toBe(true);
+      expect(row.props.accessibilityHint).toBe(
+        'In-app purchases are not available in this version.',
+      );
+      expect(queryByText('Upgrade')).toBeNull();
+      expect(queryByText('Upgrade required')).toBeNull();
+      fireEvent.press(row);
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModel).toBe(selectedBefore);
+    } finally {
+      mockFeatures.nativePurchases = true;
+    }
   });
 
   it('suppresses the selected checkmark when the selected cloud model is tier-locked', () => {

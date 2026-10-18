@@ -276,10 +276,33 @@ describe('pipeline wiring', () => {
     }
   });
 
-  it('keeps the app identifier in detox.env equal to both native identifiers', () => {
-    const { APP_BUNDLE_ID } = require('../../detox.env');
-    const appConfig = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
-    expect(appConfig).toContain(`bundleIdentifier: '${APP_BUNDLE_ID}'`);
-    expect(appConfig).toContain(`package: '${APP_BUNDLE_ID}'`);
-  });
+  it.each(['development', 'preview', 'production'])(
+    'keeps the app identifier in detox.env equal to both native identifiers in %s builds',
+    (appEnv) => {
+      const { APP_BUNDLE_ID } =
+        jest.requireActual<typeof import('../../detox.env')>('../../detox.env');
+      const environment = jest.replaceProperty(process, 'env', {
+        ...process.env,
+        APP_ENV: appEnv,
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_pipeline_config_test',
+        EXPO_PUBLIC_API_URL: 'https://agiworkforce.com',
+      });
+
+      try {
+        jest.isolateModules(() => {
+          const { expo } = jest.requireActual<{
+            expo: {
+              ios?: { bundleIdentifier?: string };
+              android?: { package?: string };
+            };
+          }>('../../app.config.js');
+          expect(APP_BUNDLE_ID).toEqual(expect.stringMatching(/\S/u));
+          expect(expo.ios?.bundleIdentifier).toBe(APP_BUNDLE_ID);
+          expect(expo.android?.package).toBe(APP_BUNDLE_ID);
+        });
+      } finally {
+        environment.restore();
+      }
+    },
+  );
 });

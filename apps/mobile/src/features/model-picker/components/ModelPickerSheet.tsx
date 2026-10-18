@@ -42,6 +42,7 @@ import {
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 const EFFORT_LADDER_ORDER: readonly string[] = [
   'none',
@@ -437,6 +438,7 @@ export function ModelPickerSheet({
   }, [onOpenCloudAccess, router, sheetRef]);
 
   const openUpgrade = useCallback(() => {
+    if (!FEATURES.nativePurchases) return;
     sheetRef.current?.close();
     requestAnimationFrame(() => {
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);

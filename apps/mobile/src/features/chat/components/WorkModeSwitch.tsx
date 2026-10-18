@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export function WorkModeSwitch() {
   const colors = useThemeColors();
@@ -30,20 +31,26 @@ export function WorkModeSwitch() {
     >
       {(['chat', 'agiwork'] as const).map((mode) => {
         const selected = mode === activeMode;
+        const disabled = mode === 'agiwork' && !entitled && !FEATURES.nativePurchases;
         return (
           <PressableBox
             key={mode}
             accessibilityRole="tab"
             accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
             accessibilityHint={
-              mode === 'agiwork'
-                ? 'Your next messages run as AGI Work: planned, multi-step work with tools'
-                : 'Your next messages get a direct answer'
+              disabled
+                ? 'Work is unavailable on your plan'
+                : mode === 'agiwork'
+                  ? 'Your next messages run as AGI Work: planned, multi-step work with tools'
+                  : 'Your next messages get a direct answer'
             }
-            accessibilityState={{ selected }}
+            accessibilityState={{ selected, disabled }}
+            disabled={disabled}
             onPress={() => {
               if (mode === 'agiwork' && !entitled) {
-                router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+                if (FEATURES.nativePurchases) {
+                  router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+                }
                 return;
               }
               setWorkMode(mode);

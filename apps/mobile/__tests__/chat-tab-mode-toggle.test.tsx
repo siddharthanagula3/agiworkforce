@@ -269,15 +269,18 @@ describe('Chat tab mode toggle', () => {
     expect(mockSetWorkMode).toHaveBeenCalledWith('agiwork');
   });
 
-  it('sends an ineligible Work selection to the existing Cloud billing gate', () => {
+  it('keeps Work unavailable for a Free account without an upgrade redirect', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'free' });
 
     const screen = render(<ChatTabScreen />);
+    expect(screen.getByTestId('chat.work-mode.agiwork').props.accessibilityState.disabled).toBe(
+      true,
+    );
     fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
     expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('clears a persisted Work selection when the Cloud account no longer has Work access', () => {

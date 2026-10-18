@@ -13,6 +13,7 @@ import {
 } from '@agiworkforce/types';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import { assertNativePurchasesEnabled } from './nativePurchaseAvailability';
 
 export class BillingUpgradeRequestError extends Error {
   constructor(readonly userMessage: string) {
@@ -141,6 +142,7 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
 }
 
 export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse> {
+  assertNativePurchasesEnabled();
   const platform = currentStorePlatform();
   if (!platform) {
     return {
@@ -158,6 +160,7 @@ export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse>
 }
 
 export async function redeemBillingUpgradeCode(code: string): Promise<void> {
+  assertNativePurchasesEnabled();
   const normalizedCode = code.trim().toUpperCase();
   if (!normalizedCode || normalizedCode.length > 50 || !/^[A-Z0-9]+$/.test(normalizedCode)) {
     throw new BillingUpgradeRequestError('Enter a valid access code.');
@@ -180,6 +183,7 @@ export function billingWaitlistSource(platform: MobileIapPlatform | null): strin
 }
 
 export async function joinBillingUpgradeWaitlist(plan: SelfServePaidPlanTier): Promise<void> {
+  assertNativePurchasesEnabled();
   const { token } = await api.get<{ token?: string }>('/api/csrf');
   if (!token)
     throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
@@ -198,6 +202,7 @@ export async function verifyMobileIapPurchase(input: {
   productId: string;
   purchaseToken: string;
 }): Promise<MobileIapVerifyResponse> {
+  assertNativePurchasesEnabled();
   const response = await api.post<unknown>('/api/mobile/iap/verify', input);
   if (
     !isRecord(response) ||
