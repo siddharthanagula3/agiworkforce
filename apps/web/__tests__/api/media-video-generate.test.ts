@@ -260,10 +260,6 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
   }),
 }));
 
-vi.mock('@/lib/video-task-store', () => ({
-  storeVideoTask: vi.fn(),
-}));
-
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 

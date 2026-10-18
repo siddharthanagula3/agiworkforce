@@ -32,12 +32,6 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-const taskStoreMocks = vi.hoisted(() => ({ get: vi.fn() }));
-vi.mock('@/lib/video-task-store', () => ({
-  storeVideoTask: vi.fn(),
-  getVideoTask: taskStoreMocks.get,
-}));
-
 const durableMocks = vi.hoisted(() => ({
   scoped: vi.fn(),
   get: vi.fn(),
