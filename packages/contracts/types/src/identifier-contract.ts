@@ -51,26 +51,3 @@ export interface IdentifierContract {
 }
 
 export const IDENTIFIER_CONTRACT = identifierContractJson as unknown as IdentifierContract;
-
-/** Why a candidate is not usable as an identifier, or null when it is. */
-export function forbiddenIdentifierReason(column: string): string | null {
-  for (const rule of IDENTIFIER_CONTRACT.forbiddenKeyColumns) {
-    if (new RegExp(rule.match).test(column)) return rule.why;
-  }
-  return null;
-}
-
-export function isUsableIdentifierColumn(column: string): boolean {
-  return forbiddenIdentifierReason(column) === null;
-}
-
-/** A table whose id is minted by something other than the database default. */
-export function identifierMintedBy(table: string): string | null {
-  return (
-    IDENTIFIER_CONTRACT.mintedElsewhereKeys.find((entry) => entry.table === table)?.mintedBy ?? null
-  );
-}
-
-export function isSequentialKeyTable(table: string): boolean {
-  return IDENTIFIER_CONTRACT.sequentialKeys.some((entry) => entry.table === table);
-}

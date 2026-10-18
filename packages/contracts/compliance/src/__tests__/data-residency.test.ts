@@ -6,9 +6,7 @@ import {
   DataRegionUnavailableError,
   configuredDataRegions,
   dataRegionEnvName,
-  dataRegionEnvNames,
   excludedTransportsFor,
-  inferenceRouteSetAdmits,
   normaliseDataRegion,
   resolveDataRegion,
   selectDataRegion,
@@ -16,6 +14,15 @@ import {
 import { NON_US_VENDOR_TRANSPORTS } from '../transport-residency';
 
 const HOME_ENV = { AGI_DATABASE_URL: 'postgresql://u:p@us.example/db?sslmode=require' };
+
+const EU_ENV_NAMES = [
+  'AGI_DATA_REGION_EU_DATABASE_URL',
+  'AGI_DATA_REGION_EU_OBJECT_STORAGE_ENDPOINT',
+  'AGI_DATA_REGION_EU_OBJECT_STORAGE_BUCKET',
+  'AGI_DATA_REGION_EU_LOG_DESTINATION',
+  'AGI_DATA_REGION_EU_KMS_REGION',
+  'AGI_DATA_REGION_EU_INFERENCE_TRANSPORTS',
+];
 
 /**
  * The second region the whole design has to be testable against. It is a
@@ -38,14 +45,7 @@ function euEnv(overrides: Record<string, string | undefined> = {}) {
 describe('region env naming', () => {
   it('derives every facet name from the region id, so a third region adds no literals', () => {
     expect(dataRegionEnvName('eu', 'databaseUrl')).toBe('AGI_DATA_REGION_EU_DATABASE_URL');
-    expect(dataRegionEnvNames('eu')).toEqual([
-      'AGI_DATA_REGION_EU_DATABASE_URL',
-      'AGI_DATA_REGION_EU_OBJECT_STORAGE_ENDPOINT',
-      'AGI_DATA_REGION_EU_OBJECT_STORAGE_BUCKET',
-      'AGI_DATA_REGION_EU_LOG_DESTINATION',
-      'AGI_DATA_REGION_EU_KMS_REGION',
-      'AGI_DATA_REGION_EU_INFERENCE_TRANSPORTS',
-    ]);
+    expect(dataRegionEnvName('eu', 'keyManagementRegion')).toBe('AGI_DATA_REGION_EU_KMS_REGION');
   });
 });
 
@@ -77,8 +77,8 @@ describe('resolving the home region', () => {
     const { inferenceRouteSet } = resolution.runtime;
     expect(inferenceRouteSet.mode).toBe('exclude');
     expect([...inferenceRouteSet.transports].sort()).toEqual([...NON_US_VENDOR_TRANSPORTS].sort());
-    expect(inferenceRouteSetAdmits(inferenceRouteSet, 'open_router')).toBe(true);
-    expect(inferenceRouteSetAdmits(inferenceRouteSet, 'deepseek')).toBe(false);
+    expect(inferenceRouteSet.transports.has('open_router')).toBe(false);
+    expect(inferenceRouteSet.transports.has('deepseek')).toBe(true);
   });
 
   it('is unprovisioned with no database at all', () => {
@@ -96,7 +96,7 @@ describe('resolving a second region', () => {
     const resolution = resolveDataRegion('eu', HOME_ENV);
     expect(resolution.provisioned).toBe(false);
     if (resolution.provisioned) return;
-    expect(resolution.missing).toEqual(dataRegionEnvNames('eu'));
+    expect(resolution.missing).toEqual(EU_ENV_NAMES);
   });
 
   it('is all-or-nothing: one missing facet leaves the region unprovisioned', () => {
@@ -126,9 +126,9 @@ describe('resolving a second region', () => {
     if (!resolution.provisioned) throw new Error('fixture region should resolve');
     const { inferenceRouteSet } = resolution.runtime;
     expect(inferenceRouteSet.mode).toBe('allow');
-    expect(inferenceRouteSetAdmits(inferenceRouteSet, 'mistral_eu')).toBe(true);
-    expect(inferenceRouteSetAdmits(inferenceRouteSet, 'open_router')).toBe(false);
-    expect(inferenceRouteSetAdmits(inferenceRouteSet, 'deepseek')).toBe(false);
+    expect(inferenceRouteSet.transports.has('mistral_eu')).toBe(true);
+    expect(inferenceRouteSet.transports.has('open_router')).toBe(false);
+    expect(inferenceRouteSet.transports.has('deepseek')).toBe(false);
   });
 
   it('treats an empty inference list as no route set rather than every route', () => {
@@ -182,7 +182,7 @@ describe('selecting the region a request runs in', () => {
       selectDataRegion('eu', HOME_ENV);
     } catch (error) {
       expect((error as DataRegionUnavailableError).region).toBe('eu');
-      expect((error as DataRegionUnavailableError).missing).toEqual(dataRegionEnvNames('eu'));
+      expect((error as DataRegionUnavailableError).missing).toEqual(EU_ENV_NAMES);
       expect(String(error)).not.toMatch(/us\.example/);
     }
   });

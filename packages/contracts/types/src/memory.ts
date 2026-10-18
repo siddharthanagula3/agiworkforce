@@ -78,25 +78,3 @@ export interface Memory {
 
   userId?: string;
 }
-
-export interface MemorySearchParams {
-  query?: string;
-
-  category?: MemoryCategory;
-
-  tags?: string[];
-
-  minImportance?: ImportanceScore;
-
-  limit?: number;
-
-  offset?: number;
-}
-
-export interface MemorySearchResult {
-  memory: Memory;
-
-  relevance: number;
-
-  matchType: 'semantic' | 'fts' | 'tag' | 'hybrid';
-}

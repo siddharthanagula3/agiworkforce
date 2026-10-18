@@ -5,7 +5,6 @@ import {
   BUILT_IN_ORGANIZATION_ROLES,
   builtInRoleKeyForMembershipRole,
   expandOrganizationPermissions,
-  ORGANIZATION_PERMISSIONS,
   PRIMARY_OWNER_ONLY_PERMISSIONS,
   type OrganizationPermission,
 } from './permissions';
@@ -27,47 +26,6 @@ export const AUTHORIZATION_STAGES = [
 ] as const;
 
 export type AuthorizationStage = (typeof AUTHORIZATION_STAGES)[number];
-
-export interface AuthorizationStageContract {
-  stage: AuthorizationStage;
-  question: string;
-  source: string;
-  /** What a later stage may do to this stage's answer. Always 'narrow'. */
-  effectOnEarlierStages: 'narrow';
-}
-
-export const AUTHORIZATION_PRECEDENCE: readonly AuthorizationStageContract[] = Object.freeze([
-  {
-    stage: 'membership',
-    question: 'Does this account belong to this workspace?',
-    source: 'organization_members',
-    effectOnEarlierStages: 'narrow',
-  },
-  {
-    stage: 'entitlement',
-    question: 'Does the workspace plan include this capability?',
-    source: 'subscription and seat entitlements',
-    effectOnEarlierStages: 'narrow',
-  },
-  {
-    stage: 'permission',
-    question: 'Does this member hold the permission this action requires?',
-    source: 'organization_member_permissions',
-    effectOnEarlierStages: 'narrow',
-  },
-  {
-    stage: 'policy',
-    question: 'Has an administrator turned this off for this member?',
-    source: 'organization_admin_policies and organization_policy_overrides',
-    effectOnEarlierStages: 'narrow',
-  },
-  {
-    stage: 'rollout',
-    question: 'Has this capability been released to this workspace?',
-    source: 'feature flags',
-    effectOnEarlierStages: 'narrow',
-  },
-] as const);
 
 export const ENTERPRISE_DENIAL_CODES = [
   'not_a_member',
@@ -124,57 +82,6 @@ export type AuthorizationDecision =
       grantedBy: readonly string[];
     }
   | { allowed: false; denial: EnterpriseDenial };
-
-export interface PermissionGrant {
-  /** Where the permissions came from: a role key, a group id, a membership role. */
-  source: string;
-  permissions: readonly OrganizationPermission[];
-}
-
-export interface EffectivePermissions {
-  permissions: ReadonlySet<OrganizationPermission>;
-  /** Permission to the grants that conferred it, for the explanation endpoint. */
-  grantedBy: Readonly<Record<string, readonly string[]>>;
-  /** Permissions a grant offered that policy or the owner rule took back. */
-  withheld: Readonly<Record<string, EnterpriseDenialCode>>;
-}
-
-// The union of every grant, minus the Primary Owner permissions and anything
-// denied. A deny is a ceiling, so one more group can never lift it.
-export function resolveEffectivePermissions(input: {
-  grants: readonly PermissionGrant[];
-  isPrimaryOwner: boolean;
-  deniedPermissions?: readonly OrganizationPermission[];
-}): EffectivePermissions {
-  const denied = new Set(input.deniedPermissions ?? []);
-  const permissions = new Set<OrganizationPermission>();
-  const grantedBy: Record<string, string[]> = {};
-  const withheld: Record<string, EnterpriseDenialCode> = {};
-
-  for (const grant of input.grants) {
-    for (const permission of grant.permissions) {
-      if (!ORGANIZATION_PERMISSIONS.includes(permission)) continue;
-      if (!input.isPrimaryOwner && PRIMARY_OWNER_ONLY_PERMISSIONS.includes(permission)) {
-        withheld[permission] = 'primary_owner_only';
-        continue;
-      }
-      if (denied.has(permission)) {
-        withheld[permission] = 'policy_denied';
-        continue;
-      }
-      permissions.add(permission);
-      (grantedBy[permission] ??= []).push(grant.source);
-    }
-  }
-
-  for (const sources of Object.values(grantedBy)) sources.sort();
-
-  return {
-    permissions,
-    grantedBy: Object.freeze(grantedBy),
-    withheld: Object.freeze(withheld),
-  };
-}
 
 // A grant may only pass on permissions the granter holds. The WITH CHECK of
 // both grant tables enforces the same rule; this copy produces the message.
@@ -268,7 +175,7 @@ function denial(
   };
 }
 
-// Stages run in AUTHORIZATION_PRECEDENCE order and the first refusal is the
+// Stages run in AUTHORIZATION_STAGES order and the first refusal is the
 // answer. Personal scope has no workspace to govern it, so it allows.
 export function evaluateAuthorization(
   subject: AuthorizationSubject,
@@ -400,33 +307,4 @@ export function resolveDefaultModelId(
     return { modelId: null, resolution: 'not_permitted' };
   }
   return { modelId: defaultModelId, resolution: 'permitted' };
-}
-
-export interface AuthorizationExplanation {
-  organizationId: string | null;
-  policyRevision: number;
-  isPrimaryOwner: boolean;
-  permissions: readonly OrganizationPermission[];
-  grantedBy: Readonly<Record<string, readonly string[]>>;
-  withheld: Readonly<Record<string, EnterpriseDenialCode>>;
-  precedence: readonly AuthorizationStageContract[];
-}
-
-// Why a member can do what they can: permissions in force, what conferred each,
-// what was taken back and by which stage.
-export function explainAuthorization(input: {
-  organizationId: string | null;
-  policyRevision: number;
-  isPrimaryOwner: boolean;
-  effective: EffectivePermissions;
-}): AuthorizationExplanation {
-  return {
-    organizationId: input.organizationId,
-    policyRevision: input.policyRevision,
-    isPrimaryOwner: input.isPrimaryOwner,
-    permissions: [...input.effective.permissions].sort(),
-    grantedBy: input.effective.grantedBy,
-    withheld: input.effective.withheld,
-    precedence: AUTHORIZATION_PRECEDENCE,
-  };
 }

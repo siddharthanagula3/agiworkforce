@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AUTHORIZATION_PRECEDENCE,
   AUTHORIZATION_STAGES,
   ENTERPRISE_DENIAL_CODES,
   ENTERPRISE_DENIAL_STAGE,
@@ -57,15 +56,6 @@ describe('the five stages are separate answers, not one boolean', () => {
       ENTERPRISE_DENIAL_CODES.map((code) => ENTERPRISE_DENIAL_STAGE[code]),
     );
     expect([...named].sort()).toEqual([...AUTHORIZATION_STAGES].sort());
-  });
-
-  it('describes each stage once, in order, and only ever narrows', () => {
-    expect(AUTHORIZATION_PRECEDENCE.map((entry) => entry.stage)).toEqual([...AUTHORIZATION_STAGES]);
-    for (const entry of AUTHORIZATION_PRECEDENCE) {
-      expect(entry.effectOnEarlierStages).toBe('narrow');
-      expect(entry.question.length).toBeGreaterThan(10);
-      expect(entry.source.length).toBeGreaterThan(0);
-    }
   });
 
   it('refuses one feature four different ways, one per reason', () => {

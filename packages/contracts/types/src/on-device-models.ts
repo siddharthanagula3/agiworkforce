@@ -1,11 +1,5 @@
 export type OnDeviceRuntime =
-  | 'apple-foundation-models'
-  | 'executorch'
-  | 'llama-rn'
-  | 'litert-lm'
-  | 'aicore';
-
-export type OnDeviceTier = 1 | 2 | 3;
+  'apple-foundation-models' | 'executorch' | 'llama-rn' | 'litert-lm' | 'aicore';
 
 export interface ExecutorchPreset {
   modelName: string;

@@ -1,13 +1,11 @@
 import { RUN_STATUS_LABELS } from './cross-device';
-import type { LifecycleStatus, WorkLifecycleStatus } from './lifecycle-status';
+import type { LifecycleStatus } from './lifecycle-status';
 
 declare const __brand: unique symbol;
 
 export type ConversationId = string & { readonly [__brand]: 'ConversationId' };
 
 export type MessageId = string & { readonly [__brand]: 'MessageId' };
-
-export type ActionId = string & { readonly [__brand]: 'ActionId' };
 
 /**
  * The block kinds a conversation can carry. A client publishes the subset it
@@ -72,8 +70,6 @@ export type MessageStatus =
   /** Message failed to send or stream. */
   | 'error';
 
-export type ActionStatus = WorkLifecycleStatus;
-
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type ArtifactType =
@@ -116,14 +112,6 @@ export interface ArtifactBase {
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
-export interface ApprovalRequestBase {
-  id: string;
-  toolName: string;
-  description: string;
-  riskLevel: RiskLevel;
-  status: 'pending' | 'approved' | 'rejected';
-}
-
 export type ToolCallStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export const TOOL_CALL_STATUS_LABELS = Object.freeze({
@@ -156,24 +144,6 @@ export interface RuntimeActivityStep {
   detail?: string;
   progress?: number;
   status: RuntimeActivityStepStatus;
-}
-
-export interface FileAttachmentBase {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url?: string;
-}
-
-export interface ConversationBase {
-  id: ConversationId;
-
-  title: string;
-
-  created_at: string;
-
-  updated_at: string;
 }
 
 export interface MessageBase {
@@ -257,23 +227,3 @@ export const ASSISTANT_TURN_ATTRIBUTION_KEYS = [
   'reasoningProfile',
   'toolInvocations',
 ] as const satisfies readonly (keyof AssistantTurnAttribution)[];
-
-export type AssistantTurnAttributionKey = (typeof ASSISTANT_TURN_ATTRIBUTION_KEYS)[number];
-
-export interface ActionBase {
-  id: ActionId;
-
-  message_id: MessageId;
-
-  conversation_id: ConversationId;
-
-  action_type: string;
-
-  status: ActionStatus;
-
-  created_at: string;
-
-  completed_at?: string;
-
-  error?: string;
-}

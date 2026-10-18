@@ -6,8 +6,6 @@ export type OrganizationPermissionLevel = (typeof ORGANIZATION_PERMISSION_LEVELS
 
 export const FEATURE_PERMISSION_AREAS = ['content', 'sharing'] as const;
 
-export type FeaturePermissionArea = (typeof FEATURE_PERMISSION_AREAS)[number];
-
 export const ADMIN_PERMISSION_AREAS = [
   'members',
   'owners',

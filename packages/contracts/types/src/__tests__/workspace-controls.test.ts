@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AUTHORIZATION_PRECEDENCE,
   AUTHORIZATION_STAGES,
   BUILT_IN_ORGANIZATION_ROLES,
   DEFAULT_WORKSPACE_CODE_CONTROLS,
@@ -21,7 +20,6 @@ import {
   isGrantableOrganizationPermission,
   missingOrganizationPermissions,
   resolveDefaultModelId,
-  resolveEffectivePermissions,
   resolveWorkspaceCodeControls,
   resolveWorkspaceControls,
   type AuthorizationSubject,
@@ -297,13 +295,6 @@ describe('authorization precedence', () => {
     };
   }
 
-  it('states one stage per step, in order, each of which may only narrow', () => {
-    expect(AUTHORIZATION_PRECEDENCE.map((stage) => stage.stage)).toEqual([...AUTHORIZATION_STAGES]);
-    for (const stage of AUTHORIZATION_PRECEDENCE) {
-      expect(stage.effectOnEarlierStages).toBe('narrow');
-    }
-  });
-
   it('answers with the earliest refusal, not an incidental later one', () => {
     const decision = evaluateAuthorization(
       subject({
@@ -370,56 +361,6 @@ describe('authorization precedence', () => {
       feature: 'code',
     });
     expect(decision.allowed).toBe(true);
-  });
-});
-
-describe('effective permissions', () => {
-  it('unions every grant and names what conferred each permission', () => {
-    const effective = resolveEffectivePermissions({
-      isPrimaryOwner: false,
-      grants: [
-        { source: 'membership:member', permissions: ['content.read', 'content.share'] },
-        { source: 'group:Engineering:admin', permissions: ['content.read', 'policy.manage'] },
-      ],
-    });
-    expect([...effective.permissions].sort()).toEqual([
-      'content.read',
-      'content.share',
-      'policy.manage',
-    ]);
-    expect(effective.grantedBy['content.read']).toEqual([
-      'group:Engineering:admin',
-      'membership:member',
-    ]);
-  });
-
-  it('keeps the three ownership permissions from anyone but the Primary Owner', () => {
-    const escalated = resolveEffectivePermissions({
-      isPrimaryOwner: false,
-      grants: [{ source: 'role:custom', permissions: ['workspace.delete'] }],
-    });
-    expect(escalated.permissions.has('workspace.delete')).toBe(false);
-    expect(escalated.withheld['workspace.delete']).toBe('primary_owner_only');
-
-    const owner = resolveEffectivePermissions({
-      isPrimaryOwner: true,
-      grants: [{ source: 'membership:primary_owner', permissions: ['workspace.delete'] }],
-    });
-    expect(owner.permissions.has('workspace.delete')).toBe(true);
-  });
-
-  it('lets a policy deny outrank however many roles granted it', () => {
-    const effective = resolveEffectivePermissions({
-      isPrimaryOwner: false,
-      deniedPermissions: ['content.share'],
-      grants: [
-        { source: 'role:a', permissions: ['content.share'] },
-        { source: 'role:b', permissions: ['content.share'] },
-        { source: 'group:g', permissions: ['content.share'] },
-      ],
-    });
-    expect(effective.permissions.has('content.share')).toBe(false);
-    expect(effective.withheld['content.share']).toBe('policy_denied');
   });
 });
 

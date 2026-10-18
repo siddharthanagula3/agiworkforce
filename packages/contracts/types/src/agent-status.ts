@@ -16,8 +16,6 @@ import type { LifecycleProjection, WorkLifecycleStatus } from './lifecycle-statu
 
 export type AgentSessionStatus = Exclude<WorkLifecycleStatus, 'pending'> | 'paused';
 
-export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
-
 export const LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS: LifecycleProjection<AgentSessionStatus> =
   Object.freeze({
     running: 'running',
@@ -75,33 +73,4 @@ export interface AgentSession {
   toolCallCount?: number;
 
   userId?: string;
-}
-
-export interface AgentStatusSummary {
-  running: number;
-
-  completed: number;
-
-  failed: number;
-
-  total: number;
-}
-
-export interface ActiveAgent {
-  id: string;
-  name: string;
-  status: AgentStatus;
-  currentTask?: string;
-  progress?: number;
-  lastActivity?: Date;
-}
-
-export interface TaskAssignment {
-  taskId: string;
-  agentId: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  createdAt: Date;
-  updatedAt: Date;
 }

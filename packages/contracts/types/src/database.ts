@@ -30,13 +30,6 @@ export interface ConversationRow {
   source: ConversationSource;
 }
 
-export type ConversationInsert = Omit<
-  ConversationRow,
-  'id' | 'created_at' | 'updated_at' | 'last_message_at' | 'message_count'
-> & {
-  id?: string;
-};
-
 export interface MessageRow {
   id: string;
   conversation_id: string;
@@ -51,48 +44,6 @@ export interface MessageRow {
   tool_results: unknown | null;
   metadata: Record<string, unknown>;
   created_at: string;
-}
-
-export type MessageInsert = Omit<MessageRow, 'id' | 'created_at'> & {
-  id?: string;
-};
-
-import type { WorkLifecycleStatus } from './lifecycle-status';
-
-export type WorkforceTaskStatus = WorkLifecycleStatus;
-
-export interface WorkforceTaskRow {
-  id: string;
-  user_id: string;
-  employee_id: string;
-  title: string;
-  description: string | null;
-  status: WorkforceTaskStatus;
-  priority: number;
-  input_data: Record<string, unknown>;
-  output_data: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  completed_at: string | null;
-  error: string | null;
-}
-
-export type WorkforceExecutionStatus = Exclude<WorkLifecycleStatus, 'pending'>;
-
-export interface WorkforceExecutionRow {
-  id: string;
-  task_id: string;
-  user_id: string;
-  employee_id: string;
-  started_at: string;
-  completed_at: string | null;
-  status: WorkforceExecutionStatus;
-  duration_ms: number | null;
-  tokens_used: number;
-  cost_estimate: number;
-  result: Record<string, unknown> | null;
-  error: string | null;
-  updated_at: string;
 }
 
 export interface SharedSessionRow {

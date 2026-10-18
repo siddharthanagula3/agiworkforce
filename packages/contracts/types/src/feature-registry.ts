@@ -101,8 +101,6 @@ export const FEATURE_DEFINITIONS = registryJson.features as Readonly<
   Record<string, FeatureDefinition>
 >;
 
-export const FEATURE_IDS = Object.keys(FEATURE_DEFINITIONS) as readonly string[];
-
 export type FeatureId = string;
 
 export function isFeatureId(value: string): boolean {

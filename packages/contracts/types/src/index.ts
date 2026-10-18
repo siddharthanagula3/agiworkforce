@@ -179,15 +179,7 @@ export * from './trust-mode-contract';
 export {
   CONCEPT_NAMES,
   CONCEPT_REGISTRY,
-  ORIGIN_SURFACES,
-  RESOURCE_COLUMN_CONTRACT,
-  conceptByAlias,
-  conceptForTable,
-  getConcept,
   isConceptName,
-  isOriginSurface,
-  resourceColumn,
-  tableDisposition,
   type ConceptAccessRule,
   type ConceptDataClass,
   type ConceptRecord,
@@ -207,7 +199,6 @@ export * from './client-capability-manifest';
 export * from './experiment-registry';
 export * from './feature-release';
 export { featureDefinition, featureMaturityLabel } from './feature-registry';
-export * from './request-identity';
 
 export * from './file-reference';
 export * from './file-model';
@@ -332,11 +323,9 @@ export {
 } from './browser-selection';
 
 export {
-  BROWSER_PROFILE_CAPABILITIES,
   BROWSER_PROFILE_REFUSALS,
   authorizeProfileRequest,
   findVisibleProfile,
-  isBrowserProfileCapability,
   liveSessionsOnProfile,
   normalizeProfileSite,
   profileAdmits,

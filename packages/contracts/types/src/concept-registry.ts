@@ -137,9 +137,6 @@ export interface ConceptFacetSubject {
   why: string;
 }
 
-export type ConceptFacetKind =
-  'column' | 'table' | 'contract' | 'permission' | 'policy-key' | 'route' | 'absent';
-
 interface ConceptFacetClaim {
   id: string;
   subject: string;
@@ -244,50 +241,6 @@ export interface ConceptRegistry {
 
 export const CONCEPT_REGISTRY = conceptRegistryJson as ConceptRegistry;
 
-export const RESOURCE_COLUMN_CONTRACT = CONCEPT_REGISTRY.columnContract;
-
-export const ORIGIN_SURFACES = CONCEPT_REGISTRY.originSurfaces;
-
 export function isConceptName(value: string | null | undefined): value is ConceptName {
   return typeof value === 'string' && (CONCEPT_NAMES as readonly string[]).includes(value);
-}
-
-export function isOriginSurface(value: string | null | undefined): value is OriginSurface {
-  return typeof value === 'string' && (ORIGIN_SURFACES as readonly string[]).includes(value);
-}
-
-export function getConcept(name: ConceptName): ConceptRecord {
-  const concept = CONCEPT_REGISTRY.concepts.find((candidate) => candidate.name === name);
-  if (!concept) throw new Error(`Concept ${name} is not registered`);
-  return concept;
-}
-
-export function conceptForTable(table: string): ConceptRecord | null {
-  return CONCEPT_REGISTRY.concepts.find((concept) => concept.tables.includes(table)) ?? null;
-}
-
-export function resourceColumn(name: ConceptName, role: ResourceColumnRole): string | null {
-  return getConcept(name).columns[role] ?? null;
-}
-
-export function conceptByAlias(name: string): ConceptRecord | null {
-  const lowered = name.toLowerCase();
-  return (
-    CONCEPT_REGISTRY.concepts.find(
-      (concept) => concept.name === lowered || concept.aliases.includes(lowered),
-    ) ?? null
-  );
-}
-
-export function conceptFacets(name: ConceptName): readonly ConceptFacet[] {
-  return getConcept(name).facets ?? [];
-}
-
-/** The facets the product deliberately does not have, each naming what stands in for it. */
-export function absentConceptFacets(name: ConceptName): readonly ConceptFacet[] {
-  return conceptFacets(name).filter((facet) => facet.kind === 'absent');
-}
-
-export function tableDisposition(table: string): TableDispositionRecord | null {
-  return CONCEPT_REGISTRY.tableDispositions.find((entry) => entry.table === table) ?? null;
 }

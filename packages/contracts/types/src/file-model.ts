@@ -73,8 +73,6 @@ export const MANAGED_FILE_ROLES = {
   version: 'version',
 } as const satisfies Readonly<Record<string, keyof ManagedFile>>;
 
-export type ManagedFileRole = keyof typeof MANAGED_FILE_ROLES;
-
 export function isFileDerivation(value: unknown): value is FileDerivation {
   return (FILE_DERIVATIONS as readonly unknown[]).includes(value);
 }

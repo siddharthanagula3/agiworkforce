@@ -408,15 +408,6 @@ export interface CreateCloudCodeSessionInput {
   harnessCredential?: string | null;
 }
 
-export interface CreateCloudCodeSessionResponse {
-  session: CloudCodeSession;
-  terminalEntries: CloudCodeTerminalEntry[];
-}
-
-export interface RunCloudCodeCommandInput {
-  command: string;
-}
-
 export interface RunCloudCodeCommandResponse {
   session: CloudCodeSession;
   terminalEntry: CloudCodeTerminalEntry;
@@ -448,31 +439,9 @@ export interface NotebookCellOutput {
   data: string;
 }
 
-export interface RunCloudCodeNotebookCellInput {
-  code: string;
-  language: NotebookCellLanguage;
-}
-
-export interface RunCloudCodeNotebookCellResponse {
-  session: CloudCodeSession;
-  ok: boolean;
-  outputs: NotebookCellOutput[];
-  error?: string;
-}
-
 export interface CloudCodeNotebookFile {
   path: string;
   name: string;
   isDir: boolean;
   byteSize: number;
-}
-
-export interface ListCloudCodeNotebookFilesResponse {
-  session: CloudCodeSession;
-  files: CloudCodeNotebookFile[];
-}
-
-export interface UploadCloudCodeNotebookFileResponse {
-  session: CloudCodeSession;
-  file: CloudCodeNotebookFile;
 }

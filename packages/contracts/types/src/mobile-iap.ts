@@ -188,12 +188,6 @@ export interface MobileIapCatalogResponse {
   consumableProductIds?: string[];
 }
 
-export interface MobileIapVerifyRequest {
-  platform: MobileIapPlatform;
-  productId: string;
-  purchaseToken: string;
-}
-
 export interface MobileIapVerifyResponse {
   success: true;
   kind: MobileIapProductKind;

@@ -1,22 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHINESE_HQ_PROVIDER_IDS } from '../provider-jurisdiction';
-import {
-  NON_US_VENDOR_TRANSPORTS,
-  isNonUsVendorTransport,
-  transportResidency,
-} from '../transport-residency';
+import { NON_US_VENDOR_TRANSPORTS, isNonUsVendorTransport } from '../transport-residency';
 
 describe('transport residency', () => {
-  it('answers UNPUBLISHED rather than guessing at a transport it cannot place', () => {
-    // The whole point of the third value. A transport this list has never been
-    // told about must not come back as United States processing by default.
-    expect(transportResidency('some_gateway_added_next_week')).toBe('UNPUBLISHED');
-  });
-
   it('places the vendor-run endpoints it does know', () => {
     for (const transport of NON_US_VENDOR_TRANSPORTS) {
-      expect(transportResidency(transport)).toBe('NON_US');
       expect(isNonUsVendorTransport(transport)).toBe(true);
     }
   });

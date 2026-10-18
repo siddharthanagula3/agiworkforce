@@ -40,8 +40,6 @@ export const CLIENT_MANIFEST_FIELDS = [
   'renderableBlocks',
 ] as const;
 
-export type ClientManifestField = (typeof CLIENT_MANIFEST_FIELDS)[number];
-
 export interface ClientCapabilityManifest {
   schemaVersion: number;
   surface: SourceSurface;

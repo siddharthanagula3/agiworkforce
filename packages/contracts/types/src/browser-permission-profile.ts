@@ -12,10 +12,8 @@
  * as denied: "you may not use profile X" already tells the caller X exists.
  */
 
-import { SITE_POLICY_CAPABILITIES, type SitePolicyCapability } from './site-policy';
+import type { SitePolicyCapability } from './site-policy';
 import type { BrowserSessionKind } from './browser-session';
-
-export const BROWSER_PROFILE_CAPABILITIES = SITE_POLICY_CAPABILITIES;
 
 export type BrowserProfileCapability = SitePolicyCapability;
 
@@ -74,12 +72,6 @@ export function normalizeProfileSite(value: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-export function isBrowserProfileCapability(value: unknown): value is BrowserProfileCapability {
-  return (
-    typeof value === 'string' && (BROWSER_PROFILE_CAPABILITIES as readonly string[]).includes(value)
-  );
 }
 
 export function sameProfileScope(a: BrowserProfileScope, b: BrowserProfileScope): boolean {

@@ -31,8 +31,6 @@ export type EnterpriseSurface = SourceSurface;
 
 export type EnterprisePrivacyMode = PrivacyMode;
 
-export type EnterprisePlanTier = 'free' | 'pro_individual' | 'team' | 'business' | 'enterprise';
-
 export type SecretHandlingMode = 'warn' | 'redact' | 'block';
 
 export const SECRET_HANDLING_MODE_DEFAULT: Readonly<
@@ -66,16 +64,6 @@ export interface Organization {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface OrganizationMember {
-  organizationId: string;
-  userId: string;
-  role: OrganizationRole;
-  email?: string | null;
-  displayName?: string | null;
-  provisioningSource: 'manual' | 'scim' | 'sso_jit' | 'admin';
-  joinedAt: string;
 }
 
 export interface AdminPolicy {
@@ -153,16 +141,6 @@ export interface ConnectorPolicy {
   updatedAt: string;
 }
 
-export interface RetentionPolicy {
-  organizationId: string;
-  conversationRetentionDays: number;
-  artifactRetentionDays: number;
-  auditRetentionDays: number;
-  localExportEnabled: boolean;
-  deletionReviewRequired: boolean;
-  updatedAt: string;
-}
-
 export type EnterpriseAuditAction =
   | 'organization.created'
   | 'organization.updated'
@@ -195,221 +173,6 @@ export interface EnterpriseAuditEvent {
   userAgent?: string | null;
   metadata?: Record<string, unknown>;
   createdAt: string;
-}
-
-export interface AuditExportRequest {
-  organizationId: string;
-  requestedByUserId: string;
-  startAt: string;
-  endAt: string;
-  format: 'jsonl' | 'csv';
-  status: 'queued' | 'processing' | 'ready' | 'failed' | 'expired';
-  downloadUrl?: string;
-  expiresAt?: string;
-}
-
-export type IdentityProviderStatus =
-  | 'awaiting_domain_verification'
-  | 'awaiting_provider_configuration'
-  | 'ready_to_activate'
-  | 'active';
-
-export interface IdentityProviderDomainChallenge {
-  recordType: 'TXT';
-  recordName: string;
-  recordValue: string;
-}
-
-export interface IdentityProviderServiceProvider {
-  acsUrl: string | null;
-  entityId: string | null;
-  metadataUrl: string | null;
-}
-
-export interface IdentityProviderConfig {
-  id: string;
-  organizationId: string;
-  providerType: 'saml' | 'oidc';
-  domain: string;
-  displayName?: string | null;
-  metadataUrl?: string | null;
-  oidcDiscoveryUrl?: string | null;
-  oidcClientId?: string | null;
-  isActive: boolean;
-  status: IdentityProviderStatus;
-  domainVerifiedAt?: string | null;
-  serviceProvider?: IdentityProviderServiceProvider;
-  domainVerification?: IdentityProviderDomainChallenge | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ScimUser {
-  id: string;
-  externalId: string;
-  userName: string;
-  active: boolean;
-  name?: {
-    givenName?: string;
-    familyName?: string;
-    formatted?: string;
-  };
-  emails?: Array<{ value: string; primary?: boolean }>;
-  groups?: Array<{ value: string; display?: string }>;
-}
-
-export interface ScimGroup {
-  id: string;
-  externalId: string;
-  displayName: string;
-  members?: Array<{ value: string; display?: string }>;
-}
-
-export interface SupportCase {
-  id: string;
-  organizationId: string | null;
-  requesterUserId: string;
-  subject: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'open' | 'triaged' | 'in_progress' | 'waiting_on_customer' | 'resolved' | 'closed';
-  privacyLabel: 'local_only' | 'byok' | 'managed' | 'security_sensitive';
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface FeedbackCase {
-  id: string;
-  organizationId: string | null;
-  reporterUserId: string | null;
-  sourceSurface: EnterpriseSurface;
-  category: 'bug' | 'feature_request' | 'quality' | 'security' | 'billing' | 'support';
-  title: string;
-  body: string;
-  status: 'new' | 'triaged' | 'linked_to_fix' | 'shipped' | 'wont_do';
-  createdAt: string;
-}
-
-export interface ReleaseFixLink {
-  id: string;
-  feedbackCaseId: string;
-  pullRequestUrl: string | null;
-  commitSha: string | null;
-  releaseVersion: string | null;
-  status: 'proposed' | 'merged' | 'released' | 'rolled_back';
-  createdAt: string;
-}
-
-export interface UsageLedgerEntry {
-  id: string;
-  organizationId: string | null;
-  userId: string | null;
-  privacyMode: EnterprisePrivacyMode;
-  provider: Provider | string;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  providerCostUsd: number;
-  chargedAmountUsd: number;
-  grossMarginUsd: number;
-  grossMarginPct: number | null;
-  createdAt: string;
-}
-
-export interface ManagedCreditAccount {
-  id: string;
-  organizationId: string;
-  status: 'waitlisted' | 'private_beta' | 'active' | 'suspended' | 'closed';
-  billingMode: 'invoice_ach' | 'invoice_wire' | 'stripe_card' | 'manual';
-  balanceCents: number;
-  reservedRefundCents: number;
-  hardLimitCents: number;
-  monthlyLimitCents: number;
-  publicLaunchBlocked: boolean;
-  approvedBy?: string | null;
-  approvedAt?: string | null;
-  privateBetaTermsAcceptedAt?: string | null;
-  riskStatus?: 'clear' | 'review' | 'fraud_hold' | 'dispute_hold' | 'refund_hold';
-  fraudHoldUntil?: string | null;
-  providerTermsReviewedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ManagedComputeDenialCode =
-  | 'managed_compute_disabled'
-  | 'public_launch_blocked'
-  | 'not_private_beta'
-  | 'not_org_member'
-  | 'provider_blocked'
-  | 'model_blocked'
-  | 'insufficient_balance'
-  | 'hard_limit_exceeded'
-  | 'monthly_limit_exceeded'
-  | 'fraud_hold'
-  | 'refund_hold'
-  | 'dispute_hold'
-  | 'provider_cost_stale'
-  | 'retention_policy_missing'
-  | 'global_rate_limiter_unavailable';
-
-export interface ManagedComputeEligibility {
-  allowed: boolean;
-  organizationId: string;
-  userId: string;
-  privacyMode: Extract<EnterprisePrivacyMode, 'managed'>;
-  provider: Provider | string;
-  model: string;
-  accountStatus: ManagedCreditAccount['status'];
-  denialCode?: ManagedComputeDenialCode;
-  denialMessage?: string;
-  checkedAt: string;
-}
-
-export interface ManagedUsageReservation {
-  id: string;
-  idempotencyKey: string;
-  organizationId: string;
-  accountId: string;
-  userId: string;
-  provider: Provider | string;
-  model: string;
-  estimatedInputTokens: number;
-  estimatedOutputTokens: number;
-  reservedCents: number;
-  status: 'reserved' | 'settled' | 'released' | 'expired';
-  expiresAt: string;
-  createdAt: string;
-  settledAt?: string | null;
-}
-
-export interface ManagedRiskEvent {
-  id: string;
-  organizationId: string;
-  accountId: string;
-  kind:
-    | 'refund_requested'
-    | 'refund_approved'
-    | 'dispute_opened'
-    | 'dispute_won'
-    | 'dispute_lost'
-    | 'fraud_hold_started'
-    | 'fraud_hold_released'
-    | 'chargeback_reserve_updated';
-  amountCents?: number;
-  status: 'open' | 'resolved' | 'rejected';
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface ProviderCostSnapshot {
-  id: string;
-  provider: Provider | string;
-  model: string;
-  inputUsdPerMillionTokens: number;
-  outputUsdPerMillionTokens: number;
-  sourceUrl: string;
-  capturedAt: string;
 }
 
 export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId' | 'updatedAt'> = {
@@ -445,18 +208,4 @@ export const MANAGED_COMPUTE_MARGIN_POLICY = {
 
 export function isOrganizationAdminRole(role: OrganizationRole): boolean {
   return role === 'owner' || role === 'admin';
-}
-
-export function getUsageCostShare(
-  entry: Pick<UsageLedgerEntry, 'providerCostUsd' | 'chargedAmountUsd'>,
-): number | null {
-  if (entry.chargedAmountUsd <= 0) return null;
-  return entry.providerCostUsd / entry.chargedAmountUsd;
-}
-
-export function requiresManagedComputeMarginReview(
-  entry: Pick<UsageLedgerEntry, 'providerCostUsd' | 'chargedAmountUsd'>,
-): boolean {
-  const share = getUsageCostShare(entry);
-  return share === null || share >= MANAGED_COMPUTE_MARGIN_POLICY.warningAtRevenueShare;
 }

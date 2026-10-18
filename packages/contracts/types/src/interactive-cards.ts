@@ -361,14 +361,6 @@ export interface ItineraryToolInputStop {
   localityHint: string;
 }
 
-export interface ItineraryToolInput {
-  title: string;
-  summary: string;
-  region: { label: string; timeZone: string };
-  stops: ItineraryToolInputStop[];
-  travelMode: ItineraryTravelMode;
-}
-
 type _IdentityKeysLeakedToModel = Extract<
   keyof ItineraryToolInputStop,
   | 'placeId'
@@ -467,11 +459,3 @@ export type InteractiveCardResponsePayload =
       }>;
     }
   | { kind: 'dismiss'; text?: string };
-
-export interface PersistedInteractiveCards {
-  schemaVersion: number;
-  cards: InteractiveCard[];
-}
-
-export type InteractiveCardCapability =
-  'canRenderInteractiveCards' | 'canAnswerInteractiveCards' | 'canRenderMapCards';

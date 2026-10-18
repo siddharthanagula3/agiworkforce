@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type ActionStatus, RUNTIME_ACTIVITY_STEP_STATUSES } from '../conversation';
+import { RUNTIME_ACTIVITY_STEP_STATUSES } from '../conversation';
 import { LIFECYCLE_STATUS_BY_AGENT_STATUS } from '../agent';
 import { LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS } from '../agent-status';
 import {
@@ -33,9 +33,9 @@ import {
   surfaceStateForSyncState,
   toLifecycleStatus,
   type LifecycleStatus,
+  type WorkLifecycleStatus,
 } from '../lifecycle-status';
 import { RESOURCE_LIFECYCLE_STATES } from '../resource-lifecycle';
-import type { WorkforceTaskStatus } from '../database';
 import type { RuntimeActivityStatus } from '../runtime';
 import {
   LIFECYCLE_STATUS_BY_WORKFLOW_STATUS,
@@ -67,10 +67,9 @@ describe('lifecycle status vocabulary', () => {
     for (const status of WORK_LIFECYCLE_STATUSES) expect(isLifecycleStatus(status)).toBe(true);
     const asLifecycle: readonly LifecycleStatus[] = WORK_LIFECYCLE_STATUSES;
     expect(asLifecycle).toHaveLength(5);
-    const action: ActionStatus = 'cancelled';
-    const activity: RuntimeActivityStatus = action;
-    const task: WorkforceTaskStatus = activity;
-    const workflow: WorkflowStatus = task;
+    const work: WorkLifecycleStatus = 'cancelled';
+    const activity: RuntimeActivityStatus = work;
+    const workflow: WorkflowStatus = activity;
     expect(workflow).toBe('cancelled');
   });
 
@@ -264,10 +263,5 @@ describe('surface state', () => {
     }
     expect(SURFACE_STATE_RULES.archived.remedy).toBe('restore');
     expect(isPermanentFailureSurfaceState('archived')).toBe(false);
-  });
-
-  it('keeps ActionStatus assignable to the shared vocabulary', () => {
-    const status: LifecycleStatus = 'completed' satisfies ActionStatus;
-    expect(status).toBe('completed');
   });
 });

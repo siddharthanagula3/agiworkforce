@@ -193,17 +193,6 @@ export const INTRINSIC_CAPABILITY_NAMES: readonly ModelCapabilityName[] = modelR
 export const ROUTE_DEPENDENT_CAPABILITY_NAMES: readonly ModelCapabilityName[] = modelRegistry
   .capabilityClasses.routeDependent as readonly ModelCapabilityName[];
 
-export function projectModelCapabilities(
-  capabilities: NormalizedModelCapabilities,
-): ModelCapabilities {
-  return Object.fromEntries(
-    Object.entries(COMPAT_CAPABILITY_SOURCES).map(([compatName, capabilityName]) => [
-      compatName,
-      capabilities[capabilityName] === true,
-    ]),
-  ) as ModelCapabilities;
-}
-
 export interface VideoGenerationOutputSize {
   resolution: string;
   aspectRatio: string;
@@ -1192,7 +1181,6 @@ const MANUAL_OVERRIDE_MODEL_IDS: readonly string[] = Object.entries(
     return MANUAL_OVERRIDE_MODEL_TYPES.has(model.modelType);
   })
   .map(([id]) => id);
-const MANUAL_OVERRIDE_MODEL_SET = new Set<string>(MANUAL_OVERRIDE_MODEL_IDS);
 
 type RegistryRoutingSlot = (typeof modelRegistry.policies.auto.slots)[RoutingSlot];
 
@@ -1406,8 +1394,6 @@ for (const tier of Object.keys(TIER_POLICIES_DEFINITION) as ProductTier[]) {
 Object.freeze(TIER_POLICIES_DEFINITION);
 
 export const TIER_POLICIES = TIER_POLICIES_DEFINITION;
-
-export const TIER_POLICIES_INTERNAL = TIER_POLICIES_DEFINITION;
 
 function resolveCanonicalTarget(target: string): string {
   if (modelsCatalog.models[target]) {
@@ -1671,10 +1657,6 @@ export function getDeveloperLabel(developerId: string): string {
   return DEVELOPER_LABELS[developerId] ?? developerId;
 }
 
-export function getModelDeveloper(modelId: string | null | undefined): string | null {
-  return getModelMetadataById(modelId)?.developer ?? null;
-}
-
 export function getProviderConfig(provider: Provider | string): ProviderConfig | null {
   return modelsCatalog.providers[provider] ?? null;
 }
@@ -1818,10 +1800,6 @@ export const MODEL_FAMILY_REGISTRY: Readonly<Record<ModelFamilySlot, ModelFamily
     ) as Record<ModelFamilySlot, ModelFamilySlotDefinition>,
   );
 
-export function isModelFamilySlot(slot: string): slot is ModelFamilySlot {
-  return Object.prototype.hasOwnProperty.call(MODEL_FAMILY_REGISTRY, slot);
-}
-
 export function getModelFamilySlot(slot: ModelFamilySlot): ModelFamilySlotDefinition {
   return MODEL_FAMILY_REGISTRY[slot];
 }
@@ -1912,11 +1890,6 @@ export function getSlotForModel(modelId: string | null | undefined): RoutingSlot
 
 export function getManualOverrideModelIds(): string[] {
   return [...MANUAL_OVERRIDE_MODEL_IDS];
-}
-
-export function isManualOverrideModel(modelId: string | null | undefined): boolean {
-  const canonicalModelId = normalizeModelId(modelId);
-  return canonicalModelId ? MANUAL_OVERRIDE_MODEL_SET.has(canonicalModelId) : false;
 }
 
 export function getManualOverrideModels(
@@ -2782,19 +2755,6 @@ export function getModelIdsForProvider(
   return getModelsForProvider(provider, options).map((model) => model.id);
 }
 
-export function isModelSupportedByProvider(
-  provider: Provider | string,
-  modelId: string | null | undefined,
-  options: ModelQueryOptions = {},
-): boolean {
-  const canonicalModelId = normalizeModelId(modelId);
-  if (!canonicalModelId) {
-    return false;
-  }
-
-  return getModelsForProvider(provider, options).some((model) => model.id === canonicalModelId);
-}
-
 export function detectProviderFromModelId(
   modelId: string | null | undefined,
 ): Provider | string | null {
@@ -2877,10 +2837,6 @@ function toCoreModelOption(model: ModelMetadata): CoreModelOption {
 export function getCoreManualModelOptions(): CoreModelOption[] {
   return getManualOverrideModels().map(toCoreModelOption);
 }
-
-export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
-  new Set<string>(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders),
-);
 
 export const US_ONLY_ROUTING_TIERS: readonly string[] = Object.freeze([
   ...modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers,

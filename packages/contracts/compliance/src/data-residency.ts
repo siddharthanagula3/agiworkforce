@@ -114,12 +114,6 @@ export function dataRegionEnvName(region: DataRegionId, facet: DataRegionFacet):
   return `${ENV_PREFIX}_${region.toUpperCase()}_${FACET_ENV_SUFFIX[facet]}`;
 }
 
-export function dataRegionEnvNames(region: DataRegionId): readonly string[] {
-  return (Object.keys(FACET_ENV_SUFFIX) as DataRegionFacet[]).map((facet) =>
-    dataRegionEnvName(region, facet),
-  );
-}
-
 export interface DataRegionRuntime {
   region: DataRegionId;
   definition: DataRegionDefinition;
@@ -309,58 +303,6 @@ export function selectDataRegion(
     throw new DataRegionUnavailableError(resolution.region, resolution.missing);
   }
   return resolution.runtime;
-}
-
-/**
- * `purpose` names what was about to move in the refusal and decides nothing.
- * There is no degraded answer: work is served from its region or refused.
- */
-export type CrossRegionRoutingDecision =
-  | { allowed: true; region: DataRegionId }
-  | { allowed: false; origin: DataRegionId; executing: DataRegionId; reason: string };
-
-export function crossRegionRoutingDecision(input: {
-  origin: DataRegionId;
-  executing: DataRegionId;
-  purpose: string;
-}): CrossRegionRoutingDecision {
-  if (input.origin === input.executing) return { allowed: true, region: input.origin };
-  return {
-    allowed: false,
-    origin: input.origin,
-    executing: input.executing,
-    reason:
-      `${input.purpose} originated in data region "${input.origin}" and cannot be carried out in ` +
-      `"${input.executing}". Residency is not a preference: the work waits for its own region.`,
-  };
-}
-
-export class CrossRegionRoutingRefusedError extends Error {
-  readonly origin: DataRegionId;
-  readonly executing: DataRegionId;
-
-  constructor(decision: Extract<CrossRegionRoutingDecision, { allowed: false }>) {
-    super(decision.reason);
-    this.name = 'CrossRegionRoutingRefusedError';
-    this.origin = decision.origin;
-    this.executing = decision.executing;
-  }
-}
-
-export function assertSameDataRegion(input: {
-  origin: DataRegionId;
-  executing: DataRegionId;
-  purpose: string;
-}): void {
-  const decision = crossRegionRoutingDecision(input);
-  if (decision.allowed) return;
-  throw new CrossRegionRoutingRefusedError(decision);
-}
-
-export function inferenceRouteSetAdmits(routeSet: InferenceRouteSet, transport: string): boolean {
-  return routeSet.mode === 'exclude'
-    ? !routeSet.transports.has(transport)
-    : routeSet.transports.has(transport);
 }
 
 /**

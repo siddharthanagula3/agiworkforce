@@ -232,21 +232,6 @@ export function validateAttachmentFile(file: File): AttachmentValidation {
   return validateAttachmentMeta(file.name, file.type, file.size);
 }
 
-export interface SignedUploadRequest {
-  name: string;
-  mimeType: string;
-  size: number;
-  sha256?: string;
-}
-
-export interface SignedUploadResponse {
-  attachmentId: string;
-  uploadUrl: string;
-  uploadMethod: 'PUT' | 'POST';
-  uploadHeaders?: Record<string, string>;
-  expiresAt: string;
-}
-
 /**
  * A chat conversation with its messages and metadata.
  *

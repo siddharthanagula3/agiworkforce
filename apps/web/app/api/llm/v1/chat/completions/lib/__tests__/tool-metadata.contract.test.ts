@@ -11,14 +11,14 @@ import {
   resolveConnectorToolMetadata,
   toolExternalDelivery,
 } from '../tool-metadata';
-import { isToolActionClass, TOOL_ACTION_CLASSES } from '@agiworkforce/types';
+import { TOOL_ACTION_CLASSES } from '@agiworkforce/types';
 
 describe('web tool metadata declares through the shared contract', () => {
   it('classifies every platform tool with a contract action class', () => {
     for (const metadata of Object.values(PLATFORM_TOOL_METADATA)) {
-      expect(isToolActionClass(metadata.actionClass)).toBe(true);
+      expect(TOOL_ACTION_CLASSES).toContain(metadata.actionClass);
     }
-    expect(isToolActionClass(UNKNOWN_TOOL_METADATA.actionClass)).toBe(true);
+    expect(TOOL_ACTION_CLASSES).toContain(UNKNOWN_TOOL_METADATA.actionClass);
     expect(TOOL_ACTION_CLASSES).toContain(resolveToolMetadata('web_search').actionClass);
   });
 

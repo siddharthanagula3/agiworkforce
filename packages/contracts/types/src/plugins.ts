@@ -253,11 +253,6 @@ export interface PluginInstallationsResponse {
   installations: PluginInstallation[];
 }
 
-export interface PluginRegistryListResponse {
-  entries: PluginRegistryEntry[];
-  total: number;
-}
-
 export interface PluginRegistryEntryResponse {
   entry: PluginRegistryEntry;
   manifest: PluginManifest | null;

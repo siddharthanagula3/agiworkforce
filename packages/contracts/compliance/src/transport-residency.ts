@@ -16,11 +16,8 @@
  * dispatches through, roughly half publish nothing about where inference runs.
  * A list of everything known to be outside the United States is defensible with
  * today's evidence; a list claiming to place every transport is not, and would
- * be worse than nothing because it would read as authoritative. `UNPUBLISHED`
- * exists so the gap is a value rather than an omission.
+ * be worse than nothing because it would read as authoritative.
  */
-
-export type ProcessingResidency = 'US' | 'NON_US' | 'UNPUBLISHED';
 
 /**
  * Transports a model vendor operates itself, where the vendor is domiciled
@@ -103,17 +100,4 @@ export function nonUsVendorTransportDeployment(
   return Object.prototype.hasOwnProperty.call(deployments, transport)
     ? (deployments[transport] ?? null)
     : null;
-}
-
-/**
- * The residency of a transport, as far as it can be established today.
- *
- * Deliberately answers `UNPUBLISHED` rather than guessing. A caller that must
- * keep processing inside the United States has to decide what an unpublished
- * transport means to it, and that decision belongs to the caller rather than
- * being hidden in a default here.
- */
-export function transportResidency(transport: string): ProcessingResidency {
-  if (isNonUsVendorTransport(transport)) return 'NON_US';
-  return 'UNPUBLISHED';
 }

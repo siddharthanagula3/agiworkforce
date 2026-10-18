@@ -121,8 +121,6 @@ export const FILE_REFERENCE_ROLES = {
   created: 'createdAt',
 } as const satisfies Readonly<Record<string, keyof FileReference>>;
 
-export type FileReferenceRole = keyof typeof FILE_REFERENCE_ROLES;
-
 /**
  * A durable address for something living in a connected third-party account.
  * `connectorId` is the installation, so revoking it invalidates every

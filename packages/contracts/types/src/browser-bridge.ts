@@ -96,29 +96,7 @@ export function isLocalClientFailureCode(value: unknown): value is LocalClientFa
   );
 }
 
-export interface LocalClientCommandResponse extends Omit<BrowserCommandResult, 'id'> {
-  id?: string;
-  code?: LocalClientFailureCode;
-}
-
 /** What `clientState` answers: whether a command can run at all, and why not. */
-export interface LocalClientStateResponse {
-  version: typeof LOCAL_CLIENT_PROTOCOL_VERSION;
-  /** A pairing record exists on this Mac. */
-  paired: boolean;
-  /**
-   * The paired browser has answered recently.
-   *
-   * Separate from `paired` because they fail differently and a client has to
-   * tell them apart: a pairing whose browser is closed, or has forgotten this
-   * Mac, still reads as paired here while no command it sends can ever be
-   * carried out. A client offers browser tools on this, not on `paired`.
-   */
-  answering?: boolean;
-  extensionId?: string;
-  appVersion?: string;
-}
-
 export function isLocalClientCommandRequest(value: unknown): value is LocalClientCommandRequest {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<LocalClientCommandRequest>;
