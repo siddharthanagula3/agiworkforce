@@ -4309,16 +4309,6 @@ Source: `scripts/check-concurrent-step-lease.mjs:17`. Exact fixture results (`au
 
 Resolution/acceptance: Require current lease comparison in the mutation WHERE clause or verify actual transaction-scoped locked ownership. Reject SET-only token writes, comments/literals and unrelated locks while accepting the real claim transaction.
 
-## CHROME-SSE-READ-AGGREGATE-CAP-01
-
-Severity: Medium. Status: complete owner source reviewed by specialist and lead; unchanged decoder reproduced in isolated transpiled-source probes on 2026-10-09. Live network/browser behavior unverified.
-
-`BoundedSseDecoder.assertWithinLimit` compares `buffer.length + dataLength` with the per-frame limit while draining each line. The buffer still contains later complete frames from the same network read. Three individually valid `data: a` events decode when delivered separately with cap 12 but fail when coalesced into one read. At the actual 1,048,576 frame cap, five individually valid frames decode separately but a combined read fails, although their combined visible output remains below the 4,194,304 total cap.
-
-Source when found: `apps/extension/src/features/cloud-bridge/boundedSseDecoder.ts:35`, `:55`, `:92`. Main replaced that decoder on 2026-09-28 with the shared `ServerSentEventDecoder` (`packages/client/client-runtime/src/sse.ts:59-60,78`), which the managed chat stream and the computer-use cloud client read through; its `assertWithinLimit` makes the same `buffer.length + dataLength` comparison while later frames of the same read are still buffered. Repointed 2026-10-14 by source reading; the probe was not re-run against the shared decoder. Actual-source probe output, controls and caller scope (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). Transport chunk boundaries must not change valid event acceptance. The current parser was fully read; no live transport or extension run was performed.
-
-Resolution/acceptance: Enforce frame bounds on the current partial frame while draining complete later frames, retaining a separately bounded transport buffer and cumulative output budget. Equivalent event sequences must pass or fail identically under separate, combined and arbitrary boundary splits; oversized individual frames must still fail. No implementation change was made.
-
 ## CHROME-STREAM-TOTAL-CAP-TEST-INTERCEPTED-01
 
 Severity: Low. Status: source-supported instrument defect with decoder interception reproduced in isolated component probes on 2026-10-09; the original Vitest file was not newly executed.
