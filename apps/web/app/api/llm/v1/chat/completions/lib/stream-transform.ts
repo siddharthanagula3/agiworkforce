@@ -19,7 +19,7 @@ import {
   routeAffinityTtlMs,
 } from '@/lib/services/free-lane/runtime-state-service';
 import { getRoutePricing } from '@agiworkforce/model-registry';
-import type { StreamChunk } from '@agiworkforce/types';
+import { MICROUSD_PER_USD, type StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import {
   classifyError,
@@ -141,7 +141,6 @@ function reportedCostMicrousdFromUsd(reportedCostUsd: number): number {
 
 const REPORTED_COST_SANITY_BAND_MIN_MULTIPLE = 0.1;
 const REPORTED_COST_SANITY_BAND_MAX_MULTIPLE = 10;
-const MICROUSD_PER_USD = 1_000_000;
 
 function isReportedCostWithinSanityBand(reportedCostUsd: number, estimateUsd: number): boolean {
   if (estimateUsd <= 0) return true;

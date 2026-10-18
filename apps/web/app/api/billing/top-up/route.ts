@@ -10,6 +10,7 @@ import {
   TOP_UP_UNITS_PER_USD,
   creditsFromMicrousd,
   formatCredits,
+  isEntitledSubscriptionStatus,
   isFreeBillingPlanTier,
   quoteTopUp,
 } from '@agiworkforce/types';
@@ -165,7 +166,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   if (
     !billing ||
     isFreeBillingPlanTier(billing.plan_tier) ||
-    !['active', 'trialing'].includes(billing.status) ||
+    !isEntitledSubscriptionStatus(billing.status) ||
     !['stripe', 'apple', 'google'].includes(billingSource)
   ) {
     throw createError.validation(

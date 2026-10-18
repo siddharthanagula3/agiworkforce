@@ -14,6 +14,7 @@ import {
   getModelsForProvider,
   getProviderDefaultModelId,
   isExecutableImageModel,
+  MICROUSD_PER_USD,
   type ExecutableImageModel,
   type ModelMetadata,
   resolveFeatureRate,
@@ -48,8 +49,6 @@ export interface ImageEditContext {
 function rateCardMicrousd(feature: RateCardFeature): number {
   return resolveFeatureRate(feature).providerCogsMicrousd ?? 0;
 }
-
-const MICROUSD_PER_USD = 1_000_000;
 
 const OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY = {
   medium: rateCardMicrousd('image_generation_openai_medium'),

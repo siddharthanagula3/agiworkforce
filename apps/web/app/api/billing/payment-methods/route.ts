@@ -8,7 +8,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
-import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 
@@ -34,21 +34,14 @@ async function handleGetPaymentMethods(request: NextRequest) {
     return NextResponse.json({ payment_methods: [] });
   }
 
-  type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id'>;
-  const [sub] = await db
-    .query<SubRow>(
-      `select stripe_customer_id, stripe_subscription_id
-         from public.subscriptions where user_id = $1 limit 1`,
-      [userId],
-    )
-    .catch(() => [] as SubRow[]);
-
-  if (!sub?.stripe_customer_id) {
+  const sub = await readBillingOwnerRow(db, userId);
+  const customerId = await resolveBillingCustomerId(db, userId, sub);
+  if (!customerId) {
     return NextResponse.json({ payment_methods: [] });
   }
 
   try {
-    const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
+    const customer = await stripe.customers.retrieve(customerId);
     if (customer.deleted) {
       return NextResponse.json({ payment_methods: [] });
     }
@@ -63,7 +56,7 @@ async function handleGetPaymentMethods(request: NextRequest) {
     // actually charges for it. Marking the customer default here would name a
     // card the renewal will not touch.
     const defaultPmId =
-      (sub.stripe_subscription_id
+      (sub?.stripe_subscription_id
         ? await stripe.subscriptions
             .retrieve(sub.stripe_subscription_id)
             .then((subscription) =>
@@ -78,7 +71,7 @@ async function handleGetPaymentMethods(request: NextRequest) {
     // filtering to cards reported "no payment method on file" to users who had
     // just paid with one.
     const stripePaymentMethods = await stripe.paymentMethods.list({
-      customer: sub.stripe_customer_id,
+      customer: customerId,
     });
 
     const payment_methods = stripePaymentMethods.data.map((pm) => ({

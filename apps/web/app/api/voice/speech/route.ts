@@ -20,6 +20,7 @@ import {
   getModelMetadataById,
   getRoutingSlotModel,
   isModelLive,
+  MICROUSD_PER_USD,
   resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
@@ -46,7 +47,6 @@ import { DEFAULT_SPEECH_VOICE, SPEECH_VOICES } from '@/lib/voice/speech-voices';
 const SPEECH_MAX_CHARACTERS = 4_000;
 const CHARACTERS_PER_INPUT_TOKEN = 4;
 const AUDIO_OUTPUT_TOKENS_PER_CHARACTER = 1.5;
-const MICROUSD_PER_USD = 1_000_000;
 
 const SpeechRequestSchema = z.object({
   text: z.string().trim().min(1).max(SPEECH_MAX_CHARACTERS),

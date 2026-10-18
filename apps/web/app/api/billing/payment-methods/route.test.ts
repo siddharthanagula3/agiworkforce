@@ -60,6 +60,15 @@ describe('GET /api/billing/payment-methods', () => {
     expect(mockRetrieveCustomer).toHaveBeenCalledWith('cus_1');
   });
 
+  it('reports an unreadable billing account instead of an empty card list', async () => {
+    mockQuery.mockRejectedValue(new Error('db unavailable'));
+
+    const response = await GET(req());
+
+    expect(response.status).toBe(503);
+    expect(mockRetrieveCustomer).not.toHaveBeenCalled();
+  });
+
   it('rejects when authentication fails', async () => {
     mockGetUserScopedDb.mockRejectedValue(new Error('unauthorized'));
 

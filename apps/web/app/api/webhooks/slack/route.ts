@@ -42,7 +42,7 @@ async function handleSlackEvent(request: NextRequest): Promise<NextResponse> {
   if (rateLimited) return rateLimited;
 
   const body = await request.text();
-  if (body.length > MAX_BODY_BYTES) {
+  if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
   }
 

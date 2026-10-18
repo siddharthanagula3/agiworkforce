@@ -25,6 +25,7 @@ import {
   getRoutingSlotModel,
   getVoiceLiveBackendModel,
   isModelLive,
+  MICROUSD_PER_USD,
   resolveEffectiveModelPricingForInputTokens,
   type PricedModel,
 } from '@agiworkforce/types';
@@ -150,7 +151,6 @@ export function estimateAudioSeconds(
   return Math.max(1, Math.ceil(byteSize / bytesPerSecond));
 }
 
-const MICROUSD_PER_USD = 1_000_000;
 const MICROUSD_PER_LEDGER_CENT = 10_000;
 
 export function estimateTranscriptionCostMicrousd(
