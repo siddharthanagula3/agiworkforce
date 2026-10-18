@@ -331,16 +331,19 @@ impl HookExecutor {
         Ok(saved)
     }
 
-    pub async fn add_hook(&self, hook: Hook) -> Result<()> {
+    #[cfg(test)]
+    pub(crate) async fn add_hook(&self, hook: Hook) -> Result<()> {
         self.commit(|armed| with_added(armed, hook), |_| Ok(()))
             .await
     }
 
-    pub async fn remove_hook(&self, name: &str) -> Result<()> {
+    #[cfg(test)]
+    pub(crate) async fn remove_hook(&self, name: &str) -> Result<()> {
         self.commit(|armed| without(armed, name), |_| Ok(())).await
     }
 
-    pub async fn toggle_hook(&self, name: &str, enabled: bool) -> Result<()> {
+    #[cfg(test)]
+    pub(crate) async fn toggle_hook(&self, name: &str, enabled: bool) -> Result<()> {
         self.commit(|armed| with_toggled(armed, name, enabled), |_| Ok(()))
             .await
     }

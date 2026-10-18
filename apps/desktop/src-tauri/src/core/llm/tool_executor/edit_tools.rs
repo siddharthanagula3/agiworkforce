@@ -273,12 +273,17 @@ impl ToolExecutor {
             let content = match fs::read_to_string(&edit.path).await {
                 Ok(c) => c,
                 Err(e) => {
-                    // Rollback all previously written files
-                    Self::rollback_files(&snapshots, &written_files).await;
+                    let not_restored = Self::rollback_files(&snapshots, &written_files).await;
                     let msg = format!("Edit #{}: failed to re-read '{}': {}", i, edit.path, e);
+                    let msg = Self::with_restore_note(msg, &not_restored);
                     return Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
+                        data: json!({
+                            "error": &msg,
+                            "success": false,
+                            "rolled_back": applied,
+                            "not_restored": not_restored,
+                        }),
                         error: Some(msg),
                         metadata: HashMap::new(),
                     });
@@ -287,8 +292,7 @@ impl ToolExecutor {
 
             let occurrence_count = content.matches(edit.old_text.as_str()).count();
             if occurrence_count == 0 {
-                // Rollback all previously written files
-                Self::rollback_files(&snapshots, &written_files).await;
+                let not_restored = Self::rollback_files(&snapshots, &written_files).await;
                 let preview = if edit.old_text.len() > 60 {
                     let truncate_at = edit
                         .old_text
@@ -305,9 +309,15 @@ impl ToolExecutor {
                     "Edit #{}: old_text not found in '{}': '{}'",
                     i, edit.path, preview
                 );
+                let msg = Self::with_restore_note(msg, &not_restored);
                 return Ok(ToolResult {
                     success: false,
-                    data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
+                    data: json!({
+                        "error": &msg,
+                        "success": false,
+                        "rolled_back": applied,
+                        "not_restored": not_restored,
+                    }),
                     error: Some(msg),
                     metadata: HashMap::new(),
                 });
@@ -315,14 +325,20 @@ impl ToolExecutor {
 
             if let Some(expected) = edit.expected_replacements {
                 if occurrence_count != expected {
-                    Self::rollback_files(&snapshots, &written_files).await;
+                    let not_restored = Self::rollback_files(&snapshots, &written_files).await;
                     let msg = format!(
                         "Edit #{}: expected {} replacement(s) in '{}' but found {}",
                         i, expected, edit.path, occurrence_count
                     );
+                    let msg = Self::with_restore_note(msg, &not_restored);
                     return Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
+                        data: json!({
+                            "error": &msg,
+                            "success": false,
+                            "rolled_back": applied,
+                            "not_restored": not_restored,
+                        }),
                         error: Some(msg),
                         metadata: HashMap::new(),
                     });
@@ -330,7 +346,7 @@ impl ToolExecutor {
             }
 
             if occurrence_count > 1 && !edit.replace_all {
-                Self::rollback_files(&snapshots, &written_files).await;
+                let not_restored = Self::rollback_files(&snapshots, &written_files).await;
                 let line_numbers = find_occurrence_line_numbers(&content, &edit.old_text);
                 let lines_str = line_numbers
                     .iter()
@@ -341,12 +357,14 @@ impl ToolExecutor {
                     "Edit #{}: found {} occurrences of old_text in '{}' at lines {}. Set replace_all=true or provide more context.",
                     i, occurrence_count, edit.path, lines_str
                 );
+                let msg = Self::with_restore_note(msg, &not_restored);
                 return Ok(ToolResult {
                     success: false,
                     data: json!({
                         "error": &msg,
                         "success": false,
                         "rolled_back": applied,
+                        "not_restored": not_restored,
                         "occurrences": occurrence_count,
                         "line_numbers": line_numbers
                     }),
@@ -364,12 +382,17 @@ impl ToolExecutor {
             if let Err(e) =
                 write_validated_file(Path::new(&edit.path), updated.into_bytes(), false).await
             {
-                // Rollback all previously written files
-                Self::rollback_files(&snapshots, &written_files).await;
+                let not_restored = Self::rollback_files(&snapshots, &written_files).await;
                 let msg = format!("Edit #{}: failed to write '{}': {}", i, edit.path, e);
+                let msg = Self::with_restore_note(msg, &not_restored);
                 return Ok(ToolResult {
                     success: false,
-                    data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
+                    data: json!({
+                        "error": &msg,
+                        "success": false,
+                        "rolled_back": applied,
+                        "not_restored": not_restored,
+                    }),
                     error: Some(msg),
                     metadata: HashMap::new(),
                 });
@@ -880,11 +903,13 @@ impl ToolExecutor {
         })
     }
 
-    /// Rollback files to their snapshotted state.
+    /// Puts every written file back as it was snapshotted, and returns the
+    /// paths that could not be restored.
     async fn rollback_files(
         snapshots: &HashMap<String, String>,
         written_files: &HashMap<String, bool>,
-    ) {
+    ) -> Vec<String> {
+        let mut not_restored = Vec::new();
         for path in written_files.keys() {
             if let Some(original_content) = snapshots.get(path) {
                 if let Err(e) = write_validated_file(
@@ -899,8 +924,23 @@ impl ToolExecutor {
                         path,
                         e
                     );
+                    not_restored.push(path.clone());
                 }
             }
+        }
+        not_restored
+    }
+
+    /// The failure message, with the files an earlier edit changed and the
+    /// rollback could not put back named in it.
+    fn with_restore_note(message: String, not_restored: &[String]) -> String {
+        if not_restored.is_empty() {
+            message
+        } else {
+            format!(
+                "{message}. The earlier edits to {} could not be undone; restore them by hand.",
+                not_restored.join(", ")
+            )
         }
     }
 }

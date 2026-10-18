@@ -522,7 +522,7 @@ pub fn run() {
                 }
             }
 
-            // FIX-007 (Sprint 3): per-user daily LLM-spend cap. Reuses
+            // Per-user daily LLM-spend cap. Reuses
             // the main app DB so the budget table sits next to other
             // settings and ships in regular backups.
             match crate::core::llm::daily_budget::DailyBudgetGuard::new(db_conn_arc.clone()) {
@@ -1120,15 +1120,9 @@ pub fn run() {
             crate::sys::startup_recovery::startup_export_diagnostics,
             crate::sys::startup_recovery::startup_quit,
 
-
-            // Reflection Engine
-
-
             crate::sys::commands::get_system_resources,
 
             crate::sys::commands::agent_resolve_approval,
-
-            // Completion / Ghost Text
 
             // Dispatch HMAC verification (mobile↔desktop control-message auth)
             crate::sys::commands::dispatch_hmac_init,
@@ -1179,10 +1173,6 @@ pub fn run() {
             crate::sys::commands::cloud_create_folder,
             crate::sys::commands::cloud_share,
 
-
-
-
-
             crate::sys::commands::automation_audit_outbox_list,
             crate::sys::commands::automation_audit_outbox_ack,
             crate::sys::commands::automation_record_start,
@@ -1194,7 +1184,6 @@ pub fn run() {
             crate::sys::commands::automation_record_get_status,
             crate::sys::commands::automation_record_get_last,
             crate::sys::commands::automation_record_clear_last,
-
 
             crate::sys::commands::browser_init,
             crate::sys::commands::browser_check_status,
@@ -1208,7 +1197,6 @@ pub fn run() {
             crate::sys::commands::browser_get_url,
             crate::sys::commands::browser_get_title,
             crate::sys::commands::browser_get_screenshot_stream,
-
 
             crate::sys::commands::git_status,
             crate::sys::commands::git_add,
@@ -1288,7 +1276,6 @@ pub fn run() {
 
             crate::sys::commands::capture::capture_screen_window,
 
-
             // Ollama
             crate::sys::commands::ollama_check_status,
             crate::sys::commands::ollama_list_models,
@@ -1313,7 +1300,6 @@ pub fn run() {
             crate::sys::commands::file_watch_start,
             crate::sys::commands::file_watch_stop,
 
-
             // Code search (Grep + Glob + Formatter pipeline)
             crate::sys::commands::select_cloud_handoff_folder,
             crate::sys::commands::list_cloud_handoff_files,
@@ -1331,19 +1317,16 @@ pub fn run() {
             crate::sys::commands::terminal_ai_suggest_improvements,
             crate::sys::commands::terminal_clear_history,
 
-
             crate::sys::commands::document_extract_text,
             crate::sys::commands::document_create_pdf_simple_manifest,
             // Memory commands (persistent cross-session memory)
             crate::sys::commands::memory_forget_topic,
-            // Frontend compatibility aliases
             crate::sys::commands::memory_store,
             crate::sys::commands::memory_delete,
             crate::sys::commands::memory_list_all,
             // Memory export/import commands
             crate::sys::commands::memory_export_json,
             crate::sys::commands::memory_export_markdown,
-            // Memory dashboard commands
 
             // Project Memory Commands (project-scoped long-term memory)
             crate::sys::commands::project_memory::get_project_memories,
@@ -1384,7 +1367,7 @@ pub fn run() {
             crate::sys::commands::mcp_connect_connector,
             crate::sys::commands::save_api_key,
 
-            // Connector per-tool permissions (Desktop P0, audit C-rank 1)
+            // Connector per-tool permissions
             crate::sys::commands::connector_permission_get,
             crate::sys::commands::connector_permission_set,
             crate::sys::commands::connector_permission_list,
@@ -1424,7 +1407,6 @@ pub fn run() {
             crate::sys::commands::extension_get_config,
             crate::sys::commands::extension_set_config,
 
-
             crate::sys::commands::voice_transcribe_blob,
             crate::sys::commands::voice_configure,
             crate::sys::commands::voice_get_settings,
@@ -1438,8 +1420,6 @@ pub fn run() {
             crate::sys::commands::skill_workspace_status,
             crate::sys::commands::skill_set_workspace_consent,
             crate::sys::commands::skill_create_from_recording,
-
-            // Messaging (Discord, Telegram, Signal)
 
             // AGI Dictation lifecycle (coordinator sessions + global hotkey hook).
             // System-wide dictation is NOT available yet; the coordinator
@@ -1484,7 +1464,6 @@ pub fn run() {
             crate::sys::commands::research_cancel,
             crate::sys::commands::research_get_config,
 
-
             crate::sys::commands::get_user_preference,
             crate::sys::commands::set_user_preference,
 
@@ -1497,8 +1476,6 @@ pub fn run() {
             // Project Context (active folder selection)
             crate::sys::commands::project_context_set_folder,
 
-
-
             crate::sys::commands::analytics_track_event,
             crate::sys::commands::analytics_set_privacy_mode,
             crate::sys::commands::analytics_flush_events,
@@ -1506,17 +1483,8 @@ pub fn run() {
             crate::sys::commands::analytics_set_user_property,
             crate::sys::commands::analytics_delete_all_data,
 
-
             crate::sys::commands::error_report,
             crate::sys::commands::error_report_batch,
-
-
-            // ROI Dashboard command aliases
-
-            // Frontend-facing aliases (used by useBackgroundTasks hook)
-
-            // Background LLM (queue-based LLM processing)
-
 
             crate::sys::commands::security::secret_manager_has,
             crate::sys::commands::security::secret_manager_set,
@@ -1585,8 +1553,6 @@ pub fn run() {
             crate::sys::commands::artifacts::artifact_get_versions,
             crate::sys::commands::artifacts::artifact_list_persisted,
 
-            // Code execution (sandboxed)
-
             // Capability enforcement (frontend feature toggles → backend)
             crate::sys::commands::capabilities::list_capabilities,
             crate::sys::commands::capabilities::set_capability,
@@ -1607,9 +1573,6 @@ pub fn run() {
             crate::sys::commands::hooks_get_event_types,
             crate::sys::commands::hooks_get_stats,
 
-            // ============================================================
-            // Newly registered commands (batch registration)
-            // ============================================================
             crate::sys::commands::get_local_user_id,
             crate::sys::commands::background_agent_cancel,
             crate::sys::commands::background_agent_start,
@@ -1685,15 +1648,6 @@ pub fn run() {
             // ============================================================
             crate::sys::commands::detect_ecosystem_tools,
             crate::sys::commands::import_ecosystem_mcp_servers,
-
-            // ============================================================
-            // FIX-023 (Sprint 5): commands previously defined with
-            // #[tauri::command] but missing from this list, found by
-            // apps/desktop/check-wiring.sh. Wiring them up so the
-            // frontend can actually call them when the matching UI lands.
-            // ============================================================
-
-            // Billing, payment methods + invoice email + setup intent
             crate::sys::commands::llm_list_saved_api_keys,
             crate::sys::commands::llm_list_locked_api_keys,
             crate::sys::commands::llm_delete_api_key,

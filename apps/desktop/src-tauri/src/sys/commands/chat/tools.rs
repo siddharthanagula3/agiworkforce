@@ -1403,7 +1403,7 @@ impl ChatToolResult {
 ///
 /// `prebuilt_registry` is an optional `Arc<ToolRegistry>` from `build_tool_definitions`.
 /// When provided it is reused directly, avoiding the cost of constructing and registering
-/// all tools again for every tool call within a loop (Fix 4, registry caching per request).
+/// all tools again for every tool call within a loop.
 /// When absent (e.g. called outside the main chat flow) a fresh registry is created.
 pub async fn execute_chat_tool(
     tool_name: &str,

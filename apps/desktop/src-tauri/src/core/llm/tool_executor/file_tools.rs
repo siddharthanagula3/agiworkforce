@@ -644,18 +644,26 @@ impl ToolExecutor {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
-                        let _ = undo_state
-                            .change_tracker
-                            .record_tool_executed_with_path(
-                                "file_write".to_string(),
-                                path_buf,
-                                old_content.clone(),
-                                Some(content.clone()),
-                                task_id,
-                                true,
-                                Some("Restore previous file contents".to_string()),
-                            )
-                            .await;
+                        let tracker = &undo_state.change_tracker;
+                        if file_exists {
+                            let restorable = old_content.is_some();
+                            let _ = tracker
+                                .record_tool_executed_with_path(
+                                    "file_write".to_string(),
+                                    path_buf,
+                                    old_content.clone(),
+                                    Some(content.clone()),
+                                    task_id,
+                                    restorable,
+                                    restorable
+                                        .then(|| "Restore previous file contents".to_string()),
+                                )
+                                .await;
+                        } else {
+                            let _ = tracker
+                                .record_file_created(path_buf, content.clone(), task_id)
+                                .await;
+                        }
                     }
                 }
 
@@ -735,6 +743,7 @@ impl ToolExecutor {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
+                        let restorable = file_content_before.is_some();
                         let _ = undo_state
                             .change_tracker
                             .record_tool_executed_with_path(
@@ -743,8 +752,8 @@ impl ToolExecutor {
                                 file_content_before,
                                 None,
                                 task_id,
-                                true,
-                                Some("Restore deleted file".to_string()),
+                                restorable,
+                                restorable.then(|| "Restore deleted file".to_string()),
                             )
                             .await;
                     }
