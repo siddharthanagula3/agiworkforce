@@ -10,22 +10,9 @@ import {
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { isAudioRoute, type AudioRoute } from '@/src/features/voice/services/audioRoute';
 
-// ── Types re-exported for consumers and mode-specific stores ─────────────────
-
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
-/**
- * Text-to-speech provider. PAR-M20 removed the Cloud TTS provider and its
- * runtime branch, so `'system'` (on-device speech synthesis) is the only live
- * value. A persisted `'cloud'` from an older install is a dead value and is
- * migrated to {@link TTS_DEFAULT_PROVIDER} on load, see
- * {@link migratePersistedSettings} (MOBILE-TTS-CLOUD-DEADSTATE-01).
- */
-export type TTSProvider = 'system';
-
-export const TTS_DEFAULT_PROVIDER: TTSProvider = 'system';
-
 export type PersonalizationStyle = 'default' | 'concise' | 'explanatory' | 'formal';
 
 export interface Personalization {
@@ -45,17 +32,6 @@ export interface Personalization {
   nameOptedOut?: boolean;
 }
 
-interface Capabilities {
-  webSearch: boolean;
-  imageGen: boolean;
-  memory: boolean;
-  desktopControl: boolean;
-  artifacts: boolean;
-  codeExecution: boolean;
-  voice: boolean;
-  camera: boolean;
-}
-
 export interface SettingsState {
   toolApprovalPolicy: ToolApprovalPolicy;
   hapticsEnabled: boolean;
@@ -67,14 +43,12 @@ export interface SettingsState {
   speechPitch: number;
   selectedPresetId: string | null;
   liveVoice: string | null;
-  ttsProvider: TTSProvider;
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
   dictationOnboardingSeen: boolean;
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
   temporaryChatPersonalized: boolean;
-  capabilities: Capabilities;
 
   setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -86,14 +60,12 @@ export interface SettingsState {
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
   setLiveVoice: (voice: string | null) => void;
-  setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
   setDictationOnboardingSeen: (seen: boolean) => void;
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setTemporaryChatPersonalized: (personalized: boolean) => void;
-  setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
 
 /**
@@ -108,30 +80,29 @@ const MIGRATED_APPROVAL_MODES: Record<string, ToolApprovalPolicy> = {
 };
 
 /**
- * Persist migration. Coerces any dead persisted `ttsProvider` value (notably
- * the removed `'cloud'` provider, PAR-M20 / MOBILE-TTS-CLOUD-DEADSTATE-01) to
- * {@link TTS_DEFAULT_PROVIDER}. Pure and exported so it can be unit-tested
- * without driving the full zustand persist lifecycle.
+ * `ttsProvider` and `capabilities` were persisted by older builds and nothing
+ * reads them any more, so they are dropped rather than carried forward.
  */
+const RETIRED_SETTINGS_KEYS = ['ttsProvider', 'capabilities', 'autoApproveMode'] as const;
+
 export function migratePersistedSettings(
   persisted: unknown,
   _version: number,
 ): Record<string, unknown> {
   const state = (persisted ?? {}) as Record<string, unknown>;
   const next = { ...state };
-  if (next.ttsProvider !== TTS_DEFAULT_PROVIDER) next.ttsProvider = TTS_DEFAULT_PROVIDER;
   const storedPolicy =
     next.toolApprovalPolicy ?? MIGRATED_APPROVAL_MODES[String(next.autoApproveMode)];
   next.toolApprovalPolicy = isToolApprovalPolicy(storedPolicy)
     ? storedPolicy
     : DEFAULT_TOOL_APPROVAL_POLICY;
-  delete next.autoApproveMode;
+  for (const key of RETIRED_SETTINGS_KEYS) delete next[key];
   return next;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
       hapticsEnabled: true,
       voiceEnabled: true,
@@ -142,23 +113,12 @@ export const useSettingsStore = create<SettingsState>()(
       speechPitch: 1.0,
       selectedPresetId: null,
       liveVoice: null,
-      ttsProvider: 'system',
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
       dictationOnboardingSeen: false,
       audioRoute: 'auto',
       isTemporaryChat: false,
       temporaryChatPersonalized: true,
-      capabilities: {
-        webSearch: true,
-        imageGen: true,
-        memory: true,
-        desktopControl: true,
-        artifacts: true,
-        codeExecution: true,
-        voice: true,
-        camera: true,
-      },
 
       setToolApprovalPolicy: (policy) => set({ toolApprovalPolicy: policy }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -170,7 +130,6 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setLiveVoice: (voice) => set({ liveVoice: voice }),
-      setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
       setDictationOnboardingSeen: (seen) => set({ dictationOnboardingSeen: seen }),
@@ -178,21 +137,16 @@ export const useSettingsStore = create<SettingsState>()(
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setTemporaryChatPersonalized: (personalized) =>
         set({ temporaryChatPersonalized: personalized }),
-      setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
     {
       name: 'settings-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 2,
+      version: 3,
       migrate: migratePersistedSettings,
       skipHydration: true,
       onRehydrateStorage: () => (state, error) => {
         if (error) console.warn('[settingsStore] Hydration failed:', error);
-        // Belt-and-suspenders: sanitize any dead TTS value that slipped past
-        // migrate (e.g. state written by a same-version build before the union
-        // narrowed). See MOBILE-TTS-CLOUD-DEADSTATE-01.
         else if (state) {
-          if (state.ttsProvider !== TTS_DEFAULT_PROVIDER) state.ttsProvider = TTS_DEFAULT_PROVIDER;
           if (!isToolApprovalPolicy(state.toolApprovalPolicy)) {
             state.toolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY;
           }

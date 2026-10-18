@@ -38,8 +38,6 @@ import {
   manualReconnect,
 } from '@/services/companion';
 import { setupCompanionNotifications } from '@/services/companionNotifications';
-import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat';
-import { getCurrentUserId } from '@/services/authSession';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -56,8 +54,8 @@ export default function CompanionScreen() {
   const {
     currentApproval,
     showApproval,
-    handleApprove: approvalModalApprove,
-    handleReject: approvalModalReject,
+    handleApprove,
+    handleReject,
     handleDismiss: approvalModalDismiss,
   } = useApprovalModal();
 
@@ -98,12 +96,6 @@ export default function CompanionScreen() {
     if (!FEATURES.companion || !FEATURES.dispatch) return;
     const cleanup = setupCompanionNotifications();
     return cleanup;
-  }, []);
-
-  useEffect(() => {
-    if (!FEATURES.companion || !FEATURES.dispatch) return;
-    const stopHeartbeat = startMobileHeartbeat();
-    return stopHeartbeat;
   }, []);
 
   useEffect(() => {
@@ -161,26 +153,6 @@ export default function CompanionScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router, showSetupAgain]);
-
-  const handleApprove = useCallback(
-    async (id: string) => {
-      approvalModalApprove(id);
-      const toolName = currentApproval?.toolName ?? id;
-      const userId = await getCurrentUserId();
-      if (userId) void logApprovalDecision(userId, toolName, true);
-    },
-    [approvalModalApprove, currentApproval],
-  );
-
-  const handleReject = useCallback(
-    async (id: string, reason?: string) => {
-      approvalModalReject(id, reason);
-      const toolName = currentApproval?.toolName ?? id;
-      const userId = await getCurrentUserId();
-      if (userId) void logApprovalDecision(userId, toolName, false, reason);
-    },
-    [approvalModalReject, currentApproval],
-  );
 
   if (!FEATURES.companion) return <FeatureUnavailable feature="Remote" />;
 

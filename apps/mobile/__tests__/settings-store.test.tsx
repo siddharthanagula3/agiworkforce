@@ -53,18 +53,7 @@ function resetDeviceStore() {
     speechRate: 1.0,
     speechPitch: 1.0,
     selectedPresetId: null,
-    ttsProvider: 'system',
     isTemporaryChat: false,
-    capabilities: {
-      webSearch: true,
-      imageGen: true,
-      memory: true,
-      desktopControl: true,
-      artifacts: true,
-      codeExecution: true,
-      voice: true,
-      camera: true,
-    },
   });
 }
 
@@ -100,45 +89,6 @@ function resetCloudStore() {
 
 describe('settingsStore (device-global)', () => {
   beforeEach(resetDeviceStore);
-
-  describe('capabilities defaults', () => {
-    it('all capabilities default to true', () => {
-      const { capabilities } = useSettingsStore.getState();
-      expect(capabilities.webSearch).toBe(true);
-      expect(capabilities.imageGen).toBe(true);
-      expect(capabilities.memory).toBe(true);
-      expect(capabilities.desktopControl).toBe(true);
-      expect(capabilities.artifacts).toBe(true);
-      expect(capabilities.codeExecution).toBe(true);
-      expect(capabilities.voice).toBe(true);
-      expect(capabilities.camera).toBe(true);
-    });
-  });
-
-  describe('setCapability', () => {
-    it('toggles individual capabilities to false', () => {
-      useSettingsStore.getState().setCapability('webSearch', false);
-      expect(useSettingsStore.getState().capabilities.webSearch).toBe(false);
-      expect(useSettingsStore.getState().capabilities.imageGen).toBe(true);
-    });
-
-    it('toggles capability back to true', () => {
-      useSettingsStore.getState().setCapability('memory', false);
-      expect(useSettingsStore.getState().capabilities.memory).toBe(false);
-      useSettingsStore.getState().setCapability('memory', true);
-      expect(useSettingsStore.getState().capabilities.memory).toBe(true);
-    });
-
-    it('can disable multiple capabilities independently', () => {
-      useSettingsStore.getState().setCapability('imageGen', false);
-      useSettingsStore.getState().setCapability('desktopControl', false);
-      const { capabilities } = useSettingsStore.getState();
-      expect(capabilities.webSearch).toBe(true);
-      expect(capabilities.imageGen).toBe(false);
-      expect(capabilities.memory).toBe(true);
-      expect(capabilities.desktopControl).toBe(false);
-    });
-  });
 
   describe('toolApprovalPolicy', () => {
     it('defaults to the policy the server defaults to', () => {
@@ -196,28 +146,24 @@ describe('settingsStore (device-global)', () => {
     });
   });
 
-  describe('migratePersistedSettings, dead TTS provider (MOBILE-TTS-CLOUD-DEADSTATE-01)', () => {
-    it("migrates a persisted 'cloud' ttsProvider to 'system'", () => {
-      const migrated = migratePersistedSettings({ ttsProvider: 'cloud', speechRate: 1.5 }, 0);
-      expect(migrated.ttsProvider).toBe('system');
+  describe('migratePersistedSettings, retired fields', () => {
+    it('drops the retired ttsProvider and capabilities fields and keeps the rest', () => {
+      const migrated = migratePersistedSettings(
+        { ttsProvider: 'cloud', capabilities: { webSearch: false }, speechRate: 1.5 },
+        2,
+      );
+      expect(migrated).not.toHaveProperty('ttsProvider');
+      expect(migrated).not.toHaveProperty('capabilities');
       expect(migrated.speechRate).toBe(1.5);
     });
 
-    it("leaves a valid 'system' ttsProvider untouched", () => {
-      const persisted = { ttsProvider: 'system', hapticsEnabled: false };
-      const migrated = migratePersistedSettings(persisted, 1);
-      expect(migrated.ttsProvider).toBe('system');
-      expect(migrated.hapticsEnabled).toBe(false);
-    });
-
-    it("defaults a missing ttsProvider to 'system'", () => {
-      const migrated = migratePersistedSettings({ speechPitch: 1.2 }, 0);
-      expect(migrated.ttsProvider).toBe('system');
-    });
-
     it('tolerates null/undefined persisted state', () => {
-      expect(migratePersistedSettings(null, 0).ttsProvider).toBe('system');
-      expect(migratePersistedSettings(undefined, 0).ttsProvider).toBe('system');
+      expect(migratePersistedSettings(null, 0).toolApprovalPolicy).toBe(
+        DEFAULT_TOOL_APPROVAL_POLICY,
+      );
+      expect(migratePersistedSettings(undefined, 0).toolApprovalPolicy).toBe(
+        DEFAULT_TOOL_APPROVAL_POLICY,
+      );
     });
   });
 });

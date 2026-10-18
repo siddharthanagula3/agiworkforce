@@ -124,13 +124,6 @@ jest.mock('@/services/companion', () => ({
 jest.mock('@/services/companionNotifications', () => ({
   setupCompanionNotifications: jest.fn(() => () => {}),
 }));
-jest.mock('@/services/heartbeat', () => ({
-  startMobileHeartbeat: jest.fn(() => () => {}),
-  logApprovalDecision: jest.fn(),
-}));
-jest.mock('@/services/authSession', () => ({
-  getCurrentUserId: jest.fn(async () => null),
-}));
 
 import CompanionScreen from '../app/(app)/companion/index';
 import { useAgentStore } from '../stores/agentStore';

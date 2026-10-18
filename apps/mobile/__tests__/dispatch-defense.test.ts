@@ -317,8 +317,6 @@ import {
   estimateTimeRemaining,
 } from '../src/features/companion/components/AgentDashboard';
 
-import { startMobileHeartbeat, logApprovalDecision, logEmergencyStop } from '../services/heartbeat';
-
 const connectionMod = require('@/stores/connectionStore') as {
   __state: Record<string, unknown>;
   __mocks: Record<string, jest.Mock>;
@@ -1165,121 +1163,6 @@ describe('getRiskBadgeColor', () => {
 
   it('returns "red" for high risk', () => {
     expect(getRiskBadgeColor('high')).toBe('red');
-  });
-});
-
-describe('startMobileHeartbeat', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  it('returns a cleanup function', () => {
-    const cleanup = startMobileHeartbeat();
-    expect(typeof cleanup).toBe('function');
-    cleanup();
-  });
-
-  it('is disabled for mobile v1 cloud companion state', async () => {
-    const cleanup = startMobileHeartbeat();
-    await Promise.resolve();
-    cleanup();
-    expect(cleanup).toBeDefined();
-  });
-
-  it('does not schedule repeated cloud heartbeat writes in mobile v1', () => {
-    const cleanup = startMobileHeartbeat();
-
-    jest.advanceTimersByTime(60_000);
-    jest.advanceTimersByTime(60_000);
-
-    cleanup();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('stops firing after cleanup is called', () => {
-    const cleanup = startMobileHeartbeat();
-    cleanup();
-
-    jest.advanceTimersByTime(120_000);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('is a no-op when no session exists (no userId)', async () => {
-    const cleanup = startMobileHeartbeat();
-    await Promise.resolve();
-    await Promise.resolve();
-    cleanup();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-});
-
-describe('logApprovalDecision', () => {
-  let warnSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    jest.useFakeTimers();
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    warnSpy.mockRestore();
-    jest.useRealTimers();
-  });
-
-  it('does not write cloud audit events for an approved action in mobile v1', async () => {
-    await expect(logApprovalDecision('user-1', 'delete_file', true)).resolves.toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('does not write cloud audit events for a denied action in mobile v1', async () => {
-    await expect(
-      logApprovalDecision('user-1', 'run_command', false, 'Too dangerous'),
-    ).resolves.toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('does not include metadata when reason is undefined', async () => {
-    await expect(
-      logApprovalDecision('user-1', 'view_file', true, undefined),
-    ).resolves.toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('does not throw when cloud audit logging is disabled', async () => {
-    await expect(logApprovalDecision('user-1', 'run_command', true)).resolves.not.toThrow();
-  });
-});
-
-describe('logEmergencyStop', () => {
-  let warnSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    jest.useFakeTimers();
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    warnSpy.mockRestore();
-    jest.useRealTimers();
-  });
-
-  it('does not write cloud emergency-stop audit events in mobile v1', async () => {
-    await expect(logEmergencyStop('user-1', 'all_agents')).resolves.toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('records the correct resource (specific agent session ID)', async () => {
-    await expect(logEmergencyStop('user-1', 'session-abc-123')).resolves.toBeUndefined();
-    expect(warnSpy).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  it('does not throw when cloud audit logging is disabled', async () => {
-    await expect(logEmergencyStop('user-1', 'all_agents')).resolves.not.toThrow();
   });
 });
 

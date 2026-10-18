@@ -62,7 +62,6 @@ describe('Voice settings', () => {
     jest.clearAllMocks();
     useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
-      ttsProvider: 'system',
       voiceEnabled: true,
       autoListenEnabled: true,
       selectedPresetId: null,

@@ -1225,7 +1225,8 @@ function deriveChatMessageArtifacts(
       content: s.content,
       ...(s.language && s.language !== 'text' ? { language: s.language } : {}),
     }));
-  } catch {
+  } catch (err) {
+    console.warn('[chatExecutionStore] Failed to derive message artifacts:', err);
     return [];
   }
 }
@@ -1281,8 +1282,8 @@ export function captureArtifactsFromMessage(
     if (mobileArtifacts.length > 0) {
       useArtifactStore.getState().addArtifacts(mobileArtifacts);
     }
-  } catch {
-    // noop
+  } catch (err) {
+    console.warn('[chatExecutionStore] Failed to capture message artifacts:', err);
   }
 }
 

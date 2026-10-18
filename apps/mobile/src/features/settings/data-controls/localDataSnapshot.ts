@@ -129,7 +129,6 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
         emoji: settings.personalization.emoji,
       },
       capabilities: {
-        ...settings.capabilities,
         memoryEnabled: settings.memoryEnabled,
         referencePastChats: settings.referencePastChats,
         generateMemoryFromHistory: settings.generateMemoryFromHistory,
@@ -200,18 +199,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     speechRate: 1,
     speechPitch: 1,
     selectedPresetId: null,
-    ttsProvider: 'system',
     isTemporaryChat: false,
-    capabilities: {
-      webSearch: true,
-      imageGen: true,
-      memory: true,
-      desktopControl: true,
-      artifacts: true,
-      codeExecution: true,
-      voice: true,
-      camera: true,
-    },
   });
   const defaultPersonalization = {
     fullName: '',

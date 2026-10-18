@@ -457,7 +457,6 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
 
   await deleteAsync(EXPORT_DIR, { idempotent: true });
 
-  // not leave exported conversation content on disk.
   const { EXPORTS_DIR } = await import('@/services/fileCreation');
   await deleteAsync(EXPORTS_DIR, { idempotent: true });
 }
