@@ -749,58 +749,6 @@
     "message": "Picks a model for each turn: a quick one for a summary, a stronger one for code",
     "description": "One-line description of the automatic model choice"
   },
-  "spPlansYourPlan": {
-    "message": "$PLAN$ (your plan)",
-    "description": "Plan name marked as the account's current plan",
-    "placeholders": {
-      "plan": {
-        "content": "$1",
-        "example": "Pro"
-      }
-    }
-  },
-  "spPlansFreeUsage": {
-    "message": "A small allowance, free models only",
-    "description": "The Free plan's usage in the plan comparison, which applies to free models"
-  },
-  "spPlansContract": {
-    "message": "Usage set by your contract",
-    "description": "Usage line for a contract-priced plan"
-  },
-  "spPlansIncludes": {
-    "message": "Includes: $FEATURES$",
-    "description": "The features a plan includes",
-    "placeholders": {
-      "features": {
-        "content": "$1",
-        "example": "Projects, AGI Work"
-      }
-    }
-  },
-  "spPlansAdds": {
-    "message": "Adds over $CURRENT$: $FEATURES$",
-    "description": "The features a plan adds over the account's current plan",
-    "placeholders": {
-      "current": {
-        "content": "$1",
-        "example": "Pro"
-      },
-      "features": {
-        "content": "$2",
-        "example": "Video generation"
-      }
-    }
-  },
-  "spPlansNothingMore": {
-    "message": "No features beyond $CURRENT$",
-    "description": "A plan that adds no features over the account's current plan",
-    "placeholders": {
-      "current": {
-        "content": "$1",
-        "example": "Pro"
-      }
-    }
-  },
   "spVoiceMicBlocked": {
     "message": "Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.",
     "description": "Dictation error when Chrome has the microphone blocked for the extension"

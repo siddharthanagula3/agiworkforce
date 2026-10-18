@@ -21,7 +21,6 @@ const LOCALIZED_SOURCES = [
   'src/background.ts',
   'src/features/side-panel/artifactPanel.ts',
   'src/features/side-panel/schedulesSection.ts',
-  'src/features/side-panel/planComparison.ts',
   'src/features/side-panel/voice.ts',
   'src/features/side-panel/chat-state.ts',
   'src/features/side-panel/bubbles.ts',

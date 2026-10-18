@@ -165,7 +165,6 @@
           "apps/extension/src/core/index.ts",
           "apps/extension/src/data/index.ts",
           "apps/extension/src/features/background/index.ts",
-          "apps/extension/src/features/cloud-bridge/index.ts",
           "apps/extension/src/features/content/autofill/index.ts",
           "apps/extension/src/features/native-bridge/index.ts",
           "apps/extension/src/features/side-panel/index.ts",

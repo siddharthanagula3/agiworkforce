@@ -29,7 +29,6 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 import { callCloud, CloudAgentGatewayError } from '../src/features/computer-use/cloudAgentClient';
-import { InviteCodeModal } from '../src/features/cloud-bridge/InviteCodeModal';
 
 beforeEach(() => {
   for (const k of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[k];
@@ -79,36 +78,5 @@ describe('callCloud 403 managed-compute message', () => {
       'AGI Cloud browser actions are unavailable for this account right now.',
     );
     expect(err.message).not.toContain('managed_compute_private_beta');
-  });
-});
-
-describe('InviteCodeModal public-alpha copy', () => {
-  function mountAndText(): string {
-    const modal = new InviteCodeModal({
-      open: true,
-      onClose: vi.fn(),
-      source: 'computer-use',
-      defaultTab: 'invite',
-    });
-    modal.mount(document.body);
-    const shadow = (document.querySelector('[data-agi-cloud-modal]') as HTMLElement).shadowRoot!;
-    return shadow.textContent ?? '';
-  }
-
-  it('describes cloud as public alpha reached by signing in (no invite/waitlist gate)', () => {
-    const text = mountAndText().toLowerCase();
-    expect(text).toContain('public alpha');
-    expect(text).toContain('sign in');
-    expect(text).not.toContain('gated for v1');
-    expect(text).not.toContain('unlock cloud routing');
-    expect(text).not.toContain('join the waitlist');
-    expect(text).not.toContain('cloud features are gated');
-  });
-
-  it('reframes the redeem flow as an optional promo/invite code, not a cloud gate', () => {
-    const text = mountAndText();
-    expect(text).toContain('Redeem a code');
-    expect(text).toContain('Promo or invite code');
-    expect(text).not.toContain('Unlock cloud');
   });
 });

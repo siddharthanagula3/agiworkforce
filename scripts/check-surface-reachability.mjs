@@ -171,6 +171,7 @@ export function buildSurfaces() {
           : []),
         ...htmlScriptEntries(absolute('apps/extension/src/side_panel.html')),
         ...htmlScriptEntries(absolute('apps/extension/src/options.html')),
+        ...htmlScriptEntries(absolute('apps/extension/src/welcome.html')),
       ]),
       productRoots: ['apps/extension/src'],
       aliases: { ...workspaceAliases },
