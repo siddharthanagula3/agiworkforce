@@ -12,15 +12,11 @@ import {
 import { calculateObservedProviderUsageCostDollars } from '@/lib/services/managed-usage-accounting-service';
 
 /**
- * The cloud Work runtime enforces the same envelope the CLI engine does. These
- * four mirror crates/agiworkforce-agent-core/src/runaway.rs and
- * apps/cli/src/subagent.rs; cloud-agent-budget.test.ts reads those files and
- * fails when the two engines drift apart.
+ * The cloud Work runtime stops a repeat loop where the CLI engine does. This
+ * mirrors crates/agiworkforce-agent-core/src/runaway.rs, and
+ * cloud-agent-budget.test.ts reads that file and fails when the two drift apart.
  */
 export const CLOUD_AGENT_LOOP_REPEAT_THRESHOLD = 5;
-export const CLOUD_AGENT_MAX_SUBAGENT_DEPTH = 3;
-export const CLOUD_AGENT_MAX_SUBAGENT_FANOUT = 7;
-export const CLOUD_AGENT_MAX_SUBAGENT_ATTEMPTS = 2;
 
 const MICROUSD_PER_DOLLAR = 1_000_000;
 
@@ -35,9 +31,6 @@ export const CLOUD_AGENT_BUDGET_REFUSAL_CODES = [
   'run_tool_call_cap',
   'run_time_cap',
   'tool_loop',
-  'subagent_depth_cap',
-  'subagent_fanout_cap',
-  'subagent_attempt_cap',
 ] as const;
 
 export type CloudAgentBudgetRefusalCode = (typeof CLOUD_AGENT_BUDGET_REFUSAL_CODES)[number];
@@ -49,18 +42,6 @@ export interface CloudAgentBudgetRefusal {
 
 export type CloudAgentBudgetDecision =
   { allowed: true } | { allowed: false; refusal: CloudAgentBudgetRefusal };
-
-export interface CloudAgentSubagentGrant {
-  depth: number;
-  attempt: number;
-  maxCostMicrousd: number | null;
-  maxToolCalls: number;
-  maxWallClockMs: number;
-}
-
-export type CloudAgentSubagentDecision =
-  | { allowed: true; grant: CloudAgentSubagentGrant }
-  | { allowed: false; refusal: CloudAgentBudgetRefusal };
 
 export interface CloudAgentRunBudget {
   runId: string;
@@ -139,46 +120,23 @@ function refusal(code: CloudAgentBudgetRefusalCode, message: string): CloudAgent
  */
 export async function ensureCloudAgentRunBudget(
   db: DatabaseAdapter,
-  input: {
-    userId: string;
-    runId: string;
-    parentRunId?: string | null;
-    delegationKey?: string | null;
-    depth?: number;
-    attempt?: number;
-    maxCostMicrousd?: number | null;
-    maxToolCalls?: number;
-    maxWallClockMs?: number;
-  },
+  input: { userId: string; runId: string },
 ): Promise<CloudAgentRunBudget> {
-  const parentRunId = input.parentRunId ?? null;
-  const delegationKey = parentRunId === null ? null : (input.delegationKey ?? null);
-  const depth = parentRunId === null ? 0 : (input.depth ?? 1);
-  const maxCostMicrousd =
-    input.maxCostMicrousd === undefined
-      ? CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxCostMicrousd
-      : input.maxCostMicrousd;
-
   const existing = await readCloudAgentRunBudget(db, input);
   if (existing) return existing;
 
   const rows = await db.query<CloudAgentRunBudgetRow>(
     `insert into public.cloud_agent_run_budgets (
-       run_id, user_id, parent_run_id, delegation_key, depth, attempt,
-       max_cost_microusd, max_tool_calls, max_wall_clock_ms
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       run_id, user_id, max_cost_microusd, max_tool_calls, max_wall_clock_ms
+     ) values ($1, $2, $3, $4, $5)
      on conflict (run_id) do nothing
      returning ${BUDGET_COLUMNS}`,
     [
       input.runId,
       input.userId,
-      parentRunId,
-      delegationKey,
-      depth,
-      input.attempt ?? 1,
-      maxCostMicrousd,
-      input.maxToolCalls ?? CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxToolCalls,
-      input.maxWallClockMs ?? CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxWallClockMs,
+      CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxCostMicrousd,
+      CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxToolCalls,
+      CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxWallClockMs,
     ],
   );
   if (rows[0]) return mapBudget(rows[0]);
@@ -336,123 +294,4 @@ async function deny(
 ): Promise<CloudAgentBudgetDecision> {
   await recordCloudAgentBudgetRefusal(db, { ...input, code });
   return { allowed: false, refusal: refusal(code, detail.message) };
-}
-
-interface DelegationCountersRow extends Record<string, unknown> {
-  delegations: number | string;
-  attempts: number | string;
-}
-
-/**
- * Authorise a subagent delegation from a parent run. Depth and fan-out are the
- * CLI's, and a child is capped at its even share of what the parent has left so
- * a fan-out cannot together outspend the run that delegated it. A retry reuses
- * its delegation key and so does not consume a second fan-out slot.
- */
-export async function authorizeCloudAgentSubagentDelegation(
-  db: DatabaseAdapter,
-  input: { userId: string; parentRunId: string; delegationKey: string },
-): Promise<CloudAgentSubagentDecision> {
-  const delegationKey = z.string().min(1).max(255).parse(input.delegationKey);
-  const parent = await ensureCloudAgentRunBudget(db, {
-    userId: input.userId,
-    runId: input.parentRunId,
-  });
-
-  if (parent.depth >= CLOUD_AGENT_MAX_SUBAGENT_DEPTH) {
-    return {
-      allowed: false,
-      refusal: refusal(
-        'subagent_depth_cap',
-        `Subagents may nest ${CLOUD_AGENT_MAX_SUBAGENT_DEPTH} levels deep. This one is already at level ${parent.depth}, so it cannot delegate further.`,
-      ),
-    };
-  }
-
-  const rows = await db.query<DelegationCountersRow>(
-    `select count(distinct delegation_key)::bigint as delegations,
-            count(*) filter (where delegation_key = $3)::bigint as attempts
-       from public.cloud_agent_run_budgets
-      where parent_run_id = $1 and user_id = $2`,
-    [input.parentRunId, input.userId, delegationKey],
-  );
-  const delegations = counter.parse(rows[0]?.delegations ?? 0);
-  const attempts = counter.parse(rows[0]?.attempts ?? 0);
-
-  if (attempts >= CLOUD_AGENT_MAX_SUBAGENT_ATTEMPTS) {
-    return {
-      allowed: false,
-      refusal: refusal(
-        'subagent_attempt_cap',
-        `This subagent already ran ${attempts} times without succeeding, so AGI stopped retrying it.`,
-      ),
-    };
-  }
-  if (attempts === 0 && delegations >= CLOUD_AGENT_MAX_SUBAGENT_FANOUT) {
-    return {
-      allowed: false,
-      refusal: refusal(
-        'subagent_fanout_cap',
-        `This run already delegated to ${CLOUD_AGENT_MAX_SUBAGENT_FANOUT} subagents, so another was refused.`,
-      ),
-    };
-  }
-
-  let childCostMicrousd: number | null = null;
-  if (parent.maxCostMicrousd !== null) {
-    const spent = await spentMicrousd(db, {
-      userId: input.userId,
-      runId: input.parentRunId,
-    });
-    const remaining = Math.max(0, parent.maxCostMicrousd - spent);
-    childCostMicrousd = Math.floor(remaining / CLOUD_AGENT_MAX_SUBAGENT_FANOUT);
-    if (childCostMicrousd <= 0) {
-      return {
-        allowed: false,
-        refusal: refusal(
-          'run_cost_cap',
-          `This run reached its spend limit of ${formatSpendLimit(parent.maxCostMicrousd)}, so it cannot pay for another subagent.`,
-        ),
-      };
-    }
-  }
-
-  return {
-    allowed: true,
-    grant: {
-      depth: parent.depth + 1,
-      attempt: attempts + 1,
-      maxCostMicrousd: childCostMicrousd,
-      maxToolCalls: parent.maxToolCalls,
-      maxWallClockMs: parent.maxWallClockMs,
-    },
-  };
-}
-
-/**
- * Give an authorised child run its own envelope. Called once the child run row
- * exists, so the budget can carry the foreign key that keeps the subtree inside
- * one tenant.
- */
-export async function registerCloudAgentSubagentRun(
-  db: DatabaseAdapter,
-  input: {
-    userId: string;
-    parentRunId: string;
-    childRunId: string;
-    delegationKey: string;
-    grant: CloudAgentSubagentGrant;
-  },
-): Promise<CloudAgentRunBudget> {
-  return ensureCloudAgentRunBudget(db, {
-    userId: input.userId,
-    runId: input.childRunId,
-    parentRunId: input.parentRunId,
-    delegationKey: z.string().min(1).max(255).parse(input.delegationKey),
-    depth: input.grant.depth,
-    attempt: input.grant.attempt,
-    maxCostMicrousd: input.grant.maxCostMicrousd,
-    maxToolCalls: input.grant.maxToolCalls,
-    maxWallClockMs: input.grant.maxWallClockMs,
-  });
 }

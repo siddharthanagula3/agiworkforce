@@ -11,9 +11,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { FatalError } from 'workflow';
 import {
   CLOUD_AGENT_LOOP_REPEAT_THRESHOLD,
-  CLOUD_AGENT_MAX_SUBAGENT_FANOUT,
   CLOUD_AGENT_RUN_BUDGET_DEFAULTS,
-  authorizeCloudAgentSubagentDelegation,
 } from '@/lib/services/cloud-agent-budget';
 import { fingerprintCloudAgentOperation } from '@/lib/services/cloud-agent-execution-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
@@ -28,8 +26,6 @@ interface Scenario {
   toolCalls?: number;
   tailHashes?: string[];
   spentDollars?: number;
-  delegations?: number;
-  attempts?: number;
 }
 
 const BUDGET_ROW = {
@@ -75,9 +71,6 @@ function database(scenario: Scenario) {
               : [{ providerCostDollars: scenario.spentDollars }],
         },
       ];
-    }
-    if (sql.includes('count(distinct delegation_key)')) {
-      return [{ delegations: scenario.delegations ?? 0, attempts: scenario.attempts ?? 0 }];
     }
     return [];
   });
@@ -182,28 +175,5 @@ describe('the cloud Work runtime enforces the CLI safety envelope', () => {
         payload: { qualifiedName: 'search', args: { q: 'different' } },
       }),
     ).resolves.toEqual({ answer: 1 });
-  });
-
-  it('bounds subagent delegation by fan-out and by what the parent has left', async () => {
-    const { db } = database({ spentDollars: 0 });
-    const first = await authorizeCloudAgentSubagentDelegation(db, {
-      userId: USER_ID,
-      parentRunId: RUN_ID,
-      delegationKey: 'research',
-    });
-    if (!first.allowed) throw new Error(`expected an allowance: ${first.refusal.code}`);
-    expect(first.grant.depth).toBe(1);
-    expect(first.grant.maxCostMicrousd).toBe(
-      Math.floor(CLOUD_AGENT_RUN_BUDGET_DEFAULTS.maxCostMicrousd / CLOUD_AGENT_MAX_SUBAGENT_FANOUT),
-    );
-
-    const { db: saturated } = database({ delegations: CLOUD_AGENT_MAX_SUBAGENT_FANOUT });
-    const refused = await authorizeCloudAgentSubagentDelegation(saturated, {
-      userId: USER_ID,
-      parentRunId: RUN_ID,
-      delegationKey: 'one-too-many',
-    });
-    if (refused.allowed) throw new Error('expected a refusal');
-    expect(refused.refusal.code).toBe('subagent_fanout_cap');
   });
 });
