@@ -503,7 +503,11 @@ pub(super) async fn handle_slash_command(
             registry::handle_config(arg, config);
         }
         "/voice" | "/v" => {
-            let lang = if arg.is_empty() { "en" } else { arg };
+            let lang = if arg.is_empty() {
+                crate::voice_languages::default_language()
+            } else {
+                arg
+            };
             if !crate::voice_languages::is_valid_language(lang) {
                 let langs = crate::voice_languages::supported_languages();
                 let codes: Vec<&str> = langs.iter().map(|(c, _)| *c).collect();

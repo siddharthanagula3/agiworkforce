@@ -28,9 +28,25 @@ const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
     ("cs", "Czech"),
 ];
 
+/// The language `/voice` and `/dictate` use when they name none, from
+/// `--voice-lang`.
+static DEFAULT_LANGUAGE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 /// Check whether a voice language code is valid.
 pub fn is_valid_language(lang: &str) -> bool {
     SUPPORTED_LANGUAGES.iter().any(|(code, _)| *code == lang)
+}
+
+/// Make `lang` the language `/voice` and `/dictate` use when they name none.
+/// A code [`is_valid_language`] refuses is not taken, and neither is a second
+/// one: the flag is read once at startup.
+pub fn set_default_language(lang: &str) -> bool {
+    is_valid_language(lang) && DEFAULT_LANGUAGE.set(lang.to_string()).is_ok()
+}
+
+/// The language `/voice` and `/dictate` use when they name none.
+pub fn default_language() -> &'static str {
+    DEFAULT_LANGUAGE.get().map_or("en", String::as_str)
 }
 
 /// Return the list of supported language codes.

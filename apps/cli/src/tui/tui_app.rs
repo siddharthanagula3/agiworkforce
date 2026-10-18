@@ -5149,10 +5149,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // this used to print "Voice mode requires the REPL" over a complete
         // implementation. It does not require the REPL, it requires leaving the
         // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
-        "/dictate" => SlashResult::RunDictate(if arg.is_empty() { "en" } else { arg }.to_string()),
+        "/dictate" => SlashResult::RunDictate(
+            if arg.is_empty() {
+                crate::voice_languages::default_language()
+            } else {
+                arg
+            }
+            .to_string(),
+        ),
 
         "/voice" | "/v" => {
-            let lang = if arg.is_empty() { "en" } else { arg };
+            let lang = if arg.is_empty() {
+                crate::voice_languages::default_language()
+            } else {
+                arg
+            };
             if crate::voice_languages::is_valid_language(lang) {
                 SlashResult::RunVoice(lang.to_string())
             } else {

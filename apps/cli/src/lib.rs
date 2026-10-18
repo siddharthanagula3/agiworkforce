@@ -5450,6 +5450,13 @@ pub async fn run_main() -> Result<()> {
     // banner and any spinner a subcommand starts, so it is published here
     // rather than resolved per call site.
     output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
+    if !voice_languages::set_default_language(&cli.voice_lang) {
+        output::print_warn(&format!(
+            "--voice-lang {} is not a supported language, so /voice and /dictate use {}.",
+            cli.voice_lang,
+            voice_languages::default_language()
+        ));
+    }
 
     if let Some(reason) = crate::app_server::account::renew_managed_session_if_expiring().await {
         output::print_info(&reason);
