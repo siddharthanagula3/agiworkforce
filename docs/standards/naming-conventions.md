@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-11
+Last updated: 2026-10-18
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
 
@@ -93,7 +93,7 @@ Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-str
 
 - **Folder-per-feature.** Every tool, command, agent, and major UI feature is a folder, not a loose file.
 - **Co-locate by feature.** A tool's logic, `prompt`, `UI`, `constants`, validators, and `types` live in the same folder, never split across `prompts/`, `ui/`, `logic/`.
-- **Barrels.** Each folder exposes one public surface via `index.ts` (TS) / `mod.rs` (Rust); consumers import the folder, not deep paths.
+- **Barrels.** A folder that other code imports exposes one public surface via `index.ts` (TS) / `mod.rs` (Rust), and consumers import the folder, not deep paths. A barrel nothing imports is unreachable code: `check:surface-reachability` fails it, so it is deleted rather than kept for symmetry.
 - **One concern per file.** One tool/hook/migration per file; soft cap ~300 lines, split beyond.
 - **Tool layout (TS):** `tools/<Name>Tool/{<Name>Tool.ts, prompt.ts, UI.tsx, constants.ts, <helpers>.ts, index.ts}`.
 - **Tool layout (Rust):** `tools/<tool>/{mod.rs, prompt.rs, validation.rs, ui.rs}` implementing the `Tool` trait.
