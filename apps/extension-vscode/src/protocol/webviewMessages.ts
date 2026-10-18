@@ -43,15 +43,12 @@ const reconnectMcpServer = z.object({
   type: z.literal('reconnectMcpServer'),
   payload: z.object({ server: z.string().min(1).max(200) }),
 });
-const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
 const manageWorkspaceTrust = z.object({ type: z.literal('manageWorkspaceTrust') });
 const retryRuntime = z.object({ type: z.literal('retryRuntime') });
 const installCli = z.object({ type: z.literal('installCli') });
 const cancel = z.object({ type: z.literal('cancel') });
-const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
-const clearConversation = z.object({ type: z.literal('clearConversation') });
 const dismissUsageMeter = z.object({ type: z.literal('dismissUsageMeter') });
 const restoreUsageMeter = z.object({ type: z.literal('restoreUsageMeter') });
 const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
@@ -283,7 +280,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   viewFocused,
   setUpWebSearch,
   reconnectMcpServer,
-  getModel,
   openSettings,
   openWorkspace,
   manageWorkspaceTrust,
@@ -291,8 +287,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   installCli,
   cancel,
   fileSearch,
-  shareDiagnostics,
-  clearConversation,
   setMode,
   setEffort,
   dismissUsageMeter,

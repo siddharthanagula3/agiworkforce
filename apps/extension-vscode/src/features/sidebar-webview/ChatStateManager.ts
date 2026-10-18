@@ -268,7 +268,6 @@ export type WebviewToExtMessage =
   | { type: 'viewFocused' }
   | { type: 'setUpWebSearch' }
   | { type: 'reconnectMcpServer'; payload: { server: string } }
-  | { type: 'getModel' }
   | { type: 'openSettings' }
   | { type: 'openWorkspace' }
   | { type: 'manageWorkspaceTrust' }
@@ -276,8 +275,6 @@ export type WebviewToExtMessage =
   | { type: 'installCli' }
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
-  | { type: 'shareDiagnostics' }
-  | { type: 'clearConversation' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
   | { type: 'setEffort'; payload: { effort: DeveloperReasoningEffort } }
   | { type: 'dismissUsageMeter' }
@@ -1074,11 +1071,6 @@ export class ChatStateManager {
         break;
       }
 
-      case 'getModel': {
-        this._showModel(this._activeModel);
-        break;
-      }
-
       case 'sendMessage': {
         await this._handleSendMessage(
           msg.payload.text,
@@ -1109,61 +1101,6 @@ export class ChatStateManager {
         } catch {
           this._post({ type: 'fileSearchResults', payload: { files: [] } });
         }
-        break;
-      }
-
-      case 'shareDiagnostics': {
-        const editor = vscode.window.activeTextEditor;
-        if (editor === undefined) {
-          this._postError(t('chatNotice.noEditorForDiagnostics'));
-          break;
-        }
-        const diagnostics = vscode.languages.getDiagnostics(editor.document.uri);
-        if (diagnostics.length === 0) {
-          this._postError(t('chatNotice.noDiagnostics'));
-          break;
-        }
-        const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-        const diagText = diagnostics
-          .slice(0, 20)
-          .map((d) => {
-            const sev =
-              d.severity === vscode.DiagnosticSeverity.Error
-                ? 'ERROR'
-                : d.severity === vscode.DiagnosticSeverity.Warning
-                  ? 'WARNING'
-                  : 'INFO';
-            return `[${sev}] Line ${d.range.start.line + 1}: ${d.message}${d.source ? ` (${d.source})` : ''}`;
-          })
-          .join('\n');
-        const userMsg = `Here are the diagnostics for ${relativePath}:\n\n${diagText}\n\nPlease explain these issues and suggest fixes.`;
-        this._post({
-          type: 'addUserMessage',
-          payload: { text: `Analyzing diagnostics for ${relativePath}...` },
-        });
-        await this._handleSendMessage(userMsg);
-        break;
-      }
-
-      case 'clearConversation': {
-        this._resumeAttemptSeq++;
-        this._startNewEpoch();
-        this._dropQueuedSends('Queued follow-up cancelled by Clear Conversation.');
-        this._dropInFlightSend('Message cancelled by Clear Conversation.');
-        this._dropSteeringSends('Steer cancelled by Clear Conversation.');
-        await this._interruptActiveTurn();
-        delete this._thread;
-        delete this._loadedConversation;
-        delete this._lastUserTurn;
-        this._pendingAttachments.splice(0);
-        this._dismissedEditorContext.clear();
-        this._sessionApprovals.clear();
-        this._draftDisallowedTools = undefined;
-        this._clearPendingApprovals();
-        void this.pushEditorContext();
-        this._post({ type: 'conversationCleared' });
-        this._followDefaultModel();
-        await this._pushUsageMeterOnBoundaryChange();
         break;
       }
 

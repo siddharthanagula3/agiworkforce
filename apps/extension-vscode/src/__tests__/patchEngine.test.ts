@@ -1,6 +1,5 @@
-
 import { describe, expect, it } from 'vitest';
-import { parsePatchBlocks, type PatchBlock } from '../integrations/patchEngine';
+import { parsePatchBlocks, type PatchBlock } from '@agiworkforce/ide-runtime';
 
 describe('parsePatchBlocks', () => {
   it('returns empty array for plain text with no envelope', () => {

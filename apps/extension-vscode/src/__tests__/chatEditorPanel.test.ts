@@ -234,7 +234,7 @@ describe('agi-workforce.openChatInEditor', () => {
 
     await post(panels[0]!, { type: 'newChat' });
     panels[0]!.postMessage.mockClear();
-    await panels[0]!.receiveMessage?.({ type: 'clearConversation', ...stale });
+    await panels[0]!.receiveMessage?.({ type: 'newChat', ...stale });
 
     expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
@@ -246,7 +246,7 @@ describe('agi-workforce.openChatInEditor', () => {
     const other = bindingOf(panels[1]!);
 
     panels[0]!.postMessage.mockClear();
-    await panels[0]!.receiveMessage?.({ type: 'clearConversation', ...other });
+    await panels[0]!.receiveMessage?.({ type: 'newChat', ...other });
 
     expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });

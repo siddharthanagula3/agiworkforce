@@ -29,11 +29,6 @@ export function buildContextHandoffDraft(handoff: LocalContextHandoff): string {
   return `Selected in the browser, from ${handoff.sourceUrl}\n\n${handoff.selectedText}\n\n`;
 }
 
-export function readContextHandoffUri(uri: vscode.Uri): LocalContextHandoff | null {
-  if (uri.path !== VSCODE_CONTEXT_HANDOFF_PATH) return null;
-  return parseLocalContextHandoffQuery(uri.query);
-}
-
 export const PULL_CLOUD_TASK_COMMAND = 'agi-workforce.pullCloudTaskIntoWorkspace';
 
 export function buildCloudTaskHandoffDraft(handoff: CloudTaskHandoff): string {

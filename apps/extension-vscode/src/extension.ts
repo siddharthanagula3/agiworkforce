@@ -431,18 +431,14 @@ export function activate(context: vscode.ExtensionContext): void {
         updateStatusBar();
       }
 
-      if (
-        e.affectsConfiguration('agiWorkforce.model') ||
-        e.affectsConfiguration('agiWorkforce.apiKey')
-      ) {
-        if (e.affectsConfiguration('agiWorkforce.model')) {
-          sidebarProvider?.syncModelFromConfiguration();
-        }
+      if (e.affectsConfiguration('agiWorkforce.model')) {
+        sidebarProvider?.syncModelFromConfiguration();
         sidebarProvider?.pushUsageMeter();
       }
 
       if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
         syncInlineCompletionProvider?.();
+        void validateAdvancedFeatureFlags(context);
       }
 
       if (e.affectsConfiguration('agiWorkforce.codeLensEnabled')) {
@@ -462,10 +458,6 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
         sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();
-      }
-
-      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
-        void validateAdvancedFeatureFlags(context);
       }
     }),
   );
@@ -497,16 +489,14 @@ async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext):
   const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
   if (alreadyShown === true) return;
 
-  const choice = await vscode.window.showInformationMessage(
+  await vscode.window.showInformationMessage(
     'AGI Workforce inline completions are now active. On each keystroke, up to ' +
       '~100 lines of surrounding code are sent to the AGI Workforce API for ' +
       'suggestion. Files in the sensitive-file denylist (.env, .pem, .ssh/, ' +
       'credentials, secrets.json, etc.) are automatically excluded. Manage in ' +
       'Settings → AGI Workforce.',
     'Got it',
-    "Don't show again",
   );
 
   await context.globalState.update('inlineCompletions.firstRunNoticeShown', true);
-  void choice;
 }

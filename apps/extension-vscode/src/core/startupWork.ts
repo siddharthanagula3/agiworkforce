@@ -48,10 +48,6 @@ export function markInUse(reason: InUseReason): void {
   for (const task of tasks) run(task, reason);
 }
 
-export function inUseReason(): InUseReason | undefined {
-  return started;
-}
-
 export function __resetStartupWorkForTests(): void {
   waiting = [];
   started = undefined;

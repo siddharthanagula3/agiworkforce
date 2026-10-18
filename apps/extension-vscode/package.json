@@ -392,11 +392,6 @@
         "icon": "$(diff)"
       },
       {
-        "command": "agi-workforce.showPatchLogs",
-        "title": "AGI Workforce: Show Patch Logs",
-        "icon": "$(output)"
-      },
-      {
         "command": "agi-workforce.addToContext",
         "title": "AGI Workforce: Add File to Context",
         "icon": "$(pin)"

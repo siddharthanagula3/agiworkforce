@@ -152,7 +152,7 @@ import {
   newSessionInWorktree,
 } from '../features/surfaces/sessionWorktrees';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
-import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
+import { showOriginalContext } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import { buildExplainSelectionPrompt, runEditorUtility } from '../features/editor-utilities';
 import { openPathReference, OPEN_PATH_REFERENCE_COMMAND } from '../features/path-links';
@@ -1028,9 +1028,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const filePath = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
       await showOriginalContext(session.originalText, session.newText, filePath);
     }),
-    register('agi-workforce.showPatchLogs', () => {
-      getPatchOutputChannel().show(true);
-    }),
 
     register('agi-workforce.chat', async () => {
       if (!nativeChatAvailable) {
@@ -1184,6 +1181,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (apiKey === undefined || apiKey.trim() === '') return;
 
       await setApiKey(context.secrets, apiKey.trim());
+      sidebarProvider.pushUsageMeter();
 
       vscode.window
         .showInformationMessage('AGI Workforce API key saved.', 'Open Chat')
@@ -1202,6 +1200,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
       if (choice === 'Clear') {
         await clearApiKey(context.secrets);
+        sidebarProvider.pushUsageMeter();
         vscode.window.showInformationMessage('AGI Workforce API key cleared.');
       }
     }),

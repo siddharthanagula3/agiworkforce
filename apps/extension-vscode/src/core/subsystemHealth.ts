@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { t } from '../l10n';
 
@@ -32,14 +31,6 @@ export function initSubsystemHealth(context: vscode.ExtensionContext): void {
 export function runBoot(subsystem: string, fn: () => void): void {
   try {
     fn();
-  } catch (err) {
-    recordFailure(subsystem, err);
-  }
-}
-
-export async function runBootAsync(subsystem: string, fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn();
   } catch (err) {
     recordFailure(subsystem, err);
   }

@@ -3826,25 +3826,6 @@ describe('ChatStateManager error classification', () => {
     });
   });
 
-  it('leaves an unclassified sentence exactly as it was before call sites could classify', async () => {
-    const harness = makeHarness();
-
-    await harness.manager.handleMessage({ type: 'shareDiagnostics' });
-
-    expect(harness.posted).toContainEqual({
-      type: 'error',
-      payload: presentChatError('No active editor for diagnostics.'),
-    });
-    expect(harness.posted).toContainEqual({
-      type: 'error',
-      payload: {
-        category: 'unknown',
-        headline: 'No active editor for diagnostics.',
-        retryable: false,
-      },
-    });
-  });
-
   it('leaves the typed app-server failure path untouched', async () => {
     const harness = makeHarness();
     const failure = {

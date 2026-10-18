@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { buildVsCodeContextHandoffUri, type LocalContextHandoff } from '@agiworkforce/types';
-import {
-  buildContextHandoffDraft,
-  handleContextHandoffUri,
-  readContextHandoffUri,
-} from '../features/context-handoff';
+import { buildContextHandoffDraft, handleContextHandoffUri } from '../features/context-handoff';
 
 const HANDOFF: LocalContextHandoff = {
   id: 'ctx_12345678',
@@ -28,7 +24,6 @@ describe('browser context handoff uri', () => {
 
     await expect(handleContextHandoffUri(uri, target)).resolves.toBe(true);
 
-    expect(readContextHandoffUri(uri)).toEqual(HANDOFF);
     const draft = target.prefillComposer.mock.calls[0]?.[0] as string;
     expect(draft).toBe(buildContextHandoffDraft(HANDOFF));
     expect(draft).toContain('https://example.com/docs');
@@ -52,7 +47,6 @@ describe('browser context handoff uri', () => {
     const uri = vscode.Uri.parse('vscode://agiworkforce.agi-workforce/something-else?v=1');
 
     await expect(handleContextHandoffUri(uri, makeTarget())).resolves.toBe(false);
-    expect(readContextHandoffUri(uri)).toBeNull();
     expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
       'does not handle',
     );
