@@ -92,15 +92,15 @@ describe('plugin settings transport', () => {
     });
   });
 
-  it('repeats the deployment sentence when installs are switched off', async () => {
+  it('repeats the server sentence for an unavailable service', async () => {
     stubFetch(() =>
       Response.json(
-        { error: { code: 'PLUGIN_INSTALLS_DISABLED', message: 'Plugin installs are not enabled' } },
+        { error: { code: 'SERVICE_UNAVAILABLE', message: 'Plugin settings are unavailable' } },
         { status: 503 },
       ),
     );
     await expect(fetchPluginSettings(MARKETPLACE)).rejects.toThrow(
-      'Plugin installs are not enabled',
+      'Plugin settings are unavailable',
     );
   });
 

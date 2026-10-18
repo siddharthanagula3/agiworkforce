@@ -1283,32 +1283,6 @@ describe('useDirectoryAdapter plugins', () => {
     expect(calls).not.toContain('POST /api/plugins/marketplace-installations');
   });
 
-  it('surfaces the installs-disabled sentence as a notice rather than an error', async () => {
-    stubPluginRoutes({
-      'POST /api/plugins/marketplace-installations': () =>
-        json(
-          {
-            error: {
-              code: 'PLUGIN_INSTALLS_DISABLED',
-              message: 'Plugin installs are not enabled on this deployment yet',
-            },
-          },
-          503,
-        ),
-    });
-    const { result } = renderHook(() => useDirectoryAdapter());
-    await act(async () => {
-      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
-    });
-    const failure = await Promise.resolve(
-      result.current.install?.('plugins', 'frontend-design'),
-    ).catch((caught: unknown) => caught);
-    expect(failure).toBeInstanceOf(DirectoryActionNotice);
-    expect((failure as Error).message).toBe(
-      'Plugin installs are not enabled on this deployment yet',
-    );
-  });
-
   it('turns a refused install into a desktop entry with the command', async () => {
     stubPluginRoutes({
       'POST /api/plugins/marketplace-installations': () =>

@@ -521,10 +521,9 @@ describe('fetchPluginInstallState', () => {
     expect(state.byPluginKey.get('frontend-design')?.id).toBe('inst-1');
     expect(state.byEntryId.get('entry-1')?.id).toBe('inst-1');
     expect(state.readFailed).toBe(false);
-    expect(state.notice).toBeNull();
   });
 
-  it('keeps the installs-disabled sentence as a notice', async () => {
+  it('reports a refused marketplace read as a failed read', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: string) =>
@@ -534,8 +533,8 @@ describe('fetchPluginInstallState', () => {
             : jsonResponse(
                 {
                   error: {
-                    code: 'PLUGIN_INSTALLS_DISABLED',
-                    message: 'Plugin installs are not enabled on this deployment yet',
+                    code: 'SERVICE_UNAVAILABLE',
+                    message: 'The marketplace could not be read',
                   },
                 },
                 503,
@@ -544,15 +543,14 @@ describe('fetchPluginInstallState', () => {
       ),
     );
     const state = await fetchPluginInstallState();
-    expect(state.notice).toBe('Plugin installs are not enabled on this deployment yet');
     expect(state.byPluginKey.size).toBe(0);
-    expect(state.readFailed).toBe(false);
+    expect(state.readFailed).toBe(true);
   });
 
   it('survives a refused connection', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
     const state = await fetchPluginInstallState();
-    expect(state).toMatchObject({ notice: null, readFailed: true });
+    expect(state).toMatchObject({ readFailed: true });
     expect(state.builtinIds.size).toBe(0);
   });
 });
@@ -599,41 +597,22 @@ describe('installPlugin', () => {
     expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(JSON.stringify({ entryId: 'entry-9' }));
   });
 
-  it('reports installs disabled and a blocked install as outcomes, not errors', async () => {
+  it('reports a blocked install as an outcome, not an error', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          jsonResponse(
-            {
-              error: {
-                code: 'PLUGIN_INSTALLS_DISABLED',
-                message: 'Plugin installs are not enabled on this deployment yet',
-              },
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: 'PLUGIN_NOT_INSTALLABLE',
+              message: 'Runs hooks the web cannot execute.',
+              installCommand: COMMAND,
             },
-            503,
-          ),
-        )
-        .mockResolvedValueOnce(
-          jsonResponse(
-            {
-              error: {
-                code: 'PLUGIN_NOT_INSTALLABLE',
-                message: 'Runs hooks the web cannot execute.',
-                installCommand: COMMAND,
-              },
-            },
-            409,
-          ),
+          },
+          409,
         ),
+      ),
     );
-    await expect(
-      installPlugin({ kind: 'directory', pluginId: 'frontend-design' }, 'token'),
-    ).resolves.toEqual({
-      status: 'disabled',
-      message: 'Plugin installs are not enabled on this deployment yet',
-    });
     await expect(
       installPlugin({ kind: 'directory', pluginId: 'frontend-design' }, 'token'),
     ).resolves.toEqual({

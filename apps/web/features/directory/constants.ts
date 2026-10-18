@@ -173,9 +173,7 @@ export const PLUGIN_REPAIR_RELOAD_LABEL = 'Reinstall';
 export const PLUGIN_REPAIR_CONNECTOR_ID_PREFIX = 'connector:';
 export const PLUGIN_REPAIR_CONNECTOR_COPY = 'Its skills need the connector';
 export const PLUGIN_REPAIR_CONNECT_LABEL = 'Connect';
-export const PLUGIN_INSTALLS_DISABLED_CODE = 'PLUGIN_INSTALLS_DISABLED';
 export const PLUGIN_NOT_INSTALLABLE_CODE = 'PLUGIN_NOT_INSTALLABLE';
-export const PLUGIN_INSTALLS_DISABLED_STATUS = 503;
 export const PLUGIN_CONFLICT_STATUS = 409;
 export const PLUGIN_MESSAGE_STATUSES: readonly number[] = [403, 404, 409, 502, 503];
 

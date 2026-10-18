@@ -86,8 +86,6 @@ import {
   PLUGIN_COUNT_SUFFIX,
   PLUGIN_GROUP_HEADINGS,
   PLUGIN_INSTALLATIONS_PATH,
-  PLUGIN_INSTALLS_DISABLED_CODE,
-  PLUGIN_INSTALLS_DISABLED_STATUS,
   PLUGIN_INSTALL_FAILED_COPY,
   PLUGIN_MARKETPLACES_PATH,
   PLUGIN_SOURCE_KIND_AUTHORED,
@@ -177,7 +175,6 @@ export interface PluginInstallState {
   byPluginKey: ReadonlyMap<string, PluginMarketplaceInstallation>;
   byEntryId: ReadonlyMap<string, PluginMarketplaceInstallation>;
   updates: ReadonlyMap<string, PluginUpdateOffer>;
-  notice: string | null;
   readFailed: boolean;
 }
 
@@ -192,7 +189,6 @@ export const EMPTY_INSTALL_STATE: PluginInstallState = {
   byPluginKey: new Map(),
   byEntryId: new Map(),
   updates: new Map(),
-  notice: null,
   readFailed: false,
 };
 
@@ -385,7 +381,6 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
   }
   const byPluginKey = new Map<string, PluginMarketplaceInstallation>();
   const byEntryId = new Map<string, PluginMarketplaceInstallation>();
-  let notice: string | null = null;
   if (marketplace?.ok) {
     const body = (await marketplace.json().catch(() => ({}))) as {
       installations?: PluginMarketplaceInstallation[];
@@ -394,18 +389,14 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
       byPluginKey.set(installation.pluginKey, installation);
       byEntryId.set(installation.entryId, installation);
     }
-  } else if (marketplace && marketplace.status === PLUGIN_INSTALLS_DISABLED_STATUS) {
-    const body = await readErrorBody(marketplace);
-    if (body.error?.code === PLUGIN_INSTALLS_DISABLED_CODE) notice = body.error.message ?? null;
   }
-  const readFailed = !builtin?.ok || (!marketplace?.ok && notice === null);
+  const readFailed = !builtin?.ok || !marketplace?.ok;
   return {
     builtin: builtinInstallations,
     builtinIds,
     byPluginKey,
     byEntryId,
     updates,
-    notice,
     readFailed,
   };
 }
@@ -1331,7 +1322,6 @@ export type PluginInstallOutcome =
       dependencies: PluginInstalledDependency[];
       connectors: PluginConnectorRegistration | null;
     }
-  | { status: 'disabled'; message: string }
   | { status: 'blocked'; message: string; installCommand: string | null };
 
 function messageFor(status: number, body: ErrorBody, fallback: string): string {
@@ -1368,15 +1358,6 @@ export async function installPlugin(
   if (response.ok) return readInstalledOutcome(response);
   const payload = await readErrorBody(response);
   const code = payload.error?.code;
-  if (
-    response.status === PLUGIN_INSTALLS_DISABLED_STATUS &&
-    code === PLUGIN_INSTALLS_DISABLED_CODE
-  ) {
-    return {
-      status: 'disabled',
-      message: messageFor(response.status, payload, PLUGIN_INSTALL_FAILED_COPY),
-    };
-  }
   if (response.status === PLUGIN_CONFLICT_STATUS && code === PLUGIN_NOT_INSTALLABLE_CODE) {
     return {
       status: 'blocked',
@@ -1410,7 +1391,6 @@ const PLUGIN_HAS_DEPENDENTS_CODE = 'PLUGIN_HAS_DEPENDENTS';
 
 export type PluginUninstallOutcome =
   | { status: 'removed' }
-  | { status: 'disabled'; message: string }
   | { status: 'has-dependents'; message: string; dependents: PluginDependentSummary[] };
 
 function readDependents(value: unknown): PluginDependentSummary[] {
@@ -1434,15 +1414,6 @@ export async function uninstallPlugin(
   const response = await fetch(path, { method: 'DELETE', headers: { [CSRF_HEADER]: csrfToken } });
   if (response.ok) return { status: 'removed' };
   const payload = await readErrorBody(response);
-  if (
-    response.status === PLUGIN_INSTALLS_DISABLED_STATUS &&
-    payload.error?.code === PLUGIN_INSTALLS_DISABLED_CODE
-  ) {
-    return {
-      status: 'disabled',
-      message: messageFor(response.status, payload, PLUGIN_UNINSTALL_FAILED_COPY),
-    };
-  }
   const dependents = readDependents(payload.error?.dependents);
   if (
     response.status === PLUGIN_CONFLICT_STATUS &&

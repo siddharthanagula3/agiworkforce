@@ -695,7 +695,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         workspace: page.workspace,
         community: page.community,
       });
-      const notice = [page.installs.notice, pluginRegistryNotice.current].filter(Boolean).join(' ');
+      const notice = pluginRegistryNotice.current;
       const next: DirectorySection = {
         ...section,
         ...(notice ? { notice } : {}),
@@ -1319,7 +1319,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           caught instanceof DirectoryRequestError ? caught.message : PLUGIN_INSTALL_FAILED_COPY,
         );
       }
-      if (outcome.status === 'disabled') throw new DirectoryActionNotice(outcome.message);
       if (outcome.status === 'blocked') {
         if (record)
           patchPluginRecord(withInstallBlock(record, outcome.message, outcome.installCommand));
@@ -1410,7 +1409,6 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           caught instanceof DirectoryRequestError ? caught.message : PLUGIN_UNINSTALL_FAILED_COPY,
         );
       }
-      if (outcome.status === 'disabled') throw new DirectoryActionNotice(outcome.message);
       if (outcome.status === 'has-dependents') {
         const names = dependentNames(outcome.dependents);
         throw new DirectoryActionConfirmation(
