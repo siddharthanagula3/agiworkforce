@@ -15,17 +15,17 @@
     "char_counts": {
       "name": 13,
       "subtitle": 22,
-      "promotional_text": 137,
+      "promotional_text": 133,
       "keywords": 58,
-      "description": 2029,
+      "description": 2219,
       "whats_new": 485
     }
   },
   "app_name": "AGI Workforce",
   "subtitle": "On-device AI assistant",
-  "promotional_text": "Chat privately in Local Mode, offline after setup. Local conversations stay on your phone. Optional AGI Cloud needs sign-in and internet.",
+  "promotional_text": "Chat privately in Local Mode, offline after setup. Local inference runs on your phone. Optional AGI Cloud needs sign-in and internet.",
   "keywords": "ai,chat,assistant,local,offline,privacy,llm,dpdp,on-device",
-  "description": "AGI runs on your device first. No cloud required, no account needed, no data leaving your phone for Local Mode.\n\nMost AI apps funnel your conversations through remote servers. AGI is different: responses are generated on your device using a supported system model or a downloaded open-weight model. Airplane mode? Still works. No Wi-Fi? Still works.\n\nWORKS OFFLINE\nOn supported devices, a system model is ready without a download. Other devices download a local model once before offline chat. No Local Mode inference calls hit AGI Cloud. Your local conversations stay on this device and are encrypted at rest.\n\nFREE AT INFERENCE, FOREVER\nLocal on-device inference is free and always will be. There is no usage limit, no per-message charge, no subscription required to use the core chat.\n\nCLOUD WHEN YOU CHOOSE IT\nAGI Cloud is in public alpha. Sign in for free cloud chat and web search, subject to account usage limits. This release does not offer in-app purchases, paid upgrades, or credit top-ups. Cloud requests need an internet connection and are processed by AGI Cloud and its model providers.\n\nPRIVACY FIRST\nWe do not claim full DPDP Act 2023 compliance. Our itemised India DPDP notice is published at https://agiworkforce.com/privacy/india, and the obligations we have not met, verifiable parental consent, notice in Eighth Schedule languages, and India data residency among them, are listed at https://agiworkforce.com/trust. AI output is labelled as AI-generated, and first run names the on-device model and any cloud provider. Local Mode collects no personal data by default. Signing in to AGI Cloud uses your account email (and name, if provided by your sign-in method) to create your account. Export or delete your local data at any time from Settings.\n\nINDIA-FIRST\nAGI is designed to work well on the connections and devices common across India: it runs offline, installs once, and handles Hindi queries.\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy",
+  "description": "AGI runs on your device first. Local inference needs no account and runs on your device.\n\nMost AI apps funnel your conversations through remote servers. AGI is different: responses are generated on your device using a supported system model or a downloaded open-weight model. Airplane mode? Still works. No Wi-Fi? Still works.\n\nWORKS OFFLINE\nOn supported devices, a system model is ready without a download. Other devices download a local model once before offline chat. No Local Mode inference calls hit AGI Cloud. Your local conversations are encrypted on this device and are not uploaded automatically. If you sign in and confirm Sync Local Chats to AGI Cloud in Data Controls, conversation titles and message text are copied to your Cloud account; attachments and memory facts stay on the device.\n\nFREE AT INFERENCE, FOREVER\nLocal on-device inference is free and always will be. There is no usage limit, no per-message charge, no subscription required to use the core chat.\n\nCLOUD WHEN YOU CHOOSE IT\nAGI Cloud is in public alpha. Sign in for free cloud chat and web search, subject to account usage limits. This release does not offer in-app purchases, paid upgrades, or credit top-ups. Cloud requests need an internet connection and are processed by AGI Cloud and its model providers.\n\nPRIVACY FIRST\nWe do not claim full DPDP Act 2023 compliance. Our itemised India DPDP notice is published at https://agiworkforce.com/privacy/india, and the obligations we have not met, verifiable parental consent, notice in Eighth Schedule languages, and India data residency among them, are listed at https://agiworkforce.com/trust. AI output is labelled as AI-generated, and first run names the on-device model and any cloud provider. Local Mode collects no personal data by default. Signing in to AGI Cloud uses your account email (and name, if provided by your sign-in method) to create your account. Export or delete your local data at any time from Settings.\n\nINDIA-FIRST\nAGI is designed to work well on the connections and devices common across India: it runs offline, installs once, and handles Hindi queries.\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy",
   "whats_new": "AGI 0.0.1, free Local and Cloud chat.\n\n• Local AI chat with no account required\n• Offline Local chat after a supported system model is ready or a local model finishes downloading\n• Optional free AGI Cloud chat and web search after sign-in, subject to usage limits\n• On-device voice transcription\n• No in-app purchases, paid upgrades, or credit top-ups in this release\n• India DPDP notice published, with our open gaps listed at agiworkforce.com/trust\n\nSupport: support@agiworkforce.com",
   "categories": {
     "primary": "Productivity",
@@ -70,7 +70,7 @@
         "data_types": ["Audio Data"],
         "purpose": "App Functionality",
         "optional": true,
-        "collected_when": "Only during live voice mode in an AGI Cloud chat: the microphone is streamed to AGI Cloud for the session and the transcript is saved to that chat. Dictation and the turn-based voice companion transcribe on the device and upload no audio."
+        "collected_when": "Only during live voice mode in an AGI Cloud chat: AGI Cloud sets up the session, then microphone audio streams directly from the device to OpenAI. The transcript is saved to the Cloud chat. Dictation and turn-based voice require on-device speech recognition and upload no microphone audio."
       },
       {
         "category": "Identifiers",
@@ -88,7 +88,7 @@
       }
     ],
     "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
+    "note": "Local inference stays on the device. Local chats are not uploaded automatically; a signed-in user can confirm a manual copy of conversation titles and message text to Cloud. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
   },
   "urls": {
     "privacy_policy": "https://agiworkforce.com/privacy",

@@ -65,8 +65,8 @@ export type VoiceOnboardingPurpose = 'voice' | 'dictation';
 
 export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
   'on-device':
-    'Your voice is transcribed on this device to hear you. Nothing is recorded or stored.',
-  live: 'In live voice your microphone is sent to AGI Cloud while you talk, and the transcript is saved to this chat. Audio is not kept.',
+    'Your voice is transcribed on this device. Microphone audio is not uploaded. The transcript becomes chat text when you send it.',
+  live: 'AGI Cloud sets up the call, then your microphone audio streams directly to OpenAI while you talk. The transcript is saved to this chat. AGI does not keep the microphone audio.',
 };
 
 const INTRO: Record<VoiceOnboardingPurpose, { title: string; body: string }> = {

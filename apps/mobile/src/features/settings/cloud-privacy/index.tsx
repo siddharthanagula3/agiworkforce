@@ -71,7 +71,12 @@ const PROCESSING_LOCATIONS = [
       'AGI Cloud sets up the call, then your audio streams directly between this device and OpenAI.',
   },
   {
-    feature: 'Read aloud, text scanning and translation',
+    feature: 'Read aloud',
+    where:
+      'Local Mode uses a device voice. In AGI Cloud, text is sent through AGI Cloud to OpenAI for speech synthesis. Returned audio is temporarily cached on the device for playback; the app attempts to delete it when playback ends or stops.',
+  },
+  {
+    feature: 'Text scanning and translation',
     where: 'On this device.',
   },
 ] as const;

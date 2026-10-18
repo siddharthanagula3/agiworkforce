@@ -284,6 +284,9 @@ describe('iOS submission config', () => {
     expect(listingIos.promotional_text).toContain('Local Mode');
     expect(listingIos.promotional_text).toMatch(/offline after setup/i);
     expect(listingIos.promotional_text).toMatch(/Cloud needs sign-in and internet/i);
+    expect(listingIos.promotional_text).toContain('Local inference runs on your phone');
+    expect(listingIos.promotional_text).not.toContain('Local conversations stay on your phone');
+    expect(listingIos.description).toContain('confirm Sync Local Chats to AGI Cloud');
     expect(listingIos.promotional_text).not.toMatch(/your conversations never leave/i);
   });
 

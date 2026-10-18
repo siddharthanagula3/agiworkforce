@@ -36,12 +36,18 @@ describe('VoiceOnboardingSheet', () => {
     getByText('Meet Voice');
     getByText(/Say what's on your mind/);
     getByText(VOICE_DISCLOSURE['on-device']);
+    getByText(/transcribed on this device\. Microphone audio is not uploaded/);
+    getByText(/transcript becomes chat text when you send it/);
     expect(queryByText(VOICE_DISCLOSURE.live)).toBeNull();
   });
 
   it('discloses cloud streaming and transcript storage before live voice', () => {
     const { getByText, queryByText } = renderSheet({ mode: 'live' });
     getByText(VOICE_DISCLOSURE.live);
+    getByText(/AGI Cloud sets up the call, then your microphone audio streams directly to OpenAI/);
+    getByText(/transcript is saved to this chat/);
+    getByText(/AGI does not keep the microphone audio/);
+    expect(queryByText(/microphone is sent to AGI Cloud/)).toBeNull();
     expect(queryByText(VOICE_DISCLOSURE['on-device'])).toBeNull();
   });
 

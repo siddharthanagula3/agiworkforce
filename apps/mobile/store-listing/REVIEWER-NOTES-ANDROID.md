@@ -18,16 +18,16 @@ LOCAL REVIEW
 
 1. Launch the app and complete the age and AI disclosures. Choose Local Mode; no account is required.
 2. Supported devices can use a system model. Otherwise, download a local model over an internet connection and wait for setup to finish. Model availability depends on the device.
-3. Send a Local chat message, then test with airplane mode. Local inference runs on-device and Local messages are not sent to AGI Cloud. Local chats are encrypted on the device.
+3. Send a Local chat message, then test with airplane mode. Local inference runs on-device and Local messages are not uploaded automatically. Local chats are encrypted on the device.
 
 CLOUD REVIEW
 
 1. Choose Continue to Cloud or switch to AGI Cloud. Confirm age eligibility, sign in and accept the current Terms.
 2. Use the review account provided in Play Console's secure App access fields. Reviewer credentials must be supplied before submission and are not stored in this document. Free Cloud chat and web search require internet and remain subject to usage limits; no upgrade code or test purchase is needed.
-3. Send a message and try web search. Cloud messages and selected attachments are sent to AGI Cloud and the model provider serving the request. Switching modes does not upload Local history.
+3. Send a message and try web search. Cloud messages and selected attachments are sent to AGI Cloud and the model provider serving the request. Switching modes does not upload Local history. A signed-in user can separately confirm Settings > Data Controls > Sync Local Chats to AGI Cloud to copy conversation titles and message text; attachments and memory facts stay on the device.
 
 PERMISSIONS AND SAFETY
-Camera and photo access are for attachments and document scanning; microphone/speech access is for voice input. Dictation transcribes on-device. Live Cloud voice, when available, streams microphone audio for that session. Calendar/reminders and biometric app lock are optional. Notifications are requested after Cloud sign-in for task alerts. Permissions can be declined; text chat remains usable. No location, Health or advertising-tracking permission is requested. Use Report on an assistant response to flag harmful AI output.
+Camera and photo access are for attachments and document scanning; microphone/speech access is for voice input. Dictation requires on-device recognition and uploads no microphone audio. For live Cloud voice, AGI Cloud sets up the call, then microphone audio streams directly to OpenAI and the transcript is saved to the Cloud chat. Read aloud uses a device voice in Local Mode; in Cloud mode, selected text goes through AGI Cloud to OpenAI for speech synthesis. Calendar/reminders and biometric app lock are optional. Notifications are requested after Cloud sign-in for task alerts. Permissions can be declined; text chat remains usable. No location, Health or advertising-tracking permission is requested. Use Report on an assistant response to flag harmful AI output.
 
 DELETION AND EXPORT
 Settings > Account > Delete Account requests deletion of the Cloud account and its data. Erasure is normally scheduled 24 hours later; sign back in to cancel before erasure begins. Local data is separate: Settings > Storage > Delete all local data removes it after confirmation. Settings > Data Controls > Export Local Data exports on-device information without uploading it.
@@ -184,9 +184,9 @@ to be described as submitted.
 
 Declared in `app.config.js` → `android.permissions`:
 
-| Permission     | Why                                                                                                                                                                                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RECORD_AUDIO` | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`), and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`). Declared as "Voice or sound recordings" in Data safety. |
+| Permission     | Why                                                                                                                                                                                                                                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RECORD_AUDIO` | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`), and live voice mode in an AGI Cloud chat, which uses AGI Cloud to set up the session, then streams microphone audio directly to OpenAI over WebRTC (`src/features/voice/services/liveVoiceSession.ts`). Declared as "Voice or sound recordings" in Data safety. |
 
 Merged into the manifest by library config plugins rather than listed above:
 
@@ -268,17 +268,19 @@ redirected to a sign-in wall (`app/_layout.tsx`).
 fact, which we state plainly because it is what you would find by inspecting
 traffic: in Cloud mode the user's messages and attachments leave the device,
 reach AGI Cloud, and are forwarded server-side to the model provider serving the
-request. Both files answer Play's sharing question **no** on the service-provider
-basis, the model, storage, auth and push subprocessors listed at
-https://agiworkforce.com/subprocessors process that data on AGI's behalf, not for
-their own purposes.
+request. Both files record Play's sharing answer as **no** on the
+service-provider exception. That answer depends on the applicable
+data-processing terms for the subprocessors listed at
+https://agiworkforce.com/subprocessors and must be verified before submission.
 
 What the source tree can prove about this, and does:
 
-- Every outbound request from the device goes to an AGI-controlled host.
-  `agiworkforce.com`, `api.agiworkforce.com`, `signaling.agiworkforce.com`
-  (`lib/constants.ts:2-16`), plus Clerk for sign-in and the push service. No
-  third party receives data directly from the device.
+- Cloud chat requests use AGI hosts. Live voice uses AGI Cloud for session setup,
+  then sends microphone audio directly to OpenAI over WebRTC
+  (`src/features/voice/services/liveVoiceSession.ts`). Cloud Read aloud sends text
+  through AGI Cloud to OpenAI for speech synthesis. Clerk handles sign-in and
+  the push service handles push delivery. Direct transport alone does not decide
+  whether Play's service-provider exception applies.
 - **The app contains no analytics SDK, no crash-reporting SDK and no ad SDK.**
   `apps/mobile/package.json` has no Sentry, Firebase, Crashlytics, Amplitude,
   PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency, so no telemetry

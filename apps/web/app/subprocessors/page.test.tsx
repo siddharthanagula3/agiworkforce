@@ -55,6 +55,22 @@ describe('SubprocessorsPage', () => {
     expect(copy).toMatch(/neither every request nor every model/);
   });
 
+  it('limits uploaded dictation to web and names direct mobile live audio and Cloud speech text', () => {
+    render(<SubprocessorsPage />);
+    const copy = flatCopy();
+
+    expect(copy).toMatch(/Web dictation sends your recording through AGI Cloud to OpenAI/);
+    expect(copy).toMatch(
+      /Mobile dictation and turn-based voice require on-device speech recognition and upload no microphone audio/,
+    );
+    expect(copy).toMatch(/streams directly from your browser or mobile device to OpenAI/);
+    expect(copy).toMatch(
+      /Mobile Read aloud in Cloud mode sends the selected text through AGI Cloud to OpenAI/,
+    );
+    expect(copy).toMatch(/Local Read aloud uses a device voice/);
+    expect(copy).toMatch(/app attempts to delete it when playback ends or stops/);
+  });
+
   it('no longer claims managed traffic always reaches those providers through OpenRouter', () => {
     render(<SubprocessorsPage />);
     const copy = flatCopy();

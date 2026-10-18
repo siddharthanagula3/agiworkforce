@@ -20,8 +20,9 @@ not archived; git carries the history.
 ## Current release preparation: 2026-10-17
 
 Source baseline: `c86971ce48a7d0f81e3d660df2d305fe44491f63`, with release fixes
-isolated on `codex/mobile-store-release`. The latest verification includes the
-free-first working-tree changes on `1c236da88a1484fd0f18383a63e5332d34ba5f69`.
+isolated on `codex/mobile-store-release`. The free-first release preparation is
+committed at `93cf29b9247dca3fa67a3b70e2b1a1b9b1cf3298`. Subsequent auth-test and
+privacy-disclosure work remains separate from the active native build.
 No successful signed build, binary upload, review acceptance, or public
 availability is established by the checks below.
 
@@ -39,23 +40,44 @@ Verified changes and checks:
   Native purchasing, restore, upgrade and top-up controls are gated; the
   auto-connecting store hook is not mounted, and direct native-purchase and
   upgrade requests fail before network access. Existing account entitlements,
-  server quotas and Local/Cloud boundaries remain enforced. Billing and plan routes show current
-  account details. Listings and reviewer copy now match this scope.
-- Mobile typecheck and lint pass. The final free-first validation passed 491
+  server quotas and Local/Cloud boundaries remain enforced. Billing and plan
+  routes show current account details. Listings and reviewer copy now match this scope.
+- Mobile typecheck and lint passed for the free-first preparation at
+  `93cf29b924`. That commit's full validation passed 491
   Jest suites, 4,765 tests and 24 snapshots, plus 107 Node release tests and four
   Python verifier fixture tests. The local run log is
   `/private/tmp/agi-mobile-free-first-tests-final.log`. Fixture IPA verification
   does not establish a signed archive; native store and device behavior remain
   unverified.
+- The later combined auth/privacy working-tree run aborted with exit 134 at the
+  4 GB heap cap; no assertion failure was found in
+  `/private/tmp/agi-mobile-auth-privacy-final-tests.log`. This is an incomplete
+  full-suite run, not a pass. The replacement run used four sequential Jest
+  shards with 3 GB caps through `/private/tmp/agi-mobile-final-test-batches.cjs`.
+  All 492 discovered suites ran exactly once: 4,773 tests and 24 snapshots passed,
+  with no failed or skipped tests. Coverage was checked against actual
+  `--listTests` output; the verified aggregate is
+  `/private/tmp/agi-mobile-final-shard-summary.json`. Secret, feature-flag and
+  mock-export guards also passed on the staged source.
+- The auth harness now executes installed Expo URL construction with the real
+  app config. Its iOS/Android regression verifies `agiworkforce:///login` and
+  the `postAuthIntent` query, replacing a mock that hid the third slash. Three
+  focused auth suites pass all 77 tests. Google/GitHub callback assertions and
+  Android Apple-auth exclusion are covered; completed provider login is not.
 - Production Hermes exports compiled for both platforms before the free-first
   changes; a fresh release candidate remains required. The scanner now counts
   development fallbacks separately per bundle. The actual scan still fails on
   124 OOXML identifier findings. An identifier allowlist would also exempt a
   real HTTP request using the same URI, so no exemption was retained. A new
   bytecode regression preserves rejection of that case. This gate remains
-  blocking; compilation alone does not establish release acceptance.
+  blocking: no safe bounded fix was identified. Compilation alone does not
+  establish release acceptance.
 - Release integrity, build-environment configuration, privacy declarations, and
-  TLS pin provisioning checks pass. Pinning remains report-only (MOBILE-085).
+  TLS pin provisioning checks passed before the subsequent privacy-disclosure
+  edits. The disclosure changes have focused checks and the combined mobile
+  suite passing, but are not deployed. Web copy was also
+  edited but not deployed, and its tests are blocked by missing web/UI
+  dependencies. Pinning remains report-only (MOBILE-085).
 - EAS production now has `EXPO_PUBLIC_API_URL=https://agiworkforce.com` alongside
   its existing live Clerk publishable key. EAS authentication works. The queried
   initial build history was empty; no prior release candidate was available to reuse.
@@ -69,9 +91,25 @@ Verified changes and checks:
   `6SSPKZNT28`. The widget app-group link was verified. This establishes signing
   configuration, not a successful archive.
 - Existing Apple app `6787526447` has its draft listing and reviewer notes
-  synchronized to the canonical free-first copy. Reviewer sign-in credentials
-  are still empty. Google Play draft `4975486540946177692` exists under
-  organization account `6680024874559811802`; neither draft is a public release.
+  resynchronized to the current canonical copy. Exact readback confirms a
+  2,219-character description, 133-character promotional text and 3,038-byte
+  reviewer notes. Its privacy draft readback
+  confirms eight data types, including Product Interaction used for Analytics,
+  linked to the user's identity, with tracking set to no. No Set Up items remain;
+  Publish has not been used. This is a saved draft, not a published declaration.
+- Google Play draft `4975486540946177692`, under organization account
+  `6680024874559811802`, now has the canonical AGI app name, short and full
+  description, privacy URL, Productivity category, `support@agiworkforce.com`
+  and HTTPS website saved. The final short description is 56 characters and
+  omits "free" after a Console promotion warning. Warnings still rendered after
+  the draft save, so that warning is not verified resolved. The draft has not
+  been submitted.
+- Clerk Native API is enabled and the production iOS registration matches
+  `D2PR62RLT4` and `com.agiworkforce.app`. Apple remains disabled as a Clerk
+  provider, and the actual custom callback `agiworkforce:///login` is absent
+  from the allowlist. Both changes are prepared and await user approval at the
+  point of saving. Clerk's documented contract does not establish whether the
+  base callback also covers the app's `postAuthIntent` query variants.
 
 Android native validation build `726a2d24-374e-4590-a68b-7b40e85669bc`
 (version 0.0.1, versionCode 2, source `ceca4ed537`) failed before Gradle in
@@ -85,19 +123,28 @@ network error; it provides no successful native-build evidence. EAS now
 discovers the share and widget extension targets before signing setup through
 explicit CNG metadata.
 
+Android build `8ed0a897-1c6a-4435-916a-a73d24d81db2`, version 0.0.1 (4), is
+`IN_PROGRESS`; the 19:24:42 CDT log on October 17 shows `RUN_GRADLEW` compiling
+ExecuTorch ARM64 code, with no native compiler error observed. Expo Doctor
+timed out and was skipped in that run, so this stage does not establish a clean
+Doctor result. No native artifact is available yet.
+
 Store preparation and remaining acceptance gates:
 
-| Gate                        | Observed state on October 17                                                                                                                                        | Required evidence                                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Apple app access            | Existing app 6787526447 and bundle com.agiworkforce.app verified in the signed-in UI and by a successful team-key API read; ascAppId is configured                  | Reuse the verified existing record and credentials                                                                   |
-| Apple signing               | EAS 25.1.1 reconciliation exited 0; main, share and widget signing credentials are ready with active profiles and verified widget app-group linkage                 | Produce and verify a signed release archive with all three targets                                                   |
-| Apple login                 | Native Sign in with Apple capability is enabled; production Clerk advertises Google and GitHub only                                                                 | Configure and verify Apple login in Clerk, then set the matching EAS/CI provider list and pass device sign-in        |
-| Google app record           | Organization account 6680024874559811802 is created; approved declarations accepted and draft app 4975486540946177692 for com.agiworkforce.app created and verified | Complete the app dashboard setup and upload a verified candidate                                                     |
-| Android credentials         | EAS has a JKS upload key; Play submission and FCM V1 service accounts are unassigned                                                                                | Authorized Play submission credentials; verify notification delivery if advertised                                   |
-| App associations            | Apple association document returns HTTP 200; Android `assetlinks.json` returns HTTP 503                                                                             | Publish the real Play App Signing certificate fingerprint and pass the association check                             |
-| Release CI                  | No `mobile-store-release` GitHub environment or mobile release secrets were found; the release workflow has no runs                                                 | Configure the protected release inputs if using that workflow                                                        |
-| Store and device acceptance | Apple draft listing and reviewer notes synced to free-first copy; no build attached, reviewer sign-in fields empty, and no current signed-device acceptance run     | Supply real reviewer access, screenshots (MOBILE-016), privacy forms and signed-device evidence before submission    |
-| Production bundle scanner   | Production Hermes export scan still rejects 124 OOXML identifier occurrences                                                                                        | Resolve the scanner evidence gap without exempting real cleartext requests; retain the blocking gate until it passes |
+| Gate                      | Observed state on October 17                                                                                                                                                      | Required evidence                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Apple app access          | Existing app 6787526447 and bundle com.agiworkforce.app verified in the signed-in UI and by a successful team-key API read; ascAppId is configured                                | Reuse the verified existing record and credentials                                                                   |
+| Apple signing             | EAS 25.1.1 reconciliation exited 0; main, share and widget signing credentials are ready with active profiles and verified widget app-group linkage                               | Produce and verify a signed release archive with all three targets                                                   |
+| Apple login               | Native API and correct iOS app registration verified; Clerk Apple provider remains disabled, with its prepared change awaiting user approval                                      | Enable the approved provider, align the EAS/CI provider list and verify device sign-in                               |
+| Custom OAuth callback     | The prepared agiworkforce:///login entry is not yet saved; existing Clerk entries do not cover this scheme/path; query matching is unknown                                        | Save the approved exact callback and verify Google/GitHub return, nonce completion and destination-bearing flows     |
+| Google app record         | Draft 4975486540946177692 has canonical text, privacy URL, category and contact fields saved; final short copy is 56 characters; promotion warnings remain visible; not submitted | Resolve or verify the Console warnings, finish dashboard requirements and upload a verified candidate                |
+| Android credentials       | EAS has a JKS upload key; Play submission and FCM V1 service accounts are unassigned                                                                                              | Use authorized Console upload or configure EAS submission credentials; verify notification delivery if advertised    |
+| App associations          | Apple association document returns HTTP 200; Android `assetlinks.json` returns HTTP 503                                                                                           | Publish the real Play App Signing certificate fingerprint and pass the association check                             |
+| Release CI                | No `mobile-store-release` GitHub environment or mobile release secrets were found; the release workflow has no runs                                                               | Configure the protected release inputs if using that workflow                                                        |
+| Apple submission evidence | Version 0.0.1 has zero screenshot sets, no build, blank reviewer credentials, contentRights null and missing trader status for 27 EU storefronts                                  | Supply real screenshots (MOBILE-016), reviewer access, a verified build and truthful rights/trader answers           |
+| Privacy declarations      | Apple eight-type draft remains unpublished; combined mobile checks pass; source and web copy are not deployed; web tests lack web/UI dependencies                                 | Restore web test dependencies and reconcile deployed copy and store answers before publishing                        |
+| Device acceptance         | Xcode app is not installed; active developer tools are Command Line Tools; no current simulator or signed-device validation                                                       | Establish the native test environment and verify onboarding, auth, permissions, Local/Cloud and recovery flows       |
+| Production bundle scanner | Production Hermes export scan still rejects 124 OOXML identifier occurrences                                                                                                      | Resolve the scanner evidence gap without exempting real cleartext requests; retain the blocking gate until it passes |
 
 The Android production submission profile intentionally uploads an internal-track
 draft. Public promotion remains a separate Play Console action. iOS upload also

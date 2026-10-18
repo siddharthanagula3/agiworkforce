@@ -180,6 +180,11 @@
           "date": "2026-10-15",
           "digest": "df5bffa66ee9b408",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Two honest caveats reads Two caveats, the download basis no longer says the caveats are in section 01 rather than buried here, and the access answer drops so the honest answer is not nobody, leaving the sentence that limits access by people at AGI to those who need it and to the cases in the table. The fixed salt, the raw IP in application logs and the limits on access are unchanged, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "901da3911778e24a",
+          "note": "Editorial clarification for the mobile release, recorded 2026-10-17: distinguishes mobile on-device model inference and encrypted Local history from CLI loopback requests; describes the existing, separately confirmed manual copy of Local chat titles and text to Cloud; limits uploaded dictation to web; names direct mobile live audio to OpenAI after AGI session setup and Cloud read-aloud text sent to OpenAI. The implementation, recipients, retention rules, rights and choices are unchanged. This corrects the platform scope of existing processing rather than introducing new processing, so the policy date stays. Playback cache deletion is described as an attempt, since a crash or file-system failure can leave cached audio."
         }
       ]
     },
@@ -393,6 +398,11 @@
           "date": "2026-10-15",
           "digest": "1b4dcf6a427e32db",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The corrections introduction drops we would rather publish the correction than quietly reissue the list and says each correction is listed below. No recipient, role, provider or correction changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "b61995008e3a381e",
+          "note": "Editorial clarification for the mobile release, recorded 2026-10-17: the existing OpenAI speech row distinguishes uploaded web dictation from mobile on-device recognition, explains direct mobile live audio after AGI session setup, and describes existing Cloud read-aloud text processing and its device playback cache. No recipient or registry provider is added, removed or renamed, and no processing, retention rule, right or choice changes; the policy date stays. Playback cache deletion is described as an attempt, since a crash or file-system failure can leave cached audio."
         }
       ]
     },
@@ -844,6 +854,11 @@
           "date": "2026-10-15",
           "digest": "333837760e7dfae7",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Section 07 is titled Your rights, and how each is handled, where it said what actually happens; section 09 is titled Children, where it said stated honestly; and the children section drops we are naming it rather than implying otherwise. The statement that no verifiable parental consent or age verification is performed, that this is a gap against the Act and that it is tracked as an open item is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "60612709ad445cef",
+          "note": "Editorial clarification for the mobile release, recorded 2026-10-17: the Local row now includes mobile system and downloaded model inference, encrypted device storage, and the existing confirmed manual copy of Local chat titles and text to Cloud, excluding attachments and memory facts. No processing, recipient, right, retention rule or consent choice changes; the policy date stays."
         }
       ]
     },

@@ -200,15 +200,21 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        <strong>Where your prompts go:</strong> from the CLI to Ollama or LM Studio on loopback.
-        Nothing is transmitted to us and nothing is silently routed to BYOK or Managed Cloud. The{' '}
+        <strong>Where your prompts go:</strong> on mobile, Local inference runs on your device using
+        a supported system model or a downloaded model. A model download needs an internet
+        connection; Local inference does not send your prompts to us. In the CLI, requests go to
+        Ollama or LM Studio on loopback. Neither silently routes to BYOK or Managed Cloud. The{' '}
         <Link href="/download" className="agi-ds-link">
           download page
         </Link>{' '}
         shows which CLI releases are published.
         <br />
-        <strong>What we hold:</strong> nothing about the local model request. The current Desktop
-        and web apps use Managed Cloud; they do not expose Local inference.
+        <strong>What we hold:</strong> nothing about the local model request. Mobile Local chats are
+        encrypted on your device. If you sign in and confirm Sync Local Chats to AGI Cloud in Data
+        Controls, the app copies conversation titles and message text to your Cloud account;
+        attachments and memory facts stay on the device. Switching modes does not upload Local
+        history. The current Desktop and web apps use Managed Cloud; they do not expose Local
+        inference.
       </>
     ),
   },
@@ -326,16 +332,24 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         composer or holding a Voice Mode conversation, and the text that comes back from it.
         <br />
         <strong>Why, and how it is protected:</strong> turning speech into text, and holding a
-        spoken conversation. Nothing is captured until you start one of the two. Dictation sends the
-        recording to OpenAI&rsquo;s transcription endpoint; Voice Mode opens a realtime session with
-        OpenAI and your microphone audio streams from your browser to that session for as long as it
-        runs. <strong>We do not store the audio.</strong> The dictation route passes the bytes on
-        and keeps none, and a voice session record holds that session&rsquo;s settings and a pointer
-        into the transcript, with no audio in it. The text transcript is kept as ordinary
-        conversation content and follows the conversation rows above. There is no voiceprint,
-        speaker identification or other biometric identifier anywhere in this product, and nothing
-        here infers who is speaking. What OpenAI does with audio it receives is its own published
-        practice, named on{' '}
+        spoken conversation. Nothing is captured until you start one of the two. Web dictation sends
+        the recording to OpenAI&rsquo;s transcription endpoint. Mobile dictation and turn-based
+        voice require on-device speech recognition and upload no microphone audio; if the device
+        cannot recognize the selected language locally, recognition fails rather than using a
+        server. In live Voice Mode on web or mobile, AGI Cloud sets up a realtime session with
+        OpenAI, then microphone audio streams directly from your browser or mobile device to OpenAI
+        for that session. Mobile live voice requires Cloud mode and sign-in.
+        <br />
+        <strong>We do not store the microphone audio.</strong> The web dictation route passes the
+        bytes on and keeps none, and a voice session record holds that session&rsquo;s settings and
+        a pointer into the transcript, with no microphone audio in it. The text transcript is kept
+        as ordinary conversation content and follows the conversation rows above. There is no
+        voiceprint, speaker identification or other biometric identifier anywhere in this product,
+        and nothing here infers who is speaking. Mobile Read aloud uses a device voice in Local
+        mode. In Cloud mode, the text is sent through AGI Cloud to OpenAI for speech synthesis; the
+        returned audio is temporarily cached on the device for playback, and the app attempts to
+        delete it when playback ends or stops. What OpenAI does with audio it receives is its own
+        published practice, named on{' '}
         <Link href="/subprocessors" className="agi-ds-link">
           /subprocessors
         </Link>
@@ -375,10 +389,13 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     label: 'Conversations (Local)',
     value: (
       <>
-        <strong>Examples:</strong> CLI sessions sent to Ollama or LM Studio on loopback. Not
-        silently routed to BYOK or Managed Cloud.
+        <strong>Examples:</strong> mobile conversations answered by a model on the device, and CLI
+        sessions sent to Ollama or LM Studio on loopback. Not silently routed to BYOK or Managed
+        Cloud.
         <br />
         <strong>Why, and how it is protected:</strong> AGI Cloud is not in the model request path.
+        Mobile Local chats are encrypted on the device. A copy reaches your Cloud account only if
+        you confirm the manual sync described above.
       </>
     ),
   },
@@ -996,8 +1013,10 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
     label: 'Choose where a request goes',
     value: (
       <>
-        In the CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes
-        straight to your provider on your key. The{' '}
+        On mobile, choose Local for on-device inference or sign in for AGI Cloud. Switching modes
+        does not upload Local history; copying Local chat text to Cloud requires a separate
+        confirmation in Data Controls. In the CLI, Local keeps the conversation on your machine and
+        sends us nothing; BYOK goes straight to your provider on your key. The{' '}
         <Link href="/download" className="agi-ds-link">
           download page
         </Link>{' '}

@@ -158,11 +158,11 @@
         </dict>
 
         <!--
-          Audio Data: live voice mode in an AGI Cloud chat streams the
-          microphone to AGI Cloud over WebRTC for the duration of the
-          session (src/features/voice/services/liveVoiceSession.ts) and
-          saves the transcript to that chat. Dictation and the turn-based
-          voice companion transcribe on the device and upload no audio.
+          Audio Data: AGI Cloud sets up a live voice session, then the
+          device streams microphone audio directly to OpenAI over WebRTC
+          (src/features/voice/services/liveVoiceSession.ts). The transcript
+          is saved to the Cloud chat. Dictation and turn-based voice
+          require on-device recognition and upload no microphone audio.
           Local Mode has no live voice.
         -->
         <dict>

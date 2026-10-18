@@ -4,7 +4,7 @@
   "dataDeletionEndpoint": "apps/web/app/api/user/delete-account/route.ts",
   "allDataEncryptedInTransit": true,
   "usesAdvertisingId": false,
-  "sharingBasis": "Every entry below answers Play's sharing question false on the service-provider basis. The ground fact: in Cloud mode the user's messages and attachments leave the device, reach AGI Cloud, and are forwarded server-side to the model provider serving the request; sign-in identity is handled by Clerk and push delivery by the push service. Those subprocessors are listed at https://agiworkforce.com/subprocessors and process the data on AGI's behalf, not for their own purposes. What the source tree proves: every outbound request from the device goes to an AGI-controlled host (apps/mobile/lib/constants.ts) plus Clerk and the push service, so no third party receives data directly from the device, and apps/mobile/package.json declares no analytics, crash-reporting or ad SDK. Whether the exception covers each subprocessor rests on the data-processing terms behind that list, which this repo cannot verify. LISTING-METADATA-ANDROID.json data_safety.data_shared is false to match.",
+  "sharingBasis": "Cloud messages and attachments go through AGI Cloud to the model provider serving the request. For live voice, AGI Cloud sets up the session and microphone audio streams directly from the device to OpenAI. Cloud Read aloud sends selected text through AGI Cloud to OpenAI for speech synthesis. Sign-in identity is handled by Clerk and push delivery by the push service. The recorded 'not shared' answers rely on Play's service-provider exception for the subprocessors listed at https://agiworkforce.com/subprocessors. Direct device-to-provider transport does not establish whether that exception applies. The applicable data-processing terms must be verified before submission; the repository does not establish contractual eligibility.",
   "optionalityBasis": "Every entry is optional because Cloud sign-in is optional. A signed-out user who has completed onboarding lands in Local Mode and is never redirected to a sign-in wall (apps/mobile/app/_layout.tsx), and Local Mode is prevented from reaching AGI hosts by apps/mobile/lib/egressGuard.ts.",
   "collectedData": [
     {
@@ -65,7 +65,7 @@
       "optional": true,
       "ephemeral": true,
       "usedForTracking": false,
-      "backedBy": "Live voice mode in a Cloud chat streams the microphone to AGI Cloud over WebRTC for the session (apps/mobile/src/features/voice/services/liveVoiceSession.ts) and saves the transcript to that chat. Dictation and the turn-based voice companion transcribe on the device (apps/mobile/src/features/voice/services/voiceInput.ts) and upload no audio. Local Mode has no live voice."
+      "backedBy": "Live voice in a Cloud chat uses AGI Cloud to set up the session, then streams microphone audio directly to OpenAI over WebRTC (apps/mobile/src/features/voice/services/liveVoiceSession.ts). The transcript is saved to that Cloud chat. Dictation and turn-based voice require on-device recognition (apps/mobile/src/features/voice/services/voiceInput.ts) and upload no microphone audio. Local Mode has no live voice."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",

@@ -56,11 +56,16 @@ const MODES: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        Where it goes: from the CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us
-        and nothing is silently routed to BYOK or Managed Cloud.
+        Where it goes: mobile Local inference runs on your device using a supported system model or
+        a downloaded model. A model download needs an internet connection; Local inference does not
+        send your prompts to us. CLI requests go to Ollama or LM Studio on loopback. Neither
+        silently routes to BYOK or Managed Cloud.
         <br />
-        What we hold: nothing about the local model request. The current Desktop and web apps use
-        Managed Cloud and do not expose Local inference.
+        What we hold: nothing about the local model request. Mobile Local chats are encrypted on
+        your device. If you sign in and confirm Sync Local Chats to AGI Cloud in Data Controls,
+        conversation titles and message text are copied to your Cloud account; attachments and
+        memory facts stay on the device. Switching modes does not upload Local history. The current
+        Desktop and web apps use Managed Cloud and do not expose Local inference.
       </>
     ),
   },

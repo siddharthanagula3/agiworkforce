@@ -10,6 +10,7 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 
 import PrivacyPage from '../page';
+import IndiaPrivacyPage from '../india/page';
 
 const WEB_DIR = path.join(__dirname, '..', '..', '..');
 
@@ -36,8 +37,24 @@ describe('/privacy discloses microphone audio', () => {
     expect(screen.getByText('Voice and audio')).toBeInTheDocument();
     expect(copy).toMatch(/captured only while you are dictating into the composer or holding a/);
     expect(copy).toMatch(/transcription endpoint/);
-    expect(copy).toMatch(/We do not store the audio\./);
+    expect(copy).toMatch(/We do not store the microphone audio\./);
     expect(copy).toMatch(/no voiceprint, speaker identification or other biometric identifier/);
+  });
+
+  it('distinguishes mobile dictation, live voice and Cloud read aloud from web dictation', () => {
+    render(<PrivacyPage />);
+    const copy = flatCopy();
+
+    expect(copy).toMatch(/Web dictation sends the recording to OpenAI/);
+    expect(copy).toMatch(
+      /Mobile dictation and turn-based voice require on-device speech recognition and upload no microphone audio/,
+    );
+    expect(copy).toMatch(/recognition fails rather than using a server/);
+    expect(copy).toMatch(/streams directly from your browser or mobile device to OpenAI/);
+    expect(copy).toMatch(/Mobile live voice requires Cloud mode and sign-in/);
+    expect(copy).toMatch(/Mobile Read aloud uses a device voice in Local mode/);
+    expect(copy).toMatch(/In Cloud mode, the text is sent through AGI Cloud to OpenAI/);
+    expect(copy).toMatch(/app attempts to delete it when playback ends or stops/);
   });
 
   it('keeps the disclosure tied to the routes that send the audio', () => {
@@ -46,6 +63,12 @@ describe('/privacy discloses microphone audio', () => {
 
     expect(dictation).toContain("providerApiUrl('openai', 'audio/transcriptions')");
     expect(live).toContain("OPENAI_KEY_ENV = 'OPENAI_API_KEY'");
+    expect(read('../mobile/src/features/voice/services/voiceInput.ts')).toContain(
+      'requiresOnDeviceRecognition: true',
+    );
+    expect(read('../mobile/src/features/chat/components/MessageBubble.tsx')).toContain(
+      "serverVoice: appMode === 'cloud'",
+    );
   });
 
   it('keeps the no-stored-audio claim tied to the session table that holds no audio', () => {
@@ -59,6 +82,23 @@ describe('/privacy discloses microphone audio', () => {
       'the voice session table is no longer declared where the claim reads it',
     ).toBeTruthy();
     expect(table).not.toMatch(/\baudio\b/i);
+  });
+});
+
+describe.each([
+  ['privacy policy', PrivacyPage],
+  ['India notice', IndiaPrivacyPage],
+] as const)('%s mobile Local disclosure', (_name, Page) => {
+  it('explains on-device inference and the separately confirmed copy to Cloud', () => {
+    render(<Page />);
+    const copy = flatCopy();
+
+    expect(copy).toMatch(/Local inference runs on your device using a supported system model/);
+    expect(copy).toMatch(/Local inference does not send your prompts to us/);
+    expect(copy).toMatch(/Mobile Local chats are encrypted on your device/);
+    expect(copy).toMatch(/confirm Sync Local Chats to AGI Cloud in Data Controls/);
+    expect(copy).toMatch(/attachments and memory facts stay on the device/);
+    expect(copy).toMatch(/Switching modes does not upload Local history/);
   });
 });
 

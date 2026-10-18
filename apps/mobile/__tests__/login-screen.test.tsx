@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React, { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   FREE_PLAN_TRAINING_DATA_DISCLOSURE,
@@ -88,13 +88,34 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
   FEATURES: { auth: true },
 }));
 
-jest.mock('expo-linking', () => ({
-  createURL: (path: string, options?: { queryParams?: Record<string, string> }) => {
-    const base = `agiworkforce://${path.replace(/^\//, '')}`;
-    const query = new URLSearchParams(options?.queryParams).toString();
-    return query ? `${base}?${query}` : base;
-  },
-}));
+jest.mock('expo-linking', () => jest.requireActual('expo-linking'));
+
+jest.mock('expo-constants', () => {
+  const actual = jest.requireActual('expo-constants');
+  const overrides = {
+    APP_ENV: 'production',
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_live_auth_callback_fixture',
+    EXPO_PUBLIC_API_URL: 'https://example.com',
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, overrides);
+    return {
+      ...actual,
+      __esModule: true,
+      default: {
+        ...actual.default,
+        executionEnvironment: actual.ExecutionEnvironment.Standalone,
+        expoConfig: jest.requireActual('../app.config.js').expo,
+      },
+    };
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
 
 jest.mock('@clerk/expo', () => ({
   useAuth: (options?: { treatPendingAsSignedOut?: boolean }) => mockUseAuth(options),
@@ -404,25 +425,28 @@ describe('LoginScreen', () => {
     expect(screen.getByTestId('mobile-sign-in-email').props.value).toBe('person@example.com');
   });
 
-  it('starts social sign-in and keeps the custom form after cancellation', async () => {
-    mockSSOResult = {
-      createdSessionId: null,
-      authSessionResult: { type: 'cancel' },
-      signIn: {},
-    };
-    const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+  it.each(['google', 'github'] as const)(
+    'starts %s sign-in with the actual default callback and handles cancellation',
+    async (provider) => {
+      mockSSOResult = {
+        createdSessionId: null,
+        authSessionResult: { type: 'cancel' },
+        signIn: {},
+      };
+      const screen = render(<LoginScreen />);
+      fireEvent.press(screen.getByTestId(`mobile-sign-in-${provider}`));
 
-    await waitFor(() =>
-      expect(mockStartSSOFlow).toHaveBeenCalledWith({
-        strategy: 'oauth_google',
-        redirectUrl: expect.any(String),
-      }),
-    );
-    await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
-    expect(screen.getByTestId('mobile-custom-sign-in')).toBeTruthy();
-    expect(screen.queryByText('Sign-in is still loading. Please try again.')).toBeNull();
-  });
+      await waitFor(() =>
+        expect(mockStartSSOFlow).toHaveBeenCalledWith({
+          strategy: `oauth_${provider}`,
+          redirectUrl: 'agiworkforce:///login',
+        }),
+      );
+      await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
+      expect(screen.getByTestId('mobile-custom-sign-in')).toBeTruthy();
+      expect(screen.queryByText('Sign-in is still loading. Please try again.')).toBeNull();
+    },
+  );
 
   it('carries the requested Cloud destination through the social sign-in callback', async () => {
     mockSearchParams = { postAuthIntent: 'cloud-schedules' };
@@ -433,7 +457,7 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce://login?postAuthIntent=cloud-schedules',
+        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-schedules',
       }),
     );
   });
@@ -526,6 +550,21 @@ describe('LoginScreen', () => {
     expect(screen.getByTestId('mobile-sign-in-email')).toBeTruthy();
   });
 
+  it('does not check or start native Apple authentication on Android even when configured', () => {
+    process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = 'google,github,apple';
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      const screen = render(<LoginScreen />);
+      expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+      fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+      expect(screen.queryByTestId('mobile-sign-up-apple')).toBeNull();
+      expect(mockAppleAvailable).not.toHaveBeenCalled();
+      expect(mockStartAppleAuthenticationFlow).not.toHaveBeenCalled();
+    } finally {
+      platform.restore();
+    }
+  });
+
   it('creates a legally accepted email sign-up and verifies its code', async () => {
     mockVerifyEmailCode.mockImplementationOnce(async () => {
       mockSignUp.status = 'complete';
@@ -550,25 +589,28 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(mockFinalizeSignUp).toHaveBeenCalledTimes(1));
   });
 
-  it('starts the configured social provider through the future SSO flow', async () => {
-    mockSSOResult = {
-      createdSessionId: 'session-test',
-      authSessionResult: { type: 'success' },
-    };
-    const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+  it.each(['google', 'github'] as const)(
+    'starts %s sign-up with the actual default callback',
+    async (provider) => {
+      mockSSOResult = {
+        createdSessionId: 'session-test',
+        authSessionResult: { type: 'success' },
+      };
+      const screen = render(<LoginScreen />);
+      fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+      fireEvent.press(screen.getByTestId(`mobile-sign-up-${provider}`));
 
-    await waitFor(() =>
-      expect(mockStartSSOFlow).toHaveBeenCalledWith({
-        strategy: 'oauth_google',
-        redirectUrl: expect.any(String),
-      }),
-    );
-    await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
-    expect(mockClerkSetActive).not.toHaveBeenCalled();
-    expect(screen.queryByText('AuthView:signUp')).toBeNull();
-  });
+      await waitFor(() =>
+        expect(mockStartSSOFlow).toHaveBeenCalledWith({
+          strategy: `oauth_${provider}`,
+          redirectUrl: 'agiworkforce:///login',
+        }),
+      );
+      await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
+      expect(mockClerkSetActive).not.toHaveBeenCalled();
+      expect(screen.queryByText('AuthView:signUp')).toBeNull();
+    },
+  );
 
   it('carries the requested Cloud destination through the social sign-up callback', async () => {
     mockSearchParams = { postAuthIntent: 'cloud-models' };
@@ -580,7 +622,7 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce://login?postAuthIntent=cloud-models',
+        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-models',
       }),
     );
   });

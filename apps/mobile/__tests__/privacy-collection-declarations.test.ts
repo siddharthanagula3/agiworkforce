@@ -25,7 +25,11 @@ const listingIos = JSON.parse(
 ) as {
   privacy_nutrition_labels: {
     data_not_collected: boolean;
-    data_linked_to_you: Array<{ category: string; data_types: string[] }>;
+    data_linked_to_you: Array<{
+      category: string;
+      data_types: string[];
+      collected_when: string;
+    }>;
   };
 };
 
@@ -34,8 +38,16 @@ const listingAndroid = JSON.parse(
 ) as {
   data_safety: {
     data_collected: boolean;
-    data_collected_types: Array<{ type: string }>;
+    data_collected_types: Array<{ type: string; collected_when: string }>;
+    note: string;
   };
+};
+
+const dataSafety = JSON.parse(
+  readFileSync(join(storeListingDir, 'android', 'data-safety.json'), 'utf8'),
+) as {
+  sharingBasis: string;
+  collectedData: Array<{ iosPrivacyManifestType: string; backedBy: string }>;
 };
 
 const UPLOADED_DATA_TYPES = [
@@ -106,6 +118,34 @@ describe('mobile privacy declarations match what the cloud path actually uploads
       'Device or other IDs',
     ]) {
       expect(declared).toContain(dataType);
+    }
+  });
+
+  it('names direct OpenAI live audio without treating on-device dictation as an upload', () => {
+    const disclosures = [
+      listingIos.privacy_nutrition_labels.data_linked_to_you.find((row) =>
+        row.data_types.includes('Audio Data'),
+      )?.collected_when,
+      listingAndroid.data_safety.data_collected_types.find(
+        (row) => row.type === 'Voice or sound recordings',
+      )?.collected_when,
+      dataSafety.collectedData.find(
+        (row) => row.iosPrivacyManifestType === 'NSPrivacyCollectedDataTypeAudioData',
+      )?.backedBy,
+    ];
+
+    for (const disclosure of disclosures) {
+      expect(disclosure).toMatch(/directly (?:from the device )?to OpenAI/);
+      expect(disclosure).toMatch(/on-device.*upload no microphone audio/);
+      expect(disclosure).not.toMatch(/microphone(?: audio)?(?: is streamed)? to AGI Cloud/);
+    }
+  });
+
+  it('does not use a false device transport claim to justify Play sharing answers', () => {
+    for (const disclosure of [listingAndroid.data_safety.note, dataSafety.sharingBasis]) {
+      expect(disclosure).toMatch(/directly from the device to OpenAI/);
+      expect(disclosure).toMatch(/data-processing terms must be verified before submission/);
+      expect(disclosure).not.toMatch(/every outbound request|no third party receives/i);
     }
   });
 });
