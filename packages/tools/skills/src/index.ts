@@ -52,7 +52,6 @@ export {
   executeSkillTool,
   executeSkillToolWithFiles,
   formatSkillsForToolPrompt,
-  isSkillAvailable,
   skillCatalogEntryLength,
   DEFAULT_SKILL_TOOL_MAX_OUTPUT_BYTES,
   SKILL_FILE_INVENTORY_LIMIT,

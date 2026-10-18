@@ -227,10 +227,6 @@ export function describeSkillUnavailability(
   return kinds.length === 0 ? null : { kinds, missingTools, missingMcpServers };
 }
 
-export function isSkillAvailable(skill: Skill, context: SkillToolRuntimeContext = {}): boolean {
-  return describeSkillUnavailability(skill, context) === null;
-}
-
 function byteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
