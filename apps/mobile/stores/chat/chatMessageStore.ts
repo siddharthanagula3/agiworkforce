@@ -31,6 +31,9 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
   ManagedCloudChatHttpError,
+  ManagedCloudCreateConversationBranchResponseSchema,
+  managedCloudConversationBranchesPath,
+  normalizeManagedCloudConversation,
   type ManagedCloudConversation,
   type ManagedCloudConversationHistoryStats,
 } from '@agiworkforce/cloud-contracts';
@@ -425,15 +428,26 @@ export const useChatMessageStore = create<MessageState>()(
           options?.model && requestedModelMode === sourceMode
             ? options.model
             : sourceConversation?.model;
+        if (sourceMode === 'cloud') {
+          const branchPointId =
+            options?.forkPointMessageId ?? sourceMessages[sourceMessages.length - 1]?.id;
+          if (!branchPointId) throw new Error('There is no message to branch from yet.');
+          const branchId = await createCloudBranch(sourceConversationId, branchPointId);
+          if (forkModel && forkModel !== sourceConversation?.model) {
+            await managedCloudChat.updateConversation(branchId, { model: forkModel });
+            getCloudStore().getState().patchCloudConversation(branchId, { model: forkModel });
+          }
+          set({ currentConversationId: branchId });
+          return branchId;
+        }
+
         const forkTitle =
           options?.title ??
           `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'copy'} fork)`;
-        const forkId = await createConversationForMode(
+        const forkId = createStoredConversation(
           set,
           forkTitle,
-          sourceMode === 'local'
-            ? sourceConversation?.projectId
-            : resolveCloudProjectId(sourceConversation?.projectId),
+          sourceConversation?.projectId,
           forkModel,
           sourceMode,
         );
@@ -456,7 +470,7 @@ export const useChatMessageStore = create<MessageState>()(
 
           return {
             ...safeMessage,
-            id: sourceMode === 'cloud' ? uuidv7() : `${message.id}_fork_${now}_${index}`,
+            id: `${message.id}_fork_${now}_${index}`,
             conversationId: forkId,
             model: forkModel ?? message.model,
           };
@@ -481,14 +495,6 @@ export const useChatMessageStore = create<MessageState>()(
           messages: { ...state.messages, [forkId]: forkedMessages },
           currentConversationId: forkId,
         }));
-
-        if (sourceMode === 'cloud') {
-          markConversationForSync(forkId);
-          for (const message of forkedMessages) {
-            markMessageForSync(forkId, message.id);
-          }
-          void syncNow();
-        }
 
         return forkId;
       },
@@ -1716,6 +1722,24 @@ async function createConversationForMode(
   } catch {
     throw new Error('AGI Cloud conversation could not be created.');
   }
+}
+
+async function createCloudBranch(sourceConversationId: string, messageId: string): Promise<string> {
+  const response = ManagedCloudCreateConversationBranchResponseSchema.parse(
+    await api.post<unknown>(managedCloudConversationBranchesPath(sourceConversationId), {
+      messageId,
+      requestId: uuidv7(),
+    }),
+  );
+  const branch = normalizeManagedCloudConversation(response.conversation);
+  getCloudStore()
+    .getState()
+    .addCloudConversation({
+      ...normalizeManagedCloudConversationForMobile(branch),
+      parentConversationId: sourceConversationId,
+      forkPointMessageId: messageId,
+    });
+  return branch.id;
 }
 
 function normalizeManagedCloudConversationForMobile(

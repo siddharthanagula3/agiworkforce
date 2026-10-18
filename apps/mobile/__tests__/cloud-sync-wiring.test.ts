@@ -70,7 +70,8 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { api, apiFetch } from '../services/api';
+import { managedCloudConversationBranchesPath } from '@agiworkforce/cloud-contracts';
+import { api } from '../services/api';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -96,18 +97,6 @@ import {
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
-const mockApiFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
-
-function jsonResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    headers: new Headers({ 'Content-Type': 'application/json' }),
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as unknown as Response;
-}
-
 const CONV_ID = '0190a000-0000-7000-8000-000000000001';
 const CLOUD_MODEL = requireFreeMobileCloudModel().id;
 const LOCAL_MODEL = requireLocalModel().id;
@@ -242,7 +231,7 @@ describe('cloud send → sync write-through', () => {
     ).toBe(AUTO_MODEL);
   });
 
-  it('forks a Cloud conversation wholly inside the Cloud repository', async () => {
+  it('branches a Cloud conversation through the server branch API, like web', async () => {
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,
       title: 'Cloud Source',
@@ -265,43 +254,40 @@ describe('cloud send → sync write-through', () => {
         model: CLOUD_MODEL,
       },
     ]);
-    mockApiFetch.mockImplementationOnce((async (_input: RequestInfo | URL, init: RequestInit) => {
-      const body = JSON.parse(String(init.body)) as { id: string; title: string };
-      return jsonResponse({
-        conversation: {
-          id: body.id,
-          title: body.title,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          project_id: null,
-          pinned: false,
-          starred: false,
-          archived: false,
-          is_temporary: false,
-          model: CLOUD_MODEL,
-        },
-      });
-    }) as never);
+    const BRANCH_ID = '0190a000-0000-7000-8000-0000000000b1';
+    mockPost.mockResolvedValueOnce({
+      conversation: {
+        id: BRANCH_ID,
+        title: 'Cloud Source (branch)',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        project_id: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        is_temporary: false,
+        model: CLOUD_MODEL,
+      },
+    });
 
-    const forkId = await useChatStore.getState().forkConversation(CONV_ID);
+    const forkId = await useChatStore.getState().forkConversation(CONV_ID, {
+      forkPointMessageId: '0190a000-0000-7000-8000-000000000002',
+    });
 
+    expect(forkId).toBe(BRANCH_ID);
+    const [path, body] = mockPost.mock.calls.at(-1) as [
+      string,
+      { messageId: string; requestId: string },
+    ];
+    expect(path).toBe(managedCloudConversationBranchesPath(CONV_ID));
+    expect(body.messageId).toBe('0190a000-0000-7000-8000-000000000002');
+    expect(isUuidV7(body.requestId)).toBe(true);
     expect(useChatMessageStore.getState().conversations).toHaveLength(0);
-    expect(useChatMessageStore.getState().messages[forkId]).toBeUndefined();
-    expect(useChatCloudMessageStore.getState().conversations.some((c) => c.id === forkId)).toBe(
-      true,
-    );
-    const forkMessages = useChatCloudMessageStore.getState().messages[forkId] ?? [];
-    expect(forkMessages).toHaveLength(1);
-    expect(forkMessages[0]).toEqual(
-      expect.objectContaining({ conversationId: forkId, content: 'source message' }),
-    );
-    expect(isUuidV7(forkMessages[0]!.id)).toBe(true);
-
-    const forkConversation = useChatCloudMessageStore
-      .getState()
-      .conversations.find((c) => c.id === forkId);
-    expect(forkConversation?.parentConversationId).toBe(CONV_ID);
-    expect(forkConversation?.forkPointMessageId).toBe('0190a000-0000-7000-8000-000000000002');
+    const branch = useChatCloudMessageStore.getState().conversations.find((c) => c.id === forkId);
+    expect(branch?.title).toBe('Cloud Source (branch)');
+    expect(branch?.parentConversationId).toBe(CONV_ID);
+    expect(branch?.forkPointMessageId).toBe('0190a000-0000-7000-8000-000000000002');
+    expect(useChatCloudMessageStore.getState().messages[forkId]).toBeUndefined();
   });
 
   it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {
