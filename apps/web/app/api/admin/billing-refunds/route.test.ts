@@ -330,7 +330,7 @@ describe('POST /api/admin/billing-refunds', () => {
     expect(mocks.issueOperatorRefund).not.toHaveBeenCalled();
   });
 
-  it('maps a refusal from the refund rules to its status and audits nothing', async () => {
+  it('maps a refusal from the refund rules to its status after recording the attempt', async () => {
     mocks.issueOperatorRefund.mockRejectedValueOnce(
       new RefundRequestRefusal('That payment is disputed with the bank.', 409),
     );
@@ -341,7 +341,13 @@ describe('POST /api/admin/billing-refunds', () => {
     expect(await response.json()).toMatchObject({
       error: { message: 'That payment is disputed with the bank.' },
     });
-    expect(mocks.logSecurityEvent).not.toHaveBeenCalled();
+    expect(mocks.logSecurityEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.logSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ action: 'charge_refund_requested' }),
+      }),
+      { required: true },
+    );
   });
 
   it('maps an unknown request on decline to 404', async () => {

@@ -176,6 +176,21 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     { idempotencyKey: 'required' },
   );
   requireStripe();
+  await logSecurityEvent(
+    {
+      ...auditContext,
+      details: {
+        action: 'charge_refund_requested',
+        chargeId: action.chargeId,
+        amountCents: action.amountCents,
+        requestId: action.requestId,
+        planEnded: action.endPlan,
+        stripeReason: action.stripeReason,
+        reason: action.note,
+      },
+    },
+    { required: true },
+  );
   try {
     const result = await issueOperatorRefund(db, {
       operatorUserId,
