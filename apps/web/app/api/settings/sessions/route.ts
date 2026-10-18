@@ -25,7 +25,6 @@ import {
   SESSION_LIFETIME_AUDIT_SOURCE,
   type SessionLifetimeBound,
 } from '@/lib/auth/session-policy';
-import { isRegistryMissing } from '../devices/schema-state';
 
 function toIsoTimestamp(timestamp: number | null): string | null {
   if (timestamp === null) return null;
@@ -55,23 +54,18 @@ async function readSessionDevices(
   db: Awaited<ReturnType<typeof resolveSessionsPrincipal>>['db'],
   userId: string,
 ): Promise<Map<string, SessionDevice>> {
-  try {
-    const rows = await db.query<{
-      identity_session_id: string;
-      surface: string;
-      os: string;
-      os_version: string | null;
-    }>(SESSION_DEVICES, [userId]);
-    return new Map(
-      rows.map((row) => [
-        row.identity_session_id,
-        { os: row.os, osVersion: row.os_version, surface: row.surface },
-      ]),
-    );
-  } catch (error) {
-    if (isRegistryMissing(error)) return new Map();
-    throw error;
-  }
+  const rows = await db.query<{
+    identity_session_id: string;
+    surface: string;
+    os: string;
+    os_version: string | null;
+  }>(SESSION_DEVICES, [userId]);
+  return new Map(
+    rows.map((row) => [
+      row.identity_session_id,
+      { os: row.os, osVersion: row.os_version, surface: row.surface },
+    ]),
+  );
 }
 
 function serializeSession(

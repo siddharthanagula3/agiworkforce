@@ -24,19 +24,6 @@ export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
   'editor',
 ];
 
-export const FORBIDDEN_SETTINGS_NAMESPACES: readonly string[] = [
-  'byok',
-  'apiKeys',
-  'api_keys',
-  'providers',
-  'models',
-  'device',
-  'security',
-  'secrets',
-  'credentials',
-  'account',
-];
-
 const SECRET_KEY_PATTERN =
   /(api[-_]?key|secret|token|password|passwd|credential|bearer|authorization|private[-_]?key|access[-_]?key|client[-_]?secret)/i;
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);

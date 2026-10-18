@@ -6,7 +6,6 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseOrganizationData } from '@/lib/server/organization-erasure';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { isMissingOrganizationDeletionColumns } from '@/lib/server/organization-deletion';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -39,21 +38,15 @@ export async function GET(request: NextRequest) {
   const db = getNeonDb();
   const startedAtMs = Date.now();
 
-  let due: Array<{ id: string }> = [];
-  let deletionColumnsProvisioned = true;
+  let due: Array<{ id: string }>;
   try {
     due = await db.query<{ id: string }>(DUE_ORGANIZATIONS, []);
   } catch (error) {
-    if (isMissingOrganizationDeletionColumns(error)) {
-      deletionColumnsProvisioned = false;
-      logger.warn('organizations.deletion_scheduled_for is not provisioned; nothing is due');
-    } else {
-      logger.error(
-        { error: error instanceof Error ? error.message : String(error) },
-        'Organization purge cron job failed to list due workspaces',
-      );
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Organization purge cron job failed to list due workspaces',
+    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   let purged = 0;
@@ -134,9 +127,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    message: deletionColumnsProvisioned
-      ? 'Deleted workspace purge completed'
-      : 'Workspace deletion columns are not provisioned',
+    message: 'Deleted workspace purge completed',
     candidates: due.length,
     purged,
     held,

@@ -142,36 +142,16 @@ describe('listing linked devices', () => {
   });
 });
 
-describe('a pending migration degrades one column, not the panel', () => {
-  it('still lists registrations when device_refresh_tokens has no device_id yet', async () => {
-    const undefinedColumn = Object.assign(new Error('column "device_id" does not exist'), {
-      code: '42703',
-    });
-    mockQuery.mockRejectedValueOnce(undefinedColumn).mockResolvedValueOnce([
-      {
-        device_id: DEVICE_ID,
-        kind: 'desktop',
-        name: 'Work laptop',
-        platform: 'macos',
-        version: '1.4.0',
-        last_seen_at: null,
-        registered_at: '2026-06-01T10:00:00.000Z',
-        live_credentials: 0,
-      },
-    ]);
+describe('a missing credential link is an error, not a degraded panel', () => {
+  it('fails the listing instead of reporting unknown sign-in state', async () => {
+    mockQuery.mockRejectedValue(
+      Object.assign(new Error('column "device_id" does not exist'), { code: '42703' }),
+    );
 
     const response = await GET(req());
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      devices: Array<Record<string, unknown>>;
-      credentialStateKnown: boolean;
-    };
 
-    expect(body.devices).toHaveLength(1);
-    // Not false: reporting "not signed in" when the column cannot be read
-    // would be a claim the deployment cannot support.
-    expect(body.devices[0]?.['hasLiveCredential']).toBeNull();
-    expect(body.credentialStateKnown).toBe(false);
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   it('does not treat an unrelated database failure as a pending migration', async () => {
@@ -208,7 +188,7 @@ describe('unlinking a device', () => {
     expect(response.status).toBe(404);
   });
 
-  it('unregisters without revoking every other device when the link column is missing', async () => {
+  it('fails without unregistering when the credential link cannot be revoked', async () => {
     const txQuery = vi.fn(async (sql: string) => {
       if (sql.includes('desktop_devices where id')) return [{ kind: 'desktop', name: 'Laptop' }];
       throw Object.assign(new Error('column "device_id" does not exist'), { code: '42703' });
@@ -222,14 +202,10 @@ describe('unlinking a device', () => {
       params(DEVICE_ID),
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      revokedCredentials: 0,
-      credentialsRevoked: false,
-    });
-    expect(mockExecute).toHaveBeenCalledWith(
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(mockExecute).not.toHaveBeenCalledWith(
       expect.stringContaining('delete from desktop_devices'),
-      [DEVICE_ID, 'user-1'],
+      expect.anything(),
     );
   });
 
@@ -346,34 +322,6 @@ describe('the device registry', () => {
       .map((call) => call[0] as string)
       .find((sql) => sql.includes('device_registrations'));
     expect(registrySql).toContain('r.user_id = $1');
-  });
-
-  it('still lists legacy registrations while migration 0207 is pending', async () => {
-    mockQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('device_registrations')) {
-        throw Object.assign(new Error('relation "device_registrations" does not exist'), {
-          code: '42P01',
-        });
-      }
-      return [
-        {
-          device_id: DEVICE_ID,
-          kind: 'mobile',
-          name: null,
-          platform: 'ios',
-          version: null,
-          last_seen_at: null,
-          registered_at: '2026-05-01T10:00:00.000Z',
-          live_credentials: 0,
-        },
-      ];
-    });
-
-    const response = await GET(req());
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { devices: Array<Record<string, unknown>> };
-    expect(body.devices).toHaveLength(1);
-    expect(body.devices[0]).toMatchObject({ kind: 'mobile', presence: null, capabilities: null });
   });
 
   it('revokes the credential family and identity session the device holds', async () => {

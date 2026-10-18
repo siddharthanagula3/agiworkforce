@@ -10,10 +10,9 @@ import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { deletePolicyOverride } from '@/lib/services/organization-policy-override-service';
 import { requireWorkspaceConsolePermission } from '../../../workspace-access';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function handleDelete(
   request: NextRequest,
@@ -26,7 +25,7 @@ async function handleDelete(
   if (rateLimitResponse) return rateLimitResponse;
 
   const { overrideId } = await context.params;
-  if (!UUID_RE.test(overrideId)) throw createError.validation('overrideId must be a uuid');
+  if (!isUuid(overrideId)) throw createError.validation('overrideId must be a uuid');
 
   const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,

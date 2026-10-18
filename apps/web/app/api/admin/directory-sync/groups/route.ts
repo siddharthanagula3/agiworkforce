@@ -18,11 +18,10 @@ import {
   type ProvisionedRole,
 } from '@/lib/server/scim/scim-provisioning-service';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from '../directory-sync-access';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // 'owner' is absent by design and the scim_groups check constraint refuses it:
 // an IdP group must never be able to mint an organization owner.
@@ -119,7 +118,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (typeof groupId !== 'string' || !UUID_PATTERN.test(groupId)) {
+    if (typeof groupId !== 'string' || !isUuid(groupId)) {
       return NextResponse.json({ error: 'groupId must be a UUID' }, { status: 400 });
     }
 

@@ -178,10 +178,11 @@ describe('DELETE /api/settings/organization', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 
-  it('reports the feature unavailable when the migration has not shipped yet', async () => {
+  it('fails and schedules nothing when the deletion columns are missing', async () => {
     bind({ role: 'owner', deletionRequestedAtIsMissingColumn: true });
     const res = await DELETE(req({ confirm: 'acme' }) as never);
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(500);
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('refuses to schedule deletion while a legal hold is active, naming the hold count', async () => {

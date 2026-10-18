@@ -94,16 +94,12 @@ describe('/api/cron/expire-organization-invitations', () => {
     expect(mocks.expirePendingInvitations).toHaveBeenCalledWith(mocks.db);
   });
 
-  it('reports nothing to expire when the invitations table is missing', async () => {
+  it('fails instead of reporting nothing to expire when the invitations table is missing', async () => {
     mocks.expirePendingInvitations.mockRejectedValue(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
     );
     const response = await GET(request(`Bearer ${SECRET}`));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      message: 'Organization invitations are not provisioned',
-      expired: 0,
-    });
+    expect(response.status).toBe(500);
   });
 
   it('answers 500 without leaking the failure', async () => {

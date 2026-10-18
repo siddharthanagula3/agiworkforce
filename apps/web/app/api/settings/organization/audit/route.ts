@@ -8,6 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { createError } from '@/lib/errors';
 import { readValidatedSearchParams } from '@/lib/read-json-body';
+import { UUID_PATTERN } from '@/lib/uuid';
 import { resolveComplianceCaller } from '@/lib/server/compliance-caller';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
@@ -22,8 +23,6 @@ import type { EnterpriseAuditEvent } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 const QuerySchema = z.object({
   actorUserId: z.string().max(255).optional(),
   action: z.string().max(160).optional(),
@@ -34,7 +33,7 @@ const QuerySchema = z.object({
   to: z.string().datetime({ offset: true }).optional(),
   limit: z.coerce.number().int().min(1).max(AUDIT_PAGE_SIZE_MAX).optional(),
   cursorAt: z.string().datetime({ offset: true }).optional(),
-  cursorId: z.string().regex(UUID_RE).optional(),
+  cursorId: z.string().regex(UUID_PATTERN).optional(),
   facets: z.enum(['true', 'false']).optional(),
 });
 

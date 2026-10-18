@@ -13,10 +13,9 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { setDirectoryGroupManagers } from '@/lib/services/organization-role-service';
 import { requireWorkspaceConsolePermission } from '../../../workspace-access';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ManagersSchema = z
   .object({ userIds: z.array(z.string().trim().min(1).max(255)).max(50) })
@@ -32,7 +31,7 @@ async function handleSetManagers(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { groupId } = await context.params;
-  if (!UUID_RE.test(groupId)) throw createError.validation('groupId must be a uuid');
+  if (!isUuid(groupId)) throw createError.validation('groupId must be a uuid');
 
   const { userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,

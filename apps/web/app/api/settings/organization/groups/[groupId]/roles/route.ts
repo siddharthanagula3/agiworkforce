@@ -16,10 +16,9 @@ import {
 } from '@/lib/services/organization-role-service';
 import { resolveWorkspaceConsoleAccess } from '../../../workspace-access';
 import { RoleIdListSchema } from '../../../roles/role-schema';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ groupId: string }> };
 
@@ -31,7 +30,7 @@ async function handleSetGroupRoles(request: NextRequest, context: RouteContext) 
   if (rateLimitResponse) return rateLimitResponse;
 
   const { groupId } = await context.params;
-  if (!UUID_RE.test(groupId)) throw createError.validation('groupId must be a uuid');
+  if (!isUuid(groupId)) throw createError.validation('groupId must be a uuid');
 
   const { userId, organizationId, access } = await resolveWorkspaceConsoleAccess(request);
   const db = getNeonDb();

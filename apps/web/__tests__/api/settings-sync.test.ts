@@ -14,9 +14,21 @@ import {
   filterCloudSafeSettings,
   scrubSecrets,
   CLOUD_SAFE_SETTINGS_NAMESPACES,
-  FORBIDDEN_SETTINGS_NAMESPACES,
 } from '@/app/api/settings/sync/route';
 import { NextRequest } from 'next/server';
+
+const FORBIDDEN_SETTINGS_NAMESPACES = [
+  'byok',
+  'apiKeys',
+  'api_keys',
+  'providers',
+  'models',
+  'device',
+  'security',
+  'secrets',
+  'credentials',
+  'account',
+];
 
 beforeEach(() => {
   queryMock.mockReset();

@@ -9,13 +9,6 @@ import { expirePendingInvitations } from '@/lib/services/organization-invitation
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isMissingInvitationTable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
-}
-
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');
@@ -31,13 +24,6 @@ export async function GET(request: NextRequest) {
     }
     return NextResponse.json({ expired });
   } catch (error) {
-    if (isMissingInvitationTable(error)) {
-      logger.warn('public.organization_invitations is not provisioned; nothing to expire');
-      return NextResponse.json({
-        message: 'Organization invitations are not provisioned',
-        expired: 0,
-      });
-    }
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
       'Organization invitation expiry cron job failed',

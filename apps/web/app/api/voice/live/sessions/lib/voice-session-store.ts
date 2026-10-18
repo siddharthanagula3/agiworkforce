@@ -241,9 +241,9 @@ export async function touchVoiceSession(input: {
 /**
  * A session that outlived the block it could be billed for is over, whatever
  * the tab that opened it managed to report. Closing it here is what stops a
- * reconnect being handed a provider session that stopped existing hours ago,
- * and it closes at the end of that block, not now, so the voice minutes it
- * spent stop where its tab last renewed it.
+ * reconnect being handed a provider session that stopped existing hours ago.
+ * The lease only decides when a silent session counts as expired; it closes at
+ * the last check-in, so no voice minutes are billed after the tab went quiet.
  */
 export async function closeExpiredVoiceSessions(input: {
   db: VoiceSessionDb;
@@ -257,7 +257,7 @@ export async function closeExpiredVoiceSessions(input: {
     `update public.voice_sessions
         set status = 'closed',
             close_reason = $3,
-            closed_at = least(now(), last_seen_at + make_interval(secs => $2)),
+            closed_at = last_seen_at,
             last_seen_at = now()
       where id in (
         select id

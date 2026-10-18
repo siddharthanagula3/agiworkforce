@@ -13,13 +13,12 @@ import { shareConnector, unshareConnector } from '@/lib/services/org-shared-conn
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 function parseConnectorId(raw: string): string {
-  if (!UUID_RE.test(raw)) {
+  if (!isUuid(raw)) {
     throw createError.validation('connectorId must be a uuid');
   }
   return raw;

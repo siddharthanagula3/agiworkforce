@@ -8,6 +8,7 @@ import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-respo
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
+import { isUuid } from '@/lib/uuid';
 
 export type DirectorySyncAccessFailure = { response: NextResponse };
 
@@ -18,8 +19,6 @@ export interface DirectorySyncAccess {
   role: 'owner' | 'admin';
   plan: BillingPlanTier;
 }
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function failure(status: number, error: string, extra?: Record<string, unknown>) {
   return { response: NextResponse.json({ error, ...extra }, { status }) };
@@ -54,7 +53,7 @@ export async function requireDirectorySyncAdmin(
     return failure(401, 'Unauthorized');
   }
 
-  if (requestedOrganizationId !== null && !UUID_PATTERN.test(requestedOrganizationId)) {
+  if (requestedOrganizationId !== null && !isUuid(requestedOrganizationId)) {
     return failure(400, 'organizationId must be a UUID');
   }
 

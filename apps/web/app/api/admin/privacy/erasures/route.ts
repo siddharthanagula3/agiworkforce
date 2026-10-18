@@ -32,23 +32,26 @@ async function handleAnonymousErasure(request: NextRequest): Promise<NextRespons
 
   const report = await eraseAnonymousSubjectByEmail(parsed.data.email);
 
-  await logSecurityEvent({
-    userId: adminUserId,
-    eventType: 'admin_action',
-    severity: 'high',
-    ipAddress: getClientIp(request),
-    userAgent: request.headers.get('user-agent') ?? undefined,
-    endpoint: '/api/admin/privacy/erasures',
-    details: {
-      action: 'anonymous_subject_erasure',
-      subjectEmailSha256: report.emailSha256,
-      deleted: report.deleted,
-      accountBound: report.accountBound,
-      complete: report.complete,
-      reason: parsed.data.reason,
-      tables: report.tables,
+  await logSecurityEvent(
+    {
+      userId: adminUserId,
+      eventType: 'admin_action',
+      severity: 'high',
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') ?? undefined,
+      endpoint: '/api/admin/privacy/erasures',
+      details: {
+        action: 'anonymous_subject_erasure',
+        subjectEmailSha256: report.emailSha256,
+        deleted: report.deleted,
+        accountBound: report.accountBound,
+        complete: report.complete,
+        reason: parsed.data.reason,
+        tables: report.tables,
+      },
     },
-  });
+    { required: true },
+  );
 
   return NextResponse.json(
     {

@@ -21,8 +21,8 @@ import {
 } from '@/lib/feature-flags/tenant-lockdown';
 import { validateOrganizationKeySetup } from '@/lib/server/organization-encryption-keys';
 import { CMEK_PROVIDER_IDS, type CmekKeyDescriptor, type CmekProviderId } from '@/lib/crypto/cmek';
+import { isUuid } from '@/lib/uuid';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_REASON_LENGTH = 1000;
 
 function parseLockdownBody(body: unknown): TenantLockdownInput | AppError {
@@ -31,7 +31,7 @@ function parseLockdownBody(body: unknown): TenantLockdownInput | AppError {
     reason?: string;
     secondApproverUserId?: string;
   };
-  if (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId)) {
+  if (typeof organizationId !== 'string' || !isUuid(organizationId)) {
     return createError.badRequest('organizationId is required and must be a workspace id');
   }
   if (typeof reason !== 'string' || !reason.trim() || reason.length > MAX_REASON_LENGTH) {
@@ -60,7 +60,7 @@ function parseKeySetupBody(
     keyUri?: string;
     region?: string;
   };
-  if (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId)) {
+  if (typeof organizationId !== 'string' || !isUuid(organizationId)) {
     return createError.badRequest('organizationId is required and must be a workspace id');
   }
   if (
@@ -261,6 +261,17 @@ async function changeAccountStatus(
     throw createError.badRequest('Cannot modify your own account').asUserSafe();
   }
 
+  await logSecurityEvent(
+    {
+      userId: adminUserId,
+      eventType: 'admin_action',
+      severity: change.severity,
+      endpoint: `/api/admin/security?action=${action}`,
+      details: { action, targetUserId, reason },
+    },
+    { required: true },
+  );
+
   const db = getNeonDb();
   let updated: number;
   try {
@@ -279,14 +290,6 @@ async function changeAccountStatus(
       logger.warn({ error: providerError, targetUserId }, change.providerFailure);
     }
   }
-
-  await logSecurityEvent({
-    userId: adminUserId,
-    eventType: 'admin_action',
-    severity: change.severity,
-    endpoint: `/api/admin/security?action=${action}`,
-    details: { action, targetUserId, reason },
-  });
 
   logger.info({ adminUserId, targetUserId, reason }, `User account ${change.outcome} by admin`);
 

@@ -31,7 +31,6 @@ import { requireMemberPermission } from '@/lib/services/organization-permission-
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
-  isMissingOrganizationDeletionColumns,
   organizationDeletionScheduledFor,
 } from '@/lib/server/organization-deletion';
 import {
@@ -136,27 +135,22 @@ async function fetchOrganizationDeletionStatus(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
 ): Promise<OrganizationDeletionStatus> {
-  try {
-    const [row] = await db.query<{
-      deletion_requested_at: string | null;
-      deletion_scheduled_for: string | null;
-    }>(
-      `select deletion_requested_at, deletion_scheduled_for
-         from public.organizations
-        where id = $1`,
-      [organizationId],
-    );
-    const scheduledFor = row?.deletion_scheduled_for ?? null;
-    return {
-      pending: scheduledFor !== null,
-      requestedAt: scheduledFor !== null ? (row?.deletion_requested_at ?? null) : null,
-      scheduledFor,
-      canCancel: scheduledFor !== null && new Date(scheduledFor).getTime() > Date.now(),
-    };
-  } catch (error) {
-    if (isMissingOrganizationDeletionColumns(error)) return NO_PENDING_DELETION;
-    throw error;
-  }
+  const [row] = await db.query<{
+    deletion_requested_at: string | null;
+    deletion_scheduled_for: string | null;
+  }>(
+    `select deletion_requested_at, deletion_scheduled_for
+       from public.organizations
+      where id = $1`,
+    [organizationId],
+  );
+  const scheduledFor = row?.deletion_scheduled_for ?? null;
+  return {
+    pending: scheduledFor !== null,
+    requestedAt: scheduledFor !== null ? (row?.deletion_requested_at ?? null) : null,
+    scheduledFor,
+    canCancel: scheduledFor !== null && new Date(scheduledFor).getTime() > Date.now(),
+  };
 }
 
 async function handleGet(request: NextRequest) {
@@ -533,25 +527,16 @@ async function handleDelete(request: NextRequest) {
 
   const scheduledFor = organizationDeletionScheduledFor();
 
-  try {
-    const updated = await db.execute(
-      `update public.organizations
-          set deletion_requested_at = now(),
-              deletion_scheduled_for = $2,
-              deletion_requested_by = $3
-        where id = $1`,
-      [org.id, scheduledFor.toISOString(), userId],
-    );
-    if (updated === 0) {
-      throw createError.notFound('Workspace not found');
-    }
-  } catch (error) {
-    if (isMissingOrganizationDeletionColumns(error)) {
-      throw createError.serviceUnavailable(
-        'Workspace deletion is not available yet. Please try again later.',
-      );
-    }
-    throw error;
+  const updated = await db.execute(
+    `update public.organizations
+        set deletion_requested_at = now(),
+            deletion_scheduled_for = $2,
+            deletion_requested_by = $3
+      where id = $1`,
+    [org.id, scheduledFor.toISOString(), userId],
+  );
+  if (updated === 0) {
+    throw createError.notFound('Workspace not found');
   }
 
   logger.warn({ userId, orgId: org.id }, 'Workspace deletion scheduled');

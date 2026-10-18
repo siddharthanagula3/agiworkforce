@@ -196,8 +196,8 @@ async function recordFreeAllowanceSessionCost(
 }
 
 /**
- * Closes sessions whose tab stopped checking in, where it last did plus the
- * lease, and settles their reservations there. One user's on a session start;
+ * Closes sessions whose tab stopped checking in a lease ago, at its last
+ * check-in, and settles their reservations there. One user's on a session start;
  * every user's from the reservation sweep, each settled as its owner.
  */
 export async function settleAbandonedVoiceSessions(input: {

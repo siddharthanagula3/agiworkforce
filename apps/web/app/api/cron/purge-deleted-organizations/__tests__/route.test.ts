@@ -53,14 +53,12 @@ describe('GET /api/cron/purge-deleted-organizations', () => {
     expect(res.status).toBe(401);
   });
 
-  it('reports the columns unprovisioned rather than failing when the migration has not shipped', async () => {
+  it('fails loudly instead of reporting nothing due when the deletion columns are missing', async () => {
     mocks.query.mockImplementation(async () => {
       throw Object.assign(new Error('column does not exist'), { code: '42703' });
     });
     const res = await GET(request() as never);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { candidates: number };
-    expect(body.candidates).toBe(0);
+    expect(res.status).toBe(500);
     expect(mocks.eraseOrganizationData).not.toHaveBeenCalled();
   });
 

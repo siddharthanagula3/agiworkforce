@@ -28,21 +28,8 @@ interface Fixture {
 
 function primeDb(fixture: Fixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
-    if (sql.includes('deletion_scheduled_for <= now()')) {
-      if (sql.includes('erasure_tombstones') && fixture.tombstones === undefined) {
-        throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
-      }
-      if (fixture.due === undefined) {
-        throw Object.assign(new Error('column does not exist'), { code: '42703' });
-      }
-      return fixture.due;
-    }
-    if (sql.includes('erasure_tombstones')) {
-      if (fixture.tombstones === undefined) {
-        throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
-      }
-      return fixture.tombstones;
-    }
+    if (sql.includes('deletion_scheduled_for <= now()')) return fixture.due ?? [];
+    if (sql.includes('erasure_tombstones')) return fixture.tombstones ?? [];
     return [];
   });
 }
@@ -154,29 +141,26 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(dueQuery).toContain('order by tombstone.last_swept_at asc nulls first');
   });
 
-  it('falls back to schedule order when the tombstone table is absent', async () => {
-    primeDb({ due: [{ id: 'user-1', deletion_scheduled_for: null }] });
+  it('fails loudly instead of reporting nothing due when the due query cannot run', async () => {
+    mocks.query.mockRejectedValue(
+      Object.assign(new Error('column does not exist'), { code: '42703' }),
+    );
 
     const response = await GET(cronRequest());
 
-    await expect(response.json()).resolves.toMatchObject({ queued: 1, sweepAvailable: false });
-    const dueQueries = mocks.query.mock.calls
-      .map((call) => String(call[0]))
-      .filter((sql) => sql.includes('deletion_scheduled_for <= now()'));
-    expect(dueQueries).toHaveLength(2);
-    expect(dueQueries[1]).not.toContain('erasure_tombstones');
+    expect(response.status).toBe(500);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
   });
 
-  it('sweeps the suppression list even where the deletion columns were never provisioned', async () => {
-    primeDb({ tombstones: [{ user_id: 'ghost-1', profile_present: true }] });
+  it('fails loudly when the tombstone list cannot be read', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('deletion_scheduled_for <= now()')) return [];
+      throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
+    });
 
     const response = await GET(cronRequest());
 
-    await expect(response.json()).resolves.toMatchObject({
-      message: 'Account deletion columns are not provisioned',
-      resurrected: 1,
-      resweepsQueued: 1,
-    });
+    expect(response.status).toBe(500);
   });
 
   it('reports an account whose job could not be queued without failing the sweep', async () => {

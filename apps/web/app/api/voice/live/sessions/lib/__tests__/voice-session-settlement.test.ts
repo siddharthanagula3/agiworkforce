@@ -257,13 +257,13 @@ describe('settleVoiceSession on the Free monthly voice allowance', () => {
 });
 
 describe('settleAbandonedVoiceSessions', () => {
-  it('closes a silent session a lease past its last check-in and settles it as its owner', async () => {
+  it('closes a silent session at its last check-in and settles it as its owner', async () => {
     const lastSeen = '2026-10-10T10:03:00.000Z';
     const abandoned = record(0, {
       status: 'closed',
       closeReason: 'expired',
       lastSeenAt: lastSeen,
-      closedAt: '2026-10-10T10:13:00.000Z',
+      closedAt: lastSeen,
     });
     const owner = ledgerHolding(4 * BLOCK);
     mocks.claimed.mockReturnValue(owner);
@@ -305,14 +305,14 @@ describe('settleAbandonedVoiceSessions', () => {
 
     expect(settled).toBe(1);
     const sweep = db.query.mock.calls[0]![0] as string;
-    expect(sweep).toContain('least(now(), last_seen_at + make_interval(secs => $2))');
+    expect(sweep).toContain('closed_at = last_seen_at,');
     expect((db.query.mock.calls[0]![1] as unknown[])[1]).toBe(600);
     expect(mocks.claimed).toHaveBeenCalledWith(db, { userId: 'user-1', organizationId: null });
     expect(finalized()).toMatchObject({
       ...voiceReservationIdentity('vs_1'),
       db: owner,
       outcome: 'completed',
-      usage: expect.objectContaining({ billedSeconds: 4 * LIVE_VOICE_BLOCK_SECONDS }),
+      usage: expect.objectContaining({ billedSeconds: 3 * LIVE_VOICE_BLOCK_SECONDS }),
     });
   });
 });

@@ -18,30 +18,6 @@ const GITHUB_SCOPE = { resolveOrganization: false } as const;
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      /relation\s+.+\s+does not exist/i.test(
-        String((error as Record<string, unknown>)['message'] ?? ''),
-      ))
-  );
-}
-
-function isGithubOwnershipSchemaUnavailable(error: unknown): boolean {
-  if (isUndefinedTable(error)) return true;
-  if (!error || typeof error !== 'object') return false;
-  const candidate = error as Record<string, unknown>;
-  return (
-    candidate['code'] === PG_UNDEFINED_COLUMN &&
-    String(candidate['message'] ?? '').includes('ownership_verified_at')
-  );
-}
-
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -72,13 +48,6 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       [userId],
     );
   } catch (err) {
-    if (isGithubOwnershipSchemaUnavailable(err)) {
-      logger.warn(
-        { userId },
-        'GitHub installation ownership schema is unavailable; returning no installations',
-      );
-      return NextResponse.json({ installations: [] });
-    }
     logger.error({ err, userId }, 'Failed to fetch GitHub installations');
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }

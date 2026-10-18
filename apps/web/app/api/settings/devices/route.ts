@@ -11,7 +11,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { resolveSessionsPrincipal } from '../sessions/session-principal';
-import { isCredentialLinkMissing, isRegistryMissing } from './schema-state';
 
 const MAX_DEVICES = 200;
 
@@ -88,12 +87,7 @@ async function readRegistry(
   db: Awaited<ReturnType<typeof resolveSessionsPrincipal>>['db'],
   userId: string,
 ): Promise<RegistrationRow[]> {
-  try {
-    return await db.query<RegistrationRow>(REGISTRY, [userId]);
-  } catch (error) {
-    if (isRegistryMissing(error)) return [];
-    throw error;
-  }
+  return db.query<RegistrationRow>(REGISTRY, [userId]);
 }
 
 function fromRegistration(row: RegistrationRow, now: number): ListedDevice {
@@ -153,29 +147,13 @@ const WITH_CREDENTIALS = `with live as (
   .replace('%JOIN_DESKTOP%', 'left join live l on l.device_id = d.id::text')
   .replace('%JOIN_MOBILE%', 'left join live l on l.device_id = m.id::text');
 
-// Migration 0133 adds device_refresh_tokens.device_id. Until it is applied the
-// registrations still exist and are still worth listing and unlinking, so a
-// pending migration degrades one column rather than failing the whole panel.
-const WITHOUT_CREDENTIALS = REGISTRATIONS.replace(/%LIVE_(DESKTOP|MOBILE)%/g, '0').replace(
-  /%JOIN_(DESKTOP|MOBILE)%/g,
-  '',
-);
-
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-sessions-list');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await resolveSessionsPrincipal(request);
 
-  let rows: DeviceRow[];
-  let credentialStateKnown = true;
-  try {
-    rows = await db.query<DeviceRow>(WITH_CREDENTIALS, [userId]);
-  } catch (error) {
-    if (!isCredentialLinkMissing(error)) throw error;
-    credentialStateKnown = false;
-    rows = await db.query<DeviceRow>(WITHOUT_CREDENTIALS, [userId]);
-  }
+  const rows = await db.query<DeviceRow>(WITH_CREDENTIALS, [userId]);
 
   const now = Date.now();
   const registry = await readRegistry(db, userId);
@@ -189,7 +167,7 @@ async function handleList(request: NextRequest) {
       version: row.version,
       lastSeenAt: row.last_seen_at,
       registeredAt: row.registered_at,
-      hasLiveCredential: credentialStateKnown ? row.live_credentials > 0 : null,
+      hasLiveCredential: row.live_credentials > 0,
       osVersion: null,
       architecture: null,
       shell: null,
@@ -202,7 +180,6 @@ async function handleList(request: NextRequest) {
   return NextResponse.json({
     devices,
     totalCount: devices.length,
-    credentialStateKnown,
   });
 }
 

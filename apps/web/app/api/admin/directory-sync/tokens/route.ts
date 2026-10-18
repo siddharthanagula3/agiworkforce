@@ -10,11 +10,10 @@ import { readJsonBody } from '@/lib/read-json-body';
 import type { DirectorySyncConnectionRow } from '@/lib/server/neon-types';
 import { createScimToken, listScimTokens } from '@/lib/server/scim/scim-token-service';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from '../directory-sync-access';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(request: NextRequest) {
   const rateLimited = await withRateLimit(request, 'scim-token-manage');
@@ -70,7 +69,7 @@ export async function POST(request: NextRequest) {
     const access = await requireDirectorySyncAdmin(request, (organizationId as string) ?? null);
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    if (typeof connectionId !== 'string' || !UUID_PATTERN.test(connectionId)) {
+    if (typeof connectionId !== 'string' || !isUuid(connectionId)) {
       return NextResponse.json({ error: 'connectionId must be a UUID' }, { status: 400 });
     }
 

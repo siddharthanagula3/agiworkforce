@@ -10,10 +10,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requestCloudCodeTurnCancellation } from '@/lib/services/cloud-code-agent-service';
 import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -27,7 +26,7 @@ async function optionalTurnId(request: NextRequest): Promise<string | null> {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return null;
   const turnId = (body as Record<string, unknown>)['turnId'];
   if (turnId === undefined || turnId === null) return null;
-  if (typeof turnId !== 'string' || !UUID_PATTERN.test(turnId)) {
+  if (typeof turnId !== 'string' || !isUuid(turnId)) {
     throw createError.validation('"turnId" must be a turn identifier');
   }
   return turnId;

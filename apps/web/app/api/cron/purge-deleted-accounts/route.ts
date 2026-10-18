@@ -20,28 +20,6 @@ const MAX_TOMBSTONE_SWEEPS_PER_RUN = 5;
 
 const TOMBSTONE_RESWEEP_INTERVAL = '30 days';
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isMissingDeletionColumns(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
-}
-
-function isMissingTable(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
-}
-
-const DUE_ACCOUNTS_BY_SCHEDULE = `
-  select id, deletion_scheduled_for
-    from public.profiles
-   where deletion_scheduled_for is not null
-     and deletion_scheduled_for <= now()
-   order by deletion_scheduled_for asc
-   limit ${MAX_ACCOUNTS_PER_RUN}
-`;
-
 /**
  * Least-recently-attempted account first.
  *
@@ -56,7 +34,7 @@ const DUE_ACCOUNTS_BY_SCHEDULE = `
  * the user-facing schedule. Never-attempted accounts have no tombstone and sort
  * first.
  */
-const DUE_ACCOUNTS_BY_ATTEMPT = `
+const DUE_ACCOUNTS = `
   select profile.id, profile.deletion_scheduled_for
     from public.profiles as profile
     left join public.erasure_tombstones as tombstone on tombstone.user_id = profile.id
@@ -69,16 +47,6 @@ const DUE_ACCOUNTS_BY_ATTEMPT = `
 interface DueAccount {
   id: string;
   deletion_scheduled_for: string | Date | null;
-}
-
-async function listDueAccounts(db: ReturnType<typeof getNeonDb>): Promise<DueAccount[]> {
-  try {
-    return await db.query<DueAccount>(DUE_ACCOUNTS_BY_ATTEMPT, []);
-  } catch (error) {
-    if (!isMissingTable(error)) throw error;
-    logger.warn('public.erasure_tombstones is not provisioned; the due queue cannot rotate');
-    return db.query<DueAccount>(DUE_ACCOUNTS_BY_SCHEDULE, []);
-  }
 }
 
 function scheduleStamp(value: string | Date | null): string {
@@ -106,21 +74,15 @@ export async function GET(request: NextRequest) {
   const connectorCacheRowsExpired =
     (await sweepExpiredMcpResponseCache()) + (await sweepExpiredMcpDiscoveryCache());
 
-  let due: DueAccount[] = [];
-  let deletionColumnsProvisioned = true;
+  let due: DueAccount[];
   try {
-    due = await listDueAccounts(db);
+    due = await db.query<DueAccount>(DUE_ACCOUNTS, []);
   } catch (error) {
-    if (isMissingDeletionColumns(error)) {
-      deletionColumnsProvisioned = false;
-      logger.warn('profiles.deletion_scheduled_for is not provisioned; nothing is due');
-    } else {
-      logger.error(
-        { error: error instanceof Error ? error.message : String(error) },
-        'Deleted account purge cron job failed to list due accounts',
-      );
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Deleted account purge cron job failed to list due accounts',
+    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   let queued = 0;
@@ -147,8 +109,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let tombstones: Array<{ user_id: string; profile_present: boolean }> = [];
-  let sweepAvailable = true;
+  let tombstones: Array<{ user_id: string; profile_present: boolean }>;
   try {
     tombstones = await db.query<{ user_id: string; profile_present: boolean }>(
       `
@@ -167,17 +128,11 @@ export async function GET(request: NextRequest) {
       [],
     );
   } catch (error) {
-    sweepAvailable = false;
-    if (isMissingTable(error)) {
-      logger.warn(
-        'public.erasure_tombstones is not provisioned; restored data cannot be re-erased',
-      );
-    } else {
-      logger.error(
-        { error: error instanceof Error ? error.message : String(error) },
-        'Deleted account purge cron job failed to list erasure tombstones',
-      );
-    }
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Deleted account purge cron job failed to list erasure tombstones',
+    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
   const resweepBucket = new Date().toISOString().slice(0, 10);
@@ -215,15 +170,12 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
-    message: deletionColumnsProvisioned
-      ? 'Deleted account erasures queued'
-      : 'Account deletion columns are not provisioned',
+    message: 'Deleted account erasures queued',
     candidates: due.length,
     queued,
     alreadyQueued,
     failed,
     deferred: Math.max(0, due.length - MAX_ACCOUNTS_PER_RUN),
-    sweepAvailable,
     tombstoneCandidates: tombstones.length,
     resurrected,
     resweepsQueued,

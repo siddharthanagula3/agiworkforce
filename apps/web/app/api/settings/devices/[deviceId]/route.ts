@@ -21,9 +21,7 @@ import {
   type DeviceRevocationReason,
 } from '@/lib/device-steps/device-registry';
 import { resolveSessionsPrincipal } from '../../sessions/session-principal';
-import { isCredentialLinkMissing, isRegistryMissing } from '../schema-state';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from '@/lib/uuid';
 
 /**
  * `lost` finishes the credential family for good rather than merely revoking
@@ -65,7 +63,7 @@ async function handleUnlink(
   if (csrfError) return csrfError as NextResponse;
 
   const { deviceId } = await context.params;
-  if (!UUID.test(deviceId)) {
+  if (!isUuid(deviceId)) {
     throw createError.validation('Invalid device ID');
   }
   const options = await readUnlinkOptions(request);
@@ -94,25 +92,12 @@ async function handleUnlink(
     const device = owned[0];
     if (!device) return null;
 
-    // Until 0133 lands there is no device_id to scope by. Revoking every family
-    // on the account would sign out the user's other devices to unlink one, so
-    // this unregisters and says plainly that no credential was revoked.
-    let revoked = 0;
-    let compromiseRecorded = false;
-    let credentialsRevocable = true;
-    try {
-      const outcome = await revokeDeviceRefreshCredentials(tx, {
-        userId,
-        deviceId,
-        credentialFamilyId: registered?.credentialFamilyId ?? null,
-        ...(options.lost ? { compromisedAs: 'device_lost' as const } : {}),
-      });
-      revoked = outcome.revoked;
-      compromiseRecorded = outcome.compromiseRecorded;
-    } catch (error) {
-      if (!isCredentialLinkMissing(error)) throw error;
-      credentialsRevocable = false;
-    }
+    const { revoked, compromiseRecorded } = await revokeDeviceRefreshCredentials(tx, {
+      userId,
+      deviceId,
+      credentialFamilyId: registered?.credentialFamilyId ?? null,
+      ...(options.lost ? { compromisedAs: 'device_lost' as const } : {}),
+    });
 
     if (options.logoutAll) {
       await revokeMobileIntentTokens(tx, userId, null);
@@ -146,7 +131,6 @@ async function handleUnlink(
       name: device.name,
       revokedCredentialCount: revoked,
       compromiseRecorded,
-      credentialsRevocable,
       identitySessionId: registered?.identitySessionId ?? null,
     };
   });
@@ -230,7 +214,6 @@ async function handleUnlink(
   return NextResponse.json({
     message: options.lost ? 'Device reported lost and unlinked' : 'Device unlinked',
     revokedCredentials: result.revokedCredentialCount + (sessionRevoked ? 1 : 0),
-    credentialsRevoked: result.credentialsRevocable,
     credentialFamilyCompromised: result.compromiseRecorded,
     remoteControlRevoked,
     liveSessionsDropped: revocation?.liveSessionsDropped ?? null,
@@ -259,7 +242,7 @@ async function handleStopRemoteWork(
   if (csrfError) return csrfError as NextResponse;
 
   const { deviceId } = await context.params;
-  if (!UUID.test(deviceId)) {
+  if (!isUuid(deviceId)) {
     throw createError.validation('Invalid device ID');
   }
   const parsed = StopRequestSchema.safeParse(await request.json().catch(() => null));
@@ -325,7 +308,7 @@ async function handleRename(
   if (csrfError) return csrfError as NextResponse;
 
   const { deviceId } = await context.params;
-  if (!UUID.test(deviceId)) {
+  if (!isUuid(deviceId)) {
     throw createError.validation('Invalid device ID');
   }
   const parsed = DeviceRenameRequestSchema.safeParse(await request.json().catch(() => null));
@@ -336,15 +319,10 @@ async function handleRename(
   }
   const { name } = parsed.data;
 
-  let count = 0;
-  try {
-    count += await db.execute(
-      `update device_registrations set name = $3, updated_at = now() where id = $1 and user_id = $2`,
-      [deviceId, userId, name],
-    );
-  } catch (error) {
-    if (!isRegistryMissing(error)) throw error;
-  }
+  let count = await db.execute(
+    `update device_registrations set name = $3, updated_at = now() where id = $1 and user_id = $2`,
+    [deviceId, userId, name],
+  );
   if (count === 0) {
     count += await db.execute(
       `update desktop_devices set name = $3, updated_at = now() where id = $1 and user_id = $2`,
@@ -384,32 +362,27 @@ async function readRegisteredDevice(
   deviceId: string,
   userId: string,
 ): Promise<RegisteredDevice | null> {
-  try {
-    const rows = await db.query<{
-      kind: string;
-      name: string | null;
-      install_id: string;
-      credential_family_id: string | null;
-      identity_session_id: string | null;
-    }>(
-      `select surface as kind, name, install_id, credential_family_id, identity_session_id
-         from device_registrations where id = $1 and user_id = $2 limit 1`,
-      [deviceId, userId],
-    );
-    const row = rows[0];
-    return row
-      ? {
-          kind: row.kind,
-          name: row.name,
-          installId: row.install_id,
-          credentialFamilyId: row.credential_family_id,
-          identitySessionId: row.identity_session_id,
-        }
-      : null;
-  } catch (error) {
-    if (isRegistryMissing(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<{
+    kind: string;
+    name: string | null;
+    install_id: string;
+    credential_family_id: string | null;
+    identity_session_id: string | null;
+  }>(
+    `select surface as kind, name, install_id, credential_family_id, identity_session_id
+       from device_registrations where id = $1 and user_id = $2 limit 1`,
+    [deviceId, userId],
+  );
+  const row = rows[0];
+  return row
+    ? {
+        kind: row.kind,
+        name: row.name,
+        installId: row.install_id,
+        credentialFamilyId: row.credential_family_id,
+        identitySessionId: row.identity_session_id,
+      }
+    : null;
 }
 
 interface LogoutEverywhere {

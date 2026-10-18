@@ -11,7 +11,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { requireOrganizationOwner } from '@/lib/services/organization-membership-service';
-import { isMissingOrganizationDeletionColumns } from '@/lib/server/organization-deletion';
 
 async function handleCancel(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-delete-cancel');
@@ -29,23 +28,17 @@ async function handleCancel(request: NextRequest) {
 
   await requireOrganizationOwner(db, userId, activeOrganizationId, 'cancel its deletion');
 
-  let cancelled: Array<{ id: string }> = [];
-  try {
-    cancelled = await db.query<{ id: string }>(
-      `update public.organizations
-          set deletion_requested_at = null,
-              deletion_scheduled_for = null,
-              deletion_requested_by = null
-        where id = $1
-          and deletion_scheduled_for is not null
-          and deletion_scheduled_for > now()
-        returning id`,
-      [activeOrganizationId],
-    );
-  } catch (error) {
-    if (!isMissingOrganizationDeletionColumns(error)) throw error;
-    return NextResponse.json({ message: 'No workspace deletion is pending.', cancelled: false });
-  }
+  const cancelled = await db.query<{ id: string }>(
+    `update public.organizations
+        set deletion_requested_at = null,
+            deletion_scheduled_for = null,
+            deletion_requested_by = null
+      where id = $1
+        and deletion_scheduled_for is not null
+        and deletion_scheduled_for > now()
+      returning id`,
+    [activeOrganizationId],
+  );
 
   if (cancelled.length > 0) {
     logger.info(

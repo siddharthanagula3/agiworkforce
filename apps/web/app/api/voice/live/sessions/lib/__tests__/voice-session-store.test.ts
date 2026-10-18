@@ -198,7 +198,7 @@ describe('closeExpiredVoiceSessions', () => {
     expect(sql).toContain("status = 'active'");
     expect(sql).toContain('last_seen_at <= now() - make_interval');
     expect(sql).not.toContain('started_at <=');
-    expect(sql).toContain('closed_at = least(now(), last_seen_at + make_interval(secs => $2))');
+    expect(sql).toContain('closed_at = last_seen_at,');
     expect(params[0]).toBe('user_1');
     expect(params[1]).toBe(600);
     expect(params[2]).toBe('expired');

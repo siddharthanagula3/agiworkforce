@@ -41,7 +41,7 @@ async function handleReadVoiceSession(request: NextRequest) {
 
   // A tab that is closed, suspended or disconnected never posts the close, so
   // the row it left behind would stay open forever and offer itself back as a
-  // session to resume. It is closed and settled a lease past its last check-in.
+  // session to resume. It is closed at its last check-in and settled.
   await settleAbandonedVoiceSessions({
     db: scoped.db,
     userId,

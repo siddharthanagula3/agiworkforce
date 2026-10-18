@@ -10,11 +10,10 @@ import {
   isDirectorySyncAccessFailure,
   requireDirectorySyncAdmin,
 } from '../../directory-sync-access';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ tokenId: string }> };
 
@@ -34,7 +33,7 @@ export async function DELETE(request: NextRequest, routeContext: RouteContext) {
     );
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    if (!UUID_PATTERN.test(tokenId)) {
+    if (!isUuid(tokenId)) {
       return NextResponse.json({ error: 'Token not found' }, { status: 404 });
     }
 

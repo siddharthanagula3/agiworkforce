@@ -80,6 +80,25 @@ async function handleTakedown(request: NextRequest): Promise<NextResponse> {
     throw createError.notFound('No public content is served from that token');
   }
 
+  await logSecurityEvent(
+    {
+      userId: adminUserId,
+      eventType: 'admin_action',
+      severity: 'high',
+      ipAddress: getClientIp(request),
+      userAgent: request.headers.get('user-agent') ?? undefined,
+      endpoint: '/api/admin/takedown',
+      details: {
+        action: 'public_content_takedown',
+        kind: target.kind,
+        token,
+        ownerId: target.ownerId,
+        reason: parsed.data.reason,
+      },
+    },
+    { required: true },
+  );
+
   let removed: number;
   try {
     removed =
@@ -103,22 +122,6 @@ async function handleTakedown(request: NextRequest): Promise<NextResponse> {
   if (removed === 0) {
     throw createError.notFound('No public content is served from that token');
   }
-
-  await logSecurityEvent({
-    userId: adminUserId,
-    eventType: 'admin_action',
-    severity: 'high',
-    ipAddress: getClientIp(request),
-    userAgent: request.headers.get('user-agent') ?? undefined,
-    endpoint: '/api/admin/takedown',
-    details: {
-      action: 'public_content_takedown',
-      kind: target.kind,
-      token,
-      ownerId: target.ownerId,
-      reason: parsed.data.reason,
-    },
-  });
 
   return NextResponse.json({
     success: true,

@@ -18,16 +18,15 @@ import {
 } from '@/lib/server/workspace-revision';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
 import { CustomRoleSchema } from '../role-schema';
+import { isUuid } from '@/lib/uuid';
 
 export const runtime = 'nodejs';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type RouteContext = { params: Promise<{ roleId: string }> };
 
 async function parseRoleId(context: RouteContext): Promise<string> {
   const { roleId } = await context.params;
-  if (!UUID_RE.test(roleId)) throw createError.validation('roleId must be a uuid');
+  if (!isUuid(roleId)) throw createError.validation('roleId must be a uuid');
   return roleId;
 }
 
@@ -99,7 +98,7 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
 
   const params = new URL(request.url).searchParams;
   const reassignToRoleId = params.get('reassignToRoleId');
-  if (reassignToRoleId !== null && !UUID_RE.test(reassignToRoleId)) {
+  if (reassignToRoleId !== null && !isUuid(reassignToRoleId)) {
     throw createError.validation('reassignToRoleId must be a uuid');
   }
   const rawVersion = params.get('version');
