@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { RUNWAY_API_BASE, RUNWAY_API_VERSION } from '@/lib/server/provider-endpoints';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -121,11 +122,11 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
     throw createError.serviceUnavailable('Runway API not configured');
   }
 
-  const response = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+  const response = await fetch(`${RUNWAY_API_BASE}/tasks/${taskId}`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'X-Runway-Version': '2024-11-06',
+      'X-Runway-Version': RUNWAY_API_VERSION,
     },
     signal: AbortSignal.timeout(20_000),
   });

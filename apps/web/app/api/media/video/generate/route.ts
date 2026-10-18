@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { RUNWAY_API_BASE, RUNWAY_API_VERSION } from '@/lib/server/provider-endpoints';
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -543,25 +544,21 @@ async function generateWithRunway(
     throw createError.validation('Runway video prompts must be 1,000 characters or fewer.');
   }
 
-  const response = await fetchProviderSubmission(
-    'Runway',
-    'https://api.dev.runwayml.com/v1/text_to_video',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'X-Runway-Version': '2024-11-06',
-      },
-      body: JSON.stringify({
-        model: model.apiModelId ?? model.id,
-        promptText: prompt,
-        duration: durationSecs,
-        ratio: '1280:720',
-      }),
-      signal: AbortSignal.timeout(30_000),
+  const response = await fetchProviderSubmission('Runway', `${RUNWAY_API_BASE}/text_to_video`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'X-Runway-Version': RUNWAY_API_VERSION,
     },
-  );
+    body: JSON.stringify({
+      model: model.apiModelId ?? model.id,
+      promptText: prompt,
+      duration: durationSecs,
+      ratio: '1280:720',
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
 
   if (!response.ok) {
     if (providerSubmissionWasAmbiguous(response)) {
