@@ -1,4 +1,4 @@
-import type { ChatRequest, TextBlock } from '@agiworkforce/types';
+import { listCanonicalModels, type ChatRequest, type TextBlock } from '@agiworkforce/types';
 import { splitSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import type {
   OpenAIChatCompletionCreateParams,
@@ -20,8 +20,19 @@ interface AnthropicCacheableTextBlock {
 
 const OPENROUTER_CACHE_CONTROL_ROUTE_PREFIXES = ['anthropic/', 'google/'] as const;
 
+const IMPLICIT_CACHE_ONLY_SLUGS: ReadonlySet<string> = new Set(
+  listCanonicalModels().flatMap((model) =>
+    model.openRouterSlug && model.providerCompatibility?.explicitPromptCache === false
+      ? [model.openRouterSlug]
+      : [],
+  ),
+);
+
 function supportsCacheControlPassthrough(model: string): boolean {
-  return OPENROUTER_CACHE_CONTROL_ROUTE_PREFIXES.some((prefix) => model.startsWith(prefix));
+  return (
+    OPENROUTER_CACHE_CONTROL_ROUTE_PREFIXES.some((prefix) => model.startsWith(prefix)) &&
+    !IMPLICIT_CACHE_ONLY_SLUGS.has(model)
+  );
 }
 
 function buildCacheControl(

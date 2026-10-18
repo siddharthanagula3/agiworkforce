@@ -313,24 +313,25 @@
         "provider": "google",
         "developer": "google",
         "providerModelId": "gemini-4-argon",
+        "openRouterSlug": "google/gemini-4-argon",
         "kind": "reasoning",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": [],
-        "family": null,
-        "version": null
+        "aliases": ["google/gemini-4-argon"],
+        "family": "gemini-pro",
+        "version": "4"
       },
       "lifecycle": {
         "status": "active",
-        "availability": "coming_soon",
-        "unavailableReason": "Google announced Gemini 4 Argon on September 30, 2026 with access limited to trusted cyber defenders in its Fairwind Program; paid API customers and Google AI Ultra subscribers come next, with no date published.",
+        "availability": "live",
+        "released": "October 13, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-10-13",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-10-09",
-        "stageSource": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
+        "stage": "promoted",
+        "stagedOn": "2026-10-18",
+        "stageSource": "catalog/model-families.json#google/gemini-pro",
         "replacedBy": null
       },
       "speed": "medium",
@@ -13468,8 +13469,8 @@
       "providerModelId": "gemini-4-argon",
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
-      "availability": "coming_soon",
-      "selectable": false,
+      "availability": "live",
+      "selectable": true,
       "isDefault": true,
       "cacheClass": "provider_implicit_prompt_cache",
       "commercialStatus": "agi_direct",
@@ -13479,7 +13480,9 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 2,
         "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.1
+        "cacheReadPerMillion": 0.1,
+        "promoExpiresAt": "2026-12-01T00:00:00Z",
+        "postPromoPrices": { "input": 4, "output": 20, "cached_input": 0.2 }
       }
     },
     "google/gemini-3.5-flash-lite": {
@@ -24034,27 +24037,27 @@
     },
     "gemini-4-argon": {
       "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
+      "imageInput": true,
+      "audioInput": true,
+      "videoInput": true,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
       "videoOutput": false,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true,
       "imageEditing": null,
       "realtime": null,
       "reranking": null,
       "toolSchemaSupport": null,
       "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
+      "agentic": true,
+      "webSearch": true,
       "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
+      "codeExecution": true,
+      "promptCaching": true
     },
     "gemini-3.5-flash-lite": {
       "textInput": true,
@@ -33972,7 +33975,9 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
       "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.1
+      "cacheReadPerMillion": 0.1,
+      "promoExpiresAt": "2026-12-01T00:00:00Z",
+      "postPromoPrices": { "input": 4, "output": 20, "cached_input": 0.2 }
     },
     "gemini-3.5-flash-lite": {
       "currency": "USD",
@@ -37007,12 +37012,7 @@
     },
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
     "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
-    "gemini-4-argon": {
-      "contextWindowUnpublished": {
-        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
-        "verifiedOn": "2026-10-09"
-      }
-    },
+    "gemini-4-argon": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "gemini-nano-banana-2.1": { "contextTokens": 131072 },
     "gemini-3-pro-image": { "contextTokens": 65536, "maxOutputTokens": 32768 },
@@ -38727,6 +38727,13 @@
       "verifiedBy": "owner-direction-2026-10-13",
       "status": "ROSTER",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-18/88",
+      "date": "2026-10-18",
+      "verifiedBy": "official-google-gemini-4-argon-ga-pages-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon, which keeps gemini-3.1-pro-preview as previous and as its one fallback; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview. The only route is the direct Google one. OpenRouter, Vercel AI Gateway and Experiential Labs list the model, but a marketplace route cannot carry the promotion end date, so its price sheet would be half the real rate from 2026-12-01. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
     }
   ],
   "retiredModels": {
@@ -40170,13 +40177,13 @@
       "canonicalFamily": "gemini-pro",
       "tier": "frontier",
       "lifecyclePolicy": "preview",
-      "activeModelKey": "gemini-3.1-pro-preview",
-      "activeGeneration": "3.1",
-      "activeLifecycle": "preview",
-      "previousModelKey": null,
-      "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "activeModelKey": "gemini-4-argon",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": "gemini-3.1-pro-preview",
+      "fallbackChain": ["gemini-3.1-pro-preview"],
+      "promotedAt": "2026-10-18",
+      "promotionReason": "moved on the owner's request of 2026-10-18 to add Gemini 4 Argon, which Google made available to everyone in the Gemini API as gemini-4-argon on 2026-10-13 (https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud; model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, stable); no probe was made and the eval gate was not run, neither approved by the owner"
     },
     "google/gemini-flash-image": {
       "provider": "google",
@@ -40832,7 +40839,7 @@
           "description": "Shared multimodal balanced route. Model and provider are selected by the canonical registry."
         },
         "long_context_balanced": {
-          "modelKey": "gemini-3.1-pro-preview",
+          "modelKey": "gemini-4-argon",
           "label": "Long Context Balanced",
           "description": "Shared long context balanced route. Model and provider are selected by the canonical registry."
         },
@@ -40932,7 +40939,7 @@
           "description": "Shared multimodal pro route. Model and provider are selected by the canonical registry."
         },
         "long_context_pro": {
-          "modelKey": "gemini-3.1-pro-preview",
+          "modelKey": "gemini-4-argon",
           "label": "Long Context Pro",
           "description": "Shared long context pro route. Model and provider are selected by the canonical registry."
         },
@@ -40958,7 +40965,7 @@
       "pro_additions": [
         "gpt-6.1-sol",
         "claude-sonnet-5-5",
-        "gemini-3.1-pro-preview",
+        "gemini-4-argon",
         "deepseek-flash",
         "deepseek-v4-pro",
         "qwen-3.7-plus",

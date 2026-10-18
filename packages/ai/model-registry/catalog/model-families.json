@@ -1294,7 +1294,7 @@
       "tier": "frontier",
       "modelType": "reasoning",
       "lifecyclePolicy": "preview",
-      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-pro$",
+      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-(?:pro|argon)$",
       "requiredCapabilities": [
         "functionCalling",
         "imageInput",
@@ -1307,6 +1307,58 @@
       "minContextTokens": 2000000,
       "minMaxOutputTokens": null,
       "active": {
+        "modelKey": "gemini-4-argon",
+        "generation": "4",
+        "lifecycle": "stable",
+        "promotedAt": "2026-10-18",
+        "promotionReason": "moved on the owner's request of 2026-10-18 to add Gemini 4 Argon, which Google made available to everyone in the Gemini API as gemini-4-argon on 2026-10-13 (https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud; model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, stable); no probe was made and the eval gate was not run, neither approved by the owner",
+        "evaluation": {
+          "gates": {
+            "providerAvailability": "configured on google",
+            "familyIdentity": "matches gemini-pro at tier frontier",
+            "lifecycleEligibility": "lifecycle stable is allowed",
+            "capabilityCoverage": "context 1048576 below required 2000000",
+            "regressionThresholds": "no shared benchmarks published"
+          },
+          "seeded": false
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 10,
+          "cacheReadPerMillion": 0.1,
+          "promoExpiresAt": "2026-12-01T00:00:00Z"
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": true,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true,
+          "imageEditing": null,
+          "realtime": null,
+          "reranking": null,
+          "toolSchemaSupport": null,
+          "computerUse": false,
+          "agentic": true,
+          "webSearch": true,
+          "deepResearch": false,
+          "codeExecution": true,
+          "promptCaching": true
+        },
+        "limitSnapshot": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
+        "benchmarkSnapshot": {}
+      },
+      "previous": {
         "modelKey": "gemini-3.1-pro-preview",
         "generation": "3.1",
         "lifecycle": "preview",
@@ -1344,9 +1396,15 @@
           "aime": 95
         }
       },
-      "previous": null,
-      "fallbackChain": [],
-      "history": []
+      "fallbackChain": ["gemini-3.1-pro-preview"],
+      "history": [
+        {
+          "promotedAt": "2026-10-18",
+          "from": "gemini-3.1-pro-preview",
+          "to": "gemini-4-argon",
+          "reason": "moved on the owner's request of 2026-10-18 to add Gemini 4 Argon, which Google made available to everyone in the Gemini API as gemini-4-argon on 2026-10-13 (https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud; model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, stable); no probe was made and the eval gate was not run, neither approved by the owner"
+        }
+      ]
     },
     "google/gemini-flash-image": {
       "provider": "google",
