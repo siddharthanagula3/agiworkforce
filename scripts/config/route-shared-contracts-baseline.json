@@ -125,7 +125,6 @@
     "settings/organization/members",
     "settings/organization/members/[userId]",
     "settings/organization/members/[userId]/roles",
-    "settings/organization/policy/effective/explain",
     "settings/organization/policy/overrides/[overrideId]",
     "settings/organization/posture",
     "settings/organization/roles/[roleId]",

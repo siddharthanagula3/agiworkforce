@@ -11,6 +11,16 @@ const SOURCE = /\.(?:tsx?|mts|mjs|jsx?|rs|swift|kt|json|html|ya?ml)$/;
 const TEST_FILE = /\.(?:test|spec)\.[tj]sx?$/;
 // A registry names a route by its file path, which is never a call to it.
 const ROUTE_FILE_PATH = /app\/api\/[^\s'"`]*route\.tsx?/g;
+const CODE_FILE = /\.(?:tsx?|mts|mjs|jsx?|rs|swift|kt)$/;
+// Strings are matched first so a `//` inside a URL literal is not read as a
+// comment; only what is left outside a string is a comment.
+const STRING_OR_COMMENT =
+  /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+
+// A path named only in a comment is a mention, never a call.
+function withoutComments(text: string): string {
+  return text.replace(STRING_OR_COMMENT, (_match, literal: string | undefined) => literal ?? '');
+}
 
 /**
  * A route nothing calls is either a mistake or a decision. This pins the
@@ -116,11 +126,12 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'public API for sessions and usage:read keys that prices a chat completion in credits before it is sent, documented in openapi.json',
   },
 
-  // Built this wave by another executor; their surfaces are still landing.
   {
     url: '/api/code/sessions/handoff',
-    why: 'agi code handoff in the CLI posts here; that caller lands with the CLI lane',
+    why: 'agi code handoff posts here, building the path from CODE_SESSIONS_PATH in apps/cli/src/cloud/code_push.rs',
   },
+
+  // Built this wave by another executor; their surfaces are still landing.
   { url: '/api/plugins/installations', why: 'plugins directory work in flight' },
   { url: '/api/plugins/installations/[id]', why: 'plugins directory work in flight' },
   { url: '/api/plugins/uploads', why: 'plugins directory work in flight' },
@@ -169,7 +180,8 @@ function callerCorpus(): string[] {
     })
     .map((file) => {
       try {
-        return readFileSync(file, 'utf8').replace(ROUTE_FILE_PATH, '');
+        const text = readFileSync(file, 'utf8');
+        return (CODE_FILE.test(file) ? withoutComments(text) : text).replace(ROUTE_FILE_PATH, '');
       } catch {
         return '';
       }
