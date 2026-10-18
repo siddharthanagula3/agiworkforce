@@ -114,23 +114,23 @@ export function createVercelGatewayAdapter(
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: VERCEL_GATEWAY_PROVIDER_ID,
-      });
-
-      applyVercelGatewayProviderOptions(
-        params,
-        config.providerOptions,
-        req.metadata,
-        req.zeroDataRetentionOnly,
-      );
-
-      params.stream_options = { include_usage: true };
-
-      const normalizer = createVercelGatewayUsageNormalizer();
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: VERCEL_GATEWAY_PROVIDER_ID,
+        });
+
+        applyVercelGatewayProviderOptions(
+          params,
+          config.providerOptions,
+          req.metadata,
+          req.zeroDataRetentionOnly,
+        );
+
+        params.stream_options = { include_usage: true };
+
+        const normalizer = createVercelGatewayUsageNormalizer();
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

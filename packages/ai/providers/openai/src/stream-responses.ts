@@ -1,6 +1,7 @@
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type {
+  ResponseCompletedEvent,
   ResponseOutputFunctionCallItem,
   ResponseOutputItem,
   ResponseOutputMessageItem,
@@ -150,6 +151,37 @@ function mapIncompleteReason(
     default:
       return 'end_turn';
   }
+}
+
+function usageChunkFor(response: {
+  output?: readonly ResponseOutputItem[];
+  usage?: ResponseCompletedEvent['response']['usage'];
+}): StreamChunk | undefined {
+  const usage = response.usage;
+  if (!usage) return undefined;
+  const webSearchCalls = countWebSearchCalls(response.output ?? []);
+  const codeInterpreter = codeInterpreterCalls(response.output ?? []);
+  const usageChunk: StreamChunk = {
+    type: 'usage',
+    ...(usage.input_tokens !== undefined ? { inputTokens: usage.input_tokens } : {}),
+    ...(usage.output_tokens !== undefined ? { outputTokens: usage.output_tokens } : {}),
+    ...(usage.input_tokens_details?.cached_tokens !== undefined
+      ? { cacheReadTokens: usage.input_tokens_details.cached_tokens }
+      : {}),
+    ...(usage.input_tokens_details?.cache_write_tokens !== undefined
+      ? { cacheWriteTokens: usage.input_tokens_details.cache_write_tokens }
+      : {}),
+    ...(usage.output_tokens_details?.reasoning_tokens !== undefined
+      ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
+      : {}),
+    ...(webSearchCalls.searches > 0 ? { webSearchRequests: webSearchCalls.searches } : {}),
+    ...(webSearchCalls.pageActions > 0 ? { webFetchRequests: webSearchCalls.pageActions } : {}),
+    ...(codeInterpreter.calls > 0 ? { codeExecutionRequests: codeInterpreter.calls } : {}),
+    ...(codeInterpreter.containerIds.length > 0
+      ? { codeExecutionContainerIds: codeInterpreter.containerIds }
+      : {}),
+  };
+  return usageChunk;
 }
 
 export async function* translateOpenAIResponsesStream(
@@ -539,34 +571,8 @@ export async function* translateOpenAIResponsesStream(
           emitted.serverTool = true;
           yield searchResult;
         }
-        const usage = ev.response.usage;
-        if (usage) {
-          const webSearchCalls = countWebSearchCalls(ev.response.output ?? []);
-          const codeInterpreter = codeInterpreterCalls(ev.response.output ?? []);
-          const usageChunk: StreamChunk = {
-            type: 'usage',
-            ...(usage.input_tokens !== undefined ? { inputTokens: usage.input_tokens } : {}),
-            ...(usage.output_tokens !== undefined ? { outputTokens: usage.output_tokens } : {}),
-            ...(usage.input_tokens_details?.cached_tokens !== undefined
-              ? { cacheReadTokens: usage.input_tokens_details.cached_tokens }
-              : {}),
-            ...(usage.input_tokens_details?.cache_write_tokens !== undefined
-              ? { cacheWriteTokens: usage.input_tokens_details.cache_write_tokens }
-              : {}),
-            ...(usage.output_tokens_details?.reasoning_tokens !== undefined
-              ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
-              : {}),
-            ...(webSearchCalls.searches > 0 ? { webSearchRequests: webSearchCalls.searches } : {}),
-            ...(webSearchCalls.pageActions > 0
-              ? { webFetchRequests: webSearchCalls.pageActions }
-              : {}),
-            ...(codeInterpreter.calls > 0 ? { codeExecutionRequests: codeInterpreter.calls } : {}),
-            ...(codeInterpreter.containerIds.length > 0
-              ? { codeExecutionContainerIds: codeInterpreter.containerIds }
-              : {}),
-          };
-          yield usageChunk;
-        }
+        const usageChunk = usageChunkFor(ev.response);
+        if (usageChunk) yield usageChunk;
         if (ev.response.error) {
           emitted.error = true;
           yield {
@@ -609,6 +615,8 @@ export async function* translateOpenAIResponsesStream(
           emitted.serverTool = true;
           yield searchResult;
         }
+        const usageChunk = usageChunkFor(ev.response);
+        if (usageChunk) yield usageChunk;
         yield {
           type: 'stop',
           reason: mapIncompleteReason(ev.response.incomplete_details?.reason),

@@ -133,12 +133,12 @@ export function createPerplexityAdapter(config: PerplexityAdapterConfig = {}): P
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'perplexity',
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'perplexity',
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

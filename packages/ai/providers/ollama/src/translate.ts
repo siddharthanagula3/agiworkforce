@@ -6,6 +6,7 @@ import type {
   TextBlock,
   ToolDef,
 } from '@agiworkforce/types';
+import { inlineFileBlockAsText } from '@agiworkforce/types';
 import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 
 import type { OllamaChatMessage, OllamaChatRequest, OllamaTool } from './types';
@@ -22,6 +23,12 @@ function collapseTextBlocks(blocks: ContentBlock[]): string {
     .filter(isTextBlock)
     .map((b) => b.text)
     .join('\n\n');
+}
+
+function inlineFileBlocks(blocks: ContentBlock[]): string[] {
+  return blocks
+    .filter((b): b is Extract<ContentBlock, { type: 'file' }> => b.type === 'file')
+    .map((b) => inlineFileBlockAsText(b, 'Ollama chat messages carry text and images only'));
 }
 
 function collectImageBase64s(blocks: ContentBlock[]): string[] {
@@ -42,7 +49,9 @@ function translateMessage(msg: ProviderMessage): OllamaChatMessage[] {
     (b): b is Extract<ContentBlock, { type: 'tool_result' }> => b.type === 'tool_result',
   );
 
-  const text = collapseTextBlocks(msg.content);
+  const text = [collapseTextBlocks(msg.content), ...inlineFileBlocks(msg.content)]
+    .filter((part) => part.length > 0)
+    .join('\n\n');
   const images = collectImageBase64s(msg.content);
   const toolCalls = msg.content
     .filter((b): b is Extract<ContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')

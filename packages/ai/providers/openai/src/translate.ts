@@ -192,9 +192,8 @@ function prependExplicitSystem(
   return [{ role: systemRole, content: text }, ...messages];
 }
 
-function translateTool(tool: ToolDef, strict: boolean, provider: string): OpenAIChatTool {
+function translateTool(tool: ToolDef, strict: boolean): OpenAIChatTool {
   const parameters = normalizeOpenAIStrictToolParameters(tool.inputSchema, strict);
-  void provider;
   return {
     type: 'function',
     function: {
@@ -272,6 +271,14 @@ export function derivePromptCacheKey(req: ChatRequest): string | undefined {
   return `${PROMPT_CACHE_KEY_PREFIX}_${digest}`;
 }
 
+export function wireMetadata(req: ChatRequest): Record<string, string> | undefined {
+  if (!req.metadata) return undefined;
+  const entries = Object.entries(req.metadata).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 export interface TranslateOptions {
   compat: OpenAICompletionsCompatDefaults;
   provider: string;
@@ -300,7 +307,7 @@ export function translateChatRequest(
   const messages = prependExplicitSystem(baseMessages, req.system, systemRole);
 
   const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
-  const translatedTools = req.tools?.map((t) => translateTool(t, strict, provider)) ?? [];
+  const translatedTools = req.tools?.map((t) => translateTool(t, strict)) ?? [];
   const rawVendorTools = req.rawVendorTools ?? [];
   const hasTools = translatedTools.length + rawVendorTools.length > 0;
   const vendorTools =
@@ -317,6 +324,7 @@ export function translateChatRequest(
   const toolChoice = translateToolChoice(req.toolChoice);
   const promptCacheKey = derivePromptCacheKey(req);
   const responseFormat = translateResponseFormat(req);
+  const metadata = wireMetadata(req);
 
   const reasoningEffort = resolveChatReasoningEffort(req, compat, provider, hasTools);
   const sampling = provider !== 'openai' || acceptsSamplingParameters(req.model, reasoningEffort);
@@ -336,7 +344,7 @@ export function translateChatRequest(
     ...(req.presencePenalty !== undefined ? { presence_penalty: req.presencePenalty } : {}),
     ...(req.logitBias ? { logit_bias: req.logitBias } : {}),
     ...(req.endUserId ? { user: req.endUserId } : {}),
-    ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
+    ...(metadata ? { metadata } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
     ...(responseFormat ? { response_format: responseFormat } : {}),
   };

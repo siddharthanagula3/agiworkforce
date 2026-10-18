@@ -101,12 +101,12 @@ export function createMinimaxAdapter(config: MinimaxAdapterConfig = {}): Provide
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'minimax',
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'minimax',
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

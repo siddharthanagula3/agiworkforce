@@ -133,14 +133,14 @@ export function createZhipuAdapter(config: ZhipuAdapterConfig = {}): ProviderAda
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: { ...detected.defaults, maxTokensField: 'max_tokens' },
-        provider: 'zhipu',
-      });
-
-      applyZhipuThinkingMode(params as unknown as Record<string, unknown>, req.thinking);
-
       try {
+        const params = translateChatRequest(req, {
+          compat: { ...detected.defaults, maxTokensField: 'max_tokens' },
+          provider: 'zhipu',
+        });
+
+        applyZhipuThinkingMode(params as unknown as Record<string, unknown>, req.thinking);
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

@@ -52,13 +52,6 @@ const ANTHROPIC_AUTH_METHODS: readonly AuthMethod[] = [
     required: true,
     label: 'Anthropic API Key',
   },
-  {
-    kind: 'oauth',
-    authUrl: 'https://console.anthropic.com/oauth/authorize',
-    tokenUrl: 'https://console.anthropic.com/oauth/token',
-    clientId: 'agiworkforce',
-    label: 'Anthropic Console OAuth',
-  },
 ];
 
 export interface AnthropicAdapterConfig extends ProviderAdapterConfig {

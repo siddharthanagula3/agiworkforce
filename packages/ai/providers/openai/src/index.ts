@@ -12,22 +12,6 @@
  * first-class support for their native APIs. Server-side `store` still defaults
  * off unless `responsesStore` is explicitly enabled.
  *
- * WHY TWO ADAPTERS EXIST:
- * This package implements the cross-surface ProviderAdapter contract used by
- * CLI, desktop, and the web's /api/v1/providers/* routes via
- * @agiworkforce/provider-protocol.
- *
- * The web app also has a separate fetch-based adapter at
- * apps/web/lib/llm-providers/openai.ts that implements BaseLLMProvider for
- * the web-internal /api/llm/v1 and /api/llm/v2 routes. That adapter cannot
- * be replaced by this one because it speaks a different contract
- * (LLMProviderRequest/LLMProviderResponse vs ChatRequest/StreamChunk).
- *
- * Both adapters share model ID resolution from the single source of truth
- * in packages/contracts/types/src/models.json via @agiworkforce/types imports.
- * Full consolidation would require migrating the web's internal LLM layer
- * to the ProviderAdapter contract; tracked as a separate refactor.
- *
  * @packageDocumentation
  */
 
@@ -209,12 +193,32 @@ function modelMetadataSupportsResponses(req: ChatRequest): boolean {
   );
 }
 
+/**
+ * The Responses API has no stop, seed, penalty or logit-bias field, so a request
+ * that sets one is only honoured on Chat Completions. Hosted tools exist only on
+ * Responses, so a request carrying them stays there.
+ */
+function requestNeedsChatCompletionsParameters(req: ChatRequest): boolean {
+  if (req.rawVendorTools && req.rawVendorTools.length > 0) return false;
+  return (
+    (req.stopSequences !== undefined && req.stopSequences.length > 0) ||
+    req.seed !== undefined ||
+    req.frequencyPenalty !== undefined ||
+    req.presencePenalty !== undefined ||
+    (req.logitBias !== undefined && Object.keys(req.logitBias).length > 0)
+  );
+}
+
 export function shouldUseOpenAIResponsesApi(
   req: ChatRequest,
   config: OpenAIAdapterConfig,
   detected: ReturnType<typeof detectOpenAICompletionsCompat>,
 ): boolean {
   if (!isNativeOpenAIResponsesRoute(detected)) {
+    return false;
+  }
+
+  if (requestNeedsChatCompletionsParameters(req)) {
     return false;
   }
 

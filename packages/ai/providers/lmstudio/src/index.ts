@@ -88,12 +88,12 @@ export function createLMStudioAdapter(config: LMStudioAdapterConfig = {}): Provi
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'lmstudio',
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'lmstudio',
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

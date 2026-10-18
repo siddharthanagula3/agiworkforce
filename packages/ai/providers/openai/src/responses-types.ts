@@ -74,7 +74,6 @@ export interface ResponsesCreateParams {
   max_output_tokens?: number;
   temperature?: number;
   top_p?: number;
-  stop?: string | string[];
   reasoning?: ResponsesReasoningConfig;
   store?: boolean;
   previous_response_id?: string;
@@ -287,7 +286,12 @@ export interface ResponseFailedEvent extends BaseEvent {
 
 export interface ResponseIncompleteEvent extends BaseEvent {
   type: 'response.incomplete';
-  response: { id: string; incomplete_details?: { reason?: string } };
+  response: {
+    id: string;
+    output?: ResponseOutputItem[];
+    usage?: ResponseCompletedEvent['response']['usage'];
+    incomplete_details?: { reason?: string };
+  };
 }
 
 export interface ResponseErrorEvent extends BaseEvent {

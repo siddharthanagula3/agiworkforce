@@ -145,17 +145,16 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'qwen',
-      });
-
       const endpoints = [sdk, ...fallbackSdks];
       let yielded = false;
 
       for (let attempt = 0; attempt < endpoints.length; attempt++) {
         const client = endpoints[attempt]!;
         try {
+          const params = translateChatRequest(req, {
+            compat: detected.defaults,
+            provider: 'qwen',
+          });
           const sdkStream = await client.chat.completions.create(
             params as unknown as Parameters<typeof client.chat.completions.create>[0],
             { signal },

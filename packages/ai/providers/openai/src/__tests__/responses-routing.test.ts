@@ -58,4 +58,18 @@ describe('shouldUseOpenAIResponsesApi', () => {
       expect(shouldUseResponses(modelId), modelId).toBe(false);
     }
   });
+
+  it('sends a request with stop sequences to Chat Completions, which has the field', () => {
+    const req: ChatRequest = { ...request(OPENAI_DEFAULT_MODEL_ID), stopSequences: ['END'] };
+    expect(shouldUseOpenAIResponsesApi(req, {}, detected())).toBe(false);
+  });
+
+  it('keeps a request carrying hosted tools on Responses even with stop sequences', () => {
+    const req: ChatRequest = {
+      ...request(OPENAI_DEFAULT_MODEL_ID),
+      stopSequences: ['END'],
+      rawVendorTools: [{ type: 'web_search' }],
+    };
+    expect(shouldUseOpenAIResponsesApi(req, {}, detected())).toBe(true);
+  });
 });

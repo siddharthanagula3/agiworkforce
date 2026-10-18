@@ -7,12 +7,10 @@
  * Gemini wire is small, stable, and the SDK has churned. API-key auth.
  *
  * Tool schemas pass through `cleanSchemaForGemini` from
- * `@agiworkforce/provider-protocol` to scrub the JSON Schema keywords Cloud
- * Code Assist's validator rejects (additionalProperties, $ref,
- * minLength/maxLength/pattern, etc.).
+ * `@agiworkforce/provider-protocol` to scrub the JSON Schema keywords the
+ * Gemini function-declaration validator rejects.
  *
- * Vertex AI (OAuth + project/region routing) is **NOT** wired here.
- * follow-up package or a `vertexBaseUrl` config knob.
+ * Vertex AI (OAuth + project/region routing) is not wired here.
  *
  * @packageDocumentation
  */

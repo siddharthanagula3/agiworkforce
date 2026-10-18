@@ -8,7 +8,6 @@
  * openai-responses-payload-policy.ts's `MOONSHOT_NATIVE_BASE_URLS`), which
  * enables native streaming-usage compat (`stream_options.include_usage`).
  *
- * Response quirk (source of truth: `apps/web/lib/llm-providers/moonshot.ts`):
  * Moonshot reports cache-read tokens on a flat `usage.cached_tokens` field
  * instead of OpenAI's nested `usage.prompt_tokens_details.cached_tokens`.
  * `withMoonshotCacheUsageNormalization` rewrites the flat field into the
@@ -117,12 +116,12 @@ export function createMoonshotAdapter(config: MoonshotAdapterConfig = {}): Provi
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'moonshot',
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'moonshot',
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

@@ -97,12 +97,12 @@ export function createDeepSeekAdapter(config: DeepSeekAdapterConfig = {}): Provi
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: 'deepseek',
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: 'deepseek',
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },

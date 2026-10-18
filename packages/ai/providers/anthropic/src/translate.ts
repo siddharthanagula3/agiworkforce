@@ -355,9 +355,9 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
             : undefined;
 
   const rejectsSamplingParameters = reasoning?.rejectsSamplingParameters === true;
-  const requestMetadata = req.endUserId
-    ? { ...req.metadata, user_id: req.endUserId }
-    : req.metadata;
+  const metadataUserId = req.metadata?.['user_id'];
+  const userId = req.endUserId ?? (typeof metadataUserId === 'string' ? metadataUserId : undefined);
+  const requestMetadata = userId ? { user_id: userId } : undefined;
   const outputFormat = outputFormatFor(req);
 
   return {

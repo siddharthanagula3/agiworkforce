@@ -44,6 +44,20 @@ const OLLAMA_AUTH_METHODS: readonly AuthMethod[] = [
   },
 ];
 
+function streamFailure(err: unknown): StreamChunk {
+  const classified = classifyError(err);
+  return {
+    type: 'error',
+    message: classified.message,
+    retryable: classified.retryable,
+    ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+    ...(classified.retryAfterSeconds !== undefined
+      ? { retryAfterSeconds: classified.retryAfterSeconds }
+      : {}),
+    classification: toStreamErrorClassification(classified),
+  };
+}
+
 export interface OllamaAdapterConfig extends ProviderAdapterConfig {
   baseUrl?: string;
   forceContextWindow?: number;
@@ -69,7 +83,14 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
     },
 
     async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
-      const translated = translateChatRequest(req);
+      let translated: ReturnType<typeof translateChatRequest>;
+      try {
+        translated = translateChatRequest(req);
+      } catch (err) {
+        yield streamFailure(err);
+        yield { type: 'stop', reason: 'error' };
+        return;
+      }
 
       if (config.forceContextWindow !== undefined) {
         translated.options = {
@@ -97,17 +118,7 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
           signal,
         });
       } catch (err) {
-        const classified = classifyError(err);
-        yield {
-          type: 'error',
-          message: classified.message,
-          retryable: classified.retryable,
-          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
-          ...(classified.retryAfterSeconds !== undefined
-            ? { retryAfterSeconds: classified.retryAfterSeconds }
-            : {}),
-          classification: toStreamErrorClassification(classified),
-        };
+        yield streamFailure(err);
         yield { type: 'stop', reason: 'error' };
         return;
       }
@@ -139,9 +150,14 @@ export function createOllamaAdapter(config: OllamaAdapterConfig = {}): ProviderA
         return;
       }
 
-      const watched = withStreamIdleWatchdog(translateOllamaStream(parseOllamaStream(res.body)));
-      for await (const chunk of watched) {
-        yield chunk;
+      try {
+        const watched = withStreamIdleWatchdog(translateOllamaStream(parseOllamaStream(res.body)));
+        for await (const chunk of watched) {
+          yield chunk;
+        }
+      } catch (err) {
+        yield streamFailure(err);
+        yield { type: 'stop', reason: 'error' };
       }
     },
   };

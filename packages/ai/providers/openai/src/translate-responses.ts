@@ -28,7 +28,7 @@ import type {
   ResponsesToolChoice,
 } from './responses-types';
 import { acceptsSamplingParameters } from './sampling';
-import { derivePromptCacheKey } from './translate';
+import { derivePromptCacheKey, wireMetadata } from './translate';
 
 function isTextBlock(b: ContentBlock): b is TextBlock {
   return b.type === 'text';
@@ -282,6 +282,7 @@ export function translateChatRequestToResponses(
   const sampling = acceptsSamplingParameters(req.model, reasoning?.effort);
 
   const promptCacheKey = derivePromptCacheKey(req);
+  const metadata = wireMetadata(req);
 
   const params: ResponsesCreateParams = {
     model: req.model,
@@ -294,12 +295,11 @@ export function translateChatRequestToResponses(
     ...(req.maxOutputTokens !== undefined ? { max_output_tokens: req.maxOutputTokens } : {}),
     ...(sampling && req.temperature !== undefined ? { temperature: req.temperature } : {}),
     ...(sampling && req.topP !== undefined ? { top_p: req.topP } : {}),
-    ...(req.stopSequences && req.stopSequences.length > 0 ? { stop: req.stopSequences } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(options.previousResponseId ? { previous_response_id: options.previousResponseId } : {}),
     ...(options.store !== undefined ? { store: options.store } : {}),
     ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
-    ...(req.metadata ? { metadata: req.metadata as Record<string, string> } : {}),
+    ...(metadata ? { metadata } : {}),
     ...(req.endUserId ? { user: req.endUserId } : {}),
     ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
     ...(req.responseFormat ? { text: { format: req.responseFormat } } : {}),

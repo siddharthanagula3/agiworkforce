@@ -97,12 +97,12 @@ export function createGroqAdapter(config: GroqAdapterConfig = {}): ProviderAdapt
         id: req.model,
       });
 
-      const params = translateChatRequest(req, {
-        compat: detected.defaults,
-        provider: GROQ_PROVIDER_ID,
-      });
-
       try {
+        const params = translateChatRequest(req, {
+          compat: detected.defaults,
+          provider: GROQ_PROVIDER_ID,
+        });
+
         const sdkStream = await sdk.chat.completions.create(
           params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
           { signal },
