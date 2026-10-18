@@ -13,11 +13,9 @@ const MS_PER_SECOND = 1000;
 
 export const OPENAI_ADMIN_KEY_ENV = 'OPENAI_ADMIN_API_KEY';
 export const ANTHROPIC_ADMIN_KEY_ENV = 'ANTHROPIC_ADMIN_API_KEY';
-export const OPENROUTER_KEY_ENV = 'OPENROUTER_API_KEY';
 
 export const OPENAI_COST_SOURCE = 'openai_costs_api';
 export const ANTHROPIC_COST_SOURCE = 'anthropic_cost_report';
-export const OPENROUTER_COST_SOURCE = 'openrouter_key_usage';
 
 export interface DayWindow {
   day: string;
@@ -178,54 +176,7 @@ const anthropicClient: ProviderCostReportClient = {
   },
 };
 
-const openrouterClient: ProviderCostReportClient = {
-  provider: 'openrouter',
-  source: OPENROUTER_COST_SOURCE,
-  async fetchDay(_window, fetchImpl = fetch) {
-    const key = getOptionalEnv(OPENROUTER_KEY_ENV)?.trim();
-    if (!key) {
-      return {
-        status: 'not_configured',
-        provider: this.provider,
-        source: this.source,
-        envKey: OPENROUTER_KEY_ENV,
-      };
-    }
-
-    try {
-      const payload = await readJson(
-        providerApiUrl('openrouter', 'auth/key'),
-        { Authorization: `Bearer ${key}` },
-        fetchImpl,
-      );
-      const data = (payload as { data?: { usage?: unknown } }).data;
-      const usage = numeric(data?.usage);
-      if (usage === null) {
-        return {
-          status: 'failed',
-          provider: this.provider,
-          source: this.source,
-          reason: 'usage_missing',
-        };
-      }
-      return {
-        status: 'reported',
-        provider: this.provider,
-        source: this.source,
-        reportedMicrousd: Math.round(usage * MICROUSD_PER_USD),
-      };
-    } catch (error) {
-      return {
-        status: 'failed',
-        provider: this.provider,
-        source: this.source,
-        reason: reason(error),
-      };
-    }
-  },
-};
-
-export const UNREPORTED_PROVIDERS = ['google', 'vercel', 'e2b'] as const;
+export const UNREPORTED_PROVIDERS = ['openrouter', 'google', 'vercel', 'e2b'] as const;
 const NO_COST_ENDPOINT = 'no_read_only_cost_endpoint_confirmed';
 
 function unreportedClient(provider: string): ProviderCostReportClient {
@@ -244,6 +195,5 @@ function unreportedClient(provider: string): ProviderCostReportClient {
 export const PROVIDER_COST_REPORT_CLIENTS: readonly ProviderCostReportClient[] = [
   openaiClient,
   anthropicClient,
-  openrouterClient,
   ...UNREPORTED_PROVIDERS.map(unreportedClient),
 ];

@@ -26,15 +26,12 @@ import {
   ANTHROPIC_COST_SOURCE,
   OPENAI_ADMIN_KEY_ENV,
   OPENAI_COST_SOURCE,
-  OPENROUTER_COST_SOURCE,
-  OPENROUTER_KEY_ENV,
   UNREPORTED_PROVIDERS,
   yesterdayWindow,
 } from './lib/provider-cost-reports';
 
 const OPENAI_KEY = 'sk-admin-openai';
 const ANTHROPIC_KEY = 'sk-ant-admin';
-const OPENROUTER_KEY = 'sk-or-key';
 
 function request(): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/cron/reconcile-provider-costs');
@@ -125,7 +122,6 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
   it('stores each provider figure in microUSD under its own source', async () => {
     vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
     vi.stubEnv(ANTHROPIC_ADMIN_KEY_ENV, ANTHROPIC_KEY);
-    vi.stubEnv(OPENROUTER_KEY_ENV, OPENROUTER_KEY);
     vi.stubGlobal(
       'fetch',
       routeFetch({
@@ -133,7 +129,6 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
           data: [{ results: [{ amount: { value: 1.5, currency: 'usd' } }] }],
         },
         cost_report: { data: [{ results: [{ amount: '250.5', currency: 'USD' }] }] },
-        'auth/key': { data: { usage: 12 } },
       }),
     );
 
@@ -141,7 +136,7 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
     const body = (await response.json()) as { reported: number };
 
     expect(response.status).toBe(200);
-    expect(body.reported).toBe(3);
+    expect(body.reported).toBe(2);
 
     const written = mocks.execute.mock.calls.map((call) => call[1]);
     expect(written).toContainEqual(
@@ -149,9 +144,6 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
     );
     expect(written).toContainEqual(
       expect.arrayContaining(['anthropic', 2_505_000, ANTHROPIC_COST_SOURCE]),
-    );
-    expect(written).toContainEqual(
-      expect.arrayContaining(['openrouter', 12_000_000, OPENROUTER_COST_SOURCE]),
     );
   });
 
