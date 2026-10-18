@@ -1,4 +1,4 @@
-import type { RerankOptions, RerankProvider, SearchCandidate, SearchHit } from './types';
+import type { RerankOptions, SearchCandidate, SearchHit } from './types';
 
 export type { RerankOptions } from './types';
 
@@ -93,10 +93,3 @@ export function rerankCandidates(
   }
   return kept;
 }
-
-export const HYBRID_RERANK_PROVIDER_ID = 'hybrid-lexical-semantic';
-
-export const hybridRerankProvider: RerankProvider = {
-  id: HYBRID_RERANK_PROVIDER_ID,
-  rerank: rerankCandidates,
-};

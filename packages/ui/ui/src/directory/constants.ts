@@ -263,8 +263,6 @@ export const SHOW_MORE_SUFFIX = 'more';
 export const SHOW_LESS_LABEL = 'Show less';
 export const CHIP_PREVIEW_COUNT = 12;
 
-export const MARKETPLACE_UNAVAILABLE_COPY = 'Plugin marketplaces are not available yet.';
-
 export const DIRECTORY_BROWSE_LABEL = 'Browse';
 export const ADD_MARKETPLACE_ACTION_ID = 'add-marketplace';
 export const DIRECTORY_ADD_MENU_LABEL = 'Add';

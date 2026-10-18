@@ -40,7 +40,6 @@ export {
   UNREVIEWED_BADGE,
   COMMUNITY_BADGE,
   DIRECTORY_TRUST_COPY,
-  MARKETPLACE_UNAVAILABLE_COPY,
 } from './constants';
 export type {
   DirectoryAdapter,

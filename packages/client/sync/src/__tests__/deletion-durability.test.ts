@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { applyConversationDeltas, toConversationPushItem } from '../conversations';
 import { applyMessageDeltas } from '../messages';
-import { isSyncTombstoned } from '../tombstones';
 import { createInMemoryConversationPort, createInMemoryMessagePort } from './test-ports';
 
 import type { ConversationWireDelta, MessageWireDelta } from '@agiworkforce/cloud-contracts';
@@ -96,7 +95,6 @@ describe('a deletion reaches every device and stays', () => {
     );
 
     expect(tombstones.get('c1')).toBe('2026-09-02T00:00:00.000Z');
-    expect(isSyncTombstoned({ deletedAt: tombstones.get('c1') ?? null })).toBe(true);
   });
 
   it('a message store that keeps tombstones keeps the row and marks it deleted', () => {
@@ -110,7 +108,7 @@ describe('a deletion reaches every device and stays', () => {
 
     const [message] = port.getMessages('c1');
     expect(message?.id).toBe('m1');
-    expect(isSyncTombstoned(message ?? {})).toBe(true);
+    expect(message?.deletedAt).toBe('2026-09-02T00:00:00.000Z');
   });
 
   it('a push built from a live record carries the version it last saw, never a clock', () => {

@@ -149,8 +149,7 @@ These are intentionally retained, including cases not visible to the lexical sca
 ## Foundation implemented
 
 `packages/ai/agent-core/src/semantic-decisions.ts` defines provider-neutral typed questions,
-answers and a runner. `candidate-decisions.ts` batches relative Choice ranking with absolute
-fit Nouls and a none option. It keeps internal candidate IDs outside provider payloads.
+answers and a runner.
 The TypeSafe SDK exists only in `provider-runtime/src/typesafe-decisions.ts`, exported via
 `@agiworkforce/provider-runtime/decisions`. The default provider-runtime export does not
 load the SDK, so browser consumers do not automatically import server credentials.

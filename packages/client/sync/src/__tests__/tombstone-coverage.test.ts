@@ -8,7 +8,7 @@ import {
 import { mapMemoryWireDelta } from '../memory';
 import { applyMessageDeltas, type MessageStorePort, type SyncMessageRecord } from '../messages';
 import { mapProjectWireDelta } from '../projects';
-import { applySyncTombstone, isSyncTombstoned, syncTombstoneOf } from '../tombstones';
+import { applySyncTombstone } from '../tombstones';
 
 const DELETED_AT = '2026-09-18T00:00:00.000Z';
 
@@ -155,12 +155,7 @@ describe('every synced object type carries a deletedAt tombstone', () => {
     expect(mapMemoryWireDelta(memoryDelta(false)).deletedAt).toBeNull();
   });
 
-  it('reads a tombstone the same way whatever the object type', () => {
-    expect(isSyncTombstoned({ deletedAt: DELETED_AT })).toBe(true);
-    expect(isSyncTombstoned({ deletedAt: null })).toBe(false);
-    expect(isSyncTombstoned({})).toBe(false);
-    expect(syncTombstoneOf({})).toBeNull();
-
+  it('drops the row when the store cannot keep a tombstone', () => {
     const removed: string[] = [];
     applySyncTombstone({ remove: (id) => void removed.push(id) }, 'x', DELETED_AT);
     expect(removed).toEqual(['x']);

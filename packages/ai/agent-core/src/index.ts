@@ -71,5 +71,3 @@ export type {
   DecisionObservation,
   DecisionFallbackReason,
 } from './semantic-decisions';
-export { buildCandidateDecision, selectDecisionCandidate } from './candidate-decisions';
-export type { SemanticCandidate, CandidateSelection } from './candidate-decisions';

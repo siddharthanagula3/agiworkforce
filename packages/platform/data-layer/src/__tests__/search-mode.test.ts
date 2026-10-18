@@ -6,7 +6,6 @@ import {
   SEARCH_MODES,
   SEARCH_MODE_DECLARATIONS,
   SEARCH_RETRIEVAL_STRATEGIES,
-  isSearchMode,
   parseSearchRetrievalStrategy,
   searchModeDeclaration,
   searchModesByCorpus,
@@ -76,12 +75,6 @@ describe('search mode declarations', () => {
       'project',
     ]);
     expect(searchModesByCorpus('private_index')).toContain(DEFAULT_PRIVATE_INDEX_SEARCH_MODE);
-  });
-
-  it('recognises declared modes and nothing else', () => {
-    expect(isSearchMode('research')).toBe(true);
-    expect(isSearchMode('everything')).toBe(false);
-    expect(isSearchMode(null)).toBe(false);
   });
 });
 

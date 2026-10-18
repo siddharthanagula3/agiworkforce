@@ -6,7 +6,6 @@ import {
   type DecisionRequest,
   type DecisionScope,
 } from '../semantic-decisions';
-import { buildCandidateDecision, selectDecisionCandidate } from '../candidate-decisions';
 
 const KIND = 'test_signals';
 const policy: DecisionPolicy = {
@@ -207,47 +206,6 @@ describe('response validation', () => {
   ])('rejects malformed response %#', (invalid) =>
     expect(isDecisionResult(invalid, request, policy.model)).toBe(false),
   );
-});
-
-describe('candidate selection', () => {
-  const candidates = [{ id: 'real-skill', description: 'Create a document' }];
-  const req = buildCandidateDecision('Create a document', candidates);
-  const accepted = {
-    status: 'accepted' as const,
-    latencyMs: 1,
-    result: {
-      model: policy.model,
-      inputTokens: 1,
-      outputTokens: 1,
-      answers: {
-        candidate: {
-          kind: 'choice' as const,
-          value: 'candidate_0',
-          confidence: 0.9,
-          probabilities: { none: 0.05, candidate_0: 0.95 },
-        },
-        fits_0: { kind: 'boolean' as const, probability: 0.9 },
-      },
-    },
-  };
-  it('asks ranking and absolute fit together without sending candidate identifiers', () => {
-    expect(Object.keys(req.questions)).toEqual(['fits_0', 'candidate']);
-    expect(JSON.stringify(req)).not.toContain('real-skill');
-  });
-  it('requires both confidence and absolute fit', () => {
-    expect(
-      selectDecisionCandidate(accepted, candidates, { confidence: 0.8, fitProbability: 0.8 }),
-    ).toEqual({ status: 'selected', candidateId: 'real-skill' });
-    expect(
-      selectDecisionCandidate(accepted, candidates, { confidence: 0.8, fitProbability: 0.95 }),
-    ).toMatchObject({ status: 'fallback' });
-    expect(
-      selectDecisionCandidate({ ...accepted, status: 'shadow' }, candidates, {
-        confidence: 0,
-        fitProbability: 0,
-      }),
-    ).toMatchObject({ status: 'fallback' });
-  });
 });
 
 it('accepts independently rounded live scores without discarding their probabilities', () => {

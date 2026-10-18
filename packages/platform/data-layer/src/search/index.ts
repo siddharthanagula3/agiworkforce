@@ -6,7 +6,6 @@ export {
   SEARCH_MODE_DECLARATIONS,
   SEARCH_RETRIEVAL_STRATEGIES,
   SEARCH_SOURCE_KINDS,
-  isSearchMode,
   isSearchSourceKind,
   parseSearchRetrievalStrategy,
   searchModeDeclaration,
@@ -28,7 +27,6 @@ export {
   type NamedProvider,
   type ProviderRegistry,
   type RerankOptions,
-  type RerankProvider,
   type SearchCandidate,
   type SearchChunkMetadata,
   type SearchHit,
@@ -52,9 +50,7 @@ export {
 export { DEFAULT_TEXT_WINDOW, windowText, type WindowOptions } from './chunk';
 export { createProviderRegistry } from './registry';
 export {
-  HYBRID_RERANK_PROVIDER_ID,
   RECIPROCAL_RANK_CONSTANT,
-  hybridRerankProvider,
   reciprocalRankScore,
   rerankCandidates,
   searchTerms,

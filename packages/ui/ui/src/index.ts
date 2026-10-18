@@ -329,7 +329,6 @@ export {
   UNREVIEWED_BADGE,
   COMMUNITY_BADGE,
   DIRECTORY_TRUST_COPY,
-  MARKETPLACE_UNAVAILABLE_COPY,
   type DirectoryAdapter,
   type DirectoryOpenEntry,
   type DirectoryBadgeKind,

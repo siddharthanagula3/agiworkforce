@@ -9,17 +9,6 @@ export interface SyncTombstone {
   deletedAt: string | null;
 }
 
-/** A record type that may or may not have adopted the tombstone field yet. */
-export type PartialSyncTombstone = Partial<SyncTombstone>;
-
-export function isSyncTombstoned(record: PartialSyncTombstone): boolean {
-  return (record.deletedAt ?? null) !== null;
-}
-
-export function syncTombstoneOf(record: PartialSyncTombstone): string | null {
-  return record.deletedAt ?? null;
-}
-
 /**
  * A store that keeps the tombstone rather than dropping the row. A store that
  * cannot is still correct for a single device; it just cannot tell a deletion

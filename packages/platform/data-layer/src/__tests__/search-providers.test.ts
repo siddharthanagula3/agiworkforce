@@ -1,60 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  createProviderRegistry,
-  hybridRerankProvider,
-  HYBRID_RERANK_PROVIDER_ID,
-  rerankCandidates,
-  type RerankProvider,
-  type SearchCandidate,
-  type SearchResponse,
-  type SearchStorageProvider,
-} from '../search';
-
-function candidate(overrides: Partial<SearchCandidate> = {}): SearchCandidate {
-  return {
-    chunkId: 'chunk-1',
-    documentId: 'doc-1',
-    sourceKind: 'library_file',
-    sourceId: 'file-1',
-    title: 'Quarterly report',
-    text: 'revenue grew in the quarter',
-    start: 0,
-    end: 27,
-    metadata: {},
-    chunkVersion: 1,
-    indexedAt: '2026-09-17T00:00:00.000Z',
-    lexicalRank: 1,
-    semanticRank: 1,
-    ...overrides,
-  };
-}
+import { createProviderRegistry, type SearchResponse, type SearchStorageProvider } from '../search';
 
 const EMPTY_RESPONSE: SearchResponse = { hits: [], semantic: 'unavailable' };
-
-describe('RerankProvider', () => {
-  it('registers the current reranker as a named, replaceable provider', () => {
-    const registry = createProviderRegistry<RerankProvider>([hybridRerankProvider]);
-    expect(registry.ids()).toEqual([HYBRID_RERANK_PROVIDER_ID]);
-    const resolved = registry.get(HYBRID_RERANK_PROVIDER_ID)!;
-    expect(resolved.rerank('revenue', [candidate()], { limit: 5 })).toEqual(
-      rerankCandidates('revenue', [candidate()], { limit: 5 }),
-    );
-  });
-
-  it('accepts a different implementation under a different id', () => {
-    const passthrough: RerankProvider = {
-      id: 'passthrough',
-      rerank: (_query, candidates) => candidates.map((c) => ({ ...c, score: 1, matchedTerms: [] })),
-    };
-    const registry = createProviderRegistry<RerankProvider>([hybridRerankProvider]);
-    registry.register(passthrough);
-    expect(registry.ids()).toEqual([HYBRID_RERANK_PROVIDER_ID, 'passthrough']);
-    expect(
-      registry.get('passthrough')!.rerank('revenue', [candidate()], { limit: 5 }),
-    ).toHaveLength(1);
-  });
-});
 
 describe('SearchStorageProvider', () => {
   it('is a named SearchProvider, so the index behind a search is swappable', async () => {

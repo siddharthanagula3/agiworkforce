@@ -37,12 +37,7 @@ export {
   type ResolveIdentityProviderOptions,
 } from './factory';
 
-export {
-  IDENTITIES_TABLE,
-  resolveInternalUserId,
-  subjectIsStoredUserId,
-  type IdentityRecordReader,
-} from './identities';
+export { subjectIsStoredUserId } from './identities';
 
 export { APP_URL_ENV, resolveDeploymentOrigin } from './deployment-origin';
 

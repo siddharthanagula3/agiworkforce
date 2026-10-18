@@ -162,10 +162,6 @@ export const SEARCH_MODE_DECLARATIONS: Readonly<Record<SearchMode, SearchModeDec
 /** What `createPostgresSearchProvider` serves when a caller names no mode. */
 export const DEFAULT_PRIVATE_INDEX_SEARCH_MODE: SearchMode = 'private_knowledge';
 
-export function isSearchMode(value: unknown): value is SearchMode {
-  return typeof value === 'string' && (SEARCH_MODES as readonly string[]).includes(value);
-}
-
 export function searchModeDeclaration(mode: SearchMode): SearchModeDeclaration {
   return SEARCH_MODE_DECLARATIONS[mode];
 }
@@ -265,19 +261,6 @@ export interface SearchProvider {
 export interface RerankOptions {
   limit: number;
   maxPerSource?: number;
-}
-
-/**
- * Scoring and near-duplicate removal, named so it can be swapped for a hosted
- * reranker without the storage layer knowing.
- */
-export interface RerankProvider {
-  readonly id: string;
-  rerank(
-    query: string,
-    candidates: readonly SearchCandidate[],
-    options: RerankOptions,
-  ): SearchHit[];
 }
 
 /** A named index a search runs against: Postgres today, anything registered tomorrow. */
