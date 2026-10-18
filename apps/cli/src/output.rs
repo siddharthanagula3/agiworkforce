@@ -562,17 +562,6 @@ pub fn format_subscription_cost(input_tokens: u32, output_tokens: u32) -> String
     )
 }
 
-/// Print a cost summary line.
-pub fn print_cost(
-    model: &str,
-    input_tokens: u32,
-    output_tokens: u32,
-    access: crate::design_system::AccessMode,
-) {
-    let summary = format_cost(model, input_tokens, output_tokens, access);
-    eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
-}
-
 /// Print a turn cost already resolved per provider request by the ledger.
 pub fn print_recorded_cost(
     input_tokens: u32,

@@ -36,12 +36,8 @@ pub mod documents;
 pub mod errors;
 pub mod hex;
 mod session_browser;
-// hooks lives at features::hooks::hooks; re-exported here so all 20 call-sites
-// using `crate::hooks::*` continue to resolve unchanged.
 pub use features::hooks::hooks;
 pub mod markdown;
-// lsp lives at platform::lsp; re-exported here so all 4 call-sites
-// in features/exec/tools/task_registry.rs resolve unchanged.
 pub use platform::lsp;
 pub mod mcp;
 pub mod memory;
@@ -57,8 +53,6 @@ pub mod permissions;
 pub mod plans;
 pub mod pr_feedback;
 pub(crate) mod process_tree;
-// plan_mode lives at features::plan::plan_mode; re-exported here so all
-// internal callers using `crate::plan_mode::*` continue to resolve unchanged.
 pub use features::plan::plan_mode;
 pub mod provider;
 pub mod remote_control;
@@ -72,8 +66,6 @@ pub mod sessions;
 pub mod skills;
 pub mod subagent;
 pub mod teams;
-// tools lives at features::exec::tools; re-exported here so all 42 call-sites
-// using `crate::tools::*` continue to resolve unchanged.
 pub use features::exec::tools;
 pub mod tui;
 /// Audio capture and transcription. Off by default: `cpal` links `libasound.so.2`
@@ -127,17 +119,12 @@ pub mod model_reachability;
 pub mod oauth;
 pub mod onboarding;
 pub mod subagent_audit;
-// plugins lives at features::plugins::plugins; re-exported here so all
-// internal callers using `crate::plugins::*` continue to resolve unchanged.
 pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
 pub mod project_text;
-pub mod provenance;
 pub mod review;
 pub mod routing;
-// runtime lives at platform::runtime; re-exported here so all 27 call-sites
-// using `crate::runtime::<submod>::*` continue to resolve unchanged.
 pub use platform::runtime;
 pub mod cost_ledger;
 pub mod notebook_edit;

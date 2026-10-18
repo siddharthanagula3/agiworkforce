@@ -2687,9 +2687,13 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .recorded_approval_callback()
                 .map(crate::agent::ToolApprovalSink);
             let workspace_authority = self.session.checkpoint_file_authority().cloned();
+            let cost_budget = self.session.max_budget_usd.map(|cap| {
+                crate::cost_ledger::CostBudget::new(cap, self.session.cost_ledger.total_usd)
+            });
             if let Some(manager) = self.session.subagent_manager.as_mut() {
                 manager.set_approval(approval);
                 manager.set_workspace_authority(workspace_authority);
+                manager.set_cost_budget(cost_budget);
             }
             let parent_model = self.session.model.clone();
             let parent_skip_permissions = self.session.skips_approval();

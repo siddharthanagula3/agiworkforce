@@ -1571,16 +1571,6 @@ pub fn render_insights(session: &AgentSession) -> String {
     )
 }
 
-pub fn render_advisor(arg: &str) -> String {
-    if arg.trim().is_empty() {
-        return "Advisor: consult a catalog-selected higher-tier model without affecting context.\n  Usage: /advisor <question>".to_string();
-    }
-    format!(
-        "Advisor request captured: {}\n  Dedicated advisor routing is available through the CLI slash command handler.",
-        arg.trim()
-    )
-}
-
 /// Path this command reads a team's onboarding guide from.
 ///
 /// It used to read `$HOME/.claude/`, which is Claude Code's directory, not

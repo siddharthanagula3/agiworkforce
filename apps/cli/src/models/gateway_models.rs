@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use crate::model_catalog::Model;
 use crate::tier_cache::UserTier;
 
-const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 const FETCH_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_RESPONSE_BYTES: usize = 1_048_576;
 const MAX_MODELS: usize = 512;
@@ -180,8 +179,8 @@ async fn fetch_from_endpoint(
 /// A configured credential is never retried anonymously after a 401/403. The
 /// trusted-host check runs before the credential can be attached.
 pub async fn discover_gateway_models() -> Result<GatewayCatalog> {
-    let raw_base =
-        std::env::var("AGIWORKFORCE_API_BASE").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
+    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
     let endpoint = models_endpoint(&raw_base)?;
     let jwt = crate::tier_cache::load_jwt();
     let client = reqwest::Client::builder()

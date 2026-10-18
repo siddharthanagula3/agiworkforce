@@ -291,12 +291,6 @@ impl LspClient {
         self.request("textDocument/completion", params).await
     }
 
-    pub async fn document_symbol(&mut self, file: &str) -> Result<Value> {
-        let uri = path_to_file_uri(Path::new(file));
-        let params = serde_json::json!({"textDocument": {"uri": uri}});
-        self.request("textDocument/documentSymbol", params).await
-    }
-
     pub async fn formatting(&mut self, file: &str, tab_size: u32) -> Result<Value> {
         let uri = path_to_file_uri(Path::new(file));
         let params = serde_json::json!({

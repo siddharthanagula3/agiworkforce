@@ -33,7 +33,6 @@ pub mod projects;
 pub mod protocol;
 pub mod request_permissions;
 pub mod request_user_input;
-pub mod shell_environment;
 pub mod string_utils;
 pub mod task_state;
 pub mod tool_primitive;

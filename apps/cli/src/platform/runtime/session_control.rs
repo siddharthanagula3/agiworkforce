@@ -93,14 +93,6 @@ impl ManagedSessionStore {
         create_managed_session_in(&self.base_dir, messages)
     }
 
-    pub fn create_with_id(
-        &self,
-        session_id: impl Into<String>,
-        messages: Vec<Message>,
-    ) -> Result<ResolvedManagedSessionReference> {
-        create_managed_session_with_id_in(&self.base_dir, session_id.into(), messages)
-    }
-
     pub fn list(&self) -> Result<Vec<ManagedSessionSummary>> {
         list_managed_sessions_in(&self.base_dir)
     }
@@ -572,29 +564,6 @@ pub fn managed_session_exists(session_id: impl AsRef<str>) -> Result<bool> {
     let base_dir = CliConfig::config_dir()?;
     let session_id = validate_managed_session_id(session_id.as_ref())?;
     Ok(find_session_path_in(&base_dir, session_id).is_some())
-}
-
-/// Create a new managed session with an explicit session id (e.g. a user-chosen slug
-/// from `agi session fork --as <name>`). The id becomes the filename so
-/// `agi --resume <id>` resolves immediately.
-pub fn create_managed_session_with_id(
-    session_id: impl Into<String>,
-    messages: Vec<Message>,
-) -> Result<ResolvedManagedSessionReference> {
-    ManagedSessionStore::user_config()?.create_with_id(session_id, messages)
-}
-
-fn create_managed_session_with_id_in(
-    base_dir: &Path,
-    session_id: String,
-    messages: Vec<Message>,
-) -> Result<ResolvedManagedSessionReference> {
-    let now = Utc::now();
-    let session = ManagedSession::with_messages(session_id, now, messages);
-    let path = save_session_in(base_dir, &session)?;
-    Ok(reference_from_summary(ManagedSessionSummary::from_session(
-        &session, path,
-    )))
 }
 
 /// The managed sessions a listing offers, archived ones left out.

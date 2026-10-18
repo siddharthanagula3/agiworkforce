@@ -1371,16 +1371,6 @@ impl AgentSession {
         report
     }
 
-    /// Override the provider from config.
-    pub fn set_provider_override(&mut self, provider_name: &str) {
-        if let Some(provider) = models::provider_from_name(provider_name) {
-            let provider_mode = provider_privacy_mode(&provider);
-            if self.privacy_mode == PrivacyMode::Local || provider_mode == self.privacy_mode {
-                self.provider = provider;
-            }
-        }
-    }
-
     pub fn set_privacy_mode(&mut self, mode: PrivacyMode) {
         self.privacy_mode = mode;
         if let Some(manager) = self.mcp_manager.as_mut() {

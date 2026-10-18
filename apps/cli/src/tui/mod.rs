@@ -5,7 +5,6 @@ mod color;
 pub(crate) mod fuzzy;
 pub(crate) mod icons;
 pub(crate) mod motion;
-pub(crate) mod pane_view;
 pub(crate) mod remote_host;
 #[allow(dead_code, unused_imports)]
 mod shimmer;

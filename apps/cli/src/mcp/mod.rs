@@ -33,25 +33,14 @@ use agiworkforce_mcp::{
     OAuthConfig, OAuthToken, TokenStore, TransportConfig,
 };
 
-pub mod connection_pool;
 pub mod consent;
 pub mod elicitation;
 mod oauth_store;
 pub mod registry;
-pub mod resources;
-pub mod status;
 pub mod tui_handler;
 
-#[allow(unused_imports)]
-pub use connection_pool::McpConnectionManager;
 pub use oauth_store::McpOAuthStore;
-#[allow(unused_imports)]
-pub use oauth_store::McpOAuthToken;
 use oauth_store::McpServerOAuthStore;
-#[allow(unused_imports)]
-pub use resources::{McpResource, McpResourceList};
-#[allow(unused_imports)]
-pub use status::{McpServerStatus, McpServerStatusSnapshot};
 
 // ---------------------------------------------------------------------------
 // Config types (CLI-local: serde back-compat + manifest shapes)
@@ -2129,22 +2118,6 @@ impl McpManager {
             .retain(|tool| !remote_servers.contains(&tool.server_name));
         self.prompts
             .retain(|prompt| !remote_servers.contains(&prompt.server_name));
-    }
-
-    pub fn tools_for_privacy(&self, privacy_mode: crate::agent::PrivacyMode) -> Vec<McpTool> {
-        self.tools
-            .iter()
-            .filter(|tool| self.server_allowed(&tool.server_name, privacy_mode))
-            .cloned()
-            .collect()
-    }
-
-    pub fn prompts_for_privacy(&self, privacy_mode: crate::agent::PrivacyMode) -> Vec<McpPrompt> {
-        self.prompts
-            .iter()
-            .filter(|prompt| self.server_allowed(&prompt.server_name, privacy_mode))
-            .cloned()
-            .collect()
     }
 
     /// Register discovered tools under names no other connected server has

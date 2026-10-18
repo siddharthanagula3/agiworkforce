@@ -381,12 +381,6 @@ impl CloudClient {
     /// Read a hosted file the account owns. Media the account stores is served
     /// behind the same credential as the JSON APIs, so a generated image is not
     /// reachable by URL alone.
-    pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, CloudError> {
-        self.get_bytes_with_header(path, None)
-            .await
-            .map(|(bytes, _)| bytes)
-    }
-
     pub async fn get_bytes_with_header(
         &self,
         path: &str,

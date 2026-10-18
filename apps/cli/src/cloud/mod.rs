@@ -122,10 +122,6 @@ impl CloudSession {
         Self::from_client(client)
     }
 
-    pub fn open_managed() -> Result<Self, CloudError> {
-        Self::from_client(CloudClient::connect_managed()?)
-    }
-
     fn from_client(client: CloudClient) -> Result<Self, CloudError> {
         let config_dir =
             CliConfig::config_dir().map_err(|error| CloudError::Transport(error.to_string()))?;

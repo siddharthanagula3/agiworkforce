@@ -851,19 +851,6 @@ fn environment_for_a_command(
         .collect()
 }
 
-/// Give `command`, which is about to be started sandboxed for
-/// `workspace_dir`, the environment a sandboxed command gets there: the one
-/// rule for `run_command`, a hook and anything else that starts a sandboxed
-/// child. In a trusted workspace with nothing set that is what it would
-/// inherit anyway; with [`SANDBOX_FILTER_ENV`] the credentials are left out;
-/// in an untrusted workspace, or under a scrub, only the short list is
-/// given. A caller that builds the command itself calls this before it sets
-/// a variable of its own; [`execute_sandboxed_with_input`] and the other
-/// executors here do it already.
-pub fn apply_sandboxed_environment(command: &mut tokio::process::Command, workspace_dir: &Path) {
-    apply_environment_policy(command, scrub_environment_for(workspace_dir));
-}
-
 fn apply_environment_policy(command: &mut tokio::process::Command, scrub: bool) {
     let policy = resolve_environment_policy(scrub, credential_filter_requested());
     if policy != EnvironmentPolicy::Inherited {
