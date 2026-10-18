@@ -269,6 +269,7 @@
     },
     "packages/ui/unified-chat": {
       ".": "universal",
+      "./artifact-sandbox": "universal",
       "./capabilities": "universal",
       "./model-picker": "universal",
       "./network-error": "universal",
