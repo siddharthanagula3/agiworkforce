@@ -1,86 +1,24 @@
 import 'server-only';
 
 import { modelRegistry } from '@agiworkforce/model-registry';
-import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   DEFAULT_DATA_REGION,
   DataRegionUnavailableError,
-  configuredDataRegions,
-  excludedTransportsFor,
   normaliseDataRegion,
   resolveDataRegion,
   selectDataRegion,
   type DataRegionId,
-  type DataRegionRuntime,
 } from '@agiworkforce/compliance';
 
 import { logger } from '@/lib/logger';
-import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { SERVICE_POOL_TUNING } from '@/lib/server/db-pool-tuning';
-import { reportDatabaseConnectionError } from '@/lib/server/db-connection-error';
-
-/**
- * @file Serving one workspace from the region it is pinned to.
- *
- * `neon-db.ts` opens one pool against the deployment's own database, which is
- * the right answer for every workspace in the home region and the wrong answer
- * for any other. This module is the seam: a pool per provisioned region, chosen
- * by the workspace's `data_region`, with the same tuning the service pool
- * already uses.
- *
- * Only the home region is provisioned. A workspace pinned to any other is
- * refused rather than served from here, which is the point: a residency promise
- * that degrades to "somewhere else" under load is not a promise. Standing up a
- * second Neon project, an EU-jurisdiction bucket, a regional log sink and a
- * regional KMS is a founder action against real vendor accounts.
- */
-
-const regionPools = new Map<DataRegionId, DatabaseAdapter>();
-
-export function regionRuntime(
-  region: string | null | undefined,
-  env: Record<string, string | undefined> = process.env,
-): DataRegionRuntime {
-  return selectDataRegion(region, env);
-}
-
-export function provisionedRegions(
-  env: Record<string, string | undefined> = process.env,
-): readonly DataRegionId[] {
-  return configuredDataRegions(env);
-}
 
 export function isRegionProvisioned(
   region: DataRegionId,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   return resolveDataRegion(region, env).provisioned;
-}
-
-/**
- * The database handle for one region. The home region keeps the deployment's
- * own connection string, so nothing changes for the workspaces already on it;
- * any other region gets a pool of its own against the connection string that
- * region names.
- */
-export function getRegionDb(
-  region: string | null | undefined,
-  env: Record<string, string | undefined> = process.env,
-): DatabaseAdapter {
-  const runtime = regionRuntime(region, env);
-  const existing = regionPools.get(runtime.region);
-  if (existing) return existing;
-  const created = traceDatabaseAdapter(
-    createDatabaseClient({
-      applicationName: `agi-web-${runtime.region}`,
-      connectionString: runtime.databaseUrl,
-      onConnectionError: reportDatabaseConnectionError,
-      ...SERVICE_POOL_TUNING,
-    }),
-  );
-  regionPools.set(runtime.region, created);
-  return created;
 }
 
 export interface OrganizationRegionState {
@@ -287,38 +225,6 @@ export async function completeOrganizationRegionMove(
   };
 }
 
-export interface RegionPinnedInfrastructure {
-  objectStorageEndpoint: string;
-  objectStorageBucket: string;
-  objectStorageJurisdiction: string | null;
-  logDestination: string;
-  keyManagementRegion: string;
-}
-
-/**
- * Where one workspace's objects, logs and keys belong.
- *
- * `objectStorageJurisdiction` is the one a reviewer asks about: a bucket in an
- * auto-region is not residency, because the provider may move its objects, so a
- * region that pins storage names the jurisdiction the bucket has to be created
- * under and the home region names none. Connector credentials follow the same
- * answer as the rest of the workspace's rows, since they live in the region's
- * own database.
- */
-export function regionInfrastructure(
-  region: string | null | undefined,
-  env: Record<string, string | undefined> = process.env,
-): RegionPinnedInfrastructure {
-  const runtime = regionRuntime(region, env);
-  return {
-    objectStorageEndpoint: runtime.objectStorageEndpoint,
-    objectStorageBucket: runtime.objectStorageBucket,
-    objectStorageJurisdiction: runtime.definition.objectStorageJurisdiction,
-    logDestination: runtime.logDestination,
-    keyManagementRegion: runtime.keyManagementRegion,
-  };
-}
-
 export class CustomerKeyRegionError extends Error {
   readonly region: DataRegionId;
   readonly keyRegion: string;
@@ -349,7 +255,7 @@ export function keyManagementRegions(
   region: string | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): readonly string[] {
-  return regionRuntime(region, env)
+  return selectDataRegion(region, env)
     .keyManagementRegion.split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
@@ -364,24 +270,11 @@ export function assertCustomerKeyRegion(
   keyRegion: string,
   env: Record<string, string | undefined> = process.env,
 ): void {
-  const runtime = regionRuntime(dataRegion, env);
+  const runtime = selectDataRegion(dataRegion, env);
   const admitted = keyManagementRegions(dataRegion, env);
   const candidate = keyRegion.trim().toLowerCase();
   if (admitted.some((entry) => entry.toLowerCase() === candidate)) return;
   throw new CustomerKeyRegionError(runtime.region, keyRegion, admitted);
-}
-
-/**
- * The transports a region refuses, in the shape the routing request already
- * takes. The home region's answer is the exclusion list the product has always
- * applied, so nothing moves for the deployment as configured today.
- */
-export function regionExcludedTransports(
-  knownTransports: Iterable<string>,
-  env: Record<string, string | undefined> = process.env,
-): ReadonlySet<string> {
-  const runtime = regionRuntime(env['AGI_DATA_REGION'] ?? null, env);
-  return excludedTransportsFor(runtime.inferenceRouteSet, knownTransports);
 }
 
 const MANAGED_CLOUD_GOVERNANCE_ID = 'managed_cloud';

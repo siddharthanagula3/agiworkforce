@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(async () => undefined),
-  createDatabaseClient: vi.fn((config: Record<string, unknown>) => ({ config })),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -12,15 +11,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...(args as [])),
 }));
-vi.mock('@/lib/server/db-pool-tuning', () => ({ SERVICE_POOL_TUNING: { poolSize: 10 } }));
-vi.mock('@/lib/server/db-connection-error', () => ({ reportDatabaseConnectionError: vi.fn() }));
-vi.mock('@agiworkforce/data-layer', async () => {
-  const actual = await vi.importActual<Record<string, unknown>>('@agiworkforce/data-layer');
-  return {
-    ...actual,
-    createDatabaseClient: (config: Record<string, unknown>) => mocks.createDatabaseClient(config),
-  };
-});
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { DataRegionUnavailableError } from '@agiworkforce/compliance';
@@ -29,12 +19,8 @@ import {
   CustomerKeyRegionError,
   assertCustomerKeyRegion,
   completeOrganizationRegionMove,
-  getRegionDb,
   keyManagementRegions,
-  regionExcludedTransports,
-  regionInfrastructure,
   isRegionProvisioned,
-  provisionedRegions,
   readOrganizationRegion,
   requestOrganizationRegionMove,
 } from './data-region';
@@ -64,38 +50,13 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('which regions this deployment has', () => {
   it('has only the home region out of the box', () => {
-    expect(provisionedRegions(HOME_ONLY)).toEqual(['us']);
+    expect(isRegionProvisioned('us', HOME_ONLY)).toBe(true);
     expect(isRegionProvisioned('eu', HOME_ONLY)).toBe(false);
   });
 
   it('has both once the second region names every piece it is made of', () => {
-    expect(provisionedRegions(TWO_REGIONS)).toEqual(['us', 'eu']);
-  });
-});
-
-describe('the database a region is served from', () => {
-  it('opens one pool per region against that region’s own connection string', () => {
-    getRegionDb('us', TWO_REGIONS);
-    getRegionDb('eu', TWO_REGIONS);
-
-    const strings = mocks.createDatabaseClient.mock.calls.map(
-      ([config]) => (config as Record<string, string>)['connectionString'],
-    );
-    expect(strings).toEqual([
-      TWO_REGIONS.AGI_DATABASE_URL,
-      TWO_REGIONS.AGI_DATA_REGION_EU_DATABASE_URL,
-    ]);
-  });
-
-  it('reuses the pool it already opened for a region', () => {
-    const before = mocks.createDatabaseClient.mock.calls.length;
-    getRegionDb('us', TWO_REGIONS);
-    getRegionDb('us', TWO_REGIONS);
-    expect(mocks.createDatabaseClient.mock.calls.length).toBe(before);
-  });
-
-  it('refuses a region this deployment cannot serve instead of opening the home pool', () => {
-    expect(() => getRegionDb('eu', HOME_ONLY)).toThrow(DataRegionUnavailableError);
+    expect(isRegionProvisioned('us', TWO_REGIONS)).toBe(true);
+    expect(isRegionProvisioned('eu', TWO_REGIONS)).toBe(true);
   });
 });
 
@@ -218,36 +179,6 @@ describe('moving an existing workspace to another region', () => {
     const [event] = mocks.recordAuditEvent.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(event['eventType']).toBe('data_region_changed');
     expect((event['detail'] as Record<string, unknown>)['previousRegion']).toBe('us');
-  });
-});
-
-describe('the objects, logs and keys a region pins', () => {
-  it('names no storage jurisdiction for the home region, because it pins none', () => {
-    const home = regionInfrastructure('us', HOME_ONLY);
-    expect(home.objectStorageJurisdiction).toBeNull();
-  });
-
-  it('names the jurisdiction a pinned bucket must be created under, not an auto region', () => {
-    const eu = regionInfrastructure('eu', TWO_REGIONS);
-    expect(eu.objectStorageJurisdiction).toBe('eu');
-    expect(eu.objectStorageBucket).toBe('agi-eu-private');
-    expect(eu.logDestination).toBe('https://logs.eu.example/ingest');
-    expect(eu.keyManagementRegion).toBe('eu-central-1');
-  });
-
-  it('excludes for the home region exactly what the product already excluded', () => {
-    const excluded = regionExcludedTransports(['open_router', 'deepseek', 'qwen'], HOME_ONLY);
-    expect(excluded.has('deepseek')).toBe(true);
-    expect(excluded.has('open_router')).toBe(false);
-  });
-
-  it('excludes everything a pinned region does not name', () => {
-    const excluded = regionExcludedTransports(['open_router', 'mistral_eu'], {
-      ...TWO_REGIONS,
-      AGI_DATA_REGION: 'eu',
-    });
-    expect(excluded.has('open_router')).toBe(true);
-    expect(excluded.has('mistral_eu')).toBe(false);
   });
 });
 
