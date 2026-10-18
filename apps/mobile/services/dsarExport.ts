@@ -16,13 +16,7 @@ import { listCustomInstructions } from '@/storage/customInstructions';
 import { getAllSettings } from '@/storage/settingsDb';
 import { listInstalledModels } from '@/storage/installedModels';
 import { mmkvDisclosureLedger, mmkvConsentLedger } from '@/services/complianceLedger';
-import type {
-  Conversation,
-  Message,
-  MemoryFact,
-  CustomInstruction,
-  InstalledModel,
-} from '@/storage/types';
+import type { Conversation, Message, MemoryFact, InstalledModel } from '@/storage/types';
 
 type WrapMarkerFn = (opts: {
   text: string;

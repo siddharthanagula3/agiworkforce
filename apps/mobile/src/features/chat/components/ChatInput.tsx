@@ -20,7 +20,6 @@ import {
   Pencil,
   Telescope,
   Terminal,
-  Paintbrush,
   Sparkles,
   Clock,
 } from 'lucide-react-native';

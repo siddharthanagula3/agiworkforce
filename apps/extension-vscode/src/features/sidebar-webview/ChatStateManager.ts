@@ -2345,11 +2345,6 @@ export class ChatStateManager {
   }
 
   /**
-   * The CLI reports a provider id; the header names a provider. Resolving here
-   * keeps the catalog the single owner of that name and keeps raw ids out of
-   * the webview.
-   */
-  /**
    * The provider the user chose, by the catalog's name for it. A failure that
    * does not name a provider itself, a dead connection for instance, still gets
    * to say which one it could not reach.
@@ -2587,10 +2582,6 @@ export class ChatStateManager {
     this._activeModelChanged.dispose();
   }
 
-  /**
-   * The resumed transcript plus what this session sent, for a retry to pick
-   * the last user turn out of. Assistant text is not kept here.
-   */
   /** The CLI session this chat is running in, when one has been opened. */
   activeThreadId(): string | undefined {
     return this._thread?.id;

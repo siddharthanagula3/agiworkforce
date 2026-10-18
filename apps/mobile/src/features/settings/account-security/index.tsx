@@ -471,14 +471,22 @@ export default function AccountSecurityScreen() {
                 }
               />
             ))}
-            {signInMethods.keys.map((key) => (
+            {signInMethods.keys === null ? (
               <SettingsRow
-                key={key.id}
-                label={key.name}
+                label="Passkeys and security keys"
                 icon={Fingerprint}
-                value={key.kind === 'passkey' ? 'Passkey' : 'Security key'}
+                value="Unavailable"
               />
-            ))}
+            ) : (
+              signInMethods.keys.map((key) => (
+                <SettingsRow
+                  key={key.id}
+                  label={key.name}
+                  icon={Fingerprint}
+                  value={key.kind === 'passkey' ? 'Passkey' : 'Security key'}
+                />
+              ))
+            )}
           </>
         )}
         <SettingsRow

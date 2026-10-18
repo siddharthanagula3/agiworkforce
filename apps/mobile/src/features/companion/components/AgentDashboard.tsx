@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, RefreshControl, Alert, ScrollView } from 'react-native';
+import { View, RefreshControl, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -43,12 +43,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
-import {
-  requestAgentRefresh,
-  sendAgentCommand,
-  sendEmergencyStop,
-  getRiskBadgeColor,
-} from '@/services/companion';
+import { requestAgentRefresh, sendAgentCommand, sendEmergencyStop } from '@/services/companion';
 import { ExecutionStream } from '@/src/features/companion/components/ExecutionStream';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 

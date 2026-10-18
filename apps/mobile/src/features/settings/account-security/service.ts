@@ -225,7 +225,8 @@ export interface SignInKey {
 
 export interface SignInMethods {
   identities: SignInIdentity[];
-  keys: SignInKey[];
+  /** `null` when the account-security service could not list them. */
+  keys: SignInKey[] | null;
 }
 
 function readIdentities(value: unknown): SignInIdentity[] {
@@ -246,9 +247,11 @@ function readIdentities(value: unknown): SignInIdentity[] {
   });
 }
 
-function readKeys(value: unknown): SignInKey[] {
-  const credentials = (value as { credentials?: unknown } | null)?.credentials;
-  if (!Array.isArray(credentials)) return [];
+function readKeys(value: unknown): SignInKey[] | null {
+  if (!isRecord(value)) return null;
+  if (value['state'] === 'unavailable') return [];
+  const credentials = value['credentials'];
+  if (!Array.isArray(credentials)) return null;
   return credentials.flatMap((entry) => {
     const row = entry as Record<string, unknown>;
     const kind = row['kind'];

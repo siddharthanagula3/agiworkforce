@@ -82,7 +82,6 @@ import {
 } from '@/services/notifications';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';

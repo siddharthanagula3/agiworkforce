@@ -10,7 +10,6 @@ import {
   getModelMetadataById,
   getMinimumRequiredTier,
   getProviderOffering,
-  normalizeBillingPlanTier,
   normalizeModelId,
   type EnvironmentAvailability,
   type ModelEnvironment,

@@ -6,6 +6,7 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 import { api } from '../services/api';
+import { ApiHttpError } from '../services/apiErrors';
 import { assertCloudAccountEpochCurrent } from '../src/features/auth/services/cloudAccountSession';
 import {
   deleteCloudMessagesRemote,
@@ -33,7 +34,7 @@ describe('deleteCloudMessagesRemote', () => {
   });
 
   it('treats an already-deleted message as idempotent success', async () => {
-    mockDelete.mockRejectedValueOnce(new Error('HTTP 404: Not found'));
+    mockDelete.mockRejectedValueOnce(new ApiHttpError('Message not found', 404));
     mockDelete.mockResolvedValueOnce(undefined);
 
     await expect(deleteCloudMessagesRemote('c1', ['gone', 'present'])).resolves.toBeUndefined();
@@ -87,7 +88,7 @@ describe('setCloudMessageReactionRemote', () => {
   });
 
   it('treats a 404 (message already deleted) as idempotent success', async () => {
-    mockPatch.mockRejectedValueOnce(new Error('HTTP 404: Not found'));
+    mockPatch.mockRejectedValueOnce(new ApiHttpError('Message not found', 404));
 
     await expect(setCloudMessageReactionRemote('c1', 'm1', 'thumbsDown')).resolves.toBeUndefined();
   });

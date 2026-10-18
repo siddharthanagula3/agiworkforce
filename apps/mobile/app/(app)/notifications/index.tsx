@@ -7,7 +7,6 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import {
   ArrowLeft,
-  Bell,
   BellOff,
   CheckCheck,
   Trash2,
@@ -18,10 +17,8 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { formatNotificationTime } from '@/src/features/notifications/time';
 import {
   cloudRunNotificationRoute,

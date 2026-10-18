@@ -110,11 +110,11 @@ describe('a session outlives the process that made it', () => {
     expect(ROOT_LAYOUT).toMatch(/<ClerkProvider[^>]*[\s\S]*?tokenCache=\{tokenCache\}/);
   });
 
-  it('persists the account store to the keychain, not to the unencrypted store', () => {
+  it('keeps no account state on disk of its own; the session lives in the token cache', () => {
     const store = readFileSync(join(MOBILE_ROOT, 'src', 'features', 'auth', 'store.ts'), 'utf8');
 
-    expect(store).toContain("from '@/lib/secureStorage'");
-    expect(store).toContain('createJSONStorage(() => secureStorage)');
+    expect(store).not.toContain('zustand/middleware');
+    expect(store).not.toContain('mmkvStorage');
   });
 
   it('asks the keychain to keep every stored secret on this device alone', () => {

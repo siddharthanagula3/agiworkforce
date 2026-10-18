@@ -15,7 +15,6 @@ import {
   Link,
   ChevronRight,
   Lock,
-  Terminal,
   Bot,
   Film,
   Check,

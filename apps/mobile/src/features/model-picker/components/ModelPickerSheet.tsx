@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import BottomSheet, {

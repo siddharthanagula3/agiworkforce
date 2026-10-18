@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { View, Animated } from 'react-native';
+import { Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { spacing, useThemeColors, zIndex } from '@/src/ui/theme';

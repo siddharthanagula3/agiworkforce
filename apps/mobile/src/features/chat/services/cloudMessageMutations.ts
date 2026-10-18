@@ -1,4 +1,5 @@
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 import { managedCloudMessagePath } from '@agiworkforce/cloud-contracts';
 import {
   assertCloudAccountEpochCurrent,
@@ -6,7 +7,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 
 function isNotFound(error: unknown): boolean {
-  return error instanceof Error && /HTTP 404\b/.test(error.message);
+  return error instanceof ApiHttpError && error.status === 404;
 }
 
 export async function deleteCloudMessagesRemote(

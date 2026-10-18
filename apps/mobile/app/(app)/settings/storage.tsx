@@ -342,7 +342,7 @@ export default function StorageManagerScreen() {
 
           {models.length === 0 ? (
             <Text className="text-sm" style={{ color: c.textMuted }}>
-              No models downloaded. Download a model from Settings → Models.
+              No models downloaded. Download a model from Settings → General → Models.
             </Text>
           ) : (
             models.map((model, idx) => (

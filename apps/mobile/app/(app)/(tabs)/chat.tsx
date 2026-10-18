@@ -1,14 +1,6 @@
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import {
-  View,
-  Alert,
-  Keyboard,
-  Linking,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { View, Alert, Keyboard, Linking, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';

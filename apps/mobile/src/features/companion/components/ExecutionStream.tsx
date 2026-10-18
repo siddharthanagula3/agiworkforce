@@ -8,7 +8,6 @@ import Animated, {
   LinearTransition,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
   Easing,
   cancelAnimation,

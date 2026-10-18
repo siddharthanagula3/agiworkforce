@@ -1,6 +1,6 @@
 import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
-import { API_URL, TIMEOUTS } from '@/lib/constants';
+import { TIMEOUTS } from '@/lib/constants';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
 import {
   QueueFullError,
@@ -41,7 +41,6 @@ import {
   streamToolApprovalResume,
   type StreamCallbacks,
   type StreamDelta,
-  type ChatWireMessage,
 } from '@/services/streaming';
 import type { InteractiveCard, InteractiveCardResponsePayload } from '@agiworkforce/types';
 import {
@@ -142,7 +141,6 @@ import {
 import type {
   ChatMessage,
   MessageAttachment,
-  ConversationSummary,
   PendingToolInput,
   PendingToolInputCall,
   StatusStep,
