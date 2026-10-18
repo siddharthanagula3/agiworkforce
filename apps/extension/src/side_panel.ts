@@ -25,7 +25,13 @@ import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkfor
 import { getExtensionTokensCssAuto } from './tokens';
 import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
-import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
+import {
+  chooseBrowserContextTabs,
+  prepareSelectionContext,
+  readVisibleSelection,
+  TAB_CONTEXT_PICKER_CSS,
+  type PageSelection,
+} from './features/side-panel/tabContext';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
@@ -9527,20 +9533,82 @@ function renderVideoModeChip(bar: HTMLElement): void {
   bar.appendChild(chip);
 }
 
+let pendingSelectionText: string | null = null;
+let offeredSelectionKey: string | null = null;
+
+function pendingSelectionAttached(): boolean {
+  return pendingSelectionText !== null && _ctx.pendingPageContext === pendingSelectionText;
+}
+
+async function offerPageSelection(): Promise<void> {
+  if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
+  if (pendingBrowserContextTabs.length > 0) return;
+  if (_ctx.pendingPageContext !== null && !pendingSelectionAttached()) return;
+  const generation = _ctx.conversationGeneration;
+  let tab: chrome.tabs.Tab | undefined;
+  let selection: PageSelection | null = null;
+  try {
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id || !tab.url) return;
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readVisibleSelection,
+      args: [MAX_PAGE_TEXT_CHARACTERS],
+    });
+    selection = (result?.result as PageSelection | null | undefined) ?? null;
+  } catch {
+    return;
+  }
+  if (!tab?.id || !tab.url || !selection) return;
+  const prepared = prepareSelectionContext(selection, tab.url);
+  if (!prepared) return;
+  const key = `${tab.id}\n${tab.url}\n${prepared.text}`;
+  if (key === offeredSelectionKey) return;
+  if (
+    generation !== _ctx.conversationGeneration ||
+    _ctx.isStreaming ||
+    managedCloudChatState !== 'ready' ||
+    pendingBrowserContextTabs.length > 0 ||
+    (_ctx.pendingPageContext !== null && !pendingSelectionAttached())
+  ) {
+    return;
+  }
+  offeredSelectionKey = key;
+  pendingSelectionText = prepared.text;
+  _ctx.pendingPageContext = prepared.text;
+  _ctx.pendingPageContextSource = {
+    tabId: tab.id,
+    url: tab.url,
+    title: t('spSelectionChipTitle', [pageChipLabel(tab.url)]),
+  };
+  composerContextNotice = null;
+  updateAttachmentPreview();
+  updateContextButton();
+}
+
 function renderPendingPageChip(bar: HTMLElement): void {
   const source = _ctx.pendingPageContextSource;
   if (!_ctx.pendingPageContext || !source) return;
+  const selection = pendingSelectionAttached();
   const label = source.title || pageChipLabel(source.url);
   const chip = el('div', {
-    class: 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
-    title: source.url,
+    class: selection
+      ? 'sp-attachment-chip sp-attachment-doc sp-attachment-page sp-attachment-selection'
+      : 'sp-attachment-chip sp-attachment-doc sp-attachment-page',
+    title: selection ? _ctx.pendingPageContext : source.url,
   });
   const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
-  icon.appendChild(renderIcon(Globe, 16));
+  icon.appendChild(renderIcon(selection ? FileText : Globe, 16));
   chip.appendChild(icon);
   const copy = el('div', { class: 'sp-attachment-doc-copy' });
   copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, label));
-  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, pageChipLabel(source.url)));
+  copy.appendChild(
+    el(
+      'span',
+      { class: 'sp-attachment-doc-status' },
+      selection ? _ctx.pendingPageContext : pageChipLabel(source.url),
+    ),
+  );
   chip.appendChild(copy);
   const removeBtn = el(
     'button',
@@ -16264,6 +16332,8 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
+  inputEl.addEventListener('focus', () => void offerPageSelection());
+  window.addEventListener('focus', () => void offerPageSelection());
 
   const slashMenu = el('div', {
     id: 'sp-slash-menu',

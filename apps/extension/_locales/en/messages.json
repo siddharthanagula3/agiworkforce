@@ -4617,5 +4617,15 @@
   "spFullAccessNoticeDismiss": {
     "message": "Dismiss the full access notice",
     "description": "Accessible label of the X that closes the Full access notice for good."
+  },
+  "spSelectionChipTitle": {
+    "message": "Selected text · $HOST$",
+    "description": "Name of the composer chip and the sent-message disclosure for a passage highlighted on the active tab",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
   }
 }

@@ -1,5 +1,7 @@
 import { MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { BrowserContextTabReference } from '../../types';
+import { sanitizePageText } from '../../background/policy';
+import { boundPageText } from '../content/in-page-panel/pageActions';
 
 export const TAB_CONTEXT_PICKER_CSS = `
   .sp-tab-picker-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 12px; background: var(--agi-ext-bg); }
@@ -195,4 +197,88 @@ export async function chooseBrowserContextTabs(
   };
   void load();
   return result;
+}
+
+export interface PageSelection {
+  text: string;
+  truncated: boolean;
+}
+
+/**
+ * Runs inside the page through chrome.scripting, so it may reference nothing
+ * outside its own body.
+ */
+export function readVisibleSelection(maxCharacters: number): PageSelection | null {
+  const focused = document.activeElement;
+  if (
+    focused instanceof HTMLInputElement ||
+    focused instanceof HTMLTextAreaElement ||
+    focused instanceof HTMLSelectElement
+  ) {
+    return null;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const excluded =
+    'input, textarea, select, script, style, noscript, template, [hidden], [aria-hidden="true"]';
+  const blockOf = (element: Element): Element => {
+    for (let current: Element | null = element; current; current = current.parentElement) {
+      const display = getComputedStyle(current).display;
+      if (display && !display.startsWith('inline') && display !== 'contents') return current;
+    }
+    return element;
+  };
+  let text = '';
+  let previousBlock: Element | null = null;
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index);
+    const root = range.commonAncestorContainer;
+    const walker = document.createTreeWalker(
+      root.nodeType === Node.TEXT_NODE && root.parentNode ? root.parentNode : root,
+      NodeFilter.SHOW_TEXT,
+    );
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!range.intersectsNode(node)) continue;
+      const parent = node.parentElement;
+      if (!parent || parent.closest(excluded)) continue;
+      if (
+        typeof parent.checkVisibility === 'function' &&
+        !parent.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+      ) {
+        continue;
+      }
+      const value = node.nodeValue ?? '';
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : value.length;
+      const piece = value.slice(start, end);
+      if (!piece.trim()) continue;
+      const block = blockOf(parent);
+      if (previousBlock && block !== previousBlock && !text.endsWith('\n')) text += '\n';
+      previousBlock = block;
+      text += piece;
+    }
+  }
+  const collapsed = text
+    .replace(/[ \t\u00A0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim();
+  if (!collapsed) return null;
+  return {
+    text: collapsed.slice(0, maxCharacters),
+    truncated: collapsed.length > maxCharacters,
+  };
+}
+
+export function prepareSelectionContext(
+  selection: PageSelection,
+  pageUrl: string,
+): PageSelection | null {
+  try {
+    const url = new URL(pageUrl);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+  } catch {
+    return null;
+  }
+  const bounded = boundPageText(sanitizePageText(selection.text), selection.truncated);
+  return bounded.text.trim() ? bounded : null;
 }
