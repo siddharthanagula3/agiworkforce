@@ -2,7 +2,6 @@
   "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "generatedFrom": "packages/contracts/types/src top-level modules (excl. generated/, __tests__) + packages/contracts/cloud-contracts/src top-level modules + packages/contracts/types/src/generated/protocol file count (ts-rs output from crates/agiworkforce-protocol)",
   "typesModules": [
-    "a2a",
     "account-eligibility",
     "account-usage-client",
     "account-usage-wire",
@@ -41,7 +40,6 @@
     "context",
     "context-handoff-uri",
     "conversation",
-    "council",
     "country-groups",
     "credits",
     "cross-device",
@@ -104,12 +102,9 @@
     "provider",
     "provider-adapter",
     "provider-offering-label",
-    "provider-state",
-    "quick-start-intents",
     "rate-card",
     "reason-codes",
     "remote-code",
-    "request-identity",
     "research",
     "resource-lifecycle",
     "resource-metadata-contract",
@@ -147,10 +142,8 @@
     "web-hooks",
     "web-offline",
     "web-search-citations",
-    "webmcp",
     "workflow",
-    "workspace",
-    "workspace-analytics"
+    "workspace"
   ],
   "cloudContractsModules": [
     "account-deletion",

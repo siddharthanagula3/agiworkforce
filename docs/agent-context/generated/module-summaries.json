@@ -312,7 +312,7 @@
       "name": "@agiworkforce/guardian-github",
       "path": "packages/guardian/github",
       "kind": "package",
-      "purpose": "GitHub delivery surface for Guardian: webhook intake, check runs, and PR summaries built on @agiworkforce/guardian-core."
+      "purpose": "GitHub delivery surface for Guardian: the CI scan, check runs and PR summaries built on @agiworkforce/guardian-core."
     },
     {
       "name": "@agiworkforce/artifacts",
