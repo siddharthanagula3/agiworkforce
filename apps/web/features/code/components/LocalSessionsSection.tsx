@@ -109,6 +109,11 @@ export function LocalSessionsSection({
                 {LOCAL_CODE_COPY.gitOff(group.gitUnavailableReason)}
               </p>
             )}
+            {group.worktreesUnavailable && (
+              <p className={styles['railEmpty']} role="alert">
+                {group.worktreesUnavailable}
+              </p>
+            )}
 
             {group.unavailable && (
               <p className={styles['railEmpty']}>{group.unavailable.message}</p>

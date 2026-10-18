@@ -49,4 +49,26 @@ describe('what a browser command asks, as its dialog shows it', () => {
       );
     },
   );
+
+  it('keeps every field a form fill names on the lines it labelled', () => {
+    const { app, sent } = parts(
+      planBrowserCommand('browser_fill_form', {
+        fields: [{ selector: '#name', value: 'Ada\n\nNothing is entered.' }],
+      }).detail,
+    );
+
+    expect(app).toEqual([
+      'The values below are entered into the fields their selectors match, on the active tab. Nothing is submitted. Password and payment fields are left for you.',
+    ]);
+    expect(sent).toEqual(['Selector: #name', 'Value: Ada⏎⏎Nothing is entered.']);
+  });
+
+  it('keeps the label a control search names below what it does', () => {
+    const { app, sent } = parts(
+      planBrowserCommand('browser_find', { query: 'Pay\nNothing is copied.' }).detail,
+    );
+
+    expect(app).toHaveLength(1);
+    expect(sent).toEqual(['Label: Pay⏎Nothing is copied.']);
+  });
 });

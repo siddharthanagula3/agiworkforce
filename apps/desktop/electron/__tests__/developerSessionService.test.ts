@@ -702,6 +702,40 @@ describe('developer session runtime', () => {
     expect((failure as Error).message).toBe('agi in Terminal is writing this session.');
   });
 
+  it('lists no worktrees for a folder that is not a git repository, and says so for any other refusal', async () => {
+    const notARepository = await loadService((method) =>
+      method === 'worktree/managed/list'
+        ? new RpcFailure({
+            code: -32602,
+            message: `${root.path} is not inside a git repository with a working tree`,
+          })
+        : defaultResponder(method),
+    );
+    const plain = await notARepository.service.listDeveloperSessions();
+    expect(plain.groups).toHaveLength(1);
+    expect(plain.groups[0]?.worktreesUnavailable).toBeUndefined();
+
+    const broken = await loadService((method) =>
+      method === 'worktree/managed/list'
+        ? new RpcFailure({ code: -32603, message: 'the worktree store could not be read' })
+        : defaultResponder(method),
+    );
+    const listed = await broken.service.listDeveloperSessions();
+    expect(listed.groups).toHaveLength(1);
+    expect(listed.groups[0]?.worktreesUnavailable).toBe('the worktree store could not be read');
+  });
+
+  it('does not ask a CLI that serves no managed worktrees for them', async () => {
+    const { service, children } = await loadService((method) =>
+      method === 'initialize'
+        ? { ...HANDSHAKE, capabilities: BASE_CAPABILITIES }
+        : defaultResponder(method),
+    );
+    await service.listDeveloperSessions();
+    const sent = children.flatMap((child) => child.written).map((entry) => entry.method);
+    expect(sent).not.toContain('worktree/managed/list');
+  });
+
   it('takes a session over on a CLI that serves the writer lease, and refuses on one that does not', async () => {
     const { service, children } = await loadService((method) => {
       if (method === 'initialize') {

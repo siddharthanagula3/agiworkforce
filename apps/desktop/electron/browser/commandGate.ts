@@ -228,7 +228,10 @@ export function planBrowserCommand(
         'List the controls on the page in the paired browser?',
         query === undefined
           ? 'The buttons, links and fields of the page, with their labels, are copied into this conversation. Field values are not.'
-          : `The buttons, links and fields whose label matches "${query}" are copied into this conversation. Field values are not.`,
+          : withSent(
+              'The buttons, links and fields whose label matches the text below are copied into this conversation. Field values are not.',
+              [['Label', shownValue(query, SELECTOR_SHOWN)]],
+            ),
       );
     }
     case 'browser_fill_form': {
@@ -237,7 +240,13 @@ export function planBrowserCommand(
       return plan(
         withDefined({ fields, tabId }),
         'Fill in fields in the paired browser?',
-        `${fields.map((field) => `${field.selector}: ${field.value}`).join('\n')}\n\nare entered on the page. Nothing is submitted. Password and payment fields are left for you.`,
+        withSent(
+          'The values below are entered into the fields their selectors match, on the active tab. Nothing is submitted. Password and payment fields are left for you.',
+          fields.flatMap((field): Array<[string, string]> => [
+            ['Selector', shownValue(field.selector, SELECTOR_SHOWN)],
+            ['Value', shownValue(field.value, TYPED_TEXT_SHOWN)],
+          ]),
+        ),
       );
     }
     case 'browser_history': {

@@ -1504,6 +1504,7 @@ async function listForRoot(
     ...(unavailableReason ? { gitUnavailableReason: unavailableReason } : {}),
     sessions: [],
   };
+  let worktrees: DeveloperSessionGroup[] = [];
 
   try {
     const server = await readyServer(root);
@@ -1520,6 +1521,7 @@ async function listForRoot(
     }
     const awaiting = remote ? [] : await serversAwaitingApproval(server);
     if (awaiting.length > 0) group.mcpAwaitingApproval = awaiting;
+    if (!remote) worktrees = await worktreeGroups(root, server, group);
   } catch (error) {
     group.unavailable =
       error instanceof DeveloperRuntimeUnavailableError
@@ -1528,7 +1530,7 @@ async function listForRoot(
     return [group];
   }
 
-  return remote ? [group] : [group, ...(await worktreeGroups(root))];
+  return [group, ...worktrees];
 }
 
 const MCP_APPROVAL_SCOPES: readonly DeveloperMcpApprovalScope[] = ['project', 'plugin'];
@@ -1739,13 +1741,23 @@ export async function grantDeveloperMcpApproval(
  * A group per worktree the folder's CLI made, carrying the one session that
  * runs in it. The session comes from the folder's own list, so no runtime is
  * started inside a worktree just to name it. A folder that is not a git
- * repository has no worktrees, which is not a failure of the folder.
+ * repository has no worktrees, which is not a failure of the folder; any other
+ * refusal is recorded on the folder's group, whose own sessions still list.
  */
-async function worktreeGroups(parent: WorkspaceRoot): Promise<DeveloperSessionGroup[]> {
+const NOT_A_WORKTREE_REPOSITORY = 'is not inside a git repository with a working tree';
+
+async function worktreeGroups(
+  parent: WorkspaceRoot,
+  server: RunningServer,
+  group: DeveloperSessionGroup,
+): Promise<DeveloperSessionGroup[]> {
+  if (!server.advertised?.worktrees) return [];
   let listed: Awaited<ReturnType<typeof listWorktrees>>;
   try {
     listed = await listWorktrees(parent);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.endsWith(NOT_A_WORKTREE_REPOSITORY)) group.worktreesUnavailable = message;
     return [];
   }
   return listed.worktrees.map(({ worktree, thread }) => {

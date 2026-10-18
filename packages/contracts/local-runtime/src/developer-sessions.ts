@@ -169,6 +169,12 @@ export interface DeveloperSessionGroup {
    * (filter.lfs.clean in .git/config)". Absent from shells that predate it.
    */
   gitUnavailableReason?: string;
+  /**
+   * Why this folder's worktrees could not be listed, in the CLI's words. The
+   * folder's own sessions are still listed. Absent when they were, and for a
+   * folder that is not a git repository, which has none.
+   */
+  worktreesUnavailable?: string;
   sessions: LocalDeveloperSession[];
   /**
    * Set when the folder's sessions were left out because the agent is not
