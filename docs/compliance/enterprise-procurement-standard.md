@@ -41,10 +41,9 @@ signed Order Form and are stored on the contract row:
 - `payment_terms_days`: the net terms the due date is computed from
   (`resolveInvoiceDueAt`), capped at 180 days.
 
-An invoice with no recipient on the contract is never issued. The six reasons
-`invoiceIssuanceRefusals` returns
+The six reasons `invoiceIssuanceRefusals` returns
 (`packages/contracts/types/src/enterprise/invoice-terms.ts`) are the whole
-list, and any one of them stops the document:
+list, and any one of them flags the document:
 
 | Refusal                        | What is missing or wrong                                         |
 | ------------------------------ | ---------------------------------------------------------------- |
@@ -55,20 +54,18 @@ list, and any one of them stops the document:
 | `currency_not_contracted`      | The requested currency is not the agreement's `billing_currency` |
 | `payment_method_not_permitted` | A collection method or instrument the signed policy excludes     |
 
-`assertInvoiceIssuable` raises a validation error carrying those reasons, and
-`buildEnterpriseInvoiceDraft` calls it before building anything, so the refusal
-happens before Stripe is contacted. Fill in section 1 of the Order Form
-template and re-author the agreement version; the invoice cannot be forced.
+Invoices are issued from the Stripe dashboard. Each one is checked against the
+agreement when its webhook arrives (section 3), so a document that fails a
+check is flagged, not prevented. Fill in section 1 of the Order Form template
+and re-author the agreement version before issuing.
 
 ## 3. Payment methods
 
-The signed Order Form states which methods may collect, and an invoice this
-product issues on an excluded rail is refused rather than audited: the
-collection method and every payment method type go through
-`assertInvoiceIssuable` as `payment_method_not_permitted`. Card-on-file for an
-invoiced account is the case this exists to catch.
+The signed Order Form states which methods may collect. The collection method
+and every payment method type are checked as `payment_method_not_permitted`;
+card-on-file for an invoiced account is the case this exists to catch.
 
-One path is not refusable. An invoice created in the Stripe dashboard already
+No check can refuse an invoice. One created in the Stripe dashboard already
 exists by the time its webhook arrives, so `recordEnterpriseInvoiceEvent`
 writes it to the ledger and then calls `auditInvoiceAgainstAgreement`, which
 re-runs the same six checks, logs at error level and records a

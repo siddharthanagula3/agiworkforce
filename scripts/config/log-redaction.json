@@ -74,12 +74,6 @@
       "fix": "rename to objectKey"
     },
     {
-      "file": "apps/web/lib/services/subscription-service.ts",
-      "field": "email",
-      "reason": "three subscription reconciliation lines log the account address",
-      "fix": "replace with emailPseudonym: pseudonymizeEmail(email) from @/lib/server/email-pseudonym"
-    },
-    {
       "file": "apps/web/app/api/copyright-notice/route.ts",
       "field": "token",
       "reason": "the operator notification token is logged whole when the alert is undeliverable; it is a credential, so the redactor replaces it",
