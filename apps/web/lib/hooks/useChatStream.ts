@@ -182,6 +182,7 @@ import {
   researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
 import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
+import type { WebSettingsContentSection } from '@/features/settings/lib/web-settings-sections';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -511,6 +512,29 @@ function surfaceTermsNotice(response: Response): void {
   toast.info('Our Terms of Service were updated. Using AGI Workforce means you accept them.', {
     duration: 15_000,
     action: { label: 'Read terms', onClick: () => window.open('/terms', '_blank', 'noopener') },
+  });
+}
+
+const BILLING_NOTICE_SEEN_KEY = 'agi.billing-notice-seen';
+const BILLING_SETTINGS_SECTION = 'billing' satisfies WebSettingsContentSection;
+
+// A lapsed paid plan is served as Free and the gateway names the subscription
+// status. Once per status per browser session, so it reminds without nagging.
+function surfaceBillingNotice(response: Response): void {
+  const status = response.headers.get('X-AGI-Billing-Notice')?.trim();
+  if (!status) return;
+  try {
+    if (window.sessionStorage.getItem(BILLING_NOTICE_SEEN_KEY) === status) return;
+    window.sessionStorage.setItem(BILLING_NOTICE_SEEN_KEY, status);
+  } catch {
+    return;
+  }
+  toast.info('Your plan lapsed. Update your payment method.', {
+    duration: 15_000,
+    action: {
+      label: 'Open billing',
+      onClick: () => window.location.assign(`/settings/${BILLING_SETTINGS_SECTION}`),
+    },
   });
 }
 
@@ -4317,6 +4341,7 @@ export function useChatStream(
           if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
 
           surfaceTermsNotice(response);
+          surfaceBillingNotice(response);
           const truncatedAttachments = readAttachmentTruncationHeader(
             response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
           );

@@ -6545,8 +6545,8 @@
     "name": "Square",
     "summary": "Search and manage transaction, merchant, and payment data.",
     "description": "Access Square's commerce platform to view transaction data, manage customer profiles, track inventory, process payments, and analyze sales patterns. Handle point-of-sale operations, generate financial reports, and manage business operations through the assistant's natural language interface for streamlined commerce management.You can use the Square connector to: Create invoices: \"Create an invoice charging Jane Smith (jane@example.com) for 2 hours at $250/hr for 'Consulting on the Square MCP Server'\"Update business hours: \"Update my business hours to be 9am - 5pm Monday through Friday, 10am -…",
-    "mcpUrl": "https://mcp.squareup.com/sse",
-    "transport": "sse",
+    "mcpUrl": "https://mcp.squareup.com/mcp",
+    "transport": "streamable-http",
     "publisher": {
       "name": "Square, Inc.",
       "url": "https://squareup.com/"
