@@ -103,7 +103,12 @@ describe('composer and header at narrow widths', () => {
 });
 
 describe('onboarding disclosures', () => {
-  it('puts each disclosure label on its own line above its body', () => {
-    expect(source).toContain('.sp-ob-privacy-row .sp-ob-row-text > strong { display: block; }');
+  it('puts each disclosure label on its own line above its body, as a summary of its details', () => {
+    const welcome = readFileSync(
+      join(APP_ROOT, 'src', 'features', 'onboarding', 'welcome-page.ts'),
+      'utf8',
+    );
+    expect(welcome).toContain("el('summary', {}, disclosure.label)");
+    expect(welcome).toContain("el('p', { class: 'wl-text' }, disclosure.body)");
   });
 });
