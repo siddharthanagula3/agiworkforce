@@ -23,7 +23,9 @@ import {
 import { getOptionalEnv } from '@shared/utils/env';
 import { grantCreditTopUp, isCreditTopUpApplied } from '@/app/api/stripe-webhook/lib/db';
 import { createError } from '@/lib/errors';
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
+import { SITE_URL } from '@/lib/seo/site';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
@@ -56,7 +58,7 @@ const ATTEMPT_LOOKUP_SLACK_SECONDS = 60;
 const ATTEMPT_LOOKUP_LIMIT = 20;
 const SWEEP_PAGE_SIZE = 100;
 const UNIQUE_VIOLATION = '23505';
-const BILLING_SETTINGS_PATH = '/settings/billing';
+const BILLING_SETTINGS_URL = `${SITE_URL}/settings/billing`;
 const FAILURE_SUBJECT = 'Auto-reload is off: a payment did not go through';
 const CONSENT_SUBJECT = 'Auto-reload is on';
 const EMAIL_FOOTER = 'You are receiving this because you turned on auto-reload.';
@@ -362,15 +364,6 @@ export async function readAutoReloadSettings(
   return toAutoReloadSettings(row, instrument?.card ?? null);
 }
 
-function settingsUrl(): string | null {
-  const origin = (process.env['NEXT_PUBLIC_APP_URL'] ?? '').trim().replace(/\/$/, '');
-  return origin ? `${origin}${BILLING_SETTINGS_PATH}` : null;
-}
-
-function htmlText(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 async function emailReloadConsent(
   userId: string,
   to: string | null,
@@ -389,12 +382,9 @@ async function emailReloadConsent(
     return;
   }
 
-  const link = settingsUrl();
   const intro =
     'Auto-reload is now on for your AGI Workforce account. These are the terms you agreed to:';
-  const action = link
-    ? `Turn auto-reload off at any time in Settings > Billing: ${link}`
-    : 'Turn auto-reload off at any time in Settings > Billing.';
+  const action = `Turn auto-reload off at any time in Settings > Billing: ${BILLING_SETTINGS_URL}`;
 
   const result = await sendTransactionalEmail({
     from: process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim() ?? '',
@@ -402,12 +392,10 @@ async function emailReloadConsent(
     subject: CONSENT_SUBJECT,
     text: [intro, '', consentText, '', action, '', EMAIL_FOOTER].join('\n'),
     html: [
-      `<p>${htmlText(intro)}</p>`,
-      `<p>${htmlText(consentText)}</p>`,
-      link
-        ? `<p><a href="${link}">Turn auto-reload off in Settings &gt; Billing</a></p>`
-        : `<p>${htmlText(action)}</p>`,
-      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${htmlText(EMAIL_FOOTER)}</p>`,
+      `<p>${escapeHtml(intro)}</p>`,
+      `<p>${escapeHtml(consentText)}</p>`,
+      `<p><a href="${escapeHtml(BILLING_SETTINGS_URL)}">Turn auto-reload off in Settings &gt; Billing</a></p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${escapeHtml(EMAIL_FOOTER)}</p>`,
     ].join(''),
     idempotencyKey: `auto-reload-consent:${userId}:${acceptedAt ? toIso(acceptedAt) : AUTO_RELOAD_CONSENT_VERSION}`,
   });
@@ -613,12 +601,9 @@ async function emailReloadFailure(
     return;
   }
 
-  const link = settingsUrl();
   const consequence =
     'Auto-reload is now off, so no further charges will be attempted until you turn it back on.';
-  const action = link
-    ? `Check your card and turn auto-reload back on in Settings > Billing: ${link}`
-    : 'Check your card and turn auto-reload back on in Settings > Billing.';
+  const action = `Check your card and turn auto-reload back on in Settings > Billing: ${BILLING_SETTINGS_URL}`;
 
   const result = await sendTransactionalEmail({
     from: process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim() ?? '',
@@ -626,12 +611,10 @@ async function emailReloadFailure(
     subject: FAILURE_SUBJECT,
     text: [headline, '', consequence, '', action, '', EMAIL_FOOTER].join('\n'),
     html: [
-      `<p>${htmlText(headline)}</p>`,
-      `<p>${htmlText(consequence)}</p>`,
-      link
-        ? `<p><a href="${link}">Open Settings &gt; Billing</a></p>`
-        : `<p>${htmlText(action)}</p>`,
-      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${htmlText(EMAIL_FOOTER)}</p>`,
+      `<p>${escapeHtml(headline)}</p>`,
+      `<p>${escapeHtml(consequence)}</p>`,
+      `<p><a href="${escapeHtml(BILLING_SETTINGS_URL)}">Open Settings &gt; Billing</a></p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${escapeHtml(EMAIL_FOOTER)}</p>`,
     ].join(''),
     idempotencyKey: `auto-reload-failed:${failure.attemptId}`,
   });

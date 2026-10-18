@@ -104,7 +104,7 @@ function epoch(value: string | null | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export function videoJobDiagnostics(job: VideoGenerationJob): MediaJobDiagnosticsRecord {
+function videoJobDiagnostics(job: VideoGenerationJob): MediaJobDiagnosticsRecord {
   return mediaJobDiagnostics({
     media: 'video',
     jobId: job.id,

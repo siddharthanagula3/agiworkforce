@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   BILLING_PLAN_PRICING,
+  canUseBillingPlanCapability,
   getBillingPlanProductLimits,
   toEnforceableBillingPlanLimit,
 } from '@agiworkforce/types';
@@ -37,27 +38,22 @@ export function getFileStorageLimitErrorMessage(
   planTier: string | null | undefined,
   limitBytes: number,
 ): string {
-  const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
+  const label = planLabel(planTier);
   if (!label) {
     return 'Your current subscription does not include file storage. Choose an eligible plan and try again.';
   }
   return `${label} accounts include ${formatBytes(limitBytes)} of file storage, shared by your Library and project sources. Delete a file or upgrade to add another.`;
 }
 
-const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({
-  free: BILLING_PLAN_PRICING.free.label,
-  basic: BILLING_PLAN_PRICING.basic.label,
-  pro: BILLING_PLAN_PRICING.pro.label,
-  max: BILLING_PLAN_PRICING.max.label,
-  max_15x: BILLING_PLAN_PRICING.max_15x.label,
-  team: BILLING_PLAN_PRICING.team.label,
-  team_premium: BILLING_PLAN_PRICING.team_premium.label,
-  enterprise: BILLING_PLAN_PRICING.enterprise.label,
-});
+function planLabel(planTier: string | null | undefined): string | undefined {
+  const tier = planTier?.toLowerCase();
+  if (!canUseBillingPlanCapability(tier, 'managed_chat')) return undefined;
+  return BILLING_PLAN_PRICING[tier as keyof typeof BILLING_PLAN_PRICING].label;
+}
 
 export function getProjectLimitErrorMessage(planTier: string | null | undefined): string {
   const limit = getProjectLimit(planTier);
-  const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
+  const label = planLabel(planTier);
   if (!label || limit === 0) {
     return 'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.';
   }
@@ -72,7 +68,7 @@ export function getProjectLimitErrorMessage(planTier: string | null | undefined)
 
 export function getCustomRemoteMcpLimitErrorMessage(planTier: string | null | undefined): string {
   const limit = getCustomRemoteMcpLimit(planTier);
-  const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
+  const label = planLabel(planTier);
   if (!label || limit === 0) {
     return 'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.';
   }

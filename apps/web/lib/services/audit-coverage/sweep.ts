@@ -13,7 +13,7 @@ const MUTATING_EXPORT = new RegExp(
 );
 
 const EMITS_AUDIT = /\brecordAuditEvent\s*\(|\bemitIdentitySecurityEvent\s*\(/;
-const EMITS_SECURITY = /\blogSecurityEvent\s*\(|\blogAuthorizationFailure\s*\(/;
+const EMITS_SECURITY = /\blogSecurityEvent\s*\(/;
 
 export type AuditEmitterKind = 'audit_event' | 'security_event';
 
