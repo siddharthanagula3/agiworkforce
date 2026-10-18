@@ -210,6 +210,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/client/client-runtime/src/desktop-index.ts',
         ),
+        '@agiworkforce/cloud-contracts/support': path.resolve(
+          __dirname,
+          '../../packages/contracts/cloud-contracts/src/support.ts',
+        ),
         '@agiworkforce/cloud-contracts': path.resolve(
           __dirname,
           '../../packages/contracts/cloud-contracts/src/index.ts',

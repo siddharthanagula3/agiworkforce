@@ -3,7 +3,6 @@ type ScanModule0 = typeof import('@agiworkforce/cloud-contracts');
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
-  isElectronHost: false,
   isTestEnvironment: true,
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,

@@ -158,12 +158,7 @@ interface SettingsState {
   loading: boolean;
   error: string | null;
 
-  setDefaultProvider: (provider: Provider) => Promise<void>;
-  setTemperature: (temperature: number) => void;
-  setMaxTokens: (maxTokens: number) => void;
   setDefaultModel: (provider: Provider, model: string) => void;
-  setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => void;
-  setProviderMode: (mode: 'auto' | 'local' | 'cloud') => void;
   setOllamaUrl: (url: string) => void;
   setLmStudioUrl: (url: string) => void;
   setLlamaCppUrl: (url: string) => void;
@@ -177,12 +172,9 @@ interface SettingsState {
   setUiScale: (scale: 90 | 100 | 110) => void;
   setReduceMotion: (enabled: boolean) => void;
   setLanguage: (language: Language) => void;
-  setStartupPosition: (position: 'center' | 'remember') => void;
-  setDockOnStartup: (dock: 'left' | 'right' | null) => void;
 
   setCompactMode: (enabled: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
-  setSendShortcut: (shortcut: 'enter' | 'mod-enter') => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setMemoryEnabled: (enabled: boolean) => Promise<void>;
   setAllowToolAssistedMemoryGeneration: (enabled: boolean) => Promise<void>;
@@ -286,7 +278,6 @@ const defaultSettings: Pick<
   },
   chatPreferences: {
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
-    sendShortcut: 'enter' as const,
     autoApproveTools: false, // Off by default - show confirmation dialogs
     memoryEnabled: false, // Privacy-safe opt-in: no retrieval or generation until enabled
     allowToolAssistedMemoryGeneration: false,
@@ -321,11 +312,16 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
   ...defaultSettings.windowPreferences,
 });
 
-// `alwaysUseAgentMode` was saved and read by nothing. A settings file or a
-// saved state written before it was dropped may still carry it.
+// `alwaysUseAgentMode` and `sendShortcut` were dropped; a settings file or a
+// saved state written before then may still carry them.
 function withoutRetiredChatKeys<T extends object>(preferences: T): T {
-  const { alwaysUseAgentMode: _retired, ...kept } = preferences as T & {
+  const {
+    alwaysUseAgentMode: _retiredAgentMode,
+    sendShortcut: _retiredSendShortcut,
+    ...kept
+  } = preferences as T & {
     alwaysUseAgentMode?: unknown;
+    sendShortcut?: unknown;
   };
   return kept as T;
 }
@@ -785,47 +781,6 @@ export const useSettingsStore = create<SettingsState>()(
           set({ customKeybindings: {} }, undefined, 'settings/resetAllCustomKeybindings');
         },
 
-        setDefaultProvider: async (provider: Provider) => {
-          try {
-            await invoke('llm_set_default_provider', { provider });
-            set(
-              (state) => ({
-                llmConfig: { ...state.llmConfig, defaultProvider: provider },
-              }),
-              undefined,
-              'settings/setDefaultProvider',
-            );
-          } catch (error) {
-            console.error('Failed to set default provider:', error);
-            set(
-              { error: getSimpleErrorMessage(error) },
-              undefined,
-              'settings/setDefaultProvider/error',
-            );
-            throw error;
-          }
-        },
-
-        setTemperature: (temperature: number) => {
-          set(
-            (state) => ({
-              llmConfig: { ...state.llmConfig, temperature },
-            }),
-            undefined,
-            'settings/setTemperature',
-          );
-        },
-
-        setMaxTokens: (maxTokens: number) => {
-          set(
-            (state) => ({
-              llmConfig: { ...state.llmConfig, maxTokens },
-            }),
-            undefined,
-            'settings/setMaxTokens',
-          );
-        },
-
         setDefaultModel: (provider: Provider, model: string) => {
           set(
             (state) => ({
@@ -836,32 +791,6 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setDefaultModel',
-          );
-        },
-
-        setTaskRouting: (category: TaskCategory, provider: Provider, model: string) => {
-          set(
-            (state) => ({
-              llmConfig: {
-                ...state.llmConfig,
-                taskRouting: {
-                  ...state.llmConfig.taskRouting,
-                  [category]: { provider, model },
-                },
-              },
-            }),
-            undefined,
-            'settings/setTaskRouting',
-          );
-        },
-
-        setProviderMode: (mode: 'auto' | 'local' | 'cloud') => {
-          set(
-            (state) => ({
-              llmConfig: { ...state.llmConfig, providerMode: mode },
-            }),
-            undefined,
-            'settings/setProviderMode',
           );
         },
 
@@ -1024,26 +953,6 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
-        setStartupPosition: (position: 'center' | 'remember') => {
-          set(
-            (state) => ({
-              windowPreferences: { ...state.windowPreferences, startupPosition: position },
-            }),
-            undefined,
-            'settings/setStartupPosition',
-          );
-        },
-
-        setDockOnStartup: (dock: 'left' | 'right' | null) => {
-          set(
-            (state) => ({
-              windowPreferences: { ...state.windowPreferences, dockOnStartup: dock },
-            }),
-            undefined,
-            'settings/setDockOnStartup',
-          );
-        },
-
         setCompactMode: (enabled: boolean) => {
           set(
             (state) => ({
@@ -1061,16 +970,6 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setTemporaryChat',
-          );
-        },
-
-        setSendShortcut: (shortcut: 'enter' | 'mod-enter') => {
-          set(
-            (state) => ({
-              chatPreferences: { ...state.chatPreferences, sendShortcut: shortcut },
-            }),
-            undefined,
-            'settings/setSendShortcut',
           );
         },
 
@@ -1286,11 +1185,6 @@ export const useSettingsStore = create<SettingsState>()(
               ...withoutRetiredChatKeys(
                 settings.chatPreferences ?? defaultSettings.chatPreferences,
               ),
-              sendShortcut: oneOf(
-                settings.chatPreferences?.sendShortcut,
-                ['enter', 'mod-enter'] as const,
-                hydratedCurrent.chatPreferences.sendShortcut ?? 'enter',
-              ),
               temporaryChat:
                 settings.chatPreferences?.temporaryChat ??
                 hydratedCurrent.chatPreferences.temporaryChat ??
@@ -1421,8 +1315,6 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to restore default provider:', error);
             }
 
-            // e.g. never updated by SafetyPolicies.tsx, which calls
-            // exact "safety setting reverts on restart" regression even
             let resolvedAgentMode: AgentMode = mergedChatPreferences.agentMode ?? 'build';
             try {
               resolvedAgentMode = await invoke<AgentMode>('get_agent_mode');
@@ -1502,7 +1394,6 @@ export const useSettingsStore = create<SettingsState>()(
               );
             }
           } finally {
-            // Safety net: ensure loading is always cleared even if catch handler throws
             if (get().loading) {
               set({ loading: false }, undefined, 'settings/loadSettings/finally');
             }
@@ -1546,10 +1437,6 @@ export const useSettingsStore = create<SettingsState>()(
                 customKeybindings,
               },
             });
-
-            // is the source of truth for these two safety-gating fields and
-            // SafetyPolicies.tsx's direct `set_agent_mode`/
-            // mode via SafetyPolicies.tsx, which never touches this store),
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
@@ -1950,12 +1837,6 @@ export const useSettingsStore = create<SettingsState>()(
               reduceMotion: state.windowPreferences.reduceMotion ?? false,
             };
           }
-          if (version < 28 && state.chatPreferences) {
-            state.chatPreferences = {
-              ...state.chatPreferences,
-              sendShortcut: state.chatPreferences.sendShortcut ?? 'enter',
-            };
-          }
 
           return state as SettingsState;
         },
@@ -1972,17 +1853,18 @@ export const useSettingsStore = create<SettingsState>()(
 
 export const enforceTaskRoutingTierRestriction = (planTier: string | null): void => {
   const normalizedTier = normalizeSubscriptionTier(planTier);
-  const { llmConfig, setTaskRouting } = useSettingsStore.getState();
+  const taskRouting: TaskRouting = { ...useSettingsStore.getState().llmConfig.taskRouting };
+  let changed = false;
+  for (const [category, route] of Object.entries(taskRouting) as Array<
+    [TaskCategory, TaskRouting[TaskCategory]]
+  >) {
+    if (isTaskRoutingModelAllowedForTier(category, route.model, normalizedTier)) continue;
+    taskRouting[category] = { provider: 'managed_cloud', model: 'auto' };
+    changed = true;
+  }
+  if (!changed) return;
 
-  (
-    Object.entries(llmConfig.taskRouting) as Array<[TaskCategory, TaskRouting[TaskCategory]]>
-  ).forEach(([category, route]) => {
-    if (isTaskRoutingModelAllowedForTier(category, route.model, normalizedTier)) {
-      return;
-    }
-
-    setTaskRouting(category, 'managed_cloud', 'auto');
-  });
+  useSettingsStore.setState((state) => ({ llmConfig: { ...state.llmConfig, taskRouting } }));
 };
 
 export function initializeTaskRoutingTierRestriction(): () => void {

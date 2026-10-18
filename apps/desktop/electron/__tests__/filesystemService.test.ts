@@ -28,6 +28,7 @@ const CREDENTIAL_FILES = [
   '.env.development',
   'config/.env.staging',
   'deploy/id_ecdsa',
+  'deploy/id_ecdsa.pub',
   'deploy/id_ed25519_work',
   'certs/server.pem',
   'certs/server.key',
@@ -151,10 +152,8 @@ describe('readTextFile', () => {
     }
   });
 
-  it('still reads a public key and a source file whose name starts like a key', async () => {
-    await fs.writeFile(path.join(sandbox, 'deploy', 'id_ecdsa.pub'), 'ecdsa-sha2 AAAA\n');
+  it('still reads a source file whose name starts like a key', async () => {
     await fs.writeFile(path.join(sandbox, 'src', 'id_generator.ts'), 'export const id = 1;\n');
-    expect((await readTextFile(root, 'deploy/id_ecdsa.pub')).text).toContain('ecdsa-sha2');
     expect((await readTextFile(root, 'src/id_generator.ts')).text).toContain('export const id');
   });
 });

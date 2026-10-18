@@ -1,4 +1,5 @@
 import { app, session, type Session } from 'electron';
+import { DEVICE_AUTHORIZATION_APPROVE_PATH } from '@agiworkforce/cloud-contracts';
 import { platformRequestHeaders } from '../src/lib/platformHeaders';
 import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION } from './config';
 import type { ShellIdentity } from './runtime/developerAccountSync';
@@ -108,7 +109,7 @@ export async function postAsShellAccount(path: string, body: unknown): Promise<R
 }
 
 export async function approveDeviceCode(userCode: string): Promise<void> {
-  const response = await postAsShellAccount('/api/auth/device/approve', {
+  const response = await postAsShellAccount(DEVICE_AUTHORIZATION_APPROVE_PATH, {
     user_code: userCode,
     action: 'approve',
     surface: 'desktop',

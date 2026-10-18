@@ -66,7 +66,6 @@ const DesktopTerminalWorkspace = lazy(() =>
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
-import { useSettingsStore } from '../../stores/settingsStore';
 import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
 import { useConnectorsStore } from '../../stores/connectorsStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
@@ -258,9 +257,6 @@ export function DesktopShellV3({
     : isManagedCloud
       ? 'AGI Work is not included in this account plan. Project chat still works.'
       : localAgiTaskEligibility.reason;
-  const composerSendShortcut = useSettingsStore(
-    (state) => state.chatPreferences.sendShortcut ?? 'enter',
-  );
   const [composerEditorMode] = useState(resolveComposerEditorMode);
   const matchLocalSkillsForMessage = useSkillMarketplaceStore((state) => state.matchForMessage);
   const suggestLocalSkills = useCallback(
@@ -748,7 +744,6 @@ export function DesktopShellV3({
                 }
                 skills={managedSkills}
                 suggestSkills={isManagedCloud ? undefined : suggestLocalSkills}
-                composerSendShortcut={composerSendShortcut}
                 composerEditorMode={composerEditorMode}
                 onNavigateView={handleNavigateView}
                 sidebarSlot={null}

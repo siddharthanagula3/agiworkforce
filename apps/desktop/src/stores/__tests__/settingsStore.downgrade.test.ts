@@ -35,13 +35,13 @@ describe('settings written by a build newer than this one', () => {
   it('reads what this build understands, and only that', async () => {
     window.localStorage.setItem(
       STORE_KEY,
-      persisted(NEWER_VERSION, 55, { chatPreferences: { sendShortcut: 'chord+opt+k' } }),
+      persisted(NEWER_VERSION, 55, { chatPreferences: { agentMode: 'chord+opt+k' } }),
     );
 
     await useSettingsStore.persist.rehydrate();
 
     expect(uiScale()).toBe(100);
-    expect(useSettingsStore.getState().chatPreferences.sendShortcut).not.toBe('chord+opt+k');
+    expect(useSettingsStore.getState().chatPreferences.agentMode).not.toBe('chord+opt+k');
   });
 
   it('keeps the newer state whole, under its own version', async () => {

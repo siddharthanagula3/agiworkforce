@@ -257,18 +257,6 @@ describe('SettingsStore, configuration persistence', () => {
     expect(state.llmConfig.maxTokens).toBe(4096);
   });
 
-  it('updates temperature and maxTokens', () => {
-    useSettingsStore.getState().setTemperature(0.3);
-    useSettingsStore.getState().setMaxTokens(8192);
-
-    const config = useSettingsStore.getState().llmConfig;
-    expect(config.temperature).toBe(0.3);
-    expect(config.maxTokens).toBe(8192);
-
-    useSettingsStore.getState().setTemperature(0.7);
-    useSettingsStore.getState().setMaxTokens(4096);
-  });
-
   it('toggles chat preferences', () => {
     const original = useSettingsStore.getState().chatPreferences.compactMode;
     useSettingsStore.getState().setCompactMode(!original);

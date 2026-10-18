@@ -74,7 +74,6 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
   get isTauri() {
     return mocks.isTauri;
   },
-  isElectronHost: false,
   get supportsLocalAppMode() {
     return mocks.isTauri;
   },

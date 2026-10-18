@@ -7,7 +7,6 @@ export interface ChatPreferences {
   allowToolAssistedMemoryGeneration?: boolean;
   autoSaveMemories?: boolean;
   agentMode: AgentMode;
-  sendShortcut?: 'enter' | 'mod-enter';
   autoTTS?: boolean;
   temporaryChat?: boolean;
 }

@@ -9,7 +9,6 @@ import {
 } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 import type {
-  McpServerConfig,
   McpServerHealth,
   McpServerInfo,
   McpServersConfig,
@@ -28,7 +27,6 @@ import type {
 import { claimFromDeadline, startDeadline } from './deadlines';
 
 export type {
-  McpServerConfig,
   McpServerHealth,
   McpServerInfo,
   McpServersConfig,
@@ -582,6 +580,10 @@ export async function mcpServerGetConfig(): Promise<McpRuntimeServerConfig> {
   }
 }
 
+export async function mcpServerRevealToken(): Promise<string> {
+  return invokeAwaitingPerson<string>('mcp_server_reveal_token');
+}
+
 export async function mcpServerStart(): Promise<void> {
   try {
     await invokeWithTimeout<void>('mcp_server_start');
@@ -936,6 +938,10 @@ export class McpClient {
 
   static async getRuntimeServerConfig(): Promise<McpRuntimeServerConfig> {
     return mcpServerGetConfig();
+  }
+
+  static async revealRuntimeServerToken(): Promise<string> {
+    return mcpServerRevealToken();
   }
 
   static async startRuntimeServer(): Promise<void> {

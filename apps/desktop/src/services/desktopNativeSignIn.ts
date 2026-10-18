@@ -4,6 +4,11 @@ import {
   slowedDevicePollIntervalMs,
   type DeviceAuthorizationPost,
 } from '@agiworkforce/client-runtime';
+import {
+  DEVICE_AUTHORIZATION_APPROVE_PATH,
+  DEVICE_AUTHORIZATION_CODE_PATH,
+  DEVICE_AUTHORIZATION_TOKEN_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
 import { invoke } from '../lib/tauri-mock';
 import { isTauri } from '../lib/runtimeEnvironment';
@@ -84,12 +89,12 @@ function createDeviceAuthorizationPost(signal?: AbortSignal): DeviceAuthorizatio
     }
 
     if (usesNativeCloudAccountBridge) {
-      if (endpoint.pathname === '/api/auth/device/code') {
+      if (endpoint.pathname === DEVICE_AUTHORIZATION_CODE_PATH) {
         return assertNativeResponse(
           await invoke<NativeDeviceAuthorizationResponse>('account_start_device_authorization'),
         );
       }
-      if (endpoint.pathname === '/api/auth/device/token') {
+      if (endpoint.pathname === DEVICE_AUTHORIZATION_TOKEN_PATH) {
         const record =
           payload !== null && typeof payload === 'object' && !Array.isArray(payload)
             ? (payload as Record<string, unknown>)
@@ -228,7 +233,7 @@ async function approveOwnDeviceCode(
     );
   } else {
     const { guardedFetch } = await import('../lib/egressGuard');
-    const raw = await guardedFetch(`${trustedOrigin}/api/auth/device/approve`, {
+    const raw = await guardedFetch(`${trustedOrigin}${DEVICE_AUTHORIZATION_APPROVE_PATH}`, {
       method: 'POST',
       credentials: 'omit',
       headers: {

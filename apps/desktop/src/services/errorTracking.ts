@@ -1,5 +1,3 @@
-import { ErrorEventProperties } from '../types/analytics';
-import { analytics } from './analytics';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 
@@ -154,17 +152,6 @@ class ErrorTrackingService {
     }
 
     try {
-      const eventProps: ErrorEventProperties = {
-        error_type: error.name,
-        error_message: error.message,
-        error_stack: error.stack,
-        component: context?.component,
-        severity: context?.severity || ErrorSeverity.MEDIUM,
-        recovered: false,
-      };
-
-      analytics.track('error_occurred', eventProps);
-
       Sentry.captureException(error, {
         level: this.mapSeverityToLevel(context?.severity),
         tags: context?.tags,
@@ -309,65 +296,6 @@ class ErrorTrackingService {
 }
 
 export const errorTracking = new ErrorTrackingService();
-
-export type LaunchOutcome = 'succeeded' | 'failed';
-
-export interface LaunchHealth {
-  lastOutcome: LaunchOutcome | null;
-  lastReason: string | null;
-  launches: number;
-  failures: number;
-  consecutiveFailures: number;
-}
-
-const LAUNCH_HEALTH_KEY = 'desktop_launch_health';
-
-const EMPTY_LAUNCH_HEALTH: LaunchHealth = {
-  lastOutcome: null,
-  lastReason: null,
-  launches: 0,
-  failures: 0,
-  consecutiveFailures: 0,
-};
-
-export function launchHealth(): LaunchHealth {
-  return {
-    ...EMPTY_LAUNCH_HEALTH,
-    ...safeGetJSON<LaunchHealth>(LAUNCH_HEALTH_KEY, EMPTY_LAUNCH_HEALTH),
-  };
-}
-
-/**
- * Whether the Tauri shell reached a usable window, kept separately from crash
- * reporting: a launch that never crashes but never becomes usable is invisible
- * to Sentry and is exactly the failure this counts.
- */
-export function recordLaunchOutcome(record: {
-  outcome: LaunchOutcome;
-  reason?: string;
-  durationMs?: number;
-}): LaunchHealth {
-  const current = launchHealth();
-  const failed = record.outcome === 'failed';
-  const next: LaunchHealth = {
-    lastOutcome: record.outcome,
-    lastReason: failed ? (record.reason ?? 'unknown') : null,
-    launches: current.launches + 1,
-    failures: current.failures + (failed ? 1 : 0),
-    consecutiveFailures: failed ? current.consecutiveFailures + 1 : 0,
-  };
-  safeSetJSON(LAUNCH_HEALTH_KEY, next);
-
-  if (!isPrivateTrustBoundary()) {
-    analytics.track('app_opened', {
-      outcome: record.outcome,
-      reason: next.lastReason,
-      duration_ms: record.durationMs,
-      consecutive_failures: next.consecutiveFailures,
-    });
-  }
-  return next;
-}
 
 let globalErrorHandlerInstalled = false;
 

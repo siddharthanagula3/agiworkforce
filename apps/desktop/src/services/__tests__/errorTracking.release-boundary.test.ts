@@ -13,7 +13,6 @@ vi.mock('@sentry/react', () => ({
   addBreadcrumb: vi.fn(),
   close: vi.fn(async () => true),
 }));
-vi.mock('../analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: { getState: () => ({}) },
   selectPrivacyMode: () => privacyModeMock(),

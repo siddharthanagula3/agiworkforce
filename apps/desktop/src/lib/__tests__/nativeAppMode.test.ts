@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../runtimeEnvironment', () => ({
   isTauri: true,
-  isElectronHost: false,
   isTestEnvironment: true,
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,

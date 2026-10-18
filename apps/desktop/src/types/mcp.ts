@@ -1,7 +1,3 @@
-import type { McpServerConfig } from '@agiworkforce/mcp';
-
-export type { McpServerConfig } from '@agiworkforce/mcp';
-
 export interface McpStoredSecretReference {
   kind: 'apiKey' | 'signIn';
   provider: string;
@@ -57,7 +53,7 @@ export interface DesktopMcpStdioTransportConfig {
 export type DesktopMcpTransportConfig =
   DesktopMcpHttpTransportConfig | DesktopMcpStdioTransportConfig;
 
-export interface DesktopMcpServerConfig extends Omit<McpServerConfig, 'env' | 'transport'> {
+export interface DesktopMcpServerConfig {
   command: string;
   args: string[];
   env: Record<string, string>;
@@ -152,8 +148,6 @@ export interface McpBundle {
   tools: BundleTool[];
   configTemplate: DesktopMcpServerConfig;
   requiredCredentials: RequiredCredential[];
-  rating?: number;
-  downloads?: number;
   verified: boolean;
   featured: boolean;
   tags: string[];

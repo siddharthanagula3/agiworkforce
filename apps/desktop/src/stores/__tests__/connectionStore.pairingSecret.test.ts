@@ -61,7 +61,6 @@ vi.mock('@agiworkforce/utils', () => ({ SignalingClient: mocks.MockSignalingClie
 
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
-  isElectronHost: false,
   isTestEnvironment: true,
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,

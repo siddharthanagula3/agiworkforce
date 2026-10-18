@@ -9,10 +9,7 @@ import { resolveDesktopChatOwnerId, useChatStore, uuidToDbId } from '../../store
 
 export type ConversationExportFormat = 'markdown' | 'pdf';
 
-const FORMAT_FILTERS: Record<ConversationExportFormat, { name: string; extensions: string[] }> = {
-  markdown: { name: 'Markdown', extensions: ['md'] },
-  pdf: { name: 'PDF', extensions: ['pdf'] },
-};
+const MARKDOWN_FILTER = { name: 'Markdown', extensions: ['md'] };
 
 /** PDF is rendered by the native runtime from SQLite, so only stored Local chats offer it. */
 export function conversationExportFormats(
@@ -84,20 +81,20 @@ export async function exportConversation(
       throw new Error('PDF export is available for Local chats.');
     }
 
-    const path = await save({
-      defaultPath: `${exportFileStem(title)}.${FORMAT_FILTERS[format].extensions[0]}`,
-      filters: [FORMAT_FILTERS[format]],
-    });
-    if (!path) return false;
-
     const userId = resolveDesktopChatOwnerId();
+    let path: string | null;
     if (format === 'pdf') {
-      await invoke('conversation_export_pdf', {
+      path = await invoke<string | null>('conversation_export_pdf', {
         conversationId: String(dbId),
-        outputPath: path,
         userId,
       });
+      if (!path) return false;
     } else {
+      path = await save({
+        defaultPath: `${exportFileStem(title)}.md`,
+        filters: [MARKDOWN_FILTER],
+      });
+      if (!path) return false;
       const markdown =
         privacyMode === 'local'
           ? await invoke<string>('conversation_export', {

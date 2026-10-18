@@ -366,12 +366,6 @@ pub async fn apply_quick_query_hotkey_preferences(
     drop(registered);
     drop(shortcuts);
 
-    // The OS registration is authoritative. A renderer notification failure
-    // must not turn a committed shortcut change into a reported save failure.
-    if let Err(error) = app.emit("shortcut_updated", &updated) {
-        tracing::warn!("Failed to emit shortcut_updated after applying shortcut: {error}");
-    }
-
     Ok(updated)
 }
 
@@ -586,12 +580,7 @@ pub async fn shortcuts_update(
         let _ = unregister_global_shortcut(&app, &shortcut.key);
     }
 
-    let updated = shortcut.clone();
-
-    app.emit("shortcut_updated", &updated)
-        .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-    Ok(updated)
+    Ok(shortcut.clone())
 }
 
 #[tauri::command]
@@ -630,12 +619,7 @@ pub async fn shortcuts_reset(
         }
     }
 
-    let result: Vec<Shortcut> = shortcuts.values().cloned().collect();
-
-    app.emit("shortcuts_reset", &result)
-        .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-    Ok(result)
+    Ok(shortcuts.values().cloned().collect())
 }
 
 /// Command to register global shortcuts from frontend

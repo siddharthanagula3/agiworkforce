@@ -174,7 +174,6 @@ export function formatOpaCompletionReason(reason: OpaCompletionReason): string {
 
 interface ControlStatePayload {
   taken_over: boolean;
-  target_display: number | null;
 }
 
 interface ComputerUseState {

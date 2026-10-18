@@ -5,31 +5,6 @@ import {
   type StartupRecoveryInvoke,
   type StartupStateReport,
 } from './StartupRecoveryBootstrap';
-import { launchHealth, recordLaunchOutcome } from '../../services/errorTracking';
-
-vi.mock('../../services/errorTracking', () => {
-  let health: {
-    lastOutcome: string | null;
-    lastReason: string | null;
-    launches: number;
-    failures: number;
-    consecutiveFailures: number;
-  } = { lastOutcome: null, lastReason: null, launches: 0, failures: 0, consecutiveFailures: 0 };
-  return {
-    recordLaunchOutcome: vi.fn((record: { outcome: string; reason?: string }) => {
-      const failed = record.outcome === 'failed';
-      health = {
-        lastOutcome: record.outcome,
-        lastReason: failed ? (record.reason ?? 'unknown') : null,
-        launches: health.launches + 1,
-        failures: health.failures + (failed ? 1 : 0),
-        consecutiveFailures: failed ? health.consecutiveFailures + 1 : 0,
-      };
-      return health;
-    }),
-    launchHealth: () => health,
-  };
-});
 
 const healthyStart: StartupStateReport = { recovery: null, upgrade: { action: 'start' } };
 
@@ -174,41 +149,6 @@ describe('StartupRecoveryBootstrap', () => {
     }
   });
 
-  it('records a launch outcome distinct from crash reporting', async () => {
-    const before = launchHealth().launches;
-
-    render(
-      <StartupRecoveryBootstrap
-        nativeRuntime
-        invokeCommand={vi.fn().mockResolvedValue(healthyStart) as StartupRecoveryInvoke}
-      >
-        <div>Normal application</div>
-      </StartupRecoveryBootstrap>,
-    );
-
-    expect(await screen.findByText('Normal application')).toBeInTheDocument();
-    expect(recordLaunchOutcome).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'succeeded' }),
-    );
-    expect(launchHealth().launches).toBe(before + 1);
-    expect(launchHealth().consecutiveFailures).toBe(0);
-  });
-
-  it('counts a recovery launch as a failed launch and names the code', async () => {
-    render(
-      <StartupRecoveryBootstrap
-        nativeRuntime
-        invokeCommand={vi.fn().mockResolvedValue(unlockFailure) as StartupRecoveryInvoke}
-      >
-        <div>Normal application</div>
-      </StartupRecoveryBootstrap>,
-    );
-
-    await screen.findByRole('heading', { name: 'AGI could not unlock local data' });
-    expect(launchHealth().lastOutcome).toBe('failed');
-    expect(launchHealth().lastReason).toBe('DB_UNLOCK');
-  });
-
   it('shows the runtime-rebuild notice above the application without blocking it', async () => {
     render(
       <StartupRecoveryBootstrap
@@ -254,7 +194,6 @@ describe('StartupRecoveryBootstrap', () => {
       await screen.findByRole('heading', { name: 'This version is older than your data' }),
     ).toBeInTheDocument();
     expect(normalAppMounted).not.toHaveBeenCalled();
-    expect(launchHealth().lastReason).toBe('holdForNewerData');
   });
 
   it('does not call native startup commands in browser-only rendering', () => {

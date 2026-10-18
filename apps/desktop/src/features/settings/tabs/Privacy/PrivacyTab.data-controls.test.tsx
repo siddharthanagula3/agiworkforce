@@ -4,7 +4,7 @@ import { settings } from '@agiworkforce/desktop-command-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deleteLocalData, exportLocalData } from '@/api/privacy';
-import { invoke, relaunchApp } from '@/lib/tauri-mock';
+import { relaunchApp } from '@/lib/tauri-mock';
 import { useAuthStore } from '../../../../stores/auth';
 import { PrivacyTab } from './index';
 
@@ -48,10 +48,6 @@ vi.mock('../../CacheManagement', () => ({
 
 vi.mock('../../AllowedDirectoriesSettings', () => ({
   AllowedDirectoriesSettings: () => <div>Allowed directories</div>,
-}));
-
-vi.mock('../../AnalyticsSettings', () => ({
-  AnalyticsSettings: () => <div>Analytics settings</div>,
 }));
 
 vi.mock('@/features/governance/SafetyPolicies', () => ({
@@ -178,7 +174,6 @@ describe('PrivacyTab export and delete on this device', () => {
     await waitFor(() => expect(relaunchApp).toHaveBeenCalledOnce());
     expect(order).toEqual(['delete', 'sign out', 'restart']);
     expect(settings.settingsV2ClearCache).toHaveBeenCalledOnce();
-    expect(invoke).toHaveBeenCalledWith('analytics_delete_all_data');
     expect(localStorage.getItem('left-over')).toBeNull();
   });
 

@@ -10,7 +10,6 @@ vi.mock('../../../lib/runtimeEnvironment', () => ({
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,
   isCloudWeb: false,
-  isElectronHost: false,
 }));
 
 const clerk = {

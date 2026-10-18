@@ -501,7 +501,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'mcpb_install_bundle':
     case 'mcpb_update_bundle': {
       const bundleId = String(args?.['bundleId'] ?? '');
-      if (bundleId) MOCK_INSTALLED_MCP_BUNDLES.add(bundleId);
+      const bundle = mockMcpBundles().find((candidate) => candidate.id === bundleId);
+      if (!bundle) throw new Error(`Bundle not found: ${bundleId}`);
+      if (!bundle.verified) {
+        throw new Error(`MCP package '${bundle.name}' is not on the allow-list.`);
+      }
+      MOCK_INSTALLED_MCP_BUNDLES.add(bundleId);
       return `Bundle '${bundleId}' installed in UI development mode` as T;
     }
     case 'mcpb_uninstall_bundle': {
@@ -589,17 +594,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'scheduler_stop_run':
       return false as T;
 
-    case 'analytics_track_event':
-    case 'analytics_flush_events':
-    case 'analytics_set_user_property':
-    case 'analytics_set_privacy_mode':
-    case 'analytics_delete_all_data':
-    case 'settings_update_privacy':
-      return undefined as T;
-
-    case 'analytics_get_session_id':
-      return 'mock-session-id' as T;
-
     case 'automation_record_start':
       return {
         session_id: 'mock-recorder-session',
@@ -641,7 +635,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return [] as T;
     case 'conversation_export_pdf':
       requireMockUserId(command, args);
-      return (args?.['outputPath'] ?? '/tmp/mock-conversation.pdf') as T;
+      return '/tmp/mock-conversation.pdf' as T;
 
     case 'chat_create_conversation':
       return {
@@ -1072,8 +1066,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'unregister_trigger':
     case 'toggle_trigger':
     case 'save_custom_instructions':
-    case 'approve_request':
-    case 'reject_request':
     case 'cancel_tool_execution':
     case 'update_allowed_directories':
       return undefined as T;

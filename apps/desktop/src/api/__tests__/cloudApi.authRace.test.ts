@@ -5,7 +5,6 @@ const guardedFetchMock = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/egressGuard', () => ({ guardedFetch: guardedFetchMock }));
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
-  isElectronHost: false,
   isTestEnvironment: true,
   isDesktopUiDevLocal: false,
   supportsLocalAppMode: true,

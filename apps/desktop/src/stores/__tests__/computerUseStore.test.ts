@@ -32,12 +32,12 @@ describe('computerUseStore', () => {
 
   describe('takeover and stop', () => {
     it('takes the screen over and hands it back through the host', async () => {
-      mockInvoke.mockResolvedValueOnce({ taken_over: true, target_display: null });
+      mockInvoke.mockResolvedValueOnce({ taken_over: true });
       await useComputerUseStore.getState().takeOver();
       expect(mockInvoke).toHaveBeenCalledWith('computer_use_take_over');
       expect(useComputerUseStore.getState().takenOver).toBe(true);
 
-      mockInvoke.mockResolvedValueOnce({ taken_over: false, target_display: null });
+      mockInvoke.mockResolvedValueOnce({ taken_over: false });
       await useComputerUseStore.getState().handBack();
       expect(mockInvoke).toHaveBeenCalledWith('computer_use_hand_back');
       expect(useComputerUseStore.getState().takenOver).toBe(false);
@@ -78,7 +78,7 @@ describe('computerUseStore', () => {
       });
       mockInvoke.mockImplementation((command) => {
         if (command === 'computer_use_take_over') {
-          return Promise.resolve({ taken_over: true, target_display: null });
+          return Promise.resolve({ taken_over: true });
         }
         if (command === 'computer_use_cancel_opa_task') return Promise.resolve(true);
         return Promise.resolve(undefined);
@@ -99,7 +99,7 @@ describe('computerUseStore', () => {
     });
 
     it('still takes the screen back when nothing is running', async () => {
-      mockInvoke.mockResolvedValueOnce({ taken_over: true, target_display: null });
+      mockInvoke.mockResolvedValueOnce({ taken_over: true });
 
       await useComputerUseStore.getState().stopComputerUse();
 

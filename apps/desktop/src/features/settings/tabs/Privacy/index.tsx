@@ -2,7 +2,6 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Check, Database, Download } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { isTauri, relaunchApp } from '@/lib/tauri-mock';
-import { analyticsDeleteAllData } from '@/api/analytics';
 import { deleteLocalData, exportLocalData } from '@/api/privacy';
 import { settings, onboarding } from '@agiworkforce/desktop-command-client';
 import { appDataDir } from '@tauri-apps/api/path';
@@ -25,14 +24,6 @@ const LazyCacheManagement = lazy(() =>
 const LazyAllowedDirectoriesSettings = lazy(() =>
   import('../../AllowedDirectoriesSettings').then((m) => ({
     default: m.AllowedDirectoriesSettings,
-  })),
-);
-const LazyAnalyticsSettings = lazy(() =>
-  import('../../AnalyticsSettings').then((m) => ({ default: m.AnalyticsSettings })),
-);
-const LazyGovernanceDashboard = lazy(() =>
-  import('@/features/governance/GovernanceDashboard').then((m) => ({
-    default: m.GovernanceDashboard,
   })),
 );
 const LazySafetyPolicies = lazy(() =>
@@ -125,11 +116,7 @@ function DataPrivacySection() {
       setDeleting(false);
       return;
     }
-    await Promise.allSettled([
-      settings.settingsV2ClearCache(),
-      analyticsDeleteAllData(),
-      useAuthStore.getState().signOut(),
-    ]);
+    await Promise.allSettled([settings.settingsV2ClearCache(), useAuthStore.getState().signOut()]);
     localStorage.clear();
     sessionStorage.clear();
     await relaunchApp();
@@ -376,30 +363,14 @@ interface PrivacyTabProps {
   scope?: 'local' | 'cloud';
 }
 
-function AnalyticsPrivacySection() {
-  return (
-    <div className="pt-6 border-t border-border">
-      <h3 className="text-h3 mb-4">App analytics</h3>
-      <p className="text-sm text-muted-foreground mb-4">
-        This device-wide preference applies to both Local and Cloud mode.
-      </p>
-      <Suspense fallback={<TabFallback label="Loading analytics settings..." />}>
-        <LazyAnalyticsSettings />
-      </Suspense>
-    </div>
-  );
-}
-
-function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
-  const [governanceOpen, setGovernanceOpen] = useState(false);
+function ToolApprovalSection({ scope }: { scope: 'local' | 'cloud' }) {
   if (scope === 'cloud') {
     return (
       <div className="pt-6 border-t border-border">
-        <h3 className="text-h3 mb-1">Managed approvals &amp; governance</h3>
+        <h3 className="text-h3 mb-1">Managed tool approvals</h3>
         <p className="text-sm text-muted-foreground">
           Cloud tool policy is enforced by the managed service and approval requests appear in the
-          conversation transcript. Local remembered approvals, device tool history, and the Local
-          governance workspace do not change Cloud policy.
+          conversation transcript. Approvals remembered on this device do not change Cloud policy.
         </p>
       </div>
     );
@@ -407,39 +378,13 @@ function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
 
   return (
     <div className="pt-6 border-t border-border">
-      <h3 className="text-h3 mb-1">Governance &amp; Compliance</h3>
+      <h3 className="text-h3 mb-1">Tool approvals</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Approvals, audit events, and execution history for this device.
+        Which tools the agent may run on this device without asking first.
       </p>
-      <div className="rounded-lg border border-border bg-card/60 p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h4 className="text-sm font-medium">Approvals, audit and tool history</h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Review pending approvals, audit integrity, and execution history.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setGovernanceOpen((open) => !open)}
-            aria-expanded={governanceOpen}
-          >
-            {governanceOpen ? 'Hide' : 'Show'}
-          </Button>
-        </div>
-      </div>
-      {governanceOpen && (
-        <div className="pt-4">
-          <Suspense fallback={<TabFallback label="Loading governance..." />}>
-            <LazyGovernanceDashboard />
-          </Suspense>
-        </div>
-      )}
-      <div className="pt-6">
-        <Suspense fallback={<TabFallback label="Loading governance policies..." />}>
-          <LazySafetyPolicies />
-        </Suspense>
-      </div>
+      <Suspense fallback={<TabFallback label="Loading tool approval policies..." />}>
+        <LazySafetyPolicies />
+      </Suspense>
     </div>
   );
 }
@@ -463,8 +408,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
             <LazyCloudDataSection />
           </Suspense>
         </div>
-        <AnalyticsPrivacySection />
-        <GovernancePrivacySection scope="cloud" />
+        <ToolApprovalSection scope="cloud" />
       </>
     );
   }
@@ -498,8 +442,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
           <LazyAllowedDirectoriesSettings />
         </Suspense>
       </div>
-      <AnalyticsPrivacySection />
-      <GovernancePrivacySection scope="local" />
+      <ToolApprovalSection scope="local" />
     </>
   );
 }

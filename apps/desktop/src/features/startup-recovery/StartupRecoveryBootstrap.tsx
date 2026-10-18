@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from '../../lib/runtimeEnvironment';
-import { recordLaunchOutcome } from '../../services/errorTracking';
 import {
   upgradeNotice,
   type UpgradeNotice,
@@ -60,13 +59,7 @@ export function StartupRecoveryBootstrap({
     if (!nativeRuntime) return;
 
     let active = true;
-    const startedAt = Date.now();
     const failLaunch = (info: StartupRecoveryInfo) => {
-      recordLaunchOutcome({
-        outcome: 'failed',
-        reason: info.code,
-        durationMs: Date.now() - startedAt,
-      });
       setPhase({ kind: 'recovery', info });
     };
     const timer = setTimeout(() => {
@@ -85,11 +78,6 @@ export function StartupRecoveryBootstrap({
           return;
         }
         const notice = report ? upgradeNotice(report.upgrade) : null;
-        recordLaunchOutcome({
-          outcome: notice?.blocking ? 'failed' : 'succeeded',
-          reason: notice?.blocking ? report?.upgrade.action : undefined,
-          durationMs: Date.now() - startedAt,
-        });
         setPhase({ kind: 'ready', notice });
       })
       .catch(() => {

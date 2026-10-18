@@ -1,3 +1,4 @@
+import { SUPPORT_DIAGNOSTICS_PATH } from '@agiworkforce/cloud-contracts/support';
 import { CLOUD_API_BASE_URL, cloudFetch, getAuthHeaders } from '../../api/cloudApi';
 import { invoke } from '../../utils/ipc';
 
@@ -28,7 +29,6 @@ export interface DiagnosticsExportResult {
 }
 
 const MAX_RECENT_EVENTS = 10;
-const DIAGNOSTICS_PATH = '/api/support/diagnostics';
 
 function readTimeZone(): string | null {
   try {
@@ -87,7 +87,7 @@ export async function exportDesktopDiagnostics(
 ): Promise<DiagnosticsExportResult> {
   const diagnostics = await collectDesktopDiagnostics(input);
   const headers = await getAuthHeaders();
-  const response = await cloudFetch(`${CLOUD_API_BASE_URL}${DIAGNOSTICS_PATH}`, {
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}${SUPPORT_DIAGNOSTICS_PATH}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ diagnostics }),

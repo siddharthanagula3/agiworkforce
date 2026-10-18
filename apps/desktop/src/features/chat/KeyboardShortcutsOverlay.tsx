@@ -12,7 +12,6 @@ import {
 import {
   useSettingsStore,
   useVoiceInputStore,
-  type ChatPreferences,
   type VoiceInputHotkey,
 } from '../../stores/settingsStore';
 import { Button } from '@/ui/Button';
@@ -39,23 +38,16 @@ const INLINE_SECTIONS: InlineSection[] = [
   },
 ];
 
-export type ComposerSendShortcut = NonNullable<ChatPreferences['sendShortcut']>;
-
-export function chatInlineSection(sendShortcut: ComposerSendShortcut): InlineSection {
-  const shortcuts: InlineShortcut[] =
-    sendShortcut === 'mod-enter'
-      ? [
-          { description: 'Send message', keys: ['Ctrl/Cmd', 'Enter'] },
-          { description: 'New line', keys: ['Enter'] },
-        ]
-      : [
-          { description: 'Send message', keys: ['Enter'] },
-          { description: 'New line', keys: ['Shift', 'Enter'] },
-        ];
-  shortcuts.push({ description: 'Stop generation', keys: ['Click stop'] });
-  shortcuts.push({ description: 'Copy code block', keys: ['Click copy'] });
-  return { category: 'chat-inline', label: 'Chat', shortcuts };
-}
+export const CHAT_INLINE_SECTION: InlineSection = {
+  category: 'chat-inline',
+  label: 'Chat',
+  shortcuts: [
+    { description: 'Send message', keys: ['Enter'] },
+    { description: 'New line', keys: ['Shift', 'Enter'] },
+    { description: 'Stop generation', keys: ['Click stop'] },
+    { description: 'Copy code block', keys: ['Click copy'] },
+  ],
+};
 
 export function voiceInlineSection(hotkey: VoiceInputHotkey): InlineSection {
   const entry: InlineShortcut =
@@ -146,7 +138,6 @@ export function KeyboardShortcutsOverlay({
   onOpenSettings,
 }: KeyboardShortcutsOverlayProps) {
   const customKeybindings = useSettingsStore((state) => state.customKeybindings);
-  const sendShortcut = useSettingsStore((state) => state.chatPreferences.sendShortcut ?? 'enter');
   const voiceHotkey = useVoiceInputStore((state) => state.hotkey);
 
   const handleKeyDown = useCallback(
@@ -223,17 +214,19 @@ export function KeyboardShortcutsOverlay({
             <div className="overflow-y-auto flex-1 p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Inline sections */}
-                {[
-                  chatInlineSection(sendShortcut),
-                  ...INLINE_SECTIONS,
-                  voiceInlineSection(voiceHotkey),
-                ].map((section) => (
-                  <SectionCard key={section.category} title={section.label}>
-                    {section.shortcuts.map((s) => (
-                      <ShortcutRow key={s.description} description={s.description} keys={s.keys} />
-                    ))}
-                  </SectionCard>
-                ))}
+                {[CHAT_INLINE_SECTION, ...INLINE_SECTIONS, voiceInlineSection(voiceHotkey)].map(
+                  (section) => (
+                    <SectionCard key={section.category} title={section.label}>
+                      {section.shortcuts.map((s) => (
+                        <ShortcutRow
+                          key={s.description}
+                          description={s.description}
+                          keys={s.keys}
+                        />
+                      ))}
+                    </SectionCard>
+                  ),
+                )}
 
                 {/* Dynamic sections from DEFAULT_SHORTCUTS */}
                 {dynamicCategories.map((category) => {

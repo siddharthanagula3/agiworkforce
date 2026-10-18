@@ -10,16 +10,12 @@ export {
   providerUsdFromCredits,
 } from './billing/costSlice';
 
-import { createAnalyticsSlice } from './billing/analyticsSlice';
-import type { AnalyticsSlice } from './billing/analyticsSlice';
-
-type BillingUsageStore = CostSlice & AnalyticsSlice;
+type BillingUsageStore = CostSlice;
 
 export const useBillingUsageStore = create<BillingUsageStore>()(
   devtools(
     subscribeWithSelector((set, get) => ({
       ...createCostSlice(set as Parameters<typeof createCostSlice>[0], get as () => CostSlice),
-      ...createAnalyticsSlice(set as Parameters<typeof createAnalyticsSlice>[0]),
     })),
     { name: 'BillingUsageStore', enabled: import.meta.env.DEV },
   ),

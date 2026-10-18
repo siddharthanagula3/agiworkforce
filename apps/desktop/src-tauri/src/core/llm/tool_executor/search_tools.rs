@@ -281,14 +281,14 @@ impl ToolExecutor {
             return Ok(ToolResult {
                 success: false,
                 data: json!({
-                    "error": "Image search is not yet supported in the desktop search flow. \
+                    "error": "Image search is not supported in the desktop search flow. \
                               Try using 'web' or 'news' search type instead, or use the \
                               image_generate tool to create images from a text prompt.",
                     "success": false,
                     "suggestion": "Use search_type='web' or 'news', or use the image_generate tool"
                 }),
                 error: Some(
-                    "Image search is not yet supported. Use 'web' or 'news' search type instead, \
+                    "Image search is not supported. Use 'web' or 'news' search type instead, \
                      or use the image_generate tool for AI-generated images."
                         .to_string(),
                 ),

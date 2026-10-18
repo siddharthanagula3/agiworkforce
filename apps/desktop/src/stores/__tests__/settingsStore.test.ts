@@ -137,49 +137,6 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().windowPreferences.theme).toBe('light');
   });
 
-  it('should set default provider', async () => {
-    invokeMock.mockResolvedValue(undefined);
-
-    const { setDefaultProvider } = useSettingsStore.getState();
-    await setDefaultProvider('managed_cloud');
-
-    expect(useSettingsStore.getState().llmConfig.defaultProvider).toBe('managed_cloud');
-    expect(invokeMock).toHaveBeenCalledWith('llm_set_default_provider', {
-      provider: 'managed_cloud',
-    });
-  });
-
-  it('should handle provider setting errors', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const errorMessage = 'Failed to set provider';
-    invokeMock.mockRejectedValue(new Error(errorMessage));
-
-    const { setDefaultProvider } = useSettingsStore.getState();
-    await expect(setDefaultProvider('ollama')).rejects.toThrow(errorMessage);
-
-    expect(useSettingsStore.getState().error).toBe(errorMessage);
-
-    consoleErrorSpy.mockRestore();
-  });
-
-  it('should update temperature', () => {
-    const { setTemperature } = useSettingsStore.getState();
-
-    setTemperature(0.5);
-    expect(useSettingsStore.getState().llmConfig.temperature).toBe(0.5);
-
-    setTemperature(1.0);
-    expect(useSettingsStore.getState().llmConfig.temperature).toBe(1.0);
-  });
-
-  it('should update max tokens', () => {
-    const { setMaxTokens } = useSettingsStore.getState();
-
-    setMaxTokens(2048);
-    expect(useSettingsStore.getState().llmConfig.maxTokens).toBe(2048);
-  });
-
   it('should set default model for managed_cloud provider', () => {
     const { setDefaultModel } = useSettingsStore.getState();
 
@@ -192,29 +149,6 @@ describe('settingsStore', () => {
 
     setDefaultModel('ollama', 'fixture-local-model');
     expect(useSettingsStore.getState().llmConfig.defaultModels.ollama).toBe('fixture-local-model');
-  });
-
-  it('should update startup position', () => {
-    const { setStartupPosition } = useSettingsStore.getState();
-
-    setStartupPosition('remember');
-    expect(useSettingsStore.getState().windowPreferences.startupPosition).toBe('remember');
-
-    setStartupPosition('center');
-    expect(useSettingsStore.getState().windowPreferences.startupPosition).toBe('center');
-  });
-
-  it('should update dock on startup', () => {
-    const { setDockOnStartup } = useSettingsStore.getState();
-
-    setDockOnStartup('left');
-    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBe('left');
-
-    setDockOnStartup('right');
-    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBe('right');
-
-    setDockOnStartup(null);
-    expect(useSettingsStore.getState().windowPreferences.dockOnStartup).toBeNull();
   });
 
   it('should save settings', async () => {
@@ -311,18 +245,6 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().error).toBe(errorMessage);
 
     consoleErrorSpy.mockRestore();
-  });
-
-  it('should set task routing for managed_cloud', () => {
-    const { setTaskRouting } = useSettingsStore.getState();
-
-    setTaskRouting('code', 'managed_cloud', 'auto');
-
-    const state = useSettingsStore.getState();
-    expect(state.llmConfig.taskRouting.code).toEqual({
-      provider: 'managed_cloud',
-      model: 'auto',
-    });
   });
 
   it('should have all task routes default to managed_cloud', () => {

@@ -98,7 +98,7 @@ describe('COMMAND_TIMEOUTS keys off real commands', () => {
 
 describe('assertRegisteredCommand', () => {
   it('accepts a registered command', () => {
-    expect(() => assertRegisteredCommand('artifact_create')).not.toThrow();
+    expect(() => assertRegisteredCommand('artifact_get')).not.toThrow();
   });
 
   it('rejects a well-formed name the backend never registered', () => {
@@ -142,7 +142,7 @@ describe('lib/tauri-mock enforces the allowlist on the native path', () => {
   it('passes a registered command through', async () => {
     const { invoke, tauriInvoke } = await loadNativeInvoke();
 
-    await invoke('artifact_create', { title: 'x' });
-    expect(tauriInvoke).toHaveBeenCalledWith('artifact_create', { title: 'x' });
+    await invoke('artifact_get', { id: 'x' });
+    expect(tauriInvoke).toHaveBeenCalledWith('artifact_get', { id: 'x' });
   });
 });

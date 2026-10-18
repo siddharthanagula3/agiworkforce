@@ -30,10 +30,6 @@ vi.mock('@sentry/react', async (importOriginal) => {
       }),
   };
 });
-vi.mock('../analytics', () => ({
-  analytics: { track: vi.fn() },
-  AnalyticsService: vi.fn(),
-}));
 vi.mock('../../stores/appModeStore', async (importOriginal) => {
   const actual = await importOriginal<AppModeModule>();
   return {

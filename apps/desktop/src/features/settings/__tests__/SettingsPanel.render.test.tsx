@@ -77,10 +77,6 @@ vi.mock('../AllowedDirectoriesSettings', () => ({
   AllowedDirectoriesSettings: () => <div>Allowed directories</div>,
 }));
 
-vi.mock('../AnalyticsSettings', () => ({
-  AnalyticsSettings: () => <div>Analytics settings</div>,
-}));
-
 vi.mock('@/features/governance/SafetyPolicies', () => ({
   SafetyPolicies: () => <div>Safety policies</div>,
 }));

@@ -323,7 +323,7 @@ impl ToolRegistry {
                     name: "search_type".to_string(),
                     parameter_type: ParameterType::String,
                     required: false,
-                    description: "Type of search: 'web' (default), 'news', or 'images'".to_string(),
+                    description: "Type of search: 'web' (default) or 'news'".to_string(),
                     default: Some(serde_json::json!("web")),
                 },
             ],

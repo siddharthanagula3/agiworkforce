@@ -87,7 +87,6 @@ vi.mock('@agiworkforce/unified-chat', () => ({ useReducedMotion: () => false }))
 vi.mock('../../../lib/runtimeEnvironment', async (importOriginal) => ({
   ...(await importOriginal<RuntimeenvironmentModule>()),
   isTauri: true,
-  isElectronHost: false,
   supportsLocalAppMode: true,
 }));
 

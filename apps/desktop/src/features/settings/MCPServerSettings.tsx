@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, Share2 } from 'lucide-react';
+import { McpClient } from '@/api/mcp';
 import { useMcpServerStore } from '@/stores/mcpServerStore';
 
 const ALL_TOOLS = ['agi_chat', 'agi_run_task', 'agi_execute_skill', 'agi_bash', 'agi_research'];
@@ -10,7 +11,6 @@ export function MCPServerSettings() {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [toolNotice, setToolNotice] = useState<string | null>(null);
-  const [tokenVisible, setTokenVisible] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -31,22 +31,29 @@ export function MCPServerSettings() {
 
   const copySnippet = async () => {
     if (!config) return;
+    setCopyError(null);
+    let token: string;
+    try {
+      token = await McpClient.revealRuntimeServerToken();
+    } catch (cause) {
+      setCopyError(cause instanceof Error ? cause.message : String(cause));
+      return;
+    }
     const snippet = JSON.stringify(
       {
         'agi-workforce': {
           type: 'http',
           url: `http://localhost:${config.port}/mcp`,
-          headers: { Authorization: `Bearer ${config.token}` },
+          headers: { Authorization: `Bearer ${token}` },
         },
       },
       null,
       2,
     );
-    setCopyError(null);
     try {
       await navigator.clipboard.writeText(snippet);
     } catch {
-      setCopyError('The snippet could not be copied. Show the token and copy it by hand.');
+      setCopyError('The snippet could not be copied.');
       return;
     }
     setCopied(true);
@@ -156,18 +163,9 @@ export function MCPServerSettings() {
       {/* Bearer token */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-muted-foreground">Bearer Token</label>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono">
-            {tokenVisible ? config?.token : '\u2022'.repeat(36)}
-          </code>
-          <button
-            type="button"
-            onClick={() => setTokenVisible((v) => !v)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {tokenVisible ? 'Hide' : 'Show'}
-          </button>
-        </div>
+        <code className="block rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono">
+          {config?.token}
+        </code>
       </div>
 
       {/* Tools */}

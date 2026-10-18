@@ -90,17 +90,24 @@ describe('conversation export', () => {
     );
   });
 
-  it('asks the native runtime to render a PDF at the chosen path', async () => {
-    mocks.save.mockResolvedValue('/Users/me/Q4.pdf');
+  it('lets the native runtime pick the PDF destination and render it there', async () => {
+    mocks.invoke.mockResolvedValue('/Users/me/Q4.pdf');
 
-    await exportConversation('chat-1', 'pdf');
+    await expect(exportConversation('chat-1', 'pdf')).resolves.toBe(true);
 
     expect(mocks.invoke).toHaveBeenCalledWith('conversation_export_pdf', {
       conversationId: '12',
-      outputPath: '/Users/me/Q4.pdf',
       userId: 'local-desktop-user',
     });
+    expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.writeTextFile).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing when the native PDF save dialog is cancelled', async () => {
+    mocks.invoke.mockResolvedValue(null);
+
+    await expect(exportConversation('chat-1', 'pdf')).resolves.toBe(false);
+    expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
   it('writes nothing when the save dialog is cancelled', async () => {

@@ -8,7 +8,7 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
     opened.push(url);
   },
 }));
-vi.mock('../lib/runtimeEnvironment', () => ({ isTauri: true, isElectronHost: false }));
+vi.mock('../lib/runtimeEnvironment', () => ({ isTauri: true }));
 
 import { openExternalUrl } from '../utils/navigation';
 import { WEB_APP_URL } from '../api/config';

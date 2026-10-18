@@ -226,7 +226,7 @@ function BundleDetailsModal({
   onUninstall: (bundleId: string) => void;
   isInstalling: boolean;
 }) {
-  const canInstall = Boolean(bundle.npmPackage);
+  const canInstall = Boolean(bundle.npmPackage) && bundle.verified;
   const comesFromOfficialRegistry = isOfficialRegistryEntry(bundle);
 
   return (
@@ -297,10 +297,11 @@ function BundleDetailsModal({
 
             {!bundle.verified && (
               <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-sm font-medium text-amber-300">Unverified registry entry</p>
+                <p className="text-sm font-medium text-amber-300">Not on the allow-list</p>
                 <p className="mt-1 text-xs text-amber-200/80">
-                  Review the publisher, package, source, requested credentials, and tools before
-                  installing. This package has not been verified by AGI Workforce.
+                  AGI Workforce installs only the packages its allow-list pins, so this one cannot
+                  be installed from here. If you trust its publisher, add it by hand as an MCP
+                  server.
                 </p>
               </div>
             )}
@@ -495,7 +496,7 @@ function BundleCard({
   onInstall: (bundleId: string) => void;
   isInstalling: boolean;
 }) {
-  const canInstall = Boolean(bundle.npmPackage);
+  const canInstall = Boolean(bundle.npmPackage) && bundle.verified;
   const comesFromOfficialRegistry = isOfficialRegistryEntry(bundle);
 
   return (
@@ -653,18 +654,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
       const bundle =
         bundles.find((candidate) => candidate.id === bundleId) ??
         featuredBundles.find((candidate) => candidate.id === bundleId);
-      if (!bundle?.npmPackage) return;
-
-      if (!bundle.verified) {
-        const accepted = await confirm({
-          title: `Install unverified bundle “${bundle.name}”?`,
-          description: `This runs npm install -g for ${bundle.npmPackage} and adds a disabled MCP server configuration on this device. Review the publisher, source, tools, and requested credentials before continuing.`,
-          confirmText: 'Install unverified bundle',
-          cancelText: 'Cancel',
-          variant: 'destructive',
-        });
-        if (!accepted) return;
-      }
+      if (!bundle?.npmPackage || !bundle.verified) return;
 
       if (bundle.installed) {
         await updateBundle(bundleId);
@@ -672,7 +662,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
         await installBundle(bundleId);
       }
     },
-    [bundles, confirm, featuredBundles, installBundle, updateBundle],
+    [bundles, featuredBundles, installBundle, updateBundle],
   );
 
   const handleUninstall = useCallback(

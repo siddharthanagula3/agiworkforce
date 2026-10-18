@@ -76,22 +76,13 @@ describe('MCPBundleBrowser', () => {
     });
   });
 
-  it('requires explicit confirmation before installing an unverified bundle', async () => {
+  it('offers no install for a bundle the allow-list does not pin', () => {
     setBundle({ ...baseBundle, verified: false });
     render(<MCPBundleBrowser />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
-
-    expect(
-      await screen.findByRole('heading', { name: /Install unverified bundle/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manual' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
     expect(installBundle).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Install unverified bundle' }));
-
-    await waitFor(() => {
-      expect(installBundle).toHaveBeenCalledWith(baseBundle.id);
-    });
   });
 
   it('does not advertise one-click installation when no package is available', () => {

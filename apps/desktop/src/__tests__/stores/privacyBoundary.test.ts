@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   useAppModeStore,
   selectPrivacyMode,
@@ -47,84 +47,6 @@ describe('binary selectors (real selectors)', () => {
   });
 });
 
-describe('CRITICAL: telemetry egress gate (real analytics.track)', () => {
-  let invoke: ReturnType<typeof vi.fn>;
-  let analytics: import('../../services/analytics').AnalyticsService;
-  const wasEventSent = () => invoke.mock.calls.some((args) => args[0] === 'analytics_track_event');
-
-  beforeEach(async () => {
-    const core = await import('@tauri-apps/api/core');
-    invoke = vi.mocked(core.invoke);
-    invoke.mockResolvedValue(undefined as never);
-
-    const mod = await import('../../services/analytics');
-    analytics = mod.analytics;
-
-    analytics.updateConfig({ enabled: true });
-
-    invoke.mockClear();
-  });
-
-  afterEach(() => {
-    analytics.updateConfig({ enabled: false });
-  });
-
-  it('does NOT send telemetry in local mode even when consent is enabled', () => {
-    useAppModeStore.setState({ mode: 'local' });
-    expect(selectPrivacyMode(useAppModeStore.getState())).toBe('local');
-
-    analytics.track('app_opened', { source: 'unit-test' });
-
-    expect(wasEventSent()).toBe(false);
-  });
-
-  it('DOES send telemetry in cloud mode when consent is enabled', () => {
-    useAppModeStore.setState({ mode: 'cloud' });
-    expect(selectPrivacyMode(useAppModeStore.getState())).not.toBe('local');
-
-    analytics.track('app_opened', { source: 'unit-test' });
-
-    expect(wasEventSent()).toBe(true);
-  });
-
-  it('sends the event under the field names the native collector reads', () => {
-    useAppModeStore.setState({ mode: 'cloud' });
-
-    analytics.track('app_opened', { source: 'unit-test' });
-
-    const sent = invoke.mock.calls.find((args) => args[0] === 'analytics_track_event');
-    const event = (sent?.[1] as { event: Record<string, unknown> }).event;
-    expect(Object.keys(event).sort()).toEqual([
-      'name',
-      'properties',
-      'session_id',
-      'timestamp',
-      'user_id',
-    ]);
-    expect(event['session_id']).toEqual(expect.any(String));
-    expect(event['name']).toBe('app_opened');
-  });
-
-  it('respects the consent toggle in cloud mode (enabled=false → no egress)', () => {
-    useAppModeStore.setState({ mode: 'cloud' });
-    analytics.updateConfig({ enabled: false });
-    invoke.mockClear();
-
-    analytics.track('app_opened', { source: 'unit-test' });
-
-    expect(wasEventSent()).toBe(false);
-
-    analytics.updateConfig({ enabled: true });
-  });
-
-  it('forwards the privacy mode to the Rust collector via analytics_set_privacy_mode', async () => {
-    const { analyticsSetPrivacyMode } = await import('../../api/analytics');
-    invoke.mockClear();
-    await analyticsSetPrivacyMode('local');
-    expect(invoke).toHaveBeenCalledWith('analytics_set_privacy_mode', { mode: 'local' });
-  });
-});
-
 describe('CRITICAL: managed-cloud credential-forward gate (real selectPrivacyMode)', () => {
   it('local mode → selector !== managed, so credential forward returns early', () => {
     useAppModeStore.setState({ mode: 'local' });
@@ -142,12 +64,16 @@ describe('CRITICAL: managed-cloud credential-forward gate (real selectPrivacyMod
   it('provider settings cannot reclassify the managed Cloud workspace as BYOK', async () => {
     useAppModeStore.setState({ mode: 'cloud' });
     const { useSettingsStore } = await import('../../stores/settingsStore');
-    useSettingsStore.getState().setProviderMode('cloud');
+    const setProviderMode = (providerMode: 'auto' | 'cloud') =>
+      useSettingsStore.setState((state) => ({
+        llmConfig: { ...state.llmConfig, providerMode },
+      }));
+    setProviderMode('cloud');
 
     const pm = selectPrivacyMode(useAppModeStore.getState());
     expect(pm).toBe('managed');
 
-    useSettingsStore.getState().setProviderMode('auto');
+    setProviderMode('auto');
   });
 });
 

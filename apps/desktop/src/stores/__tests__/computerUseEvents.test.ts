@@ -58,10 +58,10 @@ describe('computer-use event subscription', () => {
     vi.clearAllMocks();
     tauriMock.invoke.mockImplementation((command: string) => {
       if (command === 'computer_use_take_over') {
-        return Promise.resolve({ taken_over: true, target_display: null, epoch: 1 });
+        return Promise.resolve({ taken_over: true, epoch: 1 });
       }
       if (command === 'computer_use_hand_back') {
-        return Promise.resolve({ taken_over: false, target_display: null, epoch: 2 });
+        return Promise.resolve({ taken_over: false, epoch: 2 });
       }
       if (command === 'computer_use_cancel_opa_task') return Promise.resolve(true);
       return Promise.resolve(null);

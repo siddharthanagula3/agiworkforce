@@ -1,11 +1,11 @@
+import * as Sentry from '@sentry/react';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ErrorTrackingService, ErrorSeverity } from '../errorTracking';
-import { analytics } from '../analytics';
 
-vi.mock('../analytics', () => ({
-  analytics: {
-    track: vi.fn(),
-  },
+vi.mock('@sentry/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@sentry/react')>()),
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
 }));
 
 const { privacyModeMock } = vi.hoisted(() => ({
@@ -38,20 +38,22 @@ describe('ErrorTrackingService', () => {
   describe('trust boundary, telemetry suppression (BYOK is private, not just Local)', () => {
     beforeEach(() => {
       service.updateConfig({ enabled: true });
-      vi.mocked(analytics.track).mockClear();
+      vi.mocked(Sentry.captureException).mockClear();
+      vi.mocked(Sentry.captureMessage).mockClear();
     });
 
-    it('suppresses telemetry in BYOK mode (regression: BYOK must not leak Sentry/analytics)', () => {
+    it('suppresses telemetry in BYOK mode (regression: BYOK must not leak to Sentry)', () => {
       privacyModeMock.mockReturnValue('byok');
       service.captureError(new Error('boom'));
       service.captureMessage('hi');
-      expect(analytics.track).not.toHaveBeenCalled();
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
     });
 
     it('suppresses telemetry in Local mode', () => {
       privacyModeMock.mockReturnValue('local');
       service.captureError(new Error('boom'));
-      expect(analytics.track).not.toHaveBeenCalled();
+      expect(Sentry.captureException).not.toHaveBeenCalled();
     });
 
     it('fails CLOSED, suppresses when the privacy mode cannot be read', () => {
@@ -59,13 +61,13 @@ describe('ErrorTrackingService', () => {
         throw new Error('store unavailable');
       });
       service.captureError(new Error('boom'));
-      expect(analytics.track).not.toHaveBeenCalled();
+      expect(Sentry.captureException).not.toHaveBeenCalled();
     });
 
     it('allows telemetry only in managed mode', () => {
       privacyModeMock.mockReturnValue('managed');
       service.captureError(new Error('boom'));
-      expect(analytics.track).toHaveBeenCalledTimes(1);
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -169,14 +171,6 @@ describe('ErrorTrackingService', () => {
       expect(() => service.captureError(error)).not.toThrow();
 
       consoleSpy.mockRestore();
-    });
-
-    it('should not throw when analytics tracking fails', () => {
-      service.updateConfig({ enabled: true });
-
-      const error = new Error('Test error');
-
-      expect(() => service.captureError(error)).not.toThrow();
     });
   });
 
