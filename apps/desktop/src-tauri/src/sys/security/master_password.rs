@@ -1125,15 +1125,6 @@ impl MasterPasswordManager {
     }
 }
 
-/// Get the key derivation result as base64 for storage/comparison
-pub fn derive_key_base64(
-    manager: &MasterPasswordManager,
-    purpose: KeyPurpose,
-) -> Result<String, MasterPasswordError> {
-    let key = manager.derive_key(purpose)?;
-    Ok(general_purpose::STANDARD.encode(&key))
-}
-
 /// Passphrases for tests elsewhere in the crate, drawn at random so that no
 /// test holds a fixed secret.
 #[cfg(test)]

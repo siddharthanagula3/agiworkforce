@@ -258,7 +258,7 @@ impl DirectApiProvider {
     }
 }
 
-/// Allowed loopback ports for local AI providers (RT-05 fix).
+/// Allowed loopback ports for local AI providers.
 ///
 /// Only these ports may be used with `http://localhost` or `http://127.0.0.1`:
 ///   - 11434, Ollama default
@@ -291,13 +291,12 @@ fn is_retired_provider_host(host: &str) -> bool {
 /// Blocks requests to private/link-local IP ranges (e.g. AWS IMDS at
 /// 169.254.169.254) and enforces HTTPS for non-localhost connections.
 /// Loopback addresses (127.0.0.0/8, ::1) are allowed with HTTP only,
-/// restricted to a small set of known-safe ports (RT-05 fix).
+/// restricted to a small set of known-safe ports.
 fn validate_provider_base_url(url: &str) -> Result<(), String> {
     let parsed = url
         .parse::<reqwest::Url>()
         .map_err(|e| format!("Invalid base URL: {e}"))?;
 
-    // RT-05 fix: reject non-HTTP(S) schemes immediately.
     match parsed.scheme() {
         "https" | "http" => {}
         scheme => {
@@ -326,7 +325,7 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
     };
 
     if is_loopback {
-        // RT-05 fix: HTTP is allowed on loopback only for specific, known-safe ports.
+        // HTTP is allowed on loopback only for specific, known-safe ports.
         if parsed.scheme() == "http" {
             let port = parsed.port().unwrap_or(80);
             if !ALLOWED_LOOPBACK_PORTS.contains(&port) {

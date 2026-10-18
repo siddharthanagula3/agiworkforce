@@ -80,9 +80,7 @@ pub struct CreateConversationRequest {
     pub user_id: String,
     #[serde(default, alias = "executionMode")]
     pub execution_mode: Option<ChatExecutionMode>,
-    /// Local project scope ("AGI Work"). TauriRuntime has always sent
-    /// `projectId`; before v75 serde silently dropped it and the scope was
-    /// lost (DESKTOP-PROJECT-SCOPING-UNWIRED-01, seam A).
+    /// Local project scope ("AGI Work"), sent by TauriRuntime as `projectId`.
     #[serde(default, alias = "projectId")]
     pub project_id: Option<String>,
 }

@@ -83,12 +83,11 @@ pub async fn execute_terminal_command(
         "Executing independent terminal command"
     );
 
-    // RT-02 fix: Refuse to run as root.
     if let Err(e) = reject_if_root() {
         return Err(e.to_string());
     }
 
-    // RT-02 fix: Write security audit log before validation so all attempts are recorded.
+    // Logged before validation so refused attempts are recorded too.
     write_security_audit_log(&command, cwd.as_deref());
 
     // Use centralized command validation (one-shot mode - strictest)

@@ -1490,7 +1490,7 @@ mod tests {
         }
     }
 
-    // ── DESKTOP-SKILLS-EAGER-INJECTION-01 ────────────────────────────────────
+    // ── skills progressive disclosure ────────────────────────────────────────
     // Progressive disclosure only works if the model can actually reach the tool
     // that discloses a skill body. Before this wiring the Skill tool existed but
     // was in no catalog and had no policy, so it was unreachable dead code.

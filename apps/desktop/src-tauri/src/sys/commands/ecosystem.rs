@@ -518,8 +518,7 @@ fn toml_server_entry(source: &str, name: &str, config: &toml::Value) -> Option<I
 mod tests {
     use super::*;
 
-    /// Sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: proves the
-    /// stdio conversion path used by `import_ecosystem_mcp_servers` before
+    /// Proves the stdio conversion path used by `import_ecosystem_mcp_servers` before
     /// writing to the dotfile actually round-trips command/args/env, so the
     /// persisted entry is a faithful copy of what was scanned.
     #[test]

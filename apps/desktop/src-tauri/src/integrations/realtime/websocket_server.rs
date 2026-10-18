@@ -284,7 +284,7 @@ fn is_pair_manifest_install_authorized(raw_request: &str, local_bridge_secret: &
         && bool::from(sent_token.as_bytes().ct_eq(local_bridge_secret.as_bytes()))
 }
 
-// ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
+// WebSocket Origin allow-list.
 //
 // Any WebSocket from a non-allowed origin is rejected at the HTTP-upgrade
 // phase, before any application data is exchanged.  Allowed origins:
@@ -791,7 +791,7 @@ impl RealtimeServer {
         }
 
         tracing::info!(
-            "SEC-11: /pair/request parked a confirmation code for extension {} (request {})",
+            "/pair/request parked a confirmation code for extension {} (request {})",
             prompt.extension_id,
             prompt.request_id
         );
@@ -847,7 +847,7 @@ impl RealtimeServer {
             match take_confirmed_pair_request(&state.pending, request_id.trim(), &code).await {
                 Ok(extension_id) => extension_id,
                 Err(error) => {
-                    tracing::warn!("SEC-11: /pair/confirm rejected, {}", error);
+                    tracing::warn!("/pair/confirm rejected, {}", error);
                     Self::write_http(stream, "401 Unauthorized", "text/plain", &error).await;
                     return;
                 }
@@ -856,14 +856,14 @@ impl RealtimeServer {
         match install(Some(&extension_id)) {
             Ok(installed_locations) => {
                 tracing::info!(
-                    "SEC-11: /pair/confirm installed the native messaging manifest for extension {} at {} location(s)",
+                    "/pair/confirm installed the native messaging manifest for extension {} at {} location(s)",
                     extension_id,
                     installed_locations
                 );
             }
             Err(error) => {
                 tracing::warn!(
-                    "SEC-11: /pair/confirm could not install the manifest for extension {}: {}",
+                    "/pair/confirm could not install the manifest for extension {}: {}",
                     extension_id,
                     error
                 );
@@ -915,7 +915,7 @@ impl RealtimeServer {
             let local_bridge_secret = state.bridge_token.read().await.clone();
             if !is_pair_manifest_install_authorized(header_section, &local_bridge_secret) {
                 tracing::warn!(
-                    "SEC-11: /pair manifest install rejected, X-Bridge-Token did not match the desktop bridge secret"
+                    "/pair manifest install rejected, X-Bridge-Token did not match the desktop bridge secret"
                 );
                 Self::write_http(
                     stream,
@@ -981,7 +981,6 @@ impl RealtimeServer {
         app_handle: Option<tauri::AppHandle>,
         auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // RT-04 fix: validate Origin header during the WebSocket handshake.
         // `accept_hdr_async_with_config` lets us inspect the HTTP upgrade request
         // before the connection is established AND cap per-frame size.
         #[allow(
@@ -996,7 +995,7 @@ impl RealtimeServer {
 
             if !is_origin_allowed(origin) {
                 tracing::warn!(
-                    "RT-04: WebSocket upgrade rejected from disallowed origin: {:?}",
+                    "WebSocket upgrade rejected from disallowed origin: {:?}",
                     origin
                 );
                 let rejected = origin.unwrap_or("<none>").to_string();
@@ -1024,14 +1023,13 @@ impl RealtimeServer {
             Ok(ws) => ws,
             Err(e) => {
                 tracing::warn!(
-                    "RT-04: WebSocket handshake failed (origin check or protocol error): {}",
+                    "WebSocket handshake failed (origin check or protocol error): {}",
                     e
                 );
                 return Ok(()); // connection is already closed; not an error we need to propagate
             }
         };
 
-        // RT-04 fix: enforce a hard timeout for the initial auth message.
         // Wrap the whole connection handler so that a client that never sends
         // auth is cleaned up after AUTH_TIMEOUT.
         let handle_fut = Self::handle_connection(
@@ -1065,7 +1063,6 @@ impl RealtimeServer {
         let mut user_id_from_auth: Option<String> = None;
         let mut team_id_from_auth: Option<String> = None;
 
-        // RT-04 fix: the first message must arrive within AUTH_TIMEOUT.
         let first_msg = tokio::time::timeout(AUTH_TIMEOUT, ws_stream.next()).await;
         let auth_failure_reason = if let Ok(Some(Ok(Message::Text(text)))) = first_msg {
             if let Ok(RealtimeEvent::Authenticate {

@@ -405,11 +405,9 @@ impl McpState {
             seed_config
         };
 
-        // Merge in any servers declared in the shared CLI dotfile
-        // (~/.agiworkforce/mcp.json), e.g. added via Settings → Developer's
-        // DotfileSettings.tsx. See McpServersConfig::merge_dotfile_servers
-        // for why this is a real, intentional cross-surface config file and
-        // not dead scaffolding (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01).
+        // Servers declared in the shared CLI dotfile (~/.agiworkforce/mcp.json),
+        // e.g. added via Settings → Developer; see
+        // McpServersConfig::merge_dotfile_servers.
         raw_config.merge_dotfile_servers();
 
         *self.config.lock() = raw_config;

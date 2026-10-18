@@ -1158,7 +1158,7 @@ async fn resolve_effective_folder(
 
 /// Advertise installed skills to the model as metadata ONLY.
 ///
-/// Progressive disclosure (DESKTOP-SKILLS-EAGER-INJECTION-01): the turn carries a
+/// Progressive disclosure: the turn carries a
 /// name + description catalog and nothing else. Instruction bodies stay on disk
 /// until the model explicitly calls the `skill` tool with `action=load`, which is
 /// also where the untrusted-body fence and the workspace consent gate live. The
@@ -1267,7 +1267,7 @@ mod tests {
             .expect("catalog must include a manually controlled Anthropic reasoning model")
     }
 
-    // ── DESKTOP-SKILLS-EAGER-INJECTION-01: progressive disclosure ─────────────
+    // ── progressive disclosure ─────────────────────────────────────────────────
     // The prompt block this turn injects is the metadata catalog, never a body.
     // `maybe_inject_skill_catalog` itself needs an AppHandle, so pin the payload it
     // pushes; the eager path it replaced pushed `to_context_string()` (full body).
@@ -1772,7 +1772,7 @@ mod tests {
         }
     }
 
-    // ── DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam B: project scope prompt ─────
+    // ── project scope prompt ───────────────────────────────────────────────────
 
     #[test]
     fn project_scope_prompt_includes_instructions_and_knowledge_content() {

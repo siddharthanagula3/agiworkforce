@@ -118,8 +118,8 @@ static DANGEROUS_PATTERNS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         "| bash",
         "|sh",
         "|bash",
-        // Code injection, bare names and absolute paths
-        // RT-02 fix: absolute-path variants bypass the bare-name checks without these.
+        // Code injection, bare names and absolute paths: the absolute-path
+        // variants bypass the bare-name checks without these.
         "eval $(",
         "base64 -d |",
         "base64 -d|",
@@ -503,7 +503,7 @@ pub fn validate_interactive_input(input: &str, correlation_id: Option<&str>) -> 
     validate_command(command, &config)
 }
 
-/// RT-02 fix: Write an entry to the security audit log.
+/// Write an entry to the security audit log.
 ///
 /// Path: `~/.agiworkforce/security-audit.log`
 /// Format: `[ISO-8601] user=<username> cwd=<cwd> cmd=<command>\n`
@@ -526,9 +526,9 @@ pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
 
     // Best-effort: if we can't write the log we still allow the command.
     let _ = std::fs::create_dir_all(&log_dir);
-    // I5: tighten dir to 0o700 (owner-only), the audit log records every
-    // terminal command (potentially containing secrets in argv). Default
-    // umask leaves these world-readable on shared / multi-user systems.
+    // Owner-only: the log records every terminal command, secrets in argv
+    // included, and the default umask leaves it world-readable on shared
+    // systems.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -548,15 +548,14 @@ pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
     }
 }
 
-/// RT-02 fix: Reject execution if the current process reports `$USER == "root"`.
+/// Reject execution if the current process reports `$USER == "root"`.
 ///
 /// This is a Unix defense-in-depth preflight, not an OS sandbox or a complete
-/// privilege detector. On Windows this no-ops until a platform privilege check is
-/// wired at the command boundary.
+/// privilege detector. Windows normally sets no `USER`, so there it does not refuse.
 pub fn reject_if_root() -> ValidationResult {
     let user = std::env::var("USER").unwrap_or_default();
     if user == "root" {
-        tracing::warn!("RT-02: terminal_execute blocked, running as root");
+        tracing::warn!("terminal_execute blocked, running as root");
         return Err(CommandValidationError::DangerousPattern {
             pattern: "root-execution".to_string(),
             command: "<rejected before parsing>".to_string(),

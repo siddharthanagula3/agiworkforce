@@ -14,7 +14,7 @@ use tracing::{debug, info, warn};
 ///
 /// `skills_offered` reflects whether this turn advertised the skill catalog. When
 /// it is false the `skill` tool is withheld too, so the model is never offered a
-/// capability whose catalog it was not shown (DESKTOP-SKILLS-EAGER-INJECTION-01).
+/// capability whose catalog it was not shown.
 ///
 /// TRUST-BOUNDARY: an absent `model_capabilities` payload used to skip capability
 /// filtering entirely, and the desktop renderer never sends one, so every model,

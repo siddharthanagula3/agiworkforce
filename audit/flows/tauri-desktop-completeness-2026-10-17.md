@@ -104,7 +104,6 @@ Relevant owners: `apps/desktop/src/runtime/{TauriRuntime,CloudRuntime}.ts`, `src
 - Browser Pause: `src/features/browser/BrowserViewer.tsx:164`, `src/stores/browserStore.ts:400`.
 - Artifact identity/export: `src/features/artifacts/openArtifactInChat.ts:19`, `publishAdapter.ts:58,81`, `src-tauri/src/core/llm/tool_executor/artifact_tools.rs:70,97`, `packages/ui/unified-chat/src/components/ArtifactPanel.tsx:885`.
 - Voice: `src-tauri/Cargo.toml:301`, `sys/commands/voice.rs:472,841`, `features/speech/dictation/coordinator.rs:36`.
-- External database tools: `sys/commands/database.rs:16`, `data/database/sql_client.rs:28`, `core/agi/executors/database_executor.rs:348`; existing owner `DESKTOP-DATABASE-TOOLS-NO-CONNECTION-01`.
 
 ## Running bundled Cloud: what failed and what is missing
 
@@ -155,7 +154,6 @@ Claude reference was limited to the authorized installed app's current Home/Cowo
 | Old bundled Cloud settings/auth/runtime adapters                                             | Retire after hosted-Cloud acceptance and checking remaining host/migration consumers. Do not finish obsolete adapters merely because they still exist. |
 | `features/layout/TitleBar.tsx`, `UserProfile.tsx`                                            | Dead-export candidates: no current renderer consumer found. Verify with the dependency graph before deletion.                                          |
 | Standalone `features/document/DocumentWorkspace.tsx`                                         | Orphan UI, only barrel export found. Remove or integrate into the existing artifact/file experience; retain real document commands.                    |
-| MongoDB/Redis wrapper clients                                                                | No production callers found; existing `DESKTOP-NOSQL-CLIENTS-UNREACHABLE-01`. Remove unused optional wrappers if no planned owner.                     |
 | Claude Code plugin manager                                                                   | Move to explicitly external/developer integration or remove from normal AGI extension navigation. Do not present it as AGI chat functionality.         |
 | Native Local/BYOK runtime, SQLCipher store, permissions, terminal, MCP, scheduler, artifacts | Keep. These are valuable implemented foundations, not dead UI. Fix their concrete gaps.                                                                |
 | Local and Cloud trust boundaries                                                             | Keep separate even if visual primitives and contracts are unified.                                                                                     |

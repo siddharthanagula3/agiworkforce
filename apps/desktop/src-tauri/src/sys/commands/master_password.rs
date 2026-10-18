@@ -15,13 +15,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::State;
 
-// ── RT-01 Brute-force rate limiter ──────────────────────────────────────────
-//
-// Tracks failed verification attempts per process lifetime.
-// Thresholds: 5 → 30-second lockout, 10 → 5-minute lockout, 20 → restart required.
-// Lockout is checked even on correct password during active lockout period
-// (mandatory minimum delay prevents timing-based enumeration).
-
+/// Failed verification attempts in this process: 5 lock for 30 seconds, 10
+/// for 5 minutes, 20 until restart. A locked attempt is refused even with the
+/// right password, so the delay cannot be timed to enumerate it.
 #[derive(Debug)]
 struct LockoutState {
     failed_count: u32,
@@ -83,16 +79,8 @@ impl LockoutState {
     }
 }
 
-// Process-lifetime singleton guarded by a Mutex.
-// Uses std::sync::OnceLock so the state is lazily initialised and never
-// re-created across hot-reloads in tests.
-//
-// I2 fix: parking_lot::Mutex (not std::sync::Mutex). With std::sync::Mutex,
-// a panic while holding the lock poisons it forever, every subsequent
-// vault verify/unlock call would hit `lock().map_err(...)` and return a
-// generic 500-style error. The user could not recover without restarting
-// the app; meanwhile the lockout counter is process-lifetime so the
-// attacker benefits from the DoS. parking_lot::Mutex does not poison.
+/// parking_lot::Mutex because it does not poison: a panic under a std Mutex
+/// would refuse every later unlock until the app restarts.
 static LOCKOUT: std::sync::OnceLock<parking_lot::Mutex<LockoutState>> = std::sync::OnceLock::new();
 
 fn lockout() -> &'static parking_lot::Mutex<LockoutState> {
@@ -143,12 +131,11 @@ fn record_attempt_outcome(success: bool) {
         guard.record_failure();
         if guard.require_restart {
             tracing::warn!(
-                "RT-01: vault brute-force threshold reached, restart required to unlock"
+                "Master password brute-force threshold reached, restart required to unlock"
             );
         }
     }
 }
-// ────────────────────────────────────────────────────────────────────────────
 
 /// State wrapper for the master password manager
 pub struct MasterPasswordState {
@@ -382,7 +369,6 @@ pub async fn master_password_unlock(
     llm_state: State<'_, crate::sys::commands::llm::LLMState>,
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    // RT-01: enforce brute-force rate limit before every attempt.
     check_and_enforce_lockout()?;
 
     let outcome = {
@@ -452,8 +438,6 @@ pub async fn master_password_change(
     llm_state: State<'_, crate::sys::commands::llm::LLMState>,
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    // RT-01: the current password is checked here too, so the same
-    // brute-force gate applies.
     check_and_enforce_lockout()?;
 
     if let Some(violation) = password_rule_violation(&new_password) {
@@ -514,7 +498,6 @@ pub async fn master_password_remove(
     llm_state: State<'_, crate::sys::commands::llm::LLMState>,
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
 ) -> Result<MasterPasswordResponse, String> {
-    // RT-01: enforce brute-force rate limit before every attempt.
     check_and_enforce_lockout()?;
 
     let outcome = {

@@ -504,8 +504,7 @@ impl ToolConfirmationState {
     }
 
     /// Set the global auto-approve flag. Persisted to `settings_v2` so the
-    /// choice survives app restarts (FIX
-    /// DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01).
+    /// choice survives app restarts.
     pub fn set_auto_approve_all(&self, enabled: bool) {
         self.auto_approve_all.store(enabled, Ordering::Relaxed);
         self.db_persist_auto_approve_all(enabled);
@@ -521,10 +520,8 @@ impl ToolConfirmationState {
     }
 
     /// Set the current agent execution mode. Persisted to `settings_v2` so
-    /// the choice survives app restarts (FIX
-    /// DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01), a user who explicitly
-    /// selects Safe/Plan mode no longer has it silently reverted to Build
-    /// on the next launch.
+    /// the choice survives app restarts: a user who selects Safe or Plan mode
+    /// does not find it reverted to Build on the next launch.
     pub fn set_agent_mode(&self, mode: AgentMode) {
         {
             let mut lock = self.agent_mode.lock();

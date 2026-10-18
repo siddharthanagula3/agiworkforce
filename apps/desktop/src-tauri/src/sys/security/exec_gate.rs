@@ -88,7 +88,7 @@ const FORBIDDEN_PREFIXES: &[&[&str]] = &[
     &["sudo", "rm"],
     &["mv", "/"],
     &["cp", "/dev/null", "/"],
-    // Code injection, bare names and absolute paths (RT-02 parity)
+    // Code injection, bare names and absolute paths
     &["python", "-c"],
     &["python2", "-c"],
     &["python3", "-c"],

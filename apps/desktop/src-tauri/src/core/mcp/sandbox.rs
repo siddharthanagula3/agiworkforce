@@ -376,34 +376,6 @@ pub(crate) fn mcp_workspace() -> Result<PathBuf, String> {
     private_dir("mcp-workspace")
 }
 
-/// Rewrite `program args` to run under the full-read sandbox. `Ok(None)`
-/// means this host has no sandbox backend at all (Windows), where the caller
-/// keeps running the program directly; on macOS and Linux a missing backend
-/// fails closed. `caller_value` reads the environment the program will
-/// inherit.
-pub fn full_read_sandbox_program(
-    program: &str,
-    args: &[String],
-    workspace_dir: &Path,
-    extra_writable_roots: &[PathBuf],
-    protected_paths: &[PathBuf],
-    network_policy: NetworkPolicy,
-    caches: SandboxCaches,
-    caller_value: &dyn Fn(&str) -> Option<String>,
-) -> Result<Option<SandboxedProgram>, String> {
-    full_read_sandbox_program_guarding(
-        program,
-        args,
-        workspace_dir,
-        extra_writable_roots,
-        protected_paths,
-        &[],
-        network_policy,
-        caches,
-        caller_value,
-    )
-}
-
 /// Where this user's credentials are kept: the locations
 /// [`agiworkforce_sandbox_policy::credential_paths`] names under the home
 /// folder, the secret entries of the shared CLI folder, and this app's data
@@ -420,11 +392,16 @@ pub fn credential_locations() -> Vec<PathBuf> {
     locations
 }
 
-/// [`full_read_sandbox_program`] for a program that must not read
-/// `unreadable` either. An MCP server keeps the network and reads
-/// everywhere, so it is started with [`credential_locations`] here: it could
-/// otherwise send a key or a token out. A server that needs one of them runs
-/// outside the sandbox, which the user chooses per server.
+/// Rewrite `program args` to run under the full-read sandbox, with
+/// `unreadable` kept out of its reach. `Ok(None)` means this host has no
+/// sandbox backend at all (Windows), where the caller keeps running the
+/// program directly; on macOS and Linux a missing backend fails closed.
+/// `caller_value` reads the environment the program will inherit.
+///
+/// An MCP server keeps the network and reads everywhere, so it is started
+/// with [`credential_locations`] as `unreadable`: it could otherwise send a
+/// key or a token out. A server that needs one of them runs outside the
+/// sandbox, which the user chooses per server.
 #[allow(clippy::too_many_arguments)]
 pub fn full_read_sandbox_program_guarding(
     program: &str,
@@ -1202,10 +1179,11 @@ mod tests {
             return;
         };
         let home = home.canonicalize().unwrap_or(home);
-        let Ok(Some(launch)) = full_read_sandbox_program(
+        let Ok(Some(launch)) = full_read_sandbox_program_guarding(
             "true",
             &[],
             &std::env::temp_dir().canonicalize().expect("temp dir"),
+            &[],
             &[],
             &[],
             NetworkPolicy::Deny,
@@ -1236,10 +1214,11 @@ mod tests {
         assert!(cache.starts_with(private_temp_root().expect("private root")));
         let workspace = std::env::temp_dir().canonicalize().expect("temp dir");
         let launch = |caches| {
-            full_read_sandbox_program(
+            full_read_sandbox_program_guarding(
                 "true",
                 &[],
                 &workspace,
+                &[],
                 &[],
                 &[],
                 NetworkPolicy::Deny,

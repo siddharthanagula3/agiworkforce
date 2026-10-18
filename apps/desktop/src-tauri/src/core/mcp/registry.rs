@@ -8,10 +8,10 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
-/// RT-03 fix: Maximum allowed length for MCP tool descriptions.
+/// Maximum allowed length for MCP tool descriptions.
 const MCP_DESC_MAX_LEN: usize = 1024;
 
-/// RT-03 fix: Regex patterns to detect and strip prompt-injection markers in
+/// Regex patterns to detect and strip prompt-injection markers in
 /// MCP tool descriptions.  The patterns are case-insensitive and cover the
 /// most common injection vectors observed in the wild.
 static INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
@@ -82,7 +82,7 @@ fn sanitize_untrusted_text(raw: &str) -> String {
     strip_injection_markers(&truncated)
 }
 
-/// RT-03 fix: Sanitise a raw MCP tool description before it is inserted into
+/// Sanitise a raw MCP tool description before it is inserted into
 /// the LLM system prompt, wrapped in provenance delimiters.
 fn sanitize_mcp_description(raw: &str, server_name: &str) -> String {
     let sanitised = sanitize_untrusted_text(raw);
@@ -98,12 +98,10 @@ fn sanitize_mcp_description(raw: &str, server_name: &str) -> String {
 
 /// Sanitise every `description` string inside an MCP tool's JSON input schema.
 ///
-/// The schema was previously forwarded to the provider VERBATIM by both
-/// `to_tool_definition` and `to_openai_function`, while only the tool's own
-/// description went through the RT-03 guard. Parameter descriptions are written
-/// by the same third-party server and land in the same tool definitions, so a
-/// server that put "ignore previous instructions" in a property description
-/// walked straight past the guard.
+/// Parameter descriptions are written by the same third-party server as the
+/// tool's own description and land in the same tool definitions, so a server
+/// could otherwise put "ignore previous instructions" in a property
+/// description and walk past the guard on the tool description.
 ///
 /// No delimiter wrapper here: these values sit inside a JSON schema the
 /// provider parses, and injecting pseudo-XML into a schema field would corrupt
@@ -233,7 +231,6 @@ impl McpToolRegistry {
             ToolCapability::NetworkOperation,
         ];
 
-        // RT-03 fix: sanitise the MCP-supplied description before it reaches the LLM.
         let raw_desc = mcp_tool
             .description
             .as_deref()

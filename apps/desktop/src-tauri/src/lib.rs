@@ -30,10 +30,9 @@ use crate::sys::commands::{
     skills::SkillsState,
     tool_confirmation::ToolConfirmationState,
     undo::UndoState,
-    ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState, DatabaseState,
-    DocumentState, FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState,
-    ProductivityState, SchedulerState, SettingsServiceState, SettingsState, ShortcutsState,
-    VoiceState,
+    ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState, DocumentState,
+    FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState, ProductivityState,
+    SchedulerState, SettingsServiceState, SettingsState, ShortcutsState, VoiceState,
 };
 use crate::sys::security::SecretManager;
 use crate::sys::telemetry;
@@ -662,8 +661,6 @@ pub fn run() {
                 });
                 ApiState::default()
             }));
-
-            app.manage(tokio::sync::Mutex::new(DatabaseState::new()));
 
             app.manage(CloudState::new());
 
@@ -1558,7 +1555,7 @@ pub fn run() {
             crate::sys::commands::governance::get_approval_statistics,
             crate::sys::commands::governance::expire_timed_out_requests,
 
-            // SEC-11: browser-extension pairing handshake
+            // browser-extension pairing handshake
             crate::sys::commands::realtime::bridge_pending_pair_requests,
             crate::sys::commands::realtime::bridge_deny_pair_request,
 

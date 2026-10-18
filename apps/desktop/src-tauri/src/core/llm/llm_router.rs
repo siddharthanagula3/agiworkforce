@@ -2910,7 +2910,7 @@ impl LLMRouter {
             routed_request.tool_choice = None;
         }
 
-        // C1 fix: pre-flight session cost cap check for the streaming path.
+        // Pre-flight session cost cap check for the streaming path.
         //
         // Non-streaming `invoke_candidate` increments `cumulative_cost` and hard-stops when
         // `SESSION_COST_SAFETY_CAP` is exceeded.  The streaming path previously had no such

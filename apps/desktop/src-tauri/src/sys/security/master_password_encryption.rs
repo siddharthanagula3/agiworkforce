@@ -132,26 +132,16 @@ impl MasterPasswordEncryption {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use crate::sys::security::master_password::test_support::fixture_passphrase;
     use rusqlite::Connection;
 
     use super::*;
-
-    /// Test-only fixture password used by `unlocked_helper` and
-    /// `locked_helper`. Building this from runtime randomness would
-    /// make the tests non-deterministic; intentional hard-code per
-    /// CodeQL false-positive suppression below.
-    /// codeql[rust/hard-coded-cryptographic-value]: test fixture only,
-    /// never reachable from production paths.
-    #[allow(dead_code)]
-    // Must satisfy `enforce_password_complexity` (>= 12 chars,
-    // 3-of-4 character classes).
-    const TEST_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
 
     fn unlocked_helper() -> MasterPasswordEncryption {
         let conn = Connection::open_in_memory().unwrap();
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
-        manager.setup(TEST_FIXTURE_PASSPHRASE).unwrap();
+        manager.setup(fixture_passphrase()).unwrap();
         MasterPasswordEncryption::new(Arc::new(Mutex::new(manager)))
     }
 
@@ -159,7 +149,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         let manager = MasterPasswordManager::new(Arc::new(Mutex::new(conn)));
         manager.init_table().unwrap();
-        manager.setup(TEST_FIXTURE_PASSPHRASE).unwrap();
+        manager.setup(fixture_passphrase()).unwrap();
         manager.lock();
         MasterPasswordEncryption::new(Arc::new(Mutex::new(manager)))
     }

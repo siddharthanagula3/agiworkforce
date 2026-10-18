@@ -792,12 +792,10 @@ impl McpServersConfig {
     /// `self`, without overwriting a server name already defined in the
     /// primary desktop config (primary config wins on name collisions).
     ///
-    /// Fixes DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: Settings → Developer
-    /// (`DotfileSettings.tsx`) writes servers to this dotfile via the
-    /// `dotfile_add_mcp_server` Tauri command, which used to show a success
-    /// toast even though the live MCP client (this struct, loaded from
-    /// [`Self::default_config_path`]) never read the file, the server was
-    /// persisted but never actually connected or exposed tools. Call this on
+    /// Settings → Developer (`DotfileSettings.tsx`) writes servers to this
+    /// dotfile via the `dotfile_add_mcp_server` Tauri command, and the live
+    /// client is loaded from [`Self::default_config_path`], so without this
+    /// merge such a server would be saved but never connected. Call this on
     /// every config (re)load so dotfile-declared servers behave the same as
     /// servers added through the "Advanced MCP configuration" UI
     /// (`ConnectorGallery.tsx` → `mcp_update_config`).
@@ -893,13 +891,9 @@ impl McpServersConfig {
     /// Entries whose name collides with an existing dotfile entry are
     /// overwritten (last write wins).
     ///
-    /// This is the persistence half of the fix for the
-    /// `import_ecosystem_mcp_servers` sibling of
-    /// DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: that command used to scan
-    /// other AI tools' MCP configs and return the results with a success
-    /// toast, but never wrote anything anywhere, so "Imported N MCP
-    /// server(s)" was true only of the in-memory scan result, never of any
-    /// durable state. Callers should follow this with
+    /// `import_ecosystem_mcp_servers` persists what it scanned from other AI
+    /// tools' MCP configs through this, so "Imported N MCP server(s)" names
+    /// entries that exist on disk. Callers should follow this with
     /// `McpState::reload_active_config` so the live client picks up the
     /// newly-written entries immediately (mirrors `dotfile_add_mcp_server`).
     pub fn write_dotfile_servers(entries: &[(String, McpServerConfig)]) -> Result<usize, String> {
@@ -4011,7 +4005,7 @@ mod tests {
         assert_eq!(bundle.magic, "mcpb/1");
     }
 
-    // ── merge_dotfile_servers (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01) ──
+    // ── merge_dotfile_servers ──
 
     fn with_temp_dotfile<F: FnOnce(&std::path::Path)>(body: F) {
         let temp = tempfile::tempdir().expect("failed to create tempdir");

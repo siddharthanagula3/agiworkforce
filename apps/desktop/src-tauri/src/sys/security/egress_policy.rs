@@ -16,8 +16,7 @@
 //! A hostname is judged by the addresses it RESOLVES to, not by its spelling,
 //! so `metadata.google.internal`, `localtest.me` and `127-0-0-1.sslip.io` are
 //! refused on the strength of their A/AAAA records rather than a name
-//! denylist. Two limits on that, stated precisely because the previous version
-//! of this comment overstated them:
+//! denylist. Two limits on that:
 //!
 //! * DNS REBINDING IS CLOSED ON [`PublicHttpClient`]. The addresses the
 //!   judgement used are pinned onto that client's transport ([`PinnedResolver`]),
@@ -290,10 +289,10 @@ const MAX_REDIRECT_HOPS: usize = 10;
 ///
 /// Stated plainly, because the exemption is a real (small) widening: skipping
 /// the re-judgement also skips the re-RESOLUTION, so a name that answered public
-/// on the first hop and private on the second is followed. That is the same DNS
-/// rebinding race the module doc already declares open, not a new hole, a
-/// cross-origin hop is still resolved and judged every time, but the exemption
-/// does hand the race one extra turn per same-origin hop.
+/// on the first hop and private on the second is followed. That is the DNS
+/// rebinding race every transport other than [`PublicHttpClient`] has, not a
+/// new hole: a cross-origin hop is still resolved and judged every time, but
+/// the exemption hands the race one extra turn per same-origin hop.
 pub fn public_destination_redirect_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= MAX_REDIRECT_HOPS {
@@ -316,10 +315,9 @@ pub fn public_destination_redirect_policy() -> reqwest::redirect::Policy {
 /// The addresses each host was judged on, shared between the validator and the
 /// transport's DNS resolver.
 ///
-/// This is what closes the rebinding race the module doc used to declare open:
-/// validation and connection are no longer two independent DNS queries, so a
+/// Validation and connection are not two independent DNS queries, so a
 /// resolver that answers public once and private once cannot win the second
-/// answer, there is no second answer.
+/// answer: there is no second answer.
 #[derive(Debug, Default)]
 pub struct PinnedDestinations {
     addresses: std::sync::Mutex<std::collections::HashMap<String, Vec<IpAddr>>>,
@@ -366,32 +364,11 @@ impl reqwest::dns::Resolve for PinnedResolver {
     }
 }
 
-/// Redirect policy for a pinned public-only client: every hop is judged, and
-/// the addresses that judgement used are pinned before the hop is followed.
-fn pinned_public_redirect_policy(
-    pins: std::sync::Arc<PinnedDestinations>,
-) -> reqwest::redirect::Policy {
-    reqwest::redirect::Policy::custom(move |attempt| {
-        if attempt.previous().len() >= MAX_REDIRECT_HOPS {
-            return attempt.error("too many redirects");
-        }
-
-        match judge_destination(attempt.url().as_str(), &SystemResolver) {
-            Ok(addresses) => {
-                if let Some(host) = attempt.url().host_str() {
-                    pins.pin(host, addresses);
-                }
-                attempt.follow()
-            }
-            Err(denial) => attempt.error(denial),
-        }
-    })
-}
-
-/// A reqwest client whose request builder cannot be created until the initial
-/// URL is proven public, and whose redirect policy repeats that proof for every
-/// hop. Keeping the inner client private prevents a caller from accidentally
-/// bypassing the first-hop check while reusing the transport.
+/// A reqwest client whose request builder cannot be created until the URL is
+/// proven public. It follows no redirect itself, so every hop the caller sends
+/// goes through [`Self::request`] and is judged and pinned there. Keeping the
+/// inner client private prevents a caller from bypassing that check while
+/// reusing the transport.
 #[derive(Clone)]
 pub struct PublicHttpClient {
     inner: reqwest::Client,
@@ -399,24 +376,6 @@ pub struct PublicHttpClient {
 }
 
 impl PublicHttpClient {
-    /// Build a public-only client with reqwest's standard configuration.
-    pub fn new() -> Self {
-        Self::with_builder(reqwest::Client::builder())
-            .expect("standard public HTTP client configuration must build")
-    }
-
-    /// Build a public-only client while retaining caller-specific settings
-    /// such as timeout or user agent. The redirect policy is always replaced
-    /// with the strict per-hop public policy.
-    pub fn with_builder(builder: reqwest::ClientBuilder) -> Result<Self, reqwest::Error> {
-        let pins = std::sync::Arc::new(PinnedDestinations::default());
-        let inner = builder
-            .redirect(pinned_public_redirect_policy(std::sync::Arc::clone(&pins)))
-            .dns_resolver(PinnedResolver(std::sync::Arc::clone(&pins)))
-            .build()?;
-        Ok(Self { inner, pins })
-    }
-
     /// Build a public-only client that follows no redirect itself. The caller
     /// sends each hop through [`Self::request`], which judges and pins it, and
     /// so decides what a hop may carry, such as dropping credentials when the
@@ -456,32 +415,6 @@ impl PublicHttpClient {
 
     pub fn pinned_addresses(&self, host: &str) -> Option<Vec<IpAddr>> {
         self.pins.pinned(host)
-    }
-
-    pub fn get(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        self.request(reqwest::Method::GET, url)
-    }
-
-    pub fn post(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        self.request(reqwest::Method::POST, url)
-    }
-
-    pub fn put(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        self.request(reqwest::Method::PUT, url)
-    }
-
-    pub fn patch(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        self.request(reqwest::Method::PATCH, url)
-    }
-
-    pub fn delete(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
-        self.request(reqwest::Method::DELETE, url)
-    }
-}
-
-impl Default for PublicHttpClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -808,7 +741,8 @@ mod tests {
     #[test]
     fn public_client_pins_the_addresses_it_validated() {
         let resolver = StubResolver::new(&[("api.agiworkforce.com", "216.198.79.1")]);
-        let client = PublicHttpClient::new();
+        let client = PublicHttpClient::without_redirects(reqwest::Client::builder())
+            .expect("client builds");
 
         let _request = client
             .request_with_resolver(
@@ -856,9 +790,10 @@ mod tests {
 
     #[test]
     fn public_client_refuses_an_internal_initial_url_before_building_a_request() {
-        let client = PublicHttpClient::new();
+        let client = PublicHttpClient::without_redirects(reqwest::Client::builder())
+            .expect("client builds");
         assert!(matches!(
-            client.get("http://127.0.0.1/latest/meta-data/"),
+            client.request(reqwest::Method::GET, "http://127.0.0.1/latest/meta-data/"),
             Err(EgressDenial::InternalDestination(_))
         ));
     }

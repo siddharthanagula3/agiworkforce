@@ -6000,9 +6000,8 @@ fn apply_migration_v74(conn: &Connection) -> Result<()> {
 }
 
 /// Migration v75: Add `project_id` to conversations for local project scoping
-/// ("AGI Work"). DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam A: TauriRuntime has
-/// always sent `projectId` on conversation create, but there was no column to
-/// persist it into. Nullable TEXT referencing `projects.id`; NULL = unscoped.
+/// ("AGI Work"). TauriRuntime sends `projectId` on conversation create, and
+/// this is the column it is persisted into. Nullable TEXT referencing `projects.id`; NULL = unscoped.
 /// No FK constraint, `projects` rows are soft-deletable and a dangling scope
 /// must degrade to "no project context", not block conversation reads.
 fn apply_migration_v75(conn: &Connection) -> Result<()> {
