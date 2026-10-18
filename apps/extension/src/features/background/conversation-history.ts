@@ -167,6 +167,7 @@ export interface BackgroundTurn {
   timestamp?: number;
   deliveryId?: string;
   runtime?: ConversationRuntime;
+  answeredModel?: string;
 }
 
 export interface BackgroundTurnAppendResult {
@@ -1162,10 +1163,12 @@ export async function appendBackgroundTurn(
   if (answer.length === 0) return undefined;
 
   const at = turn.timestamp ?? Date.now();
-  const assistantModel =
-    routing.currentModelKey && routing.currentModelKey !== 'auto'
-      ? getModelMetadataById(routing.currentModelKey)
-      : undefined;
+  const answeringModel =
+    turn.answeredModel ??
+    (routing.currentModelKey && routing.currentModelKey !== 'auto'
+      ? routing.currentModelKey
+      : undefined);
+  const assistantModel = answeringModel ? getModelMetadataById(answeringModel) : undefined;
   const appended: HistoryMessage[] = [
     {
       role: 'user',

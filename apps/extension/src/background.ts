@@ -1867,6 +1867,7 @@ async function resumeScheduledTaskJournal(
             ...(state.journal.routing.effort ? { effort: state.journal.routing.effort } : {}),
           }
         : undefined,
+      state.journal.routing?.answeredModel,
     );
     deliveryFailure = !stored;
   }
@@ -5827,6 +5828,7 @@ async function handleChatMessage(
         owner,
         answer,
         routing ? { selectedModel: 'auto', currentModelKey: routing.modelKey } : undefined,
+        routing?.answeredModel,
       );
       if (!stored) {
         const message = 'The background answer could not be proven durable.';

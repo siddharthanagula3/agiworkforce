@@ -169,6 +169,11 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import {
+  applyResolvedRoute,
+  resolvedRouteFrom,
+  type ResolvedRoute,
+} from './features/side-panel/answeredModel';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
 import {
   expandPromptShortcut,
@@ -827,6 +832,7 @@ interface ChatChunk {
     taskType: RoutingTaskType;
     reason: string;
     effort?: Effort;
+    answeredModel?: string;
   };
 }
 
@@ -971,16 +977,8 @@ function previousAnswerModel(streamId: string): string | undefined {
 
 function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
-  const metadata = getModelMetadataById(routing.modelKey);
-  if (!metadata) return false;
-  const chosenByAuto = routing.reason !== 'explicit';
-  const movedFrom = chosenByAuto ? previousAnswerModel(streamId) : undefined;
-  const route: ResolvedRoute = {
-    model: metadata.id,
-    provider: metadata.provider,
-    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
-    ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
-  };
+  const route = resolvedRouteFrom(routing, () => previousAnswerModel(streamId));
+  if (!route) return false;
   resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
@@ -990,13 +988,7 @@ function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): 
 
 function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   const route = resolvedRouteByStreamId.get(streamId);
-  if (!route) return;
-  assistant.model = route.model;
-  assistant.provider = route.provider;
-  if (route.autoRouteReason) assistant.autoRouteReason = route.autoRouteReason;
-  else delete assistant.autoRouteReason;
-  if (route.movedFromModel) assistant.movedFromModel = route.movedFromModel;
-  else delete assistant.movedFromModel;
+  if (route) applyResolvedRoute(assistant, route);
 }
 
 function managedQuickModeActive(): boolean {
@@ -1142,13 +1134,6 @@ interface ComposerAttachmentIntake {
 const composerAttachmentIntakes = new Set<ComposerAttachmentIntake>();
 const composerAttachmentReads = new Map<FileReader, () => void>();
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-interface ResolvedRoute {
-  model: string;
-  provider: string;
-  autoRouteReason?: string;
-  movedFromModel?: string;
-}
-
 const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
@@ -8402,6 +8387,7 @@ function handleStreamError(
       : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
+  const failedRoute = resolvedRouteByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
@@ -8435,6 +8421,7 @@ function handleStreamError(
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
+    if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
     // cloud-ineligible (isCloudPersistenceEligible requires every message to be
     // managed-cloud); this turn is managed-cloud, so mark it as such.

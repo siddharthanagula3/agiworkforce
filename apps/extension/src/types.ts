@@ -547,6 +547,7 @@ export interface ChromeManagedRoutingMetadata {
   taskType: RoutingTaskType;
   reason: string;
   effort?: Effort;
+  answeredModel?: string;
 }
 
 export interface ResumeChatRunMessage extends BaseMessage {

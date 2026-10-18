@@ -64,6 +64,7 @@ export async function recordBackgroundChatResult(
   owner: ManagedCloudOwner,
   answer: string,
   routing?: ConversationRoutingState,
+  answeredModel?: string,
 ): Promise<ConversationEntry | undefined> {
   const entry = await appendBackgroundTurn(
     owner,
@@ -74,6 +75,7 @@ export async function recordBackgroundChatResult(
       answer,
       ...(delivery.deliveryId ? { deliveryId: delivery.deliveryId } : {}),
       runtime: 'managed-cloud',
+      ...(answeredModel ? { answeredModel } : {}),
     },
     routing,
   );

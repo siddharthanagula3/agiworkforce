@@ -166,6 +166,7 @@ function makeErrorResponse(status: number, bodyText: string): Response {
   return {
     ok: false,
     status,
+    headers: new Headers(),
     body: null,
     text: vi.fn().mockResolvedValue(bodyText),
   } as unknown as Response;
