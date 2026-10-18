@@ -138,13 +138,8 @@ export {
   DEVELOPER_AGENT_MODE_LABELS,
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-  MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-  developerAgentModeApprovesWithoutAsking,
-  developerSessionUpgradeTarget,
-  isDeveloperAgentModeReadOnly,
-  negotiateDeveloperSessionProtocol,
   normalizeDeveloperAgentMode,
   DEVELOPER_UNNAMED_TURN_AGENT_MODE,
   remoteTurnAgentMode,
@@ -153,11 +148,7 @@ export {
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
 } from './developer-session';
-export type {
-  DeveloperAgentMode,
-  DeveloperSessionNegotiation,
-  DeveloperReasoningEffort,
-} from './developer-session';
+export type { DeveloperAgentMode, DeveloperReasoningEffort } from './developer-session';
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
@@ -207,7 +198,7 @@ export type {
 export { APPLICATION_COMMANDS } from './apps';
 export type { ApplicationCommand, ApplicationOpenResult } from './apps';
 
-export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH, isEmptyClipboard } from './clipboard';
+export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH } from './clipboard';
 export type { ClipboardCommand, ClipboardImage, ClipboardSnapshot } from './clipboard';
 
 export {

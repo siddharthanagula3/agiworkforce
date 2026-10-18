@@ -34,15 +34,6 @@ export function mergeCloudArtifacts(
   return [...byId.values()];
 }
 
-export function isDerivedArtifact(a: SharedArtifact): boolean {
-  return a.metadata?.['derived'] === true;
-}
-
-export function selectArtifactsToPush(artifacts: ReadonlyArray<SharedArtifact>): SharedArtifact[] {
-  return artifacts.filter((a) => !isDerivedArtifact(a));
-}
-
-// is now defined once as a Zod schema in @agiworkforce/cloud-contracts; re-exported here
 export type { ArtifactWireDelta };
 
 export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {

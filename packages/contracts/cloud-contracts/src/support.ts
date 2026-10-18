@@ -35,10 +35,6 @@ export function supportTicketPath(ticketId: string): string {
   return `${SUPPORT_TICKETS_PATH}/${encodeURIComponent(ticketId)}`;
 }
 
-export function supportTicketEscalatePath(ticketId: string): string {
-  return `${supportTicketPath(ticketId)}/escalate`;
-}
-
 export function supportStaffTicketPath(ticketId: string): string {
   return `${SUPPORT_STAFF_TICKETS_PATH}/${encodeURIComponent(ticketId)}`;
 }
@@ -74,13 +70,6 @@ export const SUPPORT_ABSTENTION_REASONS = [
 ] as const;
 
 export type SupportAbstentionReason = (typeof SUPPORT_ABSTENTION_REASONS)[number];
-
-export const SUPPORT_HARD_ABSTAIN_REASONS = [
-  'hard_abstain_billing',
-  'hard_abstain_data_deletion',
-  'hard_abstain_security',
-  'hard_abstain_legal',
-] as const;
 
 export interface SupportAnswerView {
   kind: 'answer';
@@ -393,10 +382,6 @@ export function isTicketStatus(value: unknown): value is TicketStatus {
   return typeof value === 'string' && (TICKET_STATUSES as readonly string[]).includes(value);
 }
 
-export function isTicketPriority(value: unknown): value is TicketPriority {
-  return typeof value === 'string' && (TICKET_PRIORITIES as readonly string[]).includes(value);
-}
-
 export interface SupportTicket {
   id: string;
   subject: string;
@@ -433,10 +418,6 @@ export function severityForPriority(priority: TicketPriority): EscalationSeverit
 
 export function pagesOnCall(severity: EscalationSeverity): boolean {
   return severity === 'p0' || severity === 'p1';
-}
-
-export function isEscalationTracker(value: unknown): value is EscalationTracker {
-  return typeof value === 'string' && (ESCALATION_TRACKERS as readonly string[]).includes(value);
 }
 
 export interface TicketEscalation {

@@ -91,15 +91,6 @@ export const PLUGIN_MARKETPLACE_SOURCE_KINDS: readonly PluginMarketplaceSourceKi
   'authored',
 ] as const;
 
-export function isPluginMarketplaceSourceKind(
-  value: unknown,
-): value is PluginMarketplaceSourceKind {
-  return (
-    typeof value === 'string' &&
-    (PLUGIN_MARKETPLACE_SOURCE_KINDS as readonly string[]).includes(value)
-  );
-}
-
 export type PluginMarketplaceSourceStatus = 'active' | 'error';
 
 export const PLUGIN_MARKETPLACE_SOURCE_STATUSES: readonly PluginMarketplaceSourceStatus[] = [

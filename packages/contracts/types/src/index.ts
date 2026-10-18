@@ -319,7 +319,6 @@ export {
   BROWSER_SELECTION_ORDER,
   BROWSER_SITE_ACCESS,
   broadensSiteAccess,
-  browserSessionLabel,
   browserSiteAccess,
   browserSiteAccessRank,
   selectBrowser,

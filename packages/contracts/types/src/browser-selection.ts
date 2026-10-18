@@ -99,10 +99,6 @@ const LABELS: Readonly<Record<BrowserSessionKind, string>> = {
   cloud: 'the cloud browser',
 };
 
-export function browserSessionLabel(kind: BrowserSessionKind): string {
-  return LABELS[kind];
-}
-
 function candidateOrder(requested: BrowserSessionKind | null): readonly BrowserSessionKind[] {
   if (!requested) return BROWSER_SELECTION_ORDER;
   return [requested, ...BROWSER_SELECTION_ORDER.filter((kind) => kind !== requested)];

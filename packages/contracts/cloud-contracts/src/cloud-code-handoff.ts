@@ -5,9 +5,7 @@ import type {
   HandoffAdmission,
   HandoffRefusal,
 } from '@agiworkforce/types/protocol';
-import { CLOUD_CODE_SESSIONS_PATH, CloudCodeSessionSchema } from './cloud-code-sessions';
-
-export const CLOUD_CODE_HANDOFF_PATH = `${CLOUD_CODE_SESSIONS_PATH}/handoff`;
+import { CloudCodeSessionSchema } from './cloud-code-sessions';
 
 export const CLOUD_CODE_HANDOFF_MAX_AGE_SECONDS = 15 * 60;
 

@@ -6,15 +6,10 @@ import {
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-  MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
-  developerAgentModeApprovesWithoutAsking,
-  developerSessionUpgradeTarget,
-  isDeveloperAgentModeReadOnly,
-  negotiateDeveloperSessionProtocol,
   normalizeDeveloperAgentMode,
   remoteTurnAgentMode,
 } from '../developer-session';
@@ -52,7 +47,6 @@ describe('developer-session protocol versions', () => {
       .map((part) => Number(part.trim()))
       .filter((value) => Number.isFinite(value));
     expect(supported).toEqual([...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS]);
-    expect(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION).toBe(supported![supported!.length - 1]);
 
     const errorCode = rustContract.match(
       /pub const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE: i32 = (-?\d+);/u,
@@ -125,56 +119,5 @@ describe('permission postures', () => {
     expect(normalizeDeveloperAgentMode('')).toBeNull();
     expect(normalizeDeveloperAgentMode(null)).toBeNull();
     expect(normalizeDeveloperAgentMode(undefined)).toBeNull();
-  });
-
-  it('says which postures may act without asking', () => {
-    expect(developerAgentModeApprovesWithoutAsking('ask')).toBe(false);
-    expect(developerAgentModeApprovesWithoutAsking('plan')).toBe(false);
-    expect(developerAgentModeApprovesWithoutAsking('auto')).toBe(true);
-    expect(developerAgentModeApprovesWithoutAsking('bypass')).toBe(true);
-    expect(isDeveloperAgentModeReadOnly('plan')).toBe(true);
-    expect(isDeveloperAgentModeReadOnly('auto')).toBe(false);
-  });
-});
-
-describe('handshake compatibility', () => {
-  it('agrees with a client one version behind, so a new runtime does not drop it', () => {
-    expect(negotiateDeveloperSessionProtocol(DEVELOPER_SESSION_PROTOCOL_VERSION)).toEqual({
-      outcome: 'agreed',
-      protocolVersion: DEVELOPER_SESSION_PROTOCOL_VERSION,
-    });
-    expect(negotiateDeveloperSessionProtocol(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION)).toEqual({
-      outcome: 'agreed',
-      protocolVersion: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    });
-  });
-
-  it('answers a pre-negotiation client the version it pins', () => {
-    expect(negotiateDeveloperSessionProtocol(undefined)).toEqual({
-      outcome: 'legacy',
-      protocolVersion: LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    });
-  });
-
-  it('names which side must upgrade instead of failing with prose', () => {
-    const tooOld = negotiateDeveloperSessionProtocol(
-      MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1,
-    );
-    expect(tooOld).toEqual({
-      outcome: 'unsupported',
-      requestedProtocolVersion: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1,
-      supportedProtocolVersions: [...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS],
-      minimumProtocolVersion: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    });
-    expect(developerSessionUpgradeTarget(tooOld)).toBe('client');
-
-    const tooNew = negotiateDeveloperSessionProtocol(DEVELOPER_SESSION_PROTOCOL_VERSION + 1);
-    expect(tooNew.outcome).toBe('unsupported');
-    expect(developerSessionUpgradeTarget(tooNew)).toBe('runtime');
-    expect(
-      developerSessionUpgradeTarget(
-        negotiateDeveloperSessionProtocol(DEVELOPER_SESSION_PROTOCOL_VERSION),
-      ),
-    ).toBeNull();
   });
 });

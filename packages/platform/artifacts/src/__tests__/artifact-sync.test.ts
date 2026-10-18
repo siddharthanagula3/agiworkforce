@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   mergeCloudArtifacts,
-  selectArtifactsToPush,
-  isDerivedArtifact,
   applyArtifactDeltas,
   wireToCloudArtifact,
   type CloudArtifact,
@@ -60,34 +58,6 @@ describe('mergeCloudArtifacts', () => {
     const cloud: CloudArtifact[] = [{ ...art({ id: 'a1' }), deletedAt: null }];
     const merged = mergeCloudArtifacts([], cloud);
     expect('deletedAt' in (merged[0] as object)).toBe(false);
-  });
-});
-
-describe('selectArtifactsToPush', () => {
-  it('pushes only non-derived (edited / first-class) artifacts', () => {
-    const items = [
-      art({ id: 'derived', metadata: { derived: true } }),
-      art({ id: 'edited', metadata: { derived: false } }),
-      art({ id: 'authored', metadata: {} }),
-    ];
-    expect(
-      selectArtifactsToPush(items)
-        .map((a) => a.id)
-        .sort(),
-    ).toEqual(['authored', 'edited']);
-  });
-
-  it('never pushes derived artifacts (re-derivable everywhere)', () => {
-    const items = [art({ id: 'd1' }), art({ id: 'd2' })];
-    expect(selectArtifactsToPush(items)).toEqual([]);
-  });
-});
-
-describe('isDerivedArtifact', () => {
-  it('reads metadata.derived', () => {
-    expect(isDerivedArtifact(art({ metadata: { derived: true } }))).toBe(true);
-    expect(isDerivedArtifact(art({ metadata: { derived: false } }))).toBe(false);
-    expect(isDerivedArtifact(art({ metadata: {} }))).toBe(false);
   });
 });
 

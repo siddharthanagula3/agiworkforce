@@ -6,6 +6,10 @@
  * of truth; the test beside this file fails if the two drift.
  */
 
+import {
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+} from '@agiworkforce/types';
 import type { DeveloperAgentMode, DeveloperReasoningEffort } from '@agiworkforce/types/protocol';
 
 export type { DeveloperAgentMode, DeveloperReasoningEffort };
@@ -87,22 +91,12 @@ export const DEVELOPER_REASONING_EFFORT_LABELS: Record<DeveloperReasoningEffort,
   max: 'Max',
 };
 
-export function developerAgentModeApprovesWithoutAsking(mode: DeveloperAgentMode): boolean {
-  return mode === 'auto' || mode === 'bypass';
-}
-
-export function isDeveloperAgentModeReadOnly(mode: DeveloperAgentMode): boolean {
-  return mode === 'plan';
-}
-
-export const DEVELOPER_SESSION_PROTOCOL_VERSION = 8;
-export const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS = [8, 7] as const;
+export { DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE };
 export const LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION = 7;
-export const MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION =
-  SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS[
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.length - 1
-  ]!;
-export const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE = -32005;
+export const SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS = [
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+] as const;
 /** JSON-RPC code of a request refused because another program holds the thread's writer lease. */
 export const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
 /**
@@ -111,46 +105,3 @@ export const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
  * for the launch as it is now.
  */
 export const MCP_APPROVAL_STALE_ERROR_CODE = -32012;
-
-export type DeveloperSessionNegotiation =
-  | { outcome: 'agreed'; protocolVersion: number }
-  | { outcome: 'legacy'; protocolVersion: number }
-  | {
-      outcome: 'unsupported';
-      requestedProtocolVersion: number;
-      supportedProtocolVersions: number[];
-      minimumProtocolVersion: number;
-    };
-
-/**
- * The one compatibility rule behind every surface pairing. A newer server keeps
- * answering an older client while its version stays supported: the added
- * methods are additive and an older client never calls them, which is how a new
- * backend feature degrades gracefully instead of dropping the session.
- */
-export function negotiateDeveloperSessionProtocol(
-  requested: number | null | undefined,
-): DeveloperSessionNegotiation {
-  if (requested === null || requested === undefined) {
-    return { outcome: 'legacy', protocolVersion: LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION };
-  }
-  if ((SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS as readonly number[]).includes(requested)) {
-    return { outcome: 'agreed', protocolVersion: requested };
-  }
-  return {
-    outcome: 'unsupported',
-    requestedProtocolVersion: requested,
-    supportedProtocolVersions: [...SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS],
-    minimumProtocolVersion: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-  };
-}
-
-/** Which side the user must upgrade when a handshake is refused. */
-export function developerSessionUpgradeTarget(
-  negotiation: DeveloperSessionNegotiation,
-): 'client' | 'runtime' | null {
-  if (negotiation.outcome !== 'unsupported') return null;
-  return negotiation.requestedProtocolVersion < negotiation.minimumProtocolVersion
-    ? 'client'
-    : 'runtime';
-}

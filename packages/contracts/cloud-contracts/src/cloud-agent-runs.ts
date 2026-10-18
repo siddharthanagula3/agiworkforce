@@ -36,8 +36,6 @@ export const CloudAgentPendingApprovalSchema = z.object({
     .max(32),
 });
 
-export const MAX_CLOUD_AGENT_PENDING_INPUT_REQUESTS_SERIALIZED_LENGTH = 16_000;
-
 // The paused model-driven connector calls a run is blocked on (MCP
 // `input_required`). `inputRequests` are the remote server's own, UNTRUSTED
 // field definitions the host has already bounded (count/size) before persisting;

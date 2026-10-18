@@ -23,7 +23,3 @@ export interface ClipboardSnapshot {
   image?: ClipboardImage;
   textTruncated: boolean;
 }
-
-export function isEmptyClipboard(snapshot: ClipboardSnapshot): boolean {
-  return !snapshot.image && (snapshot.text ?? '') === '';
-}
