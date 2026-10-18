@@ -14,6 +14,7 @@ import {
 import {
   SCHEDULES_SECTION_CSS,
   buildSchedulesSection,
+  takeScheduleDraft,
 } from './features/side-panel/schedulesSection';
 import { getExtensionTokensCssAuto } from './tokens';
 import {
@@ -2066,7 +2067,22 @@ function buildPage(): void {
   shell.appendChild(page);
   document.body.appendChild(shell);
 
-  showSettingsSection(navItems[0]!.target, false);
+  const hashTarget = (): string | null => {
+    const target = location.hash.slice(1);
+    return navItems.some((item) => item.target === target) ? target : null;
+  };
+  showSettingsSection(hashTarget() ?? navItems[0]!.target, false);
+  window.addEventListener('hashchange', () => {
+    const target = hashTarget();
+    if (target) showSettingsSection(target);
+  });
+  void takeScheduleDraft()
+    .then((draft) => {
+      if (!draft) return;
+      showSettingsSection('opt-shortcuts');
+      schedules.openWithDraft(draft);
+    })
+    .catch((error) => console.warn('[Options] schedule draft failed:', error));
   void beginOptionsAccountRefresh(
     getAuthToken,
     ({ signedIn, unavailable, loading }) => renderAccountRow(signedIn, unavailable, loading),

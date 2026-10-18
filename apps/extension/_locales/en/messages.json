@@ -3560,6 +3560,14 @@
     "message": "Unpair",
     "description": "Button that disconnects the desktop app. Pairing again restores it."
   },
+  "optPairingUnpairConfirm": {
+    "message": "Unpair the desktop app? Browser actions that run through Desktop stop working until you pair again.",
+    "description": "Question shown before disconnecting the desktop app, naming what stops working and that pairing again restores it."
+  },
+  "optPairingUnpairCancel": {
+    "message": "Keep paired",
+    "description": "Button that dismisses the unpair question and leaves the desktop app paired."
+  },
   "welcomeTitle": {
     "message": "Welcome to AGI",
     "description": "Heading of the post-install page."

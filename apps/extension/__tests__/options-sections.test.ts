@@ -266,6 +266,12 @@ describe('desktop pairing rows', () => {
     expect(unpairButton.hidden).toBe(false);
     expect(rows.element.querySelector<HTMLButtonElement>('#opt-pair-btn')!.hidden).toBe(true);
     unpairButton.click();
+    expect(rows.element.querySelector<HTMLElement>('#opt-unpair-confirm')!.hidden).toBe(false);
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-cancel-btn')!.click();
+    expect(rows.element.querySelector<HTMLElement>('#opt-unpair-confirm')!.hidden).toBe(true);
+    expect(unpairButton.hidden).toBe(false);
+    unpairButton.click();
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-confirm-btn')!.click();
     await flush();
     expect(unpairButton.hidden).toBe(true);
     expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');

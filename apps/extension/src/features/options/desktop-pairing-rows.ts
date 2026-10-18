@@ -74,7 +74,32 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
     t('spPairingCodeSubmit'),
   );
   codeRow.append(codeText, el('div', { class: 'opt-row-side' }, code, codeSubmit));
-  element.append(stateRow, codeRow);
+  const confirmRow = el('div', {
+    class: 'opt-row',
+    id: 'opt-unpair-confirm',
+    role: 'alertdialog',
+    'aria-labelledby': 'opt-unpair-confirm-text',
+  });
+  confirmRow.hidden = true;
+  const confirmUnpair = el(
+    'button',
+    { class: 'opt-btn-danger', id: 'opt-unpair-confirm-btn', type: 'button' },
+    t('optPairingUnpair'),
+  );
+  const cancelUnpair = el(
+    'button',
+    { class: 'opt-btn-secondary', id: 'opt-unpair-cancel-btn', type: 'button' },
+    t('optPairingUnpairCancel'),
+  );
+  confirmRow.append(
+    el(
+      'div',
+      { class: 'opt-row-hint', id: 'opt-unpair-confirm-text' },
+      t('optPairingUnpairConfirm'),
+    ),
+    el('div', { class: 'opt-row-side' }, cancelUnpair, confirmUnpair),
+  );
+  element.append(stateRow, confirmRow, codeRow);
 
   const apply = (state: PairingState): void => {
     error.textContent = '';
@@ -88,6 +113,7 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
     pair.hidden = state.phase === 'paired' || awaiting;
     pair.disabled = state.phase === 'requesting';
     unpairButton.hidden = state.phase !== 'paired';
+    if (state.phase !== 'paired') confirmRow.hidden = true;
     switch (state.phase) {
       case 'idle':
         label.textContent = t('spPairingIdle');
@@ -136,12 +162,23 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
     void api.submitPairingCode(code.value).then(apply);
   });
   unpairButton.addEventListener('click', () => {
-    unpairButton.disabled = true;
+    confirmRow.hidden = false;
+    unpairButton.hidden = true;
+    cancelUnpair.focus();
+  });
+  cancelUnpair.addEventListener('click', () => {
+    confirmRow.hidden = true;
+    unpairButton.hidden = false;
+    unpairButton.focus();
+  });
+  confirmUnpair.addEventListener('click', () => {
+    confirmUnpair.disabled = true;
     void api
       .unpair()
       .then(apply)
       .finally(() => {
-        unpairButton.disabled = false;
+        confirmUnpair.disabled = false;
+        confirmRow.hidden = true;
       });
   });
 
