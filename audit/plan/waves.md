@@ -16,7 +16,6 @@ Fix these first. Each file is one defect; delete it when the fix lands and its
 ledger cells are updated.
 
 - [14-desktop-and-vscode-need-unpublished-cli.md](../blockers/14-desktop-and-vscode-need-unpublished-cli.md)
-- [20-mobile-image-stop-keeps-billing.md](../blockers/20-mobile-image-stop-keeps-billing.md)
 - [30-product-definition-p0-gaps.md](../blockers/30-product-definition-p0-gaps.md)
 - [31-database-backup-restore-open-gaps.md](../blockers/31-database-backup-restore-open-gaps.md)
 - [32-incident-response-open-gaps.md](../blockers/32-incident-response-open-gaps.md)
