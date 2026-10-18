@@ -8,11 +8,7 @@ import {
 } from './neon-migrations.mjs';
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
-const DEFAULT_SOURCE_ROOTS = [
-  'apps/web/app/api',
-  'services/api-gateway/src/routes',
-  'services/api-gateway/src/websocket.ts',
-];
+const DEFAULT_SOURCE_ROOTS = ['apps/web/app/api'];
 
 function walkSourceFiles(path) {
   if (!existsSync(path)) return [];

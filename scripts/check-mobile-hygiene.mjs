@@ -56,7 +56,6 @@ const forbiddenMovedImports = [
 const uiDirectIoBaseline = new Set([
   'apps/mobile/app/_layout.tsx',
   'apps/mobile/app/(auth)/reset-password.tsx',
-  'apps/mobile/app/(app)/usage.tsx',
   'apps/mobile/app/(app)/profile/index.tsx',
   'apps/mobile/app/(app)/companion/index.tsx',
   'apps/mobile/app/(app)/(tabs)/chat.tsx',
@@ -71,7 +70,6 @@ const serviceStoreImportBaseline = new Set([
   'apps/mobile/services/cloudSettingsMapping.ts',
   'apps/mobile/services/companion.ts',
   'apps/mobile/services/companionNotifications.ts',
-  'apps/mobile/services/realtime.ts',
   'apps/mobile/services/notificationGate.ts',
   'apps/mobile/services/pushPreferenceSync.ts',
 ]);

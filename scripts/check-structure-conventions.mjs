@@ -326,26 +326,20 @@ for (const docName of retiredTopLevelDocs) {
 
 const activeReferencePaths = [
   'README.md',
-  'ONBOARDING.md',
-  'AGI_WORKFORCE.md',
   'docs/README.md',
   ...walk('docs/decisions'),
   ...walk('docs/development'),
   ...walk('docs/research'),
   ...walk('docs/architecture'),
   ...walk('docs/compliance'),
-  ...walk('docs/development'),
   ...walk('docs/product'),
   ...walk('docs/specs'),
   ...walk('docs/standards'),
   'apps/mobile/README.md',
-  'packages/platform/data-layer/README.md',
   ...walk('packages/platform/data-layer/src'),
   ...walk('packages/ui/unified-chat/src'),
   'apps/web/app/api/me/route.ts',
-  'apps/desktop/src-tauri/src/sys/commands/migration.rs',
   'apps/extension/docs/threat-model.md',
-  'apps/mobile/src/features/onboarding/components/ByokConsentModal.tsx',
 ].filter((file, index, all) => exists(file) && all.indexOf(file) === index);
 
 for (const file of activeReferencePaths) {
@@ -761,7 +755,6 @@ const userFacingCliDocs = [
   'README.md',
   'apps/cli/README.md',
   'apps/cli/scripts/demo.sh',
-  'docs/surfaces/cli.md',
   'docs/development/agent-operability.md',
   'docs/standards/naming-conventions.md',
   'docs/decisions/README.md',
@@ -781,15 +774,11 @@ for (const file of userFacingCliDocs) {
 }
 
 const workspaceFilterFiles = [
-  'BUILD.md',
   'vercel.json',
   '.github/workflows/ci.yml',
-  'infrastructure/sandbox/README.md',
-  'apps/web/scripts/build-chat-spa.sh',
   'apps/web/scripts/build-with-chat.sh',
   'scripts/verify-surfaces.sh',
   'scripts/launch-verify.sh',
-  'docs/surfaces/web.md',
 ].filter(exists);
 
 for (const file of workspaceFilterFiles) {

@@ -17,7 +17,7 @@ export const COOKIE_ROOTS = [
   'apps/web/app',
   'apps/web/lib',
   'apps/web/features',
-  'apps/web/middleware.ts',
+  'apps/web/proxy.ts',
   'packages/platform/identity/src',
 ];
 
