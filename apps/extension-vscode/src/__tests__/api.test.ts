@@ -20,7 +20,7 @@ import {
   getAccountToken,
   getApiKey,
   getAccountRefreshToken,
-  getCloudGatewayOrigin,
+  getCloudWebOrigin,
   parseCloudCompletionError,
   parseAccountIdentityResponse,
   parseTierInfoResponse,
@@ -942,8 +942,8 @@ describe('managed chat Idempotency-Key wiring', () => {
   });
 });
 
-describe('getCloudGatewayOrigin', () => {
+describe('getCloudWebOrigin', () => {
   it('uses the configured trusted web origin for account-token revocation', () => {
-    expect(getCloudGatewayOrigin()).toBe('https://agiworkforce.com');
+    expect(getCloudWebOrigin()).toBe('https://agiworkforce.com');
   });
 });

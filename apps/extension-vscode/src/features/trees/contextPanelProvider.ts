@@ -5,6 +5,7 @@ import { describeRejection, safeResolveWorkspacePath } from '../../utils/pathSaf
 import { buildInstructionContextSnapshot, type InstructionContextSnapshot } from '../instructions';
 import { projectInstructionFolder } from '../../data/projectInstructions';
 import { resolvedContextWithholdReason } from '../../data/contextExclusion';
+import { inferLanguageFromUri } from '../../data/contextBuilder';
 
 const GROUP_INSTRUCTIONS = 'instructions';
 const GROUP_PINNED = 'pinned';
@@ -341,40 +342,8 @@ export class ContextPanelProvider
   }
 }
 
-const LANG_MAP: Record<string, string> = {
-  ts: 'typescript',
-  tsx: 'typescriptreact',
-  js: 'javascript',
-  jsx: 'javascriptreact',
-  py: 'python',
-  go: 'go',
-  rs: 'rust',
-  java: 'java',
-  cs: 'csharp',
-  cpp: 'cpp',
-  c: 'c',
-  h: 'c',
-  rb: 'ruby',
-  php: 'php',
-  swift: 'swift',
-  kt: 'kotlin',
-  json: 'json',
-  yaml: 'yaml',
-  yml: 'yaml',
-  md: 'markdown',
-  html: 'html',
-  css: 'css',
-  scss: 'scss',
-  less: 'less',
-  sql: 'sql',
-  sh: 'shellscript',
-  bash: 'shellscript',
-  toml: 'toml',
-};
-
 function inferLang(uri: vscode.Uri): string {
-  const ext = uri.fsPath.split('.').pop()?.toLowerCase() ?? '';
-  return LANG_MAP[ext] ?? (ext !== '' ? ext : 'plaintext');
+  return inferLanguageFromUri(uri) || 'plaintext';
 }
 
 function formatFileSize(bytes: number): string {

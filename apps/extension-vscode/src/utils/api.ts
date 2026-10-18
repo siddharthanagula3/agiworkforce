@@ -401,10 +401,6 @@ export function getCloudWebOrigin(): string {
   }
 }
 
-export function getCloudGatewayOrigin(): string {
-  return getCloudWebOrigin();
-}
-
 function getModel(): string {
   return normalizeConfiguredModelId(Config.model());
 }

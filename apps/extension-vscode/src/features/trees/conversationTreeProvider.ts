@@ -12,8 +12,6 @@ import { getAllWorkspaceFolders } from '../../platform/workspaceFolders';
 import { t } from '../../l10n';
 import { isCloudThread } from './cloudSessions';
 
-export { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
-
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly thread: ThreadSummary) {
     super(thread.title, vscode.TreeItemCollapsibleState.None);

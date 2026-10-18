@@ -5,8 +5,8 @@ import {
   ConversationTreeErrorItem,
   ConversationTreeItem,
   ConversationTreeProvider,
-  isSameWorkspacePath,
 } from '../features/trees/conversationTreeProvider';
+import { isSameWorkspacePath } from '../integrations/developerSessionValidation';
 import type { LocalRuntimeClient } from '../integrations/localRuntimeClient';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 

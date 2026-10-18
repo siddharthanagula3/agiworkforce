@@ -16,7 +16,6 @@ import {
   clearAccountToken,
   getAccountRefreshToken,
   getAccountToken,
-  getCloudGatewayOrigin,
   getCloudWebOrigin,
   setAccountToken,
 } from '../../utils/api';
@@ -259,7 +258,7 @@ export async function signOutOfAgiCloud(
     token === undefined && refreshToken === undefined
       ? true
       : await revokeDeviceAuthorization(
-          getCloudGatewayOrigin(),
+          getCloudWebOrigin(),
           {
             ...(token === undefined ? {} : { token }),
             ...(refreshToken === undefined ? {} : { refreshToken }),

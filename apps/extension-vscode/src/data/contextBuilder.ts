@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
+import * as path from 'path';
 import { promisify } from 'util';
 import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 import { redactTelemetryText } from '../core/telemetry';
@@ -35,6 +36,63 @@ export interface DiagnosticEntry {
   line: number;
   column: number;
   source: string;
+}
+
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'typescriptreact',
+  js: 'javascript',
+  jsx: 'javascriptreact',
+  py: 'python',
+  go: 'go',
+  rs: 'rust',
+  java: 'java',
+  cs: 'csharp',
+  cpp: 'cpp',
+  c: 'c',
+  h: 'c',
+  rb: 'ruby',
+  php: 'php',
+  swift: 'swift',
+  kt: 'kotlin',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  md: 'markdown',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  sql: 'sql',
+  sh: 'shellscript',
+  bash: 'shellscript',
+  zsh: 'shellscript',
+  toml: 'toml',
+  xml: 'xml',
+  svg: 'xml',
+  vue: 'vue',
+  svelte: 'svelte',
+  mts: 'typescript',
+  cts: 'typescript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  hpp: 'cpp',
+  hxx: 'cpp',
+  scala: 'scala',
+  groovy: 'groovy',
+  lua: 'lua',
+  r: 'r',
+  dart: 'dart',
+  zig: 'zig',
+  tf: 'terraform',
+  dockerfile: 'dockerfile',
+};
+
+export function inferLanguageFromUri(uri: vscode.Uri): string {
+  const base = path.basename(uri.fsPath).toLowerCase();
+  const dot = base.lastIndexOf('.');
+  const ext = dot === -1 ? base : base.slice(dot + 1);
+  return LANGUAGE_BY_EXTENSION[ext] ?? ext;
 }
 
 export class ContextBuilder {
@@ -75,7 +133,7 @@ export class ContextBuilder {
           const input = tab.input;
           if (input instanceof vscode.TabInputText) {
             const uri = input.uri;
-            const languageId = this._inferLanguageFromUri(uri);
+            const languageId = inferLanguageFromUri(uri);
             entries.push({
               filePath: uri.fsPath,
               relativePath: vscode.workspace.asRelativePath(uri),
@@ -196,60 +254,6 @@ export class ContextBuilder {
     } catch {
       return [];
     }
-  }
-
-  private _inferLanguageFromUri(uri: vscode.Uri): string {
-    const ext = uri.fsPath.split('.').pop()?.toLowerCase() ?? '';
-    const map: Record<string, string> = {
-      ts: 'typescript',
-      tsx: 'typescriptreact',
-      js: 'javascript',
-      jsx: 'javascriptreact',
-      py: 'python',
-      go: 'go',
-      rs: 'rust',
-      java: 'java',
-      cs: 'csharp',
-      cpp: 'cpp',
-      c: 'c',
-      h: 'c',
-      rb: 'ruby',
-      php: 'php',
-      swift: 'swift',
-      kt: 'kotlin',
-      json: 'json',
-      yaml: 'yaml',
-      yml: 'yaml',
-      md: 'markdown',
-      html: 'html',
-      css: 'css',
-      scss: 'scss',
-      less: 'less',
-      sql: 'sql',
-      sh: 'shellscript',
-      bash: 'shellscript',
-      zsh: 'shellscript',
-      toml: 'toml',
-      xml: 'xml',
-      svg: 'xml',
-      vue: 'vue',
-      svelte: 'svelte',
-      mts: 'typescript',
-      cts: 'typescript',
-      mjs: 'javascript',
-      cjs: 'javascript',
-      hpp: 'cpp',
-      hxx: 'cpp',
-      scala: 'scala',
-      groovy: 'groovy',
-      lua: 'lua',
-      r: 'r',
-      dart: 'dart',
-      zig: 'zig',
-      tf: 'terraform',
-      dockerfile: 'dockerfile',
-    };
-    return map[ext] ?? ext;
   }
 
   private _severityToString(severity: vscode.DiagnosticSeverity): DiagnosticEntry['severity'] {
