@@ -395,11 +395,17 @@
     "memoriesAdded_few": "أُضيفت {{count}} ذكريات",
     "memoriesAdded_many": "أُضيف {{count}} ذكرى",
     "memoriesAdded_other": "أُضيف {{count}} ذكرى",
-    "factsFound_zero": "لم يُعثر على حقائق في {{source}}.",
-    "factsFound_one": "عُثر على حقيقة واحدة في {{source}}.",
-    "factsFound_two": "عُثر على حقيقتين في {{source}}.",
-    "factsFound_few": "عُثر على {{count}} حقائق في {{source}}.",
-    "factsFound_many": "عُثر على {{count}} حقيقة في {{source}}.",
-    "factsFound_other": "عُثر على {{count}} حقيقة في {{source}}."
+    "memoriesFound_zero": "لم يُعثر على ذكريات",
+    "memoriesFound_one": "عُثر على ذكرى واحدة",
+    "memoriesFound_two": "عُثر على ذكريين",
+    "memoriesFound_few": "عُثر على {{count}} ذكريات",
+    "memoriesFound_many": "عُثر على {{count}} ذكرى",
+    "memoriesFound_other": "عُثر على {{count}} ذكرى",
+    "memoriesSelected_zero": "لا توجد ذكريات للاستيراد",
+    "memoriesSelected_one": "استيراد ذكرى واحدة",
+    "memoriesSelected_two": "استيراد ذكريين",
+    "memoriesSelected_few": "استيراد {{count}} ذكريات",
+    "memoriesSelected_many": "استيراد {{count}} ذكرى",
+    "memoriesSelected_other": "استيراد {{count}} ذكرى"
   }
 }

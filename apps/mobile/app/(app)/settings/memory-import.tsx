@@ -1,192 +1,163 @@
-import { useCallback, useState } from 'react';
-import { View, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, ScrollView, TextInput } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  Square,
+  CheckSquare,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { useThemeColors, motion } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useMemoryStore } from '@/src/features/memory/store';
-import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
+import {
+  ImportTextTooLargeError,
+  MAX_IMPORT_TEXT_CHARS,
+  MEMORY_IMPORT_SOURCES,
+  previewMemoryImport,
+  type MemoryImportPreview,
+  type MemoryImportSource,
+} from '@/src/features/memory/services/memoryImport';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { translatePlural } from '@/src/i18n/plural';
+import { toUserMessage } from '@/services/userMessage';
 
-type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
+type ImportStep = 'compose' | 'preview' | 'done';
 
-interface ImportState {
-  status: ImportStatus;
-  fileName: string | null;
-  source: ImportSource | null;
-  factsFound: number;
-  inserted: number;
-  skipped: number;
-  errorMessage: string | null;
-}
-
-const SOURCE_LABELS: Record<ImportSource, string> = {
-  chatgpt: 'Conversation export',
-  claude: 'Assistant export',
-  gemini: 'Google export',
-  text: 'Plain text / Notes',
-};
-
-const SOURCE_DESCRIPTIONS: Record<ImportSource, string> = {
-  chatgpt: 'JSON conversation file such as conversations.json or export.json',
-  claude: 'JSON assistant conversation export',
-  gemini: 'Google Takeout conversation export',
-  text: 'Any .txt or .md file with notes, one per line or paragraph',
-};
-
-const IMPORT_SOURCES: ImportSource[] = ['chatgpt', 'claude', 'gemini', 'text'];
+const IMPORT_FILE_TYPES = ['text/plain', 'text/markdown', 'application/json'];
 
 export default function MemoryImportScreen() {
   const colors = useThemeColors();
-  const { bulkInsert } = useMemoryStore();
+  const bulkInsert = useMemoryStore((s) => s.bulkInsert);
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const goBackToMemory = useGoBack('/(app)/settings/memory');
 
-  const [state, setState] = useState<ImportState>({
-    status: 'idle',
-    fileName: null,
-    source: null,
-    factsFound: 0,
-    inserted: 0,
-    skipped: 0,
-    errorMessage: null,
-  });
+  const [step, setStep] = useState<ImportStep>('compose');
+  const [source, setSource] = useState<MemoryImportSource>('ChatGPT');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<MemoryImportPreview | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
 
-  const handlePickFile = useCallback(async () => {
-    setState((s) => ({ ...s, status: 'picking', errorMessage: null }));
-
-    let result: DocumentPicker.DocumentPickerResult;
+  const handleChooseFile = useCallback(async () => {
+    setError(null);
+    let picked: DocumentPicker.DocumentPickerResult;
     try {
-      result = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/plain', 'text/markdown', '*/*'],
+      picked = await DocumentPicker.getDocumentAsync({
+        type: IMPORT_FILE_TYPES,
         copyToCacheDirectory: true,
         multiple: false,
       });
     } catch {
-      setState((s) => ({ ...s, status: 'idle' }));
+      setError('The file picker could not open. Paste the text instead.');
       return;
     }
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      setState((s) => ({ ...s, status: 'idle' }));
+    const asset = picked.canceled ? undefined : picked.assets?.[0];
+    if (!asset) return;
+    if (typeof asset.size === 'number' && asset.size > MAX_IMPORT_TEXT_CHARS) {
+      setError('That file is too large to import.');
       return;
     }
-
-    const asset = result.assets[0];
-    if (!asset) {
-      setState((s) => ({ ...s, status: 'idle' }));
-      return;
-    }
-
-    const fileName = asset.name ?? 'unknown';
-    setState((s) => ({ ...s, status: 'parsing', fileName }));
-
-    let content: string;
     try {
-      content = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      setText(
+        await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 }),
+      );
     } catch {
-      setState((s) => ({
-        ...s,
-        status: 'error',
-        errorMessage: 'Could not read this file. Choose another file and try again.',
-      }));
-      return;
+      setError('Could not read that file. Choose another file or paste the text.');
     }
+  }, []);
 
-    let importResult: Awaited<ReturnType<typeof parseImportFile>>;
+  const handlePreview = useCallback(async () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setError(null);
+    setBusy(true);
     try {
-      importResult = await parseImportFile(content, fileName);
-    } catch {
-      setState((s) => ({
-        ...s,
-        status: 'error',
-        errorMessage: 'Could not parse this export. Check the file format and try again.',
-      }));
-      return;
+      const next = await previewMemoryImport(trimmed, source, isCloud ? 'cloud' : 'local');
+      if (next.items.length === 0) {
+        setError('No memories were found in that text. Put one memory on each line.');
+        return;
+      }
+      setPreview(next);
+      setSelected(new Set(next.items.flatMap((item, index) => (item.duplicate ? [] : [index]))));
+      setStep('preview');
+    } catch (previewError) {
+      setError(
+        previewError instanceof ImportTextTooLargeError
+          ? 'That text is too long to import at once. Split it and import each part.'
+          : toUserMessage(previewError, 'Could not read that text. Try again.'),
+      );
+    } finally {
+      setBusy(false);
     }
-    const { facts, source } = importResult;
+  }, [isCloud, source, text]);
 
-    if (facts.length === 0) {
-      setState((s) => ({
-        ...s,
-        status: 'error',
-        source,
-        factsFound: 0,
-        errorMessage: 'No importable facts found in this file.',
-      }));
-      return;
-    }
-
-    Alert.alert(
-      'Import Preview',
-      `${translatePlural(
-        'settings',
-        'counts.factsFound',
-        facts.length,
-        {
-          one: 'Found {{count}} fact from {{source}}.',
-          other: 'Found {{count}} facts from {{source}}.',
-        },
-        { source: SOURCE_LABELS[source] },
-      )}\n\nPreview:\n• ${facts
-        .slice(0, 3)
-        .map((f) => f.fact.slice(0, 80))
-        .join('\n• ')}${facts.length > 3 ? `\n… and ${facts.length - 3} more` : ''}`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => setState((s) => ({ ...s, status: 'idle' })),
-        },
-        {
-          text: 'Import All',
-          onPress: async () => {
-            setState((s) => ({ ...s, status: 'importing', source, factsFound: facts.length }));
-            try {
-              const { inserted, skipped } = await bulkInsert(
-                facts.map((f) => f.fact),
-                source === 'text' ? 'other' : source,
-              );
-              setState((s) => ({ ...s, status: 'done', inserted, skipped }));
-            } catch {
-              setState((s) => ({
-                ...s,
-                status: 'error',
-                errorMessage:
-                  'Import could not finish. Some memories may have been saved. Check your memories before trying again.',
-              }));
-            }
-          },
-        },
-      ],
-    );
-  }, [bulkInsert]);
-
-  const handleReset = useCallback(() => {
-    setState({
-      status: 'idle',
-      fileName: null,
-      source: null,
-      factsFound: 0,
-      inserted: 0,
-      skipped: 0,
-      errorMessage: null,
+  const toggleItem = useCallback((index: number) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
     });
   }, []);
 
-  const goBackToMemory = useGoBack('/(app)/settings/memory');
+  const totalItems = preview?.items.length ?? 0;
+  const allSelected = totalItems > 0 && selected.size === totalItems;
 
-  const isProcessing =
-    state.status === 'picking' || state.status === 'parsing' || state.status === 'importing';
+  const toggleAll = useCallback(() => {
+    if (!preview) return;
+    setSelected(allSelected ? new Set() : new Set(preview.items.map((_, index) => index)));
+  }, [allSelected, preview]);
+
+  const handleCommit = useCallback(async () => {
+    if (!preview) return;
+    const items = preview.items.filter((_, index) => selected.has(index)).map((i) => i.content);
+    if (items.length === 0) return;
+    setError(null);
+    setBusy(true);
+    try {
+      setResult(await bulkInsert(items, preview.sourceName));
+      setStep('done');
+    } catch (commitError) {
+      setError(
+        toUserMessage(
+          commitError,
+          'Import could not finish. Some memories may have been saved. Check your memories before trying again.',
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [bulkInsert, preview, selected]);
+
+  const handleReset = useCallback(() => {
+    setStep('compose');
+    setText('');
+    setPreview(null);
+    setSelected(new Set());
+    setResult(null);
+    setError(null);
+  }, []);
+
+  const selectedLabel = useMemo(
+    () =>
+      translatePlural('settings', 'counts.memoriesSelected', selected.size, {
+        one: 'Import {{count}} memory',
+        other: 'Import {{count}} memories',
+      }),
+    [selected.size],
+  );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
@@ -210,6 +181,7 @@ export default function MemoryImportScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeIn.duration(motion.moved)} className="mb-5 mt-2">
@@ -226,41 +198,179 @@ export default function MemoryImportScreen() {
             </Text>
             <Text className="text-xs leading-5" style={{ color: colors.textSecondary }}>
               {isCloud
-                ? 'Files are read on this device. Only the facts you import are sent to your AGI Cloud account, where they sync to your other devices.'
-                : 'Files are read locally. No data is uploaded to any server. Your imports stay on this device.'}
+                ? 'Only the memories you choose to import are sent to your AGI Cloud account, where they sync to your other devices.'
+                : 'The text is read on this device and the memories stay here. Nothing is uploaded.'}
             </Text>
           </View>
         </Animated.View>
 
-        <Text
-          className="text-xs uppercase font-semibold mb-3"
-          style={{ color: colors.textMuted, letterSpacing: 0 }}
-        >
-          Supported formats
-        </Text>
-        {IMPORT_SOURCES.map((src) => (
-          <Card key={src} variant="default" className="mb-2">
-            <View className="flex-row items-center gap-3">
-              <View
-                className="w-8 h-8 rounded-lg items-center justify-center"
-                style={{ backgroundColor: colors.neutralSurface }}
-              >
-                <FileText size={16} color={colors.textMuted} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                  {SOURCE_LABELS[src]}
-                </Text>
-                <Text className="text-xs mt-0.5 leading-4" style={{ color: colors.textMuted }}>
-                  {SOURCE_DESCRIPTIONS[src]}
-                </Text>
-              </View>
-            </View>
-          </Card>
-        ))}
+        {step === 'compose' && (
+          <View>
+            <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
+              Ask your other assistant to list everything it remembers about you, one memory per
+              line, then paste the answer here. A JSON list of strings also works.
+            </Text>
 
-        {state.status === 'done' && (
-          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
+            <Text
+              className="text-xs uppercase font-semibold mt-5 mb-2"
+              style={{ color: colors.textMuted, letterSpacing: 0 }}
+            >
+              From
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {MEMORY_IMPORT_SOURCES.map((option) => {
+                const active = option === source;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => setSource(option)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={option}
+                    className="rounded-full px-3 py-2"
+                    style={{
+                      minHeight: 36,
+                      borderWidth: 1,
+                      borderColor: active ? colors.teal : colors.border,
+                      backgroundColor: active ? colors.successSurface : colors.transparent,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: typeScale.subhead,
+                        color: active ? colors.textPrimary : colors.textSecondary,
+                      }}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              multiline
+              textAlignVertical="top"
+              placeholder="Paste memories here, one per line"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Memories to import"
+              maxLength={MAX_IMPORT_TEXT_CHARS}
+              className="mt-5 rounded-xl px-3 py-3"
+              style={{
+                minHeight: 180,
+                fontSize: typeScale.body,
+                color: colors.textPrimary,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceElevated,
+              }}
+            />
+
+            <Pressable
+              onPress={() => void handleChooseFile()}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a text or JSON file"
+              className="flex-row items-center gap-2 mt-3 self-start py-2"
+              style={{ minHeight: 44 }}
+            >
+              <Upload size={16} color={colors.textSecondary} />
+              <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
+                Choose a text or JSON file
+              </Text>
+            </Pressable>
+
+            <Button
+              title="Preview"
+              variant="primary"
+              size="md"
+              className="mt-4"
+              loading={busy}
+              disabled={busy || text.trim().length === 0}
+              onPress={() => void handlePreview()}
+            />
+          </View>
+        )}
+
+        {step === 'preview' && preview && (
+          <View>
+            <View className="flex-row items-center justify-between mb-2">
+              <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
+                {translatePlural('settings', 'counts.memoriesFound', totalItems, {
+                  one: '{{count}} memory found',
+                  other: '{{count}} memories found',
+                })}
+                {preview.itemsTruncated ? ', the rest were left out' : ''}
+              </Text>
+              <Pressable
+                onPress={toggleAll}
+                accessibilityRole="button"
+                className="py-2 px-1"
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text style={{ fontSize: typeScale.subhead, color: colors.teal }}>
+                  {allSelected ? 'Select none' : 'Select all'}
+                </Text>
+              </Pressable>
+            </View>
+            {preview.items.map((item, index) => {
+              const checked = selected.has(index);
+              const Icon = checked ? CheckSquare : Square;
+              return (
+                <Pressable
+                  key={`${index}:${item.normalizedKey}`}
+                  onPress={() => toggleItem(index)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked }}
+                  accessibilityLabel={`${item.content}${item.duplicate ? ', already in memory' : ''}`}
+                  className="flex-row items-start gap-3 rounded-xl px-3 py-3 mb-2"
+                  style={{ borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Icon size={18} color={checked ? colors.teal : colors.textMuted} />
+                  <View className="flex-1">
+                    <Text style={{ fontSize: typeScale.body, color: colors.textPrimary }}>
+                      {item.content}
+                    </Text>
+                    {item.duplicate ? (
+                      <Text
+                        style={{
+                          fontSize: typeScale.caption,
+                          color: colors.textMuted,
+                          marginTop: 2,
+                        }}
+                      >
+                        Already in memory
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+            <View className="flex-row gap-3 mt-3">
+              <Button
+                title="Back"
+                variant="ghost"
+                size="md"
+                className="flex-1"
+                disabled={busy}
+                onPress={() => setStep('compose')}
+              />
+              <Button
+                title={selectedLabel}
+                variant="primary"
+                size="md"
+                className="flex-1"
+                loading={busy}
+                disabled={busy || selected.size === 0}
+                onPress={() => void handleCommit()}
+              />
+            </View>
+          </View>
+        )}
+
+        {step === 'done' && result && (
+          <Animated.View entering={FadeIn.duration(motion.moved)}>
             <View
               className="rounded-xl px-4 py-4 items-center"
               style={{
@@ -273,17 +383,12 @@ export default function MemoryImportScreen() {
               <Text className="text-base font-semibold mt-2" style={{ color: colors.textPrimary }}>
                 Import complete
               </Text>
-              {state.source && (
-                <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
-                  From {SOURCE_LABELS[state.source]}
-                </Text>
-              )}
               <Text className="text-sm mt-3 text-center" style={{ color: colors.textSecondary }}>
-                {translatePlural('settings', 'counts.memoriesAdded', state.inserted, {
+                {translatePlural('settings', 'counts.memoriesAdded', result.inserted, {
                   one: 'Added {{count}} memory',
                   other: 'Added {{count}} memories',
                 })}
-                {state.skipped > 0 ? `, ${state.skipped} skipped` : ''}
+                {result.skipped > 0 ? `, ${result.skipped} skipped` : ''}
               </Text>
             </View>
             <View className="flex-row gap-3 mt-4">
@@ -305,76 +410,25 @@ export default function MemoryImportScreen() {
           </Animated.View>
         )}
 
-        {state.status === 'error' && state.errorMessage && (
-          <Animated.View entering={FadeIn.duration(motion.moved)} className="mt-5">
-            <View
-              className="rounded-xl px-4 py-4 items-center"
-              style={{
-                backgroundColor: colors.dangerSurface,
-                borderColor: colors.dangerBorder,
-                borderWidth: 1,
-              }}
+        {error ? (
+          <View
+            className="rounded-xl px-4 py-3 mt-4 flex-row gap-3 items-start"
+            style={{
+              backgroundColor: colors.dangerSurface,
+              borderColor: colors.dangerBorder,
+              borderWidth: 1,
+            }}
+            accessibilityRole="alert"
+          >
+            <AlertCircle size={18} color={colors.agentError} />
+            <Text
+              className="flex-1"
+              style={{ fontSize: typeScale.subhead, color: colors.textPrimary }}
             >
-              <AlertCircle size={32} color={colors.agentError} />
-              <Text className="text-base font-semibold mt-2" style={{ color: colors.textPrimary }}>
-                Import failed
-              </Text>
-              <Text className="text-sm mt-1 text-center" style={{ color: colors.textSecondary }}>
-                {state.errorMessage}
-              </Text>
-            </View>
-            <Button
-              title="Try again"
-              variant="ghost"
-              size="md"
-              onPress={handleReset}
-              className="mt-3"
-            />
-          </Animated.View>
-        )}
-
-        {(state.status === 'idle' || isProcessing) && (
-          <View className="mt-6">
-            {isProcessing ? (
-              <View className="items-center gap-3 py-6">
-                <ActivityIndicator size="large" color={colors.teal} />
-                <Text className="text-sm" style={{ color: colors.textMuted }}>
-                  {state.status === 'picking'
-                    ? 'Opening file picker…'
-                    : state.status === 'parsing'
-                      ? 'Parsing file…'
-                      : 'Importing memories…'}
-                </Text>
-              </View>
-            ) : (
-              <Pressable
-                onPress={handlePickFile}
-                className="border-2 border-dashed rounded-2xl items-center justify-center py-10 gap-3"
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? colors.successSurface : colors.transparent,
-                  borderColor: pressed ? colors.successBorder : colors.border,
-                })}
-                accessibilityLabel="Select file to import"
-                accessibilityRole="button"
-              >
-                <View
-                  className="w-16 h-16 rounded-2xl items-center justify-center"
-                  style={{ backgroundColor: colors.neutralSurface }}
-                >
-                  <Upload size={28} color={colors.textMuted} />
-                </View>
-                <View className="items-center">
-                  <Text className="text-base font-semibold" style={{ color: colors.textPrimary }}>
-                    Select file
-                  </Text>
-                  <Text className="text-sm mt-1" style={{ color: colors.textMuted }}>
-                    JSON or plain text export
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+              {error}
+            </Text>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

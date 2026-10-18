@@ -199,7 +199,9 @@
     "windowSeconds_other": "{{count}} 秒",
     "memoriesAdded_one": "{{count}} 件のメモリを追加しました",
     "memoriesAdded_other": "{{count}} 件のメモリを追加しました",
-    "factsFound_one": "{{source}} から {{count}} 件の事実が見つかりました。",
-    "factsFound_other": "{{source}} から {{count}} 件の事実が見つかりました。"
+    "memoriesFound_one": "{{count}} 件のメモリが見つかりました",
+    "memoriesFound_other": "{{count}} 件のメモリが見つかりました",
+    "memoriesSelected_one": "{{count}} 件のメモリをインポート",
+    "memoriesSelected_other": "{{count}} 件のメモリをインポート"
   }
 }

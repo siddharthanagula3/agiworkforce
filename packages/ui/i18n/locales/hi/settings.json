@@ -199,7 +199,9 @@
     "windowSeconds_other": "{{count}} सेकंड",
     "memoriesAdded_one": "{{count}} मेमोरी जोड़ी गई",
     "memoriesAdded_other": "{{count}} मेमोरी जोड़ी गईं",
-    "factsFound_one": "{{source}} से {{count}} तथ्य मिला।",
-    "factsFound_other": "{{source}} से {{count}} तथ्य मिले।"
+    "memoriesFound_one": "{{count}} मेमोरी मिली",
+    "memoriesFound_other": "{{count}} मेमोरी मिलीं",
+    "memoriesSelected_one": "{{count}} मेमोरी आयात करें",
+    "memoriesSelected_other": "{{count}} मेमोरी आयात करें"
   }
 }

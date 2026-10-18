@@ -199,7 +199,9 @@
     "windowSeconds_other": "{{count}} 秒",
     "memoriesAdded_one": "已添加 {{count}} 条记忆",
     "memoriesAdded_other": "已添加 {{count}} 条记忆",
-    "factsFound_one": "从 {{source}} 找到 {{count}} 条事实。",
-    "factsFound_other": "从 {{source}} 找到 {{count}} 条事实。"
+    "memoriesFound_one": "找到 {{count}} 条记忆",
+    "memoriesFound_other": "找到 {{count}} 条记忆",
+    "memoriesSelected_one": "导入 {{count}} 条记忆",
+    "memoriesSelected_other": "导入 {{count}} 条记忆"
   }
 }

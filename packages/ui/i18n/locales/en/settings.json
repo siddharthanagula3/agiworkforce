@@ -199,7 +199,9 @@
     "deletedArchivedChats_other": "Deleted {{count}} archived chats.",
     "memoriesAdded_one": "Added {{count}} memory",
     "memoriesAdded_other": "Added {{count}} memories",
-    "factsFound_one": "Found {{count}} fact from {{source}}.",
-    "factsFound_other": "Found {{count}} facts from {{source}}."
+    "memoriesFound_one": "{{count}} memory found",
+    "memoriesFound_other": "{{count}} memories found",
+    "memoriesSelected_one": "Import {{count}} memory",
+    "memoriesSelected_other": "Import {{count}} memories"
   }
 }

@@ -199,7 +199,9 @@
     "windowSeconds_other": "{{count}} segundos",
     "memoriesAdded_one": "{{count}} memória adicionada",
     "memoriesAdded_other": "{{count}} memórias adicionadas",
-    "factsFound_one": "{{count}} fato encontrado em {{source}}.",
-    "factsFound_other": "{{count}} fatos encontrados em {{source}}."
+    "memoriesFound_one": "{{count}} memória encontrada",
+    "memoriesFound_other": "{{count}} memórias encontradas",
+    "memoriesSelected_one": "Importar {{count}} memória",
+    "memoriesSelected_other": "Importar {{count}} memórias"
   }
 }

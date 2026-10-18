@@ -22,6 +22,8 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { prohibitedMemoryMessage } from '@agiworkforce/context';
+import { MAX_IMPORT_ITEMS, parseManagedMemoryImportCommitResponse } from '@agiworkforce/types';
+import { MEMORY_IMPORT_PATH } from '@/src/features/memory/services/memoryImport';
 
 export type { MemoryFact };
 
@@ -58,15 +60,6 @@ function keptExistingMessage(keeper: string | undefined): string {
     ? `Kept “${keeper}” instead, because it outranks the new fact. Unpin or edit it to change what is remembered.`
     : 'Kept an existing memory instead, because it outranks the new fact.';
 }
-const MAX_IMPORT_BATCH = 500;
-
-interface CloudImportResult {
-  insertedCount: number;
-  skippedDuplicateCount: number;
-  blockedCount: number;
-  excludedCount: number;
-}
-
 function cloudMemoryOrigin(entry: CloudMemoryEntry): MemoryFactSource {
   const raw = entry.origin ?? entry.source;
   if (raw === 'auto') return 'learned';
@@ -412,12 +405,15 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     let skipped = facts.length - candidates.length;
 
     if (operationScope.scope === 'cloud') {
-      for (let start = 0; start < candidates.length; start += MAX_IMPORT_BATCH) {
-        const result = await api.post<CloudImportResult>('/api/memory/import', {
-          mode: 'commit',
-          items: candidates.slice(start, start + MAX_IMPORT_BATCH),
-          sourceName,
-        });
+      for (let start = 0; start < candidates.length; start += MAX_IMPORT_ITEMS) {
+        const result = parseManagedMemoryImportCommitResponse(
+          await api.post<unknown>(MEMORY_IMPORT_PATH, {
+            mode: 'commit',
+            items: candidates.slice(start, start + MAX_IMPORT_ITEMS),
+            sourceName,
+          }),
+        );
+        if (!result) throw new Error('The memory import result could not be read.');
         inserted += result.insertedCount;
         skipped += result.skippedDuplicateCount + result.blockedCount + result.excludedCount;
       }

@@ -297,9 +297,13 @@
     "memoriesAdded_few": "Добавлено {{count}} воспоминания",
     "memoriesAdded_many": "Добавлено {{count}} воспоминаний",
     "memoriesAdded_other": "Добавлено {{count}} воспоминания",
-    "factsFound_one": "Найден {{count}} факт из {{source}}.",
-    "factsFound_few": "Найдено {{count}} факта из {{source}}.",
-    "factsFound_many": "Найдено {{count}} фактов из {{source}}.",
-    "factsFound_other": "Найдено {{count}} факта из {{source}}."
+    "memoriesFound_one": "Найдено {{count}} воспоминание",
+    "memoriesFound_few": "Найдено {{count}} воспоминания",
+    "memoriesFound_many": "Найдено {{count}} воспоминаний",
+    "memoriesFound_other": "Найдено {{count}} воспоминания",
+    "memoriesSelected_one": "Импортировать {{count}} воспоминание",
+    "memoriesSelected_few": "Импортировать {{count}} воспоминания",
+    "memoriesSelected_many": "Импортировать {{count}} воспоминаний",
+    "memoriesSelected_other": "Импортировать {{count}} воспоминания"
   }
 }
