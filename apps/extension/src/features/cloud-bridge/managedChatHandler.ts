@@ -49,12 +49,16 @@ import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
 import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
 import { normalizeAnsweredModel } from './answeredModel';
 import type { ChromeManagedRoutingMetadata } from '../../types';
+import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
+import type { ToolCall } from '../computer-use/toolHandoff';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
 const MAX_SYSTEM_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
+export const MAX_MANAGED_TOOL_LEGS = 10;
+const MAX_TOOL_RESULT_CHARS = 64_000;
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -118,8 +122,18 @@ export interface ChromeManagedChatRequest {
   conversationId?: string;
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
+  tools?: readonly ToolDefinition[];
   signal?: AbortSignal;
 }
+
+export interface ChromeManagedToolResult {
+  toolCallId: string;
+  content: string;
+}
+
+export type ChromeManagedToolHandoffOutcome =
+  | { status: 'resolved'; results: ChromeManagedToolResult[]; tools?: readonly ToolDefinition[] }
+  | { status: 'cancelled' };
 
 export type ChromeManagedRoutingResult = ChromeManagedRoutingMetadata;
 
@@ -160,6 +174,7 @@ export interface ChromeManagedChatDependencies {
   onSources?: (chunk: Extract<FreeTrialChunk, { type: 'sources' }>) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
   onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
+  onToolHandoff?: (calls: ToolCall[]) => Promise<ChromeManagedToolHandoffOutcome>;
 }
 
 export interface ChromeManagedApprovalRequest {
@@ -365,6 +380,13 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
       ))
   ) {
     return 'The AGI Work plan is invalid.';
+  }
+  if (
+    request.tools !== undefined &&
+    (!Array.isArray(request.tools) ||
+      (request.tools.length > 0 && request.completionMode === 'unattended'))
+  ) {
+    return 'Browser tools are not available for this turn.';
   }
   if (
     request.completionMode !== undefined &&
@@ -727,64 +749,122 @@ export async function executeChromeManagedChat(
     signal: request.signal,
   };
   let latestTaskState: AgentTaskState | undefined;
-  for await (const chunk of dependencies.streamChat(messages, token, streamOptions)) {
-    if (chunk.type === 'text') {
-      await dependencies.onText(chunk.text);
-      continue;
-    }
-    if (chunk.type === 'code-execution') {
-      await dependencies.onCodeExecution?.(chunk);
-      continue;
-    }
-    if (chunk.type === 'agent-event') {
-      if (chunk.envelope.event.type === 'task-state-changed') {
-        latestTaskState = chunk.envelope.event.state;
+  let tools = request.tools ?? [];
+  for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
+    const legTools = leg === MAX_MANAGED_TOOL_LEGS - 1 ? [] : tools;
+    const legOptions: ManagedChatStreamOptions = {
+      ...streamOptions,
+      ...(leg === 0
+        ? {}
+        : {
+            idempotencyKey: await managedChatIdempotencyKey(
+              'send',
+              `${streamOptions.idempotencyKey}:${leg}`,
+            ),
+          }),
+      ...(legTools.length > 0 ? { tools: legTools } : {}),
+    };
+    let legText = '';
+    let handoff: ToolCall[] | null = null;
+    let terminal: ChromeManagedChatResult | null = null;
+    for await (const chunk of dependencies.streamChat(messages, token, legOptions)) {
+      if (chunk.type === 'text') {
+        legText += chunk.text;
+        await dependencies.onText(chunk.text);
+        continue;
       }
-      await dependencies.onAgentEvent?.(chunk);
-      continue;
-    }
-    if (chunk.type === 'generated-files') {
-      await dependencies.onGeneratedFiles?.(chunk);
-      continue;
-    }
-    if (chunk.type === 'interactive-card') {
-      await dependencies.onInteractiveCard?.(chunk);
-      continue;
-    }
-    if (chunk.type === 'sources') {
-      await dependencies.onSources?.(chunk);
-      continue;
-    }
-    if (chunk.type === 'run') {
-      if (chunk.run.state) latestTaskState = chunk.run.state;
-      await dependencies.onRunReference?.(chunk.run);
-      continue;
-    }
-    if (chunk.type === 'quota-warning') {
-      await dependencies.onQuotaWarning?.(chunk.warning);
-      continue;
-    }
-    if (chunk.type === 'answered-model') {
-      if (chunk.model !== (routingResult.answeredModel ?? routingResult.modelKey)) {
-        routingResult = { ...routingResult, answeredModel: chunk.model };
-        await dependencies.onRouting?.(routingResult);
+      if (chunk.type === 'code-execution') {
+        await dependencies.onCodeExecution?.(chunk);
+        continue;
       }
-      continue;
+      if (chunk.type === 'agent-event') {
+        if (chunk.envelope.event.type === 'task-state-changed') {
+          latestTaskState = chunk.envelope.event.state;
+        }
+        await dependencies.onAgentEvent?.(chunk);
+        continue;
+      }
+      if (chunk.type === 'generated-files') {
+        await dependencies.onGeneratedFiles?.(chunk);
+        continue;
+      }
+      if (chunk.type === 'interactive-card') {
+        await dependencies.onInteractiveCard?.(chunk);
+        continue;
+      }
+      if (chunk.type === 'sources') {
+        await dependencies.onSources?.(chunk);
+        continue;
+      }
+      if (chunk.type === 'run') {
+        if (chunk.run.state) latestTaskState = chunk.run.state;
+        await dependencies.onRunReference?.(chunk.run);
+        continue;
+      }
+      if (chunk.type === 'quota-warning') {
+        await dependencies.onQuotaWarning?.(chunk.warning);
+        continue;
+      }
+      if (chunk.type === 'answered-model') {
+        if (chunk.model !== (routingResult.answeredModel ?? routingResult.modelKey)) {
+          routingResult = { ...routingResult, answeredModel: chunk.model };
+          await dependencies.onRouting?.(routingResult);
+        }
+        continue;
+      }
+      if (chunk.type === 'tool-handoff') {
+        handoff = chunk.calls;
+        continue;
+      }
+      if (chunk.type === 'error') {
+        terminal = {
+          status: 'error',
+          code: chunk.code,
+          message: chunk.message,
+          ...(chunk.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: chunk.retryAfterSeconds }
+            : {}),
+          ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
+          ...(chunk.quota ? { quota: chunk.quota } : {}),
+          routing: routingResult,
+        };
+        break;
+      }
+      if (!handoff) {
+        terminal = adjudicateManagedChatCompletion(
+          request.completionMode,
+          latestTaskState,
+          routingResult,
+        );
+      }
+      break;
     }
-    if (chunk.type === 'error') {
+    if (terminal) return terminal;
+    if (!handoff) break;
+    if (!dependencies.onToolHandoff || legTools.length === 0) {
       return {
         status: 'error',
-        code: chunk.code,
-        message: chunk.message,
-        ...(chunk.retryAfterSeconds !== undefined
-          ? { retryAfterSeconds: chunk.retryAfterSeconds }
-          : {}),
-        ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
-        ...(chunk.quota ? { quota: chunk.quota } : {}),
+        code: 'protocol_error',
+        message: 'AGI Cloud asked for a browser tool this turn did not offer.',
         routing: routingResult,
       };
     }
-    return adjudicateManagedChatCompletion(request.completionMode, latestTaskState, routingResult);
+    const outcome = await dependencies.onToolHandoff(handoff);
+    if (outcome.status === 'cancelled' || request.signal?.aborted) {
+      return { status: 'error', code: 'cancelled', message: 'Cancelled.', routing: routingResult };
+    }
+    const resultsById = new Map(outcome.results.map((result) => [result.toolCallId, result]));
+    messages.push({ role: 'assistant', content: legText, tool_calls: handoff });
+    for (const call of handoff) {
+      messages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: (
+          resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
+        ).slice(0, MAX_TOOL_RESULT_CHARS),
+      });
+    }
+    if (outcome.tools) tools = outcome.tools;
   }
 
   return {
@@ -834,6 +914,13 @@ async function relayManagedResume(
       continue;
     }
     if (chunk.type === 'answered-model') continue;
+    if (chunk.type === 'tool-handoff') {
+      return {
+        status: 'error',
+        code: 'protocol_error',
+        message: 'This resumed AGI Cloud run asked for a browser tool. Send the request again.',
+      };
+    }
     if (chunk.type === 'error') {
       return {
         status: 'error',
@@ -948,6 +1035,7 @@ export function createChromeManagedChatDependencies(
     | 'onSources'
     | 'onRunReference'
     | 'onQuotaWarning'
+    | 'onToolHandoff'
   > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };

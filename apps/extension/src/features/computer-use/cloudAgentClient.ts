@@ -1,5 +1,7 @@
 import { getBrowserToolDefinitions } from './browserToolDefinitions';
 import type { ToolDefinition } from './browserToolDefinitions';
+import { readCompleteToolCalls, readToolHandoff, type ToolCall } from './toolHandoff';
+export type { ToolCall } from './toolHandoff';
 export { BROWSER_TOOL_DEFINITIONS, type ToolDefinition } from './browserToolDefinitions';
 import { ServerSentEventDecoder } from '@agiworkforce/client-runtime';
 import { validateGatewayUrl } from '../../background/policy';
@@ -118,12 +120,6 @@ export interface AssistantMessage {
   tool_calls?: ToolCall[];
 }
 
-export interface ToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
-}
-
 export type AgentMessage = TextMessage | AssistantMessage;
 
 export interface CloudAgentResponse {
@@ -215,75 +211,13 @@ function mergeToolCallDelta(acc: Map<number, ToolCall>, delta: unknown[], status
   }
 }
 
-function readCompleteToolCalls(
+function completeToolCalls(
   calls: unknown,
   ids: unknown,
   status: number,
   tools: readonly ToolDefinition[],
 ): ToolCall[] {
-  const invalid = (): never => invalidBrowserAction(status);
-  if (
-    !Array.isArray(ids) ||
-    ids.length === 0 ||
-    ids.some((id) => typeof id !== 'string' || !id.trim()) ||
-    new Set(ids).size !== ids.length ||
-    !Array.isArray(calls) ||
-    calls.length !== ids.length
-  )
-    return invalid();
-  return calls.map((raw: unknown, index): ToolCall => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
-    const call = raw as Record<string, unknown>;
-    const fn = call['function'];
-    if (
-      call['index'] !== index ||
-      call['type'] !== 'function' ||
-      call['id'] !== ids[index] ||
-      !fn ||
-      typeof fn !== 'object' ||
-      Array.isArray(fn)
-    )
-      return invalid();
-    const { name, arguments: args } = fn as Record<string, unknown>;
-    if (
-      typeof name !== 'string' ||
-      typeof args !== 'string' ||
-      !tools.some((tool) => tool.function.name === name)
-    )
-      return invalid();
-    let parsedArgs: unknown;
-    try {
-      parsedArgs = JSON.parse(args);
-    } catch {
-      return invalid();
-    }
-    if (!parsedArgs || typeof parsedArgs !== 'object' || Array.isArray(parsedArgs))
-      return invalid();
-    return { id: ids[index] as string, type: 'function', function: { name, arguments: args } };
-  });
-}
-
-function readToolHandoff(
-  marker: unknown,
-  calls: unknown,
-  finishReason: unknown,
-  status: number,
-  tools: readonly ToolDefinition[],
-): ToolCall[] {
-  if (
-    !marker ||
-    typeof marker !== 'object' ||
-    Array.isArray(marker) ||
-    finishReason !== 'tool_calls'
-  ) {
-    return invalidBrowserAction(status);
-  }
-  return readCompleteToolCalls(
-    calls,
-    (marker as Record<string, unknown>)['tool_call_ids'],
-    status,
-    tools,
-  );
+  return readCompleteToolCalls(calls, ids, tools) ?? invalidBrowserAction(status);
 }
 
 /**
@@ -542,13 +476,9 @@ async function callCloudRequest(
       invalidBrowserAction(response.status);
     }
     if (delta.x_tool_handoff !== undefined) {
-      const snapshot = readToolHandoff(
-        delta.x_tool_handoff,
-        delta.tool_calls,
-        choice.finish_reason,
-        response.status,
-        tools,
-      );
+      const snapshot =
+        readToolHandoff(delta.x_tool_handoff, delta.tool_calls, choice.finish_reason, tools) ??
+        invalidBrowserAction(response.status);
       if (toolHandoff && JSON.stringify(toolHandoff) !== JSON.stringify(snapshot)) {
         throw new CloudAgentGatewayError(
           'AGI Cloud returned conflicting browser actions. Please try again.',
@@ -640,7 +570,7 @@ async function callCloudRequest(
     const calls = Array.from(toolCallsAcc.entries())
       .sort(([first], [second]) => first - second)
       .map(([, call], index) => ({ index, ...call }));
-    message.tool_calls = readCompleteToolCalls(
+    message.tool_calls = completeToolCalls(
       calls,
       calls.map((call) => call.id),
       response.status,
