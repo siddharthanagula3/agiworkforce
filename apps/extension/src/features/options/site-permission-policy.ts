@@ -1,4 +1,4 @@
-export const APPROVED_SITE_PROMPT_STORAGE_KEY = 'agi_cu_ask_before_acting';
+import { ASK_BEFORE_ACTING_KEY } from '../computer-use/askBeforeActing';
 
 export type ApprovedSiteDefault = 'ask' | 'run';
 
@@ -82,9 +82,9 @@ export function createSitePermissionPolicySection(
   let current: ApprovedSiteDefault = 'ask';
 
   const loaded = storage
-    .get(APPROVED_SITE_PROMPT_STORAGE_KEY)
+    .get(ASK_BEFORE_ACTING_KEY)
     .then((items) => {
-      current = readApprovedSiteDefault(items[APPROVED_SITE_PROMPT_STORAGE_KEY]);
+      current = readApprovedSiteDefault(items[ASK_BEFORE_ACTING_KEY]);
       select.value = current;
       select.disabled = false;
       status.textContent = describeApprovedSiteDefault(current);
@@ -100,7 +100,7 @@ export function createSitePermissionPolicySection(
     select.disabled = true;
     status.textContent = 'Saving…';
     void storage
-      .set({ [APPROVED_SITE_PROMPT_STORAGE_KEY]: approvedSiteDefaultToStored(next) })
+      .set({ [ASK_BEFORE_ACTING_KEY]: approvedSiteDefaultToStored(next) })
       .then(() => {
         current = next;
         status.textContent = describeApprovedSiteDefault(next);

@@ -34,6 +34,7 @@ import { logger } from '../../utils';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { UUID_PATTERN } from '../../lib/uuid';
 import {
   buildExtensionCloudMessageMetadata,
   createExtensionCloudChatClient,
@@ -59,7 +60,6 @@ const RETRY_AFTER_RATE_LIMIT_MS = 60_000;
 const RETRY_AFTER_SERVER_ERROR_MS = 5 * 60_000;
 const MAX_TOMBSTONES = 100;
 const FLAG_PULL_MAX_PAGES = 20;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CloudSyncTombstone {
   accountId: string;

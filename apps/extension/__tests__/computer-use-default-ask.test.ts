@@ -13,11 +13,11 @@ describe('computer-use default = ask-before-acting (trust-boundary P0)', () => {
   const panel = read('src/features/side-panel/computerUsePanel.ts');
 
   it('background treats an UNSET ask pref as ask-before-acting (default-deny)', () => {
-    expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
+    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
   });
 
   it('background does NOT default to allow-all (the old `=== true` defect)', () => {
-    expect(background).not.toMatch(/agi_cu_ask_before_acting'\]\s*===\s*true/);
+    expect(background).not.toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*===\s*true/);
   });
 
   it('side-panel ask checkbox defaults to ON (ask)', () => {
@@ -30,15 +30,15 @@ describe('computer-use ask gate persists and rehydrates', () => {
   const panel = read('src/features/side-panel/computerUsePanel.ts');
 
   it('rehydrates the stored gate instead of always rendering the default', () => {
-    expect(panel).toMatch(/storage\?\.local\?\.get\('agi_cu_ask_before_acting'/);
+    expect(panel).toMatch(/storage\?\.local\?\.get\(ASK_BEFORE_ACTING_KEY/);
     expect(panel).toMatch(
-      /askCheckbox\.checked\s*=\s*items\?\.\['agi_cu_ask_before_acting'\]\s*!==\s*false/,
+      /askCheckbox\.checked\s*=\s*items\?\.\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/,
     );
   });
 
   it('writes the gate on toggle, not only when Run Autofill escalates', () => {
     expect(panel).toMatch(/askCheckbox\.addEventListener\('change'/);
-    expect(panel).toMatch(/set\(\{\s*agi_cu_ask_before_acting:\s*next\s*\}\)/);
+    expect(panel).toMatch(/set\(\{\s*\[ASK_BEFORE_ACTING_KEY\]:\s*next\s*\}\)/);
   });
 
   it('rolls the control back when the authoritative storage write fails', () => {

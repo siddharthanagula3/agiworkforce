@@ -1,4 +1,3 @@
-import type { DetectedField } from './detector';
 import type { JobApplicationProfile } from '../../../types';
 import { resolveLinkedInSelector, LINKEDIN_SELECTORS } from './linkedin';
 import { resolveLeverSelector, detectLeverCustomFields, LEVER_SELECTORS } from './lever';

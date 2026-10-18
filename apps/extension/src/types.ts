@@ -59,6 +59,8 @@ export type NativeMessageType =
   | 'PAUSE_COMPUTER_USE'
   | 'RESUME_COMPUTER_USE'
   | 'AGI_CU_USER_INPUT'
+  | 'AGI_CU_SHOW_ACTION'
+  | 'AGI_CU_WATCH_INPUT'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'GET_SIDE_PANEL_OPEN'
@@ -853,6 +855,42 @@ export interface ScheduledTaskResponse {
   error?: string;
 }
 
+export interface ListMemoriesMessage extends BaseMessage {
+  type: 'LIST_MEMORIES';
+  offset?: number;
+}
+
+export interface AddMemoryMessage extends BaseMessage {
+  type: 'ADD_MEMORY';
+  content: string;
+}
+
+export interface UpdateMemoryMessage extends BaseMessage {
+  type: 'UPDATE_MEMORY';
+  id: string;
+  content: string;
+}
+
+export interface DeleteMemoryMessage extends BaseMessage {
+  type: 'DELETE_MEMORY';
+  id: string;
+}
+
+export interface ComputerUseUserInputMessage extends BaseMessage {
+  type: 'AGI_CU_USER_INPUT';
+}
+
+export interface ComputerUseShowActionMessage extends BaseMessage {
+  type: 'AGI_CU_SHOW_ACTION';
+  x: number;
+  y: number;
+}
+
+export interface ComputerUseWatchInputMessage extends BaseMessage {
+  type: 'AGI_CU_WATCH_INPUT';
+  watching: boolean;
+}
+
 export interface GetQuickModeMessage extends BaseMessage {
   type: 'GET_QUICK_MODE';
 }
@@ -1104,6 +1142,13 @@ export type ExtensionMessage =
   | ListScheduledTasksMessage
   | UpdateScheduledTaskMessage
   | DeleteScheduledTaskMessage
+  | ListMemoriesMessage
+  | AddMemoryMessage
+  | UpdateMemoryMessage
+  | DeleteMemoryMessage
+  | ComputerUseUserInputMessage
+  | ComputerUseShowActionMessage
+  | ComputerUseWatchInputMessage
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage

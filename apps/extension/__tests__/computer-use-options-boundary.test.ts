@@ -22,7 +22,7 @@ describe('computer-use options trust boundary', () => {
   });
 
   it('keeps the disclosure tied to the enforced default and approved-run detach lifecycle', async () => {
-    expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
+    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
     expect(session).toMatch(
       /await fn\(\);[\s\S]*finally \{[\s\S]*await releaseDebugger\(tabId, session\)/,
     );

@@ -58,6 +58,9 @@ const SEMANTIC_FIELD_MATCHERS = [
   { semantic: 'coverLetterFile', patterns: ['cover letter file', 'cover letter upload'] },
 ];
 
+const NON_PERSON_NAME_FIELD =
+  /\b(?:company|school|organi[sz]ation|employer|university|college|institution|referr\w*|reference|manager|supervisor|user ?name|username|job|file|pet|street|business)\b/;
+
 function normalize(input) {
   return String(input || '')
     .toLowerCase()
@@ -319,7 +322,11 @@ function resolveSemanticField(element, descriptor) {
   }
 
   for (const matcher of SEMANTIC_FIELD_MATCHERS) {
-    if (matcher.patterns.some((pattern) => matchesPattern(descriptor, pattern))) {
+    const patterns =
+      matcher.semantic === 'fullName' && NON_PERSON_NAME_FIELD.test(descriptor)
+        ? matcher.patterns.filter((pattern) => pattern !== 'name')
+        : matcher.patterns;
+    if (patterns.some((pattern) => matchesPattern(descriptor, pattern))) {
       return matcher.semantic;
     }
   }

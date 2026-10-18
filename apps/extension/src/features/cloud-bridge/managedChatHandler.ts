@@ -49,6 +49,7 @@ import { ROUTING_TASK_TYPES, resolveChromeManagedChatRoute } from './managedChat
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
 import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
 import { normalizeAnsweredModel } from './answeredModel';
+import { UUID_PATTERN } from '../../lib/uuid';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import { MAX_CHAT_TOOL_RESULT_CHARS } from '../computer-use/chatBrowserTools';
@@ -78,7 +79,6 @@ function waitBeforeContinuationRetry(attempt: number, signal?: AbortSignal): Pro
 }
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
-const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createChromeManagedStreamKey(clientInstanceId: string, streamId: string): string {
   if (!STREAM_ID_PATTERN.test(clientInstanceId)) {
@@ -387,16 +387,10 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
   ) {
     return 'Invalid Managed Cloud completion mode.';
   }
-  if (
-    request.conversationId !== undefined &&
-    !MANAGED_TURN_UUID_PATTERN.test(request.conversationId)
-  ) {
+  if (request.conversationId !== undefined && !UUID_PATTERN.test(request.conversationId)) {
     return 'Invalid Managed Cloud conversation identifier.';
   }
-  if (
-    request.assistantMessageId !== undefined &&
-    !MANAGED_TURN_UUID_PATTERN.test(request.assistantMessageId)
-  ) {
+  if (request.assistantMessageId !== undefined && !UUID_PATTERN.test(request.assistantMessageId)) {
     return 'Invalid Managed Cloud assistant message identifier.';
   }
   if (

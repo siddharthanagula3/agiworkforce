@@ -32,6 +32,7 @@ import {
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
 import { ROUTING_TASK_TYPES } from '../cloud-bridge/managedChatRouting';
 import { isChromeVideoTaskId } from '../cloud-bridge/videoTaskId';
+import { UUID_PATTERN } from '../../lib/uuid';
 import {
   CODE_EXECUTION_OUTPUT_MAX_CHARS,
   type ManagedCodeExecution,
@@ -68,7 +69,6 @@ export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
 
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
 const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_STORED_MESSAGE_ATTACHMENTS = 20;
 const MAX_STORED_MESSAGE_PAGES = 8;
 const MAX_STORED_MESSAGE_SOURCES = 40;

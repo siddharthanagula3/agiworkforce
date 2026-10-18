@@ -99,6 +99,8 @@ import {
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
 import { ROUTING_TASK_TYPES } from './features/cloud-bridge/managedChatRouting';
+import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
+import { UUID_PATTERN } from './lib/uuid';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import { SIDE_PANEL_PORT_NAME } from './features/side-panel/panelPresence';
 import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
@@ -906,8 +908,6 @@ function managedOutboundRoutingPayload(quickMode = managedQuickModeActive()): {
   };
 }
 
-const OUTBOUND_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Server-authority identity for a managed turn: a client-generated
  * `assistantMessageId` (also stamped onto the assistant row so the cloud sync
@@ -923,17 +923,13 @@ function managedTurnPersistencePayload(streamId: string): {
 } {
   if (_ctx.temporaryChat) {
     const temporaryId = _ctx.temporaryConversationId;
-    return temporaryId && OUTBOUND_UUID_PATTERN.test(temporaryId)
-      ? { conversationId: temporaryId }
-      : {};
+    return temporaryId && UUID_PATTERN.test(temporaryId) ? { conversationId: temporaryId } : {};
   }
   const assistantMessageId = assistantCloudIdByStreamId.get(streamId);
   const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
   return {
-    ...(assistantMessageId && OUTBOUND_UUID_PATTERN.test(assistantMessageId)
-      ? { assistantMessageId }
-      : {}),
-    ...(cloudConversationId && OUTBOUND_UUID_PATTERN.test(cloudConversationId)
+    ...(assistantMessageId && UUID_PATTERN.test(assistantMessageId) ? { assistantMessageId } : {}),
+    ...(cloudConversationId && UUID_PATTERN.test(cloudConversationId)
       ? { conversationId: cloudConversationId }
       : {}),
   };
@@ -5390,7 +5386,7 @@ const artifactOutputs = createArtifactOutputs({
   webConversationUrl: () => {
     if (_ctx.temporaryChat) return null;
     const conversationId = activePersistenceEntry?.cloudSync?.conversationId;
-    return conversationId && OUTBOUND_UUID_PATTERN.test(conversationId)
+    return conversationId && UUID_PATTERN.test(conversationId)
       ? chromeArtifactConversationUrl(conversationId)
       : null;
   },
@@ -7381,9 +7377,8 @@ async function runChatMemoryCommand(
   const projectId = _ctx.activeProject?.id;
   const request: MemoryCommandRequest = {
     message,
-    conversationId:
-      conversationId && OUTBOUND_UUID_PATTERN.test(conversationId) ? conversationId : null,
-    projectId: projectId && OUTBOUND_UUID_PATTERN.test(projectId) ? projectId : null,
+    conversationId: conversationId && UUID_PATTERN.test(conversationId) ? conversationId : null,
+    projectId: projectId && UUID_PATTERN.test(projectId) ? projectId : null,
   };
   let result: MemoryCommandResult | null;
   try {
@@ -12397,9 +12392,9 @@ function buildUI(): void {
   }
 
   renderAutonomyChip(true);
-  chrome.storage.local.get('agi_cu_ask_before_acting', (items) => {
+  chrome.storage.local.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime.lastError) return;
-    renderAutonomyChip(items['agi_cu_ask_before_acting'] !== false);
+    renderAutonomyChip(items[ASK_BEFORE_ACTING_KEY] !== false);
   });
 
   autonomyChip.addEventListener('click', (event) => {
@@ -12457,12 +12452,12 @@ function buildUI(): void {
   askFirstOption.addEventListener('click', () => {
     renderAutonomyChip(true);
     fullAccessNotice.classList.remove('visible');
-    void chrome.storage.local.set({ agi_cu_ask_before_acting: true });
+    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: true });
     closeAutonomyPopover(true);
   });
   fullAccessOption.addEventListener('click', () => {
     renderAutonomyChip(false);
-    void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
+    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: false });
     closeAutonomyPopover(true);
     void discloseFullAccess();
   });
@@ -12481,7 +12476,7 @@ function buildUI(): void {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    const change = changes['agi_cu_ask_before_acting'];
+    const change = changes[ASK_BEFORE_ACTING_KEY];
     if (!change) return;
     renderAutonomyChip(change.newValue !== false);
     if (change.newValue !== false) fullAccessNotice.classList.remove('visible');

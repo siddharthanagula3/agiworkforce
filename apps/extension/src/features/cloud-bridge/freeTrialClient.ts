@@ -54,6 +54,7 @@ import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { UUID_PATTERN } from '../../lib/uuid';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
@@ -439,8 +440,7 @@ export interface ManagedChatFileAttachment {
   mimeType: string;
 }
 
-export const MANAGED_CHAT_FILE_ASSET_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const MANAGED_CHAT_FILE_ASSET_ID = UUID_PATTERN;
 
 export interface FreeTrialMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';

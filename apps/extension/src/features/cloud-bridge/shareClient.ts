@@ -1,9 +1,9 @@
 import { FREE_TRIAL_GATEWAY } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { UUID_PATTERN } from '../../lib/uuid';
 
 export const SHARE_LINK_PATH = '/api/share';
 const SHARE_TITLE_MAX_CHARS = 200;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface ChromeShareLinkRequest {
   title: string;

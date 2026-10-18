@@ -92,6 +92,7 @@ import {
   type MemoryWriteResult,
 } from './background/memory-bridge';
 import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agentLoop';
+import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -4776,8 +4777,8 @@ async function handleMessageAsync(
       );
     }
 
-    case 'LIST_MEMORIES' as ExtensionMessage['type']: {
-      const listOffset = (message as unknown as { offset?: unknown }).offset;
+    case 'LIST_MEMORIES': {
+      const listOffset = message.offset;
       const listed = await memoryList(
         typeof listOffset === 'number' && Number.isInteger(listOffset) && listOffset > 0
           ? listOffset
@@ -4793,19 +4794,17 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    case 'ADD_MEMORY' as ExtensionMessage['type']: {
-      const addPayload = message as unknown as { content?: string };
-      const addContent = typeof addPayload.content === 'string' ? addPayload.content : '';
+    case 'ADD_MEMORY': {
+      const addContent = typeof message.content === 'string' ? message.content : '';
       if (!addContent.trim()) {
         return { success: false, error: 'Memory content is required' } as ExtensionResponse;
       }
       return memoryWriteResponse(await memoryAdd(addContent));
     }
 
-    case 'UPDATE_MEMORY' as ExtensionMessage['type']: {
-      const upPayload = message as unknown as { id?: string; content?: string };
-      const upId = typeof upPayload.id === 'string' ? upPayload.id : '';
-      const upContent = typeof upPayload.content === 'string' ? upPayload.content : '';
+    case 'UPDATE_MEMORY': {
+      const upId = typeof message.id === 'string' ? message.id : '';
+      const upContent = typeof message.content === 'string' ? message.content : '';
       if (!upId || !upContent.trim()) {
         return {
           success: false,
@@ -4815,27 +4814,26 @@ async function handleMessageAsync(
       return memoryWriteResponse(await memoryUpdate(upId, upContent));
     }
 
-    case 'DELETE_MEMORY' as ExtensionMessage['type']: {
-      const delPayload = message as unknown as { id?: string };
-      const delId = typeof delPayload.id === 'string' ? delPayload.id : '';
+    case 'DELETE_MEMORY': {
+      const delId = typeof message.id === 'string' ? message.id : '';
       if (!delId) {
         return { success: false, error: 'Memory id is required' } as ExtensionResponse;
       }
       return memoryWriteResponse(await memoryDelete(delId));
     }
 
-    case 'GET_QUICK_MODE' as ExtensionMessage['type']: {
+    case 'GET_QUICK_MODE': {
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
-    case 'SET_QUICK_MODE' as ExtensionMessage['type']: {
+    case 'SET_QUICK_MODE': {
       const qmMsg = message as import('./types').SetQuickModeMessage;
       quickModeCache = qmMsg.enabled === true;
       await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
-    case 'SYNC_CONVERSATION' as ExtensionMessage['type']: {
+    case 'SYNC_CONVERSATION': {
       const syncMsg = message as import('./types').SyncConversationMessage;
       const syncOwner = normalizeManagedCloudOwner(syncMsg.owner);
       if (!syncOwner || isRetiredManagedCloudOwner(syncOwner)) {
@@ -4872,7 +4870,7 @@ async function handleMessageAsync(
           } as ExtensionResponse);
     }
 
-    case 'DELETE_CLOUD_CONVERSATION' as ExtensionMessage['type']: {
+    case 'DELETE_CLOUD_CONVERSATION': {
       const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
       const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
       if (!delOwner || isRetiredManagedCloudOwner(delOwner)) {
@@ -4888,7 +4886,7 @@ async function handleMessageAsync(
         : ({ success: false, error: 'Could not queue account chat deletion' } as ExtensionResponse);
     }
 
-    case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
+    case 'AGI_START_COMPUTER_USE': {
       const cuMsg = message as import('./types').StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.trim() : '';
@@ -5023,11 +5021,11 @@ async function handleMessageAsync(
 
       let askPref: Record<string, unknown>;
       try {
-        askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
+        askPref = await chrome.storage.local.get(ASK_BEFORE_ACTING_KEY);
       } catch {
         return failStart('AGI_START_COMPUTER_USE: approval preference could not be loaded');
       }
-      const askBeforeActing = askPref['agi_cu_ask_before_acting'] !== false;
+      const askBeforeActing = askPref[ASK_BEFORE_ACTING_KEY] !== false;
       if (startWasCancelled()) {
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
@@ -5411,7 +5409,7 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    case 'START_DOWNLOAD' as ExtensionMessage['type']: {
+    case 'START_DOWNLOAD': {
       const downloadMsg = message as import('./types').StartDownloadMessage;
       const downloadTabId = await resolveBrowserToolTabId(tabId);
       if (downloadTabId === null) {
@@ -5432,11 +5430,11 @@ async function handleMessageAsync(
       }
     }
 
-    case 'LIST_DOWNLOADS' as ExtensionMessage['type']: {
+    case 'LIST_DOWNLOADS': {
       return { success: true, downloads: await listSessionDownloads() } as ExtensionResponse;
     }
 
-    case 'REVEAL_DOWNLOAD' as ExtensionMessage['type']: {
+    case 'REVEAL_DOWNLOAD': {
       const revealMsg = message as import('./types').RevealDownloadMessage;
       if (typeof revealMsg.downloadId !== 'number') {
         return {
@@ -5452,7 +5450,7 @@ async function handleMessageAsync(
       }
     }
 
-    case 'SET_PAGE_WATCH' as ExtensionMessage['type']: {
+    case 'SET_PAGE_WATCH': {
       const watchMsg = message as import('./types').SetPageWatchMessage;
       const watchTabId = await resolveBrowserToolTabId(tabId);
       if (watchTabId === null) {
@@ -5470,7 +5468,7 @@ async function handleMessageAsync(
       }
     }
 
-    case 'READ_PAGE_CONSOLE' as ExtensionMessage['type']: {
+    case 'READ_PAGE_CONSOLE': {
       const consoleMsg = message as import('./types').ReadPageConsoleMessage;
       const consoleTabId = await resolveBrowserToolTabId(tabId);
       if (consoleTabId === null) {
@@ -5493,7 +5491,7 @@ async function handleMessageAsync(
       }
     }
 
-    case 'READ_PAGE_NETWORK' as ExtensionMessage['type']: {
+    case 'READ_PAGE_NETWORK': {
       const networkMsg = message as import('./types').ReadPageNetworkMessage;
       const networkTabId = await resolveBrowserToolTabId(tabId);
       if (networkTabId === null) {
@@ -5517,7 +5515,7 @@ async function handleMessageAsync(
       }
     }
 
-    case 'GET_COMPUTER_USE_STATE' as ExtensionMessage['type']: {
+    case 'GET_COMPUTER_USE_STATE': {
       const activeLease = computerUseRuns.getActive();
       if (!activeLease) {
         return { success: true, running: false } as ExtensionResponse;
@@ -5532,7 +5530,7 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    case 'AGI_CU_USER_INPUT' as ExtensionMessage['type']: {
+    case 'AGI_CU_USER_INPUT': {
       const lease = computerUseRuns.getActive();
       if (
         lease &&
@@ -5546,8 +5544,8 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    case 'PAUSE_COMPUTER_USE' as ExtensionMessage['type']:
-    case 'RESUME_COMPUTER_USE' as ExtensionMessage['type']: {
+    case 'PAUSE_COMPUTER_USE':
+    case 'RESUME_COMPUTER_USE': {
       const takeoverMessage = message as import('./types').ComputerUseTakeoverMessage;
       const lease = computerUseRuns.getActive();
       if (!lease || lease.runId !== takeoverMessage.runId) {
@@ -5605,7 +5603,7 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    case 'CANCEL_COMPUTER_USE' as ExtensionMessage['type']: {
+    case 'CANCEL_COMPUTER_USE': {
       const cancelMessage = message as import('./types').CancelComputerUseMessage;
       const rawExpectedRunId = cancelMessage.runId;
       if (

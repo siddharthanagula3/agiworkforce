@@ -16,14 +16,14 @@ describe('autonomy chip', () => {
   });
 
   it('reads the same pref the authoritative gate reads', () => {
-    expect(panel).toContain("chrome.storage.local.get('agi_cu_ask_before_acting'");
-    expect(background).toContain('agi_cu_ask_before_acting');
+    expect(panel).toContain('chrome.storage.local.get(ASK_BEFORE_ACTING_KEY');
+    expect(background).toContain('ASK_BEFORE_ACTING_KEY');
   });
 
   it('defaults to the safe state, matching background.ts', () => {
     expect(panel).toContain('renderAutonomyChip(true)');
-    expect(panel).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
-    expect(background).toMatch(/agi_cu_ask_before_acting'\]\s*!==\s*false/);
+    expect(panel).toMatch(/items\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
+    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
   });
 
   it('labels both states and tints the permissive one as a warning', () => {
@@ -36,16 +36,16 @@ describe('autonomy chip', () => {
   });
 
   it('stays in sync with the Computer Use checkbox in both directions', () => {
-    expect(panel).toContain("changes['agi_cu_ask_before_acting']");
+    expect(panel).toContain('changes[ASK_BEFORE_ACTING_KEY]');
     const computerUsePanel = read('src/features/side-panel/computerUsePanel.ts');
-    expect(computerUsePanel).toContain("'agi_cu_ask_before_acting' in changes");
+    expect(computerUsePanel).toContain('ASK_BEFORE_ACTING_KEY in changes');
     expect(computerUsePanel).toMatch(
-      /askCheckbox\.checked = changes\['agi_cu_ask_before_acting'\]\?\.newValue !== false/,
+      /askCheckbox\.checked = changes\[ASK_BEFORE_ACTING_KEY\]\?\.newValue !== false/,
     );
   });
 
   it('never writes the checkbox back to storage when a run starts', () => {
-    expect(panel).not.toContain('agi_cu_ask_before_acting: cuPanel.isAskBeforeActing()');
+    expect(panel).not.toContain('[ASK_BEFORE_ACTING_KEY]: cuPanel.isAskBeforeActing()');
   });
 
   it('exposes the mode to assistive tech', () => {
@@ -65,7 +65,7 @@ describe('autonomy chip', () => {
     const chipHandler = panel.slice(chipHandlerStart, fullAccessHandlerStart);
     const fullAccessHandler = panel.slice(fullAccessHandlerStart, fullAccessHandlerEnd);
 
-    expect(chipHandler).not.toContain('agi_cu_ask_before_acting: false');
-    expect(fullAccessHandler).toContain('agi_cu_ask_before_acting: false');
+    expect(chipHandler).not.toContain('[ASK_BEFORE_ACTING_KEY]: false');
+    expect(fullAccessHandler).toContain('[ASK_BEFORE_ACTING_KEY]: false');
   });
 });

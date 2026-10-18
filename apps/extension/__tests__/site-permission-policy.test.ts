@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { ASK_BEFORE_ACTING_KEY } from '../src/features/computer-use/askBeforeActing';
 import {
-  APPROVED_SITE_PROMPT_STORAGE_KEY,
   UNAPPROVED_SITE_DEFAULT_HINT,
   createSitePermissionPolicySection,
 } from '../src/features/options/site-permission-policy';
@@ -49,7 +49,7 @@ describe('options default site permission', () => {
 
   it('reflects a stored run-without-asking default', async () => {
     const section = createSitePermissionPolicySection(
-      fakeStorage({ [APPROVED_SITE_PROMPT_STORAGE_KEY]: false }),
+      fakeStorage({ [ASK_BEFORE_ACTING_KEY]: false }),
     );
     await section.loaded;
     expect(section.select.value).toBe('run');
@@ -65,13 +65,13 @@ describe('options default site permission', () => {
     section.select.dispatchEvent(new Event('change'));
     await Promise.resolve();
     await Promise.resolve();
-    expect(storage.values[APPROVED_SITE_PROMPT_STORAGE_KEY]).toBe(false);
+    expect(storage.values[ASK_BEFORE_ACTING_KEY]).toBe(false);
 
     section.select.value = 'ask';
     section.select.dispatchEvent(new Event('change'));
     await Promise.resolve();
     await Promise.resolve();
-    expect(storage.values[APPROVED_SITE_PROMPT_STORAGE_KEY]).toBe(true);
+    expect(storage.values[ASK_BEFORE_ACTING_KEY]).toBe(true);
   });
 
   it('restores the previous choice when the write fails', async () => {
@@ -92,10 +92,8 @@ describe('options default site permission', () => {
   });
 
   it('drives the same key the background reads before every action', () => {
-    expect(APPROVED_SITE_PROMPT_STORAGE_KEY).toBe('agi_cu_ask_before_acting');
-    expect(read('src/background.ts')).toMatch(
-      new RegExp(`${APPROVED_SITE_PROMPT_STORAGE_KEY}'\\]\\s*!==\\s*false`),
-    );
+    expect(ASK_BEFORE_ACTING_KEY).toBe('agi_cu_ask_before_acting');
+    expect(read('src/background.ts')).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
   });
 
   it('renders in the options permissions section above the approved-sites list', () => {

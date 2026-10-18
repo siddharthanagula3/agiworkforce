@@ -5,6 +5,7 @@ import type {
 } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS, DEFAULT_MAX_AGENT_STEPS } from '../computer-use/agentLoop';
+import { ASK_BEFORE_ACTING_KEY } from '../computer-use/askBeforeActing';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
@@ -1035,16 +1036,16 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   askCheckbox.checked = true;
 
   let askPreferenceMutation = 0;
-  chrome.storage?.local?.get('agi_cu_ask_before_acting', (items) => {
+  chrome.storage?.local?.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime?.lastError) return;
     if (askPreferenceMutation !== 0) return;
-    askCheckbox.checked = items?.['agi_cu_ask_before_acting'] !== false;
+    askCheckbox.checked = items?.[ASK_BEFORE_ACTING_KEY] !== false;
   });
 
   chrome.storage?.onChanged?.addListener((changes, area) => {
-    if (area !== 'local' || !('agi_cu_ask_before_acting' in changes)) return;
+    if (area !== 'local' || !(ASK_BEFORE_ACTING_KEY in changes)) return;
     if (askCheckbox.disabled) return;
-    askCheckbox.checked = changes['agi_cu_ask_before_acting']?.newValue !== false;
+    askCheckbox.checked = changes[ASK_BEFORE_ACTING_KEY]?.newValue !== false;
   });
 
   askCheckbox.addEventListener('change', () => {
@@ -1053,7 +1054,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     askCheckbox.disabled = true;
     void (async () => {
       try {
-        await chrome.storage.local.set({ agi_cu_ask_before_acting: next });
+        await chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: next });
       } catch {
         if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
         showHandoffBanner(

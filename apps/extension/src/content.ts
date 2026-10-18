@@ -244,19 +244,18 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return { success: true };
     }
 
-    case 'AGI_RUN_AUTOFILL' as ExtensionMessage['type']:
+    case 'AGI_RUN_AUTOFILL':
       return handleRunAutofill();
 
-    case 'AGI_CU_SHOW_ACTION' as ExtensionMessage['type']: {
-      const point = message as unknown as { x?: unknown; y?: unknown };
-      if (typeof point.x === 'number' && typeof point.y === 'number') {
-        showActionPoint(point.x, point.y);
+    case 'AGI_CU_SHOW_ACTION': {
+      if (typeof message.x === 'number' && typeof message.y === 'number') {
+        showActionPoint(message.x, message.y);
       }
       return { success: true } as ExtensionResponse;
     }
 
-    case 'AGI_CU_WATCH_INPUT' as ExtensionMessage['type']:
-      watchUserInput((message as unknown as { watching?: unknown }).watching === true);
+    case 'AGI_CU_WATCH_INPUT':
+      watchUserInput(message.watching === true);
       return { success: true } as ExtensionResponse;
 
     default:
