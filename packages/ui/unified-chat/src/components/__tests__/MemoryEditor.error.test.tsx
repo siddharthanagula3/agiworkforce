@@ -33,3 +33,14 @@ describe('MemoryEditor errors', () => {
     expect(input.value).toBe('Prefers concise answers');
   });
 });
+
+describe('MemoryEditor storage label', () => {
+  it('tells a device-only memory store that nothing leaves this device', () => {
+    render(
+      <MemoryEditor adapter={{ ...adapter(vi.fn()), scope: 'local', syncStatus: 'unavailable' }} />,
+    );
+
+    expect(screen.getByText('Saved on this device only.')).toBeDefined();
+    expect(screen.queryByText(/Synced to your account/)).toBeNull();
+  });
+});
