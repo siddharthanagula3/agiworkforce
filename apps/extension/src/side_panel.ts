@@ -1763,7 +1763,6 @@ function injectStyles(): void {
     #sp-mic-btn:not(:disabled):active,
     #sp-model-badge:not(:disabled):active,
     #sp-model-selector-btn:not(:disabled):active,
-    #sp-onboarding-skip:not(:disabled):active,
     #sp-project-chip:not(:disabled):active,
     #sp-project-chip-clear:not(:disabled):active,
     #sp-recents-close:not(:disabled):active,
@@ -5850,7 +5849,6 @@ function injectStyles(): void {
     #sp-blocked,
     .sp-agent-approval,
     .sp-create-shortcut-modal,
-    .sp-ob-row { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
       align-items: center;
