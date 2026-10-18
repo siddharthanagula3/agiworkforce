@@ -411,15 +411,7 @@ export async function provisionOrganizationKey(
     `insert into public.organization_encryption_keys
        (organization_id, provider, key_uri, key_region, status, key_version,
         wrapped_data_key, retired_keys, created_by_user_id)
-     values ($1, $2, $3, $4, 'active', $5, $6, '[]'::jsonb, $7)
-     on conflict (organization_id) do update
-       set provider = excluded.provider,
-           key_uri = excluded.key_uri,
-           key_region = excluded.key_region,
-           status = 'active',
-           key_version = excluded.key_version,
-           wrapped_data_key = excluded.wrapped_data_key,
-           revoked_at = null`,
+     values ($1, $2, $3, $4, 'active', $5, $6, '[]'::jsonb, $7)`,
     [
       input.organizationId,
       input.descriptor.provider,
