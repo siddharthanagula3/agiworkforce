@@ -54,13 +54,8 @@ export const FILESYSTEM_COMMANDS = [
   'file_read_bytes',
   'file_write_text',
   'file_edit_text',
-  'file_create_directory',
-  'file_rename',
-  'file_delete',
   'file_glob',
   'file_grep',
-  'file_watch',
-  'file_unwatch',
 ] as const;
 
 export type FilesystemCommand = (typeof FILESYSTEM_COMMANDS)[number];

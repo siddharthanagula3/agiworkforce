@@ -34,7 +34,6 @@ export interface BrowserPairingState {
 export const BROWSER_PAIRING_COMMANDS = [
   'browser_pairing_state',
   'browser_pairing_install_host',
-  'browser_pairing_uninstall_host',
   'browser_pairing_unpair',
 ] as const;
 

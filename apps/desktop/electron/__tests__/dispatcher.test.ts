@@ -3016,13 +3016,7 @@ describe('the commands the contract lists', () => {
   ]);
   /** Named for another host, or retired from this one: no page asks this shell for them. */
   const NOT_ANSWERED_HERE = new Set<string>([
-    'browser_pairing_uninstall_host',
-    'file_create_directory',
-    'file_delete',
-    'file_rename',
     'file_stat',
-    'file_unwatch',
-    'file_watch',
     'phone_step',
     'window_open',
     'workspace_snapshot',
