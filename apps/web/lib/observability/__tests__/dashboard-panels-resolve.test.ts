@@ -130,7 +130,6 @@ async function emitEverySignal(): Promise<void> {
   recordNotificationDelivery({ channel: 'email', outcome: 'failed', reason: 'bounced' });
   recordConfigurationState({ component: 'redis', state: 'ok' });
   recordWorkPlanSize({ shape: 'planned', steps: 4, completed: 1 });
-  recordWorkPlanSize({ shape: 'revised', steps: 6, completed: 2 });
   recordClientFailure({
     failure: 'mermaid_render',
     detail: 'parse',

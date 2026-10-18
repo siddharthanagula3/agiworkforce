@@ -3,11 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 import { MAX_AGIWORK_GOAL_CHARS } from '@agiworkforce/cloud-contracts';
-import {
-  agiWorkPlanContextSource,
-  MAX_AGIWORK_GOAL_FIELD_CHARS,
-} from '@/app/api/llm/v1/chat/completions/lib/agiwork-plan';
-import type { ContextSource } from '@agiworkforce/context';
+import { MAX_AGIWORK_GOAL_FIELD_CHARS } from '@/app/api/llm/v1/chat/completions/lib/agiwork-plan';
 import { recordWorkPlanSize } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import type { WorkPlanShape } from '@/lib/observability/work-plan-measures';
@@ -209,45 +205,12 @@ function applyOperation(plan: WorkPlan, operation: WorkPlanRevisionOperation): W
   };
 }
 
-// Pure: the caller decides whether the next version is worth writing.
-export function applyWorkPlanRevision(
-  plan: WorkPlan,
-  operations: readonly WorkPlanRevisionOperation[],
-): WorkPlan {
-  if (operations.length === 0) {
-    throw new WorkPlanRevisionError('A revision must carry at least one operation');
-  }
-  if (plan.status === 'completed' || plan.status === 'cancelled') {
-    throw new WorkPlanRevisionError(`A ${plan.status} plan cannot be revised`);
-  }
-  const revised = operations.reduce(applyOperation, plan);
-  if (revised.steps.length === 0 && plan.steps.length > 0) {
-    throw new WorkPlanRevisionError('A plan cannot be left without steps');
-  }
-  assertDependenciesAreSatisfiable(revised.steps);
-  return { ...revised, version: plan.version + 1 };
-}
-
 function observeWorkPlan(shape: WorkPlanShape, plan: WorkPlan): void {
   recordWorkPlanSize({
     shape,
     steps: plan.steps.length,
     completed: plan.steps.filter((step) => step.status === 'completed').length,
   });
-}
-
-/** The first step whose dependencies are all satisfied, or null while none is. */
-export function nextRunnableStep(plan: WorkPlan): WorkPlanStep | null {
-  const completed = new Set(
-    plan.steps.filter((step) => step.status === 'completed').map((step) => step.id),
-  );
-  return (
-    plan.steps.find(
-      (step) =>
-        step.status === 'pending' &&
-        step.dependsOn.every((dependency) => completed.has(dependency)),
-    ) ?? null
-  );
 }
 
 export function workPlanStatusFromSteps(plan: WorkPlan): WorkPlanStatus {
@@ -257,15 +220,6 @@ export function workPlanStatusFromSteps(plan: WorkPlan): WorkPlanStatus {
   if (plan.steps.every((step) => TERMINAL_STEP_STATUSES.includes(step.status))) return 'completed';
   if (plan.steps.some((step) => step.status !== 'pending')) return 'active';
   return plan.status === 'draft' ? 'draft' : plan.status;
-}
-
-export function workPlanContextSource(plan: WorkPlan): ContextSource {
-  return agiWorkPlanContextSource({
-    turnId: plan.runId ?? plan.id,
-    conversationId: plan.conversationId,
-    planId: plan.id,
-    version: plan.version,
-  });
 }
 
 interface WorkPlanRow {
@@ -408,8 +362,6 @@ function addStepOperations(steps: CreateWorkPlanInput['steps']): WorkPlanRevisio
   );
 }
 
-// Pin the objective before the steps exist, so a run is accountable to something
-// from its first moment; recordWorkPlanSteps fills them in as a revision.
 export async function openWorkPlan(
   db: DatabaseAdapter,
   input: Omit<CreateWorkPlanInput, 'steps'>,
@@ -467,27 +419,6 @@ export async function createWorkPlan(
   );
 }
 
-// Steps already on the plan are left alone, so a resumed turn that replans does
-// not erase the record of what already ran.
-export async function recordWorkPlanSteps(
-  db: DatabaseAdapter,
-  params: {
-    userId: string;
-    planId: string;
-    descriptions: readonly string[];
-    revisedBy?: WorkPlanRevisionAuthor;
-  },
-): Promise<WorkPlan | null> {
-  const operations = addStepOperations(params.descriptions.map((description) => ({ description })));
-  if (operations.length === 0) return null;
-  return reviseWorkPlan(db, {
-    userId: params.userId,
-    planId: params.planId,
-    operations,
-    revisedBy: params.revisedBy ?? 'agent',
-  });
-}
-
 export async function settleWorkPlan(
   db: DatabaseAdapter,
   params: { userId: string; planId: string; status: WorkPlanStatus },
@@ -498,122 +429,4 @@ export async function settleWorkPlan(
       where id = $1::uuid and user_id = $2 and status not in ('completed', 'cancelled')`,
     [params.planId, params.userId, params.status],
   );
-}
-
-export async function reviseWorkPlan(
-  db: DatabaseAdapter,
-  params: {
-    userId: string;
-    planId: string;
-    operations: readonly WorkPlanRevisionOperation[];
-    revisedBy: WorkPlanRevisionAuthor;
-    expectedVersion?: number;
-  },
-): Promise<WorkPlan> {
-  return withSpan('work.plan.revise', { domain: 'task' }, async (span) =>
-    db.transaction(async (tx) => {
-      const current = await readPlan(tx, { userId: params.userId, planId: params.planId });
-      if (!current) throw new WorkPlanRevisionError('No such plan');
-      if (params.expectedVersion !== undefined && params.expectedVersion !== current.version) {
-        throw new WorkPlanRevisionError(
-          `The plan moved to version ${current.version} while this revision was being prepared`,
-        );
-      }
-
-      const revised = applyWorkPlanRevision(current, params.operations);
-      const [row] = await tx.query<WorkPlanRow>(
-        `update work_plans
-          set objective = $3,
-              constraints = $4,
-              deliverable = $5,
-              version = version + 1
-        where id = $1::uuid and user_id = $2 and version = $6
-       returning id, user_id, run_id, conversation_id, objective, constraints, deliverable,
-                 version, status`,
-        [
-          params.planId,
-          params.userId,
-          revised.objective,
-          revised.constraints,
-          revised.deliverable,
-          current.version,
-        ],
-      );
-      if (!row) throw new WorkPlanRevisionError('The plan changed while this revision was applied');
-
-      const written = {
-        ...revised,
-        version: Number(row.version),
-        status: row.status as WorkPlanStatus,
-      };
-      await writeSteps(tx, written);
-      await recordRevision(tx, written, params.operations, params.revisedBy);
-      span.setAttributes({ 'agi.work.plan.status': written.status });
-      observeWorkPlan('revised', written);
-      return written;
-    }),
-  );
-}
-
-export async function advanceWorkPlanStep(
-  db: DatabaseAdapter,
-  params: {
-    userId: string;
-    planId: string;
-    stepId: string;
-    transition: 'start' | 'complete' | 'fail' | 'cancel';
-  },
-): Promise<WorkPlan> {
-  return db.transaction(async (tx) => {
-    const plan = await readPlan(tx, { userId: params.userId, planId: params.planId });
-    if (!plan) throw new WorkPlanRevisionError('No such plan');
-    const step = plan.steps.find((candidate) => candidate.id === params.stepId);
-    if (!step) throw new WorkPlanRevisionError(`Unknown step ${params.stepId}`);
-
-    if (params.transition === 'start') {
-      if (step.status !== 'pending') {
-        throw new WorkPlanRevisionError(`Step ${step.id} is already ${step.status}`);
-      }
-      const blocking = step.dependsOn.filter(
-        (dependency) =>
-          plan.steps.find((candidate) => candidate.id === dependency)?.status !== 'completed',
-      );
-      if (blocking.length > 0) {
-        throw new WorkPlanRevisionError(`Step ${step.id} waits for ${blocking.join(', ')}`);
-      }
-    } else if (step.status !== 'in_progress') {
-      throw new WorkPlanRevisionError(`Step ${step.id} is ${step.status}, not in progress`);
-    }
-
-    const status: WorkPlanStepStatus =
-      params.transition === 'start'
-        ? 'in_progress'
-        : params.transition === 'complete'
-          ? 'completed'
-          : params.transition === 'fail'
-            ? 'failed'
-            : 'cancelled';
-
-    await tx.query(
-      `update work_plan_steps
-          set status = $4,
-              started_at = case when $4 = 'in_progress' then now() else started_at end,
-              ended_at = case when $4 in ('completed', 'failed', 'cancelled') then now() else ended_at end
-        where plan_id = $1::uuid and user_id = $2 and step_id = $3`,
-      [params.planId, params.userId, params.stepId, status],
-    );
-
-    const advanced = {
-      ...plan,
-      steps: plan.steps.map((candidate) =>
-        candidate.id === step.id ? { ...candidate, status } : candidate,
-      ),
-    };
-    const nextStatus = workPlanStatusFromSteps(advanced);
-    const [row] = await tx.query<{ status: string }>(
-      `update work_plans set status = $3 where id = $1::uuid and user_id = $2 returning status`,
-      [params.planId, params.userId, nextStatus],
-    );
-    return { ...advanced, status: (row?.status ?? nextStatus) as WorkPlanStatus };
-  });
 }

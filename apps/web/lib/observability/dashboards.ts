@@ -867,8 +867,6 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
           attributeKey(OBSERVABILITY_ATTRIBUTE.workPlanMeasure),
         ],
       },
-      // A plan the agent revises is a plan that did not survive contact; the
-      // planned and revised series diverging is the reading of that.
       {
         id: 'work-planning-latency-p95',
         title: 'Planning latency p95',

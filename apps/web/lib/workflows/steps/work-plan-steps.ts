@@ -12,8 +12,8 @@ import {
 } from '@/lib/services/work-plan-service';
 import type { CloudAgentWorkflowInput } from '../cloud-agent-workflow-input';
 
-// The steps arrive later from the planning turn; this pins what the run is
-// accountable to. A plan write must never end a turn, so failures are swallowed.
+// Pins what the run is accountable to. A plan write must never end a turn, so a
+// failure is logged and the turn goes on.
 export async function ensureWorkPlanForRun(input: CloudAgentWorkflowInput): Promise<void> {
   'use step';
 

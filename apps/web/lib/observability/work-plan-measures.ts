@@ -4,6 +4,6 @@ export const WORK_PLAN_MEASURES = ['steps', 'completed'] as const;
 
 export type WorkPlanMeasure = (typeof WORK_PLAN_MEASURES)[number];
 
-export const WORK_PLAN_SHAPES = ['planned', 'revised'] as const;
+export const WORK_PLAN_SHAPES = ['planned'] as const;
 
 export type WorkPlanShape = (typeof WORK_PLAN_SHAPES)[number];

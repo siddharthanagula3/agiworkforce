@@ -10,17 +10,10 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mockGetNeonDb }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  advanceWorkPlanStep,
-  applyWorkPlanRevision,
   createWorkPlan,
   loadWorkPlanForRun,
-  nextRunnableStep,
   openWorkPlan,
-  recordWorkPlanSteps,
-  reviseWorkPlan,
-  workPlanContextSource,
   workPlanStatusFromSteps,
-  WorkPlanRevisionError,
   type WorkPlan,
 } from '@/lib/services/work-plan-service';
 import type { CloudAgentWorkflowInput } from '../cloud-agent-workflow-input';
@@ -148,31 +141,6 @@ function fakeDb() {
       return [] as T[];
     }
 
-    if (text.startsWith('update work_plans set objective')) {
-      const [planId, userId, objective, constraints, deliverable, expected] = params as [
-        string,
-        string,
-        string,
-        string | null,
-        string | null,
-        number,
-      ];
-      const row = plans.get(planId);
-      if (!row || row.user_id !== userId || row.version !== expected) return [] as T[];
-      row.objective = objective;
-      row.constraints = constraints;
-      row.deliverable = deliverable;
-      row.version += 1;
-      return [{ ...row }] as T[];
-    }
-
-    if (text.startsWith('update work_plan_steps set status')) {
-      const [planId, , stepId, status] = params as [string, string, string, string];
-      const row = (steps.get(planId) ?? []).find((candidate) => candidate.step_id === stepId);
-      if (row) row.status = status;
-      return [] as T[];
-    }
-
     if (text.startsWith('update work_plans set status')) {
       const [planId, userId, status] = params as [string, string, string];
       const row = plans.get(planId);
@@ -233,118 +201,7 @@ function workflowInput(overrides: {
   } as unknown as CloudAgentWorkflowInput;
 }
 
-describe('applyWorkPlanRevision', () => {
-  it('bumps the version once per revision, whatever the operation count', () => {
-    const revised = applyWorkPlanRevision(plan(), [
-      { kind: 'add_step', description: 'Publish' },
-      { kind: 'revise_objective', objective: 'Ship the pricing page by Friday' },
-    ]);
-
-    expect(revised.version).toBe(2);
-    expect(revised.objective).toBe('Ship the pricing page by Friday');
-    expect(revised.steps.map((step) => step.id)).toEqual(['step-1', 'step-2', 'step-3']);
-    expect(
-      applyWorkPlanRevision(revised, [{ kind: 'remove_step', stepId: 'step-3' }]).version,
-    ).toBe(3);
-  });
-
-  it('refuses an order that puts a step before what it depends on', () => {
-    expect(() =>
-      applyWorkPlanRevision(plan(), [{ kind: 'reorder', stepIds: ['step-2', 'step-1'] }]),
-    ).toThrow(/ordered before step-1/);
-
-    const withIndependent = applyWorkPlanRevision(plan(), [
-      { kind: 'add_step', description: 'Take screenshots' },
-    ]);
-    const reordered = applyWorkPlanRevision(withIndependent, [
-      { kind: 'reorder', stepIds: ['step-3', 'step-1', 'step-2'] },
-    ]);
-    expect(reordered.steps.map((step) => step.id)).toEqual(['step-3', 'step-1', 'step-2']);
-  });
-
-  it('rejects a reorder that is not a permutation of the plan', () => {
-    expect(() => applyWorkPlanRevision(plan(), [{ kind: 'reorder', stepIds: ['step-1'] }])).toThrow(
-      /exactly once/,
-    );
-    expect(() =>
-      applyWorkPlanRevision(plan(), [{ kind: 'reorder', stepIds: ['step-1', 'step-1'] }]),
-    ).toThrow(/exactly once/);
-  });
-
-  it('keeps the dependency graph closed and acyclic', () => {
-    expect(() =>
-      applyWorkPlanRevision(plan(), [
-        { kind: 'revise_step', stepId: 'step-1', dependsOn: ['step-9'] },
-      ]),
-    ).toThrow(/unknown step step-9/);
-    expect(() =>
-      applyWorkPlanRevision(plan(), [
-        { kind: 'revise_step', stepId: 'step-1', dependsOn: ['step-1'] },
-      ]),
-    ).toThrow(/depend on itself/);
-    expect(() =>
-      applyWorkPlanRevision(plan(), [
-        { kind: 'revise_step', stepId: 'step-1', dependsOn: ['step-2'] },
-      ]),
-    ).toThrow(/ordered before step-2/);
-  });
-
-  it('protects the record of work already done', () => {
-    const started = plan({
-      steps: [
-        { id: 'step-1', description: 'Draft copy', status: 'completed', dependsOn: [] },
-        { id: 'step-2', description: 'Review copy', status: 'pending', dependsOn: ['step-1'] },
-      ],
-    });
-    expect(() =>
-      applyWorkPlanRevision(started, [{ kind: 'remove_step', stepId: 'step-1' }]),
-    ).toThrow(/cancel it instead/);
-    expect(() =>
-      applyWorkPlanRevision(started, [
-        { kind: 'revise_step', stepId: 'step-1', description: 'Draft better copy' },
-      ]),
-    ).toThrow(/cannot be revised/);
-    expect(() =>
-      applyWorkPlanRevision(plan(), [{ kind: 'remove_step', stepId: 'step-1' }]),
-    ).toThrow(/step-2 depends on step-1/);
-    expect(
-      applyWorkPlanRevision(started, [{ kind: 'remove_step', stepId: 'step-2' }]).steps.map(
-        (step) => step.id,
-      ),
-    ).toEqual(['step-1']);
-  });
-
-  it('refuses to revise a settled plan, or to revise nothing', () => {
-    expect(() =>
-      applyWorkPlanRevision(plan({ status: 'completed' }), [
-        { kind: 'add_step', description: 'One more' },
-      ]),
-    ).toThrow(/completed plan cannot be revised/);
-    expect(() => applyWorkPlanRevision(plan(), [])).toThrow(WorkPlanRevisionError);
-  });
-});
-
 describe('plan readiness', () => {
-  it('offers only a step whose dependencies are all completed', () => {
-    expect(nextRunnableStep(plan())?.id).toBe('step-1');
-
-    const inProgress = plan({
-      steps: [
-        { id: 'step-1', description: 'Draft copy', status: 'in_progress', dependsOn: [] },
-        { id: 'step-2', description: 'Review copy', status: 'pending', dependsOn: ['step-1'] },
-      ],
-    });
-    expect(nextRunnableStep(inProgress)).toBeNull();
-
-    const unblocked = plan({
-      steps: [
-        { id: 'step-1', description: 'Draft copy', status: 'completed', dependsOn: [] },
-        { id: 'step-2', description: 'Review copy', status: 'pending', dependsOn: ['step-1'] },
-      ],
-    });
-    expect(nextRunnableStep(unblocked)?.id).toBe('step-2');
-  });
-
   it('reads the plan status off its steps', () => {
     expect(workPlanStatusFromSteps(plan())).toBe('draft');
     expect(
@@ -375,160 +232,41 @@ describe('plan readiness', () => {
       ),
     ).toBe('active');
   });
-
-  it('names the plan and its version as a context source', () => {
-    const source = workPlanContextSource(plan({ version: 4, conversationId: 'conversation-1' }));
-    expect(source.sourceClass).toBe('current_task_state');
-    expect(source.provenance.locator).toBe('work_plans/plan-1@4');
-    expect(source.trust.isInstruction).toBe(true);
-  });
 });
 
 describe('durable plan persistence', () => {
-  it('writes the objective, the steps and one revision row per version', async () => {
+  it('writes the objective, the steps and one revision row', async () => {
     const { db, plans, revisions } = fakeDb();
     const created = await createWorkPlan(db, {
       userId: 'user-1',
       objective: 'Ship the pricing page',
       runId: 'run-1',
-      steps: [{ description: 'Draft copy' }, { description: 'Review copy' }],
+      steps: [{ description: 'Draft copy' }, { description: 'Review copy', dependsOn: ['step-1'] }],
     });
 
     expect(created.steps.map((step) => step.description)).toEqual(['Draft copy', 'Review copy']);
     expect(plans.get(created.id)?.objective).toBe('Ship the pricing page');
     expect(revisions).toHaveLength(1);
 
-    const revised = await reviseWorkPlan(db, {
-      userId: 'user-1',
-      planId: created.id,
-      operations: [{ kind: 'add_step', description: 'Publish', dependsOn: ['step-2'] }],
-      revisedBy: 'user',
-    });
-
-    expect(revised.version).toBe(2);
-    expect(revisions.map((row) => row.version)).toEqual([1, 2]);
-    expect(revisions[1]?.revised_by).toBe('user');
-
     const reloaded = await loadWorkPlanForRun(db, { userId: 'user-1', runId: 'run-1' });
-    expect(reloaded?.version).toBe(2);
-    expect(reloaded?.steps.map((step) => step.id)).toEqual(['step-1', 'step-2', 'step-3']);
-    expect(reloaded?.steps[2]?.dependsOn).toEqual(['step-2']);
+    expect(reloaded?.version).toBe(1);
+    expect(reloaded?.steps.map((step) => step.id)).toEqual(['step-1', 'step-2']);
+    expect(reloaded?.steps[1]?.dependsOn).toEqual(['step-1']);
   });
 
-  it('reorders persisted steps and keeps each step its own status', async () => {
+  it('refuses a plan whose steps depend on a step that does not exist', async () => {
     const { db } = fakeDb();
-    const created = await createWorkPlan(db, {
-      userId: 'user-1',
-      objective: 'Ship the pricing page',
-      steps: [
-        { description: 'Draft copy' },
-        { description: 'Take screenshots' },
-        { description: 'Review copy', dependsOn: ['step-1'] },
-      ],
-    });
-
-    await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created.id,
-      stepId: 'step-1',
-      transition: 'start',
-    });
-    await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created.id,
-      stepId: 'step-1',
-      transition: 'complete',
-    });
-
-    const reordered = await reviseWorkPlan(db, {
-      userId: 'user-1',
-      planId: created.id,
-      operations: [{ kind: 'reorder', stepIds: ['step-2', 'step-1', 'step-3'] }],
-      revisedBy: 'user',
-    });
-
-    expect(reordered.steps.map((step) => step.id)).toEqual(['step-2', 'step-1', 'step-3']);
-    expect(reordered.steps.map((step) => step.status)).toEqual(['pending', 'completed', 'pending']);
-
-    const reloaded = await loadWorkPlanForRun(db, { userId: 'user-1', runId: 'run-1' });
-    expect(reloaded).toBeNull();
-    const byId = await reviseWorkPlan(db, {
-      userId: 'user-1',
-      planId: created.id,
-      operations: [{ kind: 'revise_objective', deliverable: 'A live page' }],
-      revisedBy: 'agent',
-    });
-    expect(byId.version).toBe(3);
-    expect(byId.deliverable).toBe('A live page');
-  });
-
-  it('refuses a revision prepared against a version that has since moved', async () => {
-    const { db } = fakeDb();
-    const created = await createWorkPlan(db, {
-      userId: 'user-1',
-      objective: 'Ship the pricing page',
-      steps: [{ description: 'Draft copy' }],
-    });
-    await reviseWorkPlan(db, {
-      userId: 'user-1',
-      planId: created.id,
-      operations: [{ kind: 'add_step', description: 'Publish' }],
-      revisedBy: 'agent',
-    });
-
     await expect(
-      reviseWorkPlan(db, {
+      createWorkPlan(db, {
         userId: 'user-1',
-        planId: created.id,
-        operations: [{ kind: 'add_step', description: 'Announce' }],
-        revisedBy: 'user',
-        expectedVersion: created.version,
+        objective: 'Ship the pricing page',
+        steps: [{ description: 'Review copy', dependsOn: ['step-9'] }],
       }),
-    ).rejects.toThrow(/moved to version 2/);
+    ).rejects.toThrow(/depends on unknown step step-9/);
   });
 
-  it('will not start a step whose dependencies have not finished', async () => {
-    const { db } = fakeDb();
-    const created = await createWorkPlan(db, {
-      userId: 'user-1',
-      objective: 'Ship the pricing page',
-      steps: [{ description: 'Draft copy' }, { description: 'Review copy', dependsOn: ['step-1'] }],
-    });
-
-    await expect(
-      advanceWorkPlanStep(db, {
-        userId: 'user-1',
-        planId: created.id,
-        stepId: 'step-2',
-        transition: 'start',
-      }),
-    ).rejects.toThrow(/waits for step-1/);
-
-    await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created.id,
-      stepId: 'step-1',
-      transition: 'start',
-    });
-    const completed = await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created.id,
-      stepId: 'step-1',
-      transition: 'complete',
-    });
-    expect(completed.status).toBe('active');
-
-    const started = await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created.id,
-      stepId: 'step-2',
-      transition: 'start',
-    });
-    expect(started.steps[1]?.status).toBe('in_progress');
-  });
-
-  it('records the planning turn steps onto a plan opened with only an objective', async () => {
-    const { db } = fakeDb();
+  it('opens a plan with only an objective and one revision row', async () => {
+    const { db, revisions } = fakeDb();
     const opened = await openWorkPlan(db, {
       userId: 'user-1',
       objective: 'Ship the pricing page',
@@ -536,17 +274,7 @@ describe('durable plan persistence', () => {
     });
     expect(opened.steps).toEqual([]);
     expect(opened.objective).toBe('Ship the pricing page');
-
-    const filled = await recordWorkPlanSteps(db, {
-      userId: 'user-1',
-      planId: opened.id,
-      descriptions: ['Draft copy', 'Review copy'],
-    });
-    expect(filled?.version).toBe(2);
-    expect(filled?.steps.map((step) => step.description)).toEqual(['Draft copy', 'Review copy']);
-    expect(
-      await recordWorkPlanSteps(db, { userId: 'user-1', planId: opened.id, descriptions: [] }),
-    ).toBeNull();
+    expect(revisions.map((row) => row.version)).toEqual([1]);
   });
 });
 
@@ -586,33 +314,18 @@ describe('the cloud agent workflow hook', () => {
     expect([...plans.values()]).toHaveLength(0);
   });
 
-  it('closes the plan on the run outcome without overruling what the steps say', async () => {
+  it('closes the plan on the run outcome and never reopens a settled one', async () => {
     const { db, plans } = fakeDb();
     mockGetNeonDb.mockReturnValue(db);
     const input = workflowInput({ goal: { goal: 'Ship the pricing page' } });
 
     await ensureWorkPlanForRun(input);
     const [created] = [...plans.values()];
-    await recordWorkPlanSteps(db, {
-      userId: 'user-1',
-      planId: created!.id,
-      descriptions: ['Draft copy'],
-    });
-    await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created!.id,
-      stepId: 'step-1',
-      transition: 'start',
-    });
-    await advanceWorkPlanStep(db, {
-      userId: 'user-1',
-      planId: created!.id,
-      stepId: 'step-1',
-      transition: 'fail',
-    });
-
     await settleWorkPlanForRun(input, 'completed');
-    expect(plans.get(created!.id)?.status).toBe('failed');
+    expect(plans.get(created!.id)?.status).toBe('completed');
+
+    await settleWorkPlanForRun(input, 'failed');
+    expect(plans.get(created!.id)?.status).toBe('completed');
   });
 
   it('never lets a plan write end the run', async () => {
