@@ -50,7 +50,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 import { requireCsrfToken } from '@/lib/csrf';
-import { runAuthGate } from './auth-gate';
+import { BILLING_NOTICE_HEADER, runAuthGate } from './auth-gate';
 
 function makeRequest() {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
@@ -255,6 +255,45 @@ describe('runAuthGate enterprise collection grace', () => {
     const result = await runAuthGate(makeRequest());
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('runAuthGate lapsed paid plans', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.withRateLimit.mockResolvedValue(null);
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-123', boundSurface: 'web' });
+    mocks.dbQuery.mockResolvedValue([]);
+  });
+
+  it.each(['past_due', 'unpaid'])(
+    'serves a %s paid plan as Free with a billing notice instead of refusing',
+    async (status) => {
+      mocks.getSubscription.mockResolvedValue({
+        id: 'subscription-123',
+        status,
+        plan_tier: 'pro',
+      });
+
+      const result = await runAuthGate(makeRequest());
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.subscription.plan_tier).toBe('free');
+      expect(result.ok && result.billingNotice).toEqual({ [BILLING_NOTICE_HEADER]: status });
+    },
+  );
+
+  it('carries no billing notice for a Free account', async () => {
+    mocks.getSubscription.mockResolvedValue({
+      id: 'subscription-123',
+      status: 'canceled',
+      plan_tier: 'free',
+    });
+
+    const result = await runAuthGate(makeRequest());
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.billingNotice).toBeUndefined();
   });
 });
 

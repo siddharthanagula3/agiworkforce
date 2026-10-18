@@ -1522,6 +1522,7 @@ async function admitAndDispatchTurn(request: NextRequest): Promise<NextResponse 
     }),
   );
   if (authResult.termsNotice) attachHeaders(response, authResult.termsNotice);
+  if (authResult.billingNotice) attachHeaders(response, authResult.billingNotice);
   return response;
 }
 

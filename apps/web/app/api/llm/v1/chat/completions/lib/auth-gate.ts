@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isEnterprisePlanTier } from '@agiworkforce/types';
+import { isEnterprisePlanTier, isEntitledSubscriptionStatusForTier } from '@agiworkforce/types';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -24,10 +24,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
-import {
-  resolveSubscriptionAccess,
-  type EnterpriseCollectionAccessState,
-} from '@/lib/services/subscription-access-policy';
+import type { EnterpriseCollectionAccessState } from '@/lib/services/subscription-access-policy';
 import { timePhase } from '@/lib/observability/phase-timer';
 import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
 import { resolveAuthenticatedSurface } from './request-surface';
@@ -68,7 +65,11 @@ export type AuthGateSuccess = {
   apiKeyId?: string;
   /** Headers telling the client a newer Terms of Service version is published. */
   termsNotice?: Record<string, string>;
+  /** Headers telling the client its paid plan lapsed and the turn is served as Free. */
+  billingNotice?: Record<string, string>;
 };
+
+export const BILLING_NOTICE_HEADER = 'X-AGI-Billing-Notice';
 
 type AuthGateFailure = {
   ok: false;
@@ -343,47 +344,50 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     });
   }
 
-  const enterpriseCollection = isEnterprisePlanTier(subscription.plan_tier?.toLowerCase())
+  const enterprise = isEnterprisePlanTier(subscription.plan_tier?.toLowerCase());
+  const enterpriseCollection = enterprise
     ? await resolveEnterpriseCollectionAccessState(userId)
     : undefined;
 
-  const access = resolveSubscriptionAccess(
-    subscription.status,
+  const entitled = isEntitledSubscriptionStatusForTier(
     subscription.plan_tier,
-    enterpriseCollection,
+    subscription.status,
+    enterpriseCollection?.readOnly === true,
   );
 
-  if (!access.managedExecution) {
-    if (isFreePlanTier(subscription.plan_tier)) {
-      return enforceManagedCloudSurface(request, {
-        ok: true,
-        userId,
-        token,
-        subscription: {
-          ...subscription,
-          status: 'active',
-        },
-        ...credential,
-      });
+  if (!entitled) {
+    if (enterprise) {
+      const billingReadOnly = enterpriseCollection?.readOnly === true;
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: billingReadOnly
+                ? 'Your workspace is read-only: enterprise billing collection is past the read-only threshold. Ask your billing owner to resolve the outstanding invoice.'
+                : `Subscription is ${subscription.status}. Please update your payment method.`,
+              type: 'invalid_request_error',
+              code: billingReadOnly ? 'billing_read_only' : 'subscription_inactive',
+            },
+          },
+          { status: 403 },
+        ),
+      };
     }
 
-    const billingReadOnly = enterpriseCollection?.readOnly === true;
-
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: billingReadOnly
-              ? 'Your workspace is read-only: enterprise billing collection is past the read-only threshold. Ask your billing owner to resolve the outstanding invoice.'
-              : `Subscription is ${subscription.status}. Please update your payment method.`,
-            type: 'invalid_request_error',
-            code: billingReadOnly ? 'billing_read_only' : 'subscription_inactive',
-          },
-        },
-        { status: 403 },
-      ),
-    };
+    // A lapsed paid plan keeps the account on Free, as an account that never
+    // paid would be, and the client is told why instead of being refused.
+    const lapsedPaidPlan = !isFreePlanTier(subscription.plan_tier);
+    return enforceManagedCloudSurface(request, {
+      ok: true,
+      userId,
+      token,
+      subscription: { ...subscription, plan_tier: 'free', status: 'active' },
+      ...credential,
+      ...(lapsedPaidPlan && subscription.status
+        ? { billingNotice: { [BILLING_NOTICE_HEADER]: subscription.status } }
+        : {}),
+    });
   }
 
   return enforceManagedCloudSurface(request, {
