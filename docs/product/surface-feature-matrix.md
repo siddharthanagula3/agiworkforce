@@ -76,7 +76,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Connectors | general_availability | Present | Present | Present | Absent | Present | Absent | Present |
 | Skills | general_availability | Present | Present | Present | Present | Absent | Absent | Present |
 | Plugins | beta | Present | Present | Absent | Present | Absent | Absent | Present |
-| MCP | beta | Present | Unverified | Absent | Unverified | Unverified | Partial | Present |
+| MCP | beta | Present | Absent | Absent | Unverified | Unverified | Partial | Present |
 | Tool approvals | general_availability | Present | Present | Present | Unverified | Present | Present | Present |
 | Connected apps in artifacts | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 
@@ -89,7 +89,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Terminal | general_availability | Absent | Present | Absent | Present | Present | Absent | Absent |
 | Git | general_availability | Absent | Present | Absent | Present | Unverified | Absent | Absent |
 | Diffs | general_availability | Present | Present | Unverified | Present | Present | Absent | Present |
-| Browser verification | beta | Present | Unverified | Absent | Present | Absent | Unverified | Unverified |
+| Browser verification | beta | Present | Absent | Absent | Present | Absent | Unverified | Unverified |
 | Cloud tasks | general_availability | Present | Present | Present | Unverified | Present | Absent | Present |
 
 ## Native
@@ -272,7 +272,7 @@ this document.
 ### Deep Research
 
 - **web**: present. `apps/web/features/chat/stores/research-panel-store.ts`, reached by `apps/web/features/chat/utils/research-sources.ts` (import).
-- **desktop**: present. `apps/desktop/src/features/research/ResearchReport.tsx`, reached by `apps/desktop/src/features/research/index.ts` (import).
+- **desktop**: present. `apps/desktop/src/features/research/ResearchReport.tsx`, reached by `apps/desktop/src/features/research/DeepResearchPage.tsx` (import).
 - **mobile**: present. `apps/mobile/app/(app)/reports/index.tsx`, reached by `apps/mobile/app/(app)/_layout.tsx` (route).
 - **cli**: absent. Nothing under apps/cli/src runs or reads a research report; the CLI is a coding surface.
 - **vscode**: absent. Nothing under apps/extension-vscode/src runs or reads a research report.
@@ -382,7 +382,7 @@ this document.
 ### MCP
 
 - **web**: present. `apps/web/lib/mcp-tool-executor.ts`, reached by `apps/web/lib/user-connector-tools.ts` (import).
-- **desktop**: unverified. Settled by: apps/desktop/src/services/mcp.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **desktop**: absent. The desktop renderer's MCP service (apps/desktop/src/services/mcp.ts) was unreachable from the shell and was deleted; the public Electron desktop reports localMcp false and uses the hosted connector service.
 - **mobile**: absent. The capability table records canUseLocalMcp false for mobile and nothing under apps/mobile dials an MCP server.
 - **cli**: unverified. Settled by: apps/cli/src/mcp/mod.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
 - **vscode**: unverified. Settled by: An editor path that dials an MCP server of its own. apps/extension-vscode/src/integrations/localRuntimeClient.ts reaches the CLI runtime, which owns the MCP connection; whether the editor is a client in its own right is not decidable from the tree.
@@ -462,7 +462,7 @@ this document.
 ### Browser verification
 
 - **web**: present. `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx`, reached by `apps/web/features/desktop-host/index.ts` (import).
-- **desktop**: unverified. Settled by: apps/desktop/src/lib/browserAutomation.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this.
+- **desktop**: absent. The desktop renderer's browser automation module (apps/desktop/src/lib/browserAutomation.ts) was unreachable from the shell and was deleted.
 - **mobile**: absent. The capability table records canUseBrowserAutomation false for mobile.
 - **cli**: present. `apps/cli/src/browser_bridge.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: absent. Nothing under apps/extension-vscode/src drives a browser.

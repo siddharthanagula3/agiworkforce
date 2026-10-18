@@ -627,7 +627,7 @@
           "state": "present",
           "via": "import",
           "entry": "apps/desktop/src/features/research/ResearchReport.tsx",
-          "mount": "apps/desktop/src/features/research/index.ts"
+          "mount": "apps/desktop/src/features/research/DeepResearchPage.tsx"
         },
         "mobile": {
           "state": "present",
@@ -1088,8 +1088,8 @@
           "mount": "apps/web/lib/user-connector-tools.ts"
         },
         "desktop": {
-          "state": "unverified",
-          "settledBy": "apps/desktop/src/services/mcp.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+          "state": "absent",
+          "why": "The desktop renderer's MCP service (apps/desktop/src/services/mcp.ts) was unreachable from the shell and was deleted; the public Electron desktop reports localMcp false and uses the hosted connector service."
         },
         "mobile": {
           "state": "absent",
@@ -1431,8 +1431,8 @@
           "mount": "apps/web/features/desktop-host/index.ts"
         },
         "desktop": {
-          "state": "unverified",
-          "settledBy": "apps/desktop/src/lib/browserAutomation.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+          "state": "absent",
+          "why": "The desktop renderer's browser automation module (apps/desktop/src/lib/browserAutomation.ts) was unreachable from the shell and was deleted."
         },
         "mobile": {
           "state": "absent",

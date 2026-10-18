@@ -13,30 +13,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/desktop/src/features/agi/IterationProgressPanel.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/features/agi/ProgressIndicator.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/features/agi/ProgressIndicator.tsx",
-      "symbol": "TOOL_STATUSES",
-      "family": "tool support",
-      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/features/execution/ThinkingPanel.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/desktop/src/features/governance/ToolHistoryTable.tsx",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -92,12 +68,6 @@
     },
     {
       "file": "apps/desktop/src/lib/runtimeActivity.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/lib/streamContentRuntime.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
@@ -191,12 +161,6 @@
       "symbol": "BillingPlanTier",
       "family": "plan access",
       "why": "restates plan tiers in local literals; import the tier predicates from billing-catalog."
-    },
-    {
-      "file": "apps/desktop/src/types/chatEvents.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
       "file": "apps/desktop/src/types/mcp.ts",

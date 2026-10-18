@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { act } from '@testing-library/react';
 
 describe('Platform detection, Windows navigator mocks', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
@@ -406,119 +406,6 @@ describe('UpdaterStore, update notification on Windows', () => {
     const { isDismissalExpired } = await import('../stores/updaterStore');
     const moreThan24hAgo = Date.now() - 25 * 60 * 60 * 1000;
     expect(isDismissalExpired(moreThan24hAgo)).toBe(true);
-  });
-});
-
-describe('Keyboard shortcuts, Ctrl+ modifier on Windows', () => {
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'platform', {
-      value: 'Win32',
-      writable: true,
-      configurable: true,
-    });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(navigator, 'platform', {
-      value: 'vitest',
-      writable: true,
-      configurable: true,
-    });
-  });
-
-  it('isMac is false when platform is Win32', async () => {
-    const isMac =
-      typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    expect(isMac).toBe(false);
-  });
-
-  it('platformModifiers returns ctrl:true on Windows', async () => {
-    const { platformModifiers } = await import('../hooks/useKeyboardShortcuts');
-
-    const mods = platformModifiers({});
-    expect(mods.ctrl).toBe(true);
-    expect(mods.meta).toBeFalsy();
-  });
-
-  it('formatShortcut uses "Ctrl" label (not "Cmd") on Windows', async () => {
-    const { formatShortcut } = await import('../hooks/useKeyboardShortcuts');
-
-    const label = formatShortcut({ key: 's', modifiers: { ctrl: true } });
-    expect(label).toContain('Ctrl');
-    expect(label).not.toContain('Cmd');
-  });
-
-  it('formatShortcut does not include "Win" label when meta is absent', async () => {
-    const { formatShortcut } = await import('../hooks/useKeyboardShortcuts');
-
-    const label = formatShortcut({ key: 'z', modifiers: { ctrl: true, shift: true } });
-    expect(label).toContain('Ctrl');
-    expect(label).toContain('Shift');
-    expect(label).toContain('Z');
-    expect(label).not.toContain('Win');
-    expect(label).not.toContain('Cmd');
-  });
-
-  it('normalizeKey maps Esc → Escape correctly', async () => {
-    const action = vi.fn();
-    const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
-
-    const { result } = renderHook(() =>
-      useKeyboardShortcuts([{ key: 'Escape', modifiers: {}, action }]),
-    );
-    expect(result.current).toBeUndefined();
-
-    expect(action).not.toHaveBeenCalled();
-  });
-
-  it('Ctrl+S shortcut fires action on ctrlKey keydown event', async () => {
-    const action = vi.fn();
-    const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
-
-    const { unmount } = renderHook(() =>
-      useKeyboardShortcuts([{ key: 's', modifiers: { ctrl: true }, action }]),
-    );
-
-    const event = new KeyboardEvent('keydown', {
-      key: 's',
-      ctrlKey: true,
-      metaKey: false,
-      bubbles: true,
-    });
-    window.dispatchEvent(event);
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(action).toHaveBeenCalledTimes(1);
-
-    unmount();
-  });
-
-  it('Ctrl+Z shortcut does NOT fire when metaKey (Cmd) is used instead', async () => {
-    const action = vi.fn();
-    const { useKeyboardShortcuts } = await import('../hooks/useKeyboardShortcuts');
-
-    const { unmount } = renderHook(() =>
-      useKeyboardShortcuts([{ key: 'z', modifiers: { ctrl: true }, action }]),
-    );
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'z',
-      ctrlKey: false,
-      metaKey: true,
-      bubbles: true,
-    });
-    window.dispatchEvent(event);
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(action).not.toHaveBeenCalled();
-
-    unmount();
   });
 });
 

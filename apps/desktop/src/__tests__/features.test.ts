@@ -483,14 +483,11 @@ describe('LLM Constants', () => {
 
     it('omits media models whose provider does not publish a token context limit', async () => {
       const { getModelContextWindow, MODEL_CONTEXT_WINDOWS } = await import('../constants/llm');
-      const { getContextUtilization, isWithinContextLimit } = await import('../utils/tokenCount');
 
       expect(MODEL_CONTEXT_WINDOWS).not.toHaveProperty(CONTEXTLESS_MEDIA_MODEL_ID);
       expect(() => getModelContextWindow(CONTEXTLESS_MEDIA_MODEL_ID)).toThrow(
         'does not publish a token context window',
       );
-      expect(getContextUtilization(100, CONTEXTLESS_MEDIA_MODEL_ID)).toBeNull();
-      expect(isWithinContextLimit(100, CONTEXTLESS_MEDIA_MODEL_ID)).toBe(false);
       expect(Object.values(MODEL_CONTEXT_WINDOWS).every((value) => value > 0)).toBe(true);
     });
 
