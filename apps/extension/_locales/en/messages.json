@@ -285,6 +285,10 @@
     "message": "View plans",
     "description": "Quota button and header badge that open the pricing page"
   },
+  "spQuotaFreeHeading": {
+    "message": "Upgrade for higher capacity",
+    "description": "Heading over the single upgrade action shown on the Free plan, which never shows usage meters"
+  },
   "spQuotaManageUsage": {
     "message": "Manage usage",
     "description": "Button that opens the shared usage page"

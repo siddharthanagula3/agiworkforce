@@ -655,7 +655,7 @@ function appendAnswerExtras(
       role: 'status',
     });
     progress.appendChild(renderIcon(Loader2, 14));
-    progress.appendChild(el('span', {}, t('spVideoCreating')));
+    progress.appendChild(el('span', { class: 'sp-video-progress__label' }, t('spVideoCreating')));
     wrapper.appendChild(progress);
   }
   const cards = buildInteractiveCardStack(msg, options, false);

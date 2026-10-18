@@ -334,3 +334,40 @@ describe('Chrome side-panel composer placeholder never shows a stale literal', (
     expect(body).toMatch(/else\s+input\.placeholder = t\('spComposerPlaceholder'\)/);
   });
 });
+
+describe('Chrome side-panel feature surfaces', () => {
+  it('shows only an upgrade action on the Free plan and never a usage meter', () => {
+    const start = source.indexOf('function presentManagedUsage');
+    const end = source.indexOf('refreshCloudAccountUI = async function', start);
+    const body = source.slice(start, end);
+    const freeBranch = body.indexOf('if (upgradeOnly) {');
+
+    expect(body).toContain(
+      'const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier))',
+    );
+    expect(body).toMatch(/if \(!upgradeOnly\) \{\s*for \(const view of views\)/);
+    expect(freeBranch).toBeGreaterThan(-1);
+    expect(body.indexOf('renderUsageBanner(banner)')).toBeGreaterThan(freeBranch);
+    expect(body.slice(freeBranch, body.indexOf('return;', freeBranch))).toContain(
+      'renderUsageBanner(null)',
+    );
+  });
+
+  it('gives the drawer menu the arrow-key contract its role promises', () => {
+    expect(source).toContain('wireMenuArrowKeys(drawerMenu)');
+  });
+
+  it('moves focus to the first available attach menu item when it opens', () => {
+    expect(source).toContain(
+      'attachMenuItems.find((item) => !item.hidden && !item.disabled)?.focus()',
+    );
+  });
+
+  it('updates the video progress label and not the spinner', () => {
+    expect(source).toContain('.sp-video-progress__label');
+  });
+
+  it('starts the drawer footer page label empty until the tab is read', () => {
+    expect(source).not.toMatch(/id: 'sp-drawer-about-url' \},\s*', ',/);
+  });
+});

@@ -181,7 +181,8 @@ export const ARTIFACT_PANEL_CSS = `
   }
   .sp-artifact-card__toggle:hover { background: var(--agi-ext-hover); }
   .sp-artifact-card__toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-  .sp-outputs { position: relative; display: inline-flex; }
+  #sp-header { position: relative; }
+  .sp-outputs { display: inline-flex; }
   .sp-outputs[hidden] { display: none; }
   .sp-outputs__trigger { gap: 4px; width: auto; padding: 0 6px; }
   .sp-outputs__trigger[aria-expanded='true'] { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
@@ -189,7 +190,7 @@ export const ARTIFACT_PANEL_CSS = `
   .sp-outputs__popover {
     position: absolute;
     top: calc(100% + 6px);
-    right: 0;
+    right: 12px;
     z-index: var(--z-popover);
     display: flex;
     width: min(320px, calc(100vw - 24px));

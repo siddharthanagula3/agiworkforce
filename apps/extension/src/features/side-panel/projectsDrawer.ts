@@ -138,6 +138,7 @@ export const PROJECTS_DRAWER_CSS = `
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 8px;
+    min-height: 24px;
     cursor: pointer;
     transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
   }
@@ -175,6 +176,9 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-status[hidden] { display: none; }
   .sp-drawer-projects-status-action {
     margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     padding: 0;
     font: inherit;
     color: var(--agi-ext-accent-text);
