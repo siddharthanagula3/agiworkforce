@@ -17,6 +17,7 @@ import {
   AGENT_TASK_BOARD_STAGES,
   agentTaskBoardStage,
   agentTaskStateLabel,
+  getModelMetadataById,
   messageKindForAgentEvent,
   type AgentTaskBoardStage,
 } from '@agiworkforce/types';
@@ -51,7 +52,7 @@ import {
 } from './schedulesSection';
 import { el } from './dom';
 import { buildHelpArticleLink } from './helpLinks';
-import { renderMarkdown, sanitizeHtml } from './markdown';
+import { renderMarkdownInto } from './markdown';
 import { t } from '../../i18n';
 
 export const CLOUD_RUNS_PANEL_CSS =
@@ -74,12 +75,14 @@ export const CLOUD_RUNS_PANEL_CSS =
     padding: 8px 14px;
     border-bottom: 1px solid var(--agi-ext-border);
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
 
   .sp-runs-filters {
     display: flex;
     gap: 4px;
     flex: 1;
+    flex-wrap: wrap;
   }
 
   .sp-runs-filter {
@@ -89,6 +92,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 10px;
+    min-height: 24px;
     cursor: pointer;
     transition: border-color var(--duration-instant), color var(--duration-instant);
   }
@@ -105,6 +109,7 @@ export const CLOUD_RUNS_PANEL_CSS =
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 10px;
+    min-height: 24px;
     cursor: pointer;
     flex-shrink: 0;
   }
@@ -146,6 +151,9 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-status-action {
     margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     padding: 0;
     font: inherit;
     color: var(--agi-ext-accent-text);
@@ -913,8 +921,12 @@ function runPreview(run: CloudAgentRun, title: string | null): string | null {
   return preview && preview !== title ? preview : null;
 }
 
+function runModelName(run: CloudAgentRun): string {
+  return getModelMetadataById(run.model)?.name ?? run.model;
+}
+
 function runModeAndModel(run: CloudAgentRun): string {
-  return `${WORK_MODE_LABELS[run.workMode]} • ${run.model}`;
+  return `${WORK_MODE_LABELS[run.workMode]} • ${runModelName(run)}`;
 }
 
 function runStateLabel(run: CloudAgentRun): string {
@@ -1061,6 +1073,7 @@ export function buildCloudRunsPanel(
   let filter: RunFilter = 'active';
   let layout: RunLayout = loadRunLayout();
   let runs: CloudAgentRun[] = [];
+  let listFailed = false;
   let nextCursor: string | null = null;
   let openRunId: string | null = null;
   let detailRun: CloudAgentRun | null = null;
@@ -1172,7 +1185,7 @@ export function buildCloudRunsPanel(
       el(
         'div',
         { class: 'sp-run-approval-title' },
-        `${agentTaskStateLabel('awaiting_input')}, ${run.model}`,
+        `${agentTaskStateLabel('awaiting_input')}, ${runModelName(run)}`,
       ),
     );
     for (const call of pending.toolCalls) {
@@ -1399,7 +1412,7 @@ export function buildCloudRunsPanel(
       ),
     );
     const body = el('div', { class: 'sp-run-result' });
-    body.innerHTML = sanitizeHtml(renderMarkdown(text));
+    renderMarkdownInto(body, text);
     section.appendChild(body);
     return section;
   }
@@ -1723,12 +1736,20 @@ export function buildCloudRunsPanel(
       const busy = pendingDecisionRunId !== null;
       const approveBtn = el(
         'button',
-        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Approve ${run.model} run` },
+        {
+          type: 'button',
+          class: 'sp-runs-icon-btn',
+          'aria-label': `Approve ${runModelName(run)} run`,
+        },
         'Approve',
       );
       const denyBtn = el(
         'button',
-        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Deny ${run.model} run` },
+        {
+          type: 'button',
+          class: 'sp-runs-icon-btn',
+          'aria-label': `Deny ${runModelName(run)} run`,
+        },
         'Deny',
       );
       approveBtn.disabled = busy;
@@ -1740,14 +1761,18 @@ export function buildCloudRunsPanel(
       actions.appendChild(approveBtn);
       actions.appendChild(denyBtn);
     }
-    const control = buildPauseControl(run, `${run.model} run`, true, (action) =>
+    const control = buildPauseControl(run, `${runModelName(run)} run`, true, (action) =>
       moveBoardCard(run, action),
     );
     if (control) actions.appendChild(control);
     if (LIVE_RUN_STATES.has(run.state)) {
       const stopBtn = el(
         'button',
-        { type: 'button', class: 'sp-runs-icon-btn', 'aria-label': `Stop ${run.model} run` },
+        {
+          type: 'button',
+          class: 'sp-runs-icon-btn',
+          'aria-label': `Stop ${runModelName(run)} run`,
+        },
         'Stop',
       );
       stopBtn.disabled = run.cancellationRequestedAt !== null;
@@ -1796,17 +1821,18 @@ export function buildCloudRunsPanel(
     const now = deps.now();
     const fragment = document.createDocumentFragment();
     if (runs.length === 0) {
-      fragment.appendChild(
-        el(
-          'div',
-          { class: 'sp-runs-empty' },
-          filter === 'needs-you'
-            ? 'Nothing needs you right now.\n\nA run that is waiting for your approval, an answer or a resume shows up here.'
-            : filter === 'active'
-              ? 'No active runs.\n\nRuns you start on the web, the desktop app or your phone show up here while they are working.'
-              : 'No runs yet.\n\nRuns you start on any signed-in surface show up here.',
-        ),
-      );
+      if (!listFailed)
+        fragment.appendChild(
+          el(
+            'div',
+            { class: 'sp-runs-empty' },
+            filter === 'needs-you'
+              ? 'Nothing needs you right now.\n\nA run that is waiting for your approval, an answer or a resume shows up here.'
+              : filter === 'active'
+                ? 'No active runs.\n\nRuns you start on the web, the desktop app or your phone show up here while they are working.'
+                : 'No runs yet.\n\nRuns you start on any signed-in surface show up here.',
+          ),
+        );
     } else {
       if (layout === 'board') fragment.appendChild(buildBoard(now));
       else for (const run of needsYouFirst(runs)) fragment.appendChild(buildRunRow(run, now));
@@ -1965,6 +1991,7 @@ export function buildCloudRunsPanel(
     if (controller.signal.aborted || disposed) return;
     if (result.status === 'error') {
       if (result.code !== 'cancelled') {
+        listFailed = true;
         reportLoadFailure(result, 'load');
         if (!isEditingInPanel()) render();
       }
@@ -1974,6 +2001,7 @@ export function buildCloudRunsPanel(
     const loaded = filter === 'needs-you' ? result.page.runs.filter(needsYou) : result.page.runs;
     runs = options.append ? [...runs, ...loaded] : loaded;
     nextCursor = result.page.nextCursor;
+    listFailed = false;
     pruneInputAnswers();
     clearTransientStatus();
     if (!isEditingInPanel()) render();

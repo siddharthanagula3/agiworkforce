@@ -56,6 +56,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESUME_CHAT_RUN: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  ADOPT_CHAT_TURN: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESOLVE_CHAT_APPROVAL: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESOLVE_CHAT_INPUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   MANAGED_CLOUD_AUTH_CHANGED: { senderClass: 'extension-page-only', allowsCrossTab: true },

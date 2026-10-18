@@ -1,22 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-// A notice's stored value lists a fingerprint of each account it has been shown
-// to, so each account on a browser sees it once, a signed-out visitor never
-// counts as having seen it, and whoever uses the browser later cannot read
-// which accounts did. The fingerprint is not a secret, only not the id.
-function accountFingerprint(storageKey: string, accountId: string): string {
-  const input = `${storageKey}\u0000${accountId}`;
-  let high = 0xdeadbeef;
-  let low = 0x41c6ce57;
-  for (let index = 0; index < input.length; index += 1) {
-    const code = input.charCodeAt(index);
-    high = Math.imul(high ^ code, 2654435761);
-    low = Math.imul(low ^ code, 1597334677);
-  }
-  high = Math.imul(high ^ (high >>> 16), 2246822507) ^ Math.imul(low ^ (low >>> 13), 3266489909);
-  low = Math.imul(low ^ (low >>> 16), 2246822507) ^ Math.imul(high ^ (high >>> 13), 3266489909);
-  return (4294967296 * (2097151 & low) + (high >>> 0)).toString(36);
-}
+import { noticeAccountFingerprint } from '@agiworkforce/compliance';
 
 interface ShownRecord {
   fingerprints: string[];
@@ -51,16 +34,16 @@ export function wasShownTo(storageKey: string, accountId: string): boolean {
   const { fingerprints, legacyAccountId } = readShown(storageKey);
   return (
     legacyAccountId === accountId ||
-    fingerprints.includes(accountFingerprint(storageKey, accountId))
+    fingerprints.includes(noticeAccountFingerprint(storageKey, accountId))
   );
 }
 
 export function rememberShownTo(storageKey: string, accountId: string): void {
   const { fingerprints, legacyAccountId } = readShown(storageKey);
-  const fingerprint = accountFingerprint(storageKey, accountId);
+  const fingerprint = noticeAccountFingerprint(storageKey, accountId);
   if (legacyAccountId === null && fingerprints.includes(fingerprint)) return;
   const shown = new Set(fingerprints);
-  if (legacyAccountId !== null) shown.add(accountFingerprint(storageKey, legacyAccountId));
+  if (legacyAccountId !== null) shown.add(noticeAccountFingerprint(storageKey, legacyAccountId));
   shown.add(fingerprint);
   try {
     window.localStorage.setItem(storageKey, JSON.stringify([...shown]));

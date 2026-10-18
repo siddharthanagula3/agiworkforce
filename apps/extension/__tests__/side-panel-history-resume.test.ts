@@ -32,7 +32,13 @@ function harness(stored: StoredSidePanelChatMessage) {
     messages: [message],
   };
   const resumeManagedCloudRun = vi.fn();
-  const dependencies = { _ctx: context, sameManagedCloudOwner, resumeManagedCloudRun };
+  const adoptClosedPanelTurn = vi.fn(() => Promise.resolve());
+  const dependencies = {
+    _ctx: context,
+    sameManagedCloudOwner,
+    resumeManagedCloudRun,
+    adoptClosedPanelTurn,
+  };
   const compiled = ts.transpileModule(
     `${declaration.getText(program)};return resumeLatestStoredManagedRun;`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
@@ -41,7 +47,7 @@ function harness(stored: StoredSidePanelChatMessage) {
   const admit = new Function(...Object.keys(dependencies), compiled)(
     ...Object.values(dependencies),
   ) as (generation: number) => void;
-  return { context, message, resumeManagedCloudRun, admit };
+  return { context, message, resumeManagedCloudRun, adoptClosedPanelTurn, admit };
 }
 
 describe('actual hydration to history-resume admission', () => {
@@ -125,6 +131,10 @@ describe('actual hydration to history-resume admission', () => {
     state.admit(1);
     await Promise.resolve();
     expect(state.resumeManagedCloudRun).not.toHaveBeenCalled();
+    expect(state.adoptClosedPanelTurn).toHaveBeenCalledExactlyOnceWith(
+      1,
+      state.context.managedCloudOwner,
+    );
   });
 
   it('rechecks the captured chat generation before the queued resume executes', async () => {

@@ -41,6 +41,7 @@
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
+    "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/observability": "workspace:*",
     "@agiworkforce/provider-protocol": "workspace:*",
@@ -52,7 +53,9 @@
     "@agiworkforce/utils": "workspace:*",
     "@clerk/chrome-extension": "^3.1.87",
     "dompurify": "^3.4.16",
-    "markdown-it": "^15.0.2"
+    "katex": "^0.18.9",
+    "markdown-it": "^15.0.2",
+    "markdown-it-footnote": "^4.0.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.1",

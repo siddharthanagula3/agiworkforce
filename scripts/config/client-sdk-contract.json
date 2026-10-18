@@ -73,6 +73,7 @@
         "apps/desktop/src/lib/stripeCheckout.ts",
         "apps/extension-vscode/src/utils/api.ts",
         "apps/extension/src/features/cloud-bridge/freeTrialClient.ts",
+        "apps/extension/src/features/cloud-bridge/videoGenerationClient.ts",
         "apps/extension/src/features/computer-use/cloudAgentClient.ts"
       ],
       "clients": {

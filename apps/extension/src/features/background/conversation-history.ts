@@ -29,6 +29,7 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
+import { isChromeVideoTaskId } from '../cloud-bridge/videoTaskId';
 import {
   CODE_EXECUTION_OUTPUT_MAX_CHARS,
   type ManagedCodeExecution,
@@ -96,6 +97,7 @@ export interface HistoryMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
+  videoTaskId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -167,6 +169,7 @@ export interface BackgroundTurn {
   timestamp?: number;
   deliveryId?: string;
   runtime?: ConversationRuntime;
+  answeredModel?: string;
 }
 
 export interface BackgroundTurnAppendResult {
@@ -418,6 +421,8 @@ function normalizeHistoryMessage(
     if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
     const codeExecution = readStoredCodeExecution(message['codeExecution']);
     if (codeExecution) normalized.codeExecution = codeExecution;
+    if (isChromeVideoTaskId(message['videoTaskId']))
+      normalized.videoTaskId = message['videoTaskId'];
     const sources = readStoredSources(message['sources']);
     if (sources.length > 0) normalized.sources = sources;
     const citations = readStoredSources(message['citations']);
@@ -1162,10 +1167,12 @@ export async function appendBackgroundTurn(
   if (answer.length === 0) return undefined;
 
   const at = turn.timestamp ?? Date.now();
-  const assistantModel =
-    routing.currentModelKey && routing.currentModelKey !== 'auto'
-      ? getModelMetadataById(routing.currentModelKey)
-      : undefined;
+  const answeringModel =
+    turn.answeredModel ??
+    (routing.currentModelKey && routing.currentModelKey !== 'auto'
+      ? routing.currentModelKey
+      : undefined);
+  const assistantModel = answeringModel ? getModelMetadataById(answeringModel) : undefined;
   const appended: HistoryMessage[] = [
     {
       role: 'user',
@@ -1251,6 +1258,53 @@ export async function appendBackgroundTurn(
       status: priorDeliveryMessages.length > 0 ? 'updated' : 'inserted',
       persistedAnswer: persistedAssistant.content,
     };
+  });
+}
+
+export interface DetachedTurnSettlement {
+  content: string;
+  errorText?: string;
+  cloudMessageId?: string;
+}
+
+export async function settleDetachedAssistantTurn(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  settlement: DetachedTurnSettlement,
+): Promise<boolean> {
+  assertManagedCloudOwner(owner);
+  if (!isSafeConversationId(conversationId)) return false;
+  return mutateStore(async (store) => {
+    const entry = store.conversations.find(
+      (candidate) =>
+        candidate.id === conversationId && sameManagedCloudOwner(candidate.owner, owner),
+    );
+    const index = entry ? entry.messages.length - 1 : -1;
+    const turn = entry?.messages[index];
+    if (!entry || turn?.role !== 'assistant' || turn.streaming !== true) return false;
+    const settled: HistoryMessage = { ...turn };
+    delete settled.streaming;
+    const content =
+      settlement.content.length >= turn.content.length ? settlement.content : turn.content;
+    const messages = [...entry.messages];
+    messages[index] = {
+      ...settled,
+      content,
+      ...(settlement.errorText ? { error: true, errorText: settlement.errorText } : {}),
+      ...(settlement.cloudMessageId && !turn.cloudMessageId
+        ? { cloudMessageId: settlement.cloudMessageId }
+        : {}),
+    };
+    const updated: ConversationEntry = {
+      ...entry,
+      messages: normalizeMessages(messages),
+      savedAt: Date.now(),
+    };
+    store.conversations = store.conversations.map((candidate) =>
+      candidate === entry ? updated : candidate,
+    );
+    await writeStore(store);
+    return true;
   });
 }
 

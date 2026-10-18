@@ -27,7 +27,7 @@ import {
 import { t } from '../../i18n';
 import { el } from './dom';
 import { buildHelpArticleLink } from './helpLinks';
-import { renderMarkdown, sanitizeHtml } from './markdown';
+import { renderMarkdownInto } from './markdown';
 
 export const SCHEDULES_SECTION_CSS = `
   .sp-schedules {
@@ -63,6 +63,9 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedules-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
   .sp-schedules-status-action {
     margin-left: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     padding: 0;
     font: inherit;
     color: var(--agi-ext-accent-text);
@@ -143,6 +146,7 @@ export const SCHEDULES_SECTION_CSS = `
     color: var(--agi-ext-text-muted);
     font-size: var(--type-label-size);
     padding: 3px 8px;
+    min-height: 24px;
     cursor: pointer;
     transition: color var(--duration-instant), border-color var(--duration-instant);
   }
@@ -926,7 +930,7 @@ export function buildSchedulesSection(
     if (timing) entry.appendChild(el('div', { class: 'sp-schedule-sub' }, timing.note));
     if (run.output?.trim()) {
       const answer = el('div', { class: 'sp-schedule-run-output' });
-      answer.innerHTML = sanitizeHtml(renderMarkdown(run.output));
+      renderMarkdownInto(answer, run.output);
       entry.appendChild(answer);
     } else if (run.status === 'success' && !timing?.skipped) {
       entry.appendChild(el('div', { class: 'sp-schedule-sub' }, t('spScheduleRunNoAnswer')));

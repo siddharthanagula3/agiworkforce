@@ -302,6 +302,42 @@ describe('side-panel cloud run list', () => {
     panel.dispose();
   });
 
+  it('names the model by its catalog name and not its id', async () => {
+    const deps = panelDependencies({
+      listRuns: vi.fn().mockResolvedValue({
+        status: 'success',
+        page: { runs: [run({ model: 'claude-sonnet-5-5' })], nextCursor: null },
+      }),
+    });
+    const panel = buildCloudRunsPanel(deps);
+    document.body.appendChild(panel.panelEl);
+    panel.setActive(true);
+
+    await vi.waitFor(() => {
+      expect(panel.panelEl.querySelector('.sp-run-row')).not.toBeNull();
+    });
+    expect(panel.panelEl.textContent).toContain('Claude Sonnet 5.5');
+    expect(panel.panelEl.textContent).not.toContain('claude-sonnet-5-5');
+    panel.dispose();
+  });
+
+  it('does not claim there are no runs when the list failed to load', async () => {
+    const deps = panelDependencies({
+      listRuns: vi
+        .fn()
+        .mockResolvedValue({ status: 'error', code: 'server_error', message: 'HTTP 500' }),
+    });
+    const panel = buildCloudRunsPanel(deps);
+    document.body.appendChild(panel.panelEl);
+    panel.setActive(true);
+
+    await vi.waitFor(() => {
+      expect(panel.panelEl.textContent).toContain('HTTP 500');
+    });
+    expect(panel.panelEl.querySelector('.sp-runs-empty')).toBeNull();
+    panel.dispose();
+  });
+
   it('offers sign-in rather than an error when the runs list needs an account', async () => {
     const signIn = vi.fn().mockResolvedValue(undefined);
     const deps = panelDependencies({

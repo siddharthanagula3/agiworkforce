@@ -5,6 +5,30 @@ export interface PopupMenuHandle {
 
 const NAVIGATION_KEYS: ReadonlySet<string> = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End']);
 
+const MENU_ITEM_SELECTOR =
+  '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])';
+
+export function wireMenuArrowKeys(menu: HTMLElement): void {
+  menu.addEventListener('keydown', (event) => {
+    if (!NAVIGATION_KEYS.has(event.key)) return;
+    const list = Array.from(menu.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)).filter(
+      (item) => !item.hidden,
+    );
+    if (list.length === 0) return;
+    event.preventDefault();
+    const current = list.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? list.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1) % list.length
+            : (current - 1 + list.length) % list.length;
+    list[next]?.focus();
+  });
+}
+
 export function wirePopupMenu(trigger: HTMLElement, menu: HTMLElement): PopupMenuHandle {
   const items = (): HTMLElement[] =>
     Array.from(

@@ -136,6 +136,17 @@ describe('conversation-history', () => {
     });
   });
 
+  it('keeps a video turn task id through storage so polling can resume, and drops a malformed one', async () => {
+    const conversationId = await saveConversation([
+      { role: 'user', content: 'a lighthouse at dusk', timestamp: 1 },
+      { role: 'assistant', content: '', timestamp: 2, videoTaskId: 'vid_123' },
+      { role: 'assistant', content: 'other', timestamp: 3, videoTaskId: '../files' },
+    ]);
+    const restored = await getConversation(conversationId);
+    expect(restored?.messages[1]).toMatchObject({ content: '', videoTaskId: 'vid_123' });
+    expect(restored?.messages[2]?.videoTaskId).toBeUndefined();
+  });
+
   beforeEach(() => {
     for (const key of Object.keys(_store)) delete _store[key];
     chromeMock.runtime.lastError = undefined;

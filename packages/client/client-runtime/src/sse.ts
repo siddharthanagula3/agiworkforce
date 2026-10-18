@@ -33,7 +33,7 @@ export class ServerSentEventDecoder {
   push(text: string): ServerSentEvent[] {
     this.buffer += text;
     const events = this.drain(false);
-    this.assertWithinLimit();
+    this.assertWithinLimit(this.buffer.length);
     return events;
   }
 
@@ -56,8 +56,8 @@ export class ServerSentEventDecoder {
     this.id = null;
   }
 
-  private assertWithinLimit(): void {
-    if (this.buffer.length + this.dataLength > this.maximumFrameCharacters) {
+  private assertWithinLimit(pendingCharacters: number): void {
+    if (this.dataLength + pendingCharacters > this.maximumFrameCharacters) {
       throw new ServerSentEventFrameLimitError();
     }
   }
@@ -74,12 +74,13 @@ export class ServerSentEventDecoder {
       const lineBreakLength =
         this.buffer[lineEnding] === '\r' && this.buffer[lineEnding + 1] === '\n' ? 2 : 1;
       this.buffer = this.buffer.slice(lineEnding + lineBreakLength);
+      this.assertWithinLimit(line.length);
       this.processLine(line, events);
-      this.assertWithinLimit();
     }
     if (flush && this.buffer.length > 0) {
       const trailingLine = this.buffer;
       this.buffer = '';
+      this.assertWithinLimit(trailingLine.length);
       this.processLine(trailingLine, events);
     }
     return events;
@@ -121,7 +122,7 @@ export class ServerSentEventDecoder {
     if (field !== 'data') return;
     this.dataLines.push(value);
     this.dataLength += value.length + (this.dataLines.length > 1 ? 1 : 0);
-    this.assertWithinLimit();
+    this.assertWithinLimit(0);
   }
 }
 

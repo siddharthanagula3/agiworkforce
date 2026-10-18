@@ -1,4 +1,20 @@
 import { agiWebUrl } from './lib/webOrigin';
+import {
+  browserShortcutsDependencies,
+  createShortcutsSection,
+  type ShortcutsSection,
+} from './features/options/shortcuts-section';
+import {
+  createAccountLinksSection,
+  createDesktopSection,
+  createKeyboardSection,
+  createOptionsSection,
+  optionsDestinations,
+} from './features/options/destinations';
+import {
+  SCHEDULES_SECTION_CSS,
+  buildSchedulesSection,
+} from './features/side-panel/schedulesSection';
 import { getExtensionTokensCssAuto } from './tokens';
 import {
   FREE_TRIAL_GATEWAY,
@@ -193,7 +209,7 @@ function injectStyles(): void {
 
     .opt-policy-select {
       flex-shrink: 0;
-      max-width: 260px;
+      max-width: 340px;
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
@@ -480,6 +496,95 @@ function injectStyles(): void {
       font-size: 11px;
       color: var(--agi-ext-text);
     }
+
+    .opt-row-side {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .opt-read-aloud {
+      flex-wrap: wrap;
+    }
+
+    .opt-read-aloud-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .opt-shortcut-form {
+      border-bottom: 1px solid var(--agi-ext-border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px 0;
+    }
+
+    .opt-shortcut-form[hidden],
+    .opt-confirm[hidden] {
+      display: none;
+    }
+
+    .opt-shortcut-form .opt-profile-actions {
+      border-top: 0;
+      padding-inline: 0;
+    }
+
+    .opt-shortcut-row {
+      flex-wrap: wrap;
+    }
+
+    .opt-confirm {
+      flex: 1 1 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .opt-confirm .opt-profile-actions {
+      border-top: 0;
+      padding: 0;
+    }
+
+    .opt-record-capture {
+      justify-content: flex-start;
+      cursor: pointer;
+    }
+
+    .opt-pairing-code {
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      color: var(--agi-ext-text);
+      font-family: monospace;
+      font-size: 12px;
+      min-height: 28px;
+      padding: 4px 10px;
+      width: 120px;
+    }
+
+    .opt-shortcut-schedules {
+      border-top: 1px solid var(--agi-ext-border);
+      padding: 12px 16px;
+    }
+
+    .sp-visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    ${SCHEDULES_SECTION_CSS}
 
     .opt-version {
       font-size: 10px;
@@ -889,7 +994,39 @@ function injectStyles(): void {
 
     kbd { min-width: 25px; padding: 3px 7px; border-radius: 7px; text-align: center; }
     .opt-link { font-size: 12px; text-decoration: none; }
+    button.opt-link {
+      appearance: none;
+      padding: 0;
+      border: 0;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button.opt-link:disabled { color: var(--agi-ext-text-muted); cursor: default; text-decoration: none; }
     .opt-version { padding-top: 4px; }
+    .opt-approval-history,
+    .opt-shortcuts-table + .opt-save-status { padding-inline: 22px; }
+
+    summary.opt-section-header {
+      position: relative;
+      padding-inline-end: 56px;
+      list-style: none;
+      cursor: pointer;
+    }
+    summary.opt-section-header::-webkit-details-marker { display: none; }
+    summary.opt-section-header::after {
+      content: '';
+      position: absolute;
+      inset-inline-end: 24px;
+      top: 28px;
+      width: 8px;
+      height: 8px;
+      border-inline-end: 2px solid var(--agi-ext-text-muted);
+      border-block-end: 2px solid var(--agi-ext-text-muted);
+      transform: rotate(45deg);
+    }
+    details[open] > summary.opt-section-header::after { top: 32px; transform: rotate(-135deg); }
+    summary.opt-section-header:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; border-radius: 16px; }
 
     @media (max-width: 900px) {
       .opt-shell { grid-template-columns: 204px minmax(0, 1fr); }
@@ -933,7 +1070,11 @@ function injectStyles(): void {
       .opt-allowlist-body,
       .opt-bearer-body,
       .opt-profile-grid,
-      .opt-profile-actions { padding-inline: 16px; }
+      .opt-profile-actions,
+      .opt-approval-history,
+      .opt-shortcuts-table + .opt-save-status { padding-inline: 16px; }
+      summary.opt-section-header { padding-inline-end: 48px; }
+      summary.opt-section-header::after { inset-inline-end: 18px; }
       .opt-row:has(.opt-policy-select) { flex-direction: column; align-items: stretch; gap: 12px; }
       .opt-policy-select { width: 100%; max-width: none; }
     }
@@ -1031,17 +1172,9 @@ function buildPage(): void {
   sidebar.appendChild(brand);
 
   const nav = el('nav', { class: 'opt-nav' });
-  const navItems: Array<{ label: string; target: string; sections?: string[] }> = [
-    { label: 'Appearance', target: 'opt-appearance' },
-    { label: 'Permissions', target: 'opt-permissions' },
-    {
-      label: 'Account',
-      target: 'opt-account',
-      sections: ['opt-account', 'opt-privacy', 'opt-preferences', 'opt-cloud-auth', 'opt-help'],
-    },
-    { label: 'Shortcuts', target: 'opt-shortcuts' },
-  ];
+  const navItems = optionsDestinations();
   const navButtons: HTMLButtonElement[] = [];
+  let shortcutsSection: ShortcutsSection | null = null;
 
   const showSettingsSection = (target: string, focus = true): void => {
     const section = document.getElementById(target);
@@ -1050,6 +1183,7 @@ function buildPage(): void {
     const visible = destination.sections ?? [target];
     for (const candidate of page.querySelectorAll<HTMLElement>('.opt-section'))
       candidate.hidden = !visible.includes(candidate.id);
+    shortcutsSection?.setActive(visible.includes('opt-shortcuts'));
     const selectedButton = navButtons.find((button) => button.dataset['target'] === target);
     if (selectedButton) setActiveNavButton(selectedButton);
     if (!focus) return;
@@ -1121,6 +1255,14 @@ function buildPage(): void {
   page.appendChild(header);
 
   page.appendChild(
+    createOptionsSection({
+      get: (key: string | Record<string, unknown>) => chrome.storage.local.get(key),
+      set: (items: Record<string, unknown>) => chrome.storage.local.set(items),
+    }),
+  );
+  page.appendChild(createKeyboardSection());
+
+  page.appendChild(
     createAppearanceSection({
       get: (key) => chrome.storage.local.get(key),
       set: (items) => chrome.storage.local.set(items),
@@ -1131,59 +1273,6 @@ function buildPage(): void {
   const permHeader = el('div', { class: 'opt-section-header' });
   permHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Permissions'));
   permSection.appendChild(permHeader);
-
-  const notifRow = el('div', { class: 'opt-row' });
-  const notifLeft = el('div');
-  notifLeft.appendChild(
-    el('div', { class: 'opt-row-label', id: 'opt-notif-label' }, 'Task notifications'),
-  );
-  notifLeft.appendChild(
-    el(
-      'div',
-      { class: 'opt-row-hint', id: 'opt-notif-description' },
-      'Show a Chrome notification when a scheduled task fires.',
-    ),
-  );
-  const notifStatus = el('div', {
-    class: 'opt-row-hint',
-    role: 'status',
-    'aria-live': 'polite',
-    'aria-atomic': 'true',
-  });
-  notifLeft.appendChild(notifStatus);
-  notifRow.appendChild(notifLeft);
-
-  const notifToggle = el('input', {
-    type: 'checkbox',
-    class: 'opt-toggle',
-    id: 'opt-notif-toggle',
-    'aria-labelledby': 'opt-notif-label',
-    'aria-describedby': 'opt-notif-description',
-  }) as HTMLInputElement;
-
-  chrome.storage.local.get({ agi_task_notifications: true }, (items) => {
-    notifToggle.checked = items['agi_task_notifications'] !== false;
-  });
-  notifToggle.addEventListener('change', async () => {
-    const next = notifToggle.checked;
-    notifToggle.disabled = true;
-    notifStatus.textContent = 'Saving…';
-    try {
-      await chrome.storage.local.set({ agi_task_notifications: next });
-      notifStatus.textContent = next
-        ? 'Task notifications enabled.'
-        : 'Task notifications disabled.';
-    } catch (err: unknown) {
-      notifToggle.checked = !next;
-      notifStatus.textContent = 'Could not save this preference. Please try again.';
-      console.warn('[Options] Failed to save notif pref:', err);
-    } finally {
-      notifToggle.disabled = false;
-    }
-  });
-
-  notifRow.appendChild(notifToggle);
-  permSection.appendChild(notifRow);
 
   const browserControlBoundary = el('div', { class: 'opt-row' });
   const browserControlBoundaryText = el('div');
@@ -1592,6 +1681,9 @@ function buildPage(): void {
 
   page.appendChild(accountSection);
 
+  page.appendChild(createAccountLinksSection());
+  page.appendChild(createDesktopSection());
+
   const profileSection = el('details', { class: 'opt-section', id: 'opt-preferences' });
   const profileHeader = el('summary', { class: 'opt-section-header' });
   profileHeader.appendChild(
@@ -1865,82 +1957,9 @@ function buildPage(): void {
     page.appendChild(bearerSection);
   }
 
-  const shortcutsSection = el('section', { class: 'opt-section', id: 'opt-shortcuts' });
-  const shortcutsHeader = el('div', { class: 'opt-section-header' });
-  shortcutsHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Keyboard Shortcuts'));
-  shortcutsSection.appendChild(shortcutsHeader);
-
-  const table = el('table', { class: 'opt-shortcuts-table' });
-  const shortcutCaption = el(
-    'caption',
-    { class: 'opt-sr-only' },
-    'Current Chrome keyboard shortcuts',
-  );
-  table.appendChild(shortcutCaption);
-  const shortcutBody = document.createElement('tbody');
-  table.appendChild(shortcutBody);
-  const shortcutStatus = el(
-    'p',
-    {
-      class: 'opt-save-status',
-      role: 'status',
-      'aria-live': 'polite',
-      'aria-atomic': 'true',
-    },
-    'Loading current shortcuts…',
-  );
-  const shortcutLabels: Readonly<Record<string, string>> = {
-    _execute_action: 'Open side panel',
-    capture_page: 'Capture page',
-  };
-
-  function appendShortcutRow(action: string, shortcut: string | undefined): void {
-    const tr = document.createElement('tr');
-    const tdAction = document.createElement('th');
-    tdAction.scope = 'row';
-    tdAction.textContent = action;
-    const tdKeys = document.createElement('td');
-    if (shortcut) {
-      const keys = shortcut
-        .split('+')
-        .map((key) => key.trim())
-        .filter(Boolean);
-      const kbdSpan = el('span', { class: 'opt-shortcut-kbd' });
-      for (let i = 0; i < keys.length; i++) {
-        const k = document.createElement('kbd');
-        k.textContent = keys[i] ?? '';
-        kbdSpan.appendChild(k);
-        if (i < keys.length - 1) {
-          kbdSpan.appendChild(document.createTextNode(' + '));
-        }
-      }
-      tdKeys.appendChild(kbdSpan);
-    } else {
-      tdKeys.textContent = 'Not assigned';
-    }
-    tr.appendChild(tdAction);
-    tr.appendChild(tdKeys);
-    shortcutBody.appendChild(tr);
-  }
-
-  chrome.commands.getAll((commands) => {
-    const runtimeError = chrome.runtime.lastError;
-    shortcutBody.replaceChildren();
-    if (runtimeError) {
-      shortcutStatus.textContent = 'Current Chrome shortcuts could not be loaded.';
-      shortcutStatus.className = 'opt-save-status error';
-      return;
-    }
-    const commandByName = new Map(commands.map((command) => [command.name ?? '', command]));
-    for (const [name, label] of Object.entries(shortcutLabels)) {
-      appendShortcutRow(label, commandByName.get(name)?.shortcut);
-    }
-    shortcutStatus.textContent =
-      'Change these bindings from Chrome’s Extensions → Keyboard shortcuts page.';
-  });
-  shortcutsSection.appendChild(table);
-  shortcutsSection.appendChild(shortcutStatus);
-  page.appendChild(shortcutsSection);
+  const schedules = buildSchedulesSection();
+  shortcutsSection = createShortcutsSection(browserShortcutsDependencies(schedules));
+  page.appendChild(shortcutsSection.element);
 
   const helpSection = el('section', { class: 'opt-section', id: 'opt-help' });
   const helpHeader = el('div', { class: 'opt-section-header' });

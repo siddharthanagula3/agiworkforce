@@ -31,6 +31,7 @@ import {
   classifyManagedQuotaErrorCode,
   effectivePlanTier,
   getDefaultModelFor,
+  IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
   normalizeBillingPlanTier,
@@ -54,6 +55,7 @@ import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { logger } from '../../utils';
+import { readAnsweredModel } from './answeredModel';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 import {
   ThinkingTagSplitter,
@@ -699,6 +701,7 @@ export type FreeTrialChunk =
   | { type: 'interactive-card'; card: InteractiveCard }
   | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'quota-warning'; warning: ManagedQuotaWarningSignal }
+  | { type: 'answered-model'; model: string }
   | { type: 'done' }
   | {
       type: 'error';
@@ -1343,7 +1346,13 @@ export async function* streamFreeChat(
             messages: cappedMessages,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+              supported: [
+                'clarify.v1',
+                IMAGE_CARD_KIND,
+                'itinerary.v1',
+                'map-search.v1',
+                'product-comparison.v1',
+              ],
               canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
@@ -1380,6 +1389,9 @@ export async function* streamFreeChat(
       };
       return;
     }
+
+    const answeredModel = readAnsweredModel(response.headers);
+    if (answeredModel) yield { type: 'answered-model', model: answeredModel };
 
     if (ACCOUNT_REFUSAL_STATUSES.has(response.status)) {
       const body = await readBoundedErrorBody(response);

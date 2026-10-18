@@ -14,6 +14,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  getDefaultModelFor,
+  getModelMetadataById,
+  getProviderDisplayLabel,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 
 const _store: Record<string, unknown> = {};
 
@@ -192,6 +198,20 @@ describe('options data-handling disclosure', () => {
     expect(text).toContain('copied to your AGI account');
   });
 
+  it('names the Free plan model the catalog serves, not a free-model router', () => {
+    const training = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'training')!;
+    const freeModel = getModelMetadataById(
+      getDefaultModelFor(normalizeBillingPlanTier(null), 'chat'),
+    )!;
+
+    expect(training.body).toContain(freeModel.name);
+    expect(training.body).toContain(getProviderDisplayLabel(freeModel.provider));
+    expect(training.body).toContain('a provider AGI chooses');
+    expect(training.body).toContain('free model promotion');
+    expect(training.body).toContain('Each reply shows the model that answered.');
+    expect(training.body).not.toContain('providers’ free models');
+  });
+
   it('describes the page attach the extension actually performs', () => {
     const pageInjection = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'page-injection')!;
 
@@ -232,8 +252,9 @@ describe('options data-handling disclosure', () => {
 
 describe('first-run disclosure', () => {
   it('tells the user about page injection and the account mirror before first use', () => {
-    const sidePanel = readSource('src/side_panel.ts');
-    expect(sidePanel).toContain('DATA_HANDLING_DISCLOSURES');
-    expect(sidePanel).toMatch(/sp-ob-privacy-row/);
+    const welcome = readSource('src/features/onboarding/welcome-page.ts');
+    expect(welcome).toContain('DATA_HANDLING_DISCLOSURES');
+    expect(welcome).toMatch(/wl-details/);
+    expect(readSource('src/side_panel.ts')).toContain('mountOnboardingPrompt(');
   });
 });

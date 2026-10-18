@@ -4,7 +4,7 @@ import { el } from './dom';
 import type { SidePanelSource } from './chat-state';
 
 const CITATION_MARKER = /(?<!\[)\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\]))/g;
-const UNDECORATED_ANCESTORS = 'code, pre, a, .sp-citation';
+const UNDECORATED_ANCESTORS = 'code, pre, a, [data-math], .sp-citation';
 
 let citationCardSequence = 0;
 

@@ -56,6 +56,7 @@ The publish job requests only the `chromewebstore` OAuth scope, refuses a taken-
    responsive/accessibility checks in
    `audit/blockers/35-chrome-web-store-release-blockers.md`. Do not reuse unpacked-build evidence.
 4. Confirm the published CRX item ID matches `CWS_EXTENSION_ID` and the Clerk production instance allows `chrome-extension://<that-id>`.
+5. Add `chrome-extension://<that-id>` to `PRODUCTION_PARENT_ORIGINS` in `infrastructure/sandbox/index.html` and to `frame-ancestors` in `infrastructure/sandbox/vercel.json`, then redeploy the sandbox. Until both name the item's exact origin, the artifact renderer refuses the side panel and the artifact panel shows source instead of a live preview.
 
 ## Recovery and rollback
 

@@ -21,6 +21,7 @@ const LOCALIZED_SOURCES = [
   'src/background.ts',
   'src/features/side-panel/projectsDrawer.ts',
   'src/features/side-panel/artifactsDrawer.ts',
+  'src/features/side-panel/artifactPanel.ts',
   'src/features/side-panel/schedulesSection.ts',
   'src/features/side-panel/planComparison.ts',
   'src/features/side-panel/voice.ts',
@@ -35,6 +36,19 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/commandPalette.ts',
   'src/features/side-panel/agiWorkPlanReview.ts',
   'src/features/side-panel/cloudRunsPanel.ts',
+  'src/features/side-panel/freePlanNotices.ts',
+  'src/features/side-panel/markdown.ts',
+  'src/features/options/destinations.ts',
+  'src/features/options/desktop-pairing-rows.ts',
+  'src/features/options/keyboard-shortcut-rows.ts',
+  'src/features/options/microphone-section.ts',
+  'src/features/options/notifications-row.ts',
+  'src/features/options/preference-rows.ts',
+  'src/features/options/read-aloud-row.ts',
+  'src/features/options/shortcuts-section.ts',
+  'src/features/onboarding/welcome-page.ts',
+  'src/features/side-panel/onboardingPrompt.ts',
+  'src/background/task-notifications.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
@@ -179,6 +193,7 @@ function withoutIdentifiers(expression: string): string {
   return (
     expression
       .replace(/\bt\(\s*'[A-Za-z0-9_]+'/g, 't(')
+      .replace(/\btPlural\(\s*'[A-Za-z0-9_]+'/g, 'tPlural(')
       .replace(/[=!]==?\s*(['"])(?:\\.|(?!\1).)*\1/g, '')
       .replace(/\bsetAttribute\(\s*'[a-z-]+'/g, 'setAttribute(')
       .replace(/\bsetManagedCloudChatState\(\s*'[a-z_]+'/g, 'setManagedCloudChatState(')

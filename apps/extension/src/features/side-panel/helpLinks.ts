@@ -20,6 +20,7 @@ export const HELP_LINK_CSS = `
     align-items: center;
     gap: 4px;
     width: fit-content;
+    min-height: 24px;
     color: var(--agi-ext-accent-text);
     font-size: var(--type-caption-size);
     line-height: var(--type-caption-height);

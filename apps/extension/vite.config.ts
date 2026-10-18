@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      // The extension CSP has no data: in font-src, so a font inlined as a
+      // data URI is refused and KaTeX falls back to the wrong glyphs.
+      assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
       minify: 'terser',
       sourcemap: mode !== 'production',
       rollupOptions: {
@@ -61,12 +64,14 @@ export default defineConfig(({ mode }) => {
           background: resolve(__dirname, 'src/background.ts'),
           side_panel: resolve(__dirname, 'src/side_panel.ts'),
           options: resolve(__dirname, 'src/options.ts'),
+          welcome: resolve(__dirname, 'src/welcome.ts'),
         },
         output: {
           entryFileNames: (chunk) => {
             if (chunk.name === 'background') return 'src/background.js';
             if (chunk.name === 'side_panel') return 'src/side_panel.js';
             if (chunk.name === 'options') return 'src/options.js';
+            if (chunk.name === 'welcome') return 'src/welcome.js';
             return 'assets/[name]-[hash].js';
           },
           assetFileNames: (asset) => {
@@ -77,6 +82,17 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: 'agi-katex-woff2-only',
+        enforce: 'pre',
+        transform(code, id) {
+          if (!/katex\/dist\/katex\.min\.css(?:\?|$)/.test(id)) return null;
+          return code.replace(
+            /,url\(fonts\/[^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g,
+            '',
+          );
+        },
+      },
       {
         name: 'agi-configured-chrome-manifest',
         generateBundle() {
@@ -96,6 +112,7 @@ export default defineConfig(({ mode }) => {
           { src: 'src/side_panel.css', dest: 'src' },
           { src: 'src/options.html', dest: 'src' },
           { src: 'src/options.css', dest: 'src' },
+          { src: 'src/welcome.html', dest: 'src' },
         ],
       }),
     ],

@@ -99,9 +99,14 @@ export async function loadPosition(): Promise<LauncherPosition> {
   return { ...DEFAULT_POS };
 }
 
+export function setImportantStyles(host: HTMLElement, styles: Record<string, string>): void {
+  for (const [property, value] of Object.entries(styles)) {
+    host.style.setProperty(property, value, 'important');
+  }
+}
+
 export function applyPosition(host: HTMLElement, pos: LauncherPosition): void {
-  host.style.bottom = `${pos.bottom}px`;
-  host.style.right = `${pos.right}px`;
+  setImportantStyles(host, { bottom: `${pos.bottom}px`, right: `${pos.right}px` });
 }
 
 /**
@@ -123,15 +128,17 @@ export function createLauncher(
 } {
   const host = document.createElement('div');
   host.setAttribute('data-agi-launcher', 'true');
-  host.style.cssText = [
-    'position:fixed',
-    `bottom:${DEFAULT_POS.bottom}px`,
-    `right:${DEFAULT_POS.right}px`,
-    'z-index:2147483646',
-    'pointer-events:none',
-    'transition:opacity 0.25s,transform 0.25s',
-    'will-change:opacity,transform',
-  ].join(';');
+  setImportantStyles(host, {
+    all: 'initial',
+    display: 'block',
+    position: 'fixed',
+    bottom: `${DEFAULT_POS.bottom}px`,
+    right: `${DEFAULT_POS.right}px`,
+    'z-index': '2147483646',
+    'pointer-events': 'none',
+    transition: 'opacity 0.25s,transform 0.25s',
+    'will-change': 'opacity,transform',
+  });
 
   const shadow = host.attachShadow({ mode: 'closed' });
 
@@ -171,16 +178,20 @@ export function attachScrollBehaviour(host: HTMLElement): () => void {
 
     if (!hidden && delta > THRESHOLD) {
       hidden = true;
-      host.style.opacity = '0';
-      host.style.transform = 'translateY(16px)';
-      host.style.pointerEvents = 'none';
-      host.style.visibility = 'hidden';
+      setImportantStyles(host, {
+        opacity: '0',
+        transform: 'translateY(16px)',
+        'pointer-events': 'none',
+        visibility: 'hidden',
+      });
     } else if (hidden && delta < -20) {
       hidden = false;
-      host.style.opacity = '1';
-      host.style.transform = 'translateY(0)';
-      host.style.pointerEvents = 'none';
-      host.style.visibility = 'visible';
+      setImportantStyles(host, {
+        opacity: '1',
+        transform: 'translateY(0)',
+        'pointer-events': 'none',
+        visibility: 'visible',
+      });
     }
 
     lastY = currentY;

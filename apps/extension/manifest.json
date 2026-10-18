@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "agiworkforce",
+  "name": "AGI Workforce",
   "version": "0.0.1",
   "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
   "author": "agiworkforce",
@@ -30,7 +30,7 @@
   ],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://agiworkforce.com https://api.agiworkforce.com https://gateway.agiworkforce.com https://*.r2.cloudflarestorage.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; frame-src 'self' https://sandbox.agiworkforce.com; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://agiworkforce.com https://api.agiworkforce.com https://gateway.agiworkforce.com https://*.r2.cloudflarestorage.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
   "storage": {
     "managed_schema": "managed-schema.json"
@@ -55,7 +55,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "agiworkforce"
+    "default_title": "AGI Workforce"
   },
   "icons": {
     "16": "icons/icon16.png",
