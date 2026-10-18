@@ -70,18 +70,6 @@
       "reason": "cron route gated by verifyCronRequest against CRON_SECRET, sweeps every subscription due for reset"
     },
     {
-      "path": "apps/web/app/api/device/approve/route.ts",
-      "reason": "QR device-pairing flow, the pending row is resolved by its pairing code, not the approving session, until the pairing completes"
-    },
-    {
-      "path": "apps/web/app/api/device/link/route.ts",
-      "reason": "QR device-pairing flow, mints a pending pairing row with no device attached yet, there is no second party to constrain by"
-    },
-    {
-      "path": "apps/web/app/api/device/poll/route.ts",
-      "reason": "QR device-pairing flow, the row is resolved by device_id shared with the CLI flow, not by a caller session"
-    },
-    {
       "path": "apps/web/app/api/feedback/route.ts",
       "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK: a signed-out report is a plain insert with no user id that reads nothing back. A signed-in caller's report, and every response rating write and removal (a rating needs a signed-in caller), run under RLS through createClaimedUserScopedDb bound to the verified user id, and getNeonDb there is the schema-owner pool that SET ROLE app_rls needs"
     },

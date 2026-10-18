@@ -56,10 +56,6 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /\bdevice_code\b/,
     reason: 'RFC 8628 polling: the principal is the unguessable device code in the body.',
   },
-  'device/poll/route.ts': {
-    call: /timingSafeEqual\s*\(/,
-    reason: 'The device poll proves its code in the body with a constant-time comparison.',
-  },
   'code/sessions/[sessionId]/provider-proxy/[...path]/route.ts': {
     call: /verifyProviderProxyToken\s*\(/,
     reason: 'A sandbox presents a signed provider proxy token as its bearer, never a cookie.',

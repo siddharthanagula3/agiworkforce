@@ -96,9 +96,8 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   }
   const record = rows[0]!;
 
-  // device_authorization_codes is shared with the QR linking flow; only this flow's own
-  // XXXX-XXXX rows may be exchanged here, or a QR row's client-chosen device_id would mint
-  // a developer token without the fingerprint binding /api/device/poll enforces.
+  // Only this flow's own XXXX-XXXX rows may be exchanged here: a row in
+  // device_authorization_codes that this flow did not issue carries no approval it can honour.
   if (devicePairingFlow(record.user_code) !== 'cli') {
     return NextResponse.json({ error: 'invalid_grant' } satisfies DeviceTokenError, {
       status: 400,

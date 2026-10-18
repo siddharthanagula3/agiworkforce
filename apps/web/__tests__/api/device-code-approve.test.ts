@@ -102,6 +102,31 @@ describe('Device code approve compatibility API', () => {
     );
   });
 
+  it('leaves no bearer column on the row it writes', async () => {
+    mockQuery
+      .mockResolvedValueOnce([
+        {
+          device_id: 'cli-device-id',
+          status: 'pending',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        },
+      ])
+      .mockResolvedValueOnce([{ status: 'approved' }]);
+
+    await POST(
+      new NextRequest('http://localhost/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345' }),
+      }),
+    );
+
+    expect(mockQuery).toHaveBeenCalled();
+    for (const [statement] of [...mockQuery.mock.calls, ...mockExecute.mock.calls]) {
+      expect(String(statement)).not.toMatch(/access_token|refresh_token/);
+    }
+  });
+
   it('refuses to approve a device until the current terms are accepted', async () => {
     mockHasAcceptedCurrentTerms.mockResolvedValueOnce(false);
     mockQuery.mockResolvedValueOnce([

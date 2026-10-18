@@ -145,7 +145,6 @@ const DEFAULT_ROUTES = [
   '/use-cases/sales-teams',
   '/use-cases/startups',
   '/user',
-  '/verify',
   '/vscode-extension',
   '/waitlist',
 ];

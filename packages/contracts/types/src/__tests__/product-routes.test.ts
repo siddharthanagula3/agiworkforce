@@ -44,7 +44,6 @@ describe('product routes', () => {
       '/pair/ABCD-1234',
       '/device-auth',
       '/forgot-password',
-      '/verify',
       '/session-expired',
     ]) {
       expect(isAuthPath(path), path).toBe(true);

@@ -63,7 +63,7 @@ function ConnectBody() {
           verification page and approve the code you can see on {name} itself. A page that offers to
           approve a device you cannot see the code for is not one to trust.
         </Prose>
-        <a href="/verify" className="agi-ds-link">
+        <a href="/auth/device" className="agi-ds-link">
           Enter the code from {name}
         </a>
       </div>

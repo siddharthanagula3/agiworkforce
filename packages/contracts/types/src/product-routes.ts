@@ -47,7 +47,6 @@ export const AUTH_ROUTE_PREFIXES = [
   '/sign-in',
   '/sign-up',
   '/signup',
-  '/verify',
 ] as const;
 
 /**

@@ -1127,7 +1127,7 @@
       "sentence": "That column was never encrypted, and current routes neither read nor write it or its sibling `refresh_token`.",
       "implementation": [
         "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
-        "apps/web/app/api/device/approve/route.ts",
+        "apps/web/app/api/auth/device/approve/route.ts",
         "apps/web/lib/validate-env.ts"
       ],
       "proof": [
@@ -1137,7 +1137,7 @@
         },
         {
           "kind": "test",
-          "file": "apps/web/__tests__/api/device-approve.test.ts",
+          "file": "apps/web/__tests__/api/device-code-approve.test.ts",
           "name": "leaves no bearer column on the row it writes"
         }
       ]
