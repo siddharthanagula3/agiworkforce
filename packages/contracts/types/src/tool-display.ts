@@ -164,11 +164,6 @@ export function getToolDisplayLabel(rawName: string | null | undefined): ToolDis
   };
 }
 
-export const TOOL_TIMELINE_ICON_NAME = {
-  thinking: 'Clock',
-  done: 'CheckCircle2',
-} as const;
-
 export function getToolSourceBadge(rawName: string | null | undefined): string | null {
   const n = (rawName ?? '').trim();
   if (!n) return null;

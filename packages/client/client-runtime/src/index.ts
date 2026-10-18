@@ -154,5 +154,4 @@ export type {
   WorkspacePolicySource,
 } from './workspacePolicy';
 export * from './connectors';
-export * from './cache-namespace';
 export * from './sse';

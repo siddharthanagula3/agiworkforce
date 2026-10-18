@@ -2,8 +2,7 @@
  * @agiworkforce/skills
  *
  * Skill loader for AGI Workforce, reads markdown + YAML-frontmatter skill
- * files, resolves precedence across multiple layers, and formats the result
- * as a system-prompt block.
+ * files and resolves precedence across multiple layers.
  *
  * Skill format (one file per skill, OpenClaw-compatible):
  *
@@ -47,8 +46,6 @@ export {
 } from './integrity';
 export { loadSkillsFromDir, loadSkillsFromLayers } from './loader';
 export { mergeSkills } from './merge';
-export { formatSkillsForPrompt } from './format';
-export type { FormatSkillsOptions } from './format';
 export {
   createSkillToolDefinition,
   describeSkillUnavailability,

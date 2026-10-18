@@ -23,8 +23,6 @@
  *   - `resolveTaskFamilyOrdering(...)` / `orderPreferredSlotsForTaskFamily(...)`
  *, per-family quality floor plus cost ranking over the ALREADY-ADMITTED
  *     candidate set. The result is always a permutation of that set.
- *   - `decideTaskFamilyContinuity(...)` / `applyTaskFamilyContinuity(...)`.
- *     session stickiness with escalation-only switching.
  *   - `taskFamilyRoutingStageEnabled()` / `TASK_FAMILY_STAGE_ENV`, the
  *     operator kill switch for the stage. ON unless the env names `0`,
  *     `false` or `off`.
@@ -339,14 +337,6 @@ export type {
   RoutingProfileWeights,
 } from './profiles';
 export { speedFirstSlots } from './speed-first-slots';
-export { applyTaskFamilyContinuity, decideTaskFamilyContinuity } from './task-family-continuity';
-export type {
-  TaskFamilyContinuityAction,
-  TaskFamilyContinuityDecision,
-  TaskFamilyContinuityInput,
-  TaskFamilyContinuityReason,
-  TaskFamilySessionRoute,
-} from './task-family-continuity';
 export type {
   ClassifierResult,
   ConversationContext,

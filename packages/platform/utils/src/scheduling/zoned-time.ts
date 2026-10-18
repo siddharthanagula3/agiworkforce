@@ -69,16 +69,3 @@ export function weekdayOf(year: number, month: number, day: number): number {
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
-
-export function addLocalDays(wall: WallClock, days: number): WallClock {
-  const date = new Date(
-    Date.UTC(wall.year, wall.month - 1, wall.day + days, wall.hour, wall.minute),
-  );
-  return {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
-    hour: date.getUTCHours(),
-    minute: date.getUTCMinutes(),
-  };
-}

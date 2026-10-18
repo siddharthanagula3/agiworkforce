@@ -149,14 +149,6 @@ export const TOOL_AUTH_KINDS = listing<ToolAuthKind>()([
   'operator_credential',
 ]);
 
-export const TOOL_ARTIFACT_KINDS = listing<ToolArtifactKind>()([
-  'file',
-  'image',
-  'url',
-  'json',
-  'text',
-]);
-
 export const TOOL_SURFACES = listing<ToolSurface>()([
   'web',
   'desktop',
@@ -171,11 +163,7 @@ export const isToolPermissionDecision =
   membership<ToolPermissionDecision>(TOOL_PERMISSION_DECISIONS);
 export const isToolPermissionScope = membership<ToolPermissionScope>(TOOL_PERMISSION_SCOPES);
 export const isToolApprovalReason = membership<ToolApprovalReason>(TOOL_APPROVAL_REASONS);
-export const isToolApprovalOutcome = membership<ToolApprovalOutcome>(TOOL_APPROVAL_OUTCOMES);
-export const isToolResultStatus = membership<ToolResultStatus>(TOOL_RESULT_STATUSES);
 export const isToolErrorClass = membership<ToolErrorClass>(TOOL_ERROR_CLASSES);
-export const isToolRetrySafety = membership<ToolRetrySafety>(TOOL_RETRY_SAFETY_CLASSES);
-export const isToolAuthKind = membership<ToolAuthKind>(TOOL_AUTH_KINDS);
 export const isToolSurface = membership<ToolSurface>(TOOL_SURFACES);
 
 const ESCALATION_REASONS: readonly ToolApprovalReason[] = ['lethal_trifecta', 'never_rememberable'];

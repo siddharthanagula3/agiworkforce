@@ -377,7 +377,7 @@
       "tables": ["workspaces", "organizations", "organization_members"],
       "writeFunctions": [],
       "mutators": ["apps/web/app/api/settings/organization/route.ts"],
-      "projections": ["packages/contracts/types/src/workspace-analytics.ts"],
+      "projections": [],
       "providerCopies": [],
       "ownership": "user-and-organization",
       "sync": "server-authoritative",

@@ -421,7 +421,6 @@ export const EDIT_PLUGIN_INTRO =
   'Change the plugin name, description and skills. Your chats use the saved version.';
 export const EDIT_PLUGIN_SUBMIT_LABEL = 'Save changes';
 export const EDIT_PLUGIN_FAILED_COPY = 'The plugin could not be saved.';
-export const EDIT_PLUGIN_LOADING_LABEL = 'Loading plugin';
 export const CUSTOMIZE_PLUGIN_LABEL = 'Customize';
 export const CUSTOMIZE_PLUGIN_HINT = 'Make your own copy of this plugin and edit its skills.';
 export const CUSTOMIZE_CONFIRM_TITLE_PREFIX = 'Customize';

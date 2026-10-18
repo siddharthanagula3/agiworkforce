@@ -59,23 +59,6 @@ export interface LocalClientBridgeFile {
   startedAtMs: number;
 }
 
-export function isLocalClientBridgeFile(value: unknown): value is LocalClientBridgeFile {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<LocalClientBridgeFile>;
-  return (
-    candidate.version === LOCAL_CLIENT_PROTOCOL_VERSION &&
-    typeof candidate.port === 'number' &&
-    Number.isInteger(candidate.port) &&
-    candidate.port > 0 &&
-    candidate.port < 65_536 &&
-    typeof candidate.token === 'string' &&
-    candidate.token.length > 0 &&
-    typeof candidate.pid === 'number' &&
-    Number.isInteger(candidate.pid) &&
-    typeof candidate.startedAtMs === 'number'
-  );
-}
-
 /** Who is asking, named in the shell's capability prompt and activity log. */
 export interface LocalClientIdentity {
   name: string;

@@ -1,14 +1,11 @@
 {
   "name": "@agiworkforce/guardian-github",
   "version": "0.0.1",
-  "description": "GitHub delivery surface for Guardian: webhook intake, check runs, and PR summaries built on @agiworkforce/guardian-core.",
+  "description": "GitHub delivery surface for Guardian: the CI scan, check runs and PR summaries built on @agiworkforce/guardian-core.",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./webhook": "./src/webhook.ts",
-    "./events": "./src/events.ts",
-    "./commands": "./src/commands.ts",
     "./checks": "./src/checks.ts",
     "./summary": "./src/summary.ts"
   },

@@ -40,41 +40,6 @@ export function formatTranscriptionDuration(ms: number): string {
   return `${totalSeconds}s`;
 }
 
-export function formatVoiceDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-/**
- * Check whether the current environment supports any voice input API.
- *
- * Returns `true` if at least one of the following is available:
- * - Web Speech API (SpeechRecognition / webkitSpeechRecognition)
- * - MediaRecorder (for recording audio blobs to send to a backend)
- *
- * Note: This only checks browser/web APIs. Desktop (Tauri) and mobile (expo-av)
- * have their own platform-specific availability checks.
- *
- * @returns Whether voice input is supported in the current browser environment
- */
-export function isVoiceSupported(): boolean {
-  if (typeof window === 'undefined') return false;
-
-  const w = window as typeof globalThis & {
-    SpeechRecognition?: unknown;
-    webkitSpeechRecognition?: unknown;
-  };
-
-  const hasSpeechRecognition =
-    typeof w.SpeechRecognition !== 'undefined' || typeof w.webkitSpeechRecognition !== 'undefined';
-
-  const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
-
-  return hasSpeechRecognition || hasMediaRecorder;
-}
-
 /**
  * Normalize a raw transcription string.
  *

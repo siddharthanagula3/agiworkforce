@@ -85,7 +85,3 @@ export const PRODUCT_DOMAINS = [
 ] as const;
 
 export type ProductDomain = (typeof PRODUCT_DOMAINS)[number];
-
-export function isProductDomain(value: string): value is ProductDomain {
-  return (PRODUCT_DOMAINS as readonly string[]).includes(value);
-}

@@ -137,22 +137,6 @@ export interface ExternalResourceRef {
   label: string | null;
 }
 
-export function isFileOrigin(value: unknown): value is FileOrigin {
-  return (FILE_ORIGINS as readonly unknown[]).includes(value);
-}
-
-export function isFileStorageTier(value: unknown): value is FileStorageTier {
-  return (FILE_STORAGE_TIERS as readonly unknown[]).includes(value);
-}
-
-export function isFileParseStatus(value: unknown): value is FileParseStatus {
-  return (FILE_PARSE_STATUSES as readonly unknown[]).includes(value);
-}
-
-export function isFileIndexStatus(value: unknown): value is FileIndexStatus {
-  return (FILE_INDEX_STATUSES as readonly unknown[]).includes(value);
-}
-
 export function resolveFileOwnerScope(
   partial: Partial<FileOwnerScope> | undefined,
 ): FileOwnerScope {

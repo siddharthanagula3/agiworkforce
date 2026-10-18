@@ -12,10 +12,6 @@ export const STANDARD_NET_TERM_DAYS: readonly number[] = Object.freeze([0, 15, 3
 
 export const MAX_PAYMENT_TERM_DAYS = 180;
 
-export function isStandardNetTerm(days: number): boolean {
-  return STANDARD_NET_TERM_DAYS.includes(days);
-}
-
 export function isPayableNetTerm(days: number): boolean {
   return Number.isInteger(days) && days >= 0 && days <= MAX_PAYMENT_TERM_DAYS;
 }

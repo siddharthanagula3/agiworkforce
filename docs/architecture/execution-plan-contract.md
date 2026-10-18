@@ -29,8 +29,7 @@ anything from it:
   still open.
 - Stage-2 selection mechanism: **shipped, flag-off.**
   `packages/ai/routing/src/task-family-routing.ts` (eligibility floor + cost
-  ordering) and `task-family-continuity.ts` (session stickiness, escalation-only)
-  behind `AGI_ROUTING_TASK_FAMILY_STAGE`, with the twelve `auto.taskFamilies`
+  ordering) behind `AGI_ROUTING_TASK_FAMILY_STAGE`, with the twelve `auto.taskFamilies`
   entries in `routing-policies.json`. Live routing is still gated on Stage 1.
 - Stage 1 shadow mode: **not built.** The blocker recorded in §5 still holds.
   `taskFamilyDecision` is attached to `SelectedAutoRoute` and dropped; the

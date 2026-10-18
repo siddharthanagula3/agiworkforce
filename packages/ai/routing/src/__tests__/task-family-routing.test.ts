@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
 
 import { resolveAutoRoute, type RoutingProfile } from '../auto';
-import { decideTaskFamilyContinuity } from '../task-family-continuity';
 import { TASK_FAMILIES, TASK_FAMILY_INTENDED_TASK_TYPES, type TaskFamily } from '../task-family';
 import {
   orderPreferredSlotsForTaskFamily,
@@ -505,51 +504,6 @@ describe('resolveAutoRoute integration · admission is never widened', () => {
       if (original === undefined) delete process.env[TASK_FAMILY_STAGE_ENV];
       else process.env[TASK_FAMILY_STAGE_ENV] = original;
     }
-  });
-
-  it('feeds the resolver ladder straight into escalation-only continuity', () => {
-    const on = resolveAutoRoute({
-      selection: 'auto',
-      taskType: 'coding',
-      subscriptionTier: 'max',
-      taskFamily: 'code_execution',
-      enableTaskFamilyStage: true,
-      ...managed,
-    });
-    expect(on.status).toBe('selected');
-    const ladder =
-      on.status === 'selected' ? on.taskFamilyDecision!.ordering!.escalationLadder : [];
-    expect(ladder).toEqual([CODING_ESCALATION_MODEL_ID, CODING_BALANCED_MODEL_ID]);
-
-    const pinned = decideTaskFamilyContinuity({
-      session: {
-        family: 'code_execution',
-        modelKey: CODING_ESCALATION_MODEL_ID,
-        priorTurnCount: 2,
-      },
-      nextFamily: 'code_execution',
-      candidateModelKey: CODING_ESCALATION_MODEL_ID,
-      ladder,
-    });
-    expect(pinned).toMatchObject({ action: 'pin', modelKey: CODING_ESCALATION_MODEL_ID });
-
-    const escalated = decideTaskFamilyContinuity({
-      session: {
-        family: 'code_execution',
-        modelKey: CODING_ESCALATION_MODEL_ID,
-        priorTurnCount: 2,
-      },
-      nextFamily: 'code_execution',
-      candidateModelKey: CODING_BALANCED_MODEL_ID,
-      ladder,
-      failureSignal: `Insufficient credits for ${CODING_ESCALATION_MODEL_ID}, switched to ${CODING_BALANCED_MODEL_ID}`,
-    });
-    expect(escalated).toMatchObject({
-      action: 'escalate',
-      reasonCode: 'escalated_on_failure',
-      modelKey: CODING_BALANCED_MODEL_ID,
-    });
-    expect(escalated.cache?.resetsCache).toBe(true);
   });
 
   it('leaves an explicit model selection untouched', () => {

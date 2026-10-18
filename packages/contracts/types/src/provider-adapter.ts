@@ -533,10 +533,6 @@ export const PROVIDER_TRAITS = [
 
 export type ProviderTrait = (typeof PROVIDER_TRAITS)[number];
 
-export function isProviderTrait(value: string | null | undefined): value is ProviderTrait {
-  return typeof value === 'string' && (PROVIDER_TRAITS as readonly string[]).includes(value);
-}
-
 /**
  * Absent traits mean the adapter has not declared any, which reads as "does
  * not do this". A caller that needs a trait an adapter cannot state must treat

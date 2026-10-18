@@ -1,4 +1,3 @@
-
 export interface OllamaTagsResponse {
   models: Array<{
     name: string;
@@ -88,4 +87,5 @@ export interface OllamaChatStreamChunk {
   prompt_eval_duration?: number;
   eval_count?: number;
   eval_duration?: number;
+  error?: string;
 }

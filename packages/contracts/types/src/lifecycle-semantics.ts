@@ -12,7 +12,6 @@
  */
 
 import lifecycleSemanticsJson from './lifecycle-semantics.json' with { type: 'json' };
-import type { ResourceLifecycleState } from './resource-lifecycle';
 
 export const WITHDRAWAL_KINDS = ['softDeleted', 'archived'] as const;
 export type WithdrawalKind = (typeof WITHDRAWAL_KINDS)[number];
@@ -84,36 +83,3 @@ export interface LifecycleSemanticsRegistry {
 }
 
 export const LIFECYCLE_SEMANTICS = lifecycleSemanticsJson as unknown as LifecycleSemanticsRegistry;
-
-/** The lifecycle state a withdrawal kind puts a row into. */
-export const WITHDRAWAL_STATE: Readonly<Record<WithdrawalKind, ResourceLifecycleState>> = {
-  softDeleted: 'soft_deleted',
-  archived: 'archived',
-};
-
-export function lifecycleResource(table: string): LifecycleResource | undefined {
-  return LIFECYCLE_SEMANTICS.resources[table];
-}
-
-export function withdrawalColumn(table: string, kind: WithdrawalKind): string | null {
-  return LIFECYCLE_SEMANTICS.resources[table]?.[kind]?.column ?? null;
-}
-
-/**
- * The column a reader of this table owes a predicate for. Soft delete is
- * withdrawn consent, so it outranks archive wherever a table carries both.
- */
-export function requiredReadPredicateColumn(table: string): string | null {
-  const resource = LIFECYCLE_SEMANTICS.resources[table];
-  if (resource === undefined) return null;
-  return resource.softDeleted?.column ?? resource.archived?.column ?? null;
-}
-
-export function isLifecycleReadClass(value: unknown): value is LifecycleReadClass {
-  return (LIFECYCLE_READ_CLASSES as readonly unknown[]).includes(value);
-}
-
-/** Reads that are recorded as wrong rather than as deliberate. */
-export function recordedLifecycleDefects(): readonly LifecycleReadExemption[] {
-  return LIFECYCLE_SEMANTICS.readExemptions.filter((entry) => entry.class === 'defect');
-}

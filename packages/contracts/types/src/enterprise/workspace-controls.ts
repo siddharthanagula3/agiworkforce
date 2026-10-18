@@ -488,8 +488,6 @@ export interface WorkspaceCodePolicyResponse {
 
 export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';
 
-export const WORKSPACE_POLICY_EXPLAIN_PATH = '/api/settings/organization/policy/effective/explain';
-
 // A client cannot honour a control it is never told about, so the effective
 // answer carries the Code controls beside the rest of the policy.
 export interface EffectiveWorkspacePolicyResponse {

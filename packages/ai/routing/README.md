@@ -48,8 +48,6 @@ Web, Desktop, services, provider packages, and shared chat/runtime surfaces.
   (no prose, no LLM, no network); ambiguous requests decline and fall through.
 - `src/task-family-routing.ts` - per-family quality floor plus cost-ranked
   ordering of the already-admitted candidate set, behind an operator flag.
-- `src/task-family-continuity.ts` - session stickiness and escalation-only
-  switching, built on `assessModelSwitchCache`.
 - `src/__tests__/fixtures/task-family-corpus.ts` - the eval-corpus seed
   (12 families x 6 labelled rows plus ambiguous rows).
 

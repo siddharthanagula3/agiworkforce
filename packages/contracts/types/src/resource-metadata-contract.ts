@@ -41,10 +41,6 @@ export const RESOURCE_METADATA_ROLES = [
 
 export type ResourceMetadataRole = (typeof RESOURCE_METADATA_ROLES)[number];
 
-export function isResourceMetadataRole(value: string): value is ResourceMetadataRole {
-  return (RESOURCE_METADATA_ROLES as readonly string[]).includes(value);
-}
-
 /**
  * The shape stored rows are written against. A reader that finds a higher
  * version than it knows must refuse the row rather than interpret it.
@@ -54,17 +50,6 @@ export const RESOURCE_SCHEMA_VERSION = 1;
 export interface ResourceSchemaRef {
   resourceType: string;
   schemaVersion: number;
-}
-
-export function isReadableResourceSchema(
-  ref: Pick<ResourceSchemaRef, 'schemaVersion'>,
-  readerVersion: number = RESOURCE_SCHEMA_VERSION,
-): boolean {
-  return (
-    Number.isInteger(ref.schemaVersion) &&
-    ref.schemaVersion >= 1 &&
-    ref.schemaVersion <= readerVersion
-  );
 }
 
 /**

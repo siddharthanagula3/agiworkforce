@@ -40,7 +40,7 @@
  * ```
  */
 import type { AgentTaskState } from './generated/protocol/AgentTaskState';
-import type { LifecycleProjection, LifecycleStatus } from './lifecycle-status';
+import type { LifecycleProjection } from './lifecycle-status';
 
 export interface CrossDeviceThread {
   id: string;
@@ -557,16 +557,6 @@ export const LIFECYCLE_STATUS_BY_DISPATCH_STATUS: LifecycleProjection<DispatchTa
     cancelled: 'cancelled',
     rejected: 'failed',
   });
-
-export function lifecycleStatusForAgentTaskState(state: AgentTaskState): LifecycleStatus {
-  return LIFECYCLE_STATUS_BY_AGENT_TASK_STATE[state];
-}
-
-export function lifecycleStatusForDispatchStatus(
-  status: DispatchTaskLifecycleStatus,
-): LifecycleStatus {
-  return LIFECYCLE_STATUS_BY_DISPATCH_STATUS[status];
-}
 
 export interface DispatchTaskStatusEvent {
   action: 'dispatch.task.status';

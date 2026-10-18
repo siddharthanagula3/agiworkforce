@@ -80,29 +80,6 @@ local workspace/runtime identity. The two domains share account entitlement
 but not conversation authority, secrets or storage; movement between them is an
 explicit handoff rather than background sync.
 
-### Session continuation
-
-`packages/contracts/types/src/sync/session-continuation.ts` answers three
-separate questions per workflow: locally persisted (opens with no network),
-rehydratable (rebuildable on a device that has never seen it), resumable
-(carries on rather than starting again). A workflow that answers no to any of
-them carries the line a surface must show instead of offering to continue.
-
-| Workflow | Locally persisted | Rehydratable | Resumable |
-| -------- | ----------------- | ------------ | --------- |
-| Chat     | yes               | yes          | yes       |
-| Agent    | no                | yes          | yes       |
-| Work     | no                | yes          | yes       |
-| Research | no                | yes          | no        |
-| Code     | no                | yes          | yes       |
-| Browser  | no                | yes          | no        |
-| Schedule | no                | yes          | no        |
-| Study    | no                | yes          | no        |
-
-Code is the one with a lease: resuming claims the session, so
-`readCloudCodeSessionContinuation` reports whether it can be claimed now and,
-when it cannot, until when another run holds it.
-
 ## Provider Strategy
 
 OpenAI, Anthropic, Vercel AI SDK, and provider SDKs are adapter dependencies, not AGI architecture. AGI owns:

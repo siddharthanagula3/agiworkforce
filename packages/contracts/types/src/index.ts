@@ -112,7 +112,6 @@ export * from './billing-revenue';
 export * from './country-groups';
 export * from './url';
 export * from './usage-vocabulary';
-export * from './quick-start-intents';
 export * from './paywall-vocabulary';
 export * from './interactive-cards';
 export * from './places-search';
@@ -141,15 +140,11 @@ export * from './research';
 
 export * from './plugins';
 
-export * from './council';
-
 export * from './audit';
 
 export * from './event-triggers';
 
 export * from './notifications';
-
-export * from './a2a';
 
 export * from './cross-device';
 
@@ -158,8 +153,6 @@ export * from './dispatch';
 export * from './remote-code';
 
 export * from './workspace';
-
-export * from './workspace-analytics';
 
 export * from './product-analytics';
 
@@ -177,7 +170,6 @@ export * from './suite-contracts';
 
 export * from './lifecycle-status';
 
-export * from './provider-state';
 export * from './sync';
 
 export * from './dependency-registry';

@@ -8,7 +8,7 @@
  * @packageDocumentation
  */
 
-import type { LifecycleProjection, LifecycleStatus } from './lifecycle-status';
+import type { LifecycleProjection } from './lifecycle-status';
 
 /**
  * Configuration for an AI agent instance.
@@ -69,10 +69,6 @@ export const LIFECYCLE_STATUS_BY_AGENT_STATUS: LifecycleProjection<AgentLifecycl
     error: 'failed',
     cancelled: 'cancelled',
   });
-
-export function lifecycleStatusForAgentStatus(status: AgentLifecycleStatus): LifecycleStatus {
-  return LIFECYCLE_STATUS_BY_AGENT_STATUS[status];
-}
 
 /**
  * A fully hydrated agent instance with runtime state.

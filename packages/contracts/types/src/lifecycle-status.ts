@@ -186,13 +186,6 @@ export type LifecycleProjection<DomainStatus extends string> = Readonly<
   Record<DomainStatus, LifecycleStatus>
 >;
 
-export function projectLifecycleStatus<DomainStatus extends string>(
-  projection: LifecycleProjection<DomainStatus>,
-  status: DomainStatus,
-): LifecycleStatus {
-  return projection[status];
-}
-
 /**
  * The state a surface renders. The first four are the values every client
  * already had; the rest are the outcomes those four used to collapse into

@@ -14,7 +14,7 @@
     "clickable-div-without-semantics": "Measured on 2026-09-20 and narrowed the same day: an empty aria-hidden scrim and a handler that only stops propagation are not controls, so the rule no longer reports them. What remains is a real control with no keyboard path, owed a role and a key handler."
   },
   "_counts": {
-    "raw-palette": 787,
+    "raw-palette": 783,
     "raw-bw": 54,
     "opacity-diluted-text": 18,
     "outline-none-without-focus-ring": 19,
@@ -4209,30 +4209,6 @@
       "line": 34,
       "rule": "raw-palette",
       "literal": "text-yellow-600"
-    },
-    {
-      "file": "packages/ui/ui/src/primitives/FormField.tsx",
-      "line": 128,
-      "rule": "raw-palette",
-      "literal": "border-green-500"
-    },
-    {
-      "file": "packages/ui/ui/src/primitives/FormField.tsx",
-      "line": 128,
-      "rule": "raw-palette",
-      "literal": "ring-green-500"
-    },
-    {
-      "file": "packages/ui/ui/src/primitives/FormField.tsx",
-      "line": 144,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "packages/ui/ui/src/primitives/FormField.tsx",
-      "line": 169,
-      "rule": "raw-palette",
-      "literal": "text-green-600"
     },
     {
       "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",

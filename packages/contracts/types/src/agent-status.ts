@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import type { LifecycleProjection, LifecycleStatus, WorkLifecycleStatus } from './lifecycle-status';
+import type { LifecycleProjection, WorkLifecycleStatus } from './lifecycle-status';
 
 export type AgentSessionStatus = Exclude<WorkLifecycleStatus, 'pending'> | 'paused';
 
@@ -26,10 +26,6 @@ export const LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS: LifecycleProjection<Agent
     paused: 'awaiting_input',
     cancelled: 'cancelled',
   });
-
-export function lifecycleStatusForAgentSessionStatus(status: AgentSessionStatus): LifecycleStatus {
-  return LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS[status];
-}
 
 /**
  * Represents a single agent execution session.

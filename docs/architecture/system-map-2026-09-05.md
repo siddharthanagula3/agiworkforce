@@ -75,9 +75,8 @@ an optional canary bucket. Two layers sit above it without touching admission:
 `packages/ai/routing/src/task-family-routing.ts` (permutes, never drops a
 candidate) and `packages/ai/routing/src/free-auto.ts` (a free-lane filter that
 may strand a request rather than spend money). Session stickiness and
-escalation live in `packages/ai/routing/src/task-family-continuity.ts`, driven
-by `docs/architecture/execution-plan-contract.md`; this is the most recently
-touched file in the group, consistent with the team roster's active
+escalation are not implemented; the unwired continuity module was removed,
+consistent with the team roster's active
 route-preview work.
 
 Coupling: dropping a vendor means removing its rows from the curation file and

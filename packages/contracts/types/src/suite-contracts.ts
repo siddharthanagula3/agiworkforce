@@ -194,29 +194,6 @@ export function chatExecutionModeToProviderMode(mode: ChatExecutionMode): Provid
   return CHAT_EXECUTION_MODE_DISPLAY[mode].defaultProviderMode;
 }
 
-export function providerModeToChatExecutionMode(mode: ProviderMode): ChatExecutionMode {
-  switch (mode) {
-    case 'Local':
-      return 'local_only';
-    case 'DirectByok':
-      return 'byok';
-    case 'ManagedGateway':
-    case 'ManagedNative':
-      return 'cloud_managed';
-  }
-}
-
-export function privacyModeToChatExecutionMode(mode: PrivacyMode): ChatExecutionMode {
-  switch (mode) {
-    case 'local':
-      return 'local_only';
-    case 'byok':
-      return 'byok';
-    case 'managed':
-      return 'cloud_managed';
-  }
-}
-
 export function getPrivacyModeDisplay(mode: PrivacyMode): TrustBoundaryDisplayCopy {
   return PRIVACY_MODE_DISPLAY[mode];
 }

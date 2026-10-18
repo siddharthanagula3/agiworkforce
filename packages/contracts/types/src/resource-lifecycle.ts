@@ -201,19 +201,12 @@ export const HOLDABLE_RESOURCE_TYPES: readonly string[] = HOLDABLE_RESOURCES.map
   (entry) => entry.resourceType,
 );
 
-export const HOLDABLE_TABLES: readonly string[] = HOLDABLE_RESOURCES.map((entry) => entry.table);
-
 export function holdableResource(resourceType: string): HoldableResource | null {
   return HOLDABLE_RESOURCES.find((entry) => entry.resourceType === resourceType) ?? null;
 }
 
 export function holdableResourceForTable(table: string): HoldableResource | null {
   return HOLDABLE_RESOURCES.find((entry) => entry.table === table) ?? null;
-}
-
-/** Archive and soft delete are reversible, so a hold only refuses `purged`. */
-export function holdBlocksTransition(next: ResourceLifecycleState): boolean {
-  return next === 'purged';
 }
 
 const ROLE_PERMISSIONS: Readonly<Record<ResourceRole, readonly ResourcePermission[]>> = {
@@ -250,14 +243,6 @@ export interface ResourceAccessDecision {
 
 export function isResourceVisibility(value: unknown): value is ResourceVisibility {
   return (RESOURCE_VISIBILITIES as readonly unknown[]).includes(value);
-}
-
-export function isResourceRole(value: unknown): value is ResourceRole {
-  return (RESOURCE_ROLES as readonly unknown[]).includes(value);
-}
-
-export function isResourceLifecycleState(value: unknown): value is ResourceLifecycleState {
-  return (RESOURCE_LIFECYCLE_STATES as readonly unknown[]).includes(value);
 }
 
 /**

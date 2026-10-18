@@ -42,25 +42,6 @@ export const MEMBERSHIP_STATUSES = ['invited', 'active', 'suspended', 'deprovisi
 
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
 
-// Deprovisioned is terminal: re-admitting somebody is a new invitation, so an
-// offboarded account is never reactivated by flipping one column.
-export const MEMBERSHIP_STATUS_TRANSITIONS: Readonly<
-  Record<MembershipStatus, readonly MembershipStatus[]>
-> = Object.freeze({
-  invited: ['active', 'deprovisioned'],
-  active: ['suspended', 'deprovisioned'],
-  suspended: ['active', 'deprovisioned'],
-  deprovisioned: [],
-});
-
-export function isMembershipStatus(value: unknown): value is MembershipStatus {
-  return typeof value === 'string' && (MEMBERSHIP_STATUSES as readonly string[]).includes(value);
-}
-
-export function canTransitionMembership(from: MembershipStatus, to: MembershipStatus): boolean {
-  return MEMBERSHIP_STATUS_TRANSITIONS[from].includes(to);
-}
-
 /** Only an active membership carries access. Anything else is a record. */
 export function membershipGrantsAccess(status: MembershipStatus): boolean {
   return status === 'active';
@@ -158,10 +139,6 @@ export const WORK_RUN_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'c
 
 export type WorkRunStatus = (typeof WORK_RUN_STATUSES)[number];
 
-export function isTerminalWorkRunStatus(status: WorkRunStatus): boolean {
-  return status === 'succeeded' || status === 'failed' || status === 'cancelled';
-}
-
 // What the three run types share, so listing, cancelling and cost attribution
 // need no fourth implementation when a fourth run type arrives.
 export interface WorkRun {
@@ -183,46 +160,4 @@ export const SUPPORT_RECORD_KINDS = ['support_case', 'incident', 'known_issue'] 
 // may reference an incident or a known issue; it is never either of them.
 export type SupportRecordKind = (typeof SUPPORT_RECORD_KINDS)[number];
 
-export const ACTIVE_WORKSPACE_HEADER = 'x-agi-workspace';
-
 export const PERSONAL_WORKSPACE_SELECTOR = 'personal';
-
-// A header selects a workspace, it never grants one, and an unresolvable
-// selection is refused rather than downgraded: wrong scope leaks across tenants.
-export type ActiveWorkspaceResolution =
-  | { scope: 'personal'; workspaceId: string | null }
-  | { scope: 'organization'; workspaceId: string; organizationId: string }
-  | { scope: 'denied'; reason: 'not_a_member' | 'unknown_workspace' };
-
-export function resolveActiveWorkspace(input: {
-  requested: string | null | undefined;
-  memberships: readonly WorkspaceSummary[];
-  personalWorkspaceId: string | null;
-  lastSelectedWorkspaceId?: string | null;
-}): ActiveWorkspaceResolution {
-  const requested = input.requested?.trim() || null;
-  if (requested === PERSONAL_WORKSPACE_SELECTOR) {
-    return { scope: 'personal', workspaceId: input.personalWorkspaceId };
-  }
-
-  const selector = requested ?? input.lastSelectedWorkspaceId ?? null;
-  if (!selector || selector === PERSONAL_WORKSPACE_SELECTOR) {
-    return { scope: 'personal', workspaceId: input.personalWorkspaceId };
-  }
-  if (selector === input.personalWorkspaceId) {
-    return { scope: 'personal', workspaceId: input.personalWorkspaceId };
-  }
-
-  const membership = input.memberships.find((workspace) => workspace.id === selector);
-  if (!membership) {
-    return { scope: 'denied', reason: requested ? 'not_a_member' : 'unknown_workspace' };
-  }
-  if (membership.kind === 'personal' || !membership.organizationId) {
-    return { scope: 'personal', workspaceId: membership.id };
-  }
-  return {
-    scope: 'organization',
-    workspaceId: membership.id,
-    organizationId: membership.organizationId,
-  };
-}

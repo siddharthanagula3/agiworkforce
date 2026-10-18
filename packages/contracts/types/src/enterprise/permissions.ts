@@ -337,15 +337,6 @@ export function isOrganizationPermission(value: unknown): value is OrganizationP
   return typeof value === 'string' && PERMISSION_LOOKUP.has(value);
 }
 
-export function isCanonicalOrganizationPermission(
-  value: unknown,
-): value is CanonicalOrganizationPermission {
-  return (
-    typeof value === 'string' &&
-    (CANONICAL_ORGANIZATION_PERMISSIONS as readonly string[]).includes(value)
-  );
-}
-
 export function isGrantableOrganizationPermission(value: unknown): value is OrganizationPermission {
   return isOrganizationPermission(value) && !PRIMARY_OWNER_ONLY_PERMISSIONS.includes(value);
 }

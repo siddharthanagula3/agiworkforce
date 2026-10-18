@@ -55,12 +55,10 @@ the previous release are never read again and expire on their own.
 
 ## 3. Client caches
 
-`packages/client/client-runtime/src/cache-namespace.ts` is the isolation rule for
-everything a client stores locally. A cached value belongs to a `CacheScope` of
-an account and a workspace, and `namespacedCacheKey` appends `::@<account>/<workspace>`
-to the base key. Personal is the segment `personal`, a workspace of its own
-rather than the absence of one, which is what stops personal content appearing
-inside an organization. An unauthenticated scope is `anonymous`.
+A cached value a client stores locally belongs to an account and a workspace,
+and personal is a workspace of its own rather than the absence of one, which is
+what stops personal content appearing inside an organization. Each surface owns
+its scoping; there is no shared client cache-key helper.
 
 On the web, `finalizeWorkspaceSwitch`
 (`apps/web/features/workspaces/lib/workspace-cache-scope.ts`) cancels in-flight

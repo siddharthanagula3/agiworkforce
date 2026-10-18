@@ -1,20 +1,4 @@
-
 export type SettingsCategory = 'account' | 'interface' | 'ai' | 'extensions';
-
-export const SETTINGS_CATEGORY_LABEL: Readonly<Record<SettingsCategory, string>> = Object.freeze({
-  account: 'Account',
-  interface: 'Interface',
-  ai: 'AI',
-  extensions: 'Extensions',
-});
-
-export const SETTINGS_CATEGORY_DESCRIPTION: Readonly<Record<SettingsCategory, string>> =
-  Object.freeze({
-    account: 'Profile, billing, sessions, privacy',
-    interface: 'Theme, appearance, notifications, keyboard',
-    ai: 'Models, providers, effort, agent mode',
-    extensions: 'Connectors, MCP servers, skills, plugins',
-  });
 
 export interface SettingsSection {
   id: string;

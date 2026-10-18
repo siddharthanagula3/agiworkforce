@@ -144,12 +144,6 @@ export const DERIVED_CONTRACT_STATES: readonly ContractLifecycleState[] = Object
   'terminated',
 ]);
 
-export function isContractLifecycleState(value: unknown): value is ContractLifecycleState {
-  return (
-    typeof value === 'string' && CONTRACT_LIFECYCLE_STATES.includes(value as ContractLifecycleState)
-  );
-}
-
 export function applyContractEvent(
   state: ContractLifecycleState,
   event: ContractLifecycleEvent,

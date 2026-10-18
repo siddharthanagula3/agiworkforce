@@ -9,13 +9,6 @@ import {
   syncObjectCarriesTombstone,
   syncObjectSemantics,
 } from '../sync/object-semantics';
-import {
-  CONTINUABLE_WORKFLOWS,
-  SESSION_CONTINUATION,
-  isContinuableWorkflow,
-  sessionContinuation,
-  workflowsResumableAcrossDevices,
-} from '../sync/session-continuation';
 
 describe('cross-device object semantics', () => {
   it('answers for every object type the product syncs, with no entry left out', () => {
@@ -59,35 +52,5 @@ describe('cross-device object semantics', () => {
   it('does not claim the cloud holds the bytes for every type', () => {
     expect(SYNC_OBJECT_SEMANTICS.artifact.payload).toBe('cloud-or-device');
     expect(SYNC_OBJECT_SEMANTICS.skill.payload).toBe('cloud-or-device');
-  });
-});
-
-describe('session continuation', () => {
-  it('gives all eight workflows an answer to all three questions', () => {
-    expect(CONTINUABLE_WORKFLOWS).toHaveLength(8);
-    for (const workflow of CONTINUABLE_WORKFLOWS) {
-      const answer = sessionContinuation(workflow);
-      expect(typeof answer.locallyPersisted).toBe('boolean');
-      expect(typeof answer.rehydratable).toBe('boolean');
-      expect(typeof answer.resumable).toBe('boolean');
-    }
-    expect(Object.keys(SESSION_CONTINUATION).sort()).toEqual([...CONTINUABLE_WORKFLOWS].sort());
-  });
-
-  it('makes a workflow that cannot be continued say so instead of staying silent', () => {
-    for (const workflow of CONTINUABLE_WORKFLOWS) {
-      const answer = sessionContinuation(workflow);
-      const complete = answer.locallyPersisted && answer.rehydratable && answer.resumable;
-      if (complete) expect(answer.limit).toBeNull();
-      else expect(answer.limit?.length ?? 0).toBeGreaterThan(0);
-    }
-  });
-
-  it('names the workflows a surface may offer to continue elsewhere unqualified', () => {
-    expect(workflowsResumableAcrossDevices()).toContain('chat');
-    expect(workflowsResumableAcrossDevices()).toContain('code');
-    expect(workflowsResumableAcrossDevices()).not.toContain('research');
-    expect(isContinuableWorkflow('chat')).toBe(true);
-    expect(isContinuableWorkflow('nonsense')).toBe(false);
   });
 });

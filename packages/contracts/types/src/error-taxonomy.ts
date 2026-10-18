@@ -76,10 +76,6 @@ const CODE_CLASS: ReadonlyMap<string, ErrorClass> = new Map(
   ),
 );
 
-export function isErrorClass(value: string): value is ErrorClass {
-  return (ERROR_CLASSES as readonly string[]).includes(value);
-}
-
 export function classifyErrorCode(code: ClassifiedErrorCode): ErrorClass {
   return CODE_CLASS.get(code) ?? 'internal';
 }

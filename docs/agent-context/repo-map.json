@@ -914,11 +914,11 @@
       "canonicalOwner": "Guardian",
       "consumers": [".github/workflows/guardian.yml"],
       "deployability": "library",
-      "trustBoundary": "github app webhook and check-run surface",
+      "trustBoundary": "github check-run surface",
       "status": "active",
       "action": "keep",
       "evidence": [
-        "packages/guardian/github/src/webhook.ts",
+        "packages/guardian/github/src/cli/scan.ts",
         "packages/guardian/github/src/checks.ts",
         ".github/workflows/guardian.yml"
       ]

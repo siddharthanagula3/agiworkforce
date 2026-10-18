@@ -3,7 +3,6 @@ import {
   SELF_SERVE_PAID_PLAN_TIERS,
   getBillingPlanPricing,
   isContractPricedPlan,
-  isFreeOfChargePlanTier,
   isTeamSeatUpgradeTier,
   normalizeBillingPlanTier,
   type BillingInterval,
@@ -139,8 +138,4 @@ export function spendCapExceeded(cap: SpendCap, spentCents: number): boolean {
 
 export function remainingSpendCents(cap: SpendCap, spentCents: number): number | null {
   return isUnlimitedSpendCap(cap) ? null : Math.max(0, cap - spentCents);
-}
-
-export function isFreePlanCatalogEntry(entry: PlanCatalogEntry): boolean {
-  return isFreeOfChargePlanTier(entry.tier);
 }

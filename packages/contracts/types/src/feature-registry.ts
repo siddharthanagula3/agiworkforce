@@ -35,14 +35,6 @@ export const CONTROL_LAYERS = [
 
 export type ControlLayer = (typeof CONTROL_LAYERS)[number];
 
-export const CONTROL_LAYER_QUESTIONS: Readonly<Record<ControlLayer, string>> = Object.freeze({
-  rolloutFlag: 'has this change been handed out to this request yet',
-  entitlement: 'does the plan this account pays for carry it',
-  permission: 'may this principal do it',
-  policy: 'does the administrator allow it here',
-  trustBoundary: 'may the work run where this would run it',
-});
-
 export interface FeatureGates {
   entitlement: BillingPlanCapability | null;
   policy: WorkspaceFeature | null;
@@ -126,36 +118,7 @@ export function featureLabel(id: FeatureId): string {
   return FEATURE_DEFINITIONS[id]?.label ?? id;
 }
 
-export function featureGovernance(id: FeatureId): FeatureGovernance | null {
-  return FEATURE_DEFINITIONS[id]?.governance ?? null;
-}
-
-/**
- * Features still carrying a maturity label, so a caller asking what is
- * unfinished reads the registry rather than a list somebody kept by hand.
- */
-export function unfinishedFeatureIds(): readonly FeatureId[] {
-  return FEATURE_IDS.filter((id) => FEATURE_DEFINITIONS[id]?.maturity !== 'general_availability');
-}
-
 export function featureGate(id: FeatureId, layer: ControlLayer): string | null {
   const definition = FEATURE_DEFINITIONS[id];
   return definition === undefined ? null : (definition.gates[layer] ?? null);
-}
-
-/**
- * Every feature this one needs, transitively. A cycle would make the answer
- * depend on where the walk started, so the registry guard refuses one.
- */
-export function featureDependencies(id: FeatureId): readonly string[] {
-  const seen = new Set<string>();
-  const walk = (current: string) => {
-    for (const dependency of FEATURE_DEFINITIONS[current]?.dependsOn ?? []) {
-      if (seen.has(dependency)) continue;
-      seen.add(dependency);
-      walk(dependency);
-    }
-  };
-  walk(id);
-  return [...seen];
 }

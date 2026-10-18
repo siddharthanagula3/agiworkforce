@@ -46,20 +46,18 @@ parallel stack:
   are not already in ci.yml's fast path, normalized into the finding schema.
 - Nightly schedule and `workflow_dispatch --deep` add heavy checks
   (`check:trust-boundaries`, `check:knip:production`).
-- `merge_group`, `release`, and richer `/agi` commands are normalized by
-  `guardian-github/events.ts` and activate as the control-plane pipeline lands.
+- `merge_group`, `release`, richer `/agi` commands and a GitHub App webhook are
+  not implemented; the event normalizer and webhook receiver were removed
+  because no host served them.
 - ci.yml lanes (semgrep 1.172.0, CodeQL, clippy, audits, tests) are read, not
   re-run. Guardian adds the layer CI lacks: normalization, fingerprints,
   verification, dedup, baselining, policy, and single-comment publishing.
 
 ## Safety invariants (enforced in code, tested)
 
-- HMAC verification on raw bytes, constant-time compare; unauthenticated
-  payloads never touch parsing (`guardian-github/webhook.ts`).
-- Delivery-ID replay protection via unique constraint
-  (`github_webhook_deliveries`, fail-open with logged degradation).
-- A run may publish only against its own head SHA (`shouldPublish` + workflow
-  stale-head re-check before every publish).
+- A run may publish only against its own head SHA (the workflow re-checks the
+  head before every publish). Webhook HMAC verification and delivery replay
+  protection are not implemented, because Guardian runs only as a CI scan.
 - Scanner failure ≠ clean: `ScannerRun.status` distinguishes
   `clean|findings|scanner-failed|timeout|skipped`, and blocking mode fails on
   scanner failure.

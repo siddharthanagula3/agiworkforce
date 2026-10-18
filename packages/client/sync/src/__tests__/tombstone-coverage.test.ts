@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { resourceAvailability, partitionByAvailability } from '../availability';
 import {
   applyConversationDeltas,
   type ConversationStorePort,
@@ -8,12 +7,6 @@ import {
 } from '../conversations';
 import { mapMemoryWireDelta } from '../memory';
 import { applyMessageDeltas, type MessageStorePort, type SyncMessageRecord } from '../messages';
-import {
-  applyProjectMetadata,
-  mapProjectMetadataWireDelta,
-  projectMetadataOf,
-  toProjectMetadataPushItem,
-} from '../project-metadata';
 import { mapProjectWireDelta } from '../projects';
 import { applySyncTombstone, isSyncTombstoned, syncTombstoneOf } from '../tombstones';
 
@@ -149,11 +142,8 @@ describe('every synced object type carries a deletedAt tombstone', () => {
     expect(retaining.stored.get('c1')?.[0]).toMatchObject({ deletedAt: DELETED_AT });
   });
 
-  it('projects and project metadata carry the same tombstone', () => {
+  it('projects carry the tombstone', () => {
     expect(mapProjectWireDelta(projectDelta(DELETED_AT))).toMatchObject({ deletedAt: DELETED_AT });
-    expect(mapProjectMetadataWireDelta(projectDelta(DELETED_AT))).toMatchObject({
-      deletedAt: DELETED_AT,
-    });
     expect(mapProjectWireDelta(projectDelta(null)).deletedAt).toBeNull();
   });
 
@@ -174,76 +164,5 @@ describe('every synced object type carries a deletedAt tombstone', () => {
     const removed: string[] = [];
     applySyncTombstone({ remove: (id) => void removed.push(id) }, 'x', DELETED_AT);
     expect(removed).toEqual(['x']);
-  });
-});
-
-describe('project metadata syncs without the fields it does not carry', () => {
-  it('leaves instructions alone when only the metadata changed', () => {
-    const project = mapProjectWireDelta(projectDelta(null));
-    const renamed = { ...projectMetadataOf(project), name: 'Launch v2', serverVersion: '13' };
-
-    const applied = applyProjectMetadata(project, renamed);
-    expect(applied.name).toBe('Launch v2');
-    expect(applied.instructions).toBe('ship it');
-    expect(toProjectMetadataPushItem(renamed).baseVersion).toBe('13');
-  });
-});
-
-describe('cloud sync does not assume the bytes are in the cloud', () => {
-  it('names the device holding a resource this one cannot open', () => {
-    const elsewhere = resourceAvailability(
-      {
-        resourceId: 'f1',
-        storedInCloud: false,
-        holdingDeviceId: 'device-b',
-        holdingDeviceName: "Sam's desktop",
-        byteSize: 2_048,
-      },
-      'device-a',
-    );
-    expect(elsewhere).toEqual({
-      state: 'on-another-device',
-      deviceId: 'device-b',
-      deviceName: "Sam's desktop",
-    });
-  });
-
-  it('separates what this device can open from what it cannot', () => {
-    const partitioned = partitionByAvailability(
-      [
-        {
-          resourceId: 'a',
-          storedInCloud: true,
-          holdingDeviceId: null,
-          holdingDeviceName: null,
-          byteSize: 1,
-        },
-        {
-          resourceId: 'b',
-          storedInCloud: false,
-          holdingDeviceId: 'device-a',
-          holdingDeviceName: 'here',
-          byteSize: 1,
-        },
-        {
-          resourceId: 'c',
-          storedInCloud: false,
-          holdingDeviceId: 'device-b',
-          holdingDeviceName: 'there',
-          byteSize: 1,
-        },
-        {
-          resourceId: 'd',
-          storedInCloud: false,
-          holdingDeviceId: null,
-          holdingDeviceName: null,
-          byteSize: null,
-        },
-      ],
-      'device-a',
-    );
-    expect(partitioned.openable.map((r) => r.resourceId)).toEqual(['a', 'b']);
-    expect(partitioned.elsewhere.map((r) => r.resourceId)).toEqual(['c']);
-    expect(partitioned.unavailable.map((r) => r.resourceId)).toEqual(['d']);
   });
 });

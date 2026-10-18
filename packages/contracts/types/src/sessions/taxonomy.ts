@@ -104,15 +104,6 @@ export type SessionExecutionAuthority =
   | 'browser_profile'
   | 'relay_control_plane';
 
-export const SESSION_EXECUTION_AUTHORITIES = [
-  'local_device',
-  'byok_provider_account',
-  'managed_cloud_service',
-  'developer_workspace_host',
-  'browser_profile',
-  'relay_control_plane',
-] as const satisfies readonly SessionExecutionAuthority[];
-
 export interface SessionTrustBoundary {
   privacyMode: PrivacyMode;
   providerMode: ProviderMode;
@@ -144,10 +135,7 @@ export interface SessionPolicySnapshot {
 }
 
 export type SessionDeletionPolicy =
-  | 'user_deletable'
-  | 'auto_expiring'
-  | 'retained_for_audit'
-  | 'immediate_on_disconnect';
+  'user_deletable' | 'auto_expiring' | 'retained_for_audit' | 'immediate_on_disconnect';
 
 export interface SessionRetentionPolicy {
   retentionExpiresAt?: string | null;

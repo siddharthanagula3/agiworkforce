@@ -14,6 +14,8 @@ const PARSE_ERROR_SENTINEL: OllamaChatStreamChunk = { done: false } as OllamaCha
 
 const STREAM_PARSE_ERROR_CODE = 'stream_parse_error';
 const STREAM_PARSE_ERROR_MESSAGE = 'The response stream carried a frame that could not be read.';
+const STREAM_UPSTREAM_ERROR_CODE = 'ollama_stream_error';
+const STREAM_UPSTREAM_ERROR_MESSAGE = 'Ollama stopped the response with an error.';
 
 export async function* parseOllamaStream(
   body: ReadableStream<Uint8Array>,
@@ -74,6 +76,7 @@ export async function* translateOllamaStream(
   let toolUseCounter = 0;
   let finished = false;
   let parseFailed = false;
+  let upstreamError: string | null = null;
   let pendingUsage: StreamChunk | null = null;
   let stopReason: Extract<StreamChunk, { type: 'stop' }>['reason'] = 'end_turn';
   let threw = false;
@@ -83,6 +86,13 @@ export async function* translateOllamaStream(
       if (finished) continue;
       if (chunk === PARSE_ERROR_SENTINEL) {
         parseFailed = true;
+        continue;
+      }
+      // A failure after the response started arrives as an `error` frame on a
+      // 200 stream, so the status code never reports it.
+      if (typeof chunk.error === 'string') {
+        upstreamError = chunk.error || STREAM_UPSTREAM_ERROR_MESSAGE;
+        finished = true;
         continue;
       }
       const message = chunk.message;
@@ -122,7 +132,9 @@ export async function* translateOllamaStream(
     throw error;
   } finally {
     if (!threw) {
-      if (parseFailed) {
+      if (upstreamError !== null) {
+        yield { type: 'error', message: upstreamError, code: STREAM_UPSTREAM_ERROR_CODE };
+      } else if (parseFailed) {
         yield {
           type: 'error',
           message: STREAM_PARSE_ERROR_MESSAGE,
@@ -131,7 +143,7 @@ export async function* translateOllamaStream(
         };
       }
       if (pendingUsage) yield pendingUsage;
-      yield { type: 'stop', reason: parseFailed ? 'error' : stopReason };
+      yield { type: 'stop', reason: parseFailed || upstreamError !== null ? 'error' : stopReason };
     }
   }
 }
