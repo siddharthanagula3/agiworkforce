@@ -8,7 +8,6 @@ export interface ExportOptions {
   title?: string;
   author?: string;
   metadata?: Record<string, string>;
-  pageBreaks?: number[];
 }
 
 export async function downloadAsMarkdown(

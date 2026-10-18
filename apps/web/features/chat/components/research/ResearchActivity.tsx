@@ -739,6 +739,7 @@ export function ResearchActivity({
         <div className="rounded-b-lg border border-t-0 border-border/30 bg-muted/10 px-3 py-2">
           <ResearchPlan
             steps={steps}
+            gaps={research.gaps}
             editable
             busy={isRetrying}
             costEstimate={costEstimate}

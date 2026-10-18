@@ -1,24 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 import {
-  buildNewChatHref,
   NEW_CHAT_PATH,
   parseNewChatEntry,
   QUICK_ASK_PATH,
   stripNewChatParams,
   type NewChatEntry,
 } from '../lib/new-chat-entry';
-
-export function useStartNewChat(): (entry?: Partial<NewChatEntry>) => void {
-  const router = useRouter();
-  return useCallback(
-    (entry?: Partial<NewChatEntry>) => router.push(buildNewChatHref(entry)),
-    [router],
-  );
-}
 
 /**
  * Applies a new-chat deep link to the pending composer exactly once, then drops

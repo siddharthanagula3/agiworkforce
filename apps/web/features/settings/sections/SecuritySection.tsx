@@ -26,7 +26,7 @@ import { useCurrentUser } from '@/lib/identity/client';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 export function SecuritySection() {
-  const { data: serverSettings, isLoading } = useUserSettings();
+  const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const changePasswordMutation = useChangePassword();
   const hasPassword = useCurrentUser().user?.hasPassword === true;
@@ -134,6 +134,15 @@ export function SecuritySection() {
       <AdvancedAccountSecurityPanel />
 
       <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
+
+      {settingsFailed ? (
+        <p
+          role="alert"
+          style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive-text)' }}
+        >
+          Your saved session timeout could not be loaded, so the value below is the default.
+        </p>
+      ) : null}
 
       {isLoading ? (
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Loading security settings...</div>

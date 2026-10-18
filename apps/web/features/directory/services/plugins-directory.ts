@@ -178,6 +178,7 @@ export interface PluginInstallState {
   byEntryId: ReadonlyMap<string, PluginMarketplaceInstallation>;
   updates: ReadonlyMap<string, PluginUpdateOffer>;
   notice: string | null;
+  readFailed: boolean;
 }
 
 export interface UserMarketplaceState {
@@ -192,6 +193,7 @@ export const EMPTY_INSTALL_STATE: PluginInstallState = {
   byEntryId: new Map(),
   updates: new Map(),
   notice: null,
+  readFailed: false,
 };
 
 export const EMPTY_USER_MARKETPLACES: UserMarketplaceState = { sources: [], entries: [] };
@@ -396,7 +398,16 @@ export async function fetchPluginInstallState(): Promise<PluginInstallState> {
     const body = await readErrorBody(marketplace);
     if (body.error?.code === PLUGIN_INSTALLS_DISABLED_CODE) notice = body.error.message ?? null;
   }
-  return { builtin: builtinInstallations, builtinIds, byPluginKey, byEntryId, updates, notice };
+  const readFailed = !builtin?.ok || (!marketplace?.ok && notice === null);
+  return {
+    builtin: builtinInstallations,
+    builtinIds,
+    byPluginKey,
+    byEntryId,
+    updates,
+    notice,
+    readFailed,
+  };
 }
 
 async function readOptional<T>(path: string): Promise<T | null> {

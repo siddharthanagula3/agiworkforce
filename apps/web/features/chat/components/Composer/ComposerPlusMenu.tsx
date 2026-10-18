@@ -139,6 +139,8 @@ const SKILLS_EMPTY_COPY = 'No skills of your own yet.';
 const CATALOG_SKILL_SOURCE = 'bundled';
 const PLUGINS_EMPTY_COPY = 'No plugins installed yet.';
 const PLUGINS_LOADING_LABEL = 'Loading plugins';
+const PLUGINS_FAILED_COPY = 'Your plugins could not be loaded.';
+const PLUGINS_RETRY_LABEL = 'Try again';
 const SETTINGS_SECTION_CONNECTORS = 'connectors';
 const SETTINGS_SECTION_SKILLS = 'skills';
 const SETTINGS_SECTION_PLUGINS = 'plugins';
@@ -1064,6 +1066,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [expandedPluginId, setExpandedPluginId] = useState<string | null>(null);
   const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[] | null>(null);
+  const [pluginsFailed, setPluginsFailed] = useState(false);
   const skillNames = useMemo(
     () => new Set(props.skills.map((skill) => skill.name)),
     [props.skills],
@@ -1074,15 +1077,20 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   );
 
   useEffect(() => {
-    if (!pluginsOpen || installedPlugins !== null) return;
+    if (!pluginsOpen || installedPlugins !== null || pluginsFailed) return;
     let cancelled = false;
-    void loadInstalledPlugins().then((entries) => {
-      if (!cancelled) setInstalledPlugins(entries);
-    });
+    loadInstalledPlugins().then(
+      (entries) => {
+        if (!cancelled) setInstalledPlugins(entries);
+      },
+      () => {
+        if (!cancelled) setPluginsFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [pluginsOpen, installedPlugins]);
+  }, [pluginsOpen, installedPlugins, pluginsFailed]);
 
   const selectSkill = (name: string) => {
     props.onSelectSkill(name);
@@ -1283,7 +1291,19 @@ function ChatMenu(props: ComposerPlusMenuProps) {
       </button>
       {pluginsOpen && (
         <div role="group" aria-label={ROW_LABEL_PLUGINS} className="space-y-0.5 pb-1">
-          {installedPlugins === null ? (
+          {pluginsFailed ? (
+            <div role="alert" className={SUBMENU_EMPTY_CLASS}>
+              <p>{PLUGINS_FAILED_COPY}</p>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setPluginsFailed(false)}
+                className="mt-1 min-h-6 font-medium text-foreground underline underline-offset-2"
+              >
+                {PLUGINS_RETRY_LABEL}
+              </button>
+            </div>
+          ) : installedPlugins === null ? (
             <div className="flex justify-center py-2">
               <Spinner size="sm" aria-label={PLUGINS_LOADING_LABEL} />
             </div>

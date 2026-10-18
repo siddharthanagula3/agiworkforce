@@ -24,7 +24,7 @@ vi.mock('@shared/stores/web-chat-store', () => {
   return { useChatStore, PENDING_CONVERSATION_KEY: '__new_conversation__' };
 });
 
-const { useNewChatEntry, useStartNewChat } = await import('./use-new-chat');
+const { useNewChatEntry } = await import('./use-new-chat');
 
 const MESSAGE_ID = 'c4f2a1b8-3e5d-4a6f-9b7c-1d2e3f4a5b6c';
 
@@ -32,22 +32,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.params = new URLSearchParams();
   mocks.pathname = '/chat';
-});
-
-describe('useStartNewChat', () => {
-  it('navigates to a link carrying the source and the seeded draft', () => {
-    const { result } = renderHook(() => useStartNewChat());
-
-    result.current({ source: { kind: 'file', id: 'asset-1' }, draft: '> a line' });
-
-    expect(mocks.push).toHaveBeenCalledWith('/chat?q=%3E+a+line&from=file%3Aasset-1');
-  });
-
-  it('navigates to a plain new chat when nothing is carried', () => {
-    const { result } = renderHook(() => useStartNewChat());
-    result.current();
-    expect(mocks.push).toHaveBeenCalledWith('/chat');
-  });
 });
 
 describe('useNewChatEntry', () => {

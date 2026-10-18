@@ -3,7 +3,6 @@ import {
   changePasswordSchema,
   securitySettingsSchema,
   createApiKeySchema,
-  validateFormData,
   isValidIpOrCidr,
 } from './settings-validation';
 
@@ -192,30 +191,6 @@ describe('Settings Validation Schemas', () => {
           scopes: ['usage:read', 'usage:read'],
         }).success,
       ).toBe(false);
-    });
-  });
-
-  describe('validateFormData utility', () => {
-    it('should return success with valid data', () => {
-      const result = validateFormData(securitySettingsSchema, {
-        two_factor_enabled: true,
-        session_timeout: 30,
-      });
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.session_timeout).toBe(30);
-      }
-    });
-
-    it('should return errors for invalid data', () => {
-      const result = validateFormData(securitySettingsSchema, {
-        two_factor_enabled: true,
-        session_timeout: 5,
-      });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(Object.keys(result.errors).length).toBeGreaterThan(0);
-      }
     });
   });
 });

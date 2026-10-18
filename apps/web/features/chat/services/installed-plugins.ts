@@ -11,22 +11,26 @@ export interface InstalledPlugin {
   skills: string[];
 }
 
-export async function loadInstalledPlugins(): Promise<InstalledPlugin[]> {
-  try {
-    const installs = await fetchPluginInstallState();
-    const ids = [
-      ...[...installs.builtinIds].filter(([, enabled]) => enabled).map(([id]) => id),
-      ...[...installs.byPluginKey.values()]
-        .filter((installation) => installation.enabled)
-        .map((installation) => installation.pluginKey),
-    ];
-    const entries = await Promise.all(
-      ids.map((id) => fetchPluginDirectoryEntry(id).catch(() => null)),
-    );
-    return entries.flatMap((entry) =>
-      entry ? [{ id: entry.id, name: entry.name, skills: entry.declaredSkills }] : [],
-    );
-  } catch {
-    return [];
+export class InstalledPluginsUnavailableError extends Error {
+  constructor() {
+    super('Installed plugins could not be loaded.');
+    this.name = 'InstalledPluginsUnavailableError';
   }
+}
+
+export async function loadInstalledPlugins(): Promise<InstalledPlugin[]> {
+  const installs = await fetchPluginInstallState();
+  if (installs.readFailed) throw new InstalledPluginsUnavailableError();
+  const ids = [
+    ...[...installs.builtinIds].filter(([, enabled]) => enabled).map(([id]) => id),
+    ...[...installs.byPluginKey.values()]
+      .filter((installation) => installation.enabled)
+      .map((installation) => installation.pluginKey),
+  ];
+  const entries = await Promise.all(
+    ids.map((id) => fetchPluginDirectoryEntry(id).catch(() => null)),
+  );
+  return entries.flatMap((entry) =>
+    entry ? [{ id: entry.id, name: entry.name, skills: entry.declaredSkills }] : [],
+  );
 }

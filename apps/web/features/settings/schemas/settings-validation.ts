@@ -69,35 +69,6 @@ export const createApiKeySchema = z.object({
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;
 
-export function validateFormData<T>(
-  schema: z.ZodSchema<T>,
-  data: unknown,
-): { success: true; data: T } | { success: false; errors: Record<string, string> } {
-  const result = schema.safeParse(data);
-
-  if (result.success) {
-    return { success: true, data: result.data };
-  }
-
-  const errors: Record<string, string> = {};
-  const issues =
-    (result.error as { issues?: Array<{ path: (string | number)[]; message: string }> }).issues ||
-    [];
-
-  for (const issue of issues) {
-    const path = issue.path.join('.');
-    if (!errors[path]) {
-      errors[path] = issue.message;
-    }
-  }
-
-  if (Object.keys(errors).length === 0 && issues.length > 0) {
-    errors['_root'] = issues[0]!.message;
-  }
-
-  return { success: false, errors };
-}
-
 const IPV4_OCTET = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 const IPV4_ADDRESS_PATTERN = new RegExp(
   `^${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}$`,

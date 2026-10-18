@@ -6,6 +6,7 @@ import { Badge, Card, CardContent, CardHeader, Button, useUiTranslation } from '
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import DOMPurify from 'dompurify';
+import katex from 'katex';
 import { toast } from 'sonner';
 import {
   CardExtraSections,
@@ -180,8 +181,6 @@ function FormulaDisplay({
   const rendered = useMemo(() => {
     if (!isLatex) return null;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const katex = require('katex');
       return katex.renderToString(expression, {
         throwOnError: false,
         displayMode,

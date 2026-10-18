@@ -17,7 +17,6 @@ import {
   RISK_CLASS_COPY,
   buildConnectorDescription,
   describeConnectorActions,
-  getConnectorAvailability,
   type Connector,
 } from '../connectors';
 
@@ -186,18 +185,6 @@ describe('CRIT-001 guard, present-tense copy requires a shipped adapter', () => 
 
 describe('CRIT-001 guard, availability and health fail closed', () => {
   const gmail = CONNECTORS.find((c) => c.id === 'gmail')!;
-
-  it('does not call a connector ready without a server answer', () => {
-    expect(getConnectorAvailability(gmail, undefined)).toBe('unavailable');
-    for (const connector of CONNECTORS) {
-      expect(getConnectorAvailability(connector, undefined)).not.toBe('ready');
-    }
-  });
-
-  it('only calls a connector ready while the server lists it', () => {
-    expect(getConnectorAvailability(gmail, new Set(['gmail']))).toBe('ready');
-    expect(getConnectorAvailability(gmail, new Set<string>())).toBe('unavailable');
-  });
 
   it('treats an unknown connector id with no runtime evidence as not configured', () => {
     expect(resolveConnectorHealth({ connectorId: 'never-heard-of-it' })).toBe('not-configured');

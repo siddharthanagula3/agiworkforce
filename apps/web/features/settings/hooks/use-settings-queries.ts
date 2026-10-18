@@ -89,16 +89,14 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
     queryKey: queryKeys.settings.preferences(),
     queryFn: async (): Promise<UserSettings> => {
       const { data, error } = await settingsService.getSettings();
-      if (error) {
-        // A signed-out visitor is an expected state, not an error, don't spam
-        // the console (it surfaced as a Next dev "Issue" overlay on public routes).
-        if (!/not authenticated|authentication required|unauthorized/i.test(String(error))) {
-          logger.error('[SettingsQuery] Settings error:', error);
-        }
-        // Return default settings on error
-        return { two_factor_enabled: false, session_timeout: 60 };
+      if (!error) return data;
+      // A signed-out visitor is an expected state, not an error, and keeps the
+      // defaults; anything else must not pass the defaults off as stored values.
+      if (/not authenticated|authentication required|unauthorized|HTTP 401/i.test(String(error))) {
+        return data;
       }
-      return data;
+      logger.error('[SettingsQuery] Settings error:', error);
+      throw new Error(error);
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes

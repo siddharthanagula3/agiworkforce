@@ -41,24 +41,7 @@ export function normalizePlan(plan: unknown): PlanTier {
 }
 
 export function normalizeStatus(status: unknown): BillingStatus {
-  if (status === 'cancelled') return 'canceled';
-  return isValidStatus(status) ? status : 'none';
-}
-
-export interface BillingInfo {
-  plan: PlanTier;
-  status: BillingStatus;
-  current_period_start: string | null;
-  current_period_end: string | null;
-  price: number | null;
-  currency: string | null;
-  features: string[];
-  usage: { usedPercent: number };
-  invoices: {
-    id: string;
-    date: string;
-    amount: number;
-    status: 'paid' | 'pending' | 'failed';
-    download_url: string;
-  }[];
+  const normalized = typeof status === 'string' ? status.toLowerCase() : status;
+  if (normalized === 'cancelled') return 'canceled';
+  return isValidStatus(normalized) ? normalized : 'none';
 }

@@ -9,14 +9,8 @@
 
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import {
-  canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   canAccessModelForSubscriptionTier,
-  getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
-  getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
-  getProviderDefaultModel as getCatalogProviderDefaultModel,
-  getTaskModelForProvider as getCatalogTaskModelForProvider,
-  getTierPolicy as getCatalogTierPolicy,
   normalizeSubscriptionAccessTier,
   getModelReasoning as getCatalogModelReasoning,
   splitEffortsByEntitlement as splitCatalogEffortsByEntitlement,
@@ -26,18 +20,14 @@ import {
   getSelectableModels as getCatalogSelectableModels,
   isAutoModeModelId as isCatalogAutoModeModelId,
   isFreeBillingPlanTier,
-  modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
-  formatModelPriceInCredits,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
   type ModelReasoning,
   type ModelAvailability,
   type ModelCapabilities,
 } from '@agiworkforce/types';
-
-export type { ModelCapabilities };
 
 export interface ModelMetadata {
   id: string;
@@ -65,8 +55,6 @@ export interface ModelMetadata {
 
 const config = modelsJson;
 
-export const MODEL_ID_ALIASES: Record<string, string> = modelIdAliases;
-
 export function normalizeModelId(modelId: string | null | undefined): string | null {
   return normalizeCatalogModelId(modelId);
 }
@@ -86,10 +74,6 @@ const CANONICAL_MODEL_METADATA: Record<string, ModelMetadata> = config.models as
 >;
 
 export const PROVIDER_LABELS: Record<string, string> = providerLabels;
-
-export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
-
-export const PROVIDERS_IN_ORDER: string[] = config.providersInOrder;
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
   Object.entries(MODEL_METADATA).flatMap(([id, model]) => {
@@ -127,10 +111,6 @@ export function getAllModels(): ModelMetadata[] {
   return Object.values(CANONICAL_MODEL_METADATA);
 }
 
-export function getProviderModels(provider: string): ModelMetadata[] {
-  return getAllModels().filter((model) => model.provider === provider);
-}
-
 export function getModelContextWindow(modelId: string): number {
   const canonicalModelId = normalizeModelId(modelId);
   const metadata = canonicalModelId ? MODEL_METADATA[canonicalModelId] : undefined;
@@ -143,32 +123,11 @@ export function getModelContextWindow(modelId: string): number {
   return publishedContextWindow ?? 128_000;
 }
 
-export function formatCost(inputCost?: number, outputCost?: number, cachedCost?: number): string {
-  return formatModelPriceInCredits(inputCost, outputCost, cachedCost);
-}
-
 export function isModelAllowedForTier(modelId: string, tier: string): boolean {
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
-export function getProviderDefaultModel(provider: string): string | null {
-  return getCatalogProviderDefaultModel(provider);
-}
-
-export function getTaskModelForProvider(
-  provider: string,
-  task:
-    | 'fast_completion'
-    | 'code_generation'
-    | 'complex_reasoning'
-    | 'chat'
-    | 'vision'
-    | 'long_context',
-): string | null {
-  return getCatalogTaskModelForProvider(provider, task);
-}
-
-export function normalizeSubscriptionTier(tier: string | null | undefined): string {
+function normalizeSubscriptionTier(tier: string | null | undefined): string {
   return normalizeSubscriptionAccessTier(tier ?? 'free');
 }
 
@@ -180,24 +139,4 @@ export function getBestAutoModeForTier(tier: string | null | undefined): string 
   return isFreeBillingPlanTier(normalizeSubscriptionTier(tier))
     ? FREE_TRIAL_MODEL
     : getDefaultAutoRoutingProfile().id;
-}
-
-export function canAccessManualModelSelection(tier: string | null | undefined): boolean {
-  return canAccessCatalogManualModelSelection(tier);
-}
-
-export function getManagedCloudProviderIds(
-  options: { includeSearchProviders?: boolean } = {},
-): string[] {
-  return getCatalogManagedCloudProviderIds(options);
-}
-
-export function getManualOverrideModels(
-  options: { includeSearch?: boolean } = {},
-): ModelMetadata[] {
-  return getCatalogManualOverrideModels(options) as ModelMetadata[];
-}
-
-export function getTierPolicy(tier: string | null | undefined) {
-  return getCatalogTierPolicy(tier);
 }

@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 const PREFERENCES_ENDPOINT = '/api/settings/preferences';
 const PREFERENCES_NAMESPACE = 'model-picker';
 const FAVOURITES_KEY = 'favouriteModelIds';
 const DEVICE_STORAGE_KEY = 'agi-model-picker-favourites';
+const SAVE_FAILED_COPY = 'Your favourite models could not be saved. Try again.';
 
 function readDeviceFavourites(): string[] {
   try {
@@ -27,11 +29,10 @@ function writeDeviceFavourites(modelIds: readonly string[]): void {
   }
 }
 
-async function persistFavourites(modelIds: readonly string[]): Promise<void> {
-  storedFavourites = Promise.resolve(modelIds);
+async function persistFavourites(modelIds: readonly string[]): Promise<boolean> {
   try {
     const csrf = await getCsrfToken();
-    await fetch(PREFERENCES_ENDPOINT, {
+    const response = await fetch(PREFERENCES_ENDPOINT, {
       method: 'PUT',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
@@ -40,8 +41,9 @@ async function persistFavourites(modelIds: readonly string[]): Promise<void> {
         value: { [FAVOURITES_KEY]: modelIds },
       }),
     });
+    return response.ok;
   } catch {
-    return;
+    return false;
   }
 }
 
@@ -83,30 +85,45 @@ function loadStoredFavourites(): Promise<readonly string[] | null> {
 
 export function useModelFavourites(): ModelFavourites {
   const [favouriteModelIds, setFavouriteModelIds] = useState<readonly string[]>([]);
+  const currentRef = useRef<readonly string[]>([]);
+
+  const apply = useCallback((ids: readonly string[]) => {
+    currentRef.current = ids;
+    setFavouriteModelIds(ids);
+    writeDeviceFavourites(ids);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setFavouriteModelIds(readDeviceFavourites());
+    const deviceIds = readDeviceFavourites();
+    currentRef.current = deviceIds;
+    setFavouriteModelIds(deviceIds);
     void loadStoredFavourites().then((ids) => {
       if (cancelled || !ids) return;
-      setFavouriteModelIds(ids);
-      writeDeviceFavourites(ids);
+      apply(ids);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [apply]);
 
-  const toggleFavourite = useCallback((modelId: string) => {
-    setFavouriteModelIds((previous) => {
+  const toggleFavourite = useCallback(
+    (modelId: string) => {
+      const previous = currentRef.current;
       const next = previous.includes(modelId)
         ? previous.filter((id) => id !== modelId)
         : [...previous, modelId];
-      writeDeviceFavourites(next);
-      void persistFavourites(next);
-      return next;
-    });
-  }, []);
+      apply(next);
+      storedFavourites = Promise.resolve(next);
+      void persistFavourites(next).then((saved) => {
+        if (saved) return;
+        storedFavourites = null;
+        if (currentRef.current === next) apply(previous);
+        toast.error(SAVE_FAILED_COPY);
+      });
+    },
+    [apply],
+  );
 
   return { favouriteModelIds, toggleFavourite };
 }

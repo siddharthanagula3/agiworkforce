@@ -93,7 +93,7 @@ function clearLastActivity(): void {
  * @example
  * ```tsx
  * const { isWarningActive, secondsUntilTimeout, extendSession } = useSessionTimeout({
- *   onTimeout: () => navigate('/auth/login'),
+ *   onTimeout: () => navigate('/login'),
  *   onWarning: (seconds) => console.log(`Session expires in ${seconds}s`),
  * });
  * ```

@@ -90,7 +90,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                     <SelectItem value="30">30 minutes</SelectItem>
                     <SelectItem value="60">1 hour</SelectItem>
                     <SelectItem value="240">4 hours</SelectItem>
-                    <SelectItem value="1440">Never</SelectItem>
+                    <SelectItem value="1440">24 hours</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

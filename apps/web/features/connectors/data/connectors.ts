@@ -112,17 +112,6 @@ export function buildConnectorDescription(seed: ConnectorSeed): string {
   return `Not available by default. An operator can connect ${seed.name} for ${seed.capabilitySummary}.`;
 }
 
-export type ConnectorAvailability = 'ready' | 'planned' | 'exclusive' | 'unavailable';
-
-export function getConnectorAvailability(
-  connector: Connector,
-  availableIds?: ReadonlySet<string>,
-): ConnectorAvailability {
-  if (connector.exclusive) return 'exclusive';
-  if (availableIds?.has(connector.id)) return 'ready';
-  return connector.phase > 1 ? 'planned' : 'unavailable';
-}
-
 const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
     id: 'gmail',

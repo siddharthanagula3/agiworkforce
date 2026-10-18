@@ -163,9 +163,14 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
 
     useEffect(() => {
       let cancelled = false;
-      void loadInstalledPlugins().then((entries) => {
-        if (!cancelled) setInstalledPlugins(entries);
-      });
+      loadInstalledPlugins().then(
+        (entries) => {
+          if (!cancelled) setInstalledPlugins(entries);
+        },
+        (error: unknown) => {
+          console.warn('[slash-commands] Installed plugin commands are unavailable:', error);
+        },
+      );
       return () => {
         cancelled = true;
       };

@@ -10,24 +10,18 @@ import {
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
-import { isValidPlan, type PlanTier } from '@features/billing/components/Billing/types';
+import {
+  normalizePlan,
+  normalizeStatus,
+  type BillingStatus,
+  type PlanTier,
+} from '@features/billing/components/Billing/types';
 
 export type BillingPlan = PlanTier;
 
-export type SubscriptionStatus =
-  | 'active'
-  | 'trialing'
-  | 'canceled'
-  | 'past_due'
-  | 'unpaid'
-  | 'incomplete'
-  | 'incomplete_expired'
-  | 'paused'
-  | 'none';
-
 export interface BillingInfo {
   plan: BillingPlan;
-  status: SubscriptionStatus;
+  status: BillingStatus;
   current_period_start: string | null;
   current_period_end: string | null;
   price: number | null;
@@ -44,36 +38,12 @@ export interface BillingUsage {
 
 type UsageApiResponse = ManagedUsageSummaryResponse;
 
-const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>([
-  'active',
-  'trialing',
-  'canceled',
-  'past_due',
-  'unpaid',
-  'incomplete',
-  'incomplete_expired',
-  'paused',
-  'none',
-]);
-
-function normalizeManagedBillingPlan(plan: string): BillingPlan {
-  const normalized = normalizeBillingPlanTier(plan);
-  return isValidPlan(normalized) ? normalized : 'free';
-}
-
-function normalizeSubscriptionStatus(status: string): SubscriptionStatus {
-  const normalized = status.toLowerCase() === 'cancelled' ? 'canceled' : status.toLowerCase();
-  return SUBSCRIPTION_STATUSES.has(normalized as SubscriptionStatus)
-    ? (normalized as SubscriptionStatus)
-    : 'none';
-}
-
 export function buildBillingInfoFromUsage(data: UsageApiResponse): BillingInfo {
-  const plan = normalizeManagedBillingPlan(data.plan_tier);
+  const plan = normalizePlan(normalizeBillingPlanTier(data.plan_tier));
   const usedPercent = normalizeUsagePercentage(data.usage_percentage);
   return {
     plan,
-    status: normalizeSubscriptionStatus(data.subscription_status),
+    status: normalizeStatus(data.subscription_status),
     current_period_start: data.period_start,
     current_period_end: data.period_end,
     price: isFreeBillingPlanTier(plan) ? 0 : null,

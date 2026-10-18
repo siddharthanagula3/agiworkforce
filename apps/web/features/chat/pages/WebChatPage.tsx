@@ -6060,7 +6060,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             }),
           }),
         )
-        .catch(() => undefined);
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        })
+        .catch((error: unknown) => {
+          console.warn('[voice] Could not save a voice turn to history:', error);
+          toast.error('Part of this voice conversation could not be saved to your history.', {
+            id: `voice-transcript-save-${conversationId}`,
+          });
+        });
     },
     [addMessage, updateMessage],
   );

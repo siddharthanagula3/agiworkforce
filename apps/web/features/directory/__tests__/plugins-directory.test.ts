@@ -520,6 +520,7 @@ describe('fetchPluginInstallState', () => {
     expect(state.builtinIds).toEqual(new Map([['data-pack', true]]));
     expect(state.byPluginKey.get('frontend-design')?.id).toBe('inst-1');
     expect(state.byEntryId.get('entry-1')?.id).toBe('inst-1');
+    expect(state.readFailed).toBe(false);
     expect(state.notice).toBeNull();
   });
 
@@ -545,12 +546,13 @@ describe('fetchPluginInstallState', () => {
     const state = await fetchPluginInstallState();
     expect(state.notice).toBe('Plugin installs are not enabled on this deployment yet');
     expect(state.byPluginKey.size).toBe(0);
+    expect(state.readFailed).toBe(false);
   });
 
   it('survives a refused connection', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
     const state = await fetchPluginInstallState();
-    expect(state).toMatchObject({ notice: null });
+    expect(state).toMatchObject({ notice: null, readFailed: true });
     expect(state.builtinIds.size).toBe(0);
   });
 });
