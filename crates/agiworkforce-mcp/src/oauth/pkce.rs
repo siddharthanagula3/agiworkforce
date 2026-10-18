@@ -39,11 +39,16 @@ pub(crate) fn generate_random_string(len: usize) -> String {
     // divides 256 (cutoff stays 256, accept all bytes).
     let cutoff: u16 = 256 - (256 % alphabet_len as u16);
 
-    // Use UUID v4 as a CSPRNG source (backed by OS randomness via getrandom).
-    // Each UUID yields 16 random bytes; loop until we have enough.
+    // UUID v4 is drawn from OS randomness, but bytes 6 and 8 carry the fixed
+    // version and variant bits; only the other 14 are uniform, so only those
+    // are sampled.
     while remaining > 0 {
         let bytes = uuid::Uuid::new_v4().into_bytes();
-        for &byte in bytes.iter() {
+        for (_, &byte) in bytes
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !matches!(index, 6 | 8))
+        {
             if remaining == 0 {
                 break;
             }

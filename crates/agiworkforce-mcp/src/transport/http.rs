@@ -676,7 +676,9 @@ async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Op
                     .or(cached.auth_server_metadata_url),
                 ..refreshed
             };
-            let _ = hooks.token_store.set(url, merged);
+            if let Err(e) = hooks.token_store.set(url, merged) {
+                eprintln!("[mcp oauth] warning: could not save the refreshed token for {url}: {e}");
+            }
             Some(access)
         }
         Err(e) => {

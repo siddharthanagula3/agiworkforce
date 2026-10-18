@@ -18,6 +18,7 @@ use crate::hooks::ClientHooks;
 use crate::jsonrpc::notification_frame;
 use crate::peer_requests;
 
+#[cfg(not(windows))]
 pub const INHERITED_ENV_ALLOWLIST: &[&str] = &[
     "PATH",
     "HOME",
@@ -30,6 +31,37 @@ pub const INHERITED_ENV_ALLOWLIST: &[&str] = &[
     "TERM",
     "SHELL",
     "XDG_RUNTIME_DIR",
+];
+
+/// Windows programs, `npx` and `node` among them, fail to start or cannot find
+/// their own profile without these, and none carries a secret or a loader hook.
+#[cfg(windows)]
+pub const INHERITED_ENV_ALLOWLIST: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "TERM",
+    "SHELL",
+    "XDG_RUNTIME_DIR",
+    "SystemRoot",
+    "SystemDrive",
+    "windir",
+    "ComSpec",
+    "PATHEXT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "USERNAME",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "ProgramData",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
 ];
 
 pub const WITHHELD_MANIFEST_VARS: &[&str] = &[
