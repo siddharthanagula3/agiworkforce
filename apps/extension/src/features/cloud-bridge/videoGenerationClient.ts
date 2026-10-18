@@ -1,3 +1,4 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
@@ -15,7 +16,20 @@ const UPGRADE_CODES: ReadonlySet<string> = new Set([
   'subscription_required',
 ]);
 
-export type ChromeVideoTaskStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
+export type ChromeVideoTaskStatus =
+  Extract<LifecycleStatus, 'queued' | 'completed' | 'failed'> | 'processing' | 'timeout';
+
+const TASK_STATUSES: ReadonlySet<string> = new Set<ChromeVideoTaskStatus>([
+  'queued',
+  'processing',
+  'completed',
+  'failed',
+  'timeout',
+]);
+
+function isTaskStatus(value: unknown): value is ChromeVideoTaskStatus {
+  return typeof value === 'string' && TASK_STATUSES.has(value);
+}
 
 export interface ChromeVideoTask {
   taskId: string;
@@ -52,14 +66,7 @@ function readTask(value: unknown): ChromeVideoTask {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const taskId = record['task_id'];
   const status = record['status'];
-  if (
-    !isChromeVideoTaskId(taskId) ||
-    (status !== 'queued' &&
-      status !== 'processing' &&
-      status !== 'completed' &&
-      status !== 'failed' &&
-      status !== 'timeout')
-  ) {
+  if (!isChromeVideoTaskId(taskId) || !isTaskStatus(status)) {
     throw new ChromeVideoError('The video service returned an unreadable answer.', null, false);
   }
   const videoUrl = record['video_url'];
