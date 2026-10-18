@@ -1051,27 +1051,16 @@ impl McpClient {
         .any(|marker| msg.contains(marker))
     }
 
+    /// A tools/call is sent again only when the server cannot have run it: the
+    /// connection was gone or the session unknown. A timeout, a broken stream
+    /// or a gateway 5xx may follow a call that already ran, and a second run
+    /// repeats its side effects.
     fn is_tool_call_resendable(error: &anyhow::Error) -> bool {
-        !matches!(fault(error), Some(TransportFault::StreamBroke { .. }))
-            && Self::is_connection_error(error)
-    }
-
-    fn is_connection_error(error: &anyhow::Error) -> bool {
-        if Self::is_connection_lost(error)
-            || matches!(fault(error), Some(TransportFault::Timeout { .. }))
-        {
-            return true;
+        match fault(error) {
+            Some(TransportFault::Closed { .. } | TransportFault::SessionExpired { .. }) => true,
+            Some(_) => false,
+            None => Self::is_connection_lost(error),
         }
-        let msg = format!("{error:#}");
-        [
-            "response timeout",
-            "[mcp http] POST timeout",
-            "non-success response 502",
-            "non-success response 503",
-            "non-success response 504",
-        ]
-        .iter()
-        .any(|marker| msg.contains(marker))
     }
 }
 
@@ -1217,56 +1206,51 @@ mod tests {
     }
 
     #[test]
-    fn is_connection_error_closed() {
-        assert!(McpClient::is_connection_error(&anyhow!(
-            "MCP server closed connection"
-        )));
-    }
-
-    #[test]
-    fn is_connection_error_stdin() {
-        assert!(McpClient::is_connection_error(&anyhow!(
-            "MCP server stdin not available"
-        )));
-    }
-
-    #[test]
-    fn is_connection_error_timeout() {
-        assert!(McpClient::is_connection_error(&anyhow!(
-            "MCP server response timeout (30000ms)"
-        )));
-    }
-
-    #[test]
-    fn is_connection_error_broken_pipe() {
-        assert!(McpClient::is_connection_error(&anyhow!("Broken pipe")));
-    }
-
-    #[test]
-    fn is_connection_error_reset() {
-        assert!(McpClient::is_connection_error(&anyhow!(
-            "Connection reset by peer"
-        )));
-    }
-
-    #[test]
-    fn is_connection_error_http_timeout() {
-        assert!(McpClient::is_connection_error(&anyhow!(
-            "[srv] [mcp http] POST timeout (5000ms) on 'tools/call'"
-        )));
-    }
-
-    #[test]
-    fn is_not_connection_error_protocol() {
-        assert!(!McpClient::is_connection_error(&anyhow!(
-            "MCP error -32600: Invalid Request"
-        )));
-    }
-
-    #[test]
-    fn is_not_connection_error_json() {
-        assert!(!McpClient::is_connection_error(&anyhow!(
-            "Failed to parse JSON response"
+    fn a_tool_call_is_resent_only_when_the_server_cannot_have_run_it() {
+        for lost in [
+            "MCP server closed connection",
+            "MCP server stdin not available",
+            "Broken pipe",
+            "Connection reset by peer",
+        ] {
+            assert!(McpClient::is_tool_call_resendable(&anyhow!(lost)), "{lost}");
+        }
+        for maybe_ran in [
+            "[srv] [mcp http] POST timeout (5000ms) on 'tools/call'",
+            "MCP error -32600: Invalid Request",
+            "Failed to parse JSON response",
+        ] {
+            assert!(
+                !McpClient::is_tool_call_resendable(&anyhow!(maybe_ran)),
+                "{maybe_ran}"
+            );
+        }
+        for fault in [
+            TransportFault::Timeout {
+                server: "srv".into(),
+                millis: 30_000,
+                method: "tools/call".into(),
+            },
+            TransportFault::HttpStatus {
+                server: "srv".into(),
+                status: 504,
+                method: "tools/call".into(),
+                body: String::new(),
+            },
+            TransportFault::StreamBroke {
+                server: "srv".into(),
+                method: "tools/call".into(),
+            },
+        ] {
+            assert!(
+                !McpClient::is_tool_call_resendable(&anyhow::Error::new(fault)),
+                "a call that may have run must not run again"
+            );
+        }
+        assert!(McpClient::is_tool_call_resendable(&anyhow::Error::new(
+            TransportFault::Closed {
+                server: "srv".into()
+            }
         )));
     }
 

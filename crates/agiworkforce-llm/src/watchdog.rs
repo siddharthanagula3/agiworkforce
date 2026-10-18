@@ -5,7 +5,7 @@
 //! which converts a silent stall into a structured
 //! [`LlmError::IdleTimeout`]. The timeout is per-chunk (time since the last
 //! byte), not per-request, and is parameterized so surfaces can choose their
-//! own budget (CLI: 300s; desktop: 30s per the extraction plan).
+//! own budget.
 
 use std::time::Duration;
 

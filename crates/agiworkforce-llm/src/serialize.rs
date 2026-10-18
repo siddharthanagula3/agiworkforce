@@ -1,7 +1,6 @@
 //! Per-dialect request serialization: message conversion, tool-schema
 //! shaping, prompt-cache breakpoints, and Ollama-native request compaction.
 //!
-//! Moved verbatim from `apps/cli/src/models/{serialization,streaming}.rs`.
 //! Every function here is pure (no I/O); the golden rule is that only
 //! `name`/`description`/`input_schema` from [`ToolDefinition`] ever reach a
 //! provider payload, executor metadata stays client-side by construction.
@@ -276,11 +275,18 @@ pub fn convert_message_to_openai_responses(m: &Message) -> Vec<Value> {
         MessageContent::Blocks(blocks) => {
             let mut content = Vec::new();
             let mut non_message_items = Vec::new();
+            // Responses refuses `input_text` in assistant history: replayed
+            // model text is `output_text`.
+            let text_type = if m.role == "assistant" {
+                "output_text"
+            } else {
+                "input_text"
+            };
 
             for block in blocks {
                 match block {
                     ContentBlock::Text { text } => content.push(serde_json::json!({
-                        "type": "input_text",
+                        "type": text_type,
                         "text": text,
                     })),
                     ContentBlock::Image { mime, data_b64 } => {
@@ -1108,6 +1114,34 @@ mod tests {
         let parts = v["parts"].as_array().unwrap();
         assert_eq!(parts[0]["inlineData"]["mimeType"], "image/png");
         assert_eq!(parts[0]["inlineData"]["data"], "BASE64DATA");
+    }
+
+    #[test]
+    fn responses_assistant_history_text_is_output_text() {
+        let msg = Message::blocks(
+            "assistant",
+            vec![
+                ContentBlock::Text {
+                    text: "Reading it.".to_string(),
+                },
+                ContentBlock::ToolUse {
+                    id: "call_1".to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({"path": "a.txt"}),
+                },
+            ],
+        );
+        let items = convert_message_to_openai_responses(&msg);
+        assert_eq!(items[0]["role"], "assistant");
+        assert_eq!(items[0]["content"][0]["type"], "output_text");
+        assert_eq!(items[1]["type"], "function_call");
+        let user = convert_message_to_openai_responses(&Message::blocks(
+            "user",
+            vec![ContentBlock::Text {
+                text: "hi".to_string(),
+            }],
+        ));
+        assert_eq!(user[0]["content"][0]["type"], "input_text");
     }
 
     #[test]

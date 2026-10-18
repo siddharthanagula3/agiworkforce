@@ -37,8 +37,8 @@ where
     }
 }
 
-/// Zero-sized entry point matching the plan's `TurnEngine::run_turn(...)` sketch.
-/// See [`run_turn`] for the parameters; there is no per-instance state.
+/// Zero-sized entry point for [`run_turn`].
+/// There is no per-instance state.
 pub struct TurnEngine;
 
 impl TurnEngine {
@@ -74,8 +74,8 @@ pub async fn run_turn(
 
     // The first completion is already paid for and must be included in the
     // ledger, but an exhausted turn budget must stop before any tool side
-    // effects or another provider request. Previously the guard ran only after
-    // a continuation, allowing a no-tool first response to bypass it entirely.
+    // effects or another provider request, including when the first response
+    // asked for no tools.
     if let Some(cap) = params.max_budget_usd {
         let cumulative = host.turn_cost_usd(&totals);
         if cumulative >= cap {
@@ -336,7 +336,7 @@ async fn complete_and_emit(
             }
             // Tool-call / usage / keepalive / vendor / end events are folded into
             // the authoritative Completion by the host; they are not turn-level
-            // observable in e1.
+            // observable.
             _ => {}
         }
     }
