@@ -8,7 +8,6 @@ import {
   type CapabilityDecision,
   type PlatformCapability,
   type UIPlanTier,
-  tierAtLeast,
 } from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 import { onAccountTierMayHaveChanged } from './tierRevalidation';
@@ -31,9 +30,6 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'team_premium',
   'enterprise',
 ]);
-
-/** Re-export of the canonical {@link tierAtLeast} comparator. */
-export { tierAtLeast };
 
 export function coerceTier(raw: string | undefined): Tier | undefined {
   if (raw === undefined) return undefined;

@@ -811,7 +811,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   context.subscriptions.push(
     register('agi-workforce.sendSelectionToNewSession', sendSelectionToNewSession),
     register('agi-workforce.openSettings', (section?: unknown) => {
-      SettingsPanel.createOrShow(context, section);
+      SettingsPanel.createOrShow(context, section, async () => {
+        const presence = await resolveAccountPresence(context.secrets, cliCapabilities);
+        return presence.source === 'cli';
+      });
     }),
     register('agi-workforce.openAgentConfig', async () => {
       try {
@@ -2089,7 +2092,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           : undefined;
       const authInvalidated = capturedAccountToken !== undefined && accountToken === undefined;
       if (authInvalidated || accountToken === undefined) {
-        await clearAccountTierCache(context);
+        if (cliAccount?.source !== 'cli') await clearAccountTierCache(context);
       } else {
         await refreshAccountTierCache(context, async () => capturedTierInfo);
       }
@@ -2170,7 +2173,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           },
         );
       } else {
-        const meter = await resolveUsageMeter(context.secrets, 0);
+        const meter = await resolveUsageMeter(context.secrets);
         if (meter.source !== 'managed-plan') {
           items.push(
             { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },

@@ -34,6 +34,7 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   }
 
   const codeLensProvider = new AgiCodeLensProvider();
+  context.subscriptions.push(codeLensProvider);
   let codeLensRegistration: vscode.Disposable | undefined;
 
   const syncCodeLensProvider = (): void => {
@@ -114,12 +115,13 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
 export function createDegradedProviderState(context: vscode.ExtensionContext): ProviderState {
   const diagnosticsProvider = new AgiDiagnosticsProvider();
   const diffDecorationProvider = new DiffDecorationProvider();
-  context.subscriptions.push(diagnosticsProvider, diffDecorationProvider);
+  const codeLensProvider = new AgiCodeLensProvider();
+  context.subscriptions.push(diagnosticsProvider, diffDecorationProvider, codeLensProvider);
 
   return {
     diffDecorationProvider,
     diagnosticsProvider,
-    codeLensProvider: new AgiCodeLensProvider(),
+    codeLensProvider,
     syncCodeLensProvider: () => {},
     syncInlineCompletionProvider: () => {},
   };

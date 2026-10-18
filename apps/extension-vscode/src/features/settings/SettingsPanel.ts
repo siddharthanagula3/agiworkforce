@@ -92,6 +92,7 @@ export class SettingsPanel {
   static createOrShow(
     context: vscode.ExtensionContext,
     requestedSection: unknown = 'general',
+    signedInThroughCli: () => Promise<boolean> = () => Promise.resolve(false),
   ): SettingsPanel {
     const section = isSettingsSection(requestedSection) ? requestedSection : 'general';
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
@@ -108,7 +109,7 @@ export class SettingsPanel {
       retainContextWhenHidden: true,
       localResourceRoots: [],
     });
-    SettingsPanel.instance = new SettingsPanel(panel, context, section);
+    SettingsPanel.instance = new SettingsPanel(panel, context, section, signedInThroughCli);
     return SettingsPanel.instance;
   }
 
@@ -116,6 +117,7 @@ export class SettingsPanel {
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext,
     initialSection: SettingsSection,
+    private readonly signedInThroughCli: () => Promise<boolean>,
   ) {
     const storedInstructions = getStoredCustomInstructions(this.context);
     const initialState: SettingsPanelState = {
@@ -208,7 +210,7 @@ export class SettingsPanel {
 
       if (fetchedState.accountConnected) {
         await refreshAccountTierCache(this.context, async () => fetchedState.tierInfo);
-      } else {
+      } else if (!(await this.signedInThroughCli())) {
         await clearAccountTierCache(this.context);
       }
       if (sequence !== this.refreshSequence) return;

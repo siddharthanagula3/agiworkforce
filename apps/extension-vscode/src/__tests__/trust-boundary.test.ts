@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { tierAtLeast } from '../integrations/tierResolver';
+import { tierAtLeast } from '@agiworkforce/types';
 
 const TIER_LADDER = [
   'local',

@@ -1,7 +1,6 @@
-import { getCoreManualModelOptions } from '@agiworkforce/types';
+import { getCoreManualModelOptions, tierAtLeast } from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
 import { extractProvider, guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { tierAtLeast } from '../integrations/tierResolver';
 import { requireCatalogModel, SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const CATALOG_MODELS = getCoreManualModelOptions();

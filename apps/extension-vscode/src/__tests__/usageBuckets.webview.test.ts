@@ -49,7 +49,7 @@ const RAW_USAGE_SUMMARY = {
 
 async function payloadFromServerSummary(raw: unknown) {
   vi.mocked(fetchTierInfo).mockResolvedValue(parseTierInfoResponse(raw));
-  const meter = await resolveUsageMeter(SECRETS, 0, CLOUD_MODEL_CONTEXT);
+  const meter = await resolveUsageMeter(SECRETS, CLOUD_MODEL_CONTEXT);
   return { meter, payload: buildUsageMeterPayload(meter, false, NOW) };
 }
 
@@ -189,7 +189,7 @@ describe('per-limit usage breakdown in the VS Code meter', () => {
 
   it('claims no managed limits on a BYOK boundary', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
-    const meter = await resolveUsageMeter(SECRETS, 0, CLOUD_MODEL_CONTEXT);
+    const meter = await resolveUsageMeter(SECRETS, CLOUD_MODEL_CONTEXT);
     const payload = buildUsageMeterPayload(meter, false, NOW);
 
     expect(payload.buckets).toEqual([]);

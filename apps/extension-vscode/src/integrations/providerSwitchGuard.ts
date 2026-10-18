@@ -1,6 +1,5 @@
-import { getModelMetadataById } from '@agiworkforce/types';
+import { canSwitchProviderInThread, getModelMetadataById } from '@agiworkforce/types';
 import type { Tier } from './tierResolver';
-import { tierAtLeast } from './tierResolver';
 
 export function extractProvider(modelId: string): string {
   if (!modelId || modelId.trim() === '') return 'unknown';
@@ -40,5 +39,5 @@ export function guardProviderSwitch(
 
   if (currentProvider === 'unknown' || nextProvider === 'unknown') return 'allow';
 
-  return tierAtLeast(tier, 'max') ? 'allow' : 'upgrade-required';
+  return canSwitchProviderInThread(tier) ? 'allow' : 'upgrade-required';
 }

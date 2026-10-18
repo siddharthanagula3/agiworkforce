@@ -47,7 +47,7 @@ async function payloadFor(planTier: string, subscriptionStatus: string) {
   vi.mocked(fetchTierInfo).mockResolvedValue(
     parseTierInfoResponse(usageSummary(planTier, subscriptionStatus)),
   );
-  const meter = await resolveUsageMeter(SECRETS, 0, CLOUD_MODEL_CONTEXT);
+  const meter = await resolveUsageMeter(SECRETS, CLOUD_MODEL_CONTEXT);
   return buildUsageMeterPayload(meter, false, NOW);
 }
 

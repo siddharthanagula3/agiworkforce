@@ -4,7 +4,6 @@ import { fetchTierInfo } from '../utils/api';
 import {
   formatBucketCreditsLeft,
   formatUsageMeterFallbackLabel,
-  resolvePlanTier,
   resolveUsageMeter,
 } from '../data/usageMeter';
 
@@ -34,9 +33,7 @@ describe('usageMeter', () => {
 
   it('treats local models as unbounded without fetching cloud usage', async () => {
     setConfiguredModel('ollama/fixture-local-model');
-
-    await expect(resolvePlanTier(secrets)).resolves.toBe('local');
-    await expect(resolveUsageMeter(secrets, 1_200)).resolves.toEqual({
+    await expect(resolveUsageMeter(secrets)).resolves.toEqual({
       remaining: null,
       resetsAt: null,
       source: 'unbounded',
@@ -50,9 +47,7 @@ describe('usageMeter', () => {
       usagePercentage: 25,
       resetsAt: '2026-06-01T00:00:00.000Z',
     });
-
-    await expect(resolvePlanTier(secrets)).resolves.toBe('max');
-    await expect(resolveUsageMeter(secrets, 999)).resolves.toEqual({
+    await expect(resolveUsageMeter(secrets)).resolves.toEqual({
       remaining: 0.75,
       resetsAt: '2026-06-01T00:00:00.000Z',
       source: 'managed-plan',
@@ -67,7 +62,7 @@ describe('usageMeter', () => {
       resetsAt: '2026-06-01T00:00:00.000Z',
     });
 
-    await expect(resolveUsageMeter(secrets, 6_200)).resolves.toEqual({
+    await expect(resolveUsageMeter(secrets)).resolves.toEqual({
       remaining: null,
       resetsAt: '2026-06-01T00:00:00.000Z',
       source: 'user-api-key',
@@ -84,9 +79,7 @@ describe('usageMeter', () => {
         usagePercentage: 10,
         resetsAt: '2026-06-01T00:00:00.000Z',
       });
-
-      await expect(resolvePlanTier(secrets)).resolves.toBe(tier);
-      await expect(resolveUsageMeter(secrets, 100)).resolves.toEqual({
+      await expect(resolveUsageMeter(secrets)).resolves.toEqual({
         remaining: 0.9,
         resetsAt: '2026-06-01T00:00:00.000Z',
         source: 'managed-plan',
@@ -103,7 +96,7 @@ describe('usageMeter', () => {
       subscriptionStatus: 'past_due',
     });
 
-    await expect(resolveUsageMeter(secrets, 100)).resolves.toEqual({
+    await expect(resolveUsageMeter(secrets)).resolves.toEqual({
       remaining: null,
       resetsAt: null,
       source: 'user-api-key',
@@ -114,8 +107,7 @@ describe('usageMeter', () => {
   });
 
   it('falls back to not-AGI-managed usage when no cloud tier is available', async () => {
-    await expect(resolvePlanTier(secrets)).resolves.toBe('byok');
-    await expect(resolveUsageMeter(secrets, 6_200)).resolves.toEqual({
+    await expect(resolveUsageMeter(secrets)).resolves.toEqual({
       remaining: null,
       resetsAt: null,
       source: 'user-api-key',
@@ -187,7 +179,7 @@ describe('usageMeter', () => {
       credits,
     });
 
-    await expect(resolveUsageMeter(secrets, 0)).resolves.toMatchObject({
+    await expect(resolveUsageMeter(secrets)).resolves.toMatchObject({
       source: 'managed-plan',
       credits,
       creditBalanceCents: 125,

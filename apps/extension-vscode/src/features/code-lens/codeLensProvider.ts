@@ -7,11 +7,15 @@ interface CachedLensesEntry {
   lenses: vscode.CodeLens[];
 }
 
-export class AgiCodeLensProvider implements vscode.CodeLensProvider {
+export class AgiCodeLensProvider implements vscode.CodeLensProvider, vscode.Disposable {
   private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
   private readonly _cache = new Map<string, CachedLensesEntry>();
+
+  private readonly _closeListener = vscode.workspace.onDidCloseTextDocument((document) => {
+    this._cache.delete(document.uri.toString());
+  });
 
   provideCodeLenses(
     document: vscode.TextDocument,
@@ -31,6 +35,12 @@ export class AgiCodeLensProvider implements vscode.CodeLensProvider {
   refresh(): void {
     this._cache.clear();
     this._onDidChangeCodeLenses.fire();
+  }
+
+  dispose(): void {
+    this._closeListener.dispose();
+    this._onDidChangeCodeLenses.dispose();
+    this._cache.clear();
   }
 }
 

@@ -2485,7 +2485,7 @@ export class ChatStateManager {
       meter = { remaining: null, resetsAt: null, source: 'user-api-key' };
     } else
       try {
-        meter = await resolveUsageMeter(this._secrets, 0, {
+        meter = await resolveUsageMeter(this._secrets, {
           modelId,
           ...(isLocalRuntimeModel ? { isLocalRuntimeModel: true } : {}),
         });

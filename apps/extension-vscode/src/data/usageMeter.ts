@@ -145,22 +145,8 @@ function resolveActiveModel(context: ActiveModelContext): {
   return { modelId, isLocal: context.isLocalRuntimeModel === true || isLocalModel(modelId) };
 }
 
-export async function resolvePlanTier(
-  secrets: vscode.SecretStorage,
-  context: ActiveModelContext = {},
-): Promise<UIPlanTier> {
-  if (resolveActiveModel(context).isLocal) return 'local';
-
-  const tierInfo = await fetchTierInfo(secrets);
-  const tier = coerceTier(tierInfo?.tier);
-  if (tier !== undefined) return tier;
-
-  return 'byok';
-}
-
 export async function resolveUsageMeter(
   secrets: vscode.SecretStorage,
-  _sessionTokens: number,
   context: ActiveModelContext = {},
 ): Promise<ExtensionUsageMeter> {
   if (resolveActiveModel(context).isLocal) {
