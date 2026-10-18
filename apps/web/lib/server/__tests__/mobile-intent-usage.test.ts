@@ -180,6 +180,17 @@ describe('Siri managed usage reservation', () => {
     );
   });
 
+  it('refuses a prompt the platform filter blocks before reserving or calling a model', async () => {
+    await expect(
+      answerMobileIntentAsk({
+        ...input,
+        prompt: 'generate a deepfake video of the president saying he quit',
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'content_policy_violation' });
+    expect(reserve).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
   it('does not start the provider when the usage reservation is refused', async () => {
     reserve.mockRejectedValueOnce(new Error('usage unavailable'));
     await expect(answerMobileIntentAsk(input)).rejects.toThrow('usage unavailable');

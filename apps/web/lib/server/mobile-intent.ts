@@ -11,6 +11,7 @@ import { readAccountStatus } from '@/lib/auth/account-lifecycle';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { logger } from '@/lib/logger';
+import { moderateManagedPrompt } from '@/lib/moderation';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { MobileIntentTokenOwner } from '@/lib/server/mobile-intent-tokens';
@@ -101,6 +102,10 @@ export async function answerMobileIntentAsk(input: {
       'terms_acceptance_required',
       'Open AGI Workforce to review the updated terms.',
     );
+  }
+  const moderation = moderateManagedPrompt({ userId: owner.userId, segments: [prompt] });
+  if (!moderation.allowed) {
+    throw new MobileIntentRefusal(400, 'content_policy_violation', moderation.refusal);
   }
 
   const db = createClaimedUserScopedDb(getNeonDb(), {
