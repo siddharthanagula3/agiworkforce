@@ -1,10 +1,8 @@
 import {
   WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_FEATURES,
-  isCodeHostAllowed,
   type EffectiveWorkspaceCodeControls,
   type EffectiveWorkspacePolicyResponse,
-  type WorkspaceCodeToggleKey,
   type WorkspaceFeature,
 } from '@agiworkforce/types';
 
@@ -244,26 +242,4 @@ export function localStorageWorkspacePolicyCache(key: string): WorkspacePolicyCa
       else localStorage.setItem(key, value);
     },
   };
-}
-
-/** What the workspace permits this Code surface, as the server answered it. */
-export function isWorkspaceCodeConnectionAllowed(
-  policy: EffectiveWorkspacePolicyResponse | null,
-  key: WorkspaceCodeToggleKey,
-): boolean {
-  return policy?.code ? policy.code[key] : true;
-}
-
-export function isWorkspaceCodeHostAllowed(
-  policy: EffectiveWorkspacePolicyResponse | null,
-  host: string | null | undefined,
-): boolean {
-  const allowed = policy?.code?.allowedEgressHosts;
-  return allowed ? isCodeHostAllowed(allowed, host) : true;
-}
-
-export function workspaceCodeSessionRetentionDays(
-  policy: EffectiveWorkspacePolicyResponse | null,
-): number | null {
-  return policy?.code?.sessionRetentionDays ?? null;
 }
