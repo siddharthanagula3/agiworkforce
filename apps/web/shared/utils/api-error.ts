@@ -10,6 +10,13 @@ export function apiErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
+export async function responseErrorMessage(
+  response: Response,
+  fallback = `Request failed (${response.status})`,
+): Promise<string> {
+  return apiErrorMessage(await response.json().catch(() => null), fallback);
+}
+
 export function apiErrorCode(body: unknown): string | null {
   if (!body || typeof body !== 'object') return null;
   const error = (body as { error?: unknown }).error;

@@ -2,6 +2,7 @@
 
 import { Spinner } from '@agiworkforce/ui';
 import { useCallback, useEffect, useState } from 'react';
+import { responseErrorMessage } from '@/shared/utils/api-error';
 
 interface ReleaseEvent {
   id: number;
@@ -66,16 +67,6 @@ function shortSha(value: string | null): string {
   return value ? value.slice(0, 12) : 'unknown';
 }
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === 'string') return body.error;
-  } catch {
-    // fall through
-  }
-  return `Request failed (${response.status})`;
-}
-
 function Claim({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="rounded-compact border border-border p-3">
@@ -98,7 +89,7 @@ export default function ReleaseDashboardPage() {
     try {
       const response = await fetch('/api/admin/releases', { credentials: 'include' });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         setData(null);
         return;
       }

@@ -18,6 +18,7 @@ import {
 } from '@agiworkforce/cloud-contracts/waitlist';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import { formatCount, formatDateTime, NONE, NOT_RECORDED } from '../lib/operator-format';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
@@ -39,13 +40,9 @@ const FORCE_OPEN_SETTING = 'AGI_BILLING_WAITLIST_OPEN=1';
 
 async function requestJson(path: string, init: RequestInit, fallback: string): Promise<unknown> {
   const response = await fetch(path, { ...init, cache: 'no-store' });
-  const body = (await response.json().catch(() => null)) as {
-    error?: { message?: unknown } | string;
-  } | null;
+  const body: unknown = await response.json().catch(() => null);
   if (response.ok) return body;
-  const error = body?.error;
-  const message = typeof error === 'string' ? error : error?.message;
-  throw new Error(typeof message === 'string' && message ? message : fallback);
+  throw new Error(apiErrorMessage(body, fallback));
 }
 
 async function writeJson(

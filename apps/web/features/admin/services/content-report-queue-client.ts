@@ -1,4 +1,5 @@
 import { getCsrfToken } from '@/lib/client/csrf';
+import { responseErrorMessage } from '@/shared/utils/api-error';
 
 export type ContentReportStatus = 'received' | 'in_review' | 'actioned' | 'dismissed';
 
@@ -36,17 +37,9 @@ export interface AdminContentReportQueue {
 }
 
 async function responseError(response: Response): Promise<Error> {
-  let message = `Content report request failed (${response.status})`;
-  try {
-    const body = (await response.json()) as { error?: string | { message?: string } };
-    if (typeof body.error === 'string' && body.error.trim()) message = body.error;
-    if (body.error && typeof body.error === 'object' && body.error.message?.trim()) {
-      message = body.error.message;
-    }
-  } catch {
-    // Preserve the status-only message when the server returned no JSON body.
-  }
-  return new Error(message);
+  return new Error(
+    await responseErrorMessage(response, `Content report request failed (${response.status})`),
+  );
 }
 
 export async function fetchContentReportQueue(

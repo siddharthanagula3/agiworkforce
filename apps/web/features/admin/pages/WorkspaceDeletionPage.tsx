@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { responseErrorMessage } from '@/shared/utils/api-error';
 
 interface WorkspaceSummary {
   id: string;
@@ -30,17 +31,6 @@ function formatTimestamp(value: string | null): string {
   if (!value) return 'an unknown date';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? 'an unknown date' : parsed.toLocaleString();
-}
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: { message?: string } | string };
-    if (typeof body.error === 'string') return body.error;
-    if (body.error?.message) return body.error.message;
-  } catch {
-    // fall through to the status line
-  }
-  return `Request failed (${response.status})`;
 }
 
 /**
@@ -89,7 +79,7 @@ export default function WorkspaceDeletionPage() {
     try {
       const response = await fetch('/api/settings/organization', { credentials: 'include' });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       const body = (await response.json()) as {
@@ -122,7 +112,7 @@ export default function WorkspaceDeletionPage() {
         body: JSON.stringify({ confirm: typedConfirmation.trim() }),
       });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       const body = (await response.json()) as { message?: string };
@@ -148,7 +138,7 @@ export default function WorkspaceDeletionPage() {
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
       });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       const body = (await response.json()) as { message?: string };

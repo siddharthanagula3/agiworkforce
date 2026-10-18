@@ -4,18 +4,16 @@ import { useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { PublicContentTarget } from '@/app/api/admin/takedown/lib/public-target';
 import { formatDateTime } from '../lib/operator-format';
+import { ACTION_CLASS, DESTRUCTIVE_CLASS } from '../lib/operator-styles';
 
 const TAKEDOWN_ENDPOINT = '/api/admin/takedown';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
-const ACTION_CLASS =
-  'rounded-full border border-border px-4 py-2 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50';
-const DESTRUCTIVE_CLASS =
-  'rounded-full border border-destructive/50 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
 const KIND_LABEL: Record<PublicContentTarget['kind'], string> = {
   'conversation-share': 'Shared conversation',
@@ -27,15 +25,6 @@ interface TakedownResult {
   token: string;
   ownerId: string;
   title: string;
-}
-
-async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', ...init });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
 }
 
 export default function ContentTakedownPanel() {
@@ -59,7 +48,7 @@ export default function ContentTakedownPanel() {
     setTarget(null);
     setResult(null);
     try {
-      const body = await readJson<{ target: PublicContentTarget }>(
+      const body = await requestJson<{ target: PublicContentTarget }>(
         `${TAKEDOWN_ENDPOINT}?token=${encodeURIComponent(candidate)}`,
       );
       setTarget(body.target);
@@ -96,7 +85,7 @@ export default function ContentTakedownPanel() {
         setRemoving(true);
         setError(null);
         try {
-          const body = await readJson<TakedownResult>(TAKEDOWN_ENDPOINT, {
+          const body = await requestJson<TakedownResult>(TAKEDOWN_ENDPOINT, {
             method: 'POST',
             headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ token: target.token, reason: recordedReason }),

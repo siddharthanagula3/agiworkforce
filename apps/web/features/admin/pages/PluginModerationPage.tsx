@@ -10,6 +10,7 @@ import {
 import { isPluginRegistryStatus, type PluginRegistryStatus } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type {
   PluginLifecycleAction,
   PluginLifecycleEvent,
@@ -118,28 +119,6 @@ interface ActionFailure {
   message: string;
 }
 
-function apiErrorMessage(body: unknown): string | null {
-  if (typeof body !== 'object' || body === null) return null;
-  const error = (body as { error?: unknown }).error;
-  if (typeof error === 'string') return error;
-  if (typeof error === 'object' && error !== null) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string') return message;
-  }
-  return null;
-}
-
-async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', credentials: 'include', ...init });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw Object.assign(new Error(apiErrorMessage(body) ?? `HTTP ${response.status}`), {
-      status: response.status,
-    });
-  }
-  return body as T;
-}
-
 function listUrl(search: string): string {
   return search ? `${LIST_ENDPOINT}?q=${encodeURIComponent(search)}` : LIST_ENDPOINT;
 }
@@ -219,7 +198,7 @@ function PluginReviewPanel({
     const request = latestLoad.current + 1;
     latestLoad.current = request;
     try {
-      const body = await readJson<LifecycleView>(lifecycleUrl(plugin.id));
+      const body = await requestJson<LifecycleView>(lifecycleUrl(plugin.id));
       if (request !== latestLoad.current) return;
       setView(body);
       setLoadError(null);
@@ -255,7 +234,7 @@ function PluginReviewPanel({
     setFailure(null);
     setNotice(null);
     try {
-      const result = await readJson<T>(lifecycleUrl(plugin.id), {
+      const result = await requestJson<T>(lifecycleUrl(plugin.id), {
         method: 'POST',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
@@ -639,7 +618,7 @@ function SubmissionReviewPanel({
 
   useEffect(() => {
     let cancelled = false;
-    readJson<PluginSubmissionReviewResponse>(submissionUrl(submission.id))
+    requestJson<PluginSubmissionReviewResponse>(submissionUrl(submission.id))
       .then((body) => {
         if (!cancelled) setReview(body.submission);
       })
@@ -655,7 +634,7 @@ function SubmissionReviewPanel({
     setPending(true);
     setFailure(null);
     try {
-      await readJson(submissionUrl(submission.id), {
+      await requestJson(submissionUrl(submission.id), {
         method: 'POST',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(decision),
@@ -834,7 +813,7 @@ function SubmissionQueue({ confirm }: { confirm: (request: ConfirmActionRequest)
     latest.current = request;
     setLoading(true);
     try {
-      const body = await readJson<PluginSubmissionReviewListResponse>(
+      const body = await requestJson<PluginSubmissionReviewListResponse>(
         `${ADMIN_PLUGIN_SUBMISSIONS_PATH}?${PLUGIN_SUBMISSION_REVIEW_STATUS_PARAM}=${next}`,
       );
       if (request !== latest.current) return;
@@ -969,7 +948,7 @@ export default function PluginModerationPage() {
     const request = latestList.current + 1;
     latestList.current = request;
     try {
-      const body = await readJson<PluginListResponse>(listUrl(search));
+      const body = await requestJson<PluginListResponse>(listUrl(search));
       if (request !== latestList.current) return;
       setPlugins(body.plugins);
       setTotal(body.total);

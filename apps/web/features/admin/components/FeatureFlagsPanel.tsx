@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { FlagDefinition, FlagOverride } from '@/lib/feature-flags/flag-definition';
 import { STORE_TEST_PURCHASES_FLAG_KEY } from '@/lib/feature-flags/store-test-purchases';
 import { formatDateTime, NONE } from '../lib/operator-format';
+import { ACTION_CLASS, DESTRUCTIVE_CLASS } from '../lib/operator-styles';
 
 const FLAGS_ENDPOINT = '/api/admin/feature-flags';
 
@@ -14,10 +16,6 @@ const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const TABLE_WRAP_CLASS = 'overflow-x-auto rounded-2xl border border-border';
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
-const ACTION_CLASS =
-  'rounded-full border border-border px-4 py-2 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50';
-const DESTRUCTIVE_CLASS =
-  'rounded-full border border-destructive/50 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
 const EMPTY_RULES = '[]';
 const DEFAULT_VARIANTS = 'on, off';
@@ -48,17 +46,8 @@ interface OverrideForm {
 
 const EMPTY_OVERRIDE: OverrideForm = { subject: 'user', subjectId: '', variant: 'on' };
 
-async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', ...init });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
-}
-
 async function mutate<T>(url: string, method: string, payload: unknown): Promise<T> {
-  return readJson<T>(url, {
+  return requestJson<T>(url, {
     method,
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -113,7 +102,7 @@ export default function FeatureFlagsPanel() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const body = await readJson<{ flags: FlagDefinition[] }>(FLAGS_ENDPOINT);
+      const body = await requestJson<{ flags: FlagDefinition[] }>(FLAGS_ENDPOINT);
       setFlags(body.flags);
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read the flag definitions.'));
@@ -133,7 +122,7 @@ export default function FeatureFlagsPanel() {
     setOpenFlag(key);
     setOverrides(null);
     try {
-      const body = await readJson<{ overrides: FlagOverride[] }>(
+      const body = await requestJson<{ overrides: FlagOverride[] }>(
         `${FLAGS_ENDPOINT}/${encodeURIComponent(key)}`,
       );
       setOverrides(body.overrides);
@@ -254,7 +243,7 @@ export default function FeatureFlagsPanel() {
         expiresAt: null,
       });
       setOverrideForm(EMPTY_OVERRIDE);
-      const body = await readJson<{ overrides: FlagOverride[] }>(
+      const body = await requestJson<{ overrides: FlagOverride[] }>(
         `${FLAGS_ENDPOINT}/${encodeURIComponent(key)}`,
       );
       setOverrides(body.overrides);

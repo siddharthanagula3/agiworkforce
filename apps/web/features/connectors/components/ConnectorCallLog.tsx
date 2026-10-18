@@ -11,6 +11,7 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 
 const DEFAULT_LIMIT = 20;
 const MS_PER_SECOND = 1000;
@@ -56,7 +57,7 @@ async function fetchCalls(connectorId: string, signal: AbortSignal): Promise<Con
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+    throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
   }
   const parsed = ConnectorCallLogResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('The call log came back in a shape this page cannot read.');

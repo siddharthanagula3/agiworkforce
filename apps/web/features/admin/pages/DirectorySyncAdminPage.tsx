@@ -4,6 +4,7 @@ import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useState } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { responseErrorMessage } from '@/shared/utils/api-error';
 
 interface Connection {
   id: string;
@@ -62,16 +63,6 @@ function formatTimestamp(value: string | null): string {
   return Number.isNaN(parsed.getTime()) ? 'Unknown' : parsed.toLocaleString();
 }
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === 'string') return body.error;
-  } catch {
-    // fall through
-  }
-  return `Request failed (${response.status})`;
-}
-
 export default function DirectorySyncAdminPage({
   organizationId,
 }: {
@@ -110,7 +101,7 @@ export default function DirectorySyncAdminPage({
       ]);
 
       if (!connectionsResponse.ok) {
-        setError(await readError(connectionsResponse));
+        setError(await responseErrorMessage(connectionsResponse));
         setConnections([]);
         setEvents([]);
         setTokens([]);
@@ -179,7 +170,7 @@ export default function DirectorySyncAdminPage({
         }),
       });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       setDirectoryId('');
@@ -204,7 +195,7 @@ export default function DirectorySyncAdminPage({
         },
       );
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       await load();
@@ -231,7 +222,7 @@ export default function DirectorySyncAdminPage({
         }),
       });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       const body = (await response.json()) as { raw_token?: string };
@@ -255,7 +246,7 @@ export default function DirectorySyncAdminPage({
         body: JSON.stringify({ groupId, mappedRole, organizationId }),
       });
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       const body = (await response.json()) as { group?: GroupSummary | null };
@@ -284,7 +275,7 @@ export default function DirectorySyncAdminPage({
         { method: 'DELETE', credentials: 'include', headers: { 'x-csrf-token': csrf } },
       );
       if (!response.ok) {
-        setError(await readError(response));
+        setError(await responseErrorMessage(response));
         return;
       }
       await load();

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { OperatorCostWindow, OperatorCosts } from '../services/operator-cost-metrics';
 import type {
   ObservabilityDimension,
@@ -31,15 +32,6 @@ const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
 const GHOST_BUTTON_CLASS =
   'rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50';
-
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
-}
 
 function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -123,7 +115,7 @@ export default function OperatorCostsPanel() {
   const loadCosts = useCallback(async () => {
     setCostsError(null);
     try {
-      const body = await readJson<{ costs: OperatorCosts }>(COSTS_ENDPOINT);
+      const body = await requestJson<{ costs: OperatorCosts }>(COSTS_ENDPOINT);
       setCosts(body.costs);
     } catch (error) {
       setCostsError(toUserMessage(error, 'Could not load the cost ledger.'));
@@ -134,7 +126,7 @@ export default function OperatorCostsPanel() {
     setRows(null);
     setRowsError(null);
     try {
-      const body = await readJson<{ rows: ObservabilityMetricsRow[] }>(
+      const body = await requestJson<{ rows: ObservabilityMetricsRow[] }>(
         `${OBSERVABILITY_ENDPOINT}?dimension=${value}`,
       );
       setRows(body.rows);
@@ -162,7 +154,7 @@ export default function OperatorCostsPanel() {
     setExplainError(null);
     setExplain(null);
     try {
-      const body = await readJson<{ explain: RequestExplain }>(
+      const body = await requestJson<{ explain: RequestExplain }>(
         `${EXPLAIN_ENDPOINT}?userId=${encodeURIComponent(userId)}&idempotencyKey=${encodeURIComponent(idempotencyKey)}`,
       );
       setExplain(body.explain);

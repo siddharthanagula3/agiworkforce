@@ -11,6 +11,7 @@ import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 
 const MS_PER_SECOND = 1000;
@@ -76,7 +77,7 @@ async function fetchHealth(signal: AbortSignal): Promise<ConnectorCallHealth[]> 
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+    throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
   }
   const parsed = ConnectorHealthResponseSchema.safeParse(body);
   if (!parsed.success) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import { evaluateJobHealth, type JobHealthAlert } from '@/lib/server/slo/job-health';
 import { formatCount, formatDateTime } from '../lib/operator-format';
 
@@ -53,12 +54,7 @@ export default function BackgroundJobsPanel() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const response = await fetch(ENDPOINT, { cache: 'no-store' });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-      }
-      const payload = body as { queues: QueueStats[]; dead: DeadJob[] };
+      const payload = await requestJson<{ queues: QueueStats[]; dead: DeadJob[] }>(ENDPOINT);
       setQueues(payload.queues);
       setDead(payload.dead);
     } catch (loadError) {
@@ -75,15 +71,11 @@ export default function BackgroundJobsPanel() {
     setNotice(null);
     setError(null);
     try {
-      const response = await fetch(ENDPOINT, {
+      await requestJson(ENDPOINT, {
         method: 'POST',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ jobId }),
       });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-      }
       setNotice('Queued again. It runs on the next drain.');
       await load();
     } catch (retryError) {

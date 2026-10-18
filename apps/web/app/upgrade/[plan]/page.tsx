@@ -11,9 +11,7 @@ import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
 export default async function UpgradePlanPage({ params }: { params: Promise<{ plan: string }> }) {
   const { plan } = await params;
-  // Team is self-serve but priced per seat, and the seat count and interval are
-  // chosen on /pricing. Accepting it here would render an order screen that
-  // silently bills one seat, monthly.
+  // Seat count and interval for per-seat plans are only chosen on /pricing.
   if (isPerSeatBillingPlan(plan)) redirect('/pricing#pricing-team-title');
   if (!(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(plan)) notFound();
 

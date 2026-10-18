@@ -13,6 +13,7 @@ import {
 import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import {
   GITHUB_TRIGGER_EVENT_TYPES,
   GMAIL_TRIGGER_EVENT_TYPES,
@@ -147,7 +148,7 @@ export default function ScheduleTriggersPanel({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+        throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       setTriggers(ManagedCloudEventTriggerListResponseSchema.parse(body).triggers);
     } catch (loadError) {
@@ -188,7 +189,7 @@ export default function ScheduleTriggersPanel({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+        throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       const created = ManagedCloudEventTriggerCreatedResponseSchema.parse(body);
       setSecrets({
@@ -220,7 +221,7 @@ export default function ScheduleTriggersPanel({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+        throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       await load();
     } catch (toggleError) {
@@ -244,7 +245,7 @@ export default function ScheduleTriggersPanel({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+        throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       setEditingConditions(null);
       await load();
@@ -265,7 +266,7 @@ export default function ScheduleTriggersPanel({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+        throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       await load();
     } catch (watchError) {
@@ -293,7 +294,7 @@ export default function ScheduleTriggersPanel({
           });
           if (!response.ok) {
             const body = await response.json().catch(() => null);
-            throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+            throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
           }
           await load();
         } catch (deleteError) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Spinner } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import { useHandoffThread } from '../hooks/useHandoffThread';
 import {
   SUPPORT_MAX_MESSAGE_LENGTH,
@@ -170,10 +171,9 @@ function PresenceControl() {
         const body = (await response.json().catch(() => null)) as {
           presence?: { status?: string };
           warning?: string;
-          error?: { message?: string };
         } | null;
         if (!response.ok) {
-          throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+          throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
         }
         setState(body?.presence?.status ?? status);
         setWarning(body?.warning ?? null);

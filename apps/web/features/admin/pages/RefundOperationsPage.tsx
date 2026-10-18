@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import {
   OPERATOR_REFUND_STRIPE_REASONS,
   REFUND_REQUEST_REASON_LABELS,
@@ -18,16 +19,13 @@ import {
   type RefundingStore,
 } from '@/lib/billing/refund-requests';
 import { formatDateTime } from '../lib/operator-format';
+import { ACTION_CLASS, DESTRUCTIVE_CLASS } from '../lib/operator-styles';
 
 const ENDPOINT = '/api/admin/billing-refunds';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
-const ACTION_CLASS =
-  'rounded-full border border-border px-4 py-2 text-xs transition-colors hover:border-foreground/30 disabled:opacity-50';
-const DESTRUCTIVE_CLASS =
-  'rounded-full border border-destructive/50 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
 const ASSESSMENT_LABEL: Record<RefundAssessment, string> = {
   statutory_withdrawal: 'Statutory withdrawal',
@@ -54,15 +52,6 @@ interface RefundOutcome {
   amountCents: number;
   currency: string;
   planEnded: boolean;
-}
-
-async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', credentials: 'include', ...init });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
 }
 
 function toMinorUnits(value: string, currency: string): number | null {
@@ -183,7 +172,7 @@ export default function RefundOperationsPage() {
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
     try {
-      const body = await readJson<{ pending: OperatorRefundRequestView[] }>(ENDPOINT);
+      const body = await requestJson<{ pending: OperatorRefundRequestView[] }>(ENDPOINT);
       setPending(body.pending);
     } catch (loadError) {
       setError(toUserMessage(loadError, 'The refund queue could not be loaded.'));
@@ -205,7 +194,7 @@ export default function RefundOperationsPage() {
     setLookingUp(true);
     setError(null);
     try {
-      const body = await readJson<{ account: OperatorAccountBilling }>(
+      const body = await requestJson<{ account: OperatorAccountBilling }>(
         `${ENDPOINT}?q=${encodeURIComponent(candidate)}`,
       );
       setAccount(body.account);
@@ -236,7 +225,7 @@ export default function RefundOperationsPage() {
   }
 
   async function post<T>(payload: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
-    return readJson<T>(ENDPOINT, {
+    return requestJson<T>(ENDPOINT, {
       method: 'POST',
       headers: await addCsrfHeaders({
         'Content-Type': 'application/json',

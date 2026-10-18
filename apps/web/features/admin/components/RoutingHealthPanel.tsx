@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import BreakerStateBadge from './BreakerStateBadge';
 import type { RouteScopeHealthRow, RoutingHealthSummary } from '../services/routing-health-metrics';
 import {
@@ -23,15 +24,6 @@ const UNFUNDED_LABEL = 'Unfunded';
 
 const UNFUNDED_CLASS = 'border-destructive bg-muted text-destructive-text';
 
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
-}
-
 export default function RoutingHealthPanel() {
   const [summary, setSummary] = useState<RoutingHealthSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +34,7 @@ export default function RoutingHealthPanel() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSummary(await readJson<RoutingHealthSummary>(ROUTING_HEALTH_ENDPOINT));
+      setSummary(await requestJson<RoutingHealthSummary>(ROUTING_HEALTH_ENDPOINT));
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read routing health.'));
     }
@@ -62,7 +54,7 @@ export default function RoutingHealthPanel() {
     setRoutes(null);
     setRoutesError(null);
     try {
-      const body = await readJson<{ routes: RouteScopeHealthRow[] }>(
+      const body = await requestJson<{ routes: RouteScopeHealthRow[] }>(
         `${ROUTING_HEALTH_ENDPOINT}?${PROVIDER_PARAM}=${encodeURIComponent(provider)}`,
       );
       setRoutes(body.routes);

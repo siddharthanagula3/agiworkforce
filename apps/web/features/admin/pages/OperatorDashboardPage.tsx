@@ -10,6 +10,7 @@ import { centsFromCredits, formatCredits } from '@agiworkforce/types';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import BackgroundJobsPanel from '../components/BackgroundJobsPanel';
 import ContentTakedownPanel from '../components/ContentTakedownPanel';
 import CopyrightNoticeQueuePanel from '../components/CopyrightNoticeQueuePanel';
@@ -63,22 +64,11 @@ function isTab(value: string): value is Tab {
   return (TABS as readonly string[]).includes(value);
 }
 
-/**
- * The tab lives in the location hash so another console can link straight at a
- * control. The admin console lists content takedown and the privacy queues
- * among its controls, and a link that lands on the overview tab is a pointer
- * the reader has to finish themselves.
- */
 function tabFromHash(hash: string): Tab {
   const value = hash.replace(/^#/, '');
   return isTab(value) ? value : DEFAULT_TAB;
 }
 
-/**
- * A 30-day signup sparkline drawn from the series the API returns. Inline SVG
- * rather than a chart dependency: one polyline is the whole requirement, and a
- * charting library would be a bundle cost on a page one person opens.
- */
 function GrowthChart({ points }: { points: OperatorOverview['growth'] }) {
   if (points.length === 0) return null;
   const max = Math.max(1, ...points.map((p) => p.signups));
@@ -165,9 +155,11 @@ export function OperatorDashboardPage() {
     setError(null);
     if (!DATABASE_VIEWS.includes(view)) return;
     try {
-      const response = await fetch(`/api/operator?view=${view}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      const body = await response.json();
+      const body = await requestJson<{
+        overview: OperatorOverview;
+        feedback: FeedbackRow[];
+        users: UserRow[];
+      }>(`/api/operator?view=${view}`);
       if (view === 'overview') setOverview(body.overview);
       if (view === 'feedback') setFeedback(body.feedback);
       if (view === 'users') setUsers(body.users);
@@ -181,22 +173,13 @@ export function OperatorDashboardPage() {
   }, [tab, load]);
 
   async function operatorAction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await fetch('/api/operator', {
+    return requestJson<Record<string, unknown>>('/api/operator', {
       method: 'POST',
       headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
     });
-    const parsed = await response.json();
-    if (!response.ok) throw new Error(parsed?.error?.message ?? `Failed (${response.status})`);
-    return parsed;
   }
 
-  /**
-   * Fleet-wide reset takes the typed phrase first and then previews the blast
-   * radius, because it rewrites billing state for every active account and
-   * re-running it does not undo it. The operator sees the real number before
-   * committing to it.
-   */
   async function resetEveryone() {
     const typed = bulkConfirmation.trim();
     if (typed !== BULK_RESET_CONFIRMATION) return;
@@ -309,16 +292,10 @@ export function OperatorDashboardPage() {
         setBusyUserId(user.id);
         setNotice(null);
         try {
-          const response = await fetch('/api/operator', {
-            method: 'POST',
-            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ action: 'reset-usage', userId: user.id }),
-          });
-          const body = await response.json();
-          if (!response.ok) throw new Error(body?.error?.message ?? `Failed (${response.status})`);
+          const result = await operatorAction({ action: 'reset-usage', userId: user.id });
           setNotice(
-            body.reset
-              ? `Cleared ${formatCreditAmount(body.clearedCredits)} of usage for ${label}.`
+            result['reset']
+              ? `Cleared ${formatCreditAmount(typeof result['clearedCredits'] === 'number' ? result['clearedCredits'] : null)} of usage for ${label}.`
               : `${label} has no active credit period, so there was nothing to reset.`,
           );
           await load('users');

@@ -5,6 +5,7 @@ import { Spinner } from '@agiworkforce/ui';
 import { MICROUSD_PER_USD } from '@agiworkforce/types';
 
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type {
   CogsClass,
   EconomicsGrouping,
@@ -72,15 +73,6 @@ function formatRatio(value: number | null): string {
   return `${value.toFixed(RATIO_DIGITS)}×`;
 }
 
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
-}
-
 function GroupRow({ group, emphasis }: { group: EconomicsSummaryGroup; emphasis: boolean }) {
   return (
     <tr className={`border-t border-border ${emphasis ? 'font-medium' : ''}`}>
@@ -122,7 +114,7 @@ export default function EconomicsSummaryPanel() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ from, to, group_by: groupBy });
-      setSummary(await readJson<EconomicsSummary>(`${ECONOMICS_ENDPOINT}?${params.toString()}`));
+      setSummary(await requestJson<EconomicsSummary>(`${ECONOMICS_ENDPOINT}?${params.toString()}`));
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read the economics summary.'));
     } finally {

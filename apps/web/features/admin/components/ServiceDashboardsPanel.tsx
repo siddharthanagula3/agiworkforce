@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { ServiceDashboardsReport } from '@/lib/observability/dashboards';
 
 const SERVICE_DASHBOARDS_ENDPOINT = '/api/admin/service-dashboards';
@@ -17,13 +18,8 @@ const AGGREGATION_LABEL: Record<string, string> = {
   p95: '95th percentile',
 };
 
-async function readReport(): Promise<ServiceDashboardsReport> {
-  const response = await fetch(SERVICE_DASHBOARDS_ENDPOINT, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as ServiceDashboardsReport;
+function readReport(): Promise<ServiceDashboardsReport> {
+  return requestJson<ServiceDashboardsReport>(SERVICE_DASHBOARDS_ENDPOINT);
 }
 
 function BackendNotice({ report }: { report: ServiceDashboardsReport }) {

@@ -4,12 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
+import { requestJson } from '@/shared/utils/request-json';
 import type {
   DataRightsRequestType,
   OpenDataRightsRequest,
 } from '@/lib/server/data-rights-requests';
 import type { AnonymousTableErasure } from '@/lib/server/anonymous-erasure';
 import { formatCount, formatDateTime } from '../lib/operator-format';
+import { DESTRUCTIVE_CLASS } from '../lib/operator-styles';
 
 const REQUESTS_ENDPOINT = '/api/admin/privacy/requests';
 const ERASURES_ENDPOINT = '/api/admin/privacy/erasures';
@@ -18,8 +21,6 @@ const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const TABLE_WRAP_CLASS = 'overflow-x-auto rounded-2xl border border-border';
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
-const DESTRUCTIVE_CLASS =
-  'rounded-full border border-destructive/50 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
 function describeClock(deadline: OpenDataRightsRequest['deadline']): string {
   const days = Math.abs(deadline.daysRemaining);
@@ -65,12 +66,8 @@ export default function PrivacyRequestsPanel() {
   const load = useCallback(async () => {
     setListError(null);
     try {
-      const response = await fetch(REQUESTS_ENDPOINT, { cache: 'no-store' });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-      }
-      setRequests((body as { requests: OpenDataRightsRequest[] }).requests);
+      const body = await requestJson<{ requests: OpenDataRightsRequest[] }>(REQUESTS_ENDPOINT);
+      setRequests(body.requests);
     } catch (error) {
       setListError(toUserMessage(error, 'Could not load data rights requests.'));
     }
@@ -80,12 +77,7 @@ export default function PrivacyRequestsPanel() {
     void load();
   }, [load]);
 
-  /**
-   * A partial erasure answers with an error status and a report body, and the
-   * report is the useful half: it names which tables were cleared and which
-   * refused, so the operator can finish the request rather than being told
-   * only that something failed.
-   */
+  // A partial erasure answers with an error status and a report body; show the report.
   async function eraseSubject() {
     const contactEmail = email.trim();
     const recordedReason = reason.trim();
@@ -123,10 +115,7 @@ export default function PrivacyRequestsPanel() {
             await load();
             return;
           }
-          throw new Error(
-            (body as { error?: { message?: string } })?.error?.message ??
-              `Request failed (${response.status})`,
-          );
+          throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
         } catch (error) {
           setErasureError(toUserMessage(error, 'Could not erase that subject.'));
         } finally {

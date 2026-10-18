@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/cloud-contracts/waitlist';
 import { getBillingPlanPricing, isSelfServePaidPlanTier } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import { formatCount, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
@@ -32,7 +33,7 @@ async function requestWaitlist(
     cache: 'no-store',
   });
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  if (!response.ok) throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
   return body;
 }
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { RolloutSlotView } from '@/app/api/admin/model-rollout/route';
 import type { ModelBenchmarkRow } from '@/lib/services/model-rollout/rollout-evaluation-service';
 import { formatDateTime, formatRate, NONE } from '../lib/operator-format';
@@ -31,12 +32,7 @@ export default function ModelRolloutPanel() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const response = await fetch(ROLLOUT_ENDPOINT, { cache: 'no-store' });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-      }
-      setView(body as RolloutView);
+      setView(await requestJson<RolloutView>(ROLLOUT_ENDPOINT));
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read the rollout state.'));
     }

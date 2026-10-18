@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { ServiceHealthSummary } from '../services/service-health-metrics';
 import {
   formatCount,
@@ -18,13 +19,8 @@ const SERVICE_HEALTH_ENDPOINT = '/api/admin/service-health';
 const CARD_CLASS = 'rounded-2xl border border-border bg-card p-5';
 const TABLE_WRAP_CLASS = 'overflow-x-auto rounded-2xl border border-border';
 
-async function readSummary(): Promise<ServiceHealthSummary> {
-  const response = await fetch(SERVICE_HEALTH_ENDPOINT, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as ServiceHealthSummary;
+function readSummary(): Promise<ServiceHealthSummary> {
+  return requestJson<ServiceHealthSummary>(SERVICE_HEALTH_ENDPOINT);
 }
 
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {

@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/types';
 
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type { ProductMetricsSummary } from '../services/product-metrics';
 import { formatCount, formatDateTime, formatRate } from '../lib/operator-format';
 
@@ -23,11 +24,7 @@ const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-foreground/40';
 const CONTROL_LABEL_CLASS = 'flex flex-col gap-1 text-xs text-muted-foreground';
 
-/**
- * A ratio whose denominator is zero. The service reports null rather than a
- * number, and so does this panel: "0.0%" over no population reads as a result
- * that was measured and came back bad.
- */
+/** Shown for a zero-denominator ratio, which the service reports as null. */
 const NOTHING_TO_MEASURE = 'nothing to measure';
 
 type MetricShape = 'count' | 'rate' | 'money';
@@ -247,16 +244,9 @@ function describeBasis(entry: ProductMetricValue, shape: MetricShape): string | 
   return `${formatCount(entry.numerator)} of ${formatCount(entry.denominator)}`;
 }
 
-async function readSummary(from: string, to: string): Promise<ProductMetricsSummary> {
+function readSummary(from: string, to: string): Promise<ProductMetricsSummary> {
   const params = new URLSearchParams({ from, to });
-  const response = await fetch(`${PRODUCT_METRICS_ENDPOINT}?${params.toString()}`, {
-    cache: 'no-store',
-  });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as ProductMetricsSummary;
+  return requestJson<ProductMetricsSummary>(`${PRODUCT_METRICS_ENDPOINT}?${params.toString()}`);
 }
 
 function MetricCard({ entry }: { entry: ProductMetricValue }) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import {
   describeDiagnostics,
   MAX_TICKET_MESSAGE_CHARS,
@@ -135,13 +136,8 @@ function RecoveryActions({ ticketId }: { ticketId: string }) {
 
 async function requestJson(path: string, init: RequestInit, fallback: string): Promise<unknown> {
   const response = await fetch(path, { ...init, cache: 'no-store' });
-  const body = (await response.json().catch(() => null)) as {
-    error?: { message?: unknown };
-  } | null;
-  if (!response.ok) {
-    const message = body?.error?.message;
-    throw new Error(typeof message === 'string' && message.trim() ? message : fallback);
-  }
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(apiErrorMessage(body, fallback));
   if (body === null) throw new Error(fallback);
   return body;
 }

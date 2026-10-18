@@ -5,6 +5,7 @@ import { COMPAT_CAPABILITY_SOURCES } from '@agiworkforce/types';
 import { Spinner } from '@agiworkforce/ui';
 import type { RouteBreakerState } from '@agiworkforce/routing';
 import { toUserMessage } from '@/lib/user-error-message';
+import { requestJson } from '@/shared/utils/request-json';
 import type {
   RouteEconomicsReport,
   RouteEconomicsRow,
@@ -209,15 +210,6 @@ function numberOrUnknown(
   return value === null ? UNKNOWN : format(value);
 }
 
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store' });
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
-  }
-  return body as T;
-}
-
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -311,7 +303,7 @@ export default function RouteEconomicsPanel() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setReport(await readJson<RouteEconomicsReport>(ROUTE_ECONOMICS_ENDPOINT));
+      setReport(await requestJson<RouteEconomicsReport>(ROUTE_ECONOMICS_ENDPOINT));
     } catch (loadError) {
       setError(toUserMessage(loadError, 'Could not read route economics.'));
     }

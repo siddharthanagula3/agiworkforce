@@ -18,6 +18,7 @@ import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { FREE_QUOTA_CATEGORIES } from '@/features/models/lib/free-quota-types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { apiErrorMessage } from '@/shared/utils/api-error';
 import { formatCount, formatDurationMs, formatEpochMs } from '../lib/operator-format';
 
 const QWENCLOUD_FREE_QUOTA_DOC = 'https://docs.qwencloud.com/resources/free-quota';
@@ -268,7 +269,7 @@ function tickLapsed(tickedAtMs: number | null, nowMs: number, windowMs: number):
 async function readJsonResponse(response: Response): Promise<unknown> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw Object.assign(new Error(body?.error?.message ?? ''), { status: response.status });
+    throw Object.assign(new Error(apiErrorMessage(body, '')), { status: response.status });
   }
   return body;
 }

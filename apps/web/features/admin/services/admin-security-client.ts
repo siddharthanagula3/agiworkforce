@@ -1,4 +1,5 @@
 import { getCsrfToken } from '@/lib/client/csrf';
+import { responseErrorMessage } from '@/shared/utils/api-error';
 
 export type AdminSecuritySeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -40,19 +41,9 @@ export interface AdminSecurityDashboard {
 export type AdminAccountAction = 'suspend-user' | 'ban-user' | 'reactivate-user';
 
 async function responseError(response: Response): Promise<Error> {
-  let message = `Admin security request failed (${response.status})`;
-  try {
-    const body = (await response.json()) as {
-      error?: string | { message?: string };
-    };
-    if (typeof body.error === 'string' && body.error.trim()) message = body.error;
-    if (body.error && typeof body.error === 'object' && body.error.message?.trim()) {
-      message = body.error.message;
-    }
-  } catch {
-    // Preserve the status-only message when the server returned no JSON body.
-  }
-  return new Error(message);
+  return new Error(
+    await responseErrorMessage(response, `Admin security request failed (${response.status})`),
+  );
 }
 
 async function fetchAdminJson<T>(url: string, token: string): Promise<T> {
