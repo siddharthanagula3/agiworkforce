@@ -53,8 +53,8 @@ if (!exists(codeownersPath)) {
 
   for (const marker of [
     'Provisional CODEOWNERS',
-    'Replace @siddhartha with GitHub teams when the company/org structure exists.',
-    '* @siddhartha',
+    'Replace @siddharthanagula3 with GitHub teams when the company/org structure exists.',
+    '* @siddharthanagula3',
   ]) {
     if (!body.includes(marker)) {
       errors.push(`${codeownersPath} must include ${JSON.stringify(marker)}`);

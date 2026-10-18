@@ -1,58 +1,58 @@
 # Provisional CODEOWNERS for pre-release AGI Workforce.
 #
-# Replace @siddhartha with GitHub teams when the company/org structure exists.
+# Replace @siddharthanagula3 with GitHub teams when the company/org structure exists.
 # Until then, this file routes high-risk changes to the founder/platform lead.
 
-* @siddhartha
+* @siddharthanagula3
 
 # Root strategy, agent context, and repo-operability guardrails.
-/PLAN.md @siddhartha
-/CHANGELOG.md @siddhartha
-/docs/agent-context/ @siddhartha
-/docs/development/ @siddhartha
-/docs/standards/ @siddhartha
-/audit/ @siddhartha
-/scripts/check-*.mjs @siddhartha
+/PLAN.md @siddharthanagula3
+/CHANGELOG.md @siddharthanagula3
+/docs/agent-context/ @siddharthanagula3
+/docs/development/ @siddharthanagula3
+/docs/standards/ @siddharthanagula3
+/audit/ @siddharthanagula3
+/scripts/check-*.mjs @siddharthanagula3
 
 # Product surfaces.
-/apps/cli/ @siddhartha
-/apps/desktop/ @siddhartha
-/apps/web/ @siddhartha
-/apps/mobile/ @siddhartha
-/apps/extension/ @siddhartha
-/apps/extension-vscode/ @siddhartha
+/apps/cli/ @siddharthanagula3
+/apps/desktop/ @siddharthanagula3
+/apps/web/ @siddharthanagula3
+/apps/mobile/ @siddharthanagula3
+/apps/extension/ @siddharthanagula3
+/apps/extension-vscode/ @siddharthanagula3
 
 # Shared runtime, contracts, providers, and database.
-/packages/contracts/types/ @siddhartha
-/packages/contracts/cloud-contracts/ @siddhartha
-/packages/platform/artifacts/ @siddhartha
-/packages/client/sync/ @siddhartha
-/packages/contracts/trust-boundaries/ @siddhartha
-/packages/ai/providers/ @siddhartha
-/packages/ai/provider-runtime/ @siddhartha
-/packages/ai/routing/ @siddhartha
-/packages/ai/search/ @siddhartha
-/packages/client/client-runtime/ @siddhartha
-/packages/ui/unified-chat/ @siddhartha
-/crates/ @siddhartha
-/services/ @siddhartha
-/tools/ @siddhartha
-/apps/web/db/neon/ @siddhartha
+/packages/contracts/types/ @siddharthanagula3
+/packages/contracts/cloud-contracts/ @siddharthanagula3
+/packages/platform/artifacts/ @siddharthanagula3
+/packages/client/sync/ @siddharthanagula3
+/packages/contracts/trust-boundaries/ @siddharthanagula3
+/packages/ai/providers/ @siddharthanagula3
+/packages/ai/provider-runtime/ @siddharthanagula3
+/packages/ai/routing/ @siddharthanagula3
+/packages/ai/search/ @siddharthanagula3
+/packages/client/client-runtime/ @siddharthanagula3
+/packages/ui/unified-chat/ @siddharthanagula3
+/crates/ @siddharthanagula3
+/services/ @siddharthanagula3
+/tools/ @siddharthanagula3
+/apps/web/db/neon/ @siddharthanagula3
 
 # Enterprise/security/compliance claims.
-/docs/compliance/ @siddhartha
-/docs/security/ @siddhartha
-/packages/contracts/compliance/ @siddhartha
-/packages/contracts/licensing/ @siddhartha
+/docs/compliance/ @siddharthanagula3
+/docs/security/ @siddharthanagula3
+/packages/contracts/compliance/ @siddharthanagula3
+/packages/contracts/licensing/ @siddharthanagula3
 
 # Upstream dependency integrations. Each path is the only module allowed to talk
 # to that vendor; packages/contracts/types/src/dependency-registry.json names the
 # same owner, what depends on it, and what fails when it is down.
-/packages/platform/data-layer/ @siddhartha
-/packages/platform/key-value/ @siddhartha
-/packages/platform/identity/ @siddhartha
-/packages/platform/object-storage/ @siddhartha
-/apps/web/lib/billing/ @siddhartha
-/apps/web/lib/e2b/ @siddhartha
-/apps/web/lib/observability/ @siddhartha
-/apps/web/lib/services/notification-email-service.ts @siddhartha
+/packages/platform/data-layer/ @siddharthanagula3
+/packages/platform/key-value/ @siddharthanagula3
+/packages/platform/identity/ @siddharthanagula3
+/packages/platform/object-storage/ @siddharthanagula3
+/apps/web/lib/billing/ @siddharthanagula3
+/apps/web/lib/e2b/ @siddharthanagula3
+/apps/web/lib/observability/ @siddharthanagula3
+/apps/web/lib/services/notification-email-service.ts @siddharthanagula3

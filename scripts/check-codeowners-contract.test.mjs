@@ -41,7 +41,7 @@ function ownedPathsOf(codeowners) {
 test('a CODEOWNERS entry for a deleted file fails the contract check', () => {
   const owned = ownedPathsOf(REAL_CODEOWNERS);
   const result = runOnSandbox({
-    codeowners: `${REAL_CODEOWNERS}\n/TODO.md @siddhartha\n`,
+    codeowners: `${REAL_CODEOWNERS}\n/TODO.md @siddharthanagula3\n`,
     present: owned,
   });
 
@@ -52,10 +52,10 @@ test('a CODEOWNERS entry for a deleted file fails the contract check', () => {
 test('a wildcard entry resolves when at least one file matches', () => {
   const codeowners = [
     '# Provisional CODEOWNERS for pre-release AGI Workforce.',
-    '# Replace @siddhartha with GitHub teams when the company/org structure exists.',
+    '# Replace @siddharthanagula3 with GitHub teams when the company/org structure exists.',
     '',
-    '* @siddhartha',
-    '/scripts/check-*.mjs @siddhartha',
+    '* @siddharthanagula3',
+    '/scripts/check-*.mjs @siddharthanagula3',
   ].join('\n');
 
   const matched = runOnSandbox({ codeowners, present: ['scripts/check-thing.mjs'] });
