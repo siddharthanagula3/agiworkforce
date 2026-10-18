@@ -2161,10 +2161,8 @@
           "mount": "apps/web/app/api/skills/route.ts"
         },
         "desktop": {
-          "state": "present",
-          "via": "import",
-          "entry": "apps/desktop/src/features/governance/AuditLog.tsx",
-          "mount": "apps/desktop/src/features/governance/GovernanceDashboard.tsx"
+          "state": "absent",
+          "why": "Nothing under apps/desktop/src reads the audit log; the desktop only uploads automation audit rows through apps/desktop/src/services/automationAuditOutbox.ts, and the log is read on the web surface."
         },
         "mobile": {
           "state": "absent",

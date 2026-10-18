@@ -137,8 +137,6 @@ interface ModelState {
   selectedModel: string | null;
   selectedProvider: Provider | null;
 
-  favorites: string[];
-
   recentModels: string[];
 
   providerStatuses: Record<Provider, ProviderStatus | null>;
@@ -168,7 +166,6 @@ interface ModelState {
   loadModelsForMode: (mode: AppMode, planTier: PlanTier) => void;
 
   selectModel: (modelId: string, provider: Provider) => Promise<void>;
-  toggleFavorite: (modelId: string) => void;
   toggleThinkingMode: () => void;
   setThinkingBudget: (budget: number) => void;
   togglePerTurnAdaptiveThinking: () => void;
@@ -210,7 +207,6 @@ export const useModelStore = create<ModelState>()(
       subscribeWithSelector((set, get) => ({
         selectedModel: 'auto',
         selectedProvider: 'managed_cloud',
-        favorites: [],
         recentModels: [],
         providerStatuses: {
           openai: null,
@@ -325,20 +321,6 @@ export const useModelStore = create<ModelState>()(
             console.error('Failed to select model:', error);
             set({ error: getSimpleErrorMessage(error) }, undefined, 'model/selectModel/error');
           }
-        },
-
-        toggleFavorite: (modelId: string) => {
-          const canonicalModelId = normalizeModelId(modelId) ?? modelId;
-          set(
-            (state) => {
-              const favorites = state.favorites.includes(canonicalModelId)
-                ? state.favorites.filter((id) => id !== canonicalModelId)
-                : [...state.favorites, canonicalModelId];
-              return { favorites };
-            },
-            undefined,
-            'model/toggleFavorite',
-          );
         },
 
         toggleThinkingMode: () => {
@@ -638,7 +620,6 @@ export const useModelStore = create<ModelState>()(
             {
               selectedModel: 'auto',
               selectedProvider: 'managed_cloud',
-              favorites: [],
               recentModels: [],
               providerStatuses: {
                 openai: null,
@@ -695,7 +676,6 @@ export const useModelStore = create<ModelState>()(
         partialize: (state) => ({
           selectedModel: state.selectedModel,
           selectedProvider: state.selectedProvider,
-          favorites: state.favorites,
         }),
         migrate: (persistedState: unknown, _version: number) => {
           const state = persistedState as Partial<ModelState> | null;
@@ -711,9 +691,6 @@ export const useModelStore = create<ModelState>()(
               selectedModel === 'auto'
                 ? 'managed_cloud'
                 : (getModelMetadata(selectedModel)?.provider ?? state.selectedProvider),
-            favorites: (state.favorites ?? [])
-              .map((modelId) => normalizePersistedCatalogModel(modelId))
-              .filter((modelId): modelId is string => modelId !== null),
             recentModels: (state.recentModels ?? [])
               .map((modelId) => normalizePersistedCatalogModel(modelId))
               .filter((modelId): modelId is string => modelId !== null),
@@ -725,12 +702,6 @@ export const useModelStore = create<ModelState>()(
   ),
 );
 
-export const selectFavoriteModelsMetadata = (state: ModelState): ModelMetadata[] => {
-  return state.favorites
-    .map((id) => getModelMetadata(id))
-    .filter((m): m is ModelMetadata => m !== null && m !== undefined);
-};
-
 export const selectRecentModelsMetadata = (state: ModelState): ModelMetadata[] => {
   return state.recentModels
     .map((id) => getModelMetadata(id))
@@ -740,9 +711,6 @@ export const selectRecentModelsMetadata = (state: ModelState): ModelMetadata[] =
 export const selectSelectedModelMetadata = (state: ModelState): ModelMetadata | null => {
   return state.selectedModel ? getModelMetadata(state.selectedModel) : null;
 };
-
-export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
-  state.favorites.includes(normalizeModelId(modelId) ?? modelId);
 
 export const selectIsAutoMode = (state: ModelState) => state.selectedModel === 'auto';
 

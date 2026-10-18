@@ -186,7 +186,11 @@ export function checkKillSwitchReaders(root, unread = UNREAD) {
         'platform kill switch reaches a client.',
     );
   }
-  if (!/for\s*\(\s*const\s+\w+\s+of\s+closedCapabilities\s*\)\s*\w+\.delete\(/.test(handshake)) {
+  if (
+    !/for\s*\(\s*const\s+(\w+)\s+of\s+closedCapabilities\s*\)\s*\{?\s*\w+\.delete\(\s*\1\s*\)/.test(
+      handshake,
+    )
+  ) {
     failures.push(
       `${HANDSHAKE}: the settings layer no longer removes every closed capability from the grant, so ` +
         'a platform switch can be flipped without taking anything away.',

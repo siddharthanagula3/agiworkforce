@@ -1,3 +1,4 @@
+import type { LifecycleStatus } from '@agiworkforce/types';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -13,7 +14,7 @@ export const TRIGGER_RUN_OUTCOMES = [
   'failed',
   'cancelled',
   'taken_over',
-] as const;
+] as const satisfies readonly (LifecycleStatus | 'waiting' | 'finished' | 'taken_over')[];
 
 export type TriggerRunOutcome = (typeof TRIGGER_RUN_OUTCOMES)[number];
 

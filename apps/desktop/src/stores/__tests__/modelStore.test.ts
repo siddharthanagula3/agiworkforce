@@ -95,26 +95,6 @@ describe('modelStore', () => {
     });
   });
 
-  describe('toggleFavorite', () => {
-    it('adds a model to favorites', () => {
-      useModelStore.getState().toggleFavorite(FIXTURE_MODEL_ID);
-
-      const state = useModelStore.getState();
-      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
-    });
-
-    it('removes a model from favorites when already present', () => {
-      const removableModel = 'fixture-removable-model';
-      useModelStore.setState({ favorites: [removableModel, FIXTURE_MODEL_ID] });
-
-      useModelStore.getState().toggleFavorite(removableModel);
-
-      const state = useModelStore.getState();
-      expect(state.favorites).not.toContain(removableModel);
-      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
-    });
-  });
-
   describe('addToRecent', () => {
     it('adds model to the front of recent list', () => {
       useModelStore.getState().addToRecent('model-a');
@@ -198,7 +178,6 @@ describe('modelStore', () => {
       useModelStore.setState({
         selectedModel: FIXTURE_MODEL_ID,
         selectedProvider: 'openai',
-        favorites: ['model-a', 'model-b'],
         recentModels: ['model-a'],
         thinkingModeEnabled: true,
         thinkingBudget: 8192,
@@ -210,21 +189,19 @@ describe('modelStore', () => {
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
-      expect(state.favorites).toEqual([]);
       expect(state.recentModels).toEqual([]);
       expect(state.error).toBeNull();
     });
   });
 
   describe('persisted model migration', () => {
-    it('drops unknown selected, favorite, and recent model ids', async () => {
+    it('drops unknown selected and recent model ids', async () => {
       localStorage.setItem(
         'agiworkforce-models',
         JSON.stringify({
           state: {
             selectedModel: 'removed-provider-model',
             selectedProvider: 'anthropic',
-            favorites: ['removed-provider-model', CATALOG_MODEL_ID],
             recentModels: ['removed-provider-model', CATALOG_MODEL_ID],
           },
           version: 1,
@@ -236,7 +213,6 @@ describe('modelStore', () => {
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
-      expect(state.favorites).toEqual([CATALOG_MODEL_ID]);
       expect(state.recentModels).toEqual([CATALOG_MODEL_ID]);
     });
 
@@ -247,7 +223,6 @@ describe('modelStore', () => {
           state: {
             selectedModel: 'auto-premium',
             selectedProvider: 'managed_cloud',
-            favorites: [],
             recentModels: [],
           },
           version: 2,

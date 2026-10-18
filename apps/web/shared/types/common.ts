@@ -1,8 +1,10 @@
+import type { WorkLifecycleStatus } from '@agiworkforce/types';
+
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export type MessageDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
-export type ToolCallStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ToolCallStatus = Exclude<WorkLifecycleStatus, 'cancelled'>;
 
 export type ParticipantType = 'user' | 'agent' | 'system';
 

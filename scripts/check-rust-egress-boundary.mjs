@@ -16,9 +16,6 @@ const ALLOWLIST = [
   'apps/desktop/src-tauri/src/core/llm/providers/bedrock.rs',
   'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
   'apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs',
-  'apps/desktop/src-tauri/src/features/productivity/asana_client.rs',
-  'apps/desktop/src-tauri/src/features/productivity/notion_client.rs',
-  'apps/desktop/src-tauri/src/features/productivity/trello_client.rs',
   'apps/desktop/src-tauri/src/features/speech/local_stt.rs',
   'apps/desktop/src-tauri/src/features/speech/local_tts.rs',
   'apps/desktop/src-tauri/src/features/speech/tts.rs',
@@ -34,7 +31,6 @@ const ALLOWLIST = [
   'apps/desktop/src-tauri/src/sys/commands/ollama.rs',
   'apps/desktop/src-tauri/src/sys/commands/voice.rs',
   'apps/desktop/src-tauri/src/sys/security/egress_policy.rs',
-  'apps/desktop/src-tauri/src/sys/telemetry/collector.rs',
 ];
 
 function isRustTestPath(fullPath) {

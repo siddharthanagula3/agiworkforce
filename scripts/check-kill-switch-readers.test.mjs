@@ -157,6 +157,18 @@ test('the handshake losing either end of the platform path fails', () => {
   assert.match(checkKillSwitchReaders(unwiredMe).failures.join('\n'), /no platform kill switch/);
   const unwiredHandshake = fixture({ [HANDSHAKE]: 'return granted;\n' });
   assert.match(checkKillSwitchReaders(unwiredHandshake).failures.join('\n'), /settings layer/);
+  const wrongDelete = fixture({
+    [HANDSHAKE]: 'for (const capability of closedCapabilities) granted.delete(other);\n',
+  });
+  assert.match(checkKillSwitchReaders(wrongDelete).failures.join('\n'), /settings layer/);
+});
+
+test('a braced settings loop that deletes each closed capability passes', () => {
+  const braced = fixture({
+    [HANDSHAKE]:
+      'for (const capability of closedCapabilities) {\n  granted.delete(capability);\n  denialReasons[capability] = x;\n}\n',
+  });
+  assert.doesNotMatch(checkKillSwitchReaders(braced).failures.join('\n'), /settings layer/);
 });
 
 test('the Rust helpers read bodies and drop test modules', () => {

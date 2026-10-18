@@ -116,7 +116,7 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Model restrictions | not in the feature registry | Present | Unverified | Unverified | Present | Present | Unverified | Present |
 | Connector restrictions | not in the feature registry | Present | Present | Unverified | Absent | Present | Absent | Present |
 | Sharing restrictions | not in the feature registry | Present | Unverified | Present | Absent | Absent | Absent | Present |
-| Audit visibility | not in the feature registry | Present | Present | Absent | Present | Absent | Absent | Present |
+| Audit visibility | not in the feature registry | Present | Absent | Absent | Present | Absent | Absent | Present |
 | Managed-compute restrictions | not in the feature registry | Present | Present | Present | Unverified | Unverified | Unverified | Present |
 | Administration | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
 
@@ -632,7 +632,7 @@ this document.
 ### Audit visibility
 
 - **web**: present. `apps/web/lib/workspace-audit.ts`, reached by `apps/web/app/api/skills/route.ts` (import).
-- **desktop**: present. `apps/desktop/src/features/governance/AuditLog.tsx`, reached by `apps/desktop/src/features/governance/GovernanceDashboard.tsx` (import).
+- **desktop**: absent. Nothing under apps/desktop/src reads the audit log; the desktop only uploads automation audit rows through apps/desktop/src/services/automationAuditOutbox.ts, and the log is read on the web surface.
 - **mobile**: absent. Nothing under apps/mobile reads the audit log; administration happens on the web surface.
 - **cli**: present. `apps/cli/src/approval_audit.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: absent. Nothing under apps/extension-vscode/src reads the audit log.

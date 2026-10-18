@@ -39,7 +39,6 @@ describe('modelStore', () => {
     useModelStore.setState({
       selectedModel: 'auto',
       selectedProvider: 'managed_cloud',
-      favorites: [],
       recentModels: [],
       providerStatuses: {
         openai: null,
@@ -193,47 +192,6 @@ describe('modelStore', () => {
     });
   });
 
-  describe('toggleFavorite', () => {
-    it('should add a model to favorites', async () => {
-      const { useModelStore } = await import('../stores/modelStore');
-      const store = useModelStore.getState();
-
-      store.toggleFavorite(FIXTURE_MODEL_ID);
-
-      const state = useModelStore.getState();
-      expect(state.favorites).toContain(FIXTURE_MODEL_ID);
-    });
-
-    it('should remove a model from favorites if already favorited', async () => {
-      const { useModelStore } = await import('../stores/modelStore');
-      useModelStore.setState({ favorites: [FIXTURE_MODEL_ID, SECOND_FIXTURE_MODEL_ID] });
-
-      const store = useModelStore.getState();
-      store.toggleFavorite(FIXTURE_MODEL_ID);
-
-      const state = useModelStore.getState();
-      expect(state.favorites).not.toContain(FIXTURE_MODEL_ID);
-      expect(state.favorites).toContain(SECOND_FIXTURE_MODEL_ID);
-    });
-
-    it('should handle multiple favorites', async () => {
-      const { useModelStore } = await import('../stores/modelStore');
-      const store = useModelStore.getState();
-
-      store.toggleFavorite(FIXTURE_MODEL_ID);
-      store.toggleFavorite(SECOND_FIXTURE_MODEL_ID);
-      store.toggleFavorite('fixture-model-tertiary');
-
-      const state = useModelStore.getState();
-      expect(state.favorites).toHaveLength(3);
-      expect(state.favorites).toEqual([
-        FIXTURE_MODEL_ID,
-        SECOND_FIXTURE_MODEL_ID,
-        'fixture-model-tertiary',
-      ]);
-    });
-  });
-
   describe('toggleThinkingMode', () => {
     it('should enable thinking mode when disabled', async () => {
       const { useModelStore } = await import('../stores/modelStore');
@@ -375,7 +333,6 @@ describe('modelStore', () => {
       useModelStore.setState({
         selectedModel: FIXTURE_MODEL_ID,
         selectedProvider: 'openai',
-        favorites: ['model-a', 'model-b'],
         recentModels: ['model-c'],
         thinkingModeEnabled: true,
         error: 'some error',
@@ -387,7 +344,6 @@ describe('modelStore', () => {
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
-      expect(state.favorites).toEqual([]);
       expect(state.recentModels).toEqual([]);
       expect(state.error).toBeNull();
     });
@@ -1381,7 +1337,6 @@ describe('modelStore selectors', () => {
     useModelStore.setState({
       selectedModel: 'auto',
       selectedProvider: 'managed_cloud',
-      favorites: [], // Empty favorites for subscription-only model
       recentModels: [], // Empty recent models - populated dynamically
       thinkingModeEnabled: false,
       loading: false,
@@ -1420,15 +1375,6 @@ describe('modelStore selectors', () => {
     });
   });
 
-  it('selectFavoriteModelsMetadata should return empty array for subscription model', async () => {
-    const { useModelStore, selectFavoriteModelsMetadata } = await import('../stores/modelStore');
-    const state = useModelStore.getState();
-
-    const favoriteMetadata = selectFavoriteModelsMetadata(state);
-
-    expect(favoriteMetadata).toHaveLength(0);
-  });
-
   it('selectRecentModelsMetadata should return empty array initially', async () => {
     const { useModelStore, selectRecentModelsMetadata } = await import('../stores/modelStore');
     const state = useModelStore.getState();
@@ -1447,15 +1393,5 @@ describe('modelStore selectors', () => {
     const selectedMetadata = selectSelectedModelMetadata(state);
 
     expect(selectedMetadata).toBeNull();
-  });
-
-  it('selectIsModelFavorite should check if model is favorited', async () => {
-    const { useModelStore, selectIsModelFavorite } = await import('../stores/modelStore');
-
-    useModelStore.getState().toggleFavorite('test-model');
-    const state = useModelStore.getState();
-
-    expect(selectIsModelFavorite('test-model')(state)).toBe(true);
-    expect(selectIsModelFavorite('non-favorite')(state)).toBe(false);
   });
 });

@@ -7,18 +7,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/desktop/src/features/governance/ToolHistoryTable.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/features/governance/ToolHistoryTable.tsx",
-      "symbol": "TOOL_STATUSES",
-      "family": "tool support",
-      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
       "file": "apps/desktop/src/features/onboarding/OnboardingWizard.tsx",
       "symbol": "Provider",
       "family": "provider identity",
@@ -139,12 +127,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/desktop/src/types/analytics.ts",
-      "symbol": "BillingPlanTier",
-      "family": "plan access",
-      "why": "restates plan tiers in local literals; import the tier predicates from billing-catalog."
-    },
-    {
       "file": "apps/desktop/src/types/mcp.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -229,18 +211,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/src/features/chat/utils/agentActivityState.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/mobile/src/features/chat/utils/agentActivityState.ts",
-      "symbol": "TOOL_STATUSES",
-      "family": "tool support",
-      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
       "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -299,12 +269,6 @@
       "symbol": "TOOL_STATUSES",
       "family": "tool support",
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/desktop/src/utils/ipc.ts",
-      "symbol": "ErrorCode",
-      "why": "The bridge names TIMEOUT, PAYLOAD_TOO_LARGE and INVALID_RESPONSE as its own transport codes instead of importing ErrorCode from @agiworkforce/types, so a renderer maps a host failure onto a code the server never uses.",
-      "fix": "Import ErrorCode and raise its members; add a transport class to the shared taxonomy if none of them fits."
     },
     {
       "file": "apps/mobile/src/shared/components/FeatureUnavailable.tsx",

@@ -1,3 +1,4 @@
+import { messageKindForAgentEvent } from '@agiworkforce/types';
 import type { ToolDefinition } from './browserToolDefinitions';
 
 export interface ToolCall {
@@ -91,19 +92,17 @@ export function createToolUseJournal(tools: readonly ToolDefinition[]) {
     observe(event: { type: string }): ToolCall[] | null {
       const record = event as Record<string, unknown>;
       const toolUseId = record['toolUseId'];
-      if (event.type === 'tool-use-start') {
-        if (typeof toolUseId !== 'string' || typeof record['name'] !== 'string') return null;
-        pending.set(toolUseId, { name: record['name'], args: '', ended: false });
-        return null;
-      }
-      if (event.type === 'tool-use-delta') {
-        const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
-        if (entry && typeof record['deltaJson'] === 'string') entry.args += record['deltaJson'];
-        return null;
-      }
-      if (event.type === 'tool-use-end') {
-        const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
-        if (entry) entry.ended = true;
+      if (messageKindForAgentEvent(event.type) === 'tool_call') {
+        if (event.type === 'tool-use-start') {
+          if (typeof toolUseId !== 'string' || typeof record['name'] !== 'string') return null;
+          pending.set(toolUseId, { name: record['name'], args: '', ended: false });
+        } else if (event.type === 'tool-use-delta') {
+          const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
+          if (entry && typeof record['deltaJson'] === 'string') entry.args += record['deltaJson'];
+        } else if (event.type === 'tool-use-end') {
+          const entry = typeof toolUseId === 'string' ? pending.get(toolUseId) : undefined;
+          if (entry) entry.ended = true;
+        }
         return null;
       }
       if (event.type !== 'stop') return null;

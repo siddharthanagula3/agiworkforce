@@ -10,8 +10,10 @@ import {
 import {
   CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
+  CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   chatBrowserToolDefinitions,
   isChatBrowserToolTier,
+  MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
 } from '../src/features/computer-use/chatBrowserTools';
 import type { ChromeManagedToolHandoffOutcome } from '../src/features/cloud-bridge/managedChatHandler';
@@ -21,7 +23,7 @@ const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
   'utf8',
 );
-const start = source.indexOf('const CHAT_TOOL_HANDOFF_TIMEOUT_MS');
+const start = source.indexOf('interface PendingChatToolHandoff');
 const end = source.indexOf('const oneTimeSiteGrantTimers', start);
 if (start < 0 || end < start) throw new Error('Background tool handoff bridge was not found');
 
@@ -41,7 +43,9 @@ function bridge(sendMessage = vi.fn(async () => undefined)) {
     sameManagedCloudOwner,
     isChatBrowserToolTier,
     chatBrowserToolDefinitions,
+    MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
     MAX_CHAT_TOOL_RESULT_CHARS,
+    CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   };
   // llm-guardrail-allow: executes repository-owned extension code inside this isolated test fixture.
   const api = new Function(...Object.keys(dependencies), compiled.outputText)(

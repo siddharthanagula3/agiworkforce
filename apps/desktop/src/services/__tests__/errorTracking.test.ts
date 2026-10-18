@@ -2,8 +2,10 @@ import * as Sentry from '@sentry/react';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ErrorTrackingService, ErrorSeverity } from '../errorTracking';
 
+type SentryModule = typeof import('@sentry/react');
+
 vi.mock('@sentry/react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@sentry/react')>()),
+  ...(await importOriginal<SentryModule>()),
   captureException: vi.fn(),
   captureMessage: vi.fn(),
 }));

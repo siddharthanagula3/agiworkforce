@@ -369,7 +369,6 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'settings_load',
   'settings_load_from_disk',
   'settings_save',
-  'settings_update_privacy',
   'settings_v2_clear_cache',
   'shortcuts_register_global',
   'shortcuts_reset',
