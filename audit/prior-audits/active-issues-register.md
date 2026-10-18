@@ -4265,18 +4265,6 @@ Source: `scripts/check-agent-docs.mjs:79`. Exact evidence (`audit/checklist/evid
 
 Resolution/acceptance: Enumerate tracked plus current nonignored untracked scoped files, retain vendored ownership exclusions, and test both untracked and staged fixtures. No implementation fix was made, per the documentation-only audit scope.
 
-## CHROME-AUTOMATION-OUTBOX-LOST-RECEIPTS-01
-
-Severity: Medium. Status: unchanged source read independently by specialist and lead; deterministic component race reproduced on 2026-10-09. Actual browser, backend and deployed behavior unverified.
-
-`enqueue` reads the current array, pushes and writes a capped replacement without serialization. Two concurrent calls with independent storage snapshots each see the same old queue and the later replacement drops the other receipt. `flushAutomationAuditOutbox` snapshots a batch, awaits acceptance, then removes `batch.length` from the current capped queue rather than removing accepted event IDs. With 200 queued receipts and a new enqueue during a blocked flush, the cap evicts an old receipt; acceptance of the original batch then deletes the new, never-posted receipt.
-
-The real transpiled source was probed with structured-clone-correct Chrome storage mocks, canonical batch limit, blocked fetch and device/auth/origin dependencies mocked. Concurrent expected 2, actual 1; capped enqueue during accepted flush lost the new receipt. Sequential enqueue and clone-isolation controls passed. The component's existing storage fixture returns shared object references and does not reproduce these snapshot races. Exact command, replay steps, controls and output: specialist review (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked).
-
-Source: `apps/extension/src/features/observability/automationAudit.ts:128` and `:177`; the worker mounts flushing and the computer-use loop mounts recording. Lead read the complete unchanged owner source. No live Chrome storage, installed extension or network service ran; no source change was made.
-
-Resolution/acceptance: Serialize queue mutations and reconcile acceptance by event ID. Verify concurrent writers and a blocked accepted flush with cap eviction preserve every newer unsent event within the stated retention contract. Retain realistic independent storage snapshots in adverse tests.
-
 ## EXT-MIRROR-TEST-FAKE-COVERAGE-01
 
 Severity: Low. Status: existing open instrument defect; additional concrete instances recorded 2026-10-09. The original `security-fixes.test.ts` scope and prior evidence remain open; it was not freshly read or closed in this wave.
