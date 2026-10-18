@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ManagedCloudOwnerRequestFence } from '../src/features/side-panel/managed-owner-request-fence';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
@@ -71,76 +68,5 @@ describe('scheduled-task side-panel owner fence', () => {
     currentOwner = OWNER_B;
 
     expect(fence.isCurrent(createA, currentOwner)).toBe(false);
-  });
-});
-
-const here = dirname(fileURLToPath(import.meta.url));
-const sidePanelSource = readFileSync(resolve(here, '../src/side_panel.ts'), 'utf8');
-
-function sourceBetween(source: string, startMarker: string, endMarker: string): string {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-  expect(start).toBeGreaterThanOrEqual(0);
-  expect(end).toBeGreaterThan(start);
-  return source.slice(start, end);
-}
-
-describe('scheduled-task owner fence wiring', () => {
-  it('invalidates pending list reads and clears rows/count before exposing a new owner', () => {
-    const transition = sourceBetween(
-      sidePanelSource,
-      'async function transitionManagedCloudOwner',
-      'function injectStyles',
-    );
-    expect(transition).toMatch(
-      /scheduledTasksRequestFence\.invalidate\(\);[\s\S]*clearWorkflowsTaskRows\(\);[\s\S]*_ctx\.managedCloudOwner = nextOwner/,
-    );
-
-    const clearRows = sourceBetween(
-      sidePanelSource,
-      'function clearWorkflowsTaskRows',
-      'function renderTaskRows',
-    );
-    expect(clearRows).toContain("countBadge.textContent = '0'");
-    expect(clearRows).toContain("text: 'No scheduled tasks'");
-  });
-
-  it('checks the exact owner snapshot before both list and history continuations render', () => {
-    const refresh = sourceBetween(
-      sidePanelSource,
-      'function refreshWorkflowsTasks',
-      'function clearWorkflowsTaskRows',
-    );
-    expect(refresh).toContain(
-      'const request = scheduledTasksRequestFence.begin(_ctx.managedCloudOwner)',
-    );
-    expect(
-      refresh.match(/scheduledTasksRequestFence\.isCurrent\(request, _ctx\.managedCloudOwner\)/g),
-    ).toHaveLength(2);
-    expect(refresh).toContain('const owner = request.owner');
-  });
-
-  it('clears and closes the draft and fences pending creates before exposing a new owner', () => {
-    const transition = sourceBetween(
-      sidePanelSource,
-      'async function transitionManagedCloudOwner',
-      'function injectStyles',
-    );
-    expect(transition).toMatch(
-      /scheduledTaskCreateRequestFence\.invalidate\(\);\s*resetScheduledTaskDraftForOwnerTransition\(\);[\s\S]*_ctx\.managedCloudOwner = nextOwner/,
-    );
-
-    const form = sourceBetween(
-      sidePanelSource,
-      'const resetNewTaskForm =',
-      "const groupsSection = el('div'",
-    );
-    expect(form).toContain("newTaskForm.classList.remove('open')");
-    expect(form).toContain("ntNameInput.value = ''");
-    expect(form).toContain("ntPromptInput.value = ''");
-    expect(form).toContain("ntSaveBtn.textContent = t('spTaskCreate')");
-    expect(form).toContain(
-      'scheduledTaskCreateRequestFence.isCurrent(createRequest, _ctx.managedCloudOwner)',
-    );
   });
 });

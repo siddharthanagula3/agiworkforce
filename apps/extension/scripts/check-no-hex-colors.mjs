@@ -22,7 +22,6 @@ const MIN_SCANNED_FILES = 20;
 const KNOWN_VIOLATIONS = {
   'src/content.ts': 6,
   'src/options.ts': 2,
-  'src/side_panel.ts': 2,
 };
 
 const EXCLUDE_DIRS = new Set([

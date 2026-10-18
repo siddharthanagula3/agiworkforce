@@ -35,20 +35,10 @@ describe('Chrome side-panel interaction accessibility', () => {
     const tabs = [
       ...source.matchAll(/'data-tab': '([a-z-]+)',[\s\S]{0,120}?'aria-controls': '([\w-]+)'/g),
     ];
-    expect(tabs.map((match) => match[1])).toEqual([
-      'chat',
-      'workflows',
-      'computer-use',
-      'cloud-runs',
-      'page',
-    ]);
-    // Two of the four panels are built in their own modules, so the element a
-    // tab claims to control has to be looked for across all of them.
+    expect(tabs.map((match) => match[1])).toEqual(['chat', 'computer-use']);
     const panelSources = [
       source,
       readSource('../src/features/side-panel/computerUsePanel.ts'),
-      readSource('../src/features/side-panel/cloudRunsPanel.ts'),
-      readSource('../src/features/side-panel/browserToolsPanel.ts'),
     ].join('\n');
     for (const [, tab, controls] of tabs) {
       expect(source).toContain(`id: 'sp-tab-${tab}'`);
@@ -56,24 +46,15 @@ describe('Chrome side-panel interaction accessibility', () => {
         new RegExp(`id: ['\`]${controls}['\`]|panelEl\\.id = '${controls}'`),
       );
     }
-    expect(source).toContain("'aria-labelledby', 'sp-tab-cloud-runs'");
   });
 
   it('keeps the roving tabindex over the whole tab set, not a stale subset', () => {
-    expect(source).toContain(
-      'const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn, pageTabBtn]',
-    );
+    expect(source).toContain('const viewTabs = [chatTabBtn, cuTabBtn]');
     const switchBody = source.slice(
       source.indexOf('function switchTab(tab: SidePanelTab)'),
       source.indexOf("chatTabBtn.addEventListener('click'"),
     );
-    for (const button of [
-      'chatTabBtn',
-      'workflowsTabBtn',
-      'cuTabBtn',
-      'runsTabBtn',
-      'pageTabBtn',
-    ]) {
+    for (const button of ['chatTabBtn', 'cuTabBtn']) {
       expect(switchBody, `${button} has no aria-selected update`).toContain(
         `${button}.setAttribute('aria-selected'`,
       );
@@ -83,29 +64,7 @@ describe('Chrome side-panel interaction accessibility', () => {
 
   it('mounts every panel it declares a tab for, so no tab opens onto nothing', () => {
     expect(source).toContain('document.body.appendChild(cuPanel.panelEl)');
-    expect(source).toContain('document.body.appendChild(runsPanel.panelEl)');
-    expect(source).toContain('document.body.appendChild(pagePanel.panelEl)');
-    expect(source).toContain('buildBrowserToolsPanel()');
-    expect(source).toContain('BROWSER_TOOLS_PANEL_CSS');
-    expect(source).toContain('buildCloudRunsPanel({ fileAccess: answerFileAccess })');
-    expect(source).toContain('CLOUD_RUNS_PANEL_CSS');
-    expect(source).toContain("runsPanel.setActive(tab === 'cloud-runs')");
-  });
-
-  it('keeps the create-shortcut modal contained and restores keyboard focus', () => {
-    expect(source).toContain("'aria-labelledby': 'sp-create-shortcut-title'");
-    expect(source).toContain("'aria-modal': 'true'");
-    expect(source).toContain("createShortcutModal.addEventListener('keydown'");
-    expect(source).toContain("if (event.key === 'Escape')");
-    expect(source).toContain("if (event.key !== 'Tab') return");
-    expect(source).toContain('createShortcutReturnFocus.focus()');
-  });
-
-  it('keeps the create-shortcut dialog open when background persistence is rejected', () => {
-    expect(source).toContain('if (runtimeError || !response?.success)');
-    expect(source).toContain(
-      "response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed')",
-    );
+    expect(source).toContain('document.body.appendChild(chatPanel)');
   });
 });
 

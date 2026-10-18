@@ -240,6 +240,7 @@ function titleMenuItem(label: string): HTMLButtonElement {
 }
 
 beforeEach(async () => {
+  byId('sp-new-chat-btn')!.click();
   chromeMock.sent.length = 0;
   chromeMock.tabs.create.mockClear();
   chromeMock.runtime.openOptionsPage.mockClear();
@@ -263,6 +264,19 @@ describe('top bar', () => {
     expect(byId('sp-tab-workflows')).toBeNull();
     expect(byId('sp-tab-cloud-runs')).toBeNull();
     expect(byId('sp-tab-page')).toBeNull();
+  });
+});
+
+describe('side panel presence', () => {
+  it('announces its window to the background so the in-page launcher can hide', async () => {
+    const connection = chromeMock.runtime.connect.mock.calls.find(
+      ([options]) => (options as { name?: string }).name === 'agi-side-panel',
+    );
+    expect(connection).toBeDefined();
+    const port = chromeMock.runtime.connect.mock.results[
+      chromeMock.runtime.connect.mock.calls.indexOf(connection!)
+    ]!.value as { postMessage: ReturnType<typeof vi.fn> };
+    await vi.waitFor(() => expect(port.postMessage).toHaveBeenCalledWith({ windowId: 1 }));
   });
 });
 
@@ -320,6 +334,48 @@ describe('More popover', () => {
     open(catalogMessage('spMoreHelp', []));
     expect(chromeMock.tabs.create).toHaveBeenCalledOnce();
     expect(moreMenu().hidden).toBe(true);
+  });
+});
+
+describe('More popover Open in web', () => {
+  it('opens the current account chat on the web and is absent for a device-only chat', async () => {
+    const content = 'Open in web fixture question';
+    const conversationId = await saveConversation(account.owner, [
+      { role: 'user', content, timestamp: Date.now(), runtime: 'managed-cloud' },
+    ]);
+    const cloudId = '8b1c1f0e-6a42-4c55-9a41-2f3f6f2f6a11';
+    await recordCloudSyncState(account.owner, conversationId, {
+      conversationId: cloudId,
+      organizationId: null,
+    });
+    try {
+      byId('sp-history-btn')!.click();
+      await vi.waitFor(() => {
+        const restore = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore="true"]'),
+        ).find((button) => button.textContent?.includes(content));
+        expect(restore).toBeDefined();
+        restore!.click();
+      });
+      await vi.waitFor(() => expect(byId('sp-title-row')!.hidden).toBe(false));
+      await vi.waitFor(() =>
+        expect(byId('sp-title-menu')?.textContent).toContain(
+          catalogMessage('spHistoryArchive', []),
+        ),
+      );
+      byId('sp-menu-btn')!.click();
+      const open = Array.from(
+        moreMenu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+      ).find((item) => item.textContent?.trim() === catalogMessage('spHistoryOpenInWeb', []))!;
+      expect(open).toBeDefined();
+      expect(menuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
+      open.click();
+      expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
+        `/chat/${cloudId}`,
+      );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
   });
 });
 

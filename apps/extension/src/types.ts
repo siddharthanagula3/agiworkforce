@@ -65,6 +65,7 @@ export type NativeMessageType =
   | 'AGI_CU_USER_INPUT'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
+  | 'GET_SIDE_PANEL_OPEN'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
   | 'STOP_RECORDING'
@@ -664,6 +665,10 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
 
+export interface GetSidePanelOpenMessage extends BaseMessage {
+  type: 'GET_SIDE_PANEL_OPEN';
+}
+
 export interface GetAccessibilityTreeMessage extends BaseMessage {
   type: 'GET_ACCESSIBILITY_TREE';
 }
@@ -1175,6 +1180,7 @@ export type ExtensionMessage =
   | ResolveChatInputMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
+  | GetSidePanelOpenMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
   | StartRecordingMessage

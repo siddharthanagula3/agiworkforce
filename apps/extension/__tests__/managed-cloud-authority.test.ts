@@ -251,8 +251,6 @@ describe('Managed Cloud account/session authority', () => {
     expect(updateCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
     expect(deleteCase).toContain('normalizeManagedCloudOwner(deleteMessage.owner)');
     expect(deleteCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
-    expect(sidePanelSource).toContain("type: 'LIST_SCHEDULED_TASKS',");
-    expect(sidePanelSource).toContain('...(request.owner ? { owner: request.owner } : {})');
   });
 
   it('routes chat, resume, approval, and in-page auth failures through rejected-owner teardown', () => {

@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { ORIGIN_EXTENSION_PAGE, shouldExecuteScheduledTask } from '../src/background/policy';
 import type { ScheduledTask } from '../src/types';

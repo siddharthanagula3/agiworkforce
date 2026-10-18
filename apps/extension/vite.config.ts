@@ -64,12 +64,14 @@ export default defineConfig(({ mode }) => {
           background: resolve(__dirname, 'src/background.ts'),
           side_panel: resolve(__dirname, 'src/side_panel.ts'),
           options: resolve(__dirname, 'src/options.ts'),
+          welcome: resolve(__dirname, 'src/welcome.ts'),
         },
         output: {
           entryFileNames: (chunk) => {
             if (chunk.name === 'background') return 'src/background.js';
             if (chunk.name === 'side_panel') return 'src/side_panel.js';
             if (chunk.name === 'options') return 'src/options.js';
+            if (chunk.name === 'welcome') return 'src/welcome.js';
             return 'assets/[name]-[hash].js';
           },
           assetFileNames: (asset) => {
@@ -110,6 +112,7 @@ export default defineConfig(({ mode }) => {
           { src: 'src/side_panel.css', dest: 'src' },
           { src: 'src/options.html', dest: 'src' },
           { src: 'src/options.css', dest: 'src' },
+          { src: 'src/welcome.html', dest: 'src' },
         ],
       }),
     ],
