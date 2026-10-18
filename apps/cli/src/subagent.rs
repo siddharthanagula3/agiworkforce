@@ -160,8 +160,10 @@ struct SubagentEntry {
     handle: Option<thread::JoinHandle<()>>,
     /// Shared cancellation flag polled by the subagent.
     /// Set by cancel() and checked by the spawned thread.
-    #[allow(dead_code)]
     cancelled: Arc<std::sync::atomic::AtomicBool>,
+    /// Still running when [`SUBAGENT_WAIT_LIMIT`] ran out. Its thread is left
+    /// to notice the cancel flag on its own; no later wait holds a turn for it.
+    abandoned: bool,
 }
 
 // SubagentEntry contains thread::JoinHandle which is not Debug by default.
@@ -186,6 +188,10 @@ pub const SUBAGENT_MAX_TURNS: usize = 15;
 /// How long `wait_all` sleeps between checking whether subagent threads have
 /// finished. Bounds how long an interrupt waits before the turn task yields.
 const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// The longest one `wait_all` waits for the children still running. A child
+/// stuck in a provider or tool call must not hold the parent's turn.
+const SUBAGENT_WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// Maximum subagent nesting depth. The root interactive session is depth 0; a
 /// subagent it spawns runs at depth 1, and so on. Spawning is refused once a
@@ -547,6 +553,7 @@ impl SubagentManager {
             result,
             handle: Some(handle),
             cancelled,
+            abandoned: false,
         };
 
         self.entries.write().await.insert(id.clone(), entry);
@@ -642,8 +649,11 @@ impl SubagentManager {
     ///
     /// A handle is taken only once its thread has finished, so a cancelled
     /// `wait_all` leaves every unfinished handle in `entries` for a later
-    /// `shutdown_all` to join instead of detaching the thread.
+    /// `shutdown_all` to join instead of detaching the thread. The wait is
+    /// bounded by [`SUBAGENT_WAIT_LIMIT`]: a child still running then is
+    /// cancelled, reported as timed out and not waited for again.
     pub async fn wait_all(&self) -> Vec<(String, SubagentStatus)> {
+        let deadline = std::time::Instant::now() + SUBAGENT_WAIT_LIMIT;
         loop {
             let finished: Vec<(String, thread::JoinHandle<()>)> = {
                 let mut entries = self.entries.write().await;
@@ -677,9 +687,15 @@ impl SubagentManager {
             }
             let outstanding = {
                 let entries = self.entries.read().await;
-                entries.values().any(|entry| entry.handle.is_some())
+                entries
+                    .values()
+                    .any(|entry| entry.handle.is_some() && !entry.abandoned)
             };
             if !outstanding {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                self.abandon_unfinished().await;
                 break;
             }
             tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL).await;
@@ -696,11 +712,39 @@ impl SubagentManager {
         results
     }
 
+    /// Cancel every child whose thread is still running past
+    /// [`SUBAGENT_WAIT_LIMIT`] and report it to the parent as timed out. Its
+    /// handle stays in `entries`; the thread exits once it sees the flag.
+    async fn abandon_unfinished(&self) {
+        let mut entries = self.entries.write().await;
+        for entry in entries.values_mut() {
+            if entry.handle.is_none() || entry.abandoned {
+                continue;
+            }
+            entry.abandoned = true;
+            entry
+                .cancelled
+                .store(true, std::sync::atomic::Ordering::Release);
+            *entry.status.write().await = SubagentStatus::Failed(format!(
+                "Timed out after {}s and was cancelled while still running",
+                SUBAGENT_WAIT_LIMIT.as_secs()
+            ));
+            if !crate::tui::tui_active() {
+                eprintln!(
+                    "  {} Subagent {} timed out and was cancelled",
+                    ts::danger_header("[task]"),
+                    entry.id.bold()
+                );
+            }
+        }
+    }
+
     /// Cancel and join every subagent owned by this parent session.
     ///
     /// App-server shutdown uses this before acknowledging quiescence so an OS
     /// thread (and any tool process tree running inside it) cannot outlive the
-    /// local developer runtime.
+    /// local developer runtime. A thread stuck past [`SUBAGENT_WAIT_LIMIT`] is
+    /// cancelled and left behind rather than holding the shutdown.
     pub async fn shutdown_all(&self) {
         {
             let entries = self.entries.read().await;
@@ -1066,6 +1110,7 @@ mod tests {
                 result: Arc::new(RwLock::new(None)),
                 handle: None,
                 cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                abandoned: false,
             },
         );
     }
@@ -1176,6 +1221,7 @@ mod tests {
                 result: Arc::new(RwLock::new(None)),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
+                abandoned: false,
             },
         );
 
@@ -1220,6 +1266,7 @@ mod tests {
                 result: Arc::new(RwLock::new(None)),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
+                abandoned: false,
             },
         );
 
