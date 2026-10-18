@@ -45,13 +45,27 @@ function request(): NextRequest {
   return new NextRequest(`https://agiworkforce.com${ROUTE}`);
 }
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
 const ASSETS = [
-  { object_reference: 'private-media/image/a/1.png', created_at: '2026-09-16T10:00:00Z' },
-  { object_reference: 'private-media/image/a/2.png', created_at: '2026-09-16T11:00:00Z' },
+  {
+    object_reference: 'private-media/image/a/1.png',
+    row_id: '11111111-1111-4111-8111-111111111111',
+    cursor_at: '2026-09-16T10:00:00.000000Z',
+  },
+  {
+    object_reference: 'private-media/image/a/2.png',
+    row_id: '22222222-2222-4222-8222-222222222222',
+    cursor_at: '2026-09-16T11:00:00.000000Z',
+  },
 ];
 
 const KNOWLEDGE = [
-  { object_reference: 'project-knowledge/p1/brief.pdf', created_at: '2026-09-16T12:00:00Z' },
+  {
+    object_reference: 'project-knowledge/p1/brief.pdf',
+    row_id: '33333333-3333-4333-8333-333333333333',
+    cursor_at: '2026-09-16T12:00:00.000000Z',
+  },
 ];
 
 const TARGET = { store: {}, bucket: 'agi-backup', region: 'us-west-1', endpoint: 'https://backup' };
@@ -140,8 +154,8 @@ describe(`GET ${ROUTE}`, () => {
       replicated: 3,
       crossRegion: true,
       cursors: {
-        media: '2026-09-16T11:00:00.000Z',
-        'project-knowledge': '2026-09-16T12:00:00.000Z',
+        media: `2026-09-16T11:00:00.000000Z|${ASSETS[1]?.row_id}`,
+        'project-knowledge': `2026-09-16T12:00:00.000000Z|${KNOWLEDGE[0]?.row_id}`,
       },
     });
   });
@@ -228,17 +242,35 @@ describe(`GET ${ROUTE}`, () => {
 
     await GET(request());
 
-    expect(mocks.query).toHaveBeenCalledWith(expect.any(String), ['2026-09-16T09:00:00.000Z']);
+    expect(mocks.query).toHaveBeenCalledWith(expect.any(String), [
+      '2026-09-16T09:00:00.000Z',
+      NIL_UUID,
+    ]);
     expect(store.set).toHaveBeenCalledWith(
       'agi-object-backup:cursor',
-      '2026-09-16T11:00:00.000Z',
+      `2026-09-16T11:00:00.000000Z|${ASSETS[1]?.row_id}`,
       expect.objectContaining({ ttlSeconds: expect.any(Number) }),
     );
     expect(store.set).toHaveBeenCalledWith(
       'agi-object-backup:knowledge-cursor',
-      '2026-09-16T12:00:00.000Z',
+      `2026-09-16T12:00:00.000000Z|${KNOWLEDGE[0]?.row_id}`,
       expect.objectContaining({ ttlSeconds: expect.any(Number) }),
     );
+  });
+
+  it('resumes after the last row it replicated, so rows sharing its timestamp are not skipped', async () => {
+    const store = {
+      get: vi.fn(async () => `2026-09-16T09:00:00.000000Z|${ASSETS[0]?.row_id}`),
+      set: vi.fn(async () => true),
+    };
+    mocks.getKeyValueStore.mockReturnValue(store);
+
+    await GET(request());
+
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('(created_at, id) >'), [
+      '2026-09-16T09:00:00.000000Z',
+      ASSETS[0]?.row_id,
+    ]);
   });
 
   it('answers 500 without leaking the failure to the scheduler body', async () => {

@@ -30,7 +30,27 @@ const HOUR_MS = 60 * 60 * 1_000;
 
 interface StoredObjectRow {
   object_reference: string | null;
-  created_at: string;
+  row_id: string;
+  cursor_at: string;
+}
+
+const CURSOR_SEPARATOR = '|';
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+const CURSOR_AT_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
+interface ScanPosition {
+  at: string;
+  id: string;
+}
+
+function parseCursor(value: string): ScanPosition {
+  const separator = value.indexOf(CURSOR_SEPARATOR);
+  if (separator === -1) return { at: value, id: NIL_UUID };
+  return { at: value.slice(0, separator), id: value.slice(separator + 1) };
+}
+
+function formatCursor(position: ScanPosition): string {
+  return `${position.at}${CURSOR_SEPARATOR}${position.id}`;
 }
 
 interface BackupSource {
@@ -49,23 +69,25 @@ const BACKUP_SOURCES: readonly BackupSource[] = [
   {
     id: 'media',
     cursorKey: 'agi-object-backup:cursor',
-    sql: `select storage_pathname as object_reference, created_at
+    sql: `select storage_pathname as object_reference, id::text as row_id,
+                 to_char(created_at at time zone 'utc', ${CURSOR_AT_FORMAT}) as cursor_at
             from public.media_assets
-           where created_at > $1::timestamptz
+           where (created_at, id) > ($1::timestamptz, $2::uuid)
              and deleted_at is null
              and storage_pathname is not null
-           order by created_at asc
+           order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: (reference) => reference,
   },
   {
     id: 'project-knowledge',
     cursorKey: 'agi-object-backup:knowledge-cursor',
-    sql: `select storage_uri as object_reference, created_at
+    sql: `select storage_uri as object_reference, id::text as row_id,
+                 to_char(created_at at time zone 'utc', ${CURSOR_AT_FORMAT}) as cursor_at
             from public.project_knowledge_files
-           where created_at > $1::timestamptz
+           where (created_at, id) > ($1::timestamptz, $2::uuid)
              and storage_uri is not null
-           order by created_at asc
+           order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: objectKeyFromStorageUri,
   },
@@ -126,20 +148,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const target = resolveObjectBackupTarget();
-    const fallbackSince = new Date(Date.now() - LOOKBACK_HOURS * HOUR_MS).toISOString();
+    const fallbackSince: ScanPosition = {
+      at: new Date(Date.now() - LOOKBACK_HOURS * HOUR_MS).toISOString(),
+      id: NIL_UUID,
+    };
     const cursors: Record<string, string> = {};
     let scanned = 0;
     let unreadable = 0;
     let bytes = 0;
 
     for (const source of BACKUP_SOURCES) {
-      const since = (await readCursor(source.cursorKey)) ?? fallbackSince;
+      const stored = await readCursor(source.cursorKey);
+      const since = stored === null ? fallbackSince : parseCursor(stored);
       let cursor = since;
-      const rows = await getNeonDb().query<StoredObjectRow>(source.sql, [since]);
+      const rows = await getNeonDb().query<StoredObjectRow>(source.sql, [since.at, since.id]);
       scanned += rows.length;
 
       for (const row of rows) {
-        cursor = new Date(row.created_at).toISOString();
+        cursor = { at: row.cursor_at, id: row.row_id };
         const key = row.object_reference ? source.toKey(row.object_reference) : null;
         if (!key) {
           unreadable += 1;
@@ -153,8 +179,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       }
 
-      if (rows.length > 0) await writeCursor(source.cursorKey, cursor);
-      cursors[source.id] = cursor;
+      if (rows.length > 0) await writeCursor(source.cursorKey, formatCursor(cursor));
+      cursors[source.id] = formatCursor(cursor);
     }
 
     const reconciled = await reconcileBackupDeletions(MAX_RECONCILED_PER_RUN, { target });
