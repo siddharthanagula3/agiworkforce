@@ -15,7 +15,9 @@ vi.mock('@/lib/logger', () => ({ logger: loggerMock }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: () => ({ stream: streamMock }),
   hasServerProviderKey: (...args: unknown[]) => hasKeyMock(...args),
-  toApiModelId: (id: string) => id,
+}));
+vi.mock('@agiworkforce/provider-protocol', () => ({
+  toProviderApiModelId: (id: string) => id,
 }));
 vi.mock('@agiworkforce/types', () => ({
   getModelMetadataById: (...args: unknown[]) => metadataMock(...args),

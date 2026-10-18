@@ -2,15 +2,15 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { WorkspaceCodeControls } from '@agiworkforce/types';
-
-import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
-import { resolveEffectiveWorkspaceControls } from '@/lib/services/organization-policy-gate';
 import {
   evaluateWorkspaceCodeAct,
   type WorkspaceCodeAct,
+  type WorkspaceCodeControls,
   type WorkspaceCodeDecision,
-} from '@/lib/services/organization-policy-evaluator';
+} from '@agiworkforce/types';
+
+import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
+import { resolveEffectiveWorkspaceControls } from '@/lib/services/organization-policy-gate';
 
 interface ScopedRequest {
   headers: { get(name: string): string | null };

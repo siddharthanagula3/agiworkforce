@@ -99,7 +99,7 @@ function contactOrNull(name: string | null, email: string | null) {
   return name || email ? { name, email } : null;
 }
 
-export function toCommercialAgreement(row: AgreementRow): CommercialAgreement {
+function toCommercialAgreement(row: AgreementRow): CommercialAgreement {
   const policy = row.payment_method_policy;
   if (!isEnterprisePaymentMethodPolicy(policy)) {
     throw new Error(`Commercial agreement ${row.id} carries an unknown payment method policy.`);

@@ -21,7 +21,7 @@ import {
   type EdiscoveryCustodyInput,
   type EdiscoveryFilter,
 } from '../ediscovery-export-service';
-import { LEGAL_HOLD_RESOURCE_TYPES, type LegalHold } from '../retention-service';
+import { LEGAL_HOLD_RESOURCE_TYPES, type LegalHold } from '../legal-hold-gate';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -308,10 +308,26 @@ describe('chain of custody', () => {
         inserts.push(params);
         return [{ id: 'export-1' }];
       }
+      if (/pg_advisory_xact_lock/.test(String(sql))) return [];
       return previous === null ? [] : [{ entry_hash: previous }];
     });
-    return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, inserts };
+    const db = {
+      query,
+      execute: vi.fn(),
+      transaction: async <T>(fn: (tx: DatabaseAdapter) => Promise<T>) => fn(db),
+    } as unknown as DatabaseAdapter;
+    return { db, inserts, query };
   }
+
+  it('serializes appends per workspace before reading the chain tail', async () => {
+    const h = custodyHarness(null);
+    await recordEdiscoveryExport(h.db, custodyInput());
+    const statements = h.query.mock.calls.map(([sql]) => String(sql));
+    const lock = statements.findIndex((sql) => /pg_advisory_xact_lock/.test(sql));
+    const tail = statements.findIndex((sql) => /select entry_hash/.test(sql));
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(lock).toBeLessThan(tail);
+  });
 
   it('starts the chain at the genesis hash for a workspace that never exported', async () => {
     const h = custodyHarness(null);

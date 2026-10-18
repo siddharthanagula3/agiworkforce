@@ -35,7 +35,7 @@ const CONFIG = modelRegistry.policies.auto.semanticResponseAssessment;
 const ANSWER_DEPTH_SET = new Set<string>(ANSWER_DEPTHS);
 const ANSWER_FORMAT_SET = new Set<string>(ANSWER_FORMATS);
 const CLARIFICATION_SET = new Set(['required', 'not_required', 'uncertain']);
-const DAY_SECONDS = 48 * 60 * 60;
+const COUNTER_TTL_SECONDS = 48 * 60 * 60;
 const completed = new Map<string, Promise<SemanticResponseAssessmentOutcome>>();
 let inFlight = 0;
 
@@ -227,7 +227,11 @@ async function reserveDailyInputTokens(
   const day = new Date(nowMs).toISOString().slice(0, 10);
   const key = `routing:response-assessment:input-tokens:${day}`;
   const reserved = CONFIG.limits.maxInputTokensPerRequest;
-  const [current] = await store.batch().increment(key, reserved).expire(key, DAY_SECONDS).exec();
+  const [current] = await store
+    .batch()
+    .increment(key, reserved)
+    .expire(key, COUNTER_TTL_SECONDS)
+    .exec();
   if (typeof current !== 'number' || current > CONFIG.limits.dailyInputTokenCap) {
     await store.increment(key, -reserved);
     return null;
@@ -356,7 +360,12 @@ async function evaluateOnce(
         generationId: result.generationId,
         resolvedProvider: result.resolvedProvider,
       },
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      logger.warn(
+        { error, requestId: input.requestId },
+        'Semantic response assessment cost was not recorded',
+      );
+    });
     if (!parsed) {
       return {
         assessment: null,

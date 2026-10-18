@@ -1,8 +1,9 @@
 import 'server-only';
 
+import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
-import { hasServerProviderKey, toApiModelId } from '@/lib/services/provider-adapter-service';
+import { hasServerProviderKey } from '@/lib/services/provider-adapter-service';
 
 export interface OutputClassifierModel {
   providerId: string;
@@ -52,7 +53,7 @@ function resolveUncached(source: string): OutputClassifierModel | null {
     return null;
   }
 
-  return { providerId, catalogModelId: metadata.id, apiModelId: toApiModelId(metadata.id) };
+  return { providerId, catalogModelId: metadata.id, apiModelId: toProviderApiModelId(metadata.id) };
 }
 
 export function resetOutputClassifierModelCache(): void {

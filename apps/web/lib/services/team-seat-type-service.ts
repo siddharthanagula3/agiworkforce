@@ -56,7 +56,7 @@ export class SeatTypeWaitlistError extends Error {
   }
 }
 
-export const SEAT_BILLING_PERMISSION = 'billing.contracts.manage';
+const SEAT_BILLING_PERMISSION = 'billing.contracts.manage';
 
 const SEAT_BILLING_DENIED_MESSAGE =
   'Only the workspace owner can change what the workspace pays. An admin can assign a Premium seat that is already paid for and not in use. Nothing was changed.';

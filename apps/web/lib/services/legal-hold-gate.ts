@@ -5,6 +5,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   HOLDABLE_RESOURCE_TYPES,
@@ -409,6 +410,11 @@ export async function refuseHeldDeletion(input: {
       resourceId: input.resourceId,
       reason: 'legal_hold',
     },
-  }).catch(() => undefined);
+  }).catch((error: unknown) => {
+    logger.error(
+      { error, resourceType: input.resourceType, resourceId: input.resourceId },
+      '[legal-hold] refused deletion could not be audited',
+    );
+  });
   throw createError.forbidden(HELD_DELETION_REFUSAL);
 }

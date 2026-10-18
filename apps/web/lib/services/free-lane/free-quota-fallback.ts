@@ -47,12 +47,8 @@ const ACCOUNT_REFUSAL_CODES: ReadonlySet<string> = new Set([
 ]);
 
 async function refusedForTheAccount(refusal: Response): Promise<boolean> {
-  const body = (await refusal
-    .clone()
-    .json()
-    .catch(() => null)) as { error?: { code?: unknown } } | null;
-  const code = body?.error?.code;
-  return typeof code === 'string' && ACCOUNT_REFUSAL_CODES.has(code);
+  const code = await refusalCode(refusal);
+  return code !== null && ACCOUNT_REFUSAL_CODES.has(code);
 }
 
 const ReplayedFreeAutoTurnSchema = z.looseObject({

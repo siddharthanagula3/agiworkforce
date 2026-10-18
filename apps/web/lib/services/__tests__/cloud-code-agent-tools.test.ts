@@ -92,6 +92,16 @@ describe('classifyCommandRisk', () => {
     }
   });
 
+  it('does not read a process environment unattended through a read-only command', () => {
+    for (const command of [
+      'cat /proc/self/environ',
+      'grep KEY /proc/1/environ',
+      'head /proc/thread-self/environ',
+    ]) {
+      expect(classifyCommandRisk(command).risk).toBe('requires_approval');
+    }
+  });
+
   it('fails closed on anything it does not positively recognize', () => {
     const result = classifyCommandRisk('some-unknown-binary --do-a-thing');
     expect(result.risk).toBe('requires_approval');

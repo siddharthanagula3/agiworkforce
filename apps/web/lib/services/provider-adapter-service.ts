@@ -112,8 +112,6 @@ export interface ServerProviderAdapterOptions {
   apiKey?: string;
 }
 
-export const toApiModelId = toProviderApiModelId;
-
 function resolveServerProviderApiKey(providerId: string): string | undefined {
   const envPrefix = SERVER_PROVIDER_CONFIG[providerId]?.envPrefix;
   if (!envPrefix) return undefined;

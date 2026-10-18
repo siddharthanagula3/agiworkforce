@@ -7,9 +7,8 @@
  *
  * Pure function: no DB access, no network I/O. Every input is either passed
  * in by the caller (tier, surface, the deployment E2B flag the route already
- * resolves) or read from the static model catalog. This intentionally does
- * NOT reuse `lib/services/README.md`'s `DatabaseAdapter` pattern, it has no
- * user-scoped query to make; the route resolves the entitled plan through
+ * resolves) or read from the static model catalog. It makes no user-scoped
+ * query; the route resolves the entitled plan through
  * `entitlement-resolution.ts` and passes the primitive value in.
  *
  * ## Layer sourcing (real data only, no fabricated capabilities)
@@ -152,8 +151,8 @@ function buildSettingsLayerGrant(
     granted.delete(capability);
     denialReasons[capability] = 'disabled_by_workspace';
   }
-  for (const capability of closedCapabilities) granted.delete(capability);
   for (const capability of closedCapabilities) {
+    granted.delete(capability);
     denialReasons[capability] = 'temporarily_unavailable';
   }
   const sources = [
@@ -215,7 +214,7 @@ export interface CapabilityLimitResets {
   rollingWeeklyResetsAt: string | null;
 }
 
-export const NO_CAPABILITY_LIMIT_RESETS: CapabilityLimitResets = {
+const NO_CAPABILITY_LIMIT_RESETS: CapabilityLimitResets = {
   billingPeriodEndsAt: null,
   rollingFiveHourResetsAt: null,
   rollingWeeklyResetsAt: null,

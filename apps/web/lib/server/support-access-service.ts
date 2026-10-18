@@ -346,6 +346,11 @@ export function supportAccessEntryHash(
 }
 
 async function appendEvent(tx: DatabaseAdapter, input: SupportAccessEventInput): Promise<string> {
+  // Two appends that read the same tail would both link to it and fork the chain.
+  await tx.query(
+    `select pg_advisory_xact_lock(hashtextextended('agi:support-access-chain:' || $1, 0))`,
+    [input.organizationId],
+  );
   const [previous] = await tx.query<{ entry_hash: string }>(
     `select entry_hash from public.support_access_events
       where organization_id = $1

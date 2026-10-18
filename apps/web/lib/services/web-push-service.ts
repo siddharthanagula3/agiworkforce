@@ -237,9 +237,7 @@ function vapidAuthorization(endpoint: string, vapid: VapidCredentials): string {
   return `vapid t=${signingInput}.${base64UrlEncode(signature)}, k=${base64UrlEncode(vapid.publicKey)}`;
 }
 
-export async function getWebPushSubscriptionsForUser(
-  userId: string,
-): Promise<WebPushSubscription[]> {
+async function getWebPushSubscriptionsForUser(userId: string): Promise<WebPushSubscription[]> {
   const rows = await getNeonDb().query<SubscriptionRow>(
     `select endpoint, p256dh, auth
        from public.web_push_subscriptions

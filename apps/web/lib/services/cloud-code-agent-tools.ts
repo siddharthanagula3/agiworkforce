@@ -208,6 +208,12 @@ const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string; destructive: b
     reason: 'Changes file permissions or ownership.',
     destructive: false,
   },
+  {
+    pattern: /\/proc\/[^\s/]+\/environ\b/,
+    reason:
+      'Reads the environment of a process, which holds the credentials the sandbox was given.',
+    destructive: false,
+  },
 ];
 
 function isDestructiveCommand(command: string): boolean {

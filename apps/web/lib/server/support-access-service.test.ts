@@ -128,6 +128,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
     if (sql.includes('insert into public.support_access_grants')) {
       return [insertGrant(params)] as never[];
     }
+    if (sql.includes('pg_advisory_xact_lock')) return [] as never[];
     if (sql.includes('select entry_hash from public.support_access_events')) {
       const own = events.filter((row) => row.organization_id === params[0]);
       const last = own.at(-1);

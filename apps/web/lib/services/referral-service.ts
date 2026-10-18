@@ -88,7 +88,7 @@ function toTime(value: string | Date | null | undefined): number | null {
   return Number.isFinite(time) ? time : null;
 }
 
-export function referralSignupBlockReason(input: {
+function referralSignupBlockReason(input: {
   friendEmail: string | null;
   referrerEmail: string | null;
   friendNetworkHash: string | null;

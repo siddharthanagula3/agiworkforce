@@ -12,10 +12,10 @@ vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { BILLING_PLAN_CAPABILITY_TIERS } from '@agiworkforce/types';
+import { listLegalHolds } from '../legal-hold-gate';
 import {
   createLegalHold,
   isSwept,
-  listLegalHolds,
   readRetentionBacklog,
   releaseLegalHold,
   sweepOrganizationRetention,

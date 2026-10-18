@@ -12,9 +12,9 @@ import {
   type HoldRow,
   type LegalHold,
   type LegalHoldResourceType,
-} from './retention-service';
+} from './legal-hold-gate';
 
-export const EDISCOVERY_PAGE_SIZE = 500;
+const EDISCOVERY_PAGE_SIZE = 500;
 
 export type EdiscoveryRecordType = 'hold' | LegalHoldResourceType;
 
@@ -423,52 +423,60 @@ export async function recordEdiscoveryExport(
   db: DatabaseAdapter,
   input: EdiscoveryCustodyInput,
 ): Promise<EdiscoveryCustodyRecord> {
-  const [previous] = await db.query<{ entry_hash: string }>(
-    `select entry_hash from public.ediscovery_exports
-      where organization_id = $1
-      order by completed_at desc, id desc
-      limit 1`,
-    [input.organizationId],
-  );
-  const previousHash = previous?.entry_hash ?? EDISCOVERY_GENESIS_HASH;
-  const entryHash = ediscoveryCustodyHash(previousHash, input);
+  return db.transaction(async (tx) => {
+    // Two exports that read the same tail would both link to it and fork the chain.
+    await tx.query(
+      `select pg_advisory_xact_lock(hashtextextended('agi:ediscovery-custody:' || $1, 0))`,
+      [input.organizationId],
+    );
+    const [previous] = await tx.query<{ entry_hash: string }>(
+      `select entry_hash from public.ediscovery_exports
+        where organization_id = $1
+        order by completed_at desc, id desc
+        limit 1`,
+      [input.organizationId],
+    );
+    const previousHash = previous?.entry_hash ?? EDISCOVERY_GENESIS_HASH;
+    const entryHash = ediscoveryCustodyHash(previousHash, input);
 
-  const [row] = await db.query<{ id: string }>(
-    `insert into public.ediscovery_exports
-       (organization_id, hold_id, hold_name, requested_by_user_id, requested_via, filter,
-        manifest, record_count, byte_count, content_digest, outcome, error, started_at,
-        completed_at, previous_hash, entry_hash)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-     returning id`,
-    [
-      input.organizationId,
-      input.holdId,
-      input.holdName,
-      input.requestedByUserId,
-      input.requestedVia,
-      JSON.stringify(input.filter),
-      JSON.stringify(input.manifest ?? {}),
-      input.manifest?.records ?? 0,
-      input.manifest?.bytes ?? 0,
-      input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
-      input.outcome,
-      input.error,
-      input.startedAt,
-      input.completedAt,
+    const [row] = await tx.query<{ id: string }>(
+      `insert into public.ediscovery_exports
+         (organization_id, hold_id, hold_name, requested_by_user_id, requested_via, filter,
+          manifest, record_count, byte_count, content_digest, outcome, error, started_at,
+          completed_at, previous_hash, entry_hash)
+       values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15,
+               $16)
+       returning id`,
+      [
+        input.organizationId,
+        input.holdId,
+        input.holdName,
+        input.requestedByUserId,
+        input.requestedVia,
+        JSON.stringify(input.filter),
+        JSON.stringify(input.manifest ?? {}),
+        input.manifest?.records ?? 0,
+        input.manifest?.bytes ?? 0,
+        input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
+        input.outcome,
+        input.error,
+        input.startedAt,
+        input.completedAt,
+        previousHash,
+        entryHash,
+      ],
+    );
+
+    return {
+      ...input,
+      id: row?.id ?? '',
+      records: input.manifest?.records ?? 0,
+      bytes: input.manifest?.bytes ?? 0,
+      contentDigest: input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
       previousHash,
       entryHash,
-    ],
-  );
-
-  return {
-    ...input,
-    id: row?.id ?? '',
-    records: input.manifest?.records ?? 0,
-    bytes: input.manifest?.bytes ?? 0,
-    contentDigest: input.manifest?.sha256 ?? EDISCOVERY_GENESIS_HASH,
-    previousHash,
-    entryHash,
-  };
+    };
+  });
 }
 
 export async function readLegalHold(

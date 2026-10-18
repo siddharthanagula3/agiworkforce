@@ -5,7 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
-import { countActiveLegalHolds } from '@/lib/services/retention-service';
+import { countActiveLegalHolds } from '@/lib/services/legal-hold-gate';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,

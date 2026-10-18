@@ -13,14 +13,15 @@ import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
-import { legalHoldExclusion, legalHoldPredicate } from './legal-hold-gate';
 import {
   holdCovers,
+  legalHoldExclusion,
+  legalHoldPredicate,
   listLegalHolds,
   type LegalHold,
   type LegalHoldResourceType,
-  type RetentionSweepOutcome,
-} from './retention-service';
+} from './legal-hold-gate';
+import type { RetentionSweepOutcome } from './retention-service';
 import { readOrganizationPolicy, readWorkspaceCodeControls } from './organization-policy-service';
 
 // A hold names resource types; a domain with no such type stays held by every hold.

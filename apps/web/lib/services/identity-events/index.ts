@@ -270,10 +270,7 @@ export async function readOpenCompromiseResponse(
  * rather than asserted by the caller: the provider says when this session
  * started, and the sweep says what is left signed in.
  */
-export const COMPROMISE_RESOLUTION_STEPS = [
-  'fresh_authentication',
-  'other_sessions_ended',
-] as const;
+const COMPROMISE_RESOLUTION_STEPS = ['fresh_authentication', 'other_sessions_ended'] as const;
 
 export type CompromiseResolutionStep = (typeof COMPROMISE_RESOLUTION_STEPS)[number];
 
