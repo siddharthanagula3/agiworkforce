@@ -65,35 +65,9 @@ export {
   formatFileName,
 } from './format';
 
-export {
-  validateEmail,
-  validateUrl,
-  validateFilePath,
-  validatePassword,
-  validateApiKey,
-  validateJson,
-  validateSqlQuery,
-  sanitizeCommandArgs,
-  checkForInjection,
-  type ValidationResult,
-  type PasswordValidationResult,
-} from './validation';
+export { validateEmail, validateUrl, type ValidationResult } from './validation';
 
-export {
-  sleep,
-  sleepWithAbort,
-  debounce,
-  throttle,
-  retry,
-  retryWithStrategy,
-  retryStrategies,
-  makeRetriable,
-  withTimeout,
-  retryBatch,
-  RetryError,
-  AbortError,
-  type RetryOptions,
-} from './async';
+export { debounce, withTimeout, AbortError } from './async';
 
 export {
   runWithRetryPolicy,
@@ -154,7 +128,6 @@ export {
   getFriendlyError,
   formatErrorForChat,
   getErrorMessage,
-  withErrorHandling,
   ErrorCode,
 } from './errors';
 
@@ -162,20 +135,7 @@ export type { ApiError, FriendlyError, ErrorCodeValue } from './errors';
 
 export * from './voice';
 
-export {
-  generateToken,
-  generateUUID,
-  sha256,
-  sha1,
-  generateNumericCode,
-  generateShortId,
-  hmacSha256,
-  timingSafeEqual,
-} from './crypto';
-
-export { measureAsync, measureSync, PerformanceTracker } from './performance';
-
-export type { MeasureResult, PerformanceMetrics } from './performance';
+export { sha256, timingSafeEqual } from './crypto';
 
 export { SENSITIVE_FILE_PATTERNS, isSensitiveFile, matchSensitivePattern } from './sensitiveFiles';
 

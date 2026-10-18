@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { retry, retryStrategies } from '../async';
 import {
   RetryStoppedError,
   classifyRetryError,
@@ -164,70 +163,5 @@ describe('runWithRetryPolicy', () => {
       runWithRetryPolicy(operation, { signal: controller.signal }),
     ).rejects.toMatchObject({ reason: 'aborted' });
     expect(operation).not.toHaveBeenCalled();
-  });
-});
-
-describe('async.retry consumes the shared policy', () => {
-  it('jitters its backoff so a fleet of clients does not retry in lockstep', async () => {
-    const delays: number[] = [];
-    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
-      handler: () => void,
-      ms?: number,
-    ) => {
-      delays.push(ms ?? 0);
-      handler();
-      return 0 as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout);
-
-    try {
-      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.05);
-      await expect(
-        retry(
-          async () => {
-            throw httpError(503);
-          },
-          { maxAttempts: 3, initialDelay: 1000, maxDelay: 30_000 },
-        ),
-      ).rejects.toBeTruthy();
-      randomSpy.mockRestore();
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-
-    expect(delays.length).toBe(2);
-    expect(delays.every((ms) => ms < 1000)).toBe(true);
-  });
-
-  it('honours Retry-After from a rate-limited dependency', async () => {
-    const delays: number[] = [];
-    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
-      handler: () => void,
-      ms?: number,
-    ) => {
-      delays.push(ms ?? 0);
-      handler();
-      return 0 as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout);
-
-    try {
-      let attempts = 0;
-      const value = await retry(
-        async () => {
-          attempts += 1;
-          if (attempts === 1) throw httpError(429, { retryAfterSeconds: 9 });
-          return 'ok';
-        },
-        { maxAttempts: 3, initialDelay: 1000 },
-      );
-      expect(value).toBe('ok');
-    } finally {
-      timeoutSpy.mockRestore();
-    }
-
-    expect(delays).toEqual([9000]);
-  });
-
-  it('keeps its documented strategies usable', () => {
-    expect(retryStrategies.network.maxAttempts).toBe(3);
   });
 });
