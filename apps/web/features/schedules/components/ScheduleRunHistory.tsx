@@ -1,6 +1,6 @@
 'use client';
 
-import { ApprovalCard, Badge, Button, Skeleton } from '@agiworkforce/ui';
+import { ApprovalCard, Badge, Button, Skeleton, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import type { ManagedCloudScheduleRunApproval } from '@agiworkforce/cloud-contracts';
 import {
@@ -256,12 +256,7 @@ export function ScheduleRunHistory({
           disabled={state.loadingMore}
           aria-busy={state.loadingMore}
         >
-          {state.loadingMore && (
-            <Loader2
-              className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-          )}
+          {state.loadingMore && <Spinner size="sm" className="me-2" aria-hidden="true" />}
           {state.loadingMore ? 'Loading More…' : 'Load More Runs'}
         </Button>
       )}

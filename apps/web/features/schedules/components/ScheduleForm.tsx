@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useSyncExternalStore } from 'react';
-import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
+import { Button, Input, Label, Spinner, Switch, Textarea } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
 } from '@agiworkforce/cloud-contracts';
 import { formatCredits } from '@agiworkforce/types';
-import { CalendarClock, Loader2 } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import type { ScheduleModelOption } from '@/lib/schedules/schedule-models';
@@ -765,10 +765,7 @@ export function ScheduleForm({
         </Button>
         <Button type="submit" disabled={saving} aria-busy={saving}>
           {saving ? (
-            <Loader2
-              className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
+            <Spinner size="sm" className="me-2" aria-hidden="true" />
           ) : (
             <CalendarClock className="me-2 h-4 w-4" aria-hidden="true" />
           )}

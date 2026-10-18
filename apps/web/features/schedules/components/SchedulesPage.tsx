@@ -34,7 +34,6 @@ import {
   CalendarClock,
   Copy,
   LayoutTemplate,
-  Loader2,
   MessageSquarePlus,
   Plus,
   RotateCcw,
@@ -1122,10 +1121,7 @@ export function SchedulesPage({
                   aria-busy={loadingMoreSchedules}
                 >
                   {loadingMoreSchedules && (
-                    <Loader2
-                      className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
+                    <Spinner size="sm" className="me-2" aria-hidden="true" />
                   )}
                   {loadingMoreSchedules
                     ? 'Loading More…'

@@ -1,15 +1,10 @@
 /**
- * Mobile GenAI Content-Report Intake API
+ * GenAI content-report intake.
  *
- * POST /api/mobile/content-report, accepts trust-and-safety reports of
- * harmful / inaccurate AI-generated content from the mobile app's report sheet
- * (apps/mobile/services/contentReport.ts).
- *
- * Before this route existed the mobile report sheet had no server sink: reports
- * were stored on-device and, at most, handed to the device mail client
- * (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01). This route is the durable
- * intake, writing into public.content_reports (db/neon/0093_content_reports.sql).
- * The mobile client keeps its on-device copy as an OFFLINE fallback only.
+ * POST /api/mobile/content-report, and the web alias /api/content-report,
+ * accept trust-and-safety reports of harmful / inaccurate AI-generated content
+ * and write them into public.content_reports. The mobile client keeps its
+ * on-device copy as an OFFLINE fallback only.
  *
  * user_id is intentionally optional: reporting is reachable from both Local and
  * Cloud mode, and a Local-only user with no Cloud account must still be able to
@@ -26,6 +21,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getOptionalAuthUser } from '@/lib/api-auth';
+
+const MOBILE_INTAKE_PATH = '/api/mobile/';
 
 const ContentReportSchema = z.object({
   reportId: z.string().trim().min(1).max(128),
@@ -51,6 +48,7 @@ async function handleSubmitContentReport(request: NextRequest) {
   const { reportId, messageId, conversationId, category, contentExcerpt, userNote } = parsed.data;
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
+  const source = new URL(request.url).pathname.startsWith(MOBILE_INTAKE_PATH) ? 'mobile' : 'web';
 
   const db = getNeonDb();
   try {
@@ -67,11 +65,11 @@ async function handleSubmitContentReport(request: NextRequest) {
         category,
         contentExcerpt,
         userNote,
-        JSON.stringify({ source: 'mobile', category }),
+        JSON.stringify({ source, category }),
       ],
     );
   } catch (error) {
-    logger.error({ error, userId, category }, 'Failed to store mobile content report');
+    logger.error({ error, userId, category, source }, 'Failed to store content report');
     throw createError.internal('Failed to submit content report');
   }
 

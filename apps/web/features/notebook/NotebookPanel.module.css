@@ -48,22 +48,6 @@
   cursor: not-allowed;
 }
 
-.spin {
-  animation: notebookSpin 0.85s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
-}
-
-@keyframes notebookSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .cells {
   display: flex;
   flex-direction: column;

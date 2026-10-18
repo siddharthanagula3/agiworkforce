@@ -38,8 +38,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import { POST } from '../route';
 
-function makeRequest(body: unknown) {
-  return new Request('http://localhost:3000/api/mobile/content-report', {
+function makeRequest(body: unknown, path = '/api/mobile/content-report') {
+  return new Request(`http://localhost:3000${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -81,6 +81,16 @@ describe('POST /api/mobile/content-report', () => {
         expect.stringContaining('"source":"mobile"'),
       ],
     );
+  });
+
+  it('records a report filed through the web alias as a web report', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
+    const res = await POST(makeRequest(validBody, '/api/content-report'));
+
+    expect(res.status).toBe(200);
+    const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+    expect(JSON.parse(params[7] as string)).toEqual({ source: 'web', category: 'harmful' });
   });
 
   it('is idempotent on the client report id (on conflict do nothing)', async () => {

@@ -156,7 +156,7 @@ function SignalRow({ signal }: { signal: PostureSignal }) {
 
 function SkeletonCard() {
   return (
-    <div style={cardStyle} className="animate-pulse">
+    <div style={cardStyle} className="motion-safe:animate-pulse">
       <div
         className="h-11 border-b"
         style={{ borderColor: 'var(--settings-border)', background: 'var(--bg-hover)' }}

@@ -1,19 +1,13 @@
 'use client';
 
 /**
- * WebAppShell · persistent app-shell chrome (sidebar + content area) for
- * secondary authenticated web surfaces that are NOT the chat page, currently
- * the Projects hub (`/chat/projects`) and project detail (`/chat/projects/[id]`).
- *
- * Why this exists: those routes previously rendered bare `<main>` pages with a
- * back-arrow and no sidebar, so navigating to Projects dropped the user out of
- * the product shell. This wrapper mounts the same shared `@agiworkforce/ui`
- * <Sidebar> the live chat page uses (recents, projects, new-chat, search,
- * brand wordmark, account footer) so those routes stay inside the shell.
+ * WebAppShell · persistent app-shell chrome (sidebar + content area) for the
+ * authenticated web surfaces that are NOT the chat page. It mounts the same
+ * shared `@agiworkforce/ui` <Sidebar> the chat page uses, so those routes stay
+ * inside the product shell.
  *
  * The chat page (`WebChatPage`) keeps its own richer Sidebar wiring (streaming
- * state, dialogs, etc.) and is intentionally NOT refactored onto this shell.
- * this is the light-weight, navigation-focused variant for the project surfaces.
+ * state, dialogs, etc.); this is the navigation-focused variant.
  *
  * Project data is loaded through the account-scoped managed-cloud session.
  * Signed-out visits never fire authenticated project requests and never reuse
@@ -442,8 +436,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [openAfterMobileNavClose],
   );
 
-  // The shortcuts dialog on this shell lists four chords that only the chat
-  // page used to bind. A surface with no rail leaves Cmd/Ctrl+B unclaimed.
+  // A surface with no rail leaves Cmd/Ctrl+B unclaimed.
   useKeyboardShortcuts({
     onNewChat: handleNewChat,
     onSearch: handleOpenSearch,
@@ -519,10 +512,13 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       aria-label="Loading account"
       className="flex w-full items-center gap-2 px-3 py-3"
     >
-      <span className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" aria-hidden />
+      <span
+        className="h-7 w-7 shrink-0 motion-safe:animate-pulse rounded-full bg-muted"
+        aria-hidden
+      />
       <span className="flex min-w-0 flex-1 flex-col gap-1.5" aria-hidden>
-        <span className="h-3 w-24 animate-pulse rounded-compact bg-muted" />
-        <span className="h-2.5 w-32 animate-pulse rounded-compact bg-muted/70" />
+        <span className="h-3 w-24 motion-safe:animate-pulse rounded-compact bg-muted" />
+        <span className="h-2.5 w-32 motion-safe:animate-pulse rounded-compact bg-muted/70" />
       </span>
       <span className="sr-only">Loading account…</span>
     </div>

@@ -1,8 +1,8 @@
 'use client';
 
-import { translateUiPlural } from '@agiworkforce/ui';
+import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import { ChangeEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Download, Loader2, Play, Plus, Upload } from 'lucide-react';
+import { Download, Play, Plus, Upload } from 'lucide-react';
 import type { CloudCodeSession, NotebookCellLanguage } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import { notebookApi, type NotebookApi, type NotebookFile } from './services/notebook-api';
@@ -136,11 +136,11 @@ export function NotebookPanel({
           disabled={disabled || !cells.some(isRunnableCell)}
           onClick={() => void handleRunAll()}
         >
-          {runningAll ? <Loader2 className={styles['spin']} size={13} /> : <Play size={13} />}
+          {runningAll ? <Spinner className="h-[13px] w-[13px]" /> : <Play size={13} />}
           Run all
         </button>
         <label className={styles['toolbarButton']} htmlFor={fileInputId}>
-          {uploading ? <Loader2 className={styles['spin']} size={13} /> : <Upload size={13} />}
+          {uploading ? <Spinner className="h-[13px] w-[13px]" /> : <Upload size={13} />}
           Upload file
         </label>
         <input

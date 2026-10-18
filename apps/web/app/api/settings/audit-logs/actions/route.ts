@@ -38,26 +38,7 @@ async function handleGetActions(request: NextRequest) {
       [userId],
     );
 
-    const knownActions = [
-      'login',
-      'logout',
-      'settings_change',
-      'api_call',
-      'chat_session',
-      'payment',
-      'api_key_created',
-      'api_key_revoked',
-      'password_changed',
-      'two_factor_enabled',
-      'two_factor_disabled',
-      'two_factor_backup_codes_regenerated',
-      'session_expired',
-    ];
-
-    const fromDb = rows.map((r) => r.event_type);
-    const merged = Array.from(new Set([...knownActions, ...fromDb])).sort();
-
-    return NextResponse.json({ actions: merged });
+    return NextResponse.json({ actions: rows.map((r) => r.event_type) });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch audit log actions');
     throw createError.internal('Failed to fetch audit log actions');
