@@ -534,6 +534,37 @@ describe('NativeSignInCard', () => {
     expect(String(openExternalUrl.mock.calls[0]?.[0])).toMatch(/\/login$/);
   });
 
+  it('uses the existing web sign-in owner when the native provider callback is not authorized', async () => {
+    social.beginSocialSignIn.mockRejectedValue(
+      new ClerkAuthError('unexpected', 'Redirect url mismatch', {
+        status: 400,
+        clerkCode: 'resource_missmatch',
+      }),
+    );
+    const onSuccess = vi.fn();
+    render(<NativeSignInCard onSuccess={onSuccess} />);
+    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));
+
+    await waitFor(() => expect(browserSignIn).toHaveBeenCalledWith('', ''));
+    expect(onSuccess).toHaveBeenCalledOnce();
+    expect(completeNativeSignIn).not.toHaveBeenCalled();
+    expect(screen.queryByText('Redirect url mismatch')).not.toBeInTheDocument();
+  });
+
+  it('keeps provider rate limits visible without starting another sign-in route', async () => {
+    social.beginSocialSignIn.mockRejectedValue(
+      new ClerkAuthError('rate_limited', 'Wait before trying again.', {
+        status: 429,
+        clerkCode: 'too_many_requests',
+      }),
+    );
+    render(<NativeSignInCard />);
+    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Wait before trying again.');
+    expect(browserSignIn).not.toHaveBeenCalled();
+  });
+
   it('shows a pending state with a cancel for social sign-in', async () => {
     social.beginSocialSignIn.mockResolvedValue({
       signIn: signIn({ status: 'needs_first_factor', createdSessionId: null }),

@@ -137,18 +137,6 @@ pub fn run() {
         }
     }
 
-    let _telemetry_guard = match telemetry::init() {
-        Ok(guard) => Some(guard),
-        Err(e) => {
-            eprintln!(
-                "Failed to initialize telemetry: {}. Continuing without telemetry.",
-                e
-            );
-
-            None
-        }
-    };
-
     std::panic::set_hook(Box::new(|info| {
         let location = info
             .location()
@@ -173,6 +161,23 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_running_instance(app);
         }))
+        .plugin(
+            tauri::plugin::Builder::<_, ()>::new("telemetry")
+                .setup(|app, _| {
+                    let app_data_dir = app.path().app_data_dir()?;
+                    crate::sys::utils::set_app_data_dir(app_data_dir);
+                    match telemetry::init() {
+                        Ok(guard) => {
+                            app.manage(Mutex::new(guard));
+                        }
+                        Err(error) => {
+                            eprintln!("Failed to initialize telemetry: {error}. Continuing without telemetry.");
+                        }
+                    }
+                    Ok(())
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
