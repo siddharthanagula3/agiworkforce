@@ -879,8 +879,8 @@ fn export_document(
         .map_err(|e| format!("Failed to serialize export data: {}", e))
 }
 
-/// The main database alone, as the export writes it.
-pub fn export_local_user_data(conn: &Connection) -> Result<String, String> {
+#[cfg(test)]
+fn export_local_user_data(conn: &Connection) -> Result<String, String> {
     export_document(export_tables(conn)?, serde_json::Map::new())
 }
 
@@ -987,16 +987,7 @@ fn is_artefact_path_column(name: &str) -> bool {
 }
 
 fn artefact_path_columns(conn: &Connection, table: &str) -> Result<Vec<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info(\"{}\")", table))
-        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?;
-    let columns = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to read columns of {}: {}", table, e))?;
-
-    Ok(columns
+    Ok(table_columns(conn, table)?
         .into_iter()
         .filter(|name| is_safe_identifier(name) && is_artefact_path_column(name))
         .collect())

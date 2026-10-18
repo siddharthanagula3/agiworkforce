@@ -515,80 +515,6 @@ pub fn init_global_shortcuts(app: &AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn shortcuts_register(
-    shortcut: Shortcut,
-    app: AppHandle,
-    state: State<'_, Arc<Mutex<ShortcutsState>>>,
-) -> Result<(), String> {
-    let mut shortcut = shortcut;
-    shortcut.key = normalize_accelerator_for_platform(&shortcut.key);
-    if shortcut.key.is_empty() {
-        return Err("Shortcut key cannot be empty".to_string());
-    }
-
-    tracing::info!(
-        "Registering shortcut: {} -> {} (global: {})",
-        shortcut.key,
-        shortcut.action,
-        shortcut.is_global
-    );
-
-    let shortcuts_state = state.lock().await;
-
-    // Register as global shortcut if marked as global
-    if shortcut.is_global && shortcut.enabled {
-        register_global_shortcut(&app, &shortcut.key, shortcut.action.clone())?;
-    }
-
-    let mut shortcuts = shortcuts_state.shortcuts.lock().await;
-    shortcuts.insert(shortcut.id.clone(), shortcut.clone());
-
-    let mut registered = shortcuts_state.registered_keys.lock().await;
-    registered.push(shortcut.key.clone());
-
-    app.emit("shortcut_registered", shortcut)
-        .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn shortcuts_unregister(
-    shortcut_id: String,
-    app: AppHandle,
-    state: State<'_, Arc<Mutex<ShortcutsState>>>,
-) -> Result<(), String> {
-    tracing::info!("Unregistering shortcut: {}", shortcut_id);
-
-    let shortcuts_state = state.lock().await;
-    let mut shortcuts = shortcuts_state.shortcuts.lock().await;
-
-    if let Some(shortcut) = shortcuts.remove(&shortcut_id) {
-        // Unregister from system if it was a global shortcut
-        if shortcut.is_global {
-            let _ = unregister_global_shortcut(&app, &shortcut.key);
-        }
-
-        let mut registered = shortcuts_state.registered_keys.lock().await;
-        registered.retain(|k| k != &shortcut.key);
-
-        app.emit("shortcut_unregistered", shortcut_id)
-            .map_err(|e| format!("Failed to emit event: {}", e))?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn shortcuts_list(
-    state: State<'_, Arc<Mutex<ShortcutsState>>>,
-) -> Result<Vec<Shortcut>, String> {
-    let shortcuts_state = state.lock().await;
-    let shortcuts = shortcuts_state.shortcuts.lock().await;
-    Ok(shortcuts.values().cloned().collect())
-}
-
-#[tauri::command]
 pub async fn shortcuts_update(
     shortcut_id: String,
     new_key: Option<String>,
@@ -669,16 +595,6 @@ pub async fn shortcuts_update(
 }
 
 #[tauri::command]
-pub async fn shortcuts_trigger(action: String, app: AppHandle) -> Result<(), String> {
-    tracing::info!("Triggering shortcut action: {}", action);
-
-    app.emit("shortcut_action", action)
-        .map_err(|e| format!("Failed to emit event: {}", e))?;
-
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn shortcuts_reset(
     app: AppHandle,
     state: State<'_, Arc<Mutex<ShortcutsState>>>,
@@ -720,39 +636,6 @@ pub async fn shortcuts_reset(
         .map_err(|e| format!("Failed to emit event: {}", e))?;
 
     Ok(result)
-}
-
-#[tauri::command]
-pub async fn shortcuts_check_key(
-    key: String,
-    state: State<'_, Arc<Mutex<ShortcutsState>>>,
-) -> Result<bool, String> {
-    let normalized_key = normalize_accelerator_for_platform(&key);
-    if normalized_key.is_empty() {
-        return Ok(false);
-    }
-
-    let shortcuts_state = state.lock().await;
-    let shortcuts = shortcuts_state.shortcuts.lock().await;
-
-    let is_registered = shortcuts.values().any(|s| s.key == normalized_key);
-    Ok(is_registered)
-}
-
-#[tauri::command]
-pub async fn shortcuts_get_defaults() -> Result<Vec<Shortcut>, String> {
-    let defaults = ShortcutsState::with_defaults();
-    let shortcuts = defaults.shortcuts.lock().await;
-    Ok(shortcuts.values().cloned().collect())
-}
-
-#[tauri::command]
-pub async fn shortcuts_apply_quick_query_preferences(
-    preferences: QuickQueryHotkeyPreferences,
-    app: AppHandle,
-    state: State<'_, Arc<Mutex<ShortcutsState>>>,
-) -> Result<Shortcut, String> {
-    apply_quick_query_hotkey_preferences(&app, &state, preferences).await
 }
 
 /// Command to register global shortcuts from frontend

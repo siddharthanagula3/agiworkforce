@@ -1,8 +1,7 @@
 use crate::sys::error::Result;
 use crate::sys::security::{
-    create_tool_execution_event, create_workflow_execution_event, ApprovalAction, ApprovalDecision,
-    ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent, AuditFilters,
-    AuditIntegrityReport, AuditLogger, AuditStatus,
+    ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalWorkflow, AuditEvent,
+    AuditFilters, AuditIntegrityReport, AuditLogger,
 };
 use tauri::State;
 
@@ -20,121 +19,11 @@ pub async fn get_audit_events(
 }
 
 #[tauri::command]
-pub async fn verify_audit_event(event_id: String, db: State<'_, AppDatabase>) -> Result<bool> {
-    let conn = db.conn.clone();
-    let logger = AuditLogger::new(conn)?;
-
-    logger.verify_event(&event_id)
-}
-
-#[tauri::command]
 pub async fn verify_audit_integrity(db: State<'_, AppDatabase>) -> Result<AuditIntegrityReport> {
     let conn = db.conn.clone();
     let logger = AuditLogger::new(conn)?;
 
     logger.verify_all_events()
-}
-
-#[tauri::command]
-pub async fn log_tool_execution(
-    user_id: Option<String>,
-    team_id: Option<String>,
-    tool_name: String,
-    success: bool,
-    metadata: Option<serde_json::Value>,
-    db: State<'_, AppDatabase>,
-) -> Result<()> {
-    let conn = db.conn.clone();
-    let logger = AuditLogger::new(conn)?;
-
-    let event = create_tool_execution_event(user_id, team_id, tool_name, success, metadata);
-
-    logger.log(event)
-}
-
-#[tauri::command]
-pub async fn log_workflow_execution(
-    user_id: Option<String>,
-    team_id: Option<String>,
-    workflow_id: String,
-    status: String,
-    metadata: Option<serde_json::Value>,
-    db: State<'_, AppDatabase>,
-) -> Result<()> {
-    let conn = db.conn.clone();
-    let logger = AuditLogger::new(conn)?;
-
-    let audit_status = match status.as_str() {
-        "success" => AuditStatus::Success,
-        "failure" => AuditStatus::Failure,
-        "blocked" => AuditStatus::Blocked,
-        "pending" => AuditStatus::Pending,
-        _ => AuditStatus::Pending,
-    };
-
-    let event =
-        create_workflow_execution_event(user_id, team_id, workflow_id, audit_status, metadata);
-
-    logger.log(event)
-}
-
-#[tauri::command]
-pub async fn create_approval_request(
-    app_handle: tauri::AppHandle,
-    requester_id: String,
-    team_id: Option<String>,
-    action: ApprovalAction,
-    risk_level: String,
-    justification: Option<String>,
-    timeout_minutes: i64,
-    db: State<'_, AppDatabase>,
-) -> Result<String> {
-    let conn = db.conn.clone();
-    let workflow = ApprovalWorkflow::new(conn);
-
-    let risk = match risk_level.as_str() {
-        "low" => crate::sys::security::ApprovalRiskLevel::Low,
-        "medium" => crate::sys::security::ApprovalRiskLevel::Medium,
-        "high" => crate::sys::security::ApprovalRiskLevel::High,
-        "critical" => crate::sys::security::ApprovalRiskLevel::Critical,
-        _ => crate::sys::security::ApprovalRiskLevel::Medium,
-    };
-
-    let request_id = workflow.create_approval_request(
-        requester_id,
-        team_id,
-        action.clone(),
-        risk,
-        justification.clone(),
-        timeout_minutes,
-    )?;
-
-    let created_at = chrono::Utc::now();
-    let approval_payload = crate::ui::events::ApprovalRequestPayload {
-        id: request_id.clone(),
-        request_type: action.action_type.clone(),
-        description: format!(
-            "{} on {}",
-            action.action_type,
-            action
-                .resource_id
-                .as_ref()
-                .unwrap_or(&"unknown resource".to_string())
-        ),
-        impact: justification.clone(),
-        risk_level: risk_level.to_lowercase(),
-        status: "pending".to_string(),
-        created_at: created_at.to_rfc3339(),
-        approved_at: None,
-        rejected_at: None,
-        rejection_reason: None,
-        timeout_seconds: Some(timeout_minutes * 60),
-        details: Some(serde_json::to_value(&action).unwrap_or(serde_json::json!({}))),
-    };
-
-    crate::ui::events::emit_approval_request(&app_handle, approval_payload);
-
-    Ok(request_id)
 }
 
 #[tauri::command]
@@ -176,27 +65,6 @@ pub async fn reject_request(
     let decision = ApprovalDecision::Rejected { reason };
 
     workflow.approve_request(&request_id, &reviewer_id, decision)
-}
-
-#[tauri::command]
-pub async fn requires_approval(action: ApprovalAction, db: State<'_, AppDatabase>) -> Result<bool> {
-    let conn = db.conn.clone();
-    let workflow = ApprovalWorkflow::new(conn);
-
-    Ok(workflow.requires_approval(&action))
-}
-
-#[tauri::command]
-pub async fn calculate_risk_level(
-    action: ApprovalAction,
-    db: State<'_, AppDatabase>,
-) -> Result<String> {
-    let conn = db.conn.clone();
-    let workflow = ApprovalWorkflow::new(conn);
-
-    let risk = workflow.calculate_risk_level(&action);
-
-    Ok(risk.as_str().to_string())
 }
 
 #[tauri::command]

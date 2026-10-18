@@ -125,22 +125,6 @@ pub async fn cache_clear_by_provider(
 }
 
 #[tauri::command]
-pub async fn cache_get_size(db: State<'_, AppDatabase>) -> Result<f64, String> {
-    let conn = db.connection()?;
-
-    let total_bytes: i64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(LENGTH(response) + LENGTH(prompt_hash)), 0) FROM cache_entries",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| format!("Failed to calculate cache size: {}", e))?;
-
-    let size_mb = total_bytes as f64 / (1024.0 * 1024.0);
-    Ok(size_mb)
-}
-
-#[tauri::command]
 pub async fn cache_export(db: State<'_, AppDatabase>) -> Result<String, String> {
     let conn = db.connection()?;
 
