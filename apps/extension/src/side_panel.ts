@@ -648,7 +648,7 @@ function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
     case 'top_up':
       return t('spQuotaRecoveryTopUp');
     case 'upgrade':
-      return t('spQuotaUpgrade');
+      return t('spQuotaFreeUpgrade');
     case 'view_usage':
       return t('spQuotaManageUsage');
     case 'contact_support':
@@ -748,6 +748,7 @@ function managedPlanTier(access: ManagedModelAccess): string {
 
 function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
   if (!managedModelAccess || managedCloudChatState !== 'ready') return;
+  if (isFreeBillingPlanTier(normalizeBillingPlanTier(managedPlanTier(managedModelAccess)))) return;
   const warning = quotaWarningFromSignal(
     usageWindowViews(managedModelAccess.usage),
     signal,
@@ -14305,8 +14306,9 @@ function buildUI(): void {
       if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
     }
     renderPlanComparison(access.subscriptionTier);
+    planCompareEl.hidden = upgradeOnly;
     quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
-    quotaBadgeEl.classList.add('visible');
+    quotaBadgeEl.classList.toggle('visible', !upgradeOnly);
 
     if (usage.usage_allocation === 'pending') {
       setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
@@ -14349,13 +14351,10 @@ function buildUI(): void {
     if (upgradeOnly) {
       setQuotaNotice('', null);
       quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
-      quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
+      quotaUpgradeBtn.textContent = t('spQuotaFreeUpgrade');
       delete quotaUpgradeBtn.dataset['destination'];
       delete quotaUpgradeBtn.dataset['href'];
       quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('ready');
       renderUsageBanner(null);
       return;
