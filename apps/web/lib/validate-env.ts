@@ -1952,15 +1952,3 @@ export function logValidationResults(result: ValidationResult): void {
 
   console.debug('');
 }
-
-export function validateEnvironmentOrThrow(): void {
-  const result = validateEnvironment();
-  logValidationResults(result);
-
-  if (!result.valid) {
-    throw new Error(
-      `Environment validation failed with ${result.errors.length} error(s). ` +
-        'Check console output for details.',
-    );
-  }
-}

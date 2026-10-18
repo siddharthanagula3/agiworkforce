@@ -91,7 +91,3 @@ export function buildTurnSignalsRequest(input: {
     questions: { ...QUESTIONS },
   };
 }
-
-export function isTaskFamilyAnswer(value: string): value is TaskFamily {
-  return (TASK_FAMILIES as readonly string[]).includes(value);
-}

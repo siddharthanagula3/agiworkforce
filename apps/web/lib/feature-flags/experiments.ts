@@ -3,12 +3,9 @@ import {
   EXPERIMENT_DEFINITIONS,
   EXPERIMENT_IDS,
   experimentAssignment,
-  experimentBlockers,
   experimentDefinition,
-  experimentExposure,
   type ExperimentAssignment,
   type ExperimentDefinition,
-  type ExperimentExposure,
 } from '@agiworkforce/types';
 
 import type { FlagEvaluation } from './evaluate-flags';
@@ -75,24 +72,6 @@ export function assignedExperiments(
     );
   }
   return assignments;
-}
-
-/** The exposure to record once the subject has actually met the variation. */
-export function exposureFor(assignment: ExperimentAssignment): ExperimentExposure | null {
-  const definition = experimentDefinition(assignment.experiment);
-  return definition === null ? null : experimentExposure(assignment, definition);
-}
-
-export function experimentsBlockedFor(
-  policyAllows: (definition: ExperimentDefinition) => boolean,
-  nowMs: number = Date.now(),
-): string[] {
-  return EXPERIMENT_IDS.flatMap((id) => {
-    const definition = EXPERIMENT_DEFINITIONS[id];
-    return definition === undefined
-      ? []
-      : experimentBlockers(id, definition, { policyAllows: policyAllows(definition), nowMs });
-  });
 }
 
 export function isExperimentFlagKey(key: string): boolean {

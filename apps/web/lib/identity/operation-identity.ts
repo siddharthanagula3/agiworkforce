@@ -21,7 +21,6 @@ export interface OperationIdentity {
 export const REQUEST_ID_PREFIX = 'req';
 export const OPERATION_ID_PREFIX = 'op';
 export const ATTEMPT_ID_PREFIX = 'att';
-export const TASK_ID_PREFIX = 'task';
 
 const ID_PATTERN = /^[a-z]{2,6}_[0-9a-f]{16,32}$/u;
 
@@ -39,10 +38,6 @@ export function newOperationId(): string {
 
 export function newAttemptId(): string {
   return mint(ATTEMPT_ID_PREFIX, 8);
-}
-
-export function newTaskId(): string {
-  return mint(TASK_ID_PREFIX, 12);
 }
 
 export function isMintedId(value: string): boolean {

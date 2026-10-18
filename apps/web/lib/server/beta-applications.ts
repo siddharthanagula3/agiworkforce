@@ -43,10 +43,6 @@ export interface BetaApplicationInput {
   source: string | null;
 }
 
-export function isBetaSurface(value: unknown): value is BetaSurface {
-  return typeof value === 'string' && (BETA_SURFACES as readonly string[]).includes(value);
-}
-
 /**
  * One application per address: a second submission updates the first rather
  * than creating a duplicate a reviewer has to reconcile by eye. A row already

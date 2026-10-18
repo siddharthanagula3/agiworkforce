@@ -271,10 +271,6 @@ export function resourceDeletionPolicy(table: string): ResourceDeletionPolicy | 
   return RESOURCE_DELETION_POLICIES.find((policy) => policy.table === table) ?? null;
 }
 
-export function softDeletableTables(): readonly string[] {
-  return RESOURCE_DELETION_POLICIES.map((policy) => policy.table);
-}
-
 export interface ResourcePurgeStatement {
   readonly sql: string;
   readonly params: readonly unknown[];

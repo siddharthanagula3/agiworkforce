@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { LifecycleProjection, LifecycleStatus } from '@agiworkforce/types';
+import type { LifecycleProjection } from '@agiworkforce/types';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import {
   mediaJobDiagnostics,
@@ -35,9 +35,6 @@ export const LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS = Object.freeze({
 
 export type VideoJobStatus = keyof typeof LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS;
 
-export function lifecycleStatusForVideoJob(status: VideoJobStatus): LifecycleStatus {
-  return LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS[status];
-}
 export type VideoJobResolution = '480p' | '720p' | '1080p' | '4k';
 export type VideoJobAspectRatio = '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '21:9';
 export type VideoJobSourceSurface = 'web' | 'mobile' | 'desktop' | 'chrome';

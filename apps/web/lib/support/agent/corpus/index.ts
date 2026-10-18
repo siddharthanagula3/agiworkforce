@@ -159,7 +159,3 @@ export function getSupportCorpus(): CorpusLoadResult {
   cached ??= load();
   return cached;
 }
-
-export function __resetSupportCorpusForTests(): void {
-  cached = null;
-}

@@ -152,10 +152,6 @@ export function segmentsForPlans(plans: readonly BillingPlanTier[]): readonly Do
   return segments;
 }
 
-export function appliesToEveryPlan(plans: readonly BillingPlanTier[]): boolean {
-  return ALL_DOC_PLANS.every((plan) => plans.includes(plan));
-}
-
 export function appliesToEveryPlatform(platforms: readonly DocPlatform[]): boolean {
   return ALL_DOC_PLATFORMS.every((platform) => platforms.includes(platform));
 }

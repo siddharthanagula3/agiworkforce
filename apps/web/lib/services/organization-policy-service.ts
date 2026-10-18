@@ -341,24 +341,6 @@ export async function readOrganizationPolicy(
   return row ? formatAdminPolicy(row) : null;
 }
 
-export async function readOrganizationPolicyRevision(
-  db: DatabaseAdapter,
-  organizationId: string,
-): Promise<{ revision: number; changedAt: string | null }> {
-  const [row] = await db.query<{ revision: number | string | null; changed_at: unknown }>(
-    `select revision, changed_at
-       from public.organization_policy_revisions
-      where organization_id = $1
-      order by revision desc
-      limit 1`,
-    [organizationId],
-  );
-  return {
-    revision: toCount(row?.revision),
-    changedAt: row?.changed_at ? toIso(row.changed_at) : null,
-  };
-}
-
 export async function getEffectiveOrganizationPolicy(
   db: DatabaseAdapter,
   organizationId: string,

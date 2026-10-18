@@ -13,7 +13,6 @@ import {
   decisionGate,
   decisionIdFor,
   runShadowDecision,
-  scheduleShadow,
   type SemanticDecisionScope,
 } from '../shadow';
 import { persistSemanticDecisionTraces, type SemanticDecisionTrace } from '../trace-service';
@@ -89,8 +88,4 @@ export async function runWorthExtractingShadow(input: WorthExtractingShadowInput
       confidenceBin: bin,
     });
   }
-}
-
-export function scheduleWorthExtractingShadow(input: WorthExtractingShadowInput): void {
-  scheduleShadow(KIND, input.scope.requestId, () => runWorthExtractingShadow(input));
 }

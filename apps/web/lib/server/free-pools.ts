@@ -259,10 +259,6 @@ export type FreePoolDecision =
   | { eligible: true; entry: FreePoolEntry; eligibility: FreeEligibility }
   | { eligible: false; entry: FreePoolEntry; reason: FreePoolIneligibilityReason };
 
-export function isEntryVerified(entry: FreePoolEntry): boolean {
-  return entry.verifiedAtMs !== null && entry.reviewedBy !== null;
-}
-
 export function toFreeEligibility(entry: FreePoolEntry): FreeEligibility | undefined {
   if (entry.verifiedAtMs === null || entry.reviewedBy === null) return undefined;
   return {

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { CommercialAgreement, ExecutedCommercialAgreement } from './types';
+import type { ExecutedCommercialAgreement } from './types';
 
 export const CONTRACT_METADATA_KEY_INCLUDED_USAGE_CENTS_PER_MONTH =
   'included_usage_cents_per_month';
@@ -111,10 +111,4 @@ export function compareStripeContractMetadata(
   }
 
   return { mismatched: mismatched.sort(), missing: missing.sort() };
-}
-
-export function agreementMetadataVersion(
-  agreement: CommercialAgreement | null | undefined,
-): string | null {
-  return agreement ? String(agreement.version) : null;
 }

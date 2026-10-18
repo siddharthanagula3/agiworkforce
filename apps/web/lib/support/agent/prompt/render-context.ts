@@ -114,5 +114,3 @@ export function renderSupportContext(input: RenderContextInput): string {
 
   return sections.join('\n\n');
 }
-
-export const __fenceForTests = { FENCE, FENCE_END };

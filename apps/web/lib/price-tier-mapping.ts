@@ -204,25 +204,3 @@ export function isEnterpriseProductId(productId: string | null | undefined): boo
   const enterpriseProductId = getEnterpriseProductId();
   return !!enterpriseProductId && !!productId && productId === enterpriseProductId;
 }
-
-export function getMappingStatus(): {
-  totalMapped: number;
-  tiers: Record<string, string[]>;
-} {
-  const mapping = getTierMapping();
-  const tiers: Record<string, string[]> = {};
-  for (const tier of STRIPE_BILLED_TIERS) tiers[tier] = [];
-
-  for (const [priceId, entry] of Object.entries(mapping)) {
-    const tier = entry.tier;
-    if (!tiers[tier]) {
-      tiers[tier] = [];
-    }
-    tiers[tier].push(priceId);
-  }
-
-  return {
-    totalMapped: Object.keys(mapping).length,
-    tiers,
-  };
-}

@@ -35,10 +35,6 @@ const TIER_PRIORITY: Readonly<Record<string, HandoffPriority>> = Object.freeze({
   basic: 'low',
 });
 
-export function isHandoffPriority(value: unknown): value is HandoffPriority {
-  return typeof value === 'string' && (HANDOFF_PRIORITIES as readonly string[]).includes(value);
-}
-
 export function priorityForSupportTier(tier: string | null | undefined): HandoffPriority {
   if (!tier) return DEFAULT_HANDOFF_PRIORITY;
   return TIER_PRIORITY[tier.trim().toLowerCase()] ?? DEFAULT_HANDOFF_PRIORITY;

@@ -205,10 +205,6 @@ function ringAdvancing(definition: FlagDefinition, nowMs: number): boolean {
   return Date.parse(rollout.ramp.endAt) > nowMs;
 }
 
-export function isRolloutRingKey(key: string): boolean {
-  return parseRolloutRingFlagKey(key) !== null;
-}
-
 export function ringIncluded(
   evaluations: Readonly<Record<string, FlagEvaluation>>,
   ring: RolloutRing,

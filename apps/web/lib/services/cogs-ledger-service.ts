@@ -1384,24 +1384,3 @@ export async function getOrganizationMonthToDateSpendCents(
   );
   return numberFrom(row?.spend_cents);
 }
-
-/**
- * Spend by container rather than by payer. A personal workspace funds nothing
- * and so never appears in the organization total, which is why this cannot be
- * derived from the organization query.
- */
-export async function getWorkspaceMonthToDateSpendCents(
-  workspaceId: string,
-  db: DatabaseAdapter = getNeonDb(),
-  period: OrganizationSpendPeriod = utcMonthPeriod(new Date()),
-): Promise<number> {
-  const [row] = await db.query<OrganizationSpendRow>(
-    `select coalesce(sum(event.provider_cost_cents), 0)::bigint as spend_cents
-       from public.provider_cost_events event
-      where event.workspace_id = $1
-        and event.occurred_at >= $2::timestamptz
-        and event.occurred_at < $3::timestamptz`,
-    [workspaceId, period.start, period.end],
-  );
-  return numberFrom(row?.spend_cents);
-}

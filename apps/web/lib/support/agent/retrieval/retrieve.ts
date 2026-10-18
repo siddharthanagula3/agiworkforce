@@ -34,10 +34,6 @@ function getIndex(): { index: Bm25Index; chunks: readonly CorpusChunk[] } | null
   return cachedIndex;
 }
 
-export function __resetRetrievalIndexForTests(): void {
-  cachedIndex = null;
-}
-
 function repeatsOwnHeading(line: string, chunk: CorpusChunk): boolean {
   const content = line.trim();
   return content === chunk.docTitle || content === chunk.heading;

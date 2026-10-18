@@ -27,10 +27,6 @@ export const BILLING_ERROR_REASONS: ReadonlySet<RefundRequestReason> = new Set([
   'unrecognized_charge',
 ]);
 
-export function isRefundRequestReason(value: unknown): value is RefundRequestReason {
-  return typeof value === 'string' && (REFUND_REQUEST_REASONS as readonly string[]).includes(value);
-}
-
 export type RefundChargeKind = 'plan' | 'top_up';
 
 /**

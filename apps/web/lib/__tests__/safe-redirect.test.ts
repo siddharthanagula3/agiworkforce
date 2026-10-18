@@ -4,7 +4,7 @@ vi.mock('../logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-import { getSafeRedirectUrl, isRedirectSafe } from '../safe-redirect';
+import { getSafeRedirectUrl } from '../safe-redirect';
 
 const ORIGIN = 'https://app.agiworkforce.com';
 
@@ -61,28 +61,5 @@ describe('getSafeRedirectUrl', () => {
 
   it('uses custom fallback', () => {
     expect(getSafeRedirectUrl(null, ORIGIN, '/home')).toBe('/home');
-  });
-});
-
-describe('isRedirectSafe', () => {
-  it('returns false for null/undefined', () => {
-    expect(isRedirectSafe(null, ORIGIN)).toBe(false);
-    expect(isRedirectSafe(undefined, ORIGIN)).toBe(false);
-  });
-
-  it('returns true for relative paths', () => {
-    expect(isRedirectSafe('/dashboard', ORIGIN)).toBe(true);
-  });
-
-  it('returns false for protocol-relative URLs', () => {
-    expect(isRedirectSafe('//evil.com', ORIGIN)).toBe(false);
-  });
-
-  it('returns false for javascript: URLs', () => {
-    expect(isRedirectSafe('javascript:void(0)', ORIGIN)).toBe(false);
-  });
-
-  it('returns false for cross-origin', () => {
-    expect(isRedirectSafe('https://evil.com', ORIGIN)).toBe(false);
   });
 });

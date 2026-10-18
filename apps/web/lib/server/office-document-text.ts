@@ -24,8 +24,6 @@ const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordproces
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-export const OFFICE_DOCUMENT_MIME_TYPES = [DOCX_MIME_TYPE, XLSX_MIME_TYPE, PPTX_MIME_TYPE] as const;
-
 export type OfficeDocumentKind = 'docx' | 'xlsx' | 'pptx';
 
 const KIND_BY_MIME: Record<string, OfficeDocumentKind> = {

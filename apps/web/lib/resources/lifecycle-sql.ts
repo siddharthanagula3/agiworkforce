@@ -84,10 +84,6 @@ export function readableVisibilities(viewer: {
   return viewer.organizationId === null ? ['public'] : ['public', 'organization'];
 }
 
-export function visibilityScopeSql(parameter: number, alias?: string | null): string {
-  return `${column(alias, 'visibility')} = any($${parameter}::text[])`;
-}
-
 export function lifecycleStatesExcludedFromSearch(): readonly ResourceLifecycleState[] {
   return (Object.keys(RESOURCE_LIFECYCLE_SEMANTICS) as ResourceLifecycleState[]).filter(
     (state) => !RESOURCE_LIFECYCLE_SEMANTICS[state].searchable,

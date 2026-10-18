@@ -96,18 +96,3 @@ export function breadcrumbSchema(crumbs: readonly { name: string; path: string }
     })),
   };
 }
-
-export function collectionPageSchema(input: {
-  name: string;
-  description: string;
-  path: string;
-}): JsonLdObject {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'CollectionPage',
-    name: input.name,
-    description: input.description,
-    url: `${SITE_URL}${input.path === '/' ? '' : input.path}`,
-    isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
-  };
-}

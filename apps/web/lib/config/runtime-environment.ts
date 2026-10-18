@@ -21,8 +21,3 @@ export function deploymentEnvironment(env: EnvironmentSource = process.env): Dep
 export function isProductionRuntime(env: EnvironmentSource = process.env): boolean {
   return deploymentEnvironment(env) === 'production';
 }
-
-export function isDeployedRuntime(env: EnvironmentSource = process.env): boolean {
-  const environment = deploymentEnvironment(env);
-  return environment === 'production' || environment === 'preview';
-}

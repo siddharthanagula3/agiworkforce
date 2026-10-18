@@ -156,10 +156,6 @@ export function resolveMobileIapProduct(
   return configuredProducts(platform).find((product) => product.productId === productId) ?? null;
 }
 
-export function mobileIapCatalogStorageIsRequired(): boolean {
-  return deploymentEnablesMobileIap();
-}
-
 export function getMobileIapAndroidReplacementModes(): MobileIapAndroidReplacementModes {
   const raw = process.env[REPLACEMENT_MODES_ENV]?.trim();
   if (!raw) return MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES;

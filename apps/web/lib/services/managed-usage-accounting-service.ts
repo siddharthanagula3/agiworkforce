@@ -488,13 +488,6 @@ export function observedTurnCost(
   };
 }
 
-export function observedListLedgerCents(
-  usage: ObservedProviderUsage,
-  fallbackPricing: ProviderUsagePricingContext,
-): number {
-  return toLedgerCents(observedListLedgerMicrousd(usage, fallbackPricing));
-}
-
 export function observedProviderUsageLedgerCents(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,

@@ -114,10 +114,6 @@ export function unregisterWebSearchProvider(id: string): boolean {
   return registry.unregister(id);
 }
 
-export function webSearchProvider(id: string): WebSearchProvider | undefined {
-  return registry.get(id);
-}
-
 /** How a provider's results reached this turn, 'external' when nothing declares it. */
 export function webSearchDelivery(providerId: string): SourceDelivery {
   return (
@@ -144,10 +140,6 @@ export function configuredWebSearchProviders(
     ...registry.list().filter((provider) => !declared.includes(provider.id)),
   ];
   return ordered.filter((provider) => provider.isConfigured(overrides));
-}
-
-export function isWebSearchProviderKeyPresent(descriptor: WebSearchProviderDescriptor): boolean {
-  return Boolean(process.env[descriptor.apiKeyEnv]);
 }
 
 export interface WebSearchSourceInput {

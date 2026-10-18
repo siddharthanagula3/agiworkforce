@@ -236,10 +236,6 @@ export function selectLatestDesktopRelease(
   return candidates[0] ?? null;
 }
 
-export function selectLatestStableDesktopRelease(payload: unknown): StableDesktopRelease | null {
-  return selectLatestDesktopRelease(payload, 'stable');
-}
-
 function githubHeaders(): HeadersInit {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',

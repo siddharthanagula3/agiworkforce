@@ -1,4 +1,3 @@
-
 import { logger } from './logger';
 
 const ALLOWED_HOSTS: Set<string> = new Set([
@@ -6,14 +5,6 @@ const ALLOWED_HOSTS: Set<string> = new Set([
   'agiworkforce-chat.vercel.app',
 ]);
 
-/**
- * Validates and sanitizes a redirect URL to prevent open redirect attacks.
- *
- * @param redirectUrl - The URL to validate (can be relative or absolute)
- * @param origin - The origin to validate against (e.g., 'https://example.com')
- * @param fallback - The fallback path if validation fails (default: '/')
- * @returns A safe redirect URL (always relative path or same-origin absolute URL)
- */
 export function getSafeRedirectUrl(
   redirectUrl: string | null | undefined,
   origin: string,
@@ -70,46 +61,5 @@ export function getSafeRedirectUrl(
   } catch {
     logger.warn({ url: trimmed }, 'Invalid redirect URL');
     return fallback;
-  }
-}
-
-/**
- * Checks if a URL is safe for redirect (doesn't actually sanitize)
- *
- * @param redirectUrl - The URL to check
- * @param origin - The origin to validate against
- * @returns true if the URL is safe, false otherwise
- */
-export function isRedirectSafe(redirectUrl: string | null | undefined, origin: string): boolean {
-  if (!redirectUrl) {
-    return false;
-  }
-
-  const trimmed = redirectUrl.trim();
-
-  if (trimmed.startsWith('//')) {
-    return false;
-  }
-
-  const lowerUrl = trimmed.toLowerCase();
-  if (
-    lowerUrl.startsWith('javascript:') ||
-    lowerUrl.startsWith('data:') ||
-    lowerUrl.startsWith('vbscript:')
-  ) {
-    return false;
-  }
-
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return true;
-  }
-
-  try {
-    const parsedUrl = new URL(trimmed, origin);
-    const parsedOrigin = new URL(origin);
-
-    return parsedUrl.host === parsedOrigin.host || ALLOWED_HOSTS.has(parsedUrl.host);
-  } catch {
-    return false;
   }
 }

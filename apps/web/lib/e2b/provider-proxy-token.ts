@@ -21,10 +21,6 @@ function resolveSecret(): string {
   return cachedSecret;
 }
 
-export function resetProviderProxyTokenSecretCache(): void {
-  cachedSecret = null;
-}
-
 const ProviderProxyTokenPayloadSchema = z
   .object({
     purpose: z.literal(PROVIDER_PROXY_TOKEN_PURPOSE),

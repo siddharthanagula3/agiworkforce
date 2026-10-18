@@ -78,10 +78,6 @@ function apiKey(): string | undefined {
   return process.env['OPENROUTER_API_KEY']?.trim() || undefined;
 }
 
-export function isOpenRouterVideoConfigured(): boolean {
-  return Boolean(apiKey());
-}
-
 function callbackUrl(): string | undefined {
   if (!process.env['OPENROUTER_WEBHOOK_SECRET']?.trim()) return undefined;
   const appUrl = process.env['NEXT_PUBLIC_APP_URL']?.trim();

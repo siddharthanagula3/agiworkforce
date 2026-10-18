@@ -180,14 +180,6 @@ export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
   },
 ];
 
-/**
- * Every distinct table account erasure deletes from, across both lists. This is
- * the figure the public pages publish, not either list's own length.
- */
-export const ERASED_USER_TABLES: readonly string[] = [
-  ...new Set([...USER_SCOPED_TABLES, ...EMAIL_SCOPED_USER_TABLES].map((entry) => entry.table)),
-].sort();
-
 const PROFILE_TABLE = 'profiles';
 const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
 

@@ -1,10 +1,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import {
-  verifyAppleStoreNotification,
-  type VerifiedAppleStoreNotification,
-} from '@/lib/server/mobile-iap-store-verification';
+import type { VerifiedAppleStoreNotification } from '@/lib/server/mobile-iap-store-verification';
 
 import type {
   NormalizedPurchase,
@@ -76,10 +73,4 @@ export function normalizeAppleStoreNotification(
     endedAt: normalizeProviderTimestamp(transaction.revocationDate, 'milliseconds'),
     environment: normalizeEnvironment(transaction.environment),
   };
-}
-
-export async function readAppleSubscriptionFromNotification(
-  signedPayload: string,
-): Promise<NormalizedSubscription | null> {
-  return normalizeAppleStoreNotification(await verifyAppleStoreNotification(signedPayload));
 }

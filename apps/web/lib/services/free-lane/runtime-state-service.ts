@@ -2,13 +2,11 @@ import 'server-only';
 
 import {
   createRouteHealthStore,
-  credentialClassForProvider,
   emptyRuntimeState,
   providerRouteHealthConfig,
   resolveCredentialCooldownConfig,
   resolveModelLockoutConfig,
   resolveRouteHealthConfig,
-  type CredentialClass,
   type QuotaPool,
   type RouteCacheClass,
   type RouteHealth,
@@ -768,32 +766,6 @@ export async function getRouteHealthSnapshot(
     expiresAtMs: nowMs + SNAPSHOT_CACHE_TTL_MS,
   };
   return snapshots;
-}
-
-export interface ResilienceScopeSnapshot {
-  provider: Readonly<Record<string, RouteHealthSnapshot>>;
-  credential: Readonly<Record<string, RouteHealthSnapshot>>;
-  model: Readonly<Record<string, RouteHealthSnapshot>>;
-}
-
-export async function getResilienceScopeSnapshot(
-  ids: {
-    providerIds: readonly string[];
-    credentialIds: readonly string[];
-    routeIds: readonly string[];
-  },
-  nowMs: number = Date.now(),
-): Promise<ResilienceScopeSnapshot> {
-  const [provider, credential, model] = await Promise.all([
-    getCredentialHealthSnapshot(ids.providerIds, nowMs),
-    getCredentialCooldownSnapshot(ids.credentialIds, nowMs),
-    getRouteHealthSnapshot(ids.routeIds, nowMs),
-  ]);
-  return { provider, credential, model };
-}
-
-export function resolveProviderCredentialClass(providerId: string): CredentialClass {
-  return credentialClassForProvider(providerId);
 }
 
 const ROUTE_AFFINITY_KEY_PREFIX = 'agi-raffinity';

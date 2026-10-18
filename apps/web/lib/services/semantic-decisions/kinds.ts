@@ -55,10 +55,6 @@ export const DECISION_KINDS: Readonly<Record<DecisionKind, DecisionKindRecord>> 
   },
 };
 
-export function isDecisionKind(value: string): value is DecisionKind {
-  return (DECISION_KIND_IDS as readonly string[]).includes(value);
-}
-
 // Confidence reaches a label as one of these, never as the float: a raw
 // probability is unique per request and would open a series per turn.
 export const DECISION_CONFIDENCE_BINS = [

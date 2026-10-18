@@ -26,13 +26,6 @@ export {
   surfaceCta,
 } from './surface-status';
 
-export const MARKETING_MODEL_PILLS = [
-  'OpenAI',
-  'Anthropic',
-  'Google Gemini',
-  'Local LLMs',
-] as const;
-
 export const LAUNCH = {
   publicLabel: 'Release date to be announced',
   shortLabel: 'To be announced',

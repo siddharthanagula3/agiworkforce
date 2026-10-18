@@ -1,10 +1,5 @@
 import type { FlagEvaluation } from './evaluate-flags';
-import {
-  FLAG_OFF_VARIANT,
-  FLAG_ON_VARIANT,
-  type FlagDefinitionInput,
-  type FlagRule,
-} from './flag-definition';
+import { FLAG_OFF_VARIANT } from './flag-definition';
 
 export const DECISION_FLAG_PREFIX = 'decision.';
 export const DECISION_KILL_FLAG_KEY = 'decision.kill';
@@ -45,39 +40,4 @@ export function decisionFlagMode(
   if (variant === DECISION_ENABLED_VARIANT) return 'enabled';
   if (variant === DECISION_SHADOW_VARIANT) return 'shadow';
   return 'disabled';
-}
-
-export function decisionFlagDefinition(
-  kind: string,
-  description: string,
-  owner: string,
-  rules: readonly FlagRule[] = [],
-): FlagDefinitionInput {
-  return {
-    key: decisionFlagKey(kind),
-    description,
-    killSwitch: false,
-    variants: [...DECISION_VARIANTS],
-    defaultVariant: FLAG_OFF_VARIANT,
-    rules: [...rules],
-    expiresAt: null,
-    maturity: 'experimental',
-    owner,
-  };
-}
-
-// The inverse of a capability gate: `on` means stopped, so the default is
-// `off` and creating no flag stops nothing.
-export function decisionKillSwitchDefinition(owner: string): FlagDefinitionInput {
-  return {
-    key: DECISION_KILL_FLAG_KEY,
-    description: 'Forces every semantic decision kind to disabled, whatever its own flag says.',
-    killSwitch: false,
-    variants: [FLAG_ON_VARIANT, FLAG_OFF_VARIANT],
-    defaultVariant: FLAG_OFF_VARIANT,
-    rules: [],
-    expiresAt: null,
-    maturity: 'experimental',
-    owner,
-  };
 }

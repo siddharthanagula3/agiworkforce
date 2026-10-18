@@ -731,55 +731,6 @@ export async function markClaimedVideoGenerationOutcomeUnknown(
   return marked;
 }
 
-export async function failVideoGenerationJob(
-  db: DatabaseAdapter,
-  snapshot: VideoGenerationJob,
-  publicError: string,
-): Promise<VideoGenerationJob> {
-  if (isTerminal(snapshot)) {
-    await projectVideoGenerationTranscript(
-      db,
-      snapshot,
-      'Failed video transcript projection remains pending',
-    );
-    return snapshot;
-  }
-  const claimToken = randomUUID();
-  const claimed = await claimVideoGenerationJob({
-    db,
-    jobId: snapshot.id,
-    claimToken,
-    claimSeconds: 180,
-  });
-  if (!claimed) {
-    const current = await getVideoGenerationJobForSystem(db, snapshot.id);
-    if (current && isTerminal(current)) {
-      await projectVideoGenerationTranscript(
-        db,
-        current,
-        'Failed video transcript projection remains pending',
-      );
-      return current;
-    }
-    throw new Error('Video submission failure could not claim its durable job.');
-  }
-  if (isTerminal(claimed)) {
-    await projectVideoGenerationTranscript(
-      db,
-      claimed,
-      'Failed video transcript projection remains pending',
-    );
-    return claimed;
-  }
-  const failed = await finishFailed(db, claimed, claimToken, publicError);
-  await projectVideoGenerationTranscript(
-    db,
-    failed,
-    'Failed video transcript projection remains pending',
-  );
-  return failed;
-}
-
 export interface VideoReconciliationSummary {
   considered: number;
   completed: number;

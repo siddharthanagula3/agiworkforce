@@ -23,7 +23,6 @@ import {
   type CommercialAgreementTerms,
 } from './types';
 
-const AUDIT_ENDPOINT = '/api/enterprise/commercial-agreements';
 const AUDIT_SURFACE = 'enterprise_contracts';
 const AGREEMENT_AUTHORED_AUDIT_REASON = 'commercial_agreement_version_authored';
 const AGREEMENT_TERMINATED_AUDIT_REASON = 'commercial_agreement_terminated';
@@ -359,7 +358,6 @@ export async function authorCommercialAgreementVersion(
       userId: input.authoredBy ?? null,
       eventType: 'plan_changed',
       severity: 'info',
-      endpoint: AUDIT_ENDPOINT,
       surface: AUDIT_SURFACE,
       detail: {
         resourceType: 'organization_commercial_agreement',
@@ -429,7 +427,6 @@ export async function terminateCommercialAgreement(
       userId: input.terminatedBy,
       eventType: 'plan_changed',
       severity: 'warning',
-      endpoint: AUDIT_ENDPOINT,
       surface: AUDIT_SURFACE,
       detail: {
         resourceType: 'organization_commercial_agreement',

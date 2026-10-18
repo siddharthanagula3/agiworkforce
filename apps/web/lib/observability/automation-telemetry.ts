@@ -8,7 +8,6 @@ import {
 
 import { deploymentAttributes } from './attributes';
 import { TRACER_NAME } from './otel-span-bridge';
-import { withSpan, type ActiveSpan } from './span';
 
 export const AUTOMATION_METRIC_NAME = {
   outcomes: 'agi.automation.outcomes',
@@ -25,7 +24,6 @@ export const AUTOMATION_ATTRIBUTE = {
 } as const;
 
 const MILLISECONDS = 'ms';
-const AUTOMATION_SPAN_DOMAIN = 'tool';
 
 interface Instruments {
   readonly outcomes: Counter;
@@ -94,35 +92,6 @@ export function recordAutomationOutcome(outcome: AutomationOutcome): void {
 export function recordAutomationOutcomes(outcomes: readonly AutomationOutcome[]): number {
   for (const outcome of outcomes) recordAutomationOutcome(outcome);
   return outcomes.length;
-}
-
-export interface AutomationSpanAttributes {
-  readonly action: string;
-  readonly surface: string;
-  readonly runId?: string;
-  readonly deviceId?: string;
-  readonly sessionKind?: string | null;
-}
-
-export function withAutomationActionSpan<R>(
-  input: AutomationSpanAttributes,
-  fn: (span: ActiveSpan) => Promise<R> | R,
-): Promise<R> {
-  return withSpan(
-    `automation.${input.action}`,
-    {
-      domain: AUTOMATION_SPAN_DOMAIN,
-      kind: 'client',
-      attributes: {
-        [AUTOMATION_ATTRIBUTE.action]: input.action,
-        [AUTOMATION_ATTRIBUTE.surface]: input.surface,
-        [AUTOMATION_ATTRIBUTE.session]: input.sessionKind,
-        'automation.run_id': input.runId,
-        'automation.device_id': input.deviceId,
-      },
-    },
-    fn,
-  );
 }
 
 export interface AutomationDiagnostics {

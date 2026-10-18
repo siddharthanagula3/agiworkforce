@@ -37,10 +37,6 @@ function capabilityHealthStore(): CapabilityHealthStore {
   return capabilityHealthStoreInstance;
 }
 
-export function resetCapabilityHealthStore(): void {
-  capabilityHealthStoreInstance = null;
-}
-
 /**
  * The declared catalog flag still decides admission. This only records what the
  * serving path saw, so ranking can prefer a route that is still honouring the

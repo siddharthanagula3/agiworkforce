@@ -35,7 +35,3 @@ export function generateReferenceId(now: Date = new Date()): string {
   }
   return `AGI-${datePart(now)}-${random}`;
 }
-
-export function isReferenceId(value: string): boolean {
-  return REFERENCE_ID_PATTERN.test(value);
-}

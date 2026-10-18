@@ -26,8 +26,6 @@ import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
 
 import { TRACEPARENT_HEADER, outboundTraceparent } from '@/lib/observability/trace-propagation';
 
-const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
-
 const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
   'api.stripe.com',
   'api.upstash.io',
@@ -42,7 +40,7 @@ const ALLOWED_SERVICE_HOSTNAMES: readonly string[] = [
  */
 export function allowedEgressHostnames(): ReadonlySet<string> {
   return new Set([
-    ...[...ALLOWED_MANAGED_PROVIDER_HOSTS].filter((host) => !RETIRED_PROVIDER_HOSTS.has(host)),
+    ...ALLOWED_MANAGED_PROVIDER_HOSTS,
     ...webSearchProviderHosts(),
     ...ALLOWED_SERVICE_HOSTNAMES,
   ]);

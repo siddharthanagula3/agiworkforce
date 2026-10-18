@@ -566,12 +566,6 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
   }));
 }
 
-export function withoutProjectChats<T extends { readonly sourceClass: ContextSourceClass }>(
-  items: readonly T[],
-): T[] {
-  return items.filter((item) => item.sourceClass !== 'project_sibling_chat');
-}
-
 export function fitProjectContextBlocks(
   blocks: readonly ProjectContextBlock[],
   budgetChars: number,

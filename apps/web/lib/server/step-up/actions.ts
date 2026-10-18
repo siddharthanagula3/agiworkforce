@@ -99,10 +99,6 @@ export const STEP_UP_VERIFICATION_REQUIRED = 'STEP_UP_VERIFICATION_REQUIRED';
 
 export const STEP_UP_ACTION_IDS = Object.keys(STEP_UP_ACTIONS) as readonly StepUpAction[];
 
-export function isStepUpAction(value: unknown): value is StepUpAction {
-  return typeof value === 'string' && Object.hasOwn(STEP_UP_ACTIONS, value);
-}
-
 export function stepUpActionSpec(action: StepUpAction): StepUpActionSpec {
   return STEP_UP_ACTIONS[action];
 }

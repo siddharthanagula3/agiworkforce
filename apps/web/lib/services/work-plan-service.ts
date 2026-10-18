@@ -333,13 +333,6 @@ async function readPlan(
   return toWorkPlan(row, steps);
 }
 
-export async function loadWorkPlan(
-  db: DatabaseAdapter,
-  params: { userId: string; planId: string },
-): Promise<WorkPlan | null> {
-  return readPlan(db, params);
-}
-
 export async function loadWorkPlanForRun(
   db: DatabaseAdapter,
   params: { userId: string; runId: string },

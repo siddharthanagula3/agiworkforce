@@ -80,8 +80,6 @@ const PROTOCOL_ROUTE_HARNESSES: ReadonlyMap<string, ProtocolHarness> = (() => {
   return byProvider;
 })();
 
-export const PROTOCOL_ROUTE_PROVIDER_IDS: readonly string[] = [...PROTOCOL_ROUTE_HARNESSES.keys()];
-
 /**
  * Managed OpenRouter traffic asks OpenRouter to try the cheapest host serving
  * the model first. The registry prices the OpenRouter route at that host, and
@@ -113,8 +111,6 @@ export interface ServerProviderAdapterOptions {
   /** A credential this turn already resolved, used in place of the deployment's own key. */
   apiKey?: string;
 }
-
-export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(SERVER_PROVIDER_CONFIG);
 
 export const toApiModelId = toProviderApiModelId;
 

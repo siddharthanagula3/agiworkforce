@@ -237,18 +237,6 @@ function formatLimit(row: LimitRow): SpendLimit {
   };
 }
 
-export async function readSpendLimit(
-  db: DatabaseAdapter,
-  organizationId: string,
-): Promise<SpendLimit | null> {
-  const [row] = await db.query<LimitRow>(
-    `select ${LIMIT_COLUMNS} from public.organization_spend_limits
-      where organization_id = $1 limit 1`,
-    [organizationId],
-  );
-  return row ? formatLimit(row) : null;
-}
-
 export async function upsertSpendLimit(
   db: DatabaseAdapter,
   organizationId: string,

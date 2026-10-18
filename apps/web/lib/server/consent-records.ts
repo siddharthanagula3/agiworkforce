@@ -8,7 +8,6 @@ import {
 import { getNeonDb } from '@/lib/server/neon-db';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
-  CONSENT_PURPOSES,
   isConsentPurpose,
   isConsentSurface,
   type ConsentDecision,
@@ -36,8 +35,6 @@ export function noticeVersionForPurpose(purpose: string): string {
     ? PRODUCT_ANALYTICS_NOTICE_VERSION
     : CURRENT_NOTICE_VERSION;
 }
-
-export const MAX_CONSENT_DECISIONS_PER_REQUEST = CONSENT_PURPOSES.length;
 
 export interface ConsentRecord {
   purpose: string;
@@ -143,18 +140,6 @@ export async function readUserConsents(userId: string): Promise<ConsentRecord[]>
        from public.consent_records
       where user_id = $1
       order by purpose, recorded_at desc`,
-    [userId],
-  );
-  return rows.map(toRecord);
-}
-
-export async function readUserConsentHistory(userId: string): Promise<ConsentRecord[]> {
-  const rows = await getNeonDb().query<ConsentRow>(
-    `select purpose, granted, notice_version, surface, recorded_at
-       from public.consent_records
-      where user_id = $1
-      order by recorded_at desc
-      limit 500`,
     [userId],
   );
   return rows.map(toRecord);

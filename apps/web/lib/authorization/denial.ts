@@ -1,10 +1,6 @@
 import 'server-only';
 
-import {
-  ENTERPRISE_DENIAL_CODES,
-  type EnterpriseDenial,
-  type EnterpriseDenialCode,
-} from '@agiworkforce/types';
+import type { EnterpriseDenial, EnterpriseDenialCode } from '@agiworkforce/types';
 import { AppError, ErrorCode } from '@/lib/errors';
 
 const DENIAL_STATUS: Readonly<Record<EnterpriseDenialCode, number>> = Object.freeze({
@@ -47,10 +43,4 @@ export class EnterpriseDenialError extends AppError {
 
 export function isEnterpriseDenialError(error: unknown): error is EnterpriseDenialError {
   return error instanceof EnterpriseDenialError;
-}
-
-export function isEnterpriseDenialCode(value: unknown): value is EnterpriseDenialCode {
-  return (
-    typeof value === 'string' && (ENTERPRISE_DENIAL_CODES as readonly string[]).includes(value)
-  );
 }

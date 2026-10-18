@@ -295,12 +295,6 @@ export const IDENTITY_SECURITY_EVENTS: Readonly<
   },
 });
 
-export function isIdentitySecurityEventKey(value: unknown): value is IdentitySecurityEventKey {
-  return (
-    typeof value === 'string' && (IDENTITY_SECURITY_EVENT_KEYS as readonly string[]).includes(value)
-  );
-}
-
 export function identitySecurityEventSpec(
   key: IdentitySecurityEventKey,
 ): IdentitySecurityEventSpec {

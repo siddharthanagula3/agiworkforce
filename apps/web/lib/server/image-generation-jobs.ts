@@ -595,27 +595,6 @@ export async function closeCancelledImageGenerationJob(input: {
   return job;
 }
 
-export async function listDueImageGenerationJobIds(
-  db: DatabaseAdapter,
-  userId: string,
-  limit = 10,
-): Promise<string[]> {
-  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 50));
-  const rows = await db.query<{ id: string }>(
-    `select id
-       from public.image_generation_jobs
-      where user_id = $1
-        and terminal_at is null
-        and attempts < max_attempts
-        and next_attempt_at <= now()
-        and (claim_expires_at is null or claim_expires_at <= now())
-      order by next_attempt_at, created_at
-      limit $2`,
-    [userId, boundedLimit],
-  );
-  return rows.map((row) => String(row.id));
-}
-
 /** True while another attempt can still run, which is what "Try again" needs. */
 export function isImageGenerationJobRetryable(job: ImageGenerationJob): boolean {
   return (

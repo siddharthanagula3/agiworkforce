@@ -18,10 +18,6 @@ export const PAYMENT_PROVIDERS: Readonly<Record<PaymentProviderId, PaymentProvid
   google: googlePaymentProvider,
 };
 
-export function getPaymentProvider(id: PaymentProviderId): PaymentProvider {
-  return PAYMENT_PROVIDERS[id];
-}
-
 interface SubscriptionOwnerRow {
   plan_tier: string;
   status: string;

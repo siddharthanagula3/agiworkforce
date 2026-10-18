@@ -205,14 +205,6 @@ export function formatPersonalizationBlock(input: PersonalizationInput): string 
   return lines.join('\n');
 }
 
-export function formatCustomInstructionsBlock(instructions: string | null): string | null {
-  return formatPersonalizationBlock({
-    preferredName: null,
-    workDescription: null,
-    instructions,
-  });
-}
-
 export interface AccountPersonalizationScope {
   instructions: boolean;
   responseStyle: boolean;

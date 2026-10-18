@@ -35,13 +35,6 @@ export interface CloudCodeCompletionVerdict {
   blockers: string[];
 }
 
-export const EMPTY_CLOUD_CODE_VALIDATION_SUMMARY: CloudCodeValidationSummary = Object.freeze({
-  checks: [],
-  commandsRun: 0,
-  commandsFailed: 0,
-  filesChanged: [],
-});
-
 const RUN_COMMAND_TOOLS = new Set(['run_command', 'execute_code']);
 const FILE_WRITE_TOOLS = new Set(['write_file', 'edit_file']);
 

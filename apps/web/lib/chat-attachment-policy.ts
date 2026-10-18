@@ -48,13 +48,3 @@ export function unavailableChatAttachmentNote(
 ): string {
   return `[attachment unavailable: ${filename} ${CHAT_ATTACHMENT_UNAVAILABLE_NOTES[reason]}]`;
 }
-
-/**
- * The refusals a composer is holding, as the lines the outgoing turn carries.
- * Empty when nothing was refused, so a caller can append unconditionally.
- */
-export function unavailableChatAttachmentNotes(
-  refusals: readonly UnavailableChatAttachment[],
-): string[] {
-  return refusals.map((refusal) => unavailableChatAttachmentNote(refusal.filename, refusal.reason));
-}
