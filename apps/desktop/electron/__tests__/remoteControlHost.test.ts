@@ -154,9 +154,10 @@ describe('remote control host in the desktop main process', () => {
     expect(JSON.stringify(clientOptions?.metadata)).not.toContain(presentedSecret());
   });
 
-  it('publishes the QR payload in state and takes the scanning phone when the surface has no pairing window', async () => {
+  it('publishes the QR payload in state and asks before taking the scanning phone when the surface has no pairing window', async () => {
     const host = createRemoteControlHost({
       code,
+      confirmPhone,
       deviceName: () => 'Studio Mac',
       appVersion: () => '1.8.0',
       createSocket: () => {
@@ -178,7 +179,7 @@ describe('remote control host in the desktop main process', () => {
     });
     await flush();
     expect(states.at(-1)).toMatchObject({ status: 'connected', phoneName: 'Pixel' });
-    expect(confirmPhone).not.toHaveBeenCalled();
+    expect(confirmPhone).toHaveBeenCalledWith({ name: 'Pixel', pairingCode: CODE });
 
     host.stop();
     expect(states.at(-1)).toMatchObject({ status: 'idle', qrPayload: null });

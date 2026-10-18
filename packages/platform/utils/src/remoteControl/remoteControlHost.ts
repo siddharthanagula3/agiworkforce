@@ -91,7 +91,7 @@ export interface RemoteControlHostOptions {
    */
   presentPairing?: (pairing: RemotePairingDisplay | null) => void;
   /** Asks the person at this computer to allow a phone that has not been allowed yet. */
-  confirmPhone?: (phone: RemotePhoneToConfirm) => Promise<boolean>;
+  confirmPhone: (phone: RemotePhoneToConfirm) => Promise<boolean>;
   /** Refuses a relay this app does not pair through, beyond the secure-connection check. */
   allowRelayUrl?: (wsUrl: string) => boolean;
   createClient?: (
@@ -506,9 +506,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     if (!known) {
       awaiting = asked;
       try {
-        confirmed = options.confirmPhone
-          ? await options.confirmPhone({ name: phoneName, pairingCode })
-          : true;
+        confirmed = await options.confirmPhone({ name: phoneName, pairingCode });
       } catch {
         confirmed = false;
       }
