@@ -54,7 +54,7 @@ import {
   type ProcessedRequest,
 } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
-import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
+import { runsUnattendedWithoutAsking } from '@/lib/services/unattended-tool-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
   canonicalToolSummary,
@@ -99,6 +99,7 @@ import {
   hasObservedProviderUsage,
   observedProviderUsageLedgerMicrousd,
   type ObservedProviderUsage,
+  type ProviderUsagePricingContext,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
   finalizeManagedUsageRequest,
@@ -217,30 +218,6 @@ const HEADLINE_WITHHELD_TOOLS: ReadonlyArray<readonly [string, string]> = [
   [EXECUTE_CODE_TOOL, 'run code'],
 ];
 
-function runsWithoutAsking(
-  qualifiedName: string,
-  toolApprovalPolicy: ToolApprovalPolicy,
-  connectorPermissions: ConnectorToolPermissions,
-): boolean {
-  return (
-    resolveToolCallGate(
-      {
-        qualifiedName,
-        savedLevel: connectorPermissions.levelFor(qualifiedName),
-        batchIntroducesUntrustedContent: false,
-      },
-      {
-        approvalMode: 'manual',
-        toolApprovalPolicy,
-        unattended: true,
-        deviceHostPresent: false,
-        untrustedContentInContext: false,
-        sensitiveSourceAvailable: false,
-      },
-    ).verdict === 'allow'
-  );
-}
-
 export async function buildScheduledToolPlan(input: {
   db: Parameters<typeof loadConnectorToolPermissions>[0];
   userId: string;
@@ -266,7 +243,8 @@ export async function buildScheduledToolPlan(input: {
       ? Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS)
       : loadConnectorToolPermissions(input.db, input.userId, input.organizationId ?? null),
   ]);
-  const asks = (name: string) => !runsWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
+  const asks = (name: string) =>
+    !runsUnattendedWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
   const withheldTools: string[] = [];
 
   const provider = input.provider.toLowerCase();
@@ -575,6 +553,14 @@ function buildScheduledProcessedRequest(input: {
   };
 }
 
+export function unattendedToolLoopPricing(route: ScheduledRunRoute): ProviderUsagePricingContext {
+  return {
+    provider: dispatchProviderForSelectedRoute(route),
+    model: route.modelKey,
+    routeId: route.routeId,
+  };
+}
+
 export async function runScheduledToolLoop(input: {
   processed: ProcessedRequest;
   plan: ScheduledToolPlan;
@@ -582,6 +568,7 @@ export async function runScheduledToolLoop(input: {
   userId: string;
   signal: AbortSignal;
   usage: ObservedProviderUsage;
+  pricing: ProviderUsagePricingContext;
   resume?: ScheduledRunResume;
   onEnvelope?: (envelope: AgentEventEnvelope) => Promise<void>;
   isCancellationRequested?: () => Promise<boolean>;
@@ -644,10 +631,7 @@ export async function runScheduledToolLoop(input: {
     completionTokens: usage.outputTokens,
     totalTokens: usage.inputTokens + usage.outputTokens,
     costMicrousd: hasObservedProviderUsage(usage)
-      ? observedProviderUsageLedgerMicrousd(usage, {
-          provider: input.processed.provider,
-          model: input.processed.requestedModel,
-        })
+      ? observedProviderUsageLedgerMicrousd(usage, input.pricing)
       : 0,
     toolsUsed,
     ...(approval ? { approval } : {}),
@@ -690,6 +674,8 @@ export async function runScheduledCompletion(input: {
         cacheCreationInputTokens: response.cacheCreationInputTokens,
         cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
       },
+      undefined,
+      input.route.routeId,
     ),
     toolsUsed: [],
   };
@@ -1036,6 +1022,7 @@ async function runScheduledAgent(
           userId: scope.userId,
           signal,
           usage: observedUsage,
+          pricing: unattendedToolLoopPricing(route),
           resume,
         })
       : await runScheduledCompletion({ messages, route, signal });
@@ -1099,10 +1086,7 @@ async function runScheduledAgent(
       // A tool loop can fail after several billable provider steps; settling those
       // at zero would hand back spend the provider already charged for.
       const observedCostMicrousd = hasObservedProviderUsage(observedUsage)
-        ? observedProviderUsageLedgerMicrousd(observedUsage, {
-            provider: route.provider,
-            model: route.modelKey,
-          })
+        ? observedProviderUsageLedgerMicrousd(observedUsage, unattendedToolLoopPricing(route))
         : 0;
       try {
         await finalizeManagedUsageRequest({

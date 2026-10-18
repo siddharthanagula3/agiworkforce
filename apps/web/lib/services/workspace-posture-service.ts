@@ -25,10 +25,10 @@ import { DATA_REGIONS, DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
  * The distinction is the whole point of this surface. A buyer's security team
  * reads a posture dashboard as a list of controls, so a row that is merely
  * recorded must not sit next to a row that denies requests wearing the same
- * styling. `retentionDays`, for instance, is stored and swept by nothing
- * (ORGPOLICY-03), and per-surface sync resolves from a client-supplied header
- * (ORGPOLICY-02), both are positions this workspace has taken, not boundaries
- * an attacker meets.
+ * styling. Per-surface sync, for instance, resolves from a client-supplied
+ * header: it is a position this workspace has taken, not a boundary an attacker
+ * meets. A workspace that has never saved a policy is not governed at all, so a
+ * policy control it shows is unconfigured, whatever the shipped default says.
  */
 export type PostureEnforcement = 'enforced' | 'stated' | 'unconfigured';
 
@@ -521,25 +521,29 @@ export async function readWorkspacePosture(
             : 'This workspace is using the default rules. Review and save workspace rules to make its requirements explicit.',
           href: '/workspace/policy',
         },
-        {
-          id: 'managed-compute',
-          label: 'Managed cloud compute',
-          value: effectivePolicy.allowManagedCompute ? 'Allowed' : 'Blocked',
-          state: 'ok',
-          enforcement: 'enforced',
-          detail:
-            'This setting is applied before managed cloud work begins on every supported client. Blocked attempts appear in the audit trail.',
-          href: '/workspace/policy',
-        },
-        {
-          id: 'privacy-modes',
-          label: 'Allowed privacy modes',
-          value: effectivePolicy.allowedPrivacyModes.join(', '),
-          state: 'ok',
-          enforcement: 'enforced',
-          detail: `Default is ${effectivePolicy.defaultPrivacyMode}. Members can use only the privacy modes listed here.`,
-          href: '/workspace/policy',
-        },
+        configured
+          ? {
+              id: 'managed-compute',
+              label: 'Managed cloud compute',
+              value: effectivePolicy.allowManagedCompute ? 'Allowed' : 'Blocked',
+              state: 'ok',
+              enforcement: 'enforced',
+              detail:
+                'This setting is applied before managed cloud work begins on every supported client. Blocked attempts appear in the audit trail.',
+              href: '/workspace/policy',
+            }
+          : ungovernedPolicySignal('managed-compute', 'Managed cloud compute'),
+        configured
+          ? {
+              id: 'privacy-modes',
+              label: 'Allowed privacy modes',
+              value: effectivePolicy.allowedPrivacyModes.join(', '),
+              state: 'ok',
+              enforcement: 'enforced',
+              detail: `Default is ${effectivePolicy.defaultPrivacyMode}. Members can use only the privacy modes listed here.`,
+              href: '/workspace/policy',
+            }
+          : ungovernedPolicySignal('privacy-modes', 'Allowed privacy modes'),
         {
           id: 'model-policy',
           label: 'Approved models',
@@ -596,17 +600,19 @@ export async function readWorkspacePosture(
             'Each shared resource has an explicit read or write level, limited to the workspace members who receive access.',
           href: '/workspace/sharing',
         },
-        {
-          id: 'external-sharing',
-          label: 'Public sharing',
-          value: effectivePolicy.externalSharingEnabled ? 'Allowed' : 'Blocked',
-          state: 'ok',
-          enforcement: 'enforced',
-          detail: effectivePolicy.externalSharingEnabled
-            ? 'Members may publish a chat or an artifact to an anonymous public link. Both paths check this before minting one.'
-            : 'Members cannot create new public chat or artifact links. Existing links stay reachable until an owner revokes them.',
-          href: '/workspace/policy',
-        },
+        configured
+          ? {
+              id: 'external-sharing',
+              label: 'Public sharing',
+              value: effectivePolicy.externalSharingEnabled ? 'Allowed' : 'Blocked',
+              state: 'ok',
+              enforcement: 'enforced',
+              detail: effectivePolicy.externalSharingEnabled
+                ? 'Members may publish a chat or an artifact to an anonymous public link. Both paths check this before minting one.'
+                : 'Members cannot create new public chat or artifact links. Existing links stay reachable until an owner revokes them.',
+              href: '/workspace/policy',
+            }
+          : ungovernedPolicySignal('external-sharing', 'Public sharing'),
         {
           id: 'retention',
           label: 'Retention',
@@ -691,17 +697,19 @@ export async function readWorkspacePosture(
           detail: 'Workspace admins can read the audit history but cannot rewrite it.',
           href: '/workspace/audit',
         },
-        {
-          id: 'audit-export',
-          label: 'Audit export',
-          value: effectivePolicy.auditExportEnabled ? 'Allowed' : 'Blocked',
-          state: 'ok',
-          enforcement: 'enforced',
-          detail: effectivePolicy.auditExportEnabled
-            ? 'Owners and admins can stream the trail as JSONL. Every export, and every refusal, is itself recorded.'
-            : 'Export is refused for this workspace, and the refusal is recorded in the trail.',
-          href: '/workspace/audit',
-        },
+        configured
+          ? {
+              id: 'audit-export',
+              label: 'Audit export',
+              value: effectivePolicy.auditExportEnabled ? 'Allowed' : 'Blocked',
+              state: 'ok',
+              enforcement: 'enforced',
+              detail: effectivePolicy.auditExportEnabled
+                ? 'Owners and admins can stream the trail as JSONL. Every export, and every refusal, is itself recorded.'
+                : 'Export is refused for this workspace, and the refusal is recorded in the trail.',
+              href: '/workspace/audit',
+            }
+          : ungovernedPolicySignal('audit-export', 'Audit export'),
         siemSignal(auditDestination, streamContinuity[0] ?? null),
       ],
     },
@@ -800,6 +808,20 @@ function siemSignal(
     enforcement: 'enforced',
     detail: SIEM_DELIVERY_DETAIL,
     href: '/workspace/audit',
+  };
+}
+
+function ungovernedPolicySignal(id: string, label: string): PostureSignal {
+  return {
+    id,
+    label,
+    value: 'Not governed',
+    state: 'attention',
+    enforcement: 'unconfigured',
+    detail:
+      'No workspace policy has been saved, so this control does not apply yet and members are ' +
+      'not restricted by it. Save a workspace policy to make it bind.',
+    href: '/workspace/policy',
   };
 }
 

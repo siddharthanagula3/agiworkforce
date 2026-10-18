@@ -70,7 +70,7 @@ const STANDARD_NAME_MAX_CHARS = 200;
 const STANDARD_DESCRIPTION_MAX_CHARS = 2_000;
 const STANDARD_LIST_MAX_ITEMS = 50;
 
-const REF_PATTERN = /^[A-Za-z0-9._/-]{1,200}$/;
+const REF_PATTERN = /^(?!.*\.\.)(?!\/)[A-Za-z0-9._/-]{1,200}$/;
 const GITHUB_API_USER_AGENT = 'agiworkforce-plugin-marketplace';
 const MARKETPLACE_FETCH_TIMEOUT_MS = 10_000;
 

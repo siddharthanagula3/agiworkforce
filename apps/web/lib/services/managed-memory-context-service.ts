@@ -82,13 +82,6 @@ function isoTimestamp(value: string | Date | null): string | null {
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 
-/**
- * Whether the caller's active organization has turned memory on for its
- * members. Absent a policy row, or one this read failed to reach, memory
- * stays off: D9 gates workspace memory closed until an owner or admin
- * explicitly enables it, and a read failure must not silently open that
- * gate for every member.
- */
 export interface OrganizationMemoryPolicy {
   allowMemory: boolean;
   /** The workspace's recorded retention window; only a control when enforced. */
@@ -112,6 +105,13 @@ export type OrganizationMemoryPolicyRead =
   | { readonly readable: true; readonly policy: OrganizationMemoryPolicy }
   | { readonly readable: false };
 
+/**
+ * Whether the caller's active organization has turned memory on for its
+ * members. Absent a policy row, or one this read failed to reach, memory
+ * stays off: D9 gates workspace memory closed until an owner or admin
+ * explicitly enables it, and a read failure must not silently open that
+ * gate for every member.
+ */
 export async function loadOrganizationMemoryPolicy(
   db: ManagedMemoryContextDb,
   organizationId: string | null | undefined,
@@ -357,14 +357,6 @@ export interface MemoryScope {
 
 export const GLOBAL_MEMORY_SCOPE: MemoryScope = { projectId: null, usesGlobalMemory: true };
 
-/**
- * Which memories a conversation may see.
- *
- * Outside a project only global rows (`project_id is null`) are visible, a
- * memory confined to a project must never surface anywhere else, or the
- * confinement means nothing. Inside a project the project's own rows are always
- * visible, and global rows join them unless the project opted out.
- */
 export function activeMemoryPredicate(alias = ''): string {
   return `${alias}is_deleted = false and ${alias}superseded_by is null and (${alias}expires_at is null or ${alias}expires_at > now())`;
 }
@@ -1057,6 +1049,14 @@ export async function consolidateMemories(
   return { merged: duplicates.count, superseded: stale.count, remaining: stale.remaining };
 }
 
+/**
+ * Which memories a conversation may see.
+ *
+ * Outside a project only global rows (`project_id is null`) are visible, a
+ * memory confined to a project must never surface anywhere else, or the
+ * confinement means nothing. Inside a project the project's own rows are always
+ * visible, and global rows join them unless the project opted out.
+ */
 export function memoryScopePredicate(scope: MemoryScope, projectParamIndex: number): string {
   if (!scope.projectId) return 'and project_id is null';
   if (!scope.usesGlobalMemory) return `and project_id = $${projectParamIndex}::uuid`;

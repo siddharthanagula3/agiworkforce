@@ -2485,7 +2485,13 @@ export async function readCloudCodeSessionPullRequestStatus(
     owner.userId,
     session.repositoryUrl,
     GITHUB_PULL_REQUEST_STATUS_PERMISSIONS,
-  ).catch(() => null);
+  ).catch((error: unknown) => {
+    logger.warn(
+      { error, sessionId },
+      'GitHub credential for pull request checks could not be resolved',
+    );
+    return null;
+  });
   if (!credential) {
     throw new CloudCodeUnavailableError(
       'No connected GitHub installation can read the checks on this pull request',

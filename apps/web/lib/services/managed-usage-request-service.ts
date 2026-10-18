@@ -167,7 +167,7 @@ function resolveEstimatedMicrousd(input: {
   return microusdFromLedgerCents(input.estimatedCostCents ?? 0);
 }
 
-export interface ServedRoute {
+interface ServedRoute {
   provider: string | null;
   model: string | null;
   routeId: string | null;
@@ -178,20 +178,6 @@ function buildRouteId(
   model: string | null | undefined,
 ): string | null {
   return provider && model ? `${provider}/${model}` : null;
-}
-
-export function getServedRouteFromUsage(
-  usage: Record<string, unknown> | null | undefined,
-): ServedRoute {
-  const provider =
-    typeof usage?.['servedProvider'] === 'string' ? (usage['servedProvider'] as string) : null;
-  const model =
-    typeof usage?.['servedModel'] === 'string' ? (usage['servedModel'] as string) : null;
-  const routeId =
-    typeof usage?.['servedRouteId'] === 'string'
-      ? (usage['servedRouteId'] as string)
-      : buildRouteId(provider, model);
-  return { provider, model, routeId };
 }
 
 function resolveServedRouteFromObservations(

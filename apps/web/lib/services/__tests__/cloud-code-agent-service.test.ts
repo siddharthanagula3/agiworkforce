@@ -78,10 +78,8 @@ import type {
   CloudCodeAgentStopReason,
   CloudCodeTurnUsage,
 } from '@/lib/services/cloud-code-agent-loop';
-import {
-  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
-  executePersistedAgentTurn,
-} from '@/lib/services/cloud-code-agent-service';
+import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
+import { executePersistedAgentTurn } from '@/lib/services/cloud-code-agent-service';
 
 const FLAT_RESERVATION_CENTS = 25;
 

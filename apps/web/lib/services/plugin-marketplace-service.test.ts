@@ -195,6 +195,18 @@ describe('fetchMarketplaceManifest', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('refuses a ref that would climb out of the repository path, which git never allows', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    for (const ref of ['../../other/repo/main', 'main/../../x', '/main']) {
+      await expect(
+        fetchMarketplaceManifest('https://github.com/acme/tools', ref),
+      ).rejects.toBeInstanceOf(PluginMarketplaceValidationError);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('raises a fetch error when no manifest exists at the documented path', async () => {
     const fetchMock = vi.fn().mockResolvedValue(fakeFetchResponse('not found', false, 404));
     vi.stubGlobal('fetch', fetchMock);

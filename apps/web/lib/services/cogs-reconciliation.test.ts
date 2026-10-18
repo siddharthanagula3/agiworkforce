@@ -280,6 +280,28 @@ describe('both sides are read in whole microUSD out of the period asked for', ()
     expect(positions[0]?.customerChargedMicrousd).toBe(12 * MICROUSD_PER_CENT);
   });
 
+  it('keeps a sub-cent turn, read at the microUSD the ledger settled it in', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (!sql.includes('from public.managed_usage_requests')) return [];
+      return [
+        {
+          user_id: 'user_9',
+          idempotency_key: 'idem-00000010',
+          request_hash: HASH_B,
+          provider: 'openai',
+          actual_cost_cents: '0',
+          actual_cost_microusd: '3200',
+          finalized_at: new Date('2026-09-14T00:00:00.000Z'),
+        },
+      ];
+    });
+
+    const positions = await readDeliveredUsagePositions(WINDOW_START, WINDOW_END, db);
+
+    expect(calls[0]?.sql).toContain('coalesce(r.actual_cost_microusd, 0) > 0');
+    expect(positions[0]?.customerChargedMicrousd).toBe(3_200);
+  });
+
   it('joins the two reads into findings over one window', async () => {
     const { db } = makeDb((sql) => {
       if (sql.includes('from public.provider_cost_events')) {

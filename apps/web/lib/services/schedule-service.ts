@@ -76,7 +76,6 @@ const MAX_ERROR_LENGTH = 2_000;
 const SCHEDULE_WORKER_NAME = 'scheduled-task';
 const APPROVAL_EXPIRED_MESSAGE = `Nobody approved or denied the step this run was waiting on within ${APPROVAL_CHECKPOINT_TTL_HOURS} hours, so the run stopped. Resume the schedule to run it again.`;
 
-export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 const LOW_POWER_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export function missedExecutionGraceMs(): number {
@@ -2244,7 +2243,7 @@ async function findExpiredClaims(
   const rows = await db.query<ClaimRow>(
     `select task.*, run.id as run_id, run.started_at as run_started_at,
             coalesce(run.scheduled_for, run.started_at) as scheduled_for,
-            run.trigger_source
+            run.trigger_source, run.attempt_count as run_attempt_count
      from scheduled_task_runs as run
      join scheduled_tasks as task on task.id = run.task_id
      where run.status = 'running'

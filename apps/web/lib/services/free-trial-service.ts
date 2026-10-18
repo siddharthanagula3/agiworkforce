@@ -6,7 +6,6 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { chargeMicrousdForProviderCost, getModelMetadataById } from '@agiworkforce/types';
-export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
 import { rollingResetAt, toIsoTimestamp } from '@/lib/server/capability-limit-resets';

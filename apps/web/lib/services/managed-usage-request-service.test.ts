@@ -47,7 +47,6 @@ import {
   createManagedUsageErrorBody,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
-  getServedRouteFromUsage,
   markManagedUsageProviderStarted,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageProviderStep,
@@ -991,36 +990,6 @@ describe('managed usage settlement feeds the COGS ledger', () => {
     expect(finalization.operationResult).toBe('already_finalized');
     expect(finalization.actualCostMicrousd).toBe(0);
     expect(recordSettledProviderCost).not.toHaveBeenCalled();
-  });
-});
-
-describe('getServedRouteFromUsage', () => {
-  it('reads served-route facts back from a tagged usage blob', () => {
-    expect(
-      getServedRouteFromUsage({
-        servedProvider: 'open_router',
-        servedModel: 'served-model',
-        servedRouteId: 'open_router/served-model',
-      }),
-    ).toEqual({
-      provider: 'open_router',
-      model: 'served-model',
-      routeId: 'open_router/served-model',
-    });
-  });
-
-  it('returns nulls for a usage blob with no served-route facts', () => {
-    expect(getServedRouteFromUsage({ inputTokens: 10 })).toEqual({
-      provider: null,
-      model: null,
-      routeId: null,
-    });
-    expect(getServedRouteFromUsage(null)).toEqual({ provider: null, model: null, routeId: null });
-    expect(getServedRouteFromUsage(undefined)).toEqual({
-      provider: null,
-      model: null,
-      routeId: null,
-    });
   });
 });
 

@@ -6,8 +6,8 @@ import {
   areDurableCodeTurnsEnabled,
   startCloudCodeTurnWorkflow,
 } from '@/lib/workflows/start-cloud-code-turn-workflow';
+import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from './cloud-code-turn-budget';
 import {
-  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
   executePersistedAgentTurn,
   prepareCloudCodeAgentTurn,
   type CloudCodeAgentTurnOutcome,

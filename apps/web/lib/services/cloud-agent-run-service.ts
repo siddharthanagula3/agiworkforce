@@ -432,7 +432,7 @@ const PENDING_INPUT_COLUMNS = `
   pending_input.input_requests as pending_input_requests,
   pending_input.request_state as pending_input_request_state`;
 
-const DEVICE_CHECKPOINT_TTL_MINUTES = 15;
+export const DEVICE_CHECKPOINT_TTL_MINUTES = 15;
 
 const PENDING_DEVICE_LATERAL = `
   left join lateral (
@@ -916,7 +916,7 @@ export async function transitionCloudAgentRun(
 ): Promise<CloudAgentRun> {
   // The `previous` CTE locks the row and reads its pre-update snapshot, so a
   // repeated transition into the same terminal state, and, on the workflow
-  // path, a settle that follows a journal write that already moved the run.
+  // path, a settle that follows a journal write that already moved the run,
   // notifies at most once. A settle only knows the coarse outcome, so a run the
   // journal already moved to a finer terminal state reading as that outcome
   // keeps the finer one.
@@ -1399,14 +1399,8 @@ export async function saveCloudAgentApprovalCheckpoint(
         input.turnId,
         nextEventSequence,
         completedSteps,
-        // Serialized here, not left to the driver. node-postgres renders a JS
-        // ARRAY as a Postgres array literal, `{"a","b"}`, which is not JSON, so
-        // `$9::jsonb` failed with `invalid input syntax for type json: Expected
-        // ":", but found ","` and took the whole turn down with a 500. It went
-        // unnoticed because nothing reached this path: approval mode was 'auto'
-        // for every turn without an MCP tool, so no first-party tool ever
-        // checkpointed. `request` happens to work as an object, and is
-        // stringified too so all three read the same way.
+        // Serialized here, not left to the driver: node-postgres renders a JS
+        // array as a Postgres array literal, `{"a","b"}`, which `::jsonb` rejects.
         JSON.stringify(request),
         JSON.stringify(messages),
         JSON.stringify(pendingToolCalls),
@@ -1905,8 +1899,6 @@ export class CloudAgentDeviceMismatchError extends Error {
     this.name = 'CloudAgentDeviceMismatchError';
   }
 }
-
-export { DEVICE_CHECKPOINT_TTL_MINUTES };
 
 function mapDeviceCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgentDeviceCheckpoint {
   return {

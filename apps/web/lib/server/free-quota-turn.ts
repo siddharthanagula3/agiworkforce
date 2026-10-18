@@ -53,10 +53,8 @@ import {
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import {
-  FREE_TRIAL_MODEL,
-  estimateConservativeFreeInputTokens,
-} from '@/lib/services/free-trial-service';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
+import { estimateConservativeFreeInputTokens } from '@/lib/services/free-trial-service';
 import type { TokenUsage } from '@/lib/services/llm-cost-calculator';
 import {
   buildModelPolicyGateResponse,

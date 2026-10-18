@@ -13,10 +13,10 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { ACCOUNT_STATUSES, accountAccessDecision } from '@/lib/auth/account-status';
+import { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 
 import {
   ScheduleConflictError,
-  UNATTENDED_RUN_DENIED_STATUSES,
   ScheduleNotFoundError,
   ScheduleValidationError,
   claimDueScheduleRuns,
@@ -1146,6 +1146,29 @@ describe('due-schedule batch isolation', () => {
     expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(1, db, claim.scope);
     expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(2, db, claim.scope);
     expect(summary.claimed).toBe(2);
+  });
+
+  it('reads an expired claim with its attempt count, so its retry key moves on', async () => {
+    // A retry's idempotency key is built from the attempt it is on. Read as
+    // attempt 1 every time, a second lapsed lease re-queued the same key, the
+    // claim then inserted no run, and the task was left with no next execution.
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('lease_expires_at < now()')) return [];
+      return [];
+    });
+
+    await processDueScheduleRuns({
+      limit: 2,
+      concurrency: 1,
+      timeoutMs: 1000,
+      db: database(query),
+      executor: vi.fn() as unknown as ScheduledTaskExecutor,
+    });
+
+    const expiredRead = query.mock.calls.find(([sql]) =>
+      String(sql).includes('lease_expires_at < now()'),
+    );
+    expect(String(expiredRead?.[0])).toContain('run.attempt_count as run_attempt_count');
   });
 });
 

@@ -213,6 +213,32 @@ function signal(groups: { signals: PostureSignal[] }[], id: string): PostureSign
   return found;
 }
 
+const SAVED_POLICY_ROW = {
+  organization_id: ORG,
+  default_privacy_mode: 'byok',
+  allowed_privacy_modes: ['local', 'byok'],
+  allow_managed_compute: false,
+  require_local_to_byok_preview: true,
+  chat_sync_surfaces: ['web'],
+  allow_cli_cloud_sync: false,
+  allow_vscode_cloud_sync: false,
+  allow_chrome_cloud_sync: false,
+  audit_export_enabled: true,
+  retention_days: 90,
+  retention_enforced: false,
+  external_sharing_enabled: false,
+  allow_memory: true,
+  metadata: {},
+  updated_at: '2026-08-23T00:00:00.000Z',
+};
+
+const POLICY_CONTROL_SIGNALS = [
+  'managed-compute',
+  'privacy-modes',
+  'external-sharing',
+  'audit-export',
+] as const;
+
 describe('readWorkspacePosture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -231,8 +257,8 @@ describe('readWorkspacePosture', () => {
 
   it('never labels a recorded-but-unenforced value as enforced', async () => {
     // The failure this guards is the one a security review exists to catch: a
-    // dashboard that renders a stored number as a control. retentionDays is
-    // swept by nothing, and per-surface sync reads a client-supplied hint.
+    // dashboard that renders a stored number as a control. Retention is swept
+    // only once enforced, and per-surface sync reads a client-supplied hint.
     const h = harness();
     const posture = await readWorkspacePosture(h.db, ORG);
 
@@ -332,11 +358,24 @@ describe('readWorkspacePosture', () => {
   });
 
   it('reports public sharing from the workspace policy, not as unavailable', async () => {
-    const h = harness();
+    const h = harness({ policyRow: SAVED_POLICY_ROW });
     const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'external-sharing');
 
     expect(s.enforcement).toBe('enforced');
-    expect(['Allowed', 'Blocked']).toContain(s.value);
+    expect(s.value).toBe('Blocked');
+  });
+
+  it('does not present shipped defaults as controls when no policy was saved', async () => {
+    // An unconfigured workspace is answered `unscoped` by the policy gate, so a
+    // default that says Blocked would describe a refusal nobody performs.
+    const posture = await readWorkspacePosture(harness({ policyRow: null }).db, ORG);
+
+    for (const id of POLICY_CONTROL_SIGNALS) {
+      const s = signal(posture.groups, id);
+      expect(s.enforcement).toBe('unconfigured');
+      expect(s.value).toBe('Not governed');
+      expect(s.state).toBe('attention');
+    }
   });
 
   it('flags a SIEM destination that is failing rather than reporting it as delivering', async () => {
@@ -456,12 +495,14 @@ describe('readWorkspacePosture', () => {
     expect(s.detail).toMatch(/after Auto chooses a model/i);
   });
 
-  it('marks managed compute and privacy modes as enforced', async () => {
-    const h = harness();
+  it('marks managed compute and privacy modes as enforced once a policy is saved', async () => {
+    const h = harness({ policyRow: SAVED_POLICY_ROW });
     const posture = await readWorkspacePosture(h.db, ORG);
 
     expect(signal(posture.groups, 'managed-compute').enforcement).toBe('enforced');
+    expect(signal(posture.groups, 'managed-compute').value).toBe('Blocked');
     expect(signal(posture.groups, 'privacy-modes').enforcement).toBe('enforced');
+    expect(signal(posture.groups, 'privacy-modes').value).toBe('local, byok');
   });
 
   it('distinguishes a configured connection from an active one', async () => {

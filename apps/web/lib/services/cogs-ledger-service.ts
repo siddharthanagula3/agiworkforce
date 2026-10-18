@@ -1073,12 +1073,12 @@ const SETTLED_COST_POSITIONS_SQL = `select e.source_ref, e.user_id, e.provider, 
     order by e.created_at asc`;
 
 const DELIVERED_USAGE_POSITIONS_SQL = `select r.user_id, r.idempotency_key, r.request_hash, r.provider,
-          r.actual_cost_cents, r.finalized_at
+          r.actual_cost_cents, r.actual_cost_microusd, r.finalized_at
      from public.managed_usage_requests r
     where r.finalized_at >= $1::timestamptz
       and r.finalized_at < $2::timestamptz
       and r.status = 'completed'
-      and coalesce(r.actual_cost_cents, 0) > 0
+      and (coalesce(r.actual_cost_microusd, 0) > 0 or coalesce(r.actual_cost_cents, 0) > 0)
     order by r.finalized_at asc`;
 
 interface SettledCostRow {
@@ -1097,6 +1097,7 @@ interface DeliveredUsageRow {
   request_hash: string;
   provider: string;
   actual_cost_cents: number | string | null;
+  actual_cost_microusd?: number | string | null;
   finalized_at: string | Date;
 }
 
@@ -1144,7 +1145,10 @@ export async function readDeliveredUsagePositions(
     }),
     userId: row.user_id,
     provider: row.provider,
-    customerChargedMicrousd: microusdFromCents(numberFrom(row.actual_cost_cents)),
+    customerChargedMicrousd:
+      row.actual_cost_microusd === null || row.actual_cost_microusd === undefined
+        ? microusdFromCents(numberFrom(row.actual_cost_cents))
+        : numberFrom(row.actual_cost_microusd),
     occurredAt: isoOf(row.finalized_at),
   }));
 }

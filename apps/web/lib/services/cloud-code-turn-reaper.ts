@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { CLOUD_CODE_RUN_LEASE_SECONDS } from './cloud-code-session-service';
-import { CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS } from './cloud-code-agent-service';
+import { CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS } from './cloud-code-turn-budget';
 
 /**
  * How long a turn may sit at `running` before it is certainly dead.

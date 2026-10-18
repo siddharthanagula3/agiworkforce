@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/types';
 import {
   LIVE_VOICE_WORK_TASK_TOOL,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
   MAX_AGIWORK_GOAL_CHARS,
   type LiveVoiceClientHandoff,
 } from '@agiworkforce/cloud-contracts';
@@ -30,10 +31,7 @@ import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
-import {
-  createManagedOfficeFileToolDefinition,
-  MANAGED_OFFICE_FILE_TOOL_NAME,
-} from '@/lib/services/managed-office-file-service';
+import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 import { URL_FETCH_TOOL, urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { loadUserConnectorToolCatalog } from '@/lib/user-connector-tools';
 import { WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';

@@ -39,10 +39,7 @@ import {
 } from './managed-usage-request-service';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
-import {
-  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
-  CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS,
-} from './cloud-code-turn-budget';
+import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from './cloud-code-turn-budget';
 import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
@@ -101,8 +98,6 @@ const READER_FACING_FAILURES = [
 ] as const;
 
 const MAX_STEP_OUTPUT_LENGTH = 100_000;
-
-export { CLOUD_CODE_AGENT_TURN_BUDGET_MS, CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS };
 
 /**
  * How often a running turn asks whether it has been stopped.
@@ -242,11 +237,6 @@ async function preserveUnfinishedTurnWork(
   }
 }
 
-/**
- * Move a turn row off `running`. Never throws: every caller is already unwinding
- * something else, and a failure here must not mask the original error or skip
- * the settlement that follows it.
- */
 function persistedFailureMessage(error: unknown, turnId: string, sessionId: string): string {
   if (READER_FACING_FAILURES.some((failure) => error instanceof failure)) {
     return (error as Error).message;
@@ -258,6 +248,11 @@ function persistedFailureMessage(error: unknown, turnId: string, sessionId: stri
   return GENERIC_TURN_FAILURE_MESSAGE;
 }
 
+/**
+ * Move a turn row off `running`. Never throws: every caller is already unwinding
+ * something else, and a failure here must not mask the original error or skip
+ * the settlement that follows it.
+ */
 async function markTurnFailed(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
@@ -515,9 +510,6 @@ export interface CloudCodeAgentTurnOutcome {
  * made an abandoned turn indistinguishable from a finished one to every query
  * that filters on `state`. None of the three reached a conclusion, and the
  * schema has no "incomplete" state, so `failed` is the honest answer.
- *
- * There is deliberately no `default`: a stop reason added later must be mapped
- * here, and the unreachable trailing return is `failed`, never `completed`.
  */
 function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
   switch (stopReason) {
@@ -542,17 +534,17 @@ function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
   }
 }
 
-/**
- * A turn that stopped short must say so in the row. The loop leaves
- * `errorMessage` unset for the non-`error` stop reasons, which would persist a
- * failed turn with a null explanation.
- */
 function preservedWorkSentence(preservedFiles: number): string {
   if (preservedFiles <= 0) return '';
   const files = preservedFiles === 1 ? '1 file' : `${preservedFiles} files`;
   return ` The ${files} it had changed were committed in the workspace, so the partial work is still there to review.`;
 }
 
+/**
+ * A turn that stopped short must say so in the row. The loop leaves
+ * `errorMessage` unset for the non-`error` stop reasons, which would persist a
+ * failed turn with a null explanation.
+ */
 function terminalErrorMessage(
   result: CloudCodeAgentResult,
   stoppedByUser: boolean,

@@ -82,6 +82,7 @@ import {
   buildScheduledToolPlan,
   runScheduledCompletion,
   runScheduledToolLoop,
+  unattendedToolLoopPricing,
   withheldToolsDirective,
   type ScheduledCompletion,
   type ScheduledMessages,
@@ -619,6 +620,7 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
           userId,
           signal: input.signal,
           usage: observedUsage,
+          pricing: unattendedToolLoopPricing(route),
           ...(input.observer
             ? {
                 onEnvelope: input.observer.envelope,
@@ -685,10 +687,7 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
   } catch (error) {
     if (!providerCompleted) {
       const observedCostMicrousd = hasObservedProviderUsage(observedUsage)
-        ? observedProviderUsageLedgerMicrousd(observedUsage, {
-            provider: route.provider,
-            model: route.modelKey,
-          })
+        ? observedProviderUsageLedgerMicrousd(observedUsage, unattendedToolLoopPricing(route))
         : 0;
       try {
         await finalizeManagedUsageRequest({

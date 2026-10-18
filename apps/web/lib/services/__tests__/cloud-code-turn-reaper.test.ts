@@ -11,7 +11,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 import { CLOUD_CODE_RUN_LEASE_SECONDS } from '../cloud-code-session-service';
-import { CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS } from '../cloud-code-agent-service';
+import { CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS } from '../cloud-code-turn-budget';
 import {
   CLOUD_CODE_STUCK_TURN_AGE_SECONDS,
   reapStuckCloudCodeTurns,

@@ -27,7 +27,7 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { extractManagedAgentEventEnvelopes } from '@/app/api/llm/v1/chat/completions/lib/managed-agent-stream';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
+import { runsUnattendedWithoutAsking } from '@/lib/services/unattended-tool-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
@@ -279,30 +279,6 @@ export async function selectArtifactRuntimeRoute(
   };
 }
 
-function runsWithoutAsking(
-  qualifiedName: string,
-  toolApprovalPolicy: ToolApprovalPolicy,
-  connectorPermissions: ConnectorToolPermissions,
-): boolean {
-  return (
-    resolveToolCallGate(
-      {
-        qualifiedName,
-        savedLevel: connectorPermissions.levelFor(qualifiedName),
-        batchIntroducesUntrustedContent: false,
-      },
-      {
-        approvalMode: 'manual',
-        toolApprovalPolicy,
-        unattended: true,
-        deviceHostPresent: false,
-        untrustedContentInContext: false,
-        sensitiveSourceAvailable: false,
-      },
-    ).verdict === 'allow'
-  );
-}
-
 interface ArtifactConnectorScope {
   db: DatabaseAdapter;
   userId: string;
@@ -359,7 +335,7 @@ function artifactToolStanding(
   access: ArtifactConnectorAccess,
 ): ArtifactToolStanding {
   if (access.connectorPermissions.isDenied(tool.qualifiedName)) return 'blocked';
-  return runsWithoutAsking(
+  return runsUnattendedWithoutAsking(
     tool.qualifiedName,
     access.toolApprovalPolicy,
     access.connectorPermissions,
