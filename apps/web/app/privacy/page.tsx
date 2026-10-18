@@ -362,12 +362,28 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         </Link>
         . Tool calls follow the conversation&rsquo;s retention in section 05. The web app cannot
         watch your screen or your other tabs on its own. Browser control and computer use belong to
-        the Chrome extension, which is not released; what it captures, including screenshots of the
-        tab that cannot be redacted, is set out on{' '}
+        the Chrome extension; what it captures, including screenshots of the tab that cannot be
+        redacted, is set out on{' '}
         <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
         </Link>
-        .
+        . The use of information the Chrome extension receives, including page text, addresses and
+        screenshots of the tabs you choose, will adhere to the{' '}
+        <a
+          href="https://developer.chrome.com/docs/webstore/program-policies/policies"
+          className="agi-ds-link"
+        >
+          Chrome Web Store User Data Policy
+        </a>
+        , including the{' '}
+        <a
+          href="https://developer.chrome.com/docs/webstore/program-policies/limited-use"
+          className="agi-ds-link"
+        >
+          Limited Use requirements
+        </a>
+        . It is used only to do the task you asked for, is never sold, and is never used for
+        advertising.
       </>
     ),
   },
