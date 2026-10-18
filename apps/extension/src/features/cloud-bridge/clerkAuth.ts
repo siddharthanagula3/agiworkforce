@@ -51,13 +51,6 @@ const syncHost = parseClerkOrigin(configuredSyncHost);
 
 type ClerkClient = Awaited<ReturnType<typeof createClerkClient>>;
 
-export interface ClerkAccountProfile {
-  owner: ManagedCloudOwner;
-  displayName: string | null;
-  email: string | null;
-  initials: string;
-}
-
 let nativeClient: Promise<ClerkClient> | null = null;
 
 export function isClerkExtensionAuthConfigured(): boolean {
@@ -197,40 +190,6 @@ export async function getFreshClerkAuthContext(
 
 export async function getFreshClerkToken(forceRefresh = false): Promise<string | null> {
   return (await getFreshClerkAuthContext(forceRefresh))?.token ?? null;
-}
-
-function compactInitials(displayName: string | null, email: string | null): string {
-  const words = displayName?.split(/\s+/).filter(Boolean) ?? [];
-  const initials =
-    words.length > 1
-      ? `${words[0]?.[0] ?? ''}${words[words.length - 1]?.[0] ?? ''}`
-      : (words[0]?.slice(0, 2) ?? email?.slice(0, 2) ?? 'A');
-  return initials.toUpperCase();
-}
-
-export async function getClerkAccountProfile(
-  forceRefresh = false,
-): Promise<ClerkAccountProfile | null> {
-  if (!isClerkExtensionAuthConfigured()) return null;
-  const clerk = await getNativeClient(forceRefresh);
-  const user = clerk.user;
-  const owner = normalizeManagedCloudOwner({
-    accountId: user?.id,
-    authIncarnation: clerk.session?.id,
-  });
-  if (!user || !owner) return null;
-
-  const displayName =
-    user.fullName?.trim() ||
-    [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
-    null;
-  const email = user.primaryEmailAddress?.emailAddress?.trim() || null;
-  return {
-    owner,
-    displayName,
-    email,
-    initials: compactInitials(displayName, email),
-  };
 }
 
 export async function openClerkSignIn(): Promise<void> {

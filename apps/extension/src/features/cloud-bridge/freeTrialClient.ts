@@ -88,7 +88,6 @@ export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_R
 export const MANAGED_INPUT_RESUME_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_INPUT_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
 export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
-export const MANAGED_USAGE_HISTORY_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage/history`;
 
 const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
 const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
@@ -292,62 +291,6 @@ export async function getManagedModelAccess(
     modelIds,
     allowedAutoModes,
   };
-}
-
-export interface ManagedModelUsage {
-  modelId: string;
-  label: string | null;
-  requests: number;
-  credits: number;
-}
-
-export interface ManagedUsageHistory {
-  from: string;
-  to: string;
-  byModel: ManagedModelUsage[];
-}
-
-function readModelUsageRow(value: unknown): ManagedModelUsage | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const modelId = normalizeAccessString(record['key'], 200);
-  const requests = record['requests'];
-  const credits = record['credits'];
-  if (!modelId || typeof requests !== 'number' || typeof credits !== 'number') return null;
-  if (!Number.isFinite(requests) || !Number.isFinite(credits)) return null;
-  const label = typeof record['label'] === 'string' && record['label'] ? record['label'] : null;
-  return { modelId, label, requests, credits: Math.max(0, credits) };
-}
-
-export async function getManagedUsageHistory(
-  token: string,
-  signal?: AbortSignal,
-): Promise<ManagedUsageHistory> {
-  if (!token.trim()) throw new Error('Authentication is required');
-  const response = await fetch(MANAGED_USAGE_HISTORY_ENDPOINT, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Requested-With': 'XMLHttpRequest',
-      ...platformRequestHeaders(),
-    },
-    signal,
-  });
-  if (!response.ok) throw new Error(`Usage history is unavailable (${response.status})`);
-  const body: unknown = await response.json();
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new Error('Invalid usage history response');
-  }
-  const record = body as Record<string, unknown>;
-  const from = record['from'];
-  const to = record['to'];
-  const byModel = record['byModel'];
-  if (typeof from !== 'string' || typeof to !== 'string' || !Array.isArray(byModel)) {
-    throw new Error('Invalid usage history response');
-  }
-  const rows = byModel.map(readModelUsageRow);
-  if (rows.some((row) => row === null)) throw new Error('Invalid usage history response');
-  return { from, to, byModel: rows as ManagedModelUsage[] };
 }
 
 export async function getAuthToken(forceRefresh = false): Promise<string | null> {

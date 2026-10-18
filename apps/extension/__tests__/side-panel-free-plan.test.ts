@@ -119,7 +119,6 @@ vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
   isClerkExtensionAuthConfigured: () => true,
   getFreshClerkAuthContext: async () => ({ token: 'fixture-session', owner: account.owner }),
   getFreshClerkToken: async () => 'fixture-session',
-  getClerkAccountProfile: async () => null,
   observeClerkAuth: async (onChange: () => void) => {
     account.onChange = onChange;
     return () => undefined;
@@ -157,7 +156,6 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
         }),
       }
     ),
-    getManagedUsageHistory: async () => null,
   };
 });
 vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal) => ({

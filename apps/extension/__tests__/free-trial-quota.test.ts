@@ -93,7 +93,6 @@ import {
   MANAGED_APPROVAL_ENDPOINT,
   MANAGED_MODELS_ENDPOINT,
   MANAGED_USAGE_ENDPOINT,
-  MANAGED_USAGE_HISTORY_ENDPOINT,
   MANAGED_CHAT_MAX_INPUT_CHARS,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
@@ -101,7 +100,6 @@ import {
   getAuthToken,
   clearAuthToken,
   getManagedModelAccess,
-  getManagedUsageHistory,
   parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
@@ -415,122 +413,6 @@ describe('getManagedModelAccess', () => {
 
     await expect(getManagedModelAccess('token', controller.signal)).rejects.toBe(abort);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('getManagedUsageHistory', () => {
-  function historyResponse(body: unknown, status = 200): Response {
-    return {
-      ok: status >= 200 && status < 300,
-      status,
-      json: vi.fn().mockResolvedValue(body),
-    } as unknown as Response;
-  }
-
-  const HISTORY = {
-    userId: 'user_1',
-    from: '2026-08-28T00:00:00.000Z',
-    to: '2026-09-27T00:00:00.000Z',
-    granularity: 'day',
-    totals: { requests: 42, inputTokens: 90_000, outputTokens: 12_000, credits: 318.4 },
-    periods: [{ start: '2026-09-26T00:00:00.000Z', requests: 42, credits: 318.4 }],
-    byWorkload: [
-      {
-        key: 'chat',
-        label: null,
-        requests: 40,
-        inputTokens: 80_000,
-        outputTokens: 10_000,
-        credits: 300,
-      },
-      {
-        key: 'browser',
-        label: null,
-        requests: 2,
-        inputTokens: 10_000,
-        outputTokens: 2_000,
-        credits: 18.4,
-      },
-    ],
-    byModel: [
-      {
-        key: 'fixture-model-a',
-        label: null,
-        requests: 30,
-        inputTokens: 70_000,
-        outputTokens: 9_000,
-        credits: 250.25,
-      },
-      {
-        key: 'fixture-model-b',
-        label: null,
-        requests: 12,
-        inputTokens: 20_000,
-        outputTokens: 3_000,
-        credits: 68.15,
-      },
-    ],
-    byProject: [],
-    freshness: { asOf: '2026-09-27T00:00:00.000Z', latestActivityAt: null, unsettledRequests: 0 },
-  };
-
-  it('reads settled spend per model in credits from the account history owner', async () => {
-    fetchMock.mockResolvedValueOnce(historyResponse(HISTORY));
-
-    await expect(getManagedUsageHistory('session-token')).resolves.toEqual({
-      from: HISTORY.from,
-      to: HISTORY.to,
-      byModel: [
-        { modelId: 'fixture-model-a', label: null, requests: 30, credits: 250.25 },
-        { modelId: 'fixture-model-b', label: null, requests: 12, credits: 68.15 },
-      ],
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      MANAGED_USAGE_HISTORY_ENDPOINT,
-      expect.objectContaining({
-        method: 'GET',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer session-token',
-          'X-Requested-With': 'XMLHttpRequest',
-        }),
-      }),
-    );
-  });
-
-  it('never shows a negative spend', async () => {
-    fetchMock.mockResolvedValueOnce(
-      historyResponse({
-        ...HISTORY,
-        byModel: [{ key: 'fixture-model-a', label: null, requests: 1, credits: -0.5 }],
-      }),
-    );
-
-    const history = await getManagedUsageHistory('session-token');
-    expect(history.byModel).toEqual([
-      { modelId: 'fixture-model-a', label: null, requests: 1, credits: 0 },
-    ]);
-  });
-
-  it('fails instead of showing a partial or invented history', async () => {
-    await expect(getManagedUsageHistory('  ')).rejects.toThrow('Authentication is required');
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    fetchMock.mockResolvedValueOnce(historyResponse({}, 503));
-    await expect(getManagedUsageHistory('token')).rejects.toThrow('(503)');
-
-    fetchMock.mockResolvedValueOnce(historyResponse({ ...HISTORY, byModel: undefined }));
-    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
-
-    fetchMock.mockResolvedValueOnce(
-      historyResponse({
-        ...HISTORY,
-        byModel: [...HISTORY.byModel, { key: 'fixture-model-c', requests: 1, credits: '2' }],
-      }),
-    );
-    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
-
-    fetchMock.mockResolvedValueOnce(historyResponse([HISTORY]));
-    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
   });
 });
 

@@ -400,7 +400,6 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
 // unexplained network error inside a run.
 export const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>([
   'https://api.agiworkforce.com',
-  'https://gateway.agiworkforce.com',
   'https://agiworkforce.com',
 ]);
 

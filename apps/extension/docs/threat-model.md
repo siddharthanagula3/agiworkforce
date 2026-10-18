@@ -89,7 +89,7 @@ framing. The current source CSP permits inline styles and `data:` images; code
 review must not assume those two classes are blocked.
 
 `connect-src` names each AGI origin exactly (`https://agiworkforce.com`,
-`https://api.agiworkforce.com`, `https://gateway.agiworkforce.com`) rather than
+`https://api.agiworkforce.com`) rather than
 a `https://*.agiworkforce.com` wildcard, so a preview, marketing or staging
 subdomain is not a reachable egress target even if something in the extension
 were persuaded to name one. The set must stay equal to

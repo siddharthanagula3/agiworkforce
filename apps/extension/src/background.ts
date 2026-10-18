@@ -559,9 +559,7 @@ function sendComputerUseLifecycle(message: Record<string, unknown>): void {
   });
 }
 
-initDownloadLedger((download) => {
-  sendComputerUseLifecycle({ type: 'AGI_DOWNLOAD_CHANGED', download });
-});
+initDownloadLedger();
 
 function broadcastComputerUseForCurrentRun(
   lease: ComputerUseRunLease,

@@ -53,11 +53,11 @@ describe('computer-use configured API origin', () => {
     vi.stubGlobal('chrome', {
       storage: {
         local: {
-          get: vi.fn(async () => ({ agi_gateway_url: 'https://gateway.agiworkforce.com' })),
+          get: vi.fn(async () => ({ agi_gateway_url: 'https://api.agiworkforce.com' })),
         },
       },
     });
 
-    expect(await resolveGatewayBase()).toBe('https://gateway.agiworkforce.com');
+    expect(await resolveGatewayBase()).toBe('https://api.agiworkforce.com');
   });
 });

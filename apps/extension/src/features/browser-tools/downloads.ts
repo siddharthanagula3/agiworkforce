@@ -21,11 +21,8 @@ export interface DownloadRecord {
   readonly error?: string;
 }
 
-type DownloadBroadcast = (record: DownloadRecord) => void;
-
 const ledger = new Map<number, DownloadRecord>();
 
-let broadcast: DownloadBroadcast | null = null;
 let hydrated: Promise<void> | null = null;
 let listenersInstalled = false;
 
@@ -88,7 +85,6 @@ function persistLedger(): void {
 function put(record: DownloadRecord): void {
   ledger.set(record.id, record);
   persistLedger();
-  broadcast?.(record);
 }
 
 function stateFromDelta(value: string | undefined): DownloadState | null {
@@ -228,8 +224,7 @@ export async function waitForBrowserToolDownload(
   return observed;
 }
 
-export function initDownloadLedger(onUpdate: DownloadBroadcast): void {
-  broadcast = onUpdate;
+export function initDownloadLedger(): void {
   void ensureHydrated();
   if (listenersInstalled) return;
   listenersInstalled = true;

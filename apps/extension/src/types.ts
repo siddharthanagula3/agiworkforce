@@ -120,10 +120,6 @@ export type NativeMessageType =
   | 'READ_PAGE_CONSOLE'
   | 'READ_PAGE_NETWORK';
 
-export type InternalMessageType = 'CHAT_CHUNK';
-
-export type InternalMessage = ChatChunkMessage;
-
 export interface BaseMessage {
   type: NativeMessageType;
   timestamp?: number;
@@ -1129,11 +1125,6 @@ export interface DownloadResponse {
   error?: string;
 }
 
-export interface DownloadChangedMessage {
-  type: 'AGI_DOWNLOAD_CHANGED';
-  download: SessionDownload;
-}
-
 export interface SetPageWatchMessage extends BaseMessage {
   type: 'SET_PAGE_WATCH';
   watching: boolean;
@@ -1312,21 +1303,6 @@ export type ExtensionResponse =
   | ContextHandoffResponse
   | DownloadResponse
   | PageWatchResponse;
-
-export interface PopupState {
-  sessionStartTime: number;
-  actionCount: number;
-  isConnected: boolean;
-}
-
-export interface ExtensionConfig {
-  desktopAppPort: number;
-  desktopAppUrl: string;
-  enableLogging: boolean;
-  maxRetries: number;
-  retryDelayMs: number;
-  requestTimeoutMs: number;
-}
 
 export interface RateLimitState {
   count: number;

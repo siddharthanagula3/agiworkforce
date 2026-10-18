@@ -78,34 +78,6 @@ describe('Clerk Chrome Extension auth', () => {
     expect(createClerkClient).not.toHaveBeenCalled();
   });
 
-  it('loads foreground account identity with the native Sync Host transport', async () => {
-    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
-    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
-    createClerkClient.mockResolvedValue({
-      session: { id: 'session-ada', getToken: vi.fn().mockResolvedValue('fresh-token') },
-      user: {
-        id: 'user-ada',
-        fullName: 'Ada Lovelace',
-        primaryEmailAddress: { emailAddress: 'ada@example.com' },
-      },
-      addListener: vi.fn(),
-      openSignIn: vi.fn(),
-      signOut: vi.fn(),
-    });
-
-    const auth = await importClerkAuth();
-
-    await expect(auth.getClerkAccountProfile()).resolves.toMatchObject({
-      displayName: 'Ada Lovelace',
-      email: 'ada@example.com',
-    });
-    expect(createClerkClient).toHaveBeenCalledWith({
-      publishableKey: 'pk_test_repo_contract',
-      syncHost: 'https://clerk.agiworkforce.com',
-      background: true,
-    });
-  });
-
   it('gets foreground tokens from the background Sync Host client', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
@@ -143,54 +115,6 @@ describe('Clerk Chrome Extension auth', () => {
       type: 'GET_CLOUD_AUTH_TOKEN',
       refresh: true,
     });
-  });
-
-  it('hydrates the signed-in account identity on first render', async () => {
-    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
-    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
-    createClerkClient.mockResolvedValue({
-      session: { id: 'session-ada', getToken: vi.fn().mockResolvedValue('fresh-token') },
-      user: {
-        id: 'user-ada',
-        fullName: 'Ada Lovelace',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        primaryEmailAddress: { emailAddress: 'ada@example.com' },
-      },
-      addListener: vi.fn(),
-      signOut: vi.fn(),
-    });
-
-    const auth = await importClerkAuth();
-
-    await expect(auth.getClerkAccountProfile()).resolves.toEqual({
-      owner: { accountId: 'user-ada', authIncarnation: 'session-ada' },
-      displayName: 'Ada Lovelace',
-      email: 'ada@example.com',
-      initials: 'AL',
-    });
-  });
-
-  it('reloads foreground native session state after completing web sign-in', async () => {
-    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
-    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
-    createClerkClient.mockResolvedValueOnce({ user: null, session: null }).mockResolvedValueOnce({
-      user: {
-        id: 'user-ada',
-        fullName: 'Ada Lovelace',
-        primaryEmailAddress: { emailAddress: 'ada@example.com' },
-      },
-      session: { id: 'session-ada' },
-    });
-
-    const auth = await importClerkAuth();
-
-    await expect(auth.getClerkAccountProfile()).resolves.toBeNull();
-    await expect(auth.getClerkAccountProfile(true)).resolves.toMatchObject({
-      owner: { accountId: 'user-ada', authIncarnation: 'session-ada' },
-      displayName: 'Ada Lovelace',
-    });
-    expect(createClerkClient).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a Sync Host that is not an origin-only HTTPS URL', async () => {

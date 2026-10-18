@@ -8,10 +8,8 @@ describe('C-1 + M-02 validateGatewayUrl, exact-match allowlist', () => {
     expect(validateGatewayUrl('https://api.agiworkforce.com')).toBe('https://api.agiworkforce.com');
   });
 
-  it('accepts the allowlisted gateway subdomain (exact match)', () => {
-    expect(validateGatewayUrl('https://gateway.agiworkforce.com')).toBe(
-      'https://gateway.agiworkforce.com',
-    );
+  it('REJECTS the gateway subdomain, which nothing serves', () => {
+    expect(validateGatewayUrl('https://gateway.agiworkforce.com')).toBeNull();
   });
 
   it('REJECTS the staging subdomain, which no shipped build should reach', () => {

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * The data and routing boundary for the side panel's Projects, Schedules and
- * Artifacts drawers: each client turns one hosted response into the rows the
+ * The data and routing boundary for the side panel's Projects and Schedules
+ * drawers: each client turns one hosted response into the rows the
  * drawer renders, and turns a 401 into the signed-out state rather than an
  * empty list, which would state "you have none" over "we could not ask".
  */
@@ -23,10 +23,6 @@ import {
   listChromeSchedules,
   type ChromeSchedulesDependencies,
 } from '../src/features/cloud-bridge/schedulesClient';
-import {
-  listChromeArtifacts,
-  type ChromeArtifactsDependencies,
-} from '../src/features/cloud-bridge/artifactsClient';
 
 function project(overrides: Partial<ManagedCloudProject> = {}): ManagedCloudProject {
   return {
@@ -131,23 +127,6 @@ function schedulesDependencies(
   };
 }
 
-function artifactsDependencies(
-  response: Response,
-  token: string | null = 'token-1',
-): Partial<ChromeArtifactsDependencies> {
-  return {
-    getAuthToken: vi.fn(async () => token),
-    fetchImpl: vi.fn(async () => response),
-  };
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 describe('projects drawer client', () => {
   it('maps the hosted project list into rows and hides archived projects', async () => {
     const listProjects = vi
@@ -208,47 +187,6 @@ describe('schedules section client', () => {
     const result = await listChromeSchedules(
       {},
       schedulesDependencies(schedulesClient({ listSchedules })),
-    );
-
-    expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
-  });
-});
-
-describe('artifacts drawer client', () => {
-  it('maps the hosted artifact index into rows and drops rows it cannot identify', async () => {
-    const response = jsonResponse({
-      artifacts: [
-        {
-          id: 'artifact-1',
-          conversationId: 'conversation-1',
-          messageId: 'message-1',
-          title: 'Pricing table',
-          type: 'code',
-          language: 'tsx',
-          projectId: null,
-          createdAt: '2026-09-12T00:00:00.000Z',
-        },
-        { id: 'artifact-2' },
-      ],
-    });
-    const result = await listChromeArtifacts({}, artifactsDependencies(response));
-
-    expect(result.status).toBe('success');
-    if (result.status !== 'success') throw new Error('expected an artifact list');
-    expect(result.artifacts).toHaveLength(1);
-    expect(result.artifacts[0]).toMatchObject({
-      id: 'artifact-1',
-      conversationId: 'conversation-1',
-      messageId: 'message-1',
-      title: 'Pricing table',
-      language: 'tsx',
-    });
-  });
-
-  it('turns a 401 into the signed-out state instead of an empty list', async () => {
-    const result = await listChromeArtifacts(
-      {},
-      artifactsDependencies(jsonResponse({ error: 'Unauthorized' }, 401)),
     );
 
     expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
