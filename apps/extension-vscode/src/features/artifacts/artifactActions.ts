@@ -10,6 +10,7 @@ import {
   artifactTitle,
   describeArtifactFailure,
 } from './artifactPresentation';
+import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import type { ArtifactsWorkspace } from './artifactsClient';
 
 export const ARTIFACT_SCHEME = 'agi-artifact';
@@ -53,8 +54,9 @@ export class ArtifactContentProvider
   readonly onDidChange = this._onDidChange.event;
   private readonly contents = new Map<string, string>();
 
-  set(artifactId: string, content: string): void {
-    this.contents.set(artifactId, content);
+  set(artifact: ManagedCloudArtifactIndexEntry, content: string): void {
+    this.contents.set(artifact.id, content);
+    this._onDidChange.fire(artifactUri(artifact));
   }
 
   provideTextDocumentContent(uri: vscode.Uri): string {
@@ -97,7 +99,7 @@ export async function openArtifactReadOnly(
     return;
   }
 
-  host.contentProvider.set(artifact.id, content);
+  host.contentProvider.set(artifact, content);
   const document = await vscode.workspace.openTextDocument(artifactUri(artifact));
   await vscode.languages.setTextDocumentLanguage(document, artifactEditorLanguage(artifact));
   await vscode.window.showTextDocument(document, { preview: true });
@@ -130,13 +132,14 @@ export async function saveArtifactToWorkspace(
   workspace: ArtifactsWorkspace,
   artifact: ManagedCloudArtifactIndexEntry,
 ): Promise<void> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (folder === undefined) {
+  if ((vscode.workspace.workspaceFolders ?? []).length === 0) {
     void vscode.window.showWarningMessage(
       'AGI Workforce: open a folder first, a copy needs somewhere to land.',
     );
     return;
   }
+  const folder = await getActiveWorkspaceFolder();
+  if (folder === undefined) return;
 
   let content: string | undefined;
   try {

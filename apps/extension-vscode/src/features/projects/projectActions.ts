@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
   type ManagedCloudConversation,
   type ManagedCloudProject,
   type ManagedCloudProjectKnowledgeFile,
@@ -35,7 +36,6 @@ const RETRY_ACTION = 'Retry';
 const SWITCH_TO_PROJECT_MODEL = 'Choose the model';
 const PROJECT_CONVERSATION_PAGE_LIMIT = 10;
 const MAX_PROJECT_NAME_CHARS = 200;
-const MAX_PROJECT_INSTRUCTION_CHARS = 10_000;
 
 export interface ProjectActionHost {
   onChanged: () => void;
@@ -302,8 +302,8 @@ async function projectEdit(
       value: project.instructions ?? '',
       ignoreFocusOut: true,
       validateInput: (value) =>
-        value.length > MAX_PROJECT_INSTRUCTION_CHARS
-          ? `Keep instructions under ${MAX_PROJECT_INSTRUCTION_CHARS} characters.`
+        value.length > PROJECT_INSTRUCTIONS_MAX_LENGTH
+          ? `Keep instructions under ${PROJECT_INSTRUCTIONS_MAX_LENGTH} characters.`
           : undefined,
     });
     return instructions === undefined ? undefined : { instructions: instructions.trim() || null };
@@ -422,8 +422,8 @@ export async function createProjectInteractively(
     placeHolder: 'Example: Prefer TypeScript, and always show the migration before the code.',
     ignoreFocusOut: true,
     validateInput: (value) =>
-      value.length > MAX_PROJECT_INSTRUCTION_CHARS
-        ? `Keep instructions under ${MAX_PROJECT_INSTRUCTION_CHARS} characters.`
+      value.length > PROJECT_INSTRUCTIONS_MAX_LENGTH
+        ? `Keep instructions under ${PROJECT_INSTRUCTIONS_MAX_LENGTH} characters.`
         : undefined,
   });
   if (instructions === undefined) return undefined;
