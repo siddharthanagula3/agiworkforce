@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   GRANTABLE_ORGANIZATION_PERMISSIONS,
   PRIMARY_OWNER_ONLY_PERMISSIONS,
+  adminPermissionLevel,
 } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -39,10 +40,11 @@ async function handleGet(request: NextRequest): Promise<Response> {
   const { userId, organizationId, access } = await resolveWorkspaceConsoleAccess(request);
   const db = getNeonDb();
   const canManageRoles = access.permissions.has('roles.manage');
+  const canSeeRoleHolders = adminPermissionLevel(access.permissions, 'roles') !== 'none';
 
   const [roles, memberRoleGrants, revision] = await Promise.all([
     listOrganizationRoles(db, organizationId),
-    canManageRoles ? listMemberRoleGrants(db, organizationId) : Promise.resolve({}),
+    canSeeRoleHolders ? listMemberRoleGrants(db, organizationId) : Promise.resolve({}),
     readWorkspaceRevision(db, organizationId),
   ]);
 

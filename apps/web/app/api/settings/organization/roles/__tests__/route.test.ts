@@ -207,3 +207,38 @@ describe('role creation is idempotent', () => {
     expect(mocks.createCustomRole).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('who holds each role', () => {
+  const GRANTS = { 'user-2': [ROLE_ID] };
+
+  function callerHolding(permissions: string[]) {
+    mocks.resolveAccess.mockImplementation(async () => ({
+      db: { query: (...args: unknown[]) => mocks.query(...args) },
+      userId: 'user-1',
+      organizationId: ORG,
+      access: { role: 'member', permissions: new Set(permissions) },
+    }));
+    mocks.listMemberRoleGrants.mockResolvedValue(GRANTS);
+  }
+
+  it('is shown to a caller who manages roles', async () => {
+    callerHolding(['roles.manage']);
+    const body = await (await GET(send('GET', undefined) as never)).json();
+    expect(body.memberRoleGrants).toEqual(GRANTS);
+    expect(body.canManageRoles).toBe(true);
+  });
+
+  it('is shown to a caller who may only see roles, without letting them manage', async () => {
+    callerHolding(['admin.roles.view']);
+    const body = await (await GET(send('GET', undefined) as never)).json();
+    expect(body.memberRoleGrants).toEqual(GRANTS);
+    expect(body.canManageRoles).toBe(false);
+  });
+
+  it('is withheld from a caller who holds neither', async () => {
+    callerHolding(['audit.read']);
+    const body = await (await GET(send('GET', undefined) as never)).json();
+    expect(body.memberRoleGrants).toEqual({});
+    expect(mocks.listMemberRoleGrants).not.toHaveBeenCalled();
+  });
+});
