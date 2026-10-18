@@ -83,12 +83,10 @@ function request(amountUsd: unknown) {
 }
 
 function ledgerState(state: {
-  ready?: boolean;
   billing?: Record<string, unknown> | null;
   purchasedTodayMicrousd?: number;
 }) {
   mocks.query.mockImplementation(async (sql: string) => {
-    if (sql.includes('to_regprocedure')) return [{ ready: state.ready ?? true }];
     if (sql.includes('from subscriptions'))
       return state.billing === null ? [] : [state.billing ?? BILLING_ROW];
     if (sql.includes('from credit_transactions')) {
@@ -258,16 +256,6 @@ describe('POST /api/billing/top-up', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.createSession).not.toHaveBeenCalled();
-  });
-
-  it('fails closed before Stripe when the carry/refund migration is not ready', async () => {
-    ledgerState({ ready: false });
-
-    const response = await POST(request(20));
-
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({ error: { code: 'SERVICE_UNAVAILABLE' } });
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 

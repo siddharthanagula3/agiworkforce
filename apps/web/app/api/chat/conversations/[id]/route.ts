@@ -29,16 +29,6 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isUndefinedColumn(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: string }).code === PG_UNDEFINED_COLUMN
-  );
-}
-
 // The cached compaction summary is model-facing text written from this
 // conversation, so it goes when the conversation does rather than waiting for a
 // restore to hand it back.
@@ -112,13 +102,9 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
-  // The draft columns arrive with 0219. Until it is applied the same read has
-  // to work without them, or every conversation stops opening the moment this
-  // ships ahead of the migration.
-  const conversationSelect = (withDraft: boolean): string => `
-      select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id,${
-        withDraft ? ' draft, draft_updated_at,' : ''
-      } created_at, updated_at,
+  const [versionedConversation] = await db.query<VersionedConversationRow>(
+    `
+      select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, draft, draft_updated_at, created_at, updated_at,
         server_version::text as server_version,
         ${CONVERSATION_WORK_MODE_SELECT}
       from web_conversations
@@ -127,22 +113,9 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
         and organization_id is not distinct from $3
         and deleted_at is null
       limit 1
-    `;
-  let versionedConversation: VersionedConversationRow | undefined;
-  try {
-    [versionedConversation] = await db.query<VersionedConversationRow>(conversationSelect(true), [
-      id,
-      userId,
-      organizationId,
-    ]);
-  } catch (error) {
-    if (!isUndefinedColumn(error)) throw error;
-    [versionedConversation] = await db.query<VersionedConversationRow>(conversationSelect(false), [
-      id,
-      userId,
-      organizationId,
-    ]);
-  }
+    `,
+    [id, userId, organizationId],
+  );
 
   if (!versionedConversation) {
     throw createError.notFound('Conversation not found');
@@ -238,37 +211,27 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
    */
   if (Object.prototype.hasOwnProperty.call(body, 'draft')) {
     const draft = body.draft || null;
-    let saved: { id: string; draft_updated_at: string | Date | null } | undefined;
-    let stored = true;
-    try {
-      [saved] = await db.query<{ id: string; draft_updated_at: string | Date | null }>(
-        `update web_conversations
-            set draft = case when is_temporary then null else $3::text end,
-                draft_updated_at = case
-                  when is_temporary then null
-                  else greatest(
-                    date_trunc('milliseconds', clock_timestamp()),
-                    date_trunc('milliseconds', draft_updated_at) + interval '1 millisecond'
-                  )
-                end
-          where id = $1
-            and user_id = $2
-            and organization_id is not distinct from $4
-            and deleted_at is null
-            and draft is distinct from $3::text
-            and date_trunc('milliseconds', draft_updated_at)
-              is not distinct from date_trunc('milliseconds', $5::timestamptz)
-          returning id, draft_updated_at`,
-        [id, userId, draft, organizationId, body.draftUpdatedAt ?? null],
-      );
-    } catch (error) {
-      // Until 0219 is applied there is nowhere to put a draft. The composer's
-      // own copy is already parked, so the honest answer is that this one was
-      // not stored, not a 500 on every keystroke.
-      if (!isUndefinedColumn(error)) throw error;
-      stored = false;
-    }
-    if (stored && !saved) {
+    let [saved] = await db.query<{ id: string; draft_updated_at: string | Date | null }>(
+      `update web_conversations
+          set draft = case when is_temporary then null else $3::text end,
+              draft_updated_at = case
+                when is_temporary then null
+                else greatest(
+                  date_trunc('milliseconds', clock_timestamp()),
+                  date_trunc('milliseconds', draft_updated_at) + interval '1 millisecond'
+                )
+              end
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $4
+          and deleted_at is null
+          and draft is distinct from $3::text
+          and date_trunc('milliseconds', draft_updated_at)
+            is not distinct from date_trunc('milliseconds', $5::timestamptz)
+        returning id, draft_updated_at`,
+      [id, userId, draft, organizationId, body.draftUpdatedAt ?? null],
+    );
+    if (!saved) {
       const [current] = await db.query<{
         id: string;
         draft: string | null;
@@ -299,7 +262,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       saved = current;
     }
     if (Object.keys(body).every((key) => key === 'draft' || key === 'draftUpdatedAt')) {
-      return NextResponse.json({ saved: stored, draftUpdatedAt: saved?.draft_updated_at ?? null });
+      return NextResponse.json({ saved: true, draftUpdatedAt: saved.draft_updated_at ?? null });
     }
   }
 
@@ -308,23 +271,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (body['model']) updates['model'] = body['model'];
   const hasRouteSelectionUpdate =
     Object.prototype.hasOwnProperty.call(body, 'selectedRouteId') || body.model !== undefined;
-  const [{ supported: routePinColumnReady = false } = { supported: false }] =
-    hasRouteSelectionUpdate
-      ? await db.query<{ supported: boolean }>(
-          `select exists (
-             select 1 from information_schema.columns
-              where table_schema = 'public'
-                and table_name = 'web_conversations'
-                and column_name = 'selected_route_id'
-           ) as supported`,
-        )
-      : [];
-  if (body.selectedRouteId && !routePinColumnReady) {
-    return NextResponse.json(
-      { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
-      { status: 503 },
-    );
-  }
   const hasProjectIdUpdate = Object.prototype.hasOwnProperty.call(body, 'projectId');
   if (hasProjectIdUpdate) updates['projectId'] = body['projectId'];
   const hasPinnedUpdate = Object.prototype.hasOwnProperty.call(body, 'pinned');
@@ -402,7 +348,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       set
         title = coalesce($3, title),
         model = coalesce($4, model),
-        ${routePinColumnReady ? 'selected_route_id = $20::text,' : ''}
+        selected_route_id = case when $20::boolean then $21::text else selected_route_id end,
         project_id = case when $5::boolean then $6::text else project_id end,
         pinned = case
           when $11::boolean and $12::boolean then false
@@ -429,7 +375,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
             and coalesce(case when $13::boolean then $14::boolean else is_temporary end, false)
           )
         )
-      returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+      returning id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
         server_version::text as server_version
     `,
     [
@@ -455,7 +401,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       // sidebar every time someone looked at the other answer.
       hasActiveLeafUpdate && Object.keys(updates).length === 1,
       expectedVersion,
-      ...(routePinColumnReady ? [body.selectedRouteId ?? null] : []),
+      hasRouteSelectionUpdate,
+      body.selectedRouteId ?? null,
     ],
   );
 
@@ -483,7 +430,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     if (expectedVersion !== null) {
       const [current] = await db.query<VersionedConversationRow>(
         `
-          select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+          select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
             server_version::text as server_version
           from web_conversations
           where id = $1

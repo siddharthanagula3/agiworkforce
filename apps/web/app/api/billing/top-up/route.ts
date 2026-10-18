@@ -143,18 +143,6 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
 
   const idempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() ?? '';
 
-  const [storage] = await db.query<{ ready: boolean }>(
-    `select (
-       to_regprocedure('public.handle_top_up_refund(text,integer,text)') is not null
-       and to_regclass('public.idx_credit_transactions_top_up_session_receipt') is not null
-     ) as ready`,
-  );
-  if (storage?.ready !== true) {
-    throw createError.serviceUnavailable(
-      'Top-up balance storage is being prepared. No checkout was created; please try again later.',
-    );
-  }
-
   const [billing] = await db.query<BillingOwnerRow>(
     `select plan_tier, status, stripe_customer_id, stripe_subscription_id,
             apple_original_transaction_id, google_purchase_token, current_period_end

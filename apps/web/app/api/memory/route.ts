@@ -58,16 +58,16 @@ async function handleGetMemories(request: NextRequest) {
     rows = await db.query<MemoryRow>(
       `select m.id, m.content, m.category, m.source, m.pinned, m.expires_at,
               m.created_at, m.updated_at,
-              to_jsonb(m)->>'project_id' as project_id,
+              m.project_id::text as project_id,
               p.name as project_name,
               c.id::text as source_conversation_id,
               c.title as source_conversation_title
        from user_memories m
        left join user_projects p
-         on p.id::text = to_jsonb(m)->>'project_id'
+         on p.id = m.project_id
         and p.deleted_at is null
        left join web_conversations c
-         on c.id::text = to_jsonb(m)->>'source_conversation_id'
+         on c.id = m.source_conversation_id
         and c.user_id = m.user_id
         and c.deleted_at is null
         and coalesce(c.is_temporary, false) = false

@@ -32,31 +32,20 @@ export interface PersistConversationMessageInput {
   parentId?: string | null;
 }
 
-const PG_UNDEFINED_COLUMN = '42703';
-
 async function markConversationActivated(
   db: DatabaseAdapter,
   scope: ThreadScope,
-): Promise<boolean | null> {
-  try {
-    const updated = await db.execute(
-      `update web_conversations
-          set activated_at = now()
-        where id = $1
-          and user_id = $2
-          and organization_id is not distinct from $3
-          and activated_at is null`,
-      [scope.conversationId, scope.userId, scope.organizationId],
-    );
-    return updated > 0;
-  } catch (error) {
-    if ((error as { code?: string } | null)?.code !== PG_UNDEFINED_COLUMN) throw error;
-    logger.warn(
-      { conversationId: scope.conversationId },
-      '[chat] web_conversations.activated_at is missing (migration 0268 not applied?)',
-    );
-    return null;
-  }
+): Promise<boolean> {
+  const updated = await db.execute(
+    `update web_conversations
+        set activated_at = now()
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and activated_at is null`,
+    [scope.conversationId, scope.userId, scope.organizationId],
+  );
+  return updated > 0;
 }
 
 export async function persistConversationMessage(input: {
@@ -154,17 +143,7 @@ export async function persistConversationMessage(input: {
   }
 
   if (requestedMessage.role === 'user') {
-    const activated = await markConversationActivated(db, scope);
-    let isFirstUserMessage = activated === true;
-    if (activated === null) {
-      const [row] = await db.query<{ count: string }>(
-        'select count(*)::text as count from web_messages where conversation_id = $1 and deleted_at is null',
-        [scope.conversationId],
-      );
-      isFirstUserMessage = Number(row?.count ?? 0) <= 1;
-    }
-
-    if (isFirstUserMessage) {
+    if (await markConversationActivated(db, scope)) {
       const truncatedTitle =
         requestedMessage.content.slice(0, 50) + (requestedMessage.content.length > 50 ? '...' : '');
       await db.execute(

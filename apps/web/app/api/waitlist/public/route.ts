@@ -9,6 +9,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
@@ -168,7 +169,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       consentSurface,
     );
   } catch (err) {
-    console.warn('[waitlist/public] Consent ledger unavailable; refusing signup.', { source });
+    logger.error(
+      { error: err, source },
+      '[waitlist/public] Consent ledger unavailable; refusing signup',
+    );
     if (err && typeof err === 'object' && 'status' in err) throw err;
     throw createError.internal('Consent could not be recorded, so nothing was stored');
   }
@@ -186,13 +190,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     const stored: PublicWaitlistJoinResponse = { ok: true, joined: true };
     return NextResponse.json(stored);
   } catch (err) {
-    const pgErr = err as { code?: string };
-    if (pgErr?.code === '42P01') {
-      console.warn('[waitlist/public] Table not yet migrated; refusing signup.', { source });
-      throw createError.internal('Cloud waitlist storage is not migrated');
-    }
     if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.warn('[waitlist/public] DB unreachable; refusing signup.', { source });
+    logger.error({ error: err, source }, '[waitlist/public] DB unreachable; refusing signup');
     throw createError.internal('Cloud waitlist storage is unavailable');
   }
 }

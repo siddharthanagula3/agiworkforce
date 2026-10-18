@@ -66,12 +66,12 @@ async function handlePull(request: NextRequest, url: URL) {
           on project.id::text = m.project_id::text
          and project.deleted_at is null
         left join web_conversations origin
-          on origin.id::text = to_jsonb(m)->>'source_conversation_id'
+          on origin.id = m.source_conversation_id
          and origin.user_id = m.user_id
          and origin.deleted_at is null
          and coalesce(origin.is_temporary, false) = false
         where m.user_id = $1 and m.server_version > $2 and ${workspaceMemoryPredicate(3, 'm.')}
-          and ${memoryFreeOfGoogleUserDataSql("to_jsonb(m)->>'source_conversation_id'", 'm.user_id')}
+          and ${memoryFreeOfGoogleUserDataSql('m.source_conversation_id::text', 'm.user_id')}
         order by m.server_version asc
         limit ${MAX_MEMORIES_PULL}
       `,

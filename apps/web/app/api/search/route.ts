@@ -29,7 +29,6 @@ import {
   type NewChatSourceKind,
 } from '@features/chat/lib/new-chat-entry';
 
-const PG_UNDEFINED_FUNCTION = '42883';
 const DEFAULT_RESULT_LIMIT = 50;
 const MAX_RESULT_LIMIT = 100;
 const DEFAULT_POPULAR_DAYS = 7;
@@ -214,21 +213,11 @@ async function handleGet(request: NextRequest) {
       MAX_POPULAR_DAYS,
       'days',
     );
-    try {
-      const rows = await db.query<PopularSearchRow>(
-        'select * from get_popular_searches($1, $2, $3, $4)',
-        [userId, organizationId, limit, days],
-      );
-      return NextResponse.json({ searches: rows });
-    } catch (error) {
-      if ((error as { code?: string } | null)?.code === PG_UNDEFINED_FUNCTION) {
-        logger.warn(
-          '[search] workspace-scoped get_popular_searches unavailable (migration 0110 not applied?); returning empty list',
-        );
-        return NextResponse.json({ searches: [] });
-      }
-      throw error;
-    }
+    const rows = await db.query<PopularSearchRow>(
+      'select * from get_popular_searches($1, $2, $3, $4)',
+      [userId, organizationId, limit, days],
+    );
+    return NextResponse.json({ searches: rows });
   }
 
   if (type === 'suggestions') {

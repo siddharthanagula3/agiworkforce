@@ -410,16 +410,13 @@ describe('GET /api/artifacts/publish', () => {
     expect((await response.json()).artifacts).toEqual([]);
   });
 
-  it('reports an honest unavailable state when the publishing schema is not installed', async () => {
+  it('fails instead of claiming publishing is unconfigured when the list read errors', async () => {
     mocks.query.mockRejectedValue(
       Object.assign(new Error('relation published_artifacts does not exist'), { code: '42P01' }),
     );
 
     const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { message: 'Artifact publishing is not configured in this environment yet.' },
-    });
+    expect(response.status).toBe(500);
   });
 });
 

@@ -361,8 +361,10 @@ describe('Chat Conversations API', () => {
         );
       });
 
-      it('refuses a provider pin until its additive migration is present', async () => {
-        mockQuery.mockResolvedValueOnce([{ supported: false }]);
+      it('fails loudly instead of answering "not ready" when the pin column is missing', async () => {
+        mockQuery.mockRejectedValueOnce(
+          Object.assign(new Error('column "selected_route_id" does not exist'), { code: '42703' }),
+        );
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -374,24 +376,20 @@ describe('Chat Conversations API', () => {
         });
         const response = await POST(request);
 
-        expect(response.status).toBe(503);
-        await expect(response.json()).resolves.toMatchObject({
-          error: { code: 'route_pin_not_ready' },
-        });
-        expect(mockQuery).toHaveBeenCalledTimes(1);
-        expect(mockQuery).toHaveBeenCalledWith(
+        expect(response.status).toBe(500);
+        expect(mockQuery).not.toHaveBeenCalledWith(
           expect.stringContaining('information_schema.columns'),
         );
       });
 
-      it('persists a provider pin after its additive migration is present', async () => {
+      it('persists a provider pin with the conversation', async () => {
         const newConv = {
           id: 'new-conv',
           title: 'New conversation',
           model: CHAT_MODEL,
           selected_route_id: 'provider/route',
         };
-        mockQuery.mockResolvedValueOnce([{ supported: true }]).mockResolvedValueOnce([newConv]);
+        mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -405,7 +403,7 @@ describe('Chat Conversations API', () => {
 
         expect(response.status).toBe(201);
         expect(mockQuery).toHaveBeenNthCalledWith(
-          2,
+          1,
           expect.stringContaining('selected_route_id'),
           expect.arrayContaining(['provider/route']),
         );

@@ -118,7 +118,7 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
   });
 
-  it('still deletes the project when the knowledge-file schema is not deployed yet', async () => {
+  it('fails the delete instead of leaving knowledge files behind when their cleanup errors', async () => {
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('project_knowledge_files')) {
         throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
@@ -128,8 +128,7 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
 
     const res = await callDelete();
 
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ success: true });
+    expect(res.status).toBe(500);
     expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
   });
 

@@ -50,16 +50,6 @@ function grantKey(connectorId: string, toolName: string): string {
   return connectorId + ' ' + toolName;
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE
-  );
-}
-
 /**
  * A grant that cannot be read is not an allowance, so a failed read yields no
  * grants and every connector tool asks as it did before the grant was made.
@@ -93,12 +83,10 @@ export async function loadConnectorToolSessionGrants(
     }
     return grants;
   } catch (error) {
-    if (!isUndefinedTable(error)) {
-      logger.warn(
-        { error: error instanceof Error ? error.message : error, userId: scope.userId },
-        '[connector-session-grants] grants unavailable; every connector tool asks',
-      );
-    }
+    logger.warn(
+      { error: error instanceof Error ? error.message : error, userId: scope.userId },
+      '[connector-session-grants] grants unavailable; every connector tool asks',
+    );
     return NO_SESSION_GRANTS;
   }
 }
@@ -163,28 +151,23 @@ export async function revokeConnectorSessionGrants(
   connectorId: string,
   toolName: string | null,
 ): Promise<number> {
-  try {
-    const removed = await db.query<{ id: string }>(
-      `delete from public.connector_tool_session_grants grant_row
-        using public.web_conversations conversation
-        where grant_row.user_id = $1 and grant_row.connector_id = $2
-          and ($4::text is null or grant_row.tool_name = $4)
-          and conversation.id = grant_row.conversation_id
-          and conversation.user_id = grant_row.user_id
-          and conversation.organization_id is not distinct from $3::uuid
-       returning grant_row.id`,
-      [
-        scope.userId,
-        connectorId,
-        scope.organizationId,
-        toolName && !isConnectorCategoryToolName(toolName) ? toolName : null,
-      ],
-    );
-    return removed.length;
-  } catch (error) {
-    if (isUndefinedTable(error)) return 0;
-    throw error;
-  }
+  const removed = await db.query<{ id: string }>(
+    `delete from public.connector_tool_session_grants grant_row
+      using public.web_conversations conversation
+      where grant_row.user_id = $1 and grant_row.connector_id = $2
+        and ($4::text is null or grant_row.tool_name = $4)
+        and conversation.id = grant_row.conversation_id
+        and conversation.user_id = grant_row.user_id
+        and conversation.organization_id is not distinct from $3::uuid
+     returning grant_row.id`,
+    [
+      scope.userId,
+      connectorId,
+      scope.organizationId,
+      toolName && !isConnectorCategoryToolName(toolName) ? toolName : null,
+    ],
+  );
+  return removed.length;
 }
 
 export interface ScopedToolApproval extends ConnectorToolSessionGrant {

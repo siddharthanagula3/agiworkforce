@@ -4,7 +4,6 @@ import { randomUUID } from 'node:crypto';
 import { creditsFromCents, creditsFromMicrousd } from '@agiworkforce/types';
 
 import { getNeonDb } from '@/lib/server/neon-db';
-import { logger } from '@/lib/logger';
 import {
   bonusCreditExpiry,
   grantBonusCredits as grantBonusCreditLot,
@@ -50,17 +49,6 @@ function asNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isMissingRelation(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  return (
-    record['code'] === PG_UNDEFINED_TABLE ||
-    /relation .* does not exist/.test(String(record['message'] ?? ''))
-  );
-}
-
 export async function readOperatorOverview(): Promise<OperatorOverview> {
   const db = getNeonDb();
 
@@ -88,19 +76,11 @@ export async function readOperatorOverview(): Promise<OperatorOverview> {
       order by count(*) desc`,
   );
 
-  // A pending migration must not take the whole dashboard down with it: every
-  // other panel here answers a question that does not depend on this table.
-  const beta = await db
-    .query<{ status: string; count: string }>(
-      `select status, count(*)::text as count
-         from public.beta_applications
-        group by status`,
-    )
-    .catch((error: unknown) => {
-      if (!isMissingRelation(error)) throw error;
-      logger.warn({ error }, 'Operator overview: beta_applications is not migrated yet');
-      return [] as Array<{ status: string; count: string }>;
-    });
+  const beta = await db.query<{ status: string; count: string }>(
+    `select status, count(*)::text as count
+       from public.beta_applications
+      group by status`,
+  );
 
   // generate_series so a day with no signups is a zero rather than a gap the
   // chart would silently close up.

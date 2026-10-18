@@ -95,7 +95,7 @@ describe('GET /api/search?type=popular', () => {
     expect(params).toEqual(['user-abc', '11111111-1111-4111-8111-111111111111', 10, 7]);
   });
 
-  it('returns an empty list (200) instead of 500 when the RPC is missing (42883)', async () => {
+  it('fails instead of answering an empty list when the RPC is missing (42883)', async () => {
     mockNeonQuery.mockRejectedValue(
       new PgError(
         '42883',
@@ -103,9 +103,7 @@ describe('GET /api/search?type=popular', () => {
       ),
     );
     const res = await GET(popularRequest());
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { searches: unknown[] };
-    expect(body.searches).toEqual([]);
+    expect(res.status).toBe(500);
   });
 
   it('does not mask unrelated database errors', async () => {

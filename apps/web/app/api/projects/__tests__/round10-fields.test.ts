@@ -380,23 +380,18 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     expect(sql).not.toContain('accent_color');
   });
 
-  it('retries without round-10 fields when DB returns 42703 undefined_column', async () => {
+  it('fails instead of silently dropping fields when the DB returns 42703 undefined_column', async () => {
     const pgError = { code: '42703', message: 'column does not exist' };
-    mockNeonQuery
-      .mockRejectedValueOnce(pgError)
-      .mockResolvedValueOnce([BASE_DB_ROW])
-      .mockResolvedValueOnce([{ ...BASE_DB_ROW, conversation_count: 0 }]);
+    mockNeonQuery.mockRejectedValueOnce(pgError);
 
     const req = makePutRequest('proj-1', { iconEmoji: '🔥', name: 'Updated Name' });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
-    expect(res.status).toBe(200);
-    expect(mockNeonQuery).toHaveBeenCalledTimes(3);
+    expect(res.status).toBe(500);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
     const firstSql = (mockNeonQuery.mock.calls[0] as [string, unknown[]])[0];
-    const secondSql = (mockNeonQuery.mock.calls[1] as [string, unknown[]])[0];
     expect(firstSql).toContain('icon_emoji');
-    expect(secondSql).not.toContain('icon_emoji');
-    expect(secondSql).toContain('name');
+    expect(firstSql).toContain('name');
   });
 });
 

@@ -253,7 +253,6 @@ describe('Single Conversation API', () => {
 
       it('should update conversation model', async () => {
         const updated = { ...mockConversation, model: CHAT_MODEL };
-        mockQuery.mockResolvedValueOnce([{ supported: false }]);
         mockQuery.mockResolvedValueOnce([updated]);
 
         const request = new NextRequest(

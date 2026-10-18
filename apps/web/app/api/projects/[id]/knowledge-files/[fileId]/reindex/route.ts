@@ -13,8 +13,6 @@ import {
 } from '@/lib/services/retrieval-index-service';
 import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval-index-workflow';
 
-const PG_UNDEFINED_TABLE = '42P01';
-
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
 async function handleReindexKnowledgeFile(request: NextRequest, context: RouteContext) {
@@ -44,23 +42,12 @@ async function handleReindexKnowledgeFile(request: NextRequest, context: RouteCo
   );
   if (!file) throw createError.notFound('Knowledge file not found');
 
-  let documentId: string | null;
-  try {
-    documentId = await requestProjectKnowledgeReindex(db, {
-      fileId,
-      ownerUserId: userId,
-      organizationId,
-      fileName: file.file_name,
-    });
-  } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === PG_UNDEFINED_TABLE) {
-      return NextResponse.json(
-        { error: 'indexing_unavailable', message: 'Indexing is not available yet.' },
-        { status: 503 },
-      );
-    }
-    throw error;
-  }
+  const documentId = await requestProjectKnowledgeReindex(db, {
+    fileId,
+    ownerUserId: userId,
+    organizationId,
+    fileName: file.file_name,
+  });
   if (!documentId) throw createError.internal('Indexing could not be requested');
 
   const dispatch = await dispatchRetrievalIndexWorkflows([{ documentId, userId, organizationId }]);

@@ -99,8 +99,7 @@ describe('conversation activation', () => {
     expect(mocks.query.mock.calls.some(([query]) => MESSAGE_COUNT.test(String(query)))).toBe(false);
   });
 
-  it('still saves the message when the activation column is not there yet', async () => {
-    mocks.query.mockResolvedValueOnce([{ count: '1' }]);
+  it('fails instead of guessing from a message count when activation cannot be stamped', async () => {
     mocks.execute.mockImplementation(async (sql: string) => {
       if (ACTIVATION.test(sql))
         throw Object.assign(new Error('column does not exist'), {
@@ -110,11 +109,8 @@ describe('conversation activation', () => {
     });
 
     const response = await POST(request(), context);
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { message?: { id: string } };
-    expect(body.message?.id).toBe(MESSAGE_ID);
-    expect(mocks.warn).toHaveBeenCalled();
-    expect(mocks.query.mock.calls.some(([query]) => MESSAGE_COUNT.test(String(query)))).toBe(true);
+    expect(response.status).toBe(500);
+    expect(mocks.query.mock.calls.some(([query]) => MESSAGE_COUNT.test(String(query)))).toBe(false);
   });
 
   it('skips count and title work after the conversation is already activated', async () => {

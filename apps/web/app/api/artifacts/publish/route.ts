@@ -38,26 +38,6 @@ const PublishSchema = z.object({
   conversationId: z.string().trim().uuid().optional(),
 });
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isPublishedArtifactSchemaUnavailable(error: unknown): boolean {
-  let candidate: unknown = error;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!candidate || typeof candidate !== 'object') return false;
-    const row = candidate as Record<string, unknown>;
-    if (row['code'] === PG_UNDEFINED_TABLE) return true;
-    candidate = row['cause'];
-  }
-  return false;
-}
-
-function publishingUnavailableResponse(): NextResponse {
-  return NextResponse.json(
-    { error: { message: 'Artifact publishing is not configured in this environment yet.' } },
-    { status: 503 },
-  );
-}
-
 function refuseModeratedPublication(userId: string, title: string, content: string): void {
   const moderation = moderateManagedPrompt({
     userId,
@@ -151,24 +131,17 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     if (error instanceof PublishedArtifactQuotaError) {
       throw createError.conflict(error.message);
     }
-    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
     throw error;
   }
 
-  let version: number;
-  try {
-    version = await recordPublishedVersion(db, {
-      publishedArtifactId: published.id,
-      userId,
-      title: published.title,
-      kind: published.kind,
-      language: published.language,
-      content: publishContent,
-    });
-  } catch (error) {
-    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
-    throw error;
-  }
+  const version = await recordPublishedVersion(db, {
+    publishedArtifactId: published.id,
+    userId,
+    title: published.title,
+    kind: published.kind,
+    language: published.language,
+    content: publishContent,
+  });
 
   return NextResponse.json(
     {
@@ -191,13 +164,7 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  let artifacts;
-  try {
-    artifacts = await listPublishedArtifacts(db, { userId });
-  } catch (error) {
-    if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
-    throw error;
-  }
+  const artifacts = await listPublishedArtifacts(db, { userId });
 
   const body: ManagedCloudPublishedArtifactListResponse = {
     artifacts: artifacts.map((artifact) => ({

@@ -143,20 +143,6 @@ async function handleCatalog(
   }
 
   const db = getNeonDb();
-  const [readiness] = await db.query<{ ready: boolean }>(
-    `select (
-       to_regclass('public.mobile_iap_accounts') is not null
-       and to_regclass('public.mobile_iap_transactions') is not null
-       and to_regclass('public.mobile_iap_notification_receipts') is not null
-       and to_regprocedure('public.handle_top_up_refund(text,integer,text)') is not null
-     ) as ready`,
-  );
-  if (readiness?.ready !== true) {
-    throw createError.serviceUnavailable(
-      'Native purchase storage is being prepared. No purchase was started.',
-    );
-  }
-
   const [account] = await db.query<{ app_account_token: string }>(
     `insert into public.mobile_iap_accounts (user_id)
      values ($1)

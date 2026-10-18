@@ -458,17 +458,6 @@ export function connectorToolPermissionsFromEntries(
   );
 }
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
-
 interface PermissionRow {
   connector_id: string;
   tool_name: string;
@@ -520,12 +509,10 @@ export async function loadConnectorToolPermissions(
     );
   } catch (error) {
     standingPermissionsReadable = false;
-    if (!isUndefinedTable(error)) {
-      logger.warn(
-        { error: error instanceof Error ? error.message : error, userId },
-        '[connector-permissions] saved tool verdicts unavailable; falling back to approval prompts',
-      );
-    }
+    logger.warn(
+      { error: error instanceof Error ? error.message : error, userId },
+      '[connector-permissions] saved tool verdicts unavailable; falling back to approval prompts',
+    );
   }
 
   const levels = new Map<string, ConnectorToolPermissionLevel>();

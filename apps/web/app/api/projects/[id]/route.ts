@@ -40,15 +40,6 @@ const OWNER_ONLY_PROJECT_FIELDS = [
 
 class ProjectUpdateMiss extends Error {}
 
-const PG_UNDEFINED_COLUMN = '42703';
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isSchemaNotReady(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as { code?: string }).code;
-  return code === PG_UNDEFINED_COLUMN || code === PG_UNDEFINED_TABLE;
-}
-
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function selectProjectWithConversationCount(
@@ -190,56 +181,42 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     );
   }
 
-  const round10SetClauses: string[] = [];
-  const round10Params: unknown[] = [];
-
-  function addRound10(col: string, val: unknown) {
-    const idx = baseParams.length + round10Params.length + 1;
-    round10Params.push(val);
-    round10SetClauses.push(`${col} = $${idx}`);
+  if (body.iconEmoji !== undefined) addBase('icon_emoji', body.iconEmoji);
+  if (body.accentColor !== undefined) addBase('accent_color', body.accentColor);
+  if (body.defaultPrivacyMode !== undefined) {
+    addBase('default_privacy_mode', body.defaultPrivacyMode);
   }
-
-  if (body.iconEmoji !== undefined) addRound10('icon_emoji', body.iconEmoji);
-  if (body.accentColor !== undefined) addRound10('accent_color', body.accentColor);
-  if (body.defaultPrivacyMode !== undefined)
-    addRound10('default_privacy_mode', body.defaultPrivacyMode);
-  if (body.defaultProviderMode !== undefined)
-    addRound10('default_provider_mode', body.defaultProviderMode);
+  if (body.defaultProviderMode !== undefined) {
+    addBase('default_provider_mode', body.defaultProviderMode);
+  }
   if (body.allowedSurfaces !== undefined) {
-    addRound10(
+    addBase(
       'allowed_surfaces',
       body.allowedSurfaces.length > 0 ? body.allowedSurfaces : [...SYNCED_APP_SURFACES],
     );
   }
-  if (body.defaultModelId !== undefined) addRound10('default_model_id', body.defaultModelId);
-  if (body.importedFrom !== undefined) addRound10('imported_from', body.importedFrom);
+  if (body.defaultModelId !== undefined) addBase('default_model_id', body.defaultModelId);
+  if (body.importedFrom !== undefined) addBase('imported_from', body.importedFrom);
 
-  const hasRound10 = round10SetClauses.length > 0;
-
-  function buildUpdateSql(includeRound10: boolean): { sql: string; params: unknown[] } {
-    const setClauses = includeRound10
-      ? [...baseSetClauses, ...round10SetClauses]
-      : [...baseSetClauses];
-    const params = includeRound10 ? [...baseParams, ...round10Params] : [...baseParams];
-    const idIdx = params.length + 1;
-    const userIdx = params.length + 2;
-    const organizationIdx = params.length + 3;
+  const executeUpdate = async (targetDb: DatabaseAdapter) => {
+    const idIdx = baseParams.length + 1;
+    const userIdx = baseParams.length + 2;
+    const organizationIdx = baseParams.length + 3;
     const ownerPredicate = writeAccess === 'owner' ? '=' : '<>';
-    return {
-      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id ${ownerPredicate} $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
-      params: [...params, id, userId, organizationId],
-    };
-  }
-
-  const executeUpdate = async (targetDb: DatabaseAdapter, includeRound10: boolean) => {
-    const { sql, params } = buildUpdateSql(includeRound10);
-    const [updated] = await targetDb.query<Record<string, unknown>>(sql, params);
+    const [updated] = await targetDb.query<Record<string, unknown>>(
+      `update user_projects set ${baseSetClauses.join(', ')} where id = $${idIdx} and user_id ${ownerPredicate} $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
+      [...baseParams, id, userId, organizationId],
+    );
     if (!updated) throw new ProjectUpdateMiss();
   };
 
-  const updateAndReplaceMembership = (includeRound10: boolean) =>
-    db.transaction(async (tx) => {
-      await executeUpdate(tx, includeRound10);
+  const runUpdate = async () => {
+    if (body.conversationIds === undefined) {
+      await executeUpdate(db);
+      return;
+    }
+    await db.transaction(async (tx) => {
+      await executeUpdate(tx);
       await replaceProjectConversationMembership(tx, {
         userId,
         organizationId,
@@ -247,39 +224,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
         conversationIds: body.conversationIds ?? [],
       });
     });
-
-  const runUpdate = async () => {
-    if (body.conversationIds !== undefined) {
-      try {
-        await updateAndReplaceMembership(hasRound10);
-      } catch (error) {
-        if (
-          hasRound10 &&
-          error &&
-          typeof error === 'object' &&
-          (error as { code?: string }).code === PG_UNDEFINED_COLUMN
-        ) {
-          await updateAndReplaceMembership(false);
-        } else {
-          throw error;
-        }
-      }
-    } else {
-      try {
-        await executeUpdate(db, hasRound10);
-      } catch (error) {
-        if (
-          hasRound10 &&
-          error &&
-          typeof error === 'object' &&
-          (error as { code?: string }).code === PG_UNDEFINED_COLUMN
-        ) {
-          await executeUpdate(db, false);
-        } else {
-          throw error;
-        }
-      }
-    }
   };
 
   try {
@@ -338,8 +282,9 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const { id } = await context.params;
 
   const scope = { projectId: id, userId, organizationId };
-  const runDelete = (purgeKnowledgeFiles: boolean) =>
-    db.transaction(async (tx) => {
+  let outcome: { deleted: number; storageUris: string[] };
+  try {
+    outcome = await db.transaction(async (tx) => {
       const deleted = await tx.execute(
         `update user_projects
            set deleted_at = now(), updated_at = now()
@@ -352,22 +297,9 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
       if (deleted === 0) return { deleted, storageUris: [] as string[] };
       return {
         deleted,
-        storageUris: await releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles }),
+        storageUris: await releaseDeletedProjectContents(tx, scope, { purgeKnowledgeFiles: true }),
       };
     });
-
-  let outcome: { deleted: number; storageUris: string[] };
-  try {
-    try {
-      outcome = await runDelete(true);
-    } catch (error) {
-      if (!isSchemaNotReady(error)) throw error;
-      logger.warn(
-        { error, projectId: id, userId },
-        'Knowledge-file schema not ready; deleting project without source cleanup',
-      );
-      outcome = await runDelete(false);
-    }
   } catch (error) {
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');

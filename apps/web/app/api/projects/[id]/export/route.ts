@@ -13,11 +13,6 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const PROJECT_EXPORT_VERSION = 1;
 
-function isSchemaNotReady(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code;
-  return code === '42P01' || code === '42703';
-}
-
 async function handleExportProject(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -38,20 +33,14 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
     throw createError.notFound('Project not found');
   }
 
-  let knowledgeFiles: Record<string, unknown>[] = [];
-  try {
-    knowledgeFiles = await db.query<Record<string, unknown>>(
-      `select file_name, mime_type, byte_count, checksum_sha256, summary,
-              source_surface, added_at, version,
-              to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text
-         from project_knowledge_files
-        where project_id = $1 and deleted_at is null and superseded_at is null
-        order by added_at asc`,
-      [id],
-    );
-  } catch (error) {
-    if (!isSchemaNotReady(error)) throw error;
-  }
+  const knowledgeFiles = await db.query<Record<string, unknown>>(
+    `select file_name, mime_type, byte_count, checksum_sha256, summary,
+            source_surface, added_at, version, extracted_text
+       from project_knowledge_files
+      where project_id = $1 and deleted_at is null and superseded_at is null
+      order by added_at asc`,
+    [id],
+  );
 
   const mapped = mapProjectRow(project);
   const fileName = `${

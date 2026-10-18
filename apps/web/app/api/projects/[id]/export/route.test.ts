@@ -80,15 +80,14 @@ describe('GET /api/projects/[id]/export', () => {
     expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 
-  it('exports the project without files when the table is not migrated', async () => {
+  it('fails instead of exporting a project without its files when the file read errors', async () => {
     mocks.query
       .mockResolvedValueOnce([{ id: 'proj-1', name: 'Q3' }])
       .mockRejectedValueOnce(Object.assign(new Error('relation missing'), { code: '42P01' }));
 
     const res = await call();
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { knowledgeFiles?: unknown[] };
-    expect(body.knowledgeFiles).toEqual([]);
+    expect(res.status).toBe(500);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('falls back to a safe filename when the project name has no usable characters', async () => {

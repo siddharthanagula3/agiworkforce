@@ -238,7 +238,7 @@ describe('/api/settings/sessions', () => {
       });
     });
 
-    it('still lists sessions when the device registry has not been provisioned', async () => {
+    it('fails instead of listing sessions without their devices when the registry read errors', async () => {
       mockGetSessionList.mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
       mockNeonQuery.mockRejectedValue(
         Object.assign(new Error('relation "device_registrations" does not exist'), {
@@ -249,10 +249,8 @@ describe('/api/settings/sessions', () => {
       const response = await GET(
         new Request('http://localhost:3000/api/settings/sessions') as never,
       );
-      const body = (await response.json()) as { sessions: Array<Record<string, unknown>> };
 
-      expect(response.status).toBe(200);
-      expect(body.sessions[0]).toMatchObject({ surface: 'web', os: null });
+      expect(response.status).toBe(500);
     });
 
     it('gives the screen every field a session row shows, and no field it must not', async () => {

@@ -65,7 +65,6 @@ function harness(options: { subscription?: Record<string, unknown>; redeemed?: b
       return options.subscription ? [options.subscription] : [];
     }
     if (sql.includes('beta_redemptions')) return [{ granted: options.redeemed === true }];
-    if (sql.includes('to_regclass')) return [{ ready: true }];
     if (sql.includes('insert into public.mobile_iap_accounts')) {
       return [{ app_account_token: APP_ACCOUNT_TOKEN }];
     }

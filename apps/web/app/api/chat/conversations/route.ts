@@ -111,7 +111,7 @@ async function handleGetConversations(request: NextRequest) {
         : db.query<ChatConversationRow & { page_sort_key: string }>(
             `
           select * from (
-            select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
+            select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
               (case when pinned then '1' else '0' end)
                 || to_char(updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
               ${CONVERSATION_WORK_MODE_SELECT},
@@ -241,34 +241,15 @@ async function handleCreateConversation(request: NextRequest) {
   await assertFreeDailyAllowance({ db, userId, requested: { conversation_creates: 1 } });
 
   try {
-    const [{ supported: routePinColumnReady = false } = { supported: false }] = body.selectedRouteId
-      ? await db.query<{ supported: boolean }>(
-          `select exists (
-             select 1 from information_schema.columns
-              where table_schema = 'public'
-                and table_name = 'web_conversations'
-                and column_name = 'selected_route_id'
-           ) as supported`,
-        )
-      : [];
-    if (body.selectedRouteId && !routePinColumnReady) {
-      return NextResponse.json(
-        { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
-        { status: 503 },
-      );
-    }
-    const pinColumn = routePinColumnReady ? ', selected_route_id' : '';
-    const pinValue = routePinColumnReady ? ', $8' : '';
-    const pinUpdate = routePinColumnReady ? 'selected_route_id = excluded.selected_route_id,' : '';
     const [conversation] = await db.query<ChatConversationRow>(
       `
         insert into web_conversations
-          (id, user_id, organization_id, title, model, project_id, is_temporary${pinColumn})
-        values (coalesce($5::uuid, gen_random_uuid()), $1, $7, $2, $3, $4, $6${pinValue})
+          (id, user_id, organization_id, title, model, project_id, is_temporary, selected_route_id)
+        values (coalesce($5::uuid, gen_random_uuid()), $1, $7, $2, $3, $4, $6, $8)
         on conflict (id) do update set
           title = excluded.title,
           model = excluded.model,
-          ${pinUpdate}
+          selected_route_id = coalesce(excluded.selected_route_id, web_conversations.selected_route_id),
           project_id = excluded.project_id,
           updated_at = now()
         where web_conversations.user_id = $1
@@ -278,7 +259,7 @@ async function handleCreateConversation(request: NextRequest) {
             coalesce(web_conversations.is_temporary, false)
             and nullif(excluded.project_id, '') is not null
           )
-        returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+        returning id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
         userId,
@@ -288,7 +269,7 @@ async function handleCreateConversation(request: NextRequest) {
         body.id ?? null,
         body.isTemporary ?? false,
         organizationId,
-        ...(routePinColumnReady ? [body.selectedRouteId] : []),
+        body.selectedRouteId ?? null,
       ],
     );
     if (!conversation) {
@@ -315,17 +296,6 @@ async function handleCreateConversation(request: NextRequest) {
 
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {
-    if (
-      body.selectedRouteId &&
-      typeof error === 'object' &&
-      error !== null &&
-      (error as { code?: string }).code === '42703'
-    ) {
-      return NextResponse.json(
-        { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
-        { status: 503 },
-      );
-    }
     logger.error({ error, userId }, 'Failed to create conversation');
     throw createError.internal('Failed to create conversation');
   }

@@ -47,33 +47,14 @@ function namespaceObject(settings: Record<string, unknown>, namespace: string) {
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
-  );
-}
-
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
 async function readSettings(db: ScopedDb, userId: string): Promise<StoredSettings> {
-  try {
-    const [row] = await db.query<UserSettingsRow>(
-      'select settings, updated_at::text as version from public.user_settings where user_id = $1 limit 1',
-      [userId],
-    );
-    return { settings: row?.settings ?? {}, version: row?.version ?? null };
-  } catch (error) {
-    if (isUndefinedTable(error)) {
-      logger.error({ error, userId }, 'user_settings table is missing; run migrations');
-      throw createError.internal('Settings storage is not migrated');
-    }
-    throw error;
-  }
+  const [row] = await db.query<UserSettingsRow>(
+    'select settings, updated_at::text as version from public.user_settings where user_id = $1 limit 1',
+    [userId],
+  );
+  return { settings: row?.settings ?? {}, version: row?.version ?? null };
 }
 
 async function handleGet(request: NextRequest) {

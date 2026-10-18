@@ -29,8 +29,6 @@ import {
   trackProductAnalyticsEvent,
 } from '@/lib/server/product-analytics';
 
-const PG_UNDEFINED_COLUMN = '42703';
-
 const PAGE_SORT_COLUMN = 'page_sort_key';
 // Fixed-width UTC text, so lexicographic order is chronological order and the
 // cursor round-trips at the microsecond precision the column actually stores.
@@ -139,15 +137,8 @@ async function handleCreateProject(request: NextRequest) {
     throw createError.validation(getProjectLimitErrorMessage(planTier));
   }
 
-  const baseColumns = [
-    'user_id',
-    'organization_id',
-    'name',
-    'description',
-    'instructions',
-    'color',
-  ];
-  const baseValues: unknown[] = [
+  const columns = ['user_id', 'organization_id', 'name', 'description', 'instructions', 'color'];
+  const values: unknown[] = [
     userId,
     organizationId,
     body.name.trim(),
@@ -156,62 +147,51 @@ async function handleCreateProject(request: NextRequest) {
     body.color?.trim() || DEFAULT_PROJECT_COLOR,
   ];
 
-  const round10Columns: string[] = [];
-  const round10Values: unknown[] = [];
   if (body.iconEmoji !== undefined) {
-    round10Columns.push('icon_emoji');
-    round10Values.push(body.iconEmoji);
+    columns.push('icon_emoji');
+    values.push(body.iconEmoji);
   }
   if (body.accentColor !== undefined) {
-    round10Columns.push('accent_color');
-    round10Values.push(body.accentColor);
+    columns.push('accent_color');
+    values.push(body.accentColor);
   }
   if (body.defaultPrivacyMode !== undefined) {
-    round10Columns.push('default_privacy_mode');
-    round10Values.push(body.defaultPrivacyMode);
+    columns.push('default_privacy_mode');
+    values.push(body.defaultPrivacyMode);
   }
   if (body.defaultProviderMode !== undefined) {
-    round10Columns.push('default_provider_mode');
-    round10Values.push(body.defaultProviderMode);
+    columns.push('default_provider_mode');
+    values.push(body.defaultProviderMode);
   }
   if (body.allowedSurfaces !== undefined) {
-    round10Columns.push('allowed_surfaces');
-    round10Values.push(
-      body.allowedSurfaces.length > 0 ? body.allowedSurfaces : [...SYNCED_APP_SURFACES],
-    );
+    columns.push('allowed_surfaces');
+    values.push(body.allowedSurfaces.length > 0 ? body.allowedSurfaces : [...SYNCED_APP_SURFACES]);
   }
   if (body.defaultModelId !== undefined) {
-    round10Columns.push('default_model_id');
-    round10Values.push(body.defaultModelId);
+    columns.push('default_model_id');
+    values.push(body.defaultModelId);
   }
   if (body.importedFrom !== undefined) {
-    round10Columns.push('imported_from');
-    round10Values.push(body.importedFrom);
+    columns.push('imported_from');
+    values.push(body.importedFrom);
   }
 
-  const hasRound10 = round10Columns.length > 0;
-
-  function buildInsertSql(includeRound10: boolean): { sql: string; params: unknown[] } {
-    const cols = includeRound10 ? [...baseColumns, ...round10Columns] : [...baseColumns];
-    const vals = includeRound10 ? [...baseValues, ...round10Values] : [...baseValues];
-    const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
-    const limitParameter = `$${vals.length + 1}`;
-    return {
-      sql: `with inserted as materialized (
-              insert into user_projects (${cols.join(', ')}) values (${placeholders}) returning *
+  const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+  const insertSql = `with inserted as materialized (
+              insert into user_projects (${columns.join(', ')}) values (${placeholders}) returning *
             ), quota_guard as materialized (
-              select public.assert_user_resource_limit('projects', $1, ${limitParameter})
+              select public.assert_user_resource_limit('projects', $1, $${values.length + 1})
                 from (select count(*) from inserted) as dependency
             )
-            select inserted.* from inserted cross join quota_guard`,
-      params: [...vals, projectLimit],
-    };
-  }
+            select inserted.* from inserted cross join quota_guard`;
 
-  const insertProjectWithMembership = (includeRound10: boolean) =>
-    db.transaction(async (tx) => {
-      const { sql, params } = buildInsertSql(includeRound10);
-      const [inserted] = await tx.query<Record<string, unknown>>(sql, params);
+  let rowData: Record<string, unknown>;
+  try {
+    rowData = await db.transaction(async (tx) => {
+      const [inserted] = await tx.query<Record<string, unknown>>(insertSql, [
+        ...values,
+        projectLimit,
+      ]);
       if (!inserted || typeof inserted['id'] !== 'string') throw new Error('No row returned');
       await replaceProjectConversationMembership(tx, {
         userId,
@@ -221,23 +201,6 @@ async function handleCreateProject(request: NextRequest) {
       });
       return inserted;
     });
-
-  let rowData: Record<string, unknown>;
-  try {
-    try {
-      rowData = await insertProjectWithMembership(hasRound10);
-    } catch (error) {
-      if (
-        hasRound10 &&
-        error &&
-        typeof error === 'object' &&
-        (error as { code?: string }).code === PG_UNDEFINED_COLUMN
-      ) {
-        rowData = await insertProjectWithMembership(false);
-      } else {
-        throw error;
-      }
-    }
   } catch (error) {
     if (isUserResourceLimitError(error)) {
       throw createError.validation(getProjectLimitErrorMessage(planTier));
