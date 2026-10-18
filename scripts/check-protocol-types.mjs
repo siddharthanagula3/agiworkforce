@@ -552,12 +552,16 @@ export function checkCliUsageMirror(root = repoRoot) {
       ownedWorkloads,
       rustStringPairs(usageSummary, 'USAGE_WORKLOAD_LABELS'),
     ),
-    ...compareMaps(
-      'Workload labels (web)',
-      ownedWorkloads,
-      tsStringMap(read(WEB_USAGE_ATTRIBUTION) ?? '', 'WORKLOAD_LABELS'),
-    ),
   );
+  const webAttribution = read(WEB_USAGE_ATTRIBUTION) ?? '';
+  if (
+    tsStringMap(webAttribution, 'WORKLOAD_LABELS') !== null ||
+    !/export \{ usageWorkloadLabel \} from '@agiworkforce\/types';/u.test(webAttribution)
+  ) {
+    problems.push(
+      `Workload labels (web): ${WEB_USAGE_ATTRIBUTION} must re-export usageWorkloadLabel from @agiworkforce/types instead of keeping its own table`,
+    );
+  }
   const ownedSeats = tsPerSeatPlans(billingCatalog);
   const mirroredSeats = rustConstStrings(cliPlans, 'PER_SEAT_PLANS');
   if (ownedSeats === null || mirroredSeats === null) {

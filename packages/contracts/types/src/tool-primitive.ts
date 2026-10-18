@@ -143,6 +143,14 @@ export const TOOL_AUTH_KINDS = listing<ToolAuthKind>()([
   'operator_credential',
 ]);
 
+export const TOOL_ARTIFACT_KINDS = listing<ToolArtifactKind>()([
+  'file',
+  'image',
+  'url',
+  'json',
+  'text',
+]);
+
 export const TOOL_SURFACES = listing<ToolSurface>()([
   'web',
   'desktop',
