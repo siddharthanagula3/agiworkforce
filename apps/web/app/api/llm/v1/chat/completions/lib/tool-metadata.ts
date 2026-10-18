@@ -55,17 +55,11 @@ import {
   isDestructiveTool,
   isParallelSafeTool as isParallelSafeContractTool,
   type ToolActionClass as ContractToolActionClass,
-  type ToolApprovalReason,
   type ToolDefinition,
-  type ToolPermissionDecision,
   type ToolRetrySafety,
 } from '@agiworkforce/types';
 
 export type ToolActionClass = ContractToolActionClass;
-
-export type ToolCallVerdict = ToolPermissionDecision;
-
-export type ToolCallReason = ToolApprovalReason;
 
 /**
  * How much a single call can cost the user if it is wrong. Derived from the

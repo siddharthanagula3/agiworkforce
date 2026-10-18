@@ -1022,8 +1022,6 @@ export function ComposerFooter({
     return null;
   }, [conversationMessages]);
 
-  useEffect(() => () => {}, []);
-
   const localModels = useLocalModels(open);
   const localSelection = useLocalModelSelection((state) => state.selected);
   const selectLocalModel = useLocalModelSelection((state) => state.select);

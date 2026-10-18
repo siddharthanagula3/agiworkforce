@@ -33,7 +33,7 @@ const ENDPOINT_SENTENCES: Record<string, string> = {
   '/api/settings/activity': 'Viewed recent activity',
   '/api/settings/sessions': 'Viewed active sessions',
   '/api/user/export': 'Exported account data',
-  '/api/billing/checkout': 'Started a checkout',
+  '/api/checkout': 'Started a checkout',
 };
 
 /** Falls back to the longest matching prefix, so sub-paths stay understood. */

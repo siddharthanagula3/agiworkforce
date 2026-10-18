@@ -14,6 +14,7 @@ import {
   Check,
   X,
 } from '@agiworkforce/icons';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {
@@ -57,6 +58,7 @@ export function StyleSelector() {
     updateCustomStyle,
     deleteCustomStyle,
   } = useStyleStore();
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [open, setOpen] = React.useState(false);
   const [showCreateForm, setShowCreateForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
@@ -114,14 +116,22 @@ export function StyleSelector() {
     setShowCreateForm(false);
   }
 
-  function handleDelete(e: React.MouseEvent, id: string) {
+  function handleDelete(e: React.MouseEvent, custom: CustomStyle) {
     e.stopPropagation();
-    deleteCustomStyle(id);
-    if (editingId === id) {
-      setEditingId(null);
-      setShowCreateForm(false);
-      setForm(EMPTY_FORM);
-    }
+    confirm({
+      title: `Delete "${custom.name}"?`,
+      description:
+        'This custom style, its instruction and writing sample are removed from your account on every device. It cannot be recovered.',
+      confirmLabel: 'Delete style',
+      onConfirm: () => {
+        deleteCustomStyle(custom.id);
+        if (editingId === custom.id) {
+          setEditingId(null);
+          setShowCreateForm(false);
+          setForm(EMPTY_FORM);
+        }
+      },
+    });
   }
 
   function handleEdit(e: React.MouseEvent, custom: CustomStyle) {
@@ -312,7 +322,7 @@ export function StyleSelector() {
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => handleDelete(e, custom.id)}
+                      onClick={(e) => handleDelete(e, custom)}
                       className={cn(
                         'shrink-0 rounded-compact p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-danger',
                       )}
@@ -411,6 +421,7 @@ export function StyleSelector() {
           )}
         </div>
       </AnchoredComposerMenu>
+      {confirmDialog}
     </div>
   );
 }

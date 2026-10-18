@@ -1,10 +1,6 @@
 import 'server-only';
 
-import {
-  readPluginSnapshotRecords,
-  readPluginSnapshotStamp,
-  readPluginSyncState,
-} from './snapshot-cache';
+import { readPluginSnapshotRecords, readPluginSnapshotStamp } from './snapshot-cache';
 import type { PluginDirectoryEntry } from './types';
 
 interface CachedDirectory {
@@ -46,18 +42,4 @@ export async function findPluginDirectoryRecord(
   idOrSlug: string,
 ): Promise<PluginDirectoryEntry | null> {
   return (await load()).byKey.get(idOrSlug) ?? null;
-}
-
-export interface PluginDirectoryView {
-  readonly records: readonly PluginDirectoryEntry[];
-  readonly lastSyncAt: string | null;
-}
-
-export async function getPluginDirectoryView(): Promise<PluginDirectoryView> {
-  const [directory, syncState] = await Promise.all([load(), readPluginSyncState()]);
-  return { records: directory.records, lastSyncAt: syncState.lastSyncAt };
-}
-
-export function __resetPluginDirectoryMemoryCacheForTests(): void {
-  cached = null;
 }

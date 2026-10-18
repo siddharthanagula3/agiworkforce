@@ -78,8 +78,6 @@ type AuthGateFailure = {
 
 export type AuthGateResult = AuthGateSuccess | AuthGateFailure;
 
-export type AnyResponse = NextResponse | Response;
-
 function enforceManagedCloudSurface(
   request: NextRequest,
   success: AuthGateSuccess,
