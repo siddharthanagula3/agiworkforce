@@ -11,10 +11,8 @@ import {
   verifyInbound,
   signOutbound,
   resetDispatchSession,
-  rotateDispatchKey,
   extractDispatchSalt,
   isDispatchSessionActive,
-  setDispatchCallbacks,
 } from '../dispatch';
 
 function makeRawEnvelope(overrides?: Partial<Record<string, unknown>>): string {
@@ -100,24 +98,6 @@ describe('initDispatchSession', () => {
     await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET);
     expect(isDispatchSessionActive()).toBe(true);
   });
-
-  it('fires onVersionMismatch callback when mobile version is too old', async () => {
-    mockInvoke.mockResolvedValueOnce('key_hex');
-    const onVersionMismatch = vi.fn();
-    setDispatchCallbacks({ onVersionMismatch });
-    await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET, '1.2.9');
-    expect(onVersionMismatch).toHaveBeenCalledWith('1.2.9', '1.3.0');
-    setDispatchCallbacks({ onVersionMismatch: undefined });
-  });
-
-  it('does not fire onVersionMismatch when mobile version is sufficient', async () => {
-    mockInvoke.mockResolvedValueOnce('key_hex');
-    const onVersionMismatch = vi.fn();
-    setDispatchCallbacks({ onVersionMismatch });
-    await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET, '1.3.0');
-    expect(onVersionMismatch).not.toHaveBeenCalled();
-    setDispatchCallbacks({ onVersionMismatch: undefined });
-  });
 });
 
 describe('dispatch protocol version', () => {
@@ -128,15 +108,11 @@ describe('dispatch protocol version', () => {
   });
 
   it('surfaces update_required for an envelope from a peer on the old protocol', async () => {
-    const onProtocolVersionUnsupported = vi.fn();
-    setDispatchCallbacks({ onProtocolVersionUnsupported });
     mockInvoke.mockRejectedValueOnce('update_required');
 
     const result = await verifyInbound({ rawJson: makeRawEnvelopeWithoutVersion() });
 
     expect(result).toEqual({ ok: false, reason: 'update_required' });
-    expect(onProtocolVersionUnsupported).toHaveBeenCalledOnce();
-    setDispatchCallbacks({ onProtocolVersionUnsupported: undefined });
   });
 });
 
@@ -159,14 +135,10 @@ describe('verifyInbound', () => {
     expect(result).toEqual({ ok: true, outcome: 'signed' });
   });
 
-  it('returns ok:true for unsigned_transitional and fires callback', async () => {
-    const onUnsignedTransitional = vi.fn();
-    setDispatchCallbacks({ onUnsignedTransitional });
+  it('returns ok:true for unsigned_transitional', async () => {
     mockInvoke.mockResolvedValueOnce('unsigned_transitional');
     const result = await verifyInbound({ rawJson: makeRawEnvelope() });
     expect(result).toEqual({ ok: true, outcome: 'unsigned_transitional' });
-    expect(onUnsignedTransitional).toHaveBeenCalledOnce();
-    setDispatchCallbacks({ onUnsignedTransitional: undefined });
   });
 
   it('deduplicates by message ID without calling Rust again', async () => {
@@ -235,48 +207,6 @@ describe('signOutbound', () => {
       payload: { action: 'ping' },
       msgType: 'ping',
     });
-  });
-});
-
-describe('rotateDispatchKey', () => {
-  beforeEach(async () => {
-    await resetDispatchSession();
-    mockInvoke.mockReset();
-    await setupSession();
-  });
-
-  it('calls cloud key rotation and re-initialises session key', async () => {
-    const newKeyHex = 'b'.repeat(64);
-    mockInvoke.mockResolvedValueOnce(newKeyHex);
-    const rotateKeyRequest = vi.fn().mockResolvedValue({ new_salt: 'newsalt' });
-    const onKeyRotated = vi.fn();
-    setDispatchCallbacks({ onKeyRotated });
-
-    await rotateDispatchKey('ABCD1234', PAIRING_SECRET, rotateKeyRequest);
-
-    expect(rotateKeyRequest).toHaveBeenCalledOnce();
-    expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
-      pairingCode: 'ABCD1234',
-      sessionSalt: 'newsalt',
-      pairingSecret: PAIRING_SECRET,
-    });
-    expect(onKeyRotated).toHaveBeenCalledWith(newKeyHex);
-    setDispatchCallbacks({ onKeyRotated: undefined });
-  });
-
-  it('retries up to 3 times on failure then throws', async () => {
-    vi.useFakeTimers();
-    const rotateKeyRequest = vi.fn().mockRejectedValue(new Error('network'));
-
-    const rotatePromise = rotateDispatchKey('ABCD1234', PAIRING_SECRET, rotateKeyRequest).catch(
-      (e: unknown) => e,
-    );
-    await vi.runAllTimersAsync();
-    const result = await rotatePromise;
-    expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toMatch('key rotation failed after 3 attempts');
-    expect(rotateKeyRequest).toHaveBeenCalledTimes(3);
-    vi.useRealTimers();
   });
 });
 

@@ -167,25 +167,9 @@ describe('ChatStore, tool timeline and agentic loop', () => {
   });
 });
 
-describe('ToolStore, tool executions and approvals', () => {
+describe('ToolStore approvals', () => {
   beforeEach(() => {
     useToolStore.getState().resetOnLogout();
-  });
-
-  it('adds a tool execution and caps at 200', () => {
-    useToolStore.getState().addToolExecution({
-      id: 'exec-1',
-      toolName: 'bash',
-      input: { command: 'ls' },
-      output: 'file1.ts\nfile2.ts',
-      duration: 50,
-      success: true,
-    });
-
-    const execs = useToolStore.getState().toolExecutions;
-    expect(execs).toHaveLength(1);
-    expect(execs[0]?.toolName).toBe('bash');
-    expect(execs[0]?.success).toBe(true);
   });
 
   it('manages approval requests, add, approve, reject', () => {
@@ -249,13 +233,6 @@ describe('ToolStore, tool executions and approvals', () => {
   });
 
   it('resets all state on logout', () => {
-    useToolStore.getState().addToolExecution({
-      id: 'x',
-      toolName: 't',
-      input: {},
-      duration: 0,
-      success: true,
-    });
     useToolStore.getState().addFileOperation({
       id: 'f',
       type: 'read',
@@ -266,7 +243,6 @@ describe('ToolStore, tool executions and approvals', () => {
     useToolStore.getState().resetOnLogout();
 
     const state = useToolStore.getState();
-    expect(state.toolExecutions).toHaveLength(0);
     expect(state.fileOperations).toHaveLength(0);
     expect(state.pendingApprovals).toHaveLength(0);
     expect(state.plan).toBeNull();

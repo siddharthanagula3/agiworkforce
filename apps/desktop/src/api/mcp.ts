@@ -830,10 +830,6 @@ export class McpClient {
     return mcpSearchTools(query);
   }
 
-  static async callTool(toolId: string, args: Record<string, unknown>): Promise<unknown> {
-    return mcpCallTool(toolId, args);
-  }
-
   static async getConfig(): Promise<McpServersConfig> {
     return mcpGetConfig();
   }

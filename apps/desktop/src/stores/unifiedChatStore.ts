@@ -38,7 +38,6 @@ export type {
   FileOperationType,
   FileOperation,
   TerminalCommand,
-  ToolExecution,
   Screenshot,
   ActionLogEntryType,
   ActionLogStatus,
@@ -109,7 +108,6 @@ export interface UnifiedChatState {
 
   fileOperations: ReturnType<typeof useToolStore.getState>['fileOperations'];
   terminalCommands: ReturnType<typeof useToolStore.getState>['terminalCommands'];
-  toolExecutions: ReturnType<typeof useToolStore.getState>['toolExecutions'];
   screenshots: ReturnType<typeof useToolStore.getState>['screenshots'];
   actionLog: ReturnType<typeof useToolStore.getState>['actionLog'];
   pendingApprovals: ReturnType<typeof useToolStore.getState>['pendingApprovals'];
@@ -191,7 +189,6 @@ export interface UnifiedChatState {
   addFileOperation: ReturnType<typeof useToolStore.getState>['addFileOperation'];
   addTerminalCommand: ReturnType<typeof useToolStore.getState>['addTerminalCommand'];
   updateTerminalOutput: ReturnType<typeof useToolStore.getState>['updateTerminalOutput'];
-  addToolExecution: ReturnType<typeof useToolStore.getState>['addToolExecution'];
   addScreenshot: ReturnType<typeof useToolStore.getState>['addScreenshot'];
   addActionLogEntry: ReturnType<typeof useToolStore.getState>['addActionLogEntry'];
   updateActionLogEntry: ReturnType<typeof useToolStore.getState>['updateActionLogEntry'];
@@ -295,7 +292,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
 
       fileOperations: toolState.fileOperations,
       terminalCommands: toolState.terminalCommands,
-      toolExecutions: toolState.toolExecutions,
       screenshots: toolState.screenshots,
       actionLog: toolState.actionLog,
       pendingApprovals: toolState.pendingApprovals,
@@ -377,7 +373,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       addFileOperation: toolState.addFileOperation,
       addTerminalCommand: toolState.addTerminalCommand,
       updateTerminalOutput: toolState.updateTerminalOutput,
-      addToolExecution: toolState.addToolExecution,
       addScreenshot: toolState.addScreenshot,
       addActionLogEntry: addNormalizedActionLogEntry,
       updateActionLogEntry: updateNormalizedActionLogEntry,
@@ -471,7 +466,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     setMissionControlOpen: agentState.setMissionControlOpen,
     fileOperations: toolState.fileOperations,
     terminalCommands: toolState.terminalCommands,
-    toolExecutions: toolState.toolExecutions,
     screenshots: toolState.screenshots,
     actionLog: toolState.actionLog,
     pendingApprovals: toolState.pendingApprovals,
@@ -484,7 +478,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     addFileOperation: toolState.addFileOperation,
     addTerminalCommand: toolState.addTerminalCommand,
     updateTerminalOutput: toolState.updateTerminalOutput,
-    addToolExecution: toolState.addToolExecution,
     addScreenshot: toolState.addScreenshot,
     addActionLogEntry: addNormalizedActionLogEntry,
     updateActionLogEntry: updateNormalizedActionLogEntry,
@@ -572,7 +565,6 @@ useUnifiedChatStore.setState = (
   const toolKeys = [
     'fileOperations',
     'terminalCommands',
-    'toolExecutions',
     'screenshots',
     'actionLog',
     'pendingApprovals',

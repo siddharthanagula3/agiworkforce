@@ -49,17 +49,6 @@ export interface TerminalCommand {
   agentId?: string;
 }
 
-export interface ToolExecution {
-  id: string;
-  toolName: string;
-  input: Record<string, unknown>;
-  output?: unknown;
-  error?: string;
-  duration: number;
-  timestamp: Date;
-  success: boolean;
-}
-
 export interface Screenshot {
   id: string;
   imageBase64: string;
@@ -70,14 +59,7 @@ export interface Screenshot {
 }
 
 export type ActionLogEntryType =
-  | 'plan'
-  | 'terminal'
-  | 'filesystem'
-  | 'browser'
-  | 'ui'
-  | 'mcp'
-  | 'approval'
-  | 'metrics';
+  'plan' | 'terminal' | 'filesystem' | 'browser' | 'ui' | 'mcp' | 'approval' | 'metrics';
 
 export type ActionLogStatus = 'pending' | 'running' | 'success' | 'failed' | 'blocked';
 
@@ -264,7 +246,6 @@ function upsertApprovalAuditEntry(
 export interface ToolState {
   fileOperations: FileOperation[];
   terminalCommands: TerminalCommand[];
-  toolExecutions: ToolExecution[];
   screenshots: Screenshot[];
   actionLog: ActionLogEntry[];
 
@@ -293,8 +274,6 @@ export interface ToolState {
     exit_code?: number;
     duration_ms: number;
   }) => void;
-
-  addToolExecution: (exec: Omit<ToolExecution, 'timestamp'>) => void;
 
   addScreenshot: (screenshot: Omit<Screenshot, 'timestamp'>) => void;
 
@@ -349,7 +328,6 @@ export const useToolStore = create<ToolState>()(
         immer((set, get) => ({
           fileOperations: [],
           terminalCommands: [],
-          toolExecutions: [],
           screenshots: [],
           actionLog: [],
           pendingApprovals: [],
@@ -400,16 +378,6 @@ export const useToolStore = create<ToolState>()(
               },
               undefined,
               'tool/updateTerminalOutput',
-            ),
-
-          addToolExecution: (exec) =>
-            set(
-              (state) => {
-                state.toolExecutions.push({ ...exec, timestamp: new Date() });
-                state.toolExecutions = capArray(state.toolExecutions, FILE_OPS_LIMIT);
-              },
-              undefined,
-              'tool/addToolExecution',
             ),
 
           addScreenshot: (screenshot) =>
@@ -471,7 +439,6 @@ export const useToolStore = create<ToolState>()(
               (state) => {
                 state.fileOperations = [];
                 state.terminalCommands = [];
-                state.toolExecutions = [];
                 state.screenshots = [];
                 state.actionLog = [];
               },
@@ -1021,7 +988,6 @@ export const useToolStore = create<ToolState>()(
                 state.approvalTimeoutTimers.forEach((timerId) => clearTimeout(timerId));
                 state.fileOperations = [];
                 state.terminalCommands = [];
-                state.toolExecutions = [];
                 state.screenshots = [];
                 state.actionLog = [];
                 state.pendingApprovals = [];
@@ -1065,7 +1031,6 @@ export const useToolStore = create<ToolState>()(
 
 export const selectFileOperations = (state: ToolState) => state.fileOperations;
 export const selectTerminalCommands = (state: ToolState) => state.terminalCommands;
-export const selectToolExecutions = (state: ToolState) => state.toolExecutions;
 export const selectScreenshots = (state: ToolState) => state.screenshots;
 export const selectActionLog = (state: ToolState) => state.actionLog;
 export const selectPendingApprovals = (state: ToolState) => state.pendingApprovals;

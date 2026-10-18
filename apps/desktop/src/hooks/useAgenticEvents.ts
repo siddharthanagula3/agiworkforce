@@ -14,7 +14,6 @@ import type {
   FileOperation,
   Screenshot,
   TerminalCommand,
-  ToolExecution,
 } from '../stores/unifiedChatStore';
 import { useUnifiedChatStore } from '../stores/unifiedChatStore';
 import type {
@@ -77,11 +76,6 @@ export interface TerminalCommandEvent {
   messageId?: string;
 }
 
-export interface ToolExecutionEvent {
-  execution: ToolExecution;
-  messageId?: string;
-}
-
 export interface ScreenshotEvent {
   screenshot: Screenshot;
   messageId?: string;
@@ -114,7 +108,6 @@ const _ctx: SharedListenerContext = createSharedListenerContext();
 const runtimeActivityHandlers = {
   addFileOperation: () => useUnifiedChatStore.getState().addFileOperation,
   addTerminalCommand: () => useUnifiedChatStore.getState().addTerminalCommand,
-  addToolExecution: () => useUnifiedChatStore.getState().addToolExecution,
   addScreenshot: () => useUnifiedChatStore.getState().addScreenshot,
   addActionLogEntry: () => useUnifiedChatStore.getState().addActionLogEntry,
   updateActionLogEntry: () => useUnifiedChatStore.getState().updateActionLogEntry,
@@ -387,21 +380,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
     }),
   );
   push(unlistenTerminal);
-
-  const unlistenToolExec = await listen<ToolExecutionEvent>(
-    'agi:tool_execution',
-    safeHandler(ctx, 'agi:tool_execution', (payload) => {
-      runtimeActivityHandlers.addToolExecution()(payload.execution);
-      const exec = payload.execution as ToolExecution & {
-        tool?: string;
-        name?: string;
-        type?: string;
-      };
-      const tool = exec.toolName ?? exec.tool ?? exec.name ?? exec.type ?? '';
-      focusSidecar(tool || 'tool');
-    }),
-  );
-  push(unlistenToolExec);
 
   const unlistenScreenshot = await listen<ScreenshotEvent>(
     'agi:screenshot',

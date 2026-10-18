@@ -13,7 +13,6 @@ describe('unifiedChatStore', () => {
       actionLog: [],
       fileOperations: [],
       terminalCommands: [],
-      toolExecutions: [],
       screenshots: [],
       agents: [],
       pendingApprovals: [],

@@ -508,7 +508,6 @@ describe('unifiedChatStore - Extended Tests', () => {
       messages: [],
       fileOperations: [],
       terminalCommands: [],
-      toolExecutions: [],
       screenshots: [],
       actionLog: [],
       agents: [],

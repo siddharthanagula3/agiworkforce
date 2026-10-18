@@ -994,16 +994,10 @@ describe('TauriRuntime', () => {
     expect(useChatArtifactStore.getState().activeArtifact).toBeNull();
   });
 
-  it('projects native Local thinking and iteration events into the shared activity stream', async () => {
+  it('projects native Local iteration events into the shared activity stream', async () => {
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'chat_send_message') {
         setTimeout(() => {
-          listenHandlers.get('agent:thinking')?.({
-            payload: {
-              thinking: true,
-              message: 'Executing agent plan...',
-            },
-          });
           listenHandlers.get('chat:agent-progress')?.({
             payload: {
               conversation_id: 42,
@@ -1041,18 +1035,6 @@ describe('TauriRuntime', () => {
         type: 'agent_event',
         envelope: expect.objectContaining({
           sequence: 0,
-          event: {
-            type: 'progress-update',
-            progressId: 'local-thinking',
-            summary: 'Executing agent plan...',
-            status: 'running',
-          },
-        }),
-      }),
-      expect.objectContaining({
-        type: 'agent_event',
-        envelope: expect.objectContaining({
-          sequence: 1,
           event: {
             type: 'progress-update',
             progressId: 'local-agent-iteration',

@@ -19,7 +19,6 @@ describe('toolStore approval audit trail', () => {
     useToolStore.setState({
       fileOperations: [],
       terminalCommands: [],
-      toolExecutions: [],
       screenshots: [],
       actionLog: [],
       pendingApprovals: [],

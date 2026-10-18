@@ -198,12 +198,6 @@ function toolArguments(value: unknown): Record<string, unknown> {
     : {};
 }
 
-interface AgentThinkingPayload {
-  thinking: boolean;
-  message?: string;
-  phase?: string;
-}
-
 interface ThinkingEventPayload {
   event_type: 'start' | 'delta' | 'complete';
   content: string;
@@ -863,17 +857,6 @@ export class TauriRuntime implements ChatRuntime {
       };
       push({ type: 'agent_event', data: envelope });
     };
-
-    await registerListener<AgentThinkingPayload>('agent:thinking', (payload) => {
-      if (!payload.thinking) return;
-      thinkingStartedAtMs = Date.now();
-      pushAgentEvent({
-        type: 'progress-update',
-        progressId: 'local-thinking',
-        summary: payload.message?.trim() || payload.phase?.trim() || 'Thinking…',
-        status: 'running',
-      });
-    });
 
     await registerListener<ThinkingEventPayload>('thinking:event', (payload) => {
       if (payload.message_id && payload.message_id !== frontendMessageId) return;

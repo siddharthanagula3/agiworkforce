@@ -12,19 +12,11 @@ const DEDUP_TTL_MS = 60_000;
 export type VerifyOutcome = 'signed' | 'unsigned_transitional';
 
 export type DispatchVerifyResult =
-  | { ok: true; outcome: VerifyOutcome }
-  | { ok: false; reason: string };
+  { ok: true; outcome: VerifyOutcome } | { ok: false; reason: string };
 
 export interface InboundDispatchMessage {
   id?: string;
   rawJson: string;
-}
-
-export interface DispatchListenerCallbacks {
-  onVersionMismatch?: (mobileVersion: string, minRequired: string) => void;
-  onUnsignedTransitional?: () => void;
-  onKeyRotated?: (newKeyHex: string) => void;
-  onProtocolVersionUnsupported?: () => void;
 }
 
 let _sessionActive = false;
@@ -34,8 +26,6 @@ let _sessionLifecycleGeneration = 0;
 let _sessionLifecycleHasKeyOrPendingSetup = false;
 
 const _dedupCache = new Map<string, number>();
-
-let _callbacks: DispatchListenerCallbacks = {};
 
 class DispatchSessionSupersededError extends Error {
   constructor() {
@@ -95,10 +85,6 @@ function isMobileVersionSufficient(mobileVersion: string): boolean {
   return compareSemver(mobileVersion, DISPATCH_HMAC_MIN_MOBILE_VERSION) >= 0;
 }
 
-export function setDispatchCallbacks(callbacks: DispatchListenerCallbacks): void {
-  _callbacks = { ..._callbacks, ...callbacks };
-}
-
 /**
  * Initialise the desktop dispatch session key.
  *
@@ -121,7 +107,6 @@ export async function initDispatchSession(
   mobileVersion?: string,
 ): Promise<string> {
   if (mobileVersion && !isMobileVersionSufficient(mobileVersion)) {
-    _callbacks.onVersionMismatch?.(mobileVersion, DISPATCH_HMAC_MIN_MOBILE_VERSION);
     console.warn(
       `[dispatch] Mobile version ${mobileVersion} does not support HMAC signing. ` +
         `Force-update required before ${DISPATCH_HMAC_REQUIRED_AFTER}.`,
@@ -214,7 +199,6 @@ export async function verifyInbound(
         '[dispatch] Rejecting envelope from a peer on an older dispatch protocol. ' +
           'Both apps must be updated before pairing can be secured.',
       );
-      _callbacks.onProtocolVersionUnsupported?.();
       return { ok: false, reason };
     }
 
@@ -229,7 +213,6 @@ export async function verifyInbound(
         `(${daysLeft} days until cutoff ${DISPATCH_HMAC_REQUIRED_AFTER}). ` +
         `Mobile app may need update.`,
     );
-    _callbacks.onUnsignedTransitional?.();
   }
 
   return { ok: true, outcome };
@@ -251,71 +234,6 @@ export async function signOutbound(payload: unknown, msgType: string): Promise<s
     payload,
     msgType,
   });
-}
-
-/**
- * Rotate the session key.
- *
- * Fetches a new dispatch salt from the cloud API and re-initialises the Rust
- * session with that salt.
- * The previous key
- * is discarded (Rust only keeps one active key at a time for session keys;
- * multi-key support lives at the session-pairing layer).
- *
- * Retries up to 3 times with exponential backoff on failure.
- *
- * @param pairingCode - The current pairing code.
- * @param pairingSecret - The out-of-band secret from the active QR payload.
- * @param rotateKeyRequest - A function that calls the cloud key-rotation
- *   endpoint and returns `{ new_salt: string }`.
- */
-export async function rotateDispatchKey(
-  pairingCode: string,
-  pairingSecret: string,
-  rotateKeyRequest: () => Promise<{ new_salt: string }>,
-): Promise<void> {
-  const MAX_ATTEMPTS = 3;
-  let lastErr: unknown;
-  let rotationGeneration = _sessionLifecycleGeneration;
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (rotationGeneration !== _sessionLifecycleGeneration) {
-      throw new DispatchSessionSupersededError();
-    }
-    if (attempt > 0) {
-      await new Promise((res) => setTimeout(res, 1000 * 2 ** (attempt - 1)));
-      if (rotationGeneration !== _sessionLifecycleGeneration) {
-        throw new DispatchSessionSupersededError();
-      }
-    }
-    let expectedGenerationAfterOwnSetup: number | null = null;
-    try {
-      const { new_salt } = await rotateKeyRequest();
-      if (rotationGeneration !== _sessionLifecycleGeneration) {
-        throw new DispatchSessionSupersededError();
-      }
-      expectedGenerationAfterOwnSetup = rotationGeneration + 1;
-      const keyHex = await initDispatchSession(pairingCode, new_salt, pairingSecret);
-      console.debug('[dispatch] key rotated successfully');
-      _callbacks.onKeyRotated?.(keyHex);
-      return;
-    } catch (err) {
-      if (err instanceof DispatchSessionSupersededError) throw err;
-      if (
-        expectedGenerationAfterOwnSetup !== null &&
-        _sessionLifecycleGeneration !== expectedGenerationAfterOwnSetup
-      ) {
-        throw new DispatchSessionSupersededError();
-      }
-      rotationGeneration = _sessionLifecycleGeneration;
-      lastErr = err;
-      console.warn(`[dispatch] key rotation attempt ${attempt + 1} failed:`, err);
-    }
-  }
-
-  throw new Error(
-    `[dispatch] key rotation failed after ${MAX_ATTEMPTS} attempts: ${String(lastErr)}`,
-  );
 }
 
 export async function resetDispatchSession(): Promise<void> {

@@ -35,7 +35,6 @@ export type {
   FileOperationType,
   FileOperation,
   TerminalCommand,
-  ToolExecution,
   Screenshot,
   ActionLogEntryType,
   ActionLogStatus,
@@ -102,7 +101,6 @@ export {
 export {
   selectFileOperations,
   selectTerminalCommands,
-  selectToolExecutions,
   selectScreenshots,
   selectActionLog,
   selectPendingApprovals,
