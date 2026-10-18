@@ -3,7 +3,6 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::terminal_style as ts;
@@ -52,35 +51,6 @@ pub struct AuthStatusEntry {
     /// since the trail began.
     pub last_used: Option<String>,
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// RefreshError, typed error classification for token refresh failures
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Debug)]
-pub enum RefreshError {
-    /// Refresh token expired or revoked, user must re-authenticate.
-    InvalidGrant(String),
-    /// Network connectivity failure (DNS, timeout, connection refused).
-    NetworkError(String),
-    /// Server returned 5xx, transient, may succeed on retry.
-    ServerError(String),
-    /// Any other failure.
-    Unknown(String),
-}
-
-impl fmt::Display for RefreshError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RefreshError::InvalidGrant(msg) => write!(f, "invalid grant: {}", msg),
-            RefreshError::NetworkError(msg) => write!(f, "network error: {}", msg),
-            RefreshError::ServerError(msg) => write!(f, "server error: {}", msg),
-            RefreshError::Unknown(msg) => write!(f, "refresh error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for RefreshError {}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // File Permission Helpers
@@ -1838,47 +1808,6 @@ mod tests {
             parse_auth_keyring_index(r#"{"version":1,"storage":"plaintext","providers":[]}"#)
                 .is_none()
         );
-    }
-
-    // ── RefreshError classification ──
-
-    #[test]
-    fn test_refresh_error_invalid_grant_display() {
-        let err = RefreshError::InvalidGrant("token revoked".into());
-        let msg = err.to_string();
-        assert!(msg.contains("invalid grant"));
-        assert!(msg.contains("token revoked"));
-    }
-
-    #[test]
-    fn test_refresh_error_network_display() {
-        let err = RefreshError::NetworkError("connection refused".into());
-        let msg = err.to_string();
-        assert!(msg.contains("network error"));
-        assert!(msg.contains("connection refused"));
-    }
-
-    #[test]
-    fn test_refresh_error_server_display() {
-        let err = RefreshError::ServerError("HTTP 503".into());
-        let msg = err.to_string();
-        assert!(msg.contains("server error"));
-        assert!(msg.contains("HTTP 503"));
-    }
-
-    #[test]
-    fn test_refresh_error_unknown_display() {
-        let err = RefreshError::Unknown("something happened".into());
-        let msg = err.to_string();
-        assert!(msg.contains("refresh error"));
-        assert!(msg.contains("something happened"));
-    }
-
-    #[test]
-    fn test_refresh_error_is_std_error() {
-        // Verify RefreshError implements std::error::Error (compiles = passes)
-        let err: Box<dyn std::error::Error> = Box::new(RefreshError::InvalidGrant("test".into()));
-        assert!(!err.to_string().is_empty());
     }
 
     // ── File permissions ──
