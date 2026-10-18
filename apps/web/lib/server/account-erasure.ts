@@ -481,30 +481,10 @@ async function sealAndCheckMediaJobsForErasure(
   dataFenceToken?: string;
 }> {
   const db = getNeonDb();
-  let videoProvisioned = false;
-  let imageProvisioned = false;
-  try {
-    const schema = await db.query<{ video: boolean; image: boolean }>(
-      `select to_regclass('public.video_generation_jobs') is not null as video,
-              to_regclass('public.image_generation_jobs') is not null as image`,
-    );
-    videoProvisioned = schema[0]?.video === true;
-    imageProvisioned = schema[0]?.image === true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error({ userId, error: message }, 'Could not inspect durable media erasure schema');
-    return { blocked: true, error: message };
-  }
-  if (!videoProvisioned && !imageProvisioned) return { blocked: false };
-
   let dataFenceToken: string | undefined;
   try {
-    // The fence columns arrived with the video migration, so there is nothing to
-    // seal until it is applied. An image-only deployment still gets the blocking
-    // check below.
-    const fenced = !videoProvisioned
-      ? [{ id: userId }]
-      : scope === 'account'
+    const fenced =
+      scope === 'account'
         ? await db.query<{ id: string }>(
             `update public.profiles
                 set deletion_requested_at = coalesce(deletion_requested_at, now()),
@@ -602,10 +582,7 @@ async function sealAndCheckMediaJobsForErasure(
          )`;
 
     const rows = await db.query<{ video_blocking: boolean; image_blocking: boolean }>(
-      `select (${videoProvisioned ? videoBlocking : 'false'}
-       ) as video_blocking,
-              (${imageProvisioned ? IMAGE_JOB_BLOCKING : 'false'}
-       ) as image_blocking`,
+      `select (${videoBlocking}) as video_blocking, (${IMAGE_JOB_BLOCKING}) as image_blocking`,
       [userId],
     );
     const blockedBy = rows[0]?.video_blocking

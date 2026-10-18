@@ -175,7 +175,6 @@ interface ErasureFixture {
   failStatementMatching?: string;
   activeVideoJobs?: boolean;
   activeImageJobs?: boolean;
-  imageSchemaAbsent?: boolean;
   pendingVideoIncident?: boolean;
   pendingVideoSettlement?: boolean;
   videoGateError?: Error;
@@ -190,9 +189,6 @@ function primeDb(fixture: ErasureFixture = {}): void {
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
       return [{ held: fixture.underLegalHold ?? false }];
-    }
-    if (sql.includes("to_regclass('public.video_generation_jobs')")) {
-      return [{ video: true, image: !(fixture.imageSchemaAbsent ?? false) }];
     }
     if (sql.includes('update public.profiles') && sql.includes('deletion_requested_at')) {
       return fixture.missingProfileFence || fixture.liveDataFence ? [] : [{ id: 'user-1' }];
@@ -681,18 +677,6 @@ describe('eraseUserAccountData', () => {
     expect(gate).toContain('from public.image_generation_jobs');
     expect(gate).toMatch(/status in \('queued', 'processing'\)/);
     expect(gate).toContain("billing_settlement_status = 'pending'");
-  });
-
-  it('erases normally on a deployment where the image migration has not been applied', async () => {
-    primeDb({ imageSchemaAbsent: true });
-
-    const report = await eraseUserAccountData('user-1');
-
-    expect(report.complete).toBe(true);
-    const gate = mocks.query.mock.calls
-      .map((call) => String(call[0]))
-      .find((sql) => sql.includes('as image_blocking'));
-    expect(gate).not.toContain('from public.image_generation_jobs');
   });
 
   it('deletes terminal image rows before their managed-usage parent', async () => {
