@@ -3,7 +3,12 @@ import 'server-only';
 import { mkdtemp, open, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { googleVideoOutputHostDisposition, providerApiUrl } from '@/lib/server/provider-endpoints';
+import {
+  googleVideoOutputHostDisposition,
+  providerApiUrl,
+  RUNWAY_API_BASE,
+  RUNWAY_API_VERSION,
+} from '@/lib/server/provider-endpoints';
 import type { VideoGenerationJob } from '@/lib/server/video-generation-jobs';
 import {
   OpenRouterVideoPollError,
@@ -11,7 +16,6 @@ import {
   pollOpenRouterVideo,
 } from '@/lib/services/openrouter-video-provider-service';
 
-const RUNWAY_API_BASE = 'https://api.dev.runwayml.com/v1';
 const MAX_VIDEO_BYTES = 256 * 1024 * 1024;
 const MAX_INLINE_VIDEO_BYTES = 32 * 1024 * 1024;
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
@@ -162,7 +166,7 @@ async function pollRunway(providerTaskId: string): Promise<VideoProviderPollResu
       method: 'GET',
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'X-Runway-Version': '2024-11-06',
+        'X-Runway-Version': RUNWAY_API_VERSION,
       },
       signal: AbortSignal.timeout(20_000),
     });
@@ -343,7 +347,7 @@ export async function requestRunwayVideoCancellation(job: VideoGenerationJob): P
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'X-Runway-Version': '2024-11-06',
+        'X-Runway-Version': RUNWAY_API_VERSION,
       },
       signal: AbortSignal.timeout(20_000),
     });

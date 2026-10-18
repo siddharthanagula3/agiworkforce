@@ -182,7 +182,7 @@ import {
   researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
 import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
-import type { WebSettingsContentSection } from '@/features/settings/lib/web-settings-sections';
+import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -516,7 +516,6 @@ function surfaceTermsNotice(response: Response): void {
 }
 
 const BILLING_NOTICE_SEEN_KEY = 'agi.billing-notice-seen';
-const BILLING_SETTINGS_SECTION = 'billing' satisfies WebSettingsContentSection;
 
 // A lapsed paid plan is served as Free and the gateway names the subscription
 // status. Once per status per browser session, so it reminds without nagging.
@@ -533,7 +532,7 @@ function surfaceBillingNotice(response: Response): void {
     duration: 15_000,
     action: {
       label: 'Open billing',
-      onClick: () => window.location.assign(`/settings/${BILLING_SETTINGS_SECTION}`),
+      onClick: () => window.location.assign(settingsSectionPath('billing')),
     },
   });
 }
