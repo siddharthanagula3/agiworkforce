@@ -54,12 +54,6 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, chrome
 
-## S28.28: Publish production version.
-
-- Done when: The user can publish a separate production version (stable URL or domain) distinct from previews.
-- Wave: 4
-- Build on: vscode
-
 ## S28.29: Version comparison.
 
 - Done when: The user can compare two versions of the app's code.

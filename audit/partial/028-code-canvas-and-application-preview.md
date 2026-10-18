@@ -118,6 +118,15 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
 Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 
+## S28.16: Runtime-error overlay.
+
+- Done when: Runtime errors in the preview appear as an overlay with a way to recover.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S28.18: Preview reload.
 
 - Done when: The user can reload the preview.
@@ -162,6 +171,15 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S28.24: Download source.
+
+- Done when: The user can download the app's source code.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S28.25: Export project archive.
 
 - Done when: The user can export a whole multi-file project as an archive (e.g. zip).
@@ -192,6 +210,15 @@ Code: `apps/web/lib/artifact-sandbox.ts:95-95`
 - Done when: The user can publish the app to a shareable preview link.
 - Wave: 3
 - Already works on: web, desktop, mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| vscode | missing | Not built on this surface. |  |
+
+## S28.28: Publish production version.
+
+- Done when: The user can publish a separate production version (stable URL or domain) distinct from previews.
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

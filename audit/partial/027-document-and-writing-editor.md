@@ -6,6 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S27.01: Document title.
+
+- Done when: A document shows its title in its card and viewer, falling back to a default when it has none.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S27.03: Markdown editing mode.
 
 - Done when: The user can switch a document to a Markdown source mode, edit the text and save it back as a new version.
@@ -150,6 +159,35 @@ nothing is left.
 - Done when: A document can be exported as a PDF.
 - Wave: 3
 - Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+## S27.37: Export to Markdown.
+
+- Done when: A document can be exported as a Markdown file.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S27.39: Email draft presentation.
+
+- Done when: An email the assistant drafts is presented as an email (subject, recipients, body) rather than plain text.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+## S27.40: Recipient, subject, and attachment fields.
+
+- Done when: An email draft has editable recipient, subject and attachment fields.
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

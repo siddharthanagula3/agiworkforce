@@ -114,15 +114,42 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S62.09: Concurrent task view.
+
+- Done when: The user can watch several running tasks or agents at once in one view.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S62.10: Needs-input prioritization.
 
 - Done when: Tasks or agents that need the user's input are surfaced first.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
+
+## S62.11: Inline unblock response.
+
+- Done when: The user can unblock a waiting task or agent inline without leaving the overview.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S62.12: Full-transcript drill-down.
+
+- Done when: From an overview the user can drill into the full transcript of a task.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S62.14: Agent handoff.
 

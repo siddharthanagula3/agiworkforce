@@ -37,6 +37,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
+## S88.04: Report-a-bug flow.
+
+- Done when: A user can report a bug from the product, with enough context (build, platform) for support to act.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S88.05: Product feedback.
 
 - Done when: Users can send general product feedback from inside the product and it is stored for the team.

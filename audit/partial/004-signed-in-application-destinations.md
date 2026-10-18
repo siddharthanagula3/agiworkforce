@@ -28,11 +28,29 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S4.06: Projects index.
+
+- Done when: A Projects destination lists the user's projects and lets them open or create one.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S4.07: Project overview.
+
+- Done when: Opening a project shows its home: name, description/instructions summary, and entry points to its chats and files.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S4.08: Project conversations.
 
 - Done when: Within a project, a list of the project's conversations that open when selected.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -48,6 +66,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S4.10: Project instructions.
+
+- Done when: A place to view and edit a project's instructions, which then apply to chats in that project.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S4.11: Project members.
 
@@ -88,7 +115,7 @@ nothing is left.
 
 - Done when: A dashboard lists the user's active/running work tasks with their live status, filterable from finished ones.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -98,7 +125,7 @@ nothing is left.
 
 - Done when: Opening one task shows its status, step-by-step activity/transcript, outputs, and any pending decision.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -108,7 +135,7 @@ nothing is left.
 
 - Done when: An approvals inbox gathers every pending approval across the user's tasks and lets them approve or reject each.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -173,6 +200,15 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S4.25: Artifact gallery.
+
+- Done when: An artifact gallery lists the user's generated artifacts and opens any of them.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S4.26: Artifact editor.
 
 - Done when: An artifact editor lets the user edit an artifact's content directly and saves the result as a new version.
@@ -190,7 +226,7 @@ nothing is left.
 
 - Done when: A dedicated image studio where the user writes a prompt, picks style/size options, generates images and sees results/history in one place.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -314,3 +350,12 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:304-304`, `apps/mo
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
+
+## S4.44: Help and feedback.
+
+- Done when: A help-and-feedback destination links to help/docs/status and lets the user send product feedback or a bug report from inside the product.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

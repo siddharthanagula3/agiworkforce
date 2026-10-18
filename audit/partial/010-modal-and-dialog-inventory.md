@@ -6,6 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S10.01: Create Project.
+
+- Done when: A create-project dialog (or command) asks for a name and creates the project in the account.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S10.02: Rename conversation.
 
 - Done when: The user opens rename on a conversation, edits the title in a field or prompt, and the new title is saved.
@@ -74,6 +83,15 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S10.10: Share artifact.
+
+- Done when: An artifact share dialog publishes it to a link, lets the user copy it and choose who can open it, and can take it down.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S10.11: Publish generated application.
 
@@ -284,6 +302,15 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 | mobile | partial | D-2026-09-28-27: card and payment method link out to web billing. | flag-off, surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
+
+## S10.34: Microphone permission explanation.
+
+- Done when: Before or when the microphone is first needed, the product explains why it wants it and what to do if access is refused.
+- Wave: 3
+- Already works on: mobile, chrome
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S10.35: Screen-sharing source selection.
 

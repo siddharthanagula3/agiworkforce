@@ -6,6 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S32.31: Export to HTML.
+
+- Done when: The user can export the design as a standalone HTML file.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S32.33: Export to image or archive.
 
 - Done when: The user can export the design as an image file or as a downloadable archive.
@@ -15,3 +24,12 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+
+## S32.34: Version comparison and restoration.
+
+- Done when: The user can compare two versions of a design and restore an earlier one.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

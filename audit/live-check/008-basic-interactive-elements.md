@@ -8,4 +8,10 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
+| S8.06: Toggle buttons. | chrome | live-web |
+| S8.07: Button groups. | chrome | live-web |
 | S8.13: One-time-code fields. | mobile | external-service |
+| S8.17: Segmented controls. | chrome | live-web |
+| S8.40: Badges. | chrome | live-web |
+| S8.41: Tags. | chrome | live-web |
+| S8.48: Pagination controls. | chrome | live-web |

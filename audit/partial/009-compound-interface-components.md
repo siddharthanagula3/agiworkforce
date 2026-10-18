@@ -19,6 +19,15 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S9.04: Connected-account picker.
+
+- Done when: When a connector has more than one linked account, the user can pick which account a task or chat uses.
+- Wave: 3
+- Already works on: mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S9.05: Workspace picker.
 
 - Done when: The user can see their personal and team workspaces in a list and switch the active one.
@@ -140,7 +149,7 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 
 - Done when: Tasks are laid out as a board with a column per status so the user sees and manages work by stage.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -219,6 +228,15 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
+## S9.32: Approval card.
+
+- Done when: When an action needs consent, an inline card names the action and offers approve and deny, and the choice resumes or stops the run.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S9.34: Capability-warning card.
 
 - Done when: Before sending, a visible notice warns when the chosen model cannot handle something in the request (images, tools, attachments, context size).
@@ -230,6 +248,15 @@ Code: `apps/web/lib/e2b/gate.ts:16-16`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S9.35: Task-progress card.
+
+- Done when: A running task shows a card with its current state and progress (steps done, latest action) that updates while it runs.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S9.36: Interactive result widget.
 

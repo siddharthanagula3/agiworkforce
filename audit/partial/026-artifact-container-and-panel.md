@@ -17,6 +17,24 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
+## S26.02: Artifact title.
+
+- Done when: The artifact's title is shown on its card and in the viewer, with a fallback when the artifact has none.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.03: Artifact type.
+
+- Done when: The artifact's kind (HTML, React, diagram, document, code, spreadsheet...) is shown on its card and in the viewer.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S26.04: Artifact status.
 
 - Done when: The artifact shows its lifecycle state: being written, finished, stopped before it finished, or failed.
@@ -28,6 +46,33 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
+## S26.05: Open artifact.
+
+- Done when: User can open an artifact from the chat or from an artifact list into a view that shows its content.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.06: Close artifact without deleting it.
+
+- Done when: Closing the artifact viewer hides it without deleting the artifact, which stays available to reopen.
+- Wave: 3
+- Already works on: web, desktop, mobile, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.07: Reopen artifact.
+
+- Done when: After closing, the user can reopen the same artifact later (from the chat, a toggle, or a list), including after a reload.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S26.08: Docked side panel.
 
 - Done when: The artifact opens in a panel docked beside the conversation, so both are visible at once.
@@ -37,6 +82,24 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+
+## S26.09: Resizable panel.
+
+- Done when: The user can change the width of the docked artifact panel (pointer drag or keyboard), and the width is kept.
+- Wave: 3
+- Already works on: web, desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.10: Full-screen artifact.
+
+- Done when: The user can expand any open artifact to fill the screen and return from it.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S26.11: Detached artifact window where supported.
 
@@ -48,6 +111,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
+## S26.12: Multiple-artifact switching.
+
+- Done when: When a conversation has several artifacts, the user can switch between them without leaving the viewer.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S26.13: Artifact tabs.
 
 - Done when: The open artifacts of a conversation are shown as tabs in the viewer, one per artifact, including one being written.
@@ -57,6 +129,15 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+
+## S26.14: Source/preview toggle.
+
+- Done when: For a renderable artifact the user can switch between the rendered preview and its source.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S26.15: Direct-edit mode.
 
@@ -69,6 +150,15 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
+
+## S26.16: Read-only mode.
+
+- Done when: An artifact can be viewed in a read-only state where its content cannot be changed (e.g. a viewer, an older version, or a shared copy).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S26.20: Version selector.
 
@@ -150,6 +240,51 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
+## S26.29: Export menu.
+
+- Done when: The artifact viewer offers a menu of export formats and each choice saves a file in that format.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.30: Copy content.
+
+- Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.31: Share controls.
+
+- Done when: The user can publish an artifact to a link, copy/share the link, choose who can open it, and take it down.
+- Wave: 3
+- Already works on: web, desktop, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.32: Public/private state.
+
+- Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.35: Runtime error panel.
+
+- Done when: When an artifact fails while rendering or running, the viewer replaces it with an error panel that explains the failure and offers source/retry.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S26.36: Dependency-loading state.
 
 - Done when: While an artifact's runtime or libraries load, the viewer shows a loading state, and a failed load is reported.
@@ -170,3 +305,21 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
+
+## S26.39: Live updates from ongoing work.
+
+- Done when: While a reply or run is still producing an artifact, the artifact view updates live as content arrives.
+- Wave: 3
+- Already works on: web, desktop, mobile, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S26.40: Mobile reader adaptation.
+
+- Done when: On a phone-sized screen the artifact reader adapts (full-screen sheet, touch controls) instead of a cramped side panel.
+- Wave: 3
+- Already works on: web, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

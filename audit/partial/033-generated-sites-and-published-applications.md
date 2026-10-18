@@ -17,6 +17,15 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S33.02: Application name and description.
+
+- Done when: The user can set a name and description for a published app.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| vscode | missing | Not built on this surface. |  |
+
 ## S33.04: Prompt-based creation.
 
 - Done when: The user creates a site by prompting the assistant, then hosts the result.
@@ -37,6 +46,24 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
+## S33.08: Production deployment.
+
+- Done when: The site can be deployed to a separate production URL/stage.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| vscode | missing | Not built on this surface. |  |
+
+## S33.10: Public URL.
+
+- Done when: The published site is reachable at a public URL.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S33.12: Workspace-only access.
 
 - Done when: The owner can restrict a site to members of their workspace.
@@ -46,6 +73,25 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+## S33.13: Password or authentication options where offered.
+
+- Done when: The owner can require a password or sign-in to view the site.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+
+## S33.19: Usage and hosting limits.
+
+- Done when: Usage and hosting limits are enforced and shown to the owner.
+- Wave: 3
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 
 ## S33.20: Model-call allowance for generated apps.
@@ -96,6 +142,15 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
+
+## S33.26: Download source.
+
+- Done when: The owner can download the app's source.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S33.30: Deletion of app and associated data.
 

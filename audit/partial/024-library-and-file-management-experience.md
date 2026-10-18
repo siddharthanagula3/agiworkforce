@@ -30,6 +30,15 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S24.04: Artifact view.
+
+- Done when: A view lists the user's artifacts and opens each one.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S24.05: Image collection.
 
 - Done when: An Images view collects the user's images and opens each in a viewer.

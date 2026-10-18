@@ -147,7 +147,7 @@ Code: `scripts/check-mobile-primitives.mjs:20-20`, `scripts/check-mobile-primiti
 | --- | --- | --- | --- |
 | platform | partial | The analytics vocabulary is imported only by web; Chrome and VS Code share the error scrubber, while mobile telemetry and the CLI use neither. | surface-only |
 
-Code: `packages/contracts/types/src/product-analytics.ts:7-15`, `apps/extension-vscode/src/core/errorReporting.ts:2-3`
+Code: `packages/contracts/types/src/product-analytics.ts:7-15`
 
 ## S101.36: Shared configuration validation.
 

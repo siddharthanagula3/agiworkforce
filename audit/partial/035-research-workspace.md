@@ -182,7 +182,7 @@ nothing is left.
 
 - Done when: The user can cancel a research run; it stops and records that it was cancelled.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -252,7 +252,7 @@ nothing is left.
 
 - Done when: The user can browse a list of past research reports and reopen one.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

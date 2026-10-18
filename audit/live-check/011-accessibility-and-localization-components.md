@@ -17,6 +17,7 @@ nothing is left.
 | S11.12: Text resizing. | chrome | live-web |
 | S11.13: Browser-zoom reflow. | chrome | live-web |
 | S11.20: Mixed-direction text handling. | mobile | device |
+| S11.22: Locale-aware dates and numbers. | chrome | live-web |
 | S11.27: Long-label and translated-copy layouts. | web | live-web |
 | S11.27: Long-label and translated-copy layouts. | desktop | live-web |
 | S11.27: Long-label and translated-copy layouts. | mobile | device |

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 398737cbc7e38e06d3f4347250ea4ab8ec2f0a9a65087e280025f7da87e8c52a -->
+<!-- ui-gaps-csv-sha256: 889007b85bd6fee3a7b83b0f9e3d5c38665030110df2bdd441c171990847b8f8 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 108 P2, 35 P3.
+- Unresolved: 0 P0, 53 P1, 107 P2, 35 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  185 |
+| Open        |  184 |
 | In Progress |   11 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |  119 |
+| Done        |  120 |
 | Not Planned |   26 |
 
 ## P0
@@ -4573,7 +4573,7 @@ Claude's Code usage dashboard shows Sessions, Messages, Total tokens, Active day
 
 **Evidence**
 
-apps/web/features/settings/sections/ReflectSection.tsx lines ~5-9 (imports MANAGED_CLOUD_REFLECT_PATH, ManagedCloudReflectRecapSchema from @agiworkforce/cloud-contracts) and ~219-237 (renders totalConversations/activeDays/mostActiveDay/peakHour). Grepped apps/desktop/src for 'reflect'/'MANAGED_CLOUD_REFLECT_PATH' -- zero call sites. The only 'streak' match anywhere in the desktop app is apps/desktop/src/features/agi/IterationProgressPanel.tsx's 'Failure Streak' label -- an agent-execution retry concept, unrelated to usage engagement, and a false-positive risk for anyone re-grepping this row.
+apps/web/features/settings/sections/ReflectSection.tsx lines ~5-9 (imports MANAGED_CLOUD_REFLECT_PATH, ManagedCloudReflectRecapSchema from @agiworkforce/cloud-contracts) and ~219-237 (renders totalConversations/activeDays/mostActiveDay/peakHour). Grepped apps/desktop/src for 'reflect'/'MANAGED_CLOUD_REFLECT_PATH' -- zero call sites.
 
 **Suggested fix**
 
@@ -4642,7 +4642,7 @@ The reference paints a soft amber glow around the entire display border for the 
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx:302-304 (in-header pulsing dot); apps/desktop/src/features/overlay/ (ActionOverlay, ScreenshotOverlay, VisualizationLayer are in-window agent visualisations, not a screen-edge capture indicator)
+apps/desktop/src/features/automation/ActionRecorder.tsx:421 (in-header pulsing dot); apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx is an in-window agent view, not a screen-edge capture indicator
 
 **Suggested fix**
 
@@ -5480,24 +5480,24 @@ Add an Archive action to the conversation row/overflow menu that sets the existi
 
 - `chatgpt_reference/121-codex-macos-settings-archived-chats-empty.png`
 
-### GAP-238, No preference to hide the computer-use activity overlay during a task
+### GAP-238, The computer-use activity overlay can be hidden during a task
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Computer use
 
 **Gap**
 
-Reference has a 'Picture in picture' group with 'Always hide picture in picture, prevent showing computer use activity in picture in picture', so a user presenting or recording can suppress the floating activity window. agiworkforce renders a ComputerUseOverlay during runs with no visibility preference.
+Reference has a 'Picture in picture' group with 'Always hide picture in picture, prevent showing computer use activity in picture in picture', so a user presenting or recording can suppress the floating activity window. agiworkforce's ComputerUseOverlay has a visibility switch in Computer use settings.
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.*overlay' across apps/desktop/src, no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
+apps/desktop/src/features/settings/ComputerUseSettings.tsx:242-255 ('Show Action Overlay' switch bound to executionPreferences.showComputerUseOverlay) and apps/desktop/src/features/execution-sidecar/ExecutionSidecarScreenView.tsx:20 (reads the preference before mounting the overlay)
 
 **Suggested fix**
 
-Add an 'Always hide activity overlay' switch to ComputerUseSettings persisted in settingsStore and honoured by ComputerUseOverlay/ActionOverlay mounting.
+Closed. Keep the switch persisted in settingsStore and honoured by the overlay mounting.
 
 **Reference screenshot(s)**
 
@@ -7722,11 +7722,11 @@ Use the Tooltip primitive with 'Toggle sidebar' plus the currently bound combo r
 
 **Gap**
 
-The reference's title bar carries back and forward arrows next to the sidebar toggle and new-chat button, so users can retrace through views and conversations. agiworkforce's TitleBar has the sidebar toggle, command palette and window controls but no view history.
+The reference's title bar carries back and forward arrows next to the sidebar toggle and new-chat button, so users can retrace through views and conversations. agiworkforce's Electron shell offers Back and Forward only in the History menu, with accelerators, and its title strip has no history buttons.
 
 **Evidence**
 
-apps/desktop/src/features/layout/TitleBar.tsx:83-207 (PanelLeft, command palette, pin/always-on-top, minimise/maximise/close only)
+apps/desktop/electron/appMenu.ts:214-222 (historyMenu: Back and Forward menu items), apps/desktop/electron/windowChrome.ts (title strip chrome)
 
 **Suggested fix**
 

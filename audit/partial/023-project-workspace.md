@@ -6,6 +6,24 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S23.01: Project creation.
+
+- Done when: A signed-in user can create a named project that is saved to their account and opens as its own workspace.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S23.02: Project name and description.
+
+- Done when: A project has a name and an optional description that the user can set at creation and edit later.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S23.03: Project icon and color.
 
 - Done when: The user can choose a project's icon and colour, and the choice is shown wherever the project appears.
@@ -15,6 +33,24 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
+
+## S23.05: Project overview.
+
+- Done when: Opening a project shows an overview: its name, description, counts and its main sections (chats, files, instructions).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S23.06: Project conversations.
+
+- Done when: A project lists its conversations, opens them, and starts new chats that are filed under the project.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S23.07: Project files.
 
@@ -41,6 +77,15 @@ nothing is left.
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mobile/src/features/projects/components/ProjectSourcesTab.tsx:264-264`
+
+## S23.09: Project instructions.
+
+- Done when: Instructions saved on a project are applied to every chat in that project.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S23.11: Project Memory.
 
@@ -206,6 +251,15 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`, `apps/mo
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S23.32: Delete.
+
+- Done when: A project owner can delete a project after confirming; its files are removed and its chats are kept (unfiled).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S23.33: Project-only context mode.
 

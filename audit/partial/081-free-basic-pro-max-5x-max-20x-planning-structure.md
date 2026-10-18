@@ -6,6 +6,33 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S81.07: Explicit definition of the baseline behind “5x” and “15x.”
+
+- Done when: Pricing states what "1x" means: the baseline plan behind 5x/15x and its concrete allowance.
+- Wave: 3
+- Already works on: web, desktop, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S81.08: Explicit identification of the allowance being multiplied.
+
+- Done when: Plan copy names exactly which allowance a multiplier scales (e.g. managed-usage credits per 5-hour, weekly and monthly window).
+- Wave: 3
+- Already works on: web, desktop, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S81.09: Separate feature-access differences.
+
+- Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.
@@ -17,3 +44,12 @@ nothing is left.
 | mobile | partial | switch-on (owner): set FEATURES.billing true in apps/mobile/lib/v1FeatureFlags.ts and MOBILE_IAP_ENABLED on the server, with the App Store and Play products live; purchase, receipt, confirmation and restore code is built | flag-off |
 
 Code: `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:26-26`
+
+## S81.28: Plan-specific feature explanations.
+
+- Done when: Each plan explains its own features (what it adds over the current plan, and why a blocked feature needs a given plan).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

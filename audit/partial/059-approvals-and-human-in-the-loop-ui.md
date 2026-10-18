@@ -6,6 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S59.02: Batch approval.
+
+- Done when: The user can approve or deny several pending tool calls of a run in one action.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode, api
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S59.06: Per-domain permission.
 
 - Done when: The user can allow or block specific websites/domains the agent may act on or fetch, and it is enforced.
@@ -18,3 +27,12 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 
 Code: `apps/desktop/src/api/cloudApi.ts:965-965`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4174-4176`, `apps/desktop/src-tauri/src/core/llm/server_tools.rs:207-207`
+
+## S59.26: Approval from another device.
+
+- Done when: An approval raised on one device can be answered from another signed-in device, and the first device sees the result.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode, api
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

@@ -108,7 +108,7 @@ nothing is left.
 
 - Done when: Before audio is captured, the user sees a notice of what is recorded and where it goes, and must agree.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

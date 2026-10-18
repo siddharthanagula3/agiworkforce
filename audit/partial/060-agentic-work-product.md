@@ -16,6 +16,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
+## S60.02: Task title.
+
+- Done when: Each work task shows a readable title in the task list, and the user can set or change it.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S60.03: Objective.
 
 - Done when: The user states the objective of the task, and the objective is stored with the run and shown back.
@@ -107,6 +116,24 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S60.14: Step list.
+
+- Done when: The task view lists its steps with an accurate per-step status.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S60.16: Running-step indicator.
+
+- Done when: While a task runs, the view marks which step is currently executing.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S60.17: Parallel-work indicator.
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.
@@ -128,6 +155,24 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
+
+## S60.19: Approval request.
+
+- Done when: When the agent needs permission for an action, the task pauses and the user can approve or deny it.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S60.20: Task steering.
+
+- Done when: The user can redirect a running task with new guidance without starting over.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S60.21: Pause.
 
@@ -152,6 +197,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S60.23: Cancel.
+
+- Done when: The user can stop a running task and the run is cancelled on the server.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S60.24: Retry failed step.
 
@@ -203,15 +257,42 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S60.29: Results summary.
+
+- Done when: When a task ends the user sees a summary of the result.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S60.30: Generated deliverables.
+
+- Done when: Files the task produced are listed and can be opened or downloaded.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S60.31: Partial-outcome summary.
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
+
+## S60.32: Task history.
+
+- Done when: The user can browse past tasks with their state and open any of them.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S60.33: Task sharing.
 
@@ -225,3 +306,12 @@ nothing is left.
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S60.34: Cross-device task continuation.
+
+- Done when: A task started on one device can be followed and acted on from another device.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

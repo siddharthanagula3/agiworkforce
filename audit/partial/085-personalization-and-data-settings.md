@@ -16,11 +16,20 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 
+## S85.02: Custom instructions.
+
+- Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S85.03: Communication style.
 
 - Done when: The user can choose how the assistant communicates (tone, length, formatting) on the surface and replies follow it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -119,7 +128,7 @@ nothing is left.
 
 - Done when: The user can download a copy of their account data (chats, memory, files, settings) from the surface.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

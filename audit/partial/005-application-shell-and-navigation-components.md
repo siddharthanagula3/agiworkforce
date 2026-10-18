@@ -52,6 +52,24 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S5.14: Project row.
+
+- Done when: Navigation shows project rows that open the project (and expose its actions).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S5.15: Task row.
+
+- Done when: Background work/tasks appear as rows marked as tasks (distinct from chats) with their state, and open on selection.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S5.16: Resource-type icon.
 
 - Done when: Rows in mixed lists carry an icon (or equivalent marker) that tells the resource type apart (chat, project, task, file) visually and for assistive tech.
@@ -62,6 +80,24 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S5.17: Running-task indicator.
+
+- Done when: Navigation marks items whose task or response is still running, visually and for screen readers.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S5.18: Needs-input indicator.
+
+- Done when: Navigation marks items that are blocked waiting for the user (approval or input).
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S5.19: Unread-result indicator.
 

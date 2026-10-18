@@ -6,6 +6,15 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S7.03: Full-width data-analysis layout.
+
+- Done when: Data work (tables, charts, spreadsheets) can be viewed in a layout that uses the full window width instead of the reading column.
+- Wave: 3
+- Already works on: web, desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S7.05: Conversation plus source-inspector split view.
 
 - Done when: Sources behind an answer open in an inspector pane beside the conversation, so the reader can check a source without leaving the transcript.
@@ -53,6 +62,15 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S7.23: Sticky artifact toolbar.
+
+- Done when: The artifact toolbar (copy, download, view toggles, close) stays visible while the artifact content scrolls.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S7.24: Sticky table headers.
 
 - Done when: Table headers stay pinned while a long table scrolls.
@@ -64,3 +82,21 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S7.25: Responsive panel stacking.
+
+- Done when: On narrow windows, side panels stop sitting beside the conversation and stack over it (overlay or sheet), then return beside it when wide.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S7.29: Minimum and maximum panel widths.
+
+- Done when: Resizable or responsive panels enforce minimum and maximum widths so neither the panel nor the conversation collapses.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |

@@ -77,7 +77,7 @@ nothing is left.
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

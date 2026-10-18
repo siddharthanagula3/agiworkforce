@@ -22,7 +22,7 @@ nothing is left.
 
 - Done when: The new-chat screen offers clickable suggested prompts that fill or send a message.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -39,6 +39,15 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
+
+## S12.09: Recommended connected apps.
+
+- Done when: The new-chat screen recommends apps/connectors worth connecting or using for the next message.
+- Wave: 3
+- Already works on: mobile, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S12.10: Search entry.
 
@@ -116,6 +125,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S12.21: Mode explanation and examples.
+
+- Done when: The new-chat screen explains the available modes and gives examples of what each is for.
+- Wave: 3
+- Already works on: mobile, cli, vscode, chrome
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S12.23: Resumption of an unsent draft.
 

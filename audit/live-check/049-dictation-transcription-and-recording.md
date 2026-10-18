@@ -8,6 +8,8 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
+| S49.17: Recording notice and consent interface. | web | live-web |
+| S49.17: Recording notice and consent interface. | desktop | live-web |
 | S49.30: Undo inserted text. | web | live-web |
 | S49.30: Undo inserted text. | desktop | live-web |
 | S49.30: Undo inserted text. | mobile | device |

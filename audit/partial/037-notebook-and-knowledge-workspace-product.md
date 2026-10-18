@@ -6,6 +6,33 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
+## S37.01: Notebook index.
+
+- Done when: The user sees a list of their notebooks (knowledge workspaces) and can open one.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S37.02: Notebook creation.
+
+- Done when: The user can create a new notebook that is saved to the account.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S37.03: Notebook title and description.
+
+- Done when: A notebook has a title and description the user can set and later edit.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S37.04: Source rail.
 
 - Done when: Inside a notebook, a source list sits beside the conversation so the user can see what grounds the answers.
@@ -65,6 +92,15 @@ Code: `apps/web/app/api/connectors/google-drive/picker/route.ts:17-17`
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
+
+## S37.15: Notebook instructions.
+
+- Done when: The notebook has instructions that apply to every chat in it.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S37.19: Citation-linked navigation.
 

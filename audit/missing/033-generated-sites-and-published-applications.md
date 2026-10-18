@@ -6,12 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S33.02: Application name and description.
-
-- Done when: The user can set a name and description for a published app.
-- Wave: 4
-- Build on: vscode
-
 ## S33.03: Template-based creation.
 
 - Done when: The user can start a site from a template.
@@ -24,12 +18,6 @@ nothing is left.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
 
-## S33.08: Production deployment.
-
-- Done when: The site can be deployed to a separate production URL/stage.
-- Wave: 4
-- Build on: vscode
-
 ## S33.09: Deployment history.
 
 - Done when: The user can see the history of deployments.
@@ -41,12 +29,6 @@ nothing is left.
 - Done when: The owner can restrict a site to specific named viewers.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
-
-## S33.13: Password or authentication options where offered.
-
-- Done when: The owner can require a password or sign-in to view the site.
-- Wave: 4
-- Build on: cli, vscode
 
 ## S33.14: Custom domain setup.
 
@@ -77,12 +59,6 @@ nothing is left.
 - Done when: The owner can set up a database for the app.
 - Wave: 4
 - Build on: web, desktop, mobile, cli, vscode, chrome
-
-## S33.19: Usage and hosting limits.
-
-- Done when: Usage and hosting limits are enforced and shown to the owner.
-- Wave: 4
-- Build on: vscode
 
 ## S33.21: Logs and error inspection.
 

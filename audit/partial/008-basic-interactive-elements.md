@@ -10,11 +10,21 @@ nothing is left.
 
 - Done when: A toggle button (a button with an on/off pressed state announced to assistive tech) is used in shipped UI.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
+
+## S8.07: Button groups.
+
+- Done when: Related buttons are grouped into a labelled button group in shipped UI.
+- Wave: 3
+- Already works on: web, desktop, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | partial | The approve and deny row of the tool approval controls (CloudToolApprovalControls.tsx) is not exposed as a labelled button group. | ui |
 
 ## S8.13: One-time-code fields.
 
@@ -35,6 +45,15 @@ nothing is left.
 | --- | --- | --- | --- |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+## S8.17: Segmented controls.
+
+- Done when: A segmented control (a small set of mutually exclusive options shown as joined segments) is used in shipped UI.
+- Wave: 3
+- Already works on: web, desktop, mobile, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
 
 ## S8.19: Searchable comboboxes.
 
@@ -171,6 +190,24 @@ nothing is left.
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
+## S8.40: Badges.
+
+- Done when: Badges (small status or count markers attached to an item) are used in shipped UI.
+- Wave: 3
+- Already works on: web, desktop, mobile, cli, vscode
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
+## S8.41: Tags.
+
+- Done when: Tags (small labels that categorise or describe an item, distinct from status badges) are used in shipped UI.
+- Wave: 3
+- Already works on: web, desktop, mobile
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+
 ## S8.44: Skeleton loaders.
 
 - Done when: Skeleton placeholders stand in for content while it loads.
@@ -196,7 +233,7 @@ nothing is left.
 
 - Done when: Pagination controls (next/previous, page numbers or an explicit "Load more") let the user move through a long list.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

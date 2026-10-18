@@ -8,4 +8,21 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
+| S27.01: Document title. | chrome | live-web |
+| S27.03: Markdown editing mode. | chrome | live-web |
+| S27.06: Bold, italic, underline, and links. | chrome | live-web |
+| S27.07: Lists and checklists. | chrome | live-web |
+| S27.08: Tables. | chrome | live-web |
+| S27.09: Images. | chrome | live-web |
+| S27.11: Code and equation blocks. | chrome | live-web |
+| S27.12: Outline panel. | chrome | live-web |
+| S27.27: Autosave indicator. | chrome | live-web |
+| S27.28: Undo and redo. | chrome | live-web |
+| S27.29: Revision history. | chrome | live-web |
+| S27.34: Citation management. | chrome | live-web |
+| S27.35: Export to document formats. | chrome | live-web |
+| S27.36: Export to PDF. | chrome | live-web |
+| S27.37: Export to Markdown. | chrome | live-web |
+| S27.39: Email draft presentation. | chrome | live-web |
+| S27.40: Recipient, subject, and attachment fields. | chrome | live-web |
 | S27.41: Send-email review step. | vscode | credential |
