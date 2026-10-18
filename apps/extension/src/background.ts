@@ -83,7 +83,6 @@ import {
   scheduledTaskNotificationAuthority,
 } from './features/background/scheduled-task-notifications';
 import { getPlatformPrompt } from './features/content/platform-prompts';
-import { migrateAutofillProfile } from './features/content/autofill/filler';
 import {
   memoryList,
   memoryAdd,
@@ -105,6 +104,7 @@ import {
   type BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
 import {
+  COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
   type ComputerUseCancellationReason,
@@ -1144,9 +1144,6 @@ function initialize(): void {
   void restoreScheduledTaskAlarms()
     .then(recoverScheduledTaskRuns)
     .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
-  void migrateAutofillProfile().catch((err) => {
-    logger.debug('Autofill profile migration failed (non-fatal)', err);
-  });
 }
 
 const openSidePanelWindows = new Map<number, number>();
@@ -4891,7 +4888,7 @@ async function handleMessageAsync(
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.trim() : '';
       const cuRunId =
-        typeof cuMsg.runId === 'string' && /^cu_run_[A-Za-z0-9_-]{1,128}$/.test(cuMsg.runId)
+        typeof cuMsg.runId === 'string' && COMPUTER_USE_RUN_ID_PATTERN.test(cuMsg.runId)
           ? cuMsg.runId
           : null;
 
@@ -5609,7 +5606,7 @@ async function handleMessageAsync(
       if (
         rawExpectedRunId !== undefined &&
         (typeof rawExpectedRunId !== 'string' ||
-          !/^cu_run_[A-Za-z0-9_-]{1,128}$/.test(rawExpectedRunId))
+          !COMPUTER_USE_RUN_ID_PATTERN.test(rawExpectedRunId))
       ) {
         return {
           success: false,

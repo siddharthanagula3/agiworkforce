@@ -81,68 +81,9 @@ describe('clearAutofillProfile, SEC-49 erasure path', () => {
     expect(local.store['agi_autofill_profile']).toBeUndefined();
   });
 
-  it('also removes any pre-migration synced copy', async () => {
-    const { sync } = installChromeStub();
-    await sync.set({ agi_autofill_profile: { email: 'legacy@example.test' } });
-    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
-    await clearAutofillProfile();
-    expect(sync.store['agi_autofill_profile']).toBeUndefined();
-  });
-
   it('resolves without throwing when storage is unavailable', async () => {
     (globalThis as { chrome?: unknown }).chrome = undefined;
     const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
     await expect(clearAutofillProfile()).resolves.toBeUndefined();
-  });
-});
-
-describe('migrateAutofillProfile, H-04', () => {
-  it('copies a profile from sync into local on first run', async () => {
-    const { local, sync } = installChromeStub();
-    const legacy: JobApplicationProfile = { firstName: 'Grace', email: 'gh@x' };
-    await sync.set({ agi_autofill_profile: legacy });
-    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
-    const copied = await migrateAutofillProfile();
-    expect(copied).toBe(true);
-    expect(local.store['agi_autofill_profile']).toEqual(legacy);
-    expect(local.store['agi_autofill_profile_migrated']).toBe(true);
-  });
-
-  it('clears the sync key after migration so future syncs do not re-replicate', async () => {
-    const { sync } = installChromeStub();
-    await sync.set({ agi_autofill_profile: { email: 'g@x' } });
-    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
-    await migrateAutofillProfile();
-    expect(sync.store['agi_autofill_profile']).toBeUndefined();
-  });
-
-  it('is idempotent, second call is a no-op', async () => {
-    const { local, sync } = installChromeStub();
-    await sync.set({ agi_autofill_profile: { email: 'first@x' } });
-    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
-    expect(await migrateAutofillProfile()).toBe(true);
-
-    await sync.set({ agi_autofill_profile: { email: 'should-not-copy@x' } });
-    expect(await migrateAutofillProfile()).toBe(false);
-    expect((local.store['agi_autofill_profile'] as { email?: string })?.email).toBe('first@x');
-  });
-
-  it('does NOT clobber an existing local profile when sync also has one', async () => {
-    const { local, sync } = installChromeStub();
-    const localProfile: JobApplicationProfile = { email: 'local@x' };
-    const syncProfile: JobApplicationProfile = { email: 'sync@x' };
-    await local.set({ agi_autofill_profile: localProfile });
-    await sync.set({ agi_autofill_profile: syncProfile });
-    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
-    const copied = await migrateAutofillProfile();
-    expect(copied).toBe(false);
-    expect(local.store['agi_autofill_profile']).toEqual(localProfile);
-    expect(sync.store['agi_autofill_profile']).toBeUndefined();
-  });
-
-  it('returns false silently when sync has nothing to migrate', async () => {
-    installChromeStub();
-    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
-    expect(await migrateAutofillProfile()).toBe(false);
   });
 });

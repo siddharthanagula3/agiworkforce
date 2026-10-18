@@ -600,6 +600,5 @@ export {
   AUTOFILL_PROFILE_STORAGE_KEY,
   clearAutofillProfile,
   loadAutofillProfile,
-  migrateAutofillProfile,
   saveAutofillProfile,
 } from './profile-storage';

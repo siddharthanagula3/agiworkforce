@@ -1,5 +1,7 @@
 import type { ManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
 
+export const COMPUTER_USE_RUN_ID_PATTERN = /^cu_run_[A-Za-z0-9_-]{1,128}$/;
+
 export type ComputerUseCancellationReason =
   | 'account_changed'
   | 'debugger_detached'

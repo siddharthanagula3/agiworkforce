@@ -232,6 +232,7 @@ import {
   sanitizePageText,
   SELECTED_EFFORT_STORAGE_KEY,
   SELECTED_MODEL_STORAGE_KEY,
+  SITE_ALLOWLIST_STORAGE_KEY,
   isTrustedExtensionPageSender,
 } from './background/policy';
 import {
@@ -382,7 +383,7 @@ installSidePanelErrorReporting();
 
 const extensionSendQueue = getExtensionSendQueue();
 
-const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
+const SP_SITE_ALLOWLIST_KEY = SITE_ALLOWLIST_STORAGE_KEY;
 
 let capabilityDocument: CapabilityDocument | null = null;
 let applyCapabilityGates: () => void = () => undefined;
