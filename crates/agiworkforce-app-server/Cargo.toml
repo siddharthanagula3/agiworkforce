@@ -4,7 +4,7 @@ name = "agiworkforce-app-server"
 version = "0.0.1"
 edition = "2021"
 authors = ["AGI Automation LLC"]
-description = "JSON-RPC stdio + WebSocket transport exposing AGI Workforce tools to programmatic clients"
+description = "Developer-session protocol over JSONL stdio and authenticated WebSocket"
 license = "Proprietary"
 
 [lints.rust]

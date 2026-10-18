@@ -2,10 +2,7 @@
 //!
 //! [`LlmError`] is the crate's app-neutral error type: apps map it onto their
 //! own error enums at the facade boundary (the CLI maps to `CliError`, the
-//! desktop will map to its IPC error contract in stage c2). The classification
-//! rules, including provider-specific message overrides, `Retry-After`
-//! parsing, managed-cloud paywall detection, and context-overflow sniffing.
-//! moved verbatim from `apps/cli/src/models/streaming.rs`.
+//! desktop to its stream error strings).
 
 use std::time::Duration;
 
@@ -126,11 +123,10 @@ impl LlmError {
         }
     }
 
-    /// Retry classification, mirroring the CLI's `CliError::is_retryable`:
-    /// rate limits and network errors always retry; API errors retry on
-    /// 429/500/502/503/504.
+    /// Retry classification: rate limits and network errors always retry; API
+    /// errors retry on 429/500/502/503/504 and Anthropic's 529 overload.
     pub fn is_retryable(&self) -> bool {
-        const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504];
+        const RETRYABLE_API_STATUSES: &[u16] = &[429, 500, 502, 503, 504, 529];
         match self {
             LlmError::RateLimited { .. } | LlmError::Network { .. } => true,
             LlmError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
@@ -380,7 +376,7 @@ pub fn classify_error_response(
             return LlmError::Api {
                 provider: provider.to_string(),
                 status,
-                message: "Anthropic is overloaded. Retrying...".to_string(),
+                message: "Anthropic is overloaded. Try again in a moment.".to_string(),
             };
         }
         ("openai", 404) => {
@@ -503,6 +499,7 @@ mod tests {
             err.to_string().contains("Anthropic is overloaded"),
             "Expected overloaded message, got: {err}"
         );
+        assert!(err.is_retryable());
     }
 
     #[test]

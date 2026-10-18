@@ -24,7 +24,6 @@ pub const INVALID_REQUEST: i64 = -32600;
 pub const METHOD_NOT_FOUND: i64 = -32601;
 pub const INVALID_PARAMS: i64 = -32602;
 pub const INTERNAL_ERROR: i64 = -32603;
-pub const LEGACY_RESOURCE_NOT_FOUND: i64 = -32002;
 pub const HEADER_MISMATCH: i64 = -32020;
 pub const MISSING_REQUIRED_CLIENT_CAPABILITY: i64 = -32021;
 pub const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
@@ -105,10 +104,6 @@ impl RpcError {
             .map(|version| version.as_str().map(str::to_string))
             .collect::<Option<Vec<String>>>()?;
         (!versions.is_empty()).then_some(versions)
-    }
-
-    pub fn is_resource_not_found(&self) -> bool {
-        self.code == INVALID_PARAMS || self.code == LEGACY_RESOURCE_NOT_FOUND
     }
 
     pub fn to_response(&self, id: Option<&Value>) -> Value {

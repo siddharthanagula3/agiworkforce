@@ -10,8 +10,7 @@ members = [
 # mcp, model-registry, protocol, sandbox-policy, execpolicy); the CLI adds
 # app-server, command-registry and utils-image. What remains unconverged is the
 # desktop's two chat engines (core/agi/core.rs and
-# sys/commands/chat/send_message_execution.rs), tracked in
-# docs/plans/rust-engine-extraction-2026-07-09.md.
+# sys/commands/chat/send_message_execution.rs).
 exclude = []
 resolver = "2"
 

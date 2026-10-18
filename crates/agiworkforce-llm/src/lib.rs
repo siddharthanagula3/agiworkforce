@@ -1,8 +1,6 @@
 //! Shared LLM provider engine for AGI Workforce Rust surfaces.
 //!
-//! Extracted from `apps/cli/src/models/` (Wave 5, stage c1 of
-//! `docs/plans/rust-engine-extraction-2026-07-09.md`). Holds the provider
-//! MECHANICS only:
+//! Holds the provider MECHANICS only:
 //!
 //! - chat wire types ([`Message`], [`ContentBlock`], [`ToolDefinition`])
 //! - per-dialect request serialization ([`serialize`])

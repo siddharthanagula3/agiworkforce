@@ -1,4 +1,4 @@
-//! The four dialect stream drivers.
+//! The five dialect stream drivers.
 //!
 //! Each dialect has two layers:
 //!
@@ -9,14 +9,8 @@
 //!    framing, emits a [`StreamEvent`] at every observation point, and folds
 //!    the authoritative [`ChatOutcome`].
 //!
-//! The runners are public so conformance fixtures (and, in stage c2, the
-//! desktop's own HTTP stack) can replay raw byte chunks without a socket.
-//!
-//! Behavior parity note: the decode loops, accumulation rules, and error
-//! classification moved VERBATIM from `apps/cli/src/models/streaming.rs`.
-//! Event emission is additive, it happens at exactly the points where the
-//! legacy code mutated its accumulators, so byte-identical CLI behavior falls
-//! out of construction.
+//! The runners are public so conformance fixtures and the desktop's own HTTP
+//! stack can replay raw byte chunks without a socket.
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -86,7 +80,7 @@ pub struct ChatRequest<'a> {
     pub temperature: Option<f32>,
     pub tools: Option<&'a [ToolDefinition]>,
     /// Tool-choice constraint; forwarded only when `tools` is present.
-    /// Currently serialized by the Anthropic dialect (others: pending c3).
+    /// Serialized by the Anthropic, OpenAI and Gemini dialects.
     pub tool_choice: Option<ToolChoice>,
     /// Anthropic extended-thinking budget; ignored by other dialects.
     pub thinking_budget: Option<u32>,
@@ -94,9 +88,9 @@ pub struct ChatRequest<'a> {
     pub anthropic_thinking: Option<AnthropicThinking>,
     /// Anthropic `output_config.effort` parameter for supported Claude models.
     pub effort: Option<&'a str>,
-    /// Nucleus sampling; Anthropic dialect only (pending wider c3 wiring).
+    /// Nucleus sampling; serialized by the Anthropic, OpenAI and Gemini dialects.
     pub top_p: Option<f32>,
-    /// Top-k sampling; Anthropic dialect only.
+    /// Top-k sampling; serialized by the Anthropic and Gemini dialects.
     pub top_k: Option<u32>,
     /// Provider request metadata (e.g. Anthropic `metadata.user_id`);
     /// serialized by the Anthropic and OpenAI Responses dialects.
@@ -459,6 +453,34 @@ async fn stream_anthropic(
     run_anthropic_stream(llm_byte_stream(resp), req.idle_timeout, on_event).await
 }
 
+/// An `error` event sent after the HTTP 200, e.g. `overloaded_error`. Ignoring
+/// it would end the turn as a short answer that looks complete.
+fn anthropic_stream_error(event: &Value) -> LlmError {
+    let error = event.get("error").unwrap_or(&Value::Null);
+    let kind = error
+        .get("type")
+        .and_then(Value::as_str)
+        .filter(|kind| !kind.is_empty());
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .filter(|text| !text.trim().is_empty())
+        .unwrap_or("Anthropic stopped the stream with an error.")
+        .to_string();
+    LlmError::StreamError {
+        provider: "anthropic".to_string(),
+        message,
+        retryable: matches!(
+            kind,
+            Some("overloaded_error" | "api_error" | "rate_limit_error")
+        ),
+        detail: StreamFailureDetail {
+            code: kind.map(str::to_string),
+            ..StreamFailureDetail::default()
+        },
+    }
+}
+
 /// Decode an Anthropic Messages SSE byte stream.
 pub async fn run_anthropic_stream<S>(
     mut stream: S,
@@ -680,9 +702,10 @@ where
                         "ping" => {
                             on_event(StreamEvent::Keepalive);
                         }
+                        "error" => return Err(anthropic_stream_error(&event)),
                         _ => {
                             // Vendor events this crate does not interpret
-                            // (message_stop, error frames, future additions).
+                            // (message_stop, future additions).
                             // Legacy behavior ignored them for the outcome;
                             // consumers can observe them here.
                             on_event(StreamEvent::Vendor {
@@ -1147,12 +1170,8 @@ where
 // OpenAI Responses API (streaming)
 // ---------------------------------------------------------------------------
 
-/// Build the canonical OpenAI Responses request body from the shared wire
-/// request. Kept pure so every Rust consumer can fixture-test request shape
-/// without opening a socket.
-/// Build the OpenAI Responses request body for `req`. Pure, exposed so
-/// conformance/parity oracles (stage c2c) can byte-compare request bodies
-/// without a socket.
+/// Build the OpenAI Responses request body for `req`. Pure, so request shape
+/// can be fixture-tested without a socket.
 pub fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
     let input: Vec<Value> = req
         .messages
@@ -1691,6 +1710,33 @@ async fn stream_gemini(
     run_gemini_stream(llm_byte_stream(resp), req.idle_timeout, on_event).await
 }
 
+/// A `{"error": {code, message, status}}` frame sent after the HTTP 200.
+fn gemini_stream_error(error: &Value) -> LlmError {
+    let status = error
+        .get("status")
+        .and_then(Value::as_str)
+        .filter(|status| !status.is_empty());
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .or_else(|| error.as_str())
+        .filter(|text| !text.trim().is_empty())
+        .unwrap_or("Gemini stopped the stream with an error.")
+        .to_string();
+    LlmError::StreamError {
+        provider: "google".to_string(),
+        message,
+        retryable: matches!(
+            status,
+            Some("UNAVAILABLE" | "RESOURCE_EXHAUSTED" | "INTERNAL" | "DEADLINE_EXCEEDED")
+        ),
+        detail: StreamFailureDetail {
+            code: status.map(str::to_string),
+            ..StreamFailureDetail::default()
+        },
+    }
+}
+
 /// Decode a Gemini `streamGenerateContent?alt=sse` byte stream.
 pub async fn run_gemini_stream<S>(
     mut stream: S,
@@ -1737,6 +1783,9 @@ where
                         continue;
                     }
                 };
+                if let Some(error) = event.get("error") {
+                    return Err(gemini_stream_error(error));
+                }
                 {
                     let has_candidates = event.get("candidates").is_some();
                     let has_usage = event.get("usageMetadata").is_some();
@@ -1918,7 +1967,27 @@ struct OllamaFold {
     stop_reason: Option<String>,
 }
 
-fn handle_ollama_stream_event(event: &Value, fold: &mut OllamaFold, on_event: OnEvent<'_>) {
+fn handle_ollama_stream_event(
+    event: &Value,
+    fold: &mut OllamaFold,
+    on_event: OnEvent<'_>,
+) -> Result<(), LlmError> {
+    // Ollama reports a failure after the 200 as an `{"error": ...}` line.
+    if let Some(error) = event.get("error") {
+        let message = error
+            .as_str()
+            .or_else(|| error.get("message").and_then(Value::as_str))
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or("Ollama stopped the stream with an error.")
+            .to_string();
+        return Err(LlmError::StreamError {
+            provider: "ollama".to_string(),
+            message,
+            retryable: false,
+            detail: StreamFailureDetail::default(),
+        });
+    }
+
     if let Some(text) = event
         .get("message")
         .and_then(|m| m.get("content"))
@@ -1991,6 +2060,7 @@ fn handle_ollama_stream_event(event: &Value, fold: &mut OllamaFold, on_event: On
             usage: fold.usage.clone(),
         });
     }
+    Ok(())
 }
 
 /// Decode an Ollama-native `/api/chat` NDJSON byte stream.
@@ -2031,7 +2101,7 @@ where
             }
 
             match serde_json::from_str::<Value>(&line) {
-                Ok(event) => handle_ollama_stream_event(&event, &mut fold, on_event),
+                Ok(event) => handle_ollama_stream_event(&event, &mut fold, on_event)?,
                 Err(err) => tracing::debug!(
                     provider = "ollama",
                     error = %err,
@@ -2047,7 +2117,7 @@ where
     let trailing = buffer.trim();
     if !trailing.is_empty() {
         match serde_json::from_str::<Value>(trailing) {
-            Ok(event) => handle_ollama_stream_event(&event, &mut fold, on_event),
+            Ok(event) => handle_ollama_stream_event(&event, &mut fold, on_event)?,
             Err(err) => tracing::debug!(
                 provider = "ollama",
                 error = %err,
@@ -2822,5 +2892,42 @@ mod openai_compat_stream_tests {
             StreamFailureDetail::from_frame(&blank),
             StreamFailureDetail::default()
         );
+    }
+}
+
+#[cfg(test)]
+mod in_stream_error_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_mid_stream_error_event_fails_the_turn() {
+        let frames = concat!(
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Half\"}}\n\n",
+            "event: error\n",
+            "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n",
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let error = run_anthropic_stream(stream, Duration::from_secs(5), &mut |_| {})
+            .await
+            .expect_err("an error event must not read as a completed answer");
+        assert!(error.is_retryable(), "{error}");
+        assert!(error.to_string().contains("Overloaded"), "{error}");
+        assert!(
+            matches!(&error, LlmError::StreamError { detail, .. } if detail.code.as_deref() == Some("overloaded_error"))
+        );
+    }
+
+    #[tokio::test]
+    async fn an_ollama_error_line_fails_the_turn() {
+        let lines = concat!(
+            "{\"message\":{\"role\":\"assistant\",\"content\":\"Half\"},\"done\":false}\n",
+            "{\"error\":\"an error was encountered while running the model\"}\n",
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(lines))]);
+        let error = run_ollama_stream(stream, Duration::from_secs(5), &mut |_| {})
+            .await
+            .expect_err("an error line must not read as a completed answer");
+        assert!(error.to_string().contains("running the model"), "{error}");
     }
 }

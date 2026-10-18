@@ -48,8 +48,6 @@ use tokio::sync::broadcast;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinSet;
 
-// v3 requires servers to enforce per-turn agent controls and workspace-scoped
-// context. Older servers silently discarded these security-sensitive fields.
 const SERVER_NAME: &str = "agiworkforce-app-server";
 const SERVER_TITLE: &str = "AGI Workforce App Server";
 

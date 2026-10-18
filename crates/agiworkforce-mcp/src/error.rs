@@ -1,8 +1,6 @@
 use thiserror::Error;
 
-use crate::protocol::{
-    HEADER_MISMATCH, MISSING_REQUIRED_CLIENT_CAPABILITY, RpcError, UNSUPPORTED_PROTOCOL_VERSION,
-};
+use crate::protocol::{RpcError, UNSUPPORTED_PROTOCOL_VERSION};
 
 #[derive(Debug, Error)]
 pub enum McpError {
@@ -28,16 +26,6 @@ impl McpError {
                 .as_anyhow()
                 .chain()
                 .any(|cause| cause.downcast_ref::<ProtocolMismatch>().is_some())
-    }
-
-    pub fn is_missing_client_capability(&self) -> bool {
-        self.rpc_error()
-            .is_some_and(|error| error.code == MISSING_REQUIRED_CLIENT_CAPABILITY)
-    }
-
-    pub fn is_header_mismatch(&self) -> bool {
-        self.rpc_error()
-            .is_some_and(|error| error.code == HEADER_MISMATCH)
     }
 
     pub fn is_authorization_required(&self) -> bool {

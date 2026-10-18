@@ -1,7 +1,5 @@
 //! Shared agent turn-loop engine for AGI Workforce Rust surfaces.
 //!
-//! Extracted from the CLI's `apps/cli/src/agent/chat.rs::Session::send`
-//! (Wave 5, stage e1 of `docs/plans/rust-engine-extraction-2026-07-09.md`).
 //! Holds the turn-loop MECHANICS only:
 //!
 //! - iterate first-completion → agentic tool loop until end-turn/limits;
@@ -23,18 +21,10 @@
 //! stdout/stderr/TUI sinks. The engine never performs I/O, reads credentials,
 //! prints, or prompts, it only orchestrates.
 //!
-//! ## Relationship to the sketched `run_turn(llm, spec, req, host)` API
-//!
-//! The plan sketched `TurnEngine::run_turn(llm, spec, req, host)`. In the real
-//! tree there is no `LlmClient` object and the CLI's streaming facade
-//! (`models::stream_completion`) resolves keys/subscription-auth/Ollama probing
-//! app-locally and returns an already-assembled outcome whose tool-call and
-//! usage accumulation is dialect-specific and NOT reconstructable from the
-//! public [`agiworkforce_llm::StreamEvent`] stream. So `llm`/`spec`/`req` fold
-//! into [`TurnHost::complete`]: the host drives `agiworkforce-llm` (directly or
-//! through its facade), forwards stream events to the engine's sink, and returns
-//! the authoritative [`Completion`]. This keeps the trust-boundary and
-//! provider-selection code app-local while the engine still owns the loop.
+//! Tool-call and usage accumulation is dialect-specific and cannot be rebuilt
+//! from the public [`agiworkforce_llm::StreamEvent`] stream, so the host drives
+//! the model inside [`TurnHost::complete`], forwards stream events to the
+//! engine's sink, and returns the authoritative [`Completion`].
 
 use std::future::Future;
 use std::pin::Pin;
@@ -53,11 +43,6 @@ pub use runaway::{
     hash_tool_call,
 };
 
-// Re-export the shared LLM surface the engine speaks in. (The plan's sketched
-// `dispatch() -> &dyn ToolDispatch` is deferred to stage e2, see the Cargo.toml
-// note: the CLI's mutating/approval-gated dispatch cannot flow through
-// app-server's read-only `&self` `ToolDispatch`, so the e1 dispatch seam is
-// TurnHost's execute methods.)
 pub use agiworkforce_llm::{ChatOutcome, ContentBlock, Message, StreamEvent, ToolCall, Usage};
 
 /// Which model call within a turn produced a stream event / completion. The CLI

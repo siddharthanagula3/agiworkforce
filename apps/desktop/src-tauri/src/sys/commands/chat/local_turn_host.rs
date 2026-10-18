@@ -1,6 +1,5 @@
 //! Desktop adoption of the shared `agiworkforce-agent-core` turn engine for the
-//! non-streaming local-chat tool loop (Wave 5 stage e2 of
-//! `docs/plans/rust-engine-extraction-2026-07-09.md`).
+//! non-streaming local-chat tool loop.
 //!
 //! This is the thin, behavior-preserving facade that replaces the inline
 //! `while let Some(tool_calls) = outcome.response.tool_calls` loop that used to
