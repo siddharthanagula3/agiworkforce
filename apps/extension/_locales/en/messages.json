@@ -31,10 +31,6 @@
     "message": "AI Assistant",
     "description": "Model selector badge before a concrete model is resolved"
   },
-  "spDrawerCapture": {
-    "message": " Capture",
-    "description": "Screenshot button at rest. The leading space separates the label from its icon."
-  },
   "spTabGroupUpdateFailed": {
     "message": "Could not update the current tab group. Try again.",
     "description": "Fallback error after Chrome rejects a tab-group change"

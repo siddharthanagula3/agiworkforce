@@ -8159,23 +8159,6 @@ function ensureStreamingAssistant(streamId: string, streamUsedQuick: boolean): C
   return assistant;
 }
 
-function updateConnectionStatus(): void {
-  const pill = document.getElementById('sp-status-pill');
-  if (!pill) return;
-  if (_ctx.isConnected) {
-    pill.className = 'connected';
-    const dot = document.createElement('span');
-    dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Desktop tools');
-  } else {
-    pill.className = 'disconnected';
-    const dot = document.createElement('span');
-    dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Desktop optional');
-  }
-  updateNativeBridgeAvailabilityUI();
-}
-
 function updateNativeBridgeAvailabilityUI(): void {
   const notice = document.getElementById('sp-bridge-notice');
   const availability = getChromeSurfaceAvailability({
@@ -8301,7 +8284,7 @@ function updateComposerAdmissionControls(): void {
     control.setAttribute('aria-disabled', String(!controlsReady));
   }
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
-    '#sp-attach-screenshot-item, #sp-attach-file-input, #sp-drawer-capture-btn',
+    '#sp-attach-screenshot-item, #sp-attach-file-input',
   )) {
     control.disabled = !controlsReady || !capabilityAllowed(capabilityDocument, 'canUploadFiles');
     control.setAttribute('aria-disabled', String(control.disabled));
@@ -8351,11 +8334,6 @@ function cancelComposerImageIntake(): void {
   composerAttachmentIntakes.clear();
   for (const cancel of composerAttachmentReads.values()) cancel();
   composerAttachmentReads.clear();
-  const capture = document.getElementById('sp-drawer-capture-btn');
-  if (capture) {
-    capture.replaceChildren(renderIcon(Camera, 13), document.createTextNode(t('spDrawerCapture')));
-    capture.classList.remove('active');
-  }
   updateAttachmentPreview();
 }
 
@@ -13065,7 +13043,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     const nowConnected = statusMsg.connected === true;
     if (nowConnected !== _ctx.isConnected) {
       _ctx.isConnected = nowConnected;
-      updateConnectionStatus();
+      updateNativeBridgeAvailabilityUI();
       if (nowConnected) {
         chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
       }
@@ -13417,7 +13395,7 @@ async function probeBridgeStatus(): Promise<void> {
     const connected = result?.nativeConnected === true;
     if (connected !== _ctx.isConnected) {
       _ctx.isConnected = connected;
-      updateConnectionStatus();
+      updateNativeBridgeAvailabilityUI();
     }
     if (connected) {
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
