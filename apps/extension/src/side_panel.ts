@@ -11223,6 +11223,7 @@ function buildUI(): void {
     drawer.classList.add('open');
     drawer.removeAttribute('inert');
     showDrawerMenu();
+    void refreshDrawerTabInfo();
     drawerClose.focus();
   }
   function closeDrawer(): void {
@@ -14599,11 +14600,7 @@ function buildUI(): void {
 
   const aboutRow = el('div', { class: 'sp-drawer-about-row' });
   aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
-  const aboutUrlSpan = el(
-    'span',
-    { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' },
-    ', ',
-  );
+  const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' });
   aboutRow.appendChild(aboutUrlSpan);
   drawerFooter.appendChild(aboutRow);
   drawer.appendChild(drawerFooter);
