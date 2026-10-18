@@ -62,7 +62,7 @@ describe('Mobile SendPreview snapshots', () => {
   it('locks the Managed turn rendered tree', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'ManagedGateway',
-      destinationHost: 'gateway.agiworkforce.com',
+      destinationHost: 'agiworkforce.com',
       modelLabel: 'AGI Pro',
     });
     const { toJSON } = render(<SendPreview presentation={presentation} />);

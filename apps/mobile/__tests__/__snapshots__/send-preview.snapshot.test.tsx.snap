@@ -289,7 +289,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
         }
       }
     >
-      Sent to gateway.agiworkforce.com
+      Sent to agiworkforce.com
     </Text>
     <View
       style={
@@ -345,7 +345,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       }
     }
   >
-    Managed turn. The request, attachments, and system prompt go through gateway.agiworkforce.com subject to the managed-mode retention and access controls.
+    Managed turn. The request, attachments, and system prompt go through agiworkforce.com subject to the managed-mode retention and access controls.
   </Text>
 </View>
 `;

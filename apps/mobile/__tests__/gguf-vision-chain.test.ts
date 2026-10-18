@@ -1,4 +1,3 @@
-
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 
 const mockFiles = new Map<string, Uint8Array>();
@@ -70,7 +69,6 @@ jest.mock('@/storage/installedModels', () => ({
 }));
 
 import { downloadModel } from '@/services/modelDownload';
-import { runVisionQuery, resolveVisionRoute } from '../src/features/image/services/vision';
 import { _setLlamaModuleForTesting, getModelsForRole, tier3Release } from '@agiworkforce/local-llm';
 import type { InstalledModel } from '@/storage/types';
 
@@ -92,7 +90,7 @@ if (!VISION_CATALOG_MODEL) {
   throw new Error('Local catalog has no GGUF vision model with a projector');
 }
 
-describe('gguf vision full chain: install -> select -> multimodal generate', () => {
+describe('gguf vision pack install', () => {
   beforeAll(() => {
     mockRemote.set(BASE_URL, baseBytes);
     mockRemote.set(MMPROJ_URL, mmprojBytes);
@@ -103,7 +101,7 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
     _setLlamaModuleForTesting(null);
   });
 
-  it('runs the entire pipeline against mocked native layers', async () => {
+  it('installs the base model and its projector next to it', async () => {
     const progress: number[] = [];
     const record = await downloadModel({
       modelId: VISION_CATALOG_MODEL.id,
@@ -128,48 +126,6 @@ describe('gguf vision full chain: install -> select -> multimodal generate', () 
     expect(progress[progress.length - 1]).toBe(1);
     const stored = mockRecords.get(VISION_CATALOG_MODEL.id) as InstalledModel;
     expect(stored.local_path).toBe(expectedModelPath);
-
-    const route = await resolveVisionRoute();
-    expect(route).toEqual({
-      kind: 'vl-pack',
-      modelId: VISION_CATALOG_MODEL.id,
-      displayName: VISION_CATALOG_MODEL.displayName,
-    });
-
-    const completion = jest.fn(async () => ({ text: 'a tabby cat on a windowsill' }));
-    const initMultimodal = jest.fn(async () => true);
-    const initLlama = jest.fn(async () => ({
-      completion,
-      initMultimodal,
-      release: jest.fn(async () => undefined),
-    }));
-    _setLlamaModuleForTesting(initLlama as never);
-
-    const result = await runVisionQuery({
-      imageUri: 'file:///tmp/cat.jpg',
-      question: 'What animal is this?',
-    });
-
-    expect(initLlama).toHaveBeenCalledWith(
-      expect.objectContaining({ model: expectedModelPath, ctx_shift: false }),
-    );
-    expect(initMultimodal).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expectedMmprojPath }),
-    );
-    const sentMessages = (
-      completion.mock.calls[0] as unknown as [
-        { messages: Array<{ role: string; content: unknown }> },
-      ]
-    )[0].messages;
-    expect(sentMessages[sentMessages.length - 1]).toEqual({
-      role: 'user',
-      content: [
-        { type: 'text', text: 'What animal is this?' },
-        { type: 'image_url', image_url: { url: 'file:///tmp/cat.jpg' } },
-      ],
-    });
-    expect(result.route.kind).toBe('vl-pack');
-    expect(result.text).toBe('a tabby cat on a windowsill');
   });
 
   it('rejects a corrupted mmproj artifact and leaves no corrupt file behind', async () => {

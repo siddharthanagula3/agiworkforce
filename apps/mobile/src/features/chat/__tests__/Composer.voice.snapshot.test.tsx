@@ -126,40 +126,11 @@ jest.mock('expo-linking', () => ({
   openSettings: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 
 describe('Composer, voice scaffolding snapshots', () => {
-  describe('RecordingOverlay', () => {
-    it('renders nothing in idle state (visible=false)', () => {
-      const { toJSON } = render(
-        <RecordingOverlay
-          visible={false}
-          audioLevel={0}
-          durationMs={0}
-          onCancel={jest.fn()}
-          onSend={jest.fn()}
-        />,
-      );
-      expect(toJSON()).toBeNull();
-    });
-
-    it('locks recording overlay tree when visible=true at 3.2s', () => {
-      const { toJSON } = render(
-        <RecordingOverlay
-          visible={true}
-          audioLevel={0.6}
-          durationMs={3200}
-          onCancel={jest.fn()}
-          onSend={jest.fn()}
-        />,
-      );
-      expect(toJSON()).toMatchSnapshot();
-    });
-  });
-
   describe('VoiceInputButton', () => {
     it('locks idle mic button tree', () => {
       const { toJSON } = render(

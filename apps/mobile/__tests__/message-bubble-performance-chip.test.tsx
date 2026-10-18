@@ -19,13 +19,6 @@ jest.mock('@/components/ui/text', () => {
   return { Text };
 });
 
-jest.mock('@/components/ui/avatar', () => {
-  const RN = require('react-native');
-  return {
-    Avatar: (props: Record<string, unknown>) => <RN.View testID="avatar" {...props} />,
-  };
-});
-
 jest.mock('@/src/features/chat/components/MessageContentRenderer', () => {
   const RN = require('react-native');
   return {

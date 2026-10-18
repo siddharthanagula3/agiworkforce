@@ -194,16 +194,6 @@ jest.mock('@gorhom/bottom-sheet', () => {
   return { __esModule: true, default: Sheet };
 });
 
-jest.mock('@/src/features/voice/components/VoiceSelector', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  const VoiceSelector = React.forwardRef(
-    (_props: Record<string, unknown>, _ref: React.Ref<unknown>) => <View testID="voice-selector" />,
-  );
-  VoiceSelector.displayName = 'VoiceSelector';
-  return { VoiceSelector };
-});
-
 import SettingsTabScreen from '@/src/features/settings';
 
 describe('SettingsScreen, inset-grouped card layout', () => {

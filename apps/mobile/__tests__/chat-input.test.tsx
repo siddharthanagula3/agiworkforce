@@ -178,21 +178,6 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
 
 let capturedRecordingStart: (() => void) | undefined;
 
-let capturedOverlaySend: (() => void) | undefined;
-let capturedOverlayCancel: (() => void) | undefined;
-
-jest.mock('../src/features/voice/components/RecordingOverlay', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    RecordingOverlay: (props: { onSend: () => void; onCancel: () => void }) => {
-      capturedOverlaySend = props.onSend;
-      capturedOverlayCancel = props.onCancel;
-      return <View testID="recording-overlay" />;
-    },
-  };
-});
-
 jest.mock('../src/features/voice/services/voice', () => ({
   isRecording: jest.fn().mockReturnValue(false),
   cancelRecording: jest.fn().mockResolvedValue(undefined),
@@ -302,8 +287,6 @@ describe('ChatInput', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     lastVoiceResetSignal = undefined;
-    capturedOverlaySend = undefined;
-    capturedOverlayCancel = undefined;
     capturedRecordingStart = undefined;
     capturedAttachmentPreviewProps = undefined;
     mockSelectedModel = mockCapabilityModelId;

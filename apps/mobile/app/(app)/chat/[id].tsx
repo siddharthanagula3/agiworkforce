@@ -142,6 +142,7 @@ import {
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { API_URL } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
@@ -328,6 +329,7 @@ export default function ChatScreen() {
       providerMode: (conversationExecutionMode === 'cloud'
         ? 'ManagedGateway'
         : 'Local') satisfies ProviderMode,
+      ...(conversationExecutionMode === 'cloud' ? { destinationHost: new URL(API_URL).host } : {}),
       modelLabel: getShortDisplayName(selectedModel, subscriptionTier),
       modelId: selectedModel,
     }),
