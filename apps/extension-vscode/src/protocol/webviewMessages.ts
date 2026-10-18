@@ -52,16 +52,12 @@ const installCli = z.object({ type: z.literal('installCli') });
 const cancel = z.object({ type: z.literal('cancel') });
 const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
 const clearConversation = z.object({ type: z.literal('clearConversation') });
-const openActionSheet = z.object({ type: z.literal('openActionSheet') });
-const openModePicker = z.object({ type: z.literal('openModePicker') });
-const openEffortPicker = z.object({ type: z.literal('openEffortPicker') });
 const dismissUsageMeter = z.object({ type: z.literal('dismissUsageMeter') });
 const restoreUsageMeter = z.object({ type: z.literal('restoreUsageMeter') });
 const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
 const manageBilling = z.object({ type: z.literal('manageBilling') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
-const openHistory = z.object({ type: z.literal('openHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
 const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') });
 const messageAction = z.object({
@@ -87,6 +83,7 @@ const openAccount = z.object({ type: z.literal('openAccount') });
 const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
 const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
 const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
+const openHelp = z.object({ type: z.literal('openHelp') });
 const openRecentConversation = z.object({
   type: z.literal('openRecentConversation'),
   payload: z.object({ threadId: z.string().min(1) }),
@@ -296,9 +293,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   fileSearch,
   shareDiagnostics,
   clearConversation,
-  openActionSheet,
-  openModePicker,
-  openEffortPicker,
   setMode,
   setEffort,
   dismissUsageMeter,
@@ -309,7 +303,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   selectModel,
   proposeDiff,
   openFilePicker,
-  openHistory,
   newChat,
   openArchivedSessions,
   searchSessions,
@@ -319,6 +312,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   completeOnboarding,
   openPermissionDocs,
   openPrivacySettings,
+  openHelp,
   openRecentConversation,
   openPathReference,
   requestContextMenuState,

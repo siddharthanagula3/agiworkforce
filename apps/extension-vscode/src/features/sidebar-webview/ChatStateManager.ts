@@ -277,9 +277,6 @@ export type WebviewToExtMessage =
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
   | { type: 'clearConversation' }
-  | { type: 'openActionSheet' }
-  | { type: 'openModePicker' }
-  | { type: 'openEffortPicker' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
   | { type: 'setEffort'; payload: { effort: DeveloperReasoningEffort } }
   | { type: 'dismissUsageMeter' }
@@ -290,7 +287,6 @@ export type WebviewToExtMessage =
   | { type: 'selectModel'; payload: { modelId: string } }
   | { type: 'proposeDiff'; payload: { code: string; language: string } }
   | { type: 'openFilePicker' }
-  | { type: 'openHistory' }
   | { type: 'newChat' }
   | { type: 'openAccount' }
   | { type: 'completeOnboarding' }
@@ -1170,16 +1166,6 @@ export class ChatStateManager {
         break;
       }
 
-      case 'openActionSheet': {
-        await vscode.commands.executeCommand('agi-workforce.openActionSheet');
-        break;
-      }
-
-      case 'openHistory': {
-        await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
-        break;
-      }
-
       case 'openRecentConversation': {
         await vscode.commands.executeCommand(
           'agi-workforce.openConversation',
@@ -1420,16 +1406,6 @@ export class ChatStateManager {
         }
         const id = this._pushTextAttachment(attachment.name, attachment.text, attachment.source);
         this._post({ type: 'contextAttached', payload: { id, name: attachment.name } });
-        break;
-      }
-
-      case 'openModePicker': {
-        await vscode.commands.executeCommand('agi-workforce.setAgentMode');
-        break;
-      }
-
-      case 'openEffortPicker': {
-        await vscode.commands.executeCommand('agi-workforce.setAgentEffort');
         break;
       }
 
