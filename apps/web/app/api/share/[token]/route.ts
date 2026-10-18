@@ -45,12 +45,12 @@ type RouteContext = { params: Promise<{ token: string }> };
 
 /** Public rows first; workspace-only rows are left to the RLS-scoped read. */
 async function readSessionForCaller(token: string) {
-  const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token).catch(() => null);
+  const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token);
   if (publiclyVisible) return publiclyVisible;
 
-  const scoped = await getCurrentUserRlsDb().catch(() => null);
+  const scoped = await getCurrentUserRlsDb();
   if (!scoped) return null;
-  return getOrgReadableSessionByToken(scoped.db, token).catch(() => null);
+  return getOrgReadableSessionByToken(scoped.db, token);
 }
 
 async function handleGetShare(request: NextRequest, context: RouteContext) {

@@ -393,6 +393,7 @@ async function handleCreateShare(request: NextRequest) {
   if (sharingGateResponse) return sharingGateResponse;
 
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const [data] = await db.query<SharedSessionRow>(
     `insert into shared_sessions
@@ -418,7 +419,6 @@ async function handleCreateShare(request: NextRequest) {
     throw createError.internal('Failed to create share');
   }
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
   await recordSecretRedaction(request, userId, organizationId, data.id, sanitized);
   await recordShareLinkEvents(
     request,
@@ -480,6 +480,7 @@ async function handleRefreshConversationShares(request: NextRequest) {
   if (audienceGateResponse) return audienceGateResponse;
 
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const refreshed = await db.query<{ id: string; token: string }>(
     `with refreshed as (
@@ -512,7 +513,6 @@ async function handleRefreshConversationShares(request: NextRequest) {
   const [newest] = refreshed;
   if (!newest) throw nothingToUpdate();
 
-  const organizationId = await resolveActiveOrganizationId(db, userId, request).catch(() => null);
   await recordSecretRedaction(request, userId, organizationId, newest.id, sanitized);
   await recordShareLinkEvents(
     request,
@@ -585,7 +585,7 @@ async function handleListShares(request: NextRequest) {
       ? {
           workspace: await describeWorkspaceAudience(
             db,
-            await resolveActiveOrganizationId(db, userId, request).catch(() => null),
+            await resolveActiveOrganizationId(db, userId, request),
           ),
         }
       : {}),
@@ -603,6 +603,7 @@ async function handleRevokeConversationShares(request: NextRequest) {
     'Name the conversation whose links to revoke',
   );
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const revoked = await db.query<{ id: string }>(
     `delete from shared_sessions
@@ -613,10 +614,6 @@ async function handleRevokeConversationShares(request: NextRequest) {
     [userId, conversationId],
   );
 
-  const organizationId =
-    revoked.length > 0
-      ? await resolveActiveOrganizationId(db, userId, request).catch(() => null)
-      : null;
   await recordShareLinkEvents(
     request,
     userId,

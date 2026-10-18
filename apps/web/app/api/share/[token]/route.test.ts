@@ -176,6 +176,14 @@ describe('GET /api/share/[token] after revocation', () => {
     expect((await response.json()).token).toBe(TOKEN);
   });
 
+  it('fails instead of answering "not found" when the share read errors', async () => {
+    mocks.query.mockRejectedValue(new Error('connection reset'));
+
+    const response = await get();
+
+    expect(response.status).toBe(500);
+  });
+
   it('404s once the row is gone, so a revoked link reads nothing', async () => {
     mocks.execute.mockResolvedValue(1);
     await del();
