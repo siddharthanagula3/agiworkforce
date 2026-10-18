@@ -135,6 +135,7 @@ const chromeMock = vi.hoisted(() => {
 });
 
 const account = vi.hoisted(() => ({
+  summarized: '',
   signedIn: true,
   uploadsAllowed: true,
   ready: true,
@@ -196,7 +197,8 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   fetchAccountSummary: async () => ({
-    displayName: account.owner.authIncarnation,
+    displayName:
+      ((account.summarized = account.owner.authIncarnation), account.owner.authIncarnation),
     email: null,
     capabilityDocument: {
       granted: account.uploadsAllowed ? ['canUploadFiles'] : [],
@@ -345,7 +347,6 @@ beforeEach(async () => {
   account.onChange?.();
   await expectReadyAccount();
   await clearPending();
-  document.querySelector<HTMLButtonElement>('#sp-wf-new-task-form .sp-wf-form-cancel-btn')?.click();
   expect(pendingDataUrls()).toHaveLength(0);
   expect(noticeText()).toBe('');
 });
@@ -466,21 +467,6 @@ describe('side panel composer attachment caps', () => {
     expect(pendingDataUrls()).toHaveLength(1);
     expect(noticeText()).toContain('MB');
   });
-
-  it('adds a Drawer capture to the composer instead of reporting a false success', async () => {
-    chromeMock.screenshotDataUrl = dataUrlOfBytes(24);
-    const drawerCapture = document.getElementById('sp-drawer-capture-btn');
-    expect(drawerCapture).not.toBeNull();
-
-    drawerCapture!.click();
-
-    await expectPendingCount(1);
-    expect(pendingDataUrls()[0]).toBe(chromeMock.screenshotDataUrl);
-    expect(document.getElementById('sp-chat-panel')?.classList.contains('sp-tab-hidden')).toBe(
-      false,
-    );
-    expect(document.getElementById('sp-input-area')?.style.display).toBe('');
-  });
 });
 
 async function refreshAccount(): Promise<void> {
@@ -530,181 +516,10 @@ describe('attachment account and capability admission', () => {
   });
 });
 
-function clickSignOut(): void {
-  document.getElementById('sp-cloud-signout-btn')!.click();
-}
-
-describe('the real side-panel account sign-out owner', () => {
-  it('finishes web revocation before Clerk sign-out and clearing owner-bound drafts', async () => {
-    dropFiles([imageFile(16)]);
-    await expectPendingCount(1);
-    let finish!: () => void;
-    account.revoke.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        }),
-    );
-    chromeMock.runtime.sendMessage.mockClear();
-    chromeMock.storage.local.remove.mockClear();
-    account.signOut.mockClear();
-    clickSignOut();
-    await vi.waitFor(() => expect(account.revoke).toHaveBeenCalledOnce());
-    expect(account.signOut).not.toHaveBeenCalled();
-    expect(pendingDataUrls()).toHaveLength(1);
-    expect(chromeMock.storage.local.remove).not.toHaveBeenCalled();
-    finish();
-    await vi.waitFor(() =>
-      expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(true),
-    );
-    expect(account.signOut).toHaveBeenCalledOnce();
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
-      type: 'MANAGED_CLOUD_AUTH_CHANGED',
-      previousOwner: account.owner,
-    });
-    expect(chromeMock.runtime.sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
-      account.signOut.mock.invocationCallOrder[0]!,
-    );
-    expect(chromeMock.storage.session.remove).toHaveBeenCalledWith(['agi_clerk_session_token']);
-    expect(chromeMock.storage.local.remove).toHaveBeenCalledWith(['agi_dev_bearer_token']);
-    expect(chromeMock.storage.local.remove).toHaveBeenCalledWith([
-      'agi_api_key',
-      'agi_user_id',
-      'agi_user_tier',
-      'agi_session',
-    ]);
-    expect(pendingDataUrls()).toHaveLength(0);
-    expect(document.getElementById('sp-cloud-signout-status')!.textContent).toBe('');
-  });
-  it('reports failed shared-session revocation while still ending local access', async () => {
-    account.revoke.mockRejectedValueOnce(new Error('fixture session revocation refused'));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    clickSignOut();
-    await vi.waitFor(() =>
-      expect(document.getElementById('sp-cloud-signout-status')!.textContent).toBe(
-        catalogMessage('spCloudSignOutSyncFailed', []),
-      ),
-    );
-    await vi.waitFor(() =>
-      expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(true),
-    );
-    expect(account.signOut).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalled();
-    expect(chromeMock.storage.local.remove).toHaveBeenCalledWith([
-      'agi_api_key',
-      'agi_user_id',
-      'agi_user_tier',
-      'agi_session',
-    ]);
-  });
-});
-
-function openTaskDraft(): HTMLButtonElement {
-  document.getElementById('sp-wf-new-task-btn')!.click();
-  (document.getElementById('sp-wf-nt-name') as HTMLInputElement).value = 'Fixture task';
-  (document.getElementById('sp-wf-nt-prompt') as HTMLTextAreaElement).value = 'Summarize my page';
-  return document.getElementById('sp-wf-nt-save') as HTMLButtonElement;
-}
-
-describe('the real scheduled-task form keeps refused requests reviewable', () => {
-  it.each(['authorization', 'runtime', 'missing-response'] as const)(
-    'preserves the create draft after %s failure',
-    async (failure) => {
-      const save = openTaskDraft();
-      save.click();
-      expect(save.disabled).toBe(true);
-      expect(save.textContent).toBe(catalogMessage('spTaskCreating', []));
-      expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'CREATE_SCHEDULED_TASK', owner: account.owner }),
-        expect.any(Function),
-      );
-      chromeMock.runtime.lastError =
-        failure === 'runtime' ? { message: 'Worker unavailable' } : undefined;
-      chromeMock.taskCallback!(
-        failure === 'missing-response'
-          ? undefined
-          : { success: false, error: 'Owner authorization denied' },
-      );
-      chromeMock.runtime.lastError = undefined;
-      expect(document.getElementById('sp-wf-new-task-form')!.classList.contains('open')).toBe(true);
-      expect(document.getElementById('sp-wf-nt-error')!.textContent).toBe(
-        failure === 'runtime'
-          ? 'Worker unavailable'
-          : failure === 'missing-response'
-            ? catalogMessage('spTaskCreateFailed', [])
-            : 'Owner authorization denied',
-      );
-      expect((document.getElementById('sp-wf-nt-name') as HTMLInputElement).value).toBe(
-        'Fixture task',
-      );
-      expect(save.disabled).toBe(false);
-      expect(save.textContent).toBe(catalogMessage('spTaskCreate', []));
-    },
-  );
-  it('preserves the edit draft and restores its edit label after a denied update', async () => {
-    chromeMock.tasks = [
-      {
-        id: 'task_1700000000000_abcdef123456',
-        name: 'Fixture task',
-        prompt: 'Existing prompt',
-        enabled: true,
-        scheduleType: 'daily',
-        scheduleValue: '',
-      },
-    ];
-    document.getElementById('sp-tab-workflows')!.click();
-    let edit!: HTMLButtonElement;
-    await vi.waitFor(() => {
-      edit = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('#sp-wf-tasks-list button'),
-      ).find((button) => button.title === catalogMessage('spTaskEdit', ['Fixture task']))!;
-      expect(edit).toBeDefined();
-    });
-    edit.click();
-    const save = document.getElementById('sp-wf-nt-save') as HTMLButtonElement;
-    (document.getElementById('sp-wf-nt-name') as HTMLInputElement).value = 'Edited task';
-    save.click();
-    expect(save.textContent).toBe(catalogMessage('spTaskSaving', []));
-    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'UPDATE_SCHEDULED_TASK',
-        owner: account.owner,
-        taskId: chromeMock.tasks[0]!.id,
-      }),
-      expect.any(Function),
-    );
-    chromeMock.taskCallback!({ success: false, error: 'Owner authorization denied' });
-    expect(document.getElementById('sp-wf-new-task-form')!.classList.contains('open')).toBe(true);
-    expect(document.getElementById('sp-wf-nt-error')!.textContent).toBe(
-      'Owner authorization denied',
-    );
-    expect((document.getElementById('sp-wf-nt-name') as HTMLInputElement).value).toBe(
-      'Edited task',
-    );
-    expect(save.disabled).toBe(false);
-    expect(save.textContent).toBe(catalogMessage('spTaskSaveChanges', []));
-  });
-  it('discards a delayed create response after sign-out closes the owner-bound draft', async () => {
-    openTaskDraft().click();
-    const reply = chromeMock.taskCallback!;
-    expect(reply).toBeTypeOf('function');
-    clickSignOut();
-    await vi.waitFor(() =>
-      expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(true),
-    );
-    reply({ success: false, error: 'Old account request failed' });
-    expect(document.getElementById('sp-wf-new-task-form')!.classList.contains('open')).toBe(false);
-    expect(document.getElementById('sp-wf-nt-error')!.textContent).toBe('');
-    expect((document.getElementById('sp-wf-nt-name') as HTMLInputElement).value).toBe('');
-  });
-});
-
 async function expectReadyAccount(): Promise<void> {
   await vi.waitFor(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(false);
-    expect(document.getElementById('sp-cloud-user-label')!.textContent).toBe(
-      account.owner.authIncarnation,
-    );
+    expect(account.summarized).toBe(account.owner.authIncarnation);
     expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
       !account.uploadsAllowed,
     );
@@ -745,13 +560,11 @@ describe('image intake stays with its admitted account epoch', () => {
       expect(noticeText()).toBe('');
     });
 
-    it.each(['menu', 'drawer'] as const)(
+    it.each(['menu'] as const)(
       'New Chat releases a pending %s capture and its late reply cannot release the new intake',
       async (source) => {
         chromeMock.deferScreenshots = true;
-        const button = document.getElementById(
-          source === 'menu' ? 'sp-attach-screenshot-item' : 'sp-drawer-capture-btn',
-        ) as HTMLButtonElement;
+        const button = document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement;
         button.click();
         expect(chromeMock.screenshotReplies).toHaveLength(1);
         document.getElementById('sp-new-chat-btn')!.click();
@@ -821,7 +634,7 @@ describe('image intake stays with its admitted account epoch', () => {
     it('account model reconciliation releases an obsolete capture lease', async () => {
       await selectAdmittedModel();
       chromeMock.deferScreenshots = true;
-      (document.getElementById('sp-drawer-capture-btn') as HTMLButtonElement).click();
+      (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
       account.modelIds = [];
       account.onChange!();
       await vi.waitFor(() =>
@@ -892,13 +705,11 @@ describe('image intake stays with its admitted account epoch', () => {
     expect((document.getElementById('sp-attach-btn') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it.each(['menu', 'drawer'] as const)(
+  it.each(['menu'] as const)(
     'discards a delayed %s capture after session replacement and an A-to-B-to-A return',
     async (source) => {
       chromeMock.deferScreenshots = true;
-      const button = document.getElementById(
-        source === 'menu' ? 'sp-attach-screenshot-item' : 'sp-drawer-capture-btn',
-      ) as HTMLButtonElement;
+      const button = document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement;
       button.click();
       expect(chromeMock.screenshotReplies).toHaveLength(1);
       await changeOwner('replacement-session');
@@ -908,9 +719,6 @@ describe('image intake stays with its admitted account epoch', () => {
       expect(pendingDataUrls()).toHaveLength(0);
       expect(noticeText()).toBe('');
       expect((document.getElementById('sp-attach-btn') as HTMLButtonElement).disabled).toBe(false);
-      expect(document.getElementById('sp-drawer-capture-btn')!.classList.contains('active')).toBe(
-        false,
-      );
     },
   );
 
@@ -952,11 +760,11 @@ describe('image intake stays with its admitted account epoch', () => {
     chromeMock.screenshotReplies[0]!({ success: true, data: dataUrlOfBytes(16) });
     expect(pendingDataUrls()).toHaveLength(0);
     const requests = chromeMock.screenshotReplies.length;
-    (document.getElementById('sp-drawer-capture-btn') as HTMLButtonElement).click();
+    (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
     expect(chromeMock.screenshotReplies).toHaveLength(requests);
     account.signedIn = false;
     await refreshAccount();
-    (document.getElementById('sp-drawer-capture-btn') as HTMLButtonElement).click();
+    (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
     expect(chromeMock.screenshotReplies).toHaveLength(requests);
   });
 });

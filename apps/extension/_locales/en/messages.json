@@ -4941,5 +4941,39 @@
   "optPairingUnpair": {
     "message": "Unpair",
     "description": "Button that disconnects the desktop app. Pairing again restores it."
+  },
+  "spMoreLabel": {
+    "message": "More",
+    "description": "Accessible name and tooltip of the side panel More button"
+  },
+  "spMoreShortcuts": {
+    "message": "Shortcuts",
+    "description": "More menu entry that opens the saved prompts and schedules in extension settings"
+  },
+  "spMoreHelp": {
+    "message": "Help",
+    "description": "More menu entry that opens the help links in extension settings"
+  },
+  "spTitleSchedule": {
+    "message": "Schedule…",
+    "description": "Conversation menu action that starts a scheduled task from this chat"
+  },
+  "spTitleAddToProject": {
+    "message": "Add to project",
+    "description": "Conversation menu action that files the open chat under a project"
+  },
+  "spHistoryArchiveConfirm": {
+    "message": "Archive this chat? It leaves your recent chats and moves to Archived, on this device and in your AGI account. You can restore it from there.",
+    "description": "Confirmation shown before a chat is archived"
+  },
+  "spMoreVersion": {
+    "message": "AGI for Chrome v$VERSION$",
+    "description": "Footer of the More menu naming the installed extension version",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.2.0"
+      }
+    }
   }
 }

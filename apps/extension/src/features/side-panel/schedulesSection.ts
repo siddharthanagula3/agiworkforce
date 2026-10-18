@@ -311,10 +311,16 @@ interface ScheduleRunsView {
   message: string;
 }
 
+export interface ScheduleDraft {
+  name: string;
+  prompt: string;
+}
+
 export interface SchedulesSectionAPI {
   sectionEl: HTMLElement;
   setActive(active: boolean): void;
   refresh(): Promise<void>;
+  openWithDraft(draft: ScheduleDraft): void;
 }
 
 const DEFAULT_DEPENDENCIES: SchedulesSectionDependencies = {
@@ -358,6 +364,32 @@ const SCHEDULE_FIELDS = ManagedCloudScheduleMutationSchema.shape;
 
 function maxLength(limit: number | null): Record<string, string> {
   return limit === null ? {} : { maxlength: String(limit) };
+}
+
+function clampToField(value: string, limit: number | null): string {
+  const trimmed = value.trim();
+  return limit === null ? trimmed : trimmed.slice(0, limit);
+}
+
+export const SCHEDULE_DRAFT_STORAGE_KEY = 'agi_schedule_draft';
+
+export function scheduleDraftFromChat(title: string, firstPrompt: string): ScheduleDraft {
+  return {
+    name: clampToField(title, SCHEDULE_FIELDS.name.maxLength),
+    prompt: clampToField(firstPrompt, SCHEDULE_FIELDS.prompt.maxLength),
+  };
+}
+
+export async function stageScheduleDraft(draft: ScheduleDraft): Promise<void> {
+  await chrome.storage.session.set({ [SCHEDULE_DRAFT_STORAGE_KEY]: draft });
+}
+
+export async function takeScheduleDraft(): Promise<ScheduleDraft | null> {
+  const stored = await chrome.storage.session.get(SCHEDULE_DRAFT_STORAGE_KEY);
+  await chrome.storage.session.remove(SCHEDULE_DRAFT_STORAGE_KEY);
+  const draft = stored[SCHEDULE_DRAFT_STORAGE_KEY] as Partial<ScheduleDraft> | undefined;
+  if (!draft || typeof draft.name !== 'string' || typeof draft.prompt !== 'string') return null;
+  return scheduleDraftFromChat(draft.name, draft.prompt);
 }
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -1214,7 +1246,15 @@ export function buildSchedulesSection(
     render();
   }
 
+  function openWithDraft(draft: ScheduleDraft): void {
+    setFormOpen(true);
+    nameInput.value = draft.name;
+    promptInput.value = draft.prompt;
+    form.scrollIntoView?.({ block: 'nearest' });
+    nameInput.focus();
+  }
+
   render();
 
-  return { sectionEl, setActive, refresh };
+  return { sectionEl, setActive, refresh, openWithDraft };
 }

@@ -39,9 +39,7 @@ import { parseBrowserUploadBinding } from './features/computer-use/userFileUploa
 import {
   canUseBillingPlanCapability,
   classifyManagedQuotaErrorCode,
-  formatCredits,
   formatUsageResetIn,
-  getBillingPlanPricing,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -51,24 +49,17 @@ import {
   TERMINAL_AGENT_TASK_STATES,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
-  MAX_CUSTOM_INSTRUCTIONS_CHARS,
   normalizeModelId,
   getProviderDisplayLabel,
   messageKindForAgentEvent,
-  PREFERRED_LENGTHS,
   PROVIDERS_IN_ORDER,
-  RESPONSE_STYLES,
   resolveModelEffort,
-  USAGE_CRITICAL_REMAINING_PERCENT,
-  USAGE_WARNING_REMAINING_PERCENT,
   type ClarifyState,
   type Effort,
   type InteractiveCard,
   type InteractiveCardResponsePayload,
   type ManagedUsageWarning,
   type ModelSpeed,
-  type PreferredLength,
-  type ResponseStyle,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -100,7 +91,9 @@ import {
   type ConversationEntryChanges,
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
-import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
+import { wirePopupMenu } from './features/side-panel/menu';
+import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
+import { scheduleDraftFromChat, stageScheduleDraft } from './features/side-panel/schedulesSection';
 import {
   refreshManagedCloudRecentHistory,
   refreshManagedCloudConversationHistory,
@@ -121,7 +114,6 @@ import {
 } from './features/background/conversation-session';
 import {
   normalizeApprovedSiteOrigin,
-  removeApprovedSiteHostPermission,
   requestApprovedSiteHostPermission,
 } from './features/options/site-allowlist';
 import {
@@ -132,7 +124,6 @@ import {
   requestBrowserControlHostPermission,
 } from './features/computer-use/browserControlConsent';
 import {
-  backgroundConversationId,
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
 } from './features/background/background-results';
@@ -184,20 +175,11 @@ import {
   expandSlashCommand,
   matchSlashCommands,
   promptShortcutsFromSaved,
-  shortcutCommand,
-  shortcutCommandConflict,
-  SHORTCUT_INPUT_PLACEHOLDER,
   SLASH_COMMANDS,
   type PromptShortcut,
   type SlashCommandMeta,
 } from './features/side-panel/pageCommands';
 import { SHORTCUTS_STORAGE_KEY } from './features/background/shortcuts';
-import {
-  dictationLanguageChoices,
-  readDictationLanguage,
-  resolveDictationLanguage,
-  writeDictationLanguage,
-} from './features/side-panel/dictation-language';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
 import { DATA_HANDLING_DISCLOSURES } from './features/privacy/dataHandling';
 import {
@@ -211,9 +193,6 @@ import {
 } from './features/side-panel/surface-policy';
 import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
 import {
-  ALLOWED_BRIDGE_HOSTS,
-  DEFAULT_AGI_BRIDGE_URL,
-  validateBridgeUrl,
   sanitizePageText,
   SELECTED_EFFORT_STORAGE_KEY,
   SELECTED_MODEL_STORAGE_KEY,
@@ -226,27 +205,22 @@ import {
   ArrowUp,
   Clock,
   Trash2,
-  MessageSquare,
   Monitor,
-  Terminal,
   Globe,
   Mic,
   Camera,
   FileImage,
   FileText,
   Zap,
-  FileEdit,
-  SquarePen,
   Square,
-  Settings,
   Shield,
   X,
   Play,
   ChevronRight,
   Check,
   Plug,
-  CircleHelp,
   Ellipsis,
+  ChevronDown,
   renderIcon,
 } from './assets/icons';
 import {
@@ -255,28 +229,8 @@ import {
   describeCancellationReason,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
-import {
-  buildCloudRunsPanel,
-  CLOUD_RUNS_PANEL_CSS,
-  type CloudRunsPanelAPI,
-} from './features/side-panel/cloudRunsPanel';
-import {
-  buildBrowserToolsPanel,
-  BROWSER_TOOLS_PANEL_CSS,
-  type BrowserToolsPanelAPI,
-} from './features/side-panel/browserToolsPanel';
-import {
-  buildProjectsDrawerSection,
-  PROJECTS_DRAWER_CSS,
-  type ActiveProjectSelection,
-  type ProjectsDrawerAPI,
-} from './features/side-panel/projectsDrawer';
+import type { ActiveProjectSelection } from './features/side-panel/activeProject';
 import { listChromeProjects } from './features/cloud-bridge/projectsClient';
-import {
-  buildArtifactsDrawerSection,
-  ARTIFACTS_DRAWER_CSS,
-  type ArtifactsDrawerAPI,
-} from './features/side-panel/artifactsDrawer';
 import {
   ARTIFACT_PANEL_CSS,
   artifactProse,
@@ -302,43 +256,15 @@ import {
 } from './features/side-panel/agiWorkPlanReview';
 import { buildHelpArticleLink, HELP_LINK_CSS } from './features/side-panel/helpLinks';
 import {
-  beginPairing,
-  loadPairingState,
-  storeBridgeSecret,
-  submitPairingCode,
-  unpair,
-  type PairingState,
-} from './features/native-bridge/pairing';
-import {
-  ACCOUNT_MEMORY_CACHE_KEY,
-  fetchAccountMemoryConflicts,
-  fetchActiveMemoryWorkspace,
-  fetchMemoryExclusions,
   fetchMemoryPreferences,
-  isAccountMemory,
   MEMORY_COMMAND_HINT,
-  MEMORY_EXCLUSION_MAX_CHARS,
-  MEMORY_EXCLUSION_MAX_TERMS,
-  MEMORY_EXCLUSION_MIN_CHARS,
-  normalizeMemoryExclusions,
-  restoreAccountMemory,
   runAccountMemoryCommand,
-  saveMemoryExclusions,
   saveMemoryPreferences,
-  type AccountMemory,
-  type AccountMemoryConflict,
   type MemoryPreferences,
   type MemoryCommandKind,
   type MemoryCommandRequest,
   type MemoryCommandResult,
 } from './features/cloud-bridge/memoryClient';
-import {
-  fetchAccountPersonalization,
-  saveAccountInstructions,
-  saveAccountResponseStyle,
-  type AccountPersonalization,
-} from './features/cloud-bridge/personalizationClient';
-import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
@@ -363,17 +289,14 @@ import {
   getManagedModelAccess,
   AccountUnavailableError,
   clearAuthToken,
-  signOutOfAccount,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
-  getManagedUsageHistory,
   type ManagedChatSourcesDelta,
   type ManagedCodeExecution,
   type ManagedMemoryCommandTurn,
   type ManagedModelAccess,
-  type ManagedUsageHistory,
   type ManagedQuotaBlock,
   type ManagedQuotaRecovery,
   type ManagedQuotaWarningSignal,
@@ -388,10 +311,7 @@ import {
   usageLimitNotice,
   usageWarning,
   usageWindowViews,
-  type PurchasedCreditsView,
-  type UsageWindowView,
 } from './features/side-panel/usageWindows';
-import { planComparisonViews } from './features/side-panel/planComparison';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   getClerkAccountProfile,
@@ -402,7 +322,6 @@ import {
 } from './features/cloud-bridge/clerkAuth';
 import {
   agiWorkUnlockPlanLabel,
-  formatManagedTierLabel,
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
   getManagedModelPickerOptions,
@@ -423,7 +342,6 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
-import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
 import { logger, withTimeout } from './utils';
 import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from './features/cloud-bridge/managedRunControl';
 import { platformRequestHeaders } from './platformHeaders';
@@ -434,7 +352,6 @@ installSidePanelErrorReporting();
 
 const extensionSendQueue = getExtensionSendQueue();
 
-const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 
 let refreshOnboardingAccount: () => void = () => undefined;
@@ -491,6 +408,7 @@ function readStoredActiveProject(value: unknown): ActiveProjectSelection | null 
 let historyRestoreInProgress = false;
 let historyRestoreToken = 0;
 let invalidateConversationHistoryUI: () => void = () => {};
+let renderConversationTitle: () => void = () => {};
 let cloudHistoryOrganizationId: string | null | undefined;
 let cloudHistoryOwnerAbort = new AbortController();
 window.addEventListener('pagehide', () => cloudHistoryOwnerAbort.abort());
@@ -605,6 +523,7 @@ function conversationPersistencePresentation(
 function clearActivePersistenceState(): void {
   activePersistenceReadGeneration += 1;
   activePersistenceEntry = undefined;
+  renderConversationTitle();
 }
 
 async function refreshActivePersistenceState(): Promise<void> {
@@ -613,6 +532,7 @@ async function refreshActivePersistenceState(): Promise<void> {
   const readGeneration = ++activePersistenceReadGeneration;
   if (!owner || _ctx.messages.length === 0) {
     activePersistenceEntry = undefined;
+    renderConversationTitle();
     return;
   }
   const entry = await getConversation(owner, conversationId).catch(() => undefined);
@@ -624,6 +544,7 @@ async function refreshActivePersistenceState(): Promise<void> {
     return;
   }
   activePersistenceEntry = entry;
+  renderConversationTitle();
 }
 let refreshTabGroupUI: () => void = () => {
   /* no-op until buildUI() registers the controls */
@@ -632,7 +553,6 @@ let refreshTabGroupUI: () => void = () => {
 let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
   /* no-op until buildUI() creates the Workflows form */
 };
-let openScheduledTaskEditor: (task: ScheduledTaskRow) => void = () => undefined;
 let initialCloudAccountRefresh: Promise<void> = Promise.resolve();
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
 type ManagedCloudGateAction =
@@ -720,7 +640,6 @@ interface UsageBanner {
 
 let usageBanner: UsageBanner | null = null;
 const quotaWarnedStreamIds = new Set<string>();
-const MODEL_USAGE_ROW_LIMIT = 5;
 
 function renderUsageBanner(next: UsageBanner | null): void {
   usageBanner = next;
@@ -765,61 +684,6 @@ function quotaResetLabel(quotaCode: string): string | null {
   if (!managedModelAccess) return null;
   const blocked = quotaBlockWindow(usageWindowViews(managedModelAccess.usage), quotaCode);
   return blocked ? formatUsageResetIn(blocked.resetAt) : null;
-}
-
-function buildPurchasedCreditsRow(purchased: PurchasedCreditsView): HTMLElement {
-  const row = el('div', { class: 'sp-quota-window' });
-  const head = el('div', { class: 'sp-quota-bar-row' });
-  head.appendChild(el('span', {}, t('spQuotaPurchasedLabel')));
-  head.appendChild(
-    el(
-      'span',
-      { class: 'sp-quota-window-value' },
-      purchased.balance ?? t('spQuotaPurchasedUnavailable'),
-    ),
-  );
-  row.appendChild(head);
-  row.appendChild(
-    el(
-      'div',
-      { class: 'sp-quota-window-reset' },
-      purchased.overageEnabled ? t('spQuotaPurchasedOn') : t('spQuotaPurchasedOff'),
-    ),
-  );
-  return row;
-}
-
-function buildQuotaWindowRow(view: UsageWindowView): HTMLElement {
-  const row = el('div', { class: 'sp-quota-window' });
-  const head = el('div', { class: 'sp-quota-bar-row' });
-  head.appendChild(el('span', {}, view.label));
-  head.appendChild(el('span', { class: 'sp-quota-window-value' }, view.detail));
-  row.appendChild(head);
-  const usedPercent = Math.round(view.usedPercent);
-  const remainingPercent = 100 - view.usedPercent;
-  const bar = el('div', {
-    class: 'sp-quota-bar-bg',
-    role: 'progressbar',
-    'aria-label': view.label,
-    'aria-valuemin': '0',
-    'aria-valuemax': '100',
-    'aria-valuenow': String(usedPercent),
-    'aria-valuetext': view.detail,
-  });
-  const fill = el('div', {
-    class:
-      view.exhausted || remainingPercent <= USAGE_CRITICAL_REMAINING_PERCENT
-        ? 'sp-quota-bar-fill exhausted'
-        : remainingPercent <= USAGE_WARNING_REMAINING_PERCENT
-          ? 'sp-quota-bar-fill warning'
-          : 'sp-quota-bar-fill',
-  });
-  fill.style.width = `${usedPercent}%`;
-  bar.appendChild(fill);
-  row.appendChild(bar);
-  const resetLabel = formatUsageResetIn(view.resetAt);
-  if (resetLabel) row.appendChild(el('div', { class: 'sp-quota-window-reset' }, resetLabel));
-  return row;
 }
 
 type ChatMessage = SidePanelChatMessage;
@@ -1093,7 +957,6 @@ function modelSpeedLabel(speed: ModelSpeed): string {
 }
 
 const CONNECTORS_URL = agiWebUrl('/connectors?from=chrome-extension');
-const HELP_URL = agiWebUrl('/help?from=chrome-extension');
 
 const RECENTS_SEARCH_THRESHOLD = 10;
 
@@ -1107,8 +970,6 @@ const RELATIVE_TIME_STEPS: { ms: number; unit: Intl.RelativeTimeFormatUnit }[] =
 function getModelBadgeLabel(modelId: string): string {
   return getManagedModelBadgeLabel(modelId);
 }
-let isRecording = false;
-let recordingActionCount = 0;
 let recordingStartUrl: string | null = null;
 
 interface ComposerImage {
@@ -1169,7 +1030,7 @@ let lastStreamPersistAtMs = 0;
 let currentPageHostname = '';
 let activePageSource: PageContextSource | null = null;
 
-type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs' | 'page';
+type SidePanelTab = 'chat' | 'computer-use';
 
 const MAX_STORED_MESSAGES = 50;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
@@ -1273,6 +1134,7 @@ function persistMessages(): Promise<void> {
       sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
     ) {
       activePersistenceEntry = entry;
+      renderConversationTitle();
     }
   });
 }
@@ -1666,7 +1528,6 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   scheduledTasksRequestFence.invalidate();
   scheduledTaskCreateRequestFence.invalidate();
   resetScheduledTaskDraftForOwnerTransition();
-  clearWorkflowsTaskRows();
   const browserRunAtOwnerTransition = composerBrowserRun;
   if (_ctx.currentStreamId || browserRunAtOwnerTransition) cancelCurrentManagedStream(false);
   stopManagedChatKeepalive();
@@ -1761,8 +1622,6 @@ function injectStyles(): void {
     button:not(:disabled):active,
     #sp-auth-save-btn:not(:disabled):active,
     #sp-cloud-gate-action:not(:disabled):active,
-    #sp-drawer-back:not(:disabled):active,
-    #sp-drawer-close:not(:disabled):active,
     #sp-mic-btn:not(:disabled):active,
     #sp-model-badge:not(:disabled):active,
     #sp-model-selector-btn:not(:disabled):active,
@@ -2093,9 +1952,6 @@ function injectStyles(): void {
       clip-path: inset(50%);
       white-space: nowrap;
       border: 0;
-    }
-    :where(#sp-drawer-title, #sp-recents-title, .sp-drawer-section-title, .sp-bt-title, .sp-runs-detail-title) {
-      margin: 0;
     }
 
     /* ── Message bubbles ── */
@@ -3761,7 +3617,6 @@ function injectStyles(): void {
     .sp-composer-notice-dismiss:hover { background: var(--agi-ext-hover); }
     .sp-composer-notice-dismiss:focus-visible,
     .sp-composer-notice-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-memory-notice { flex-wrap: wrap; color: var(--agi-ext-text); }
     .sp-composer-notice-action:hover {
       background: color-mix(in srgb, currentColor 12%, transparent);
     }
@@ -4150,20 +4005,6 @@ function injectStyles(): void {
     .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent-text); }
     .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info-text); }
     .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning-text); }
-
-    /* ── Auth bar ── */
-    #sp-auth-bar {
-      /* Native Desktop pairing is optional for Managed Cloud chat and lives
-         in the settings drawer. A red top-level "Offline" strip made the
-         healthy public chat surface look unavailable. */
-      display: none;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: var(--agi-ext-bg);
-      border-bottom: 1px solid var(--agi-ext-border);
-      flex-shrink: 0;
-    }
     #sp-auth-input {
       flex: 1;
       background: var(--agi-ext-surface);
@@ -4196,45 +4037,6 @@ function injectStyles(): void {
     }
     #sp-auth-save-btn:hover { background: var(--agi-ext-primary-hover); }
     #sp-auth-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    /* ── Connection status pill ── */
-    #sp-status-pill {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      border-radius: var(--corner-menu);
-      padding: 3px 8px;
-      flex-shrink: 0;
-      font-weight: 500;
-      letter-spacing: 0.03em;
-      white-space: nowrap;
-    }
-    #sp-status-pill.connected {
-      background: var(--agi-ext-success-bg);
-      color: var(--agi-ext-success-text);
-      border: 1px solid var(--agi-ext-success-border);
-    }
-    #sp-status-pill.disconnected {
-      background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger-text);
-      border: 1px solid var(--agi-ext-danger-border);
-    }
-    .sp-status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: var(--corner-pill);
-      flex-shrink: 0;
-    }
-    #sp-status-pill.connected .sp-status-dot { background: var(--agi-ext-success); }
-    #sp-status-pill.disconnected .sp-status-dot { background: var(--agi-ext-danger); }
-    #sp-status-pill.cloud {
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text);
-      border: 1px solid var(--agi-ext-border-control);
-    }
-    #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
 
     /* ── Bridge-offline notice (shown above composer when desktop not connected) ── */
     #sp-bridge-notice {
@@ -4311,128 +4113,9 @@ function injectStyles(): void {
     .sp-tab.sp-tab-active { color: var(--agi-ext-accent-text); border-bottom-color: var(--agi-ext-accent); }
     #sp-chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #sp-chat-panel.sp-tab-hidden { display: none; }
-    #sp-workflows { display: none; flex: 1; overflow-y: auto; padding: 12px 10px; flex-direction: column; gap: 16px; }
-    #sp-workflows.sp-tab-visible { display: flex; }
-    #sp-workflows::-webkit-scrollbar { width: 4px; }
-    #sp-workflows::-webkit-scrollbar-track { background: transparent; }
-    #sp-workflows::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: var(--corner-compact); }
-    .sp-wf-section { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-menu); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-    .sp-wf-section-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-wf-section-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-    .sp-wf-empty { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 0; }
-    .sp-wf-shortcuts-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-shortcut-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
-    .sp-wf-shortcut-icon { font-size: 14px; flex-shrink: 0; }
-    .sp-wf-shortcut-info { flex: 1; min-width: 0; }
-    .sp-wf-shortcut-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-shortcut-meta { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
-    .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 9px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-btn-replay:hover { background: var(--agi-ext-hover); }
-    .sp-wf-btn-replay:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
-    .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
-    .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; color: var(--agi-ext-text-muted); }
-    .sp-wf-btn-delete.is-confirm,
-    .sp-wf-task-delete.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
-    .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
-    .sp-wf-task-info { flex: 1; min-width: 0; }
-    .sp-wf-task-name { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-task-description { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); overflow-wrap: anywhere; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text); background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-compact); padding: 1px 5px; margin-top: 2px; }
-    .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: var(--corner-pill); background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background var(--duration-quick); flex-shrink: 0; }
-    .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
-    .sp-wf-task-toggle:disabled { cursor: wait; opacity: 0.55; }
-    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: var(--corner-pill); background: var(--agi-ext-toggle-knob); top: 2px; left: 2px; transition: transform var(--duration-quick); }
-    .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
-    .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
-    .sp-wf-task-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 3px 7px; border-radius: var(--corner-control); cursor: pointer; transition: color var(--duration-instant), border-color var(--duration-instant); }
-    .sp-wf-task-result:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-focus); }
-    .sp-wf-new-task-btn { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-new-task-btn:hover { background: var(--agi-ext-hover); }
-    .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); }
-    .sp-wf-new-task-form.open { display: flex; }
-    .sp-wf-form-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-bottom: 1px; }
-    .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; }
-    .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-wf-form-textarea { resize: vertical; min-height: 72px; box-sizing: border-box; }
-    .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
-    .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-save-btn { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: background var(--duration-instant); }
-    .sp-wf-form-save-btn:hover { background: var(--agi-ext-primary-hover); }
-    .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-form-save-btn:disabled { cursor: wait; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
-    .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 10px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; align-self: flex-end; transition: color var(--duration-instant); }
-    .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
-    .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .sp-wf-mutation-status {
-      min-height: 18px;
-      padding: 0 14px;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success-text); }
-    .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    .sp-wf-create-shortcut-btn { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 4px 10px; border-radius: var(--corner-control); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-wf-create-shortcut-btn:hover { background: var(--agi-ext-hover); }
-    .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: var(--z-modal); align-items: center; justify-content: center; }
-    .sp-create-shortcut-overlay.open { display: flex; }
-    .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-menu); padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--agi-ext-elevation-4); }
-    .sp-create-shortcut-header { display: flex; align-items: center; justify-content: space-between; }
-    .sp-create-shortcut-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; color: var(--agi-ext-text); }
-    .sp-create-shortcut-close { background: none; border: none; color: var(--agi-ext-text-muted); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color var(--duration-instant); }
-    .sp-create-shortcut-close:hover { color: var(--agi-ext-text); }
-    .sp-create-shortcut-field { display: flex; flex-direction: column; gap: 4px; }
-    .sp-create-shortcut-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; }
-    .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-control); color: var(--agi-ext-text); font-size: var(--type-caption-size); padding: 6px 9px; outline: none; font-family: inherit; transition: border-color var(--duration-quick); width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: var(--type-caption-height); }
-    .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-create-shortcut-input[aria-invalid='true'], .sp-create-shortcut-textarea[aria-invalid='true'] { border-color: var(--agi-ext-danger); }
-    .sp-create-shortcut-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .sp-create-shortcut-hint:empty { display: none; }
-    .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
-    .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: color var(--duration-instant); }
-    .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
-    .sp-create-shortcut-save { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border: none; border-radius: var(--corner-control); padding: 6px 14px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); cursor: pointer; transition: background var(--duration-instant); }
-    .sp-create-shortcut-save:hover { background: var(--agi-ext-primary-hover); }
-    .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-wf-group-desc { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); }
-    .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-    .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-control); color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 5px 11px; cursor: pointer; transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick); }
-    .sp-wf-group-action-btn:hover:not(:disabled) { color: var(--agi-ext-text); border-color: var(--agi-ext-border-control); background: var(--agi-ext-hover); }
-    .sp-wf-group-action-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
-    .sp-wf-group-action-btn:disabled { cursor: not-allowed; color: var(--agi-ext-text-muted); }
-    .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
-    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-primary); border: 1px solid var(--agi-ext-primary); color: var(--agi-ext-on-primary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; padding: 8px 16px; border-radius: var(--corner-field); cursor: pointer; transition: background var(--duration-quick), transform var(--duration-instant); flex-shrink: 0; }
-    .sp-wf-record-btn:hover { background: var(--agi-ext-primary-hover); transform: scale(1.02); }
-    .sp-wf-record-btn.recording { background: var(--agi-ext-surface); color: var(--agi-ext-text); animation: sp-record-pulse calc(var(--duration-pulse) * 1.5) infinite; border-color: var(--agi-ext-border-control); }
-    .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
     @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); }
     50% { box-shadow: 0 0 0 6px var(--agi-ext-danger-shadow); }
     }
-    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: var(--corner-pill); background: currentColor; flex-shrink: 0; }
-    .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse var(--duration-pulse) infinite; }
-    .sp-wf-action-counter { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); flex: 1; }
-    .sp-wf-action-counter strong { color: var(--agi-ext-text); }
-    .sp-wf-record-status { min-height: 18px; margin-top: 7px; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); cursor: pointer; }
-    .sp-wf-capture-values input { cursor: pointer; }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border-control); border-radius: var(--corner-field); }
-    .sp-wf-save-dialog.open { display: flex; }
-    .sp-wf-save-dialog-title { font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; color: var(--agi-ext-text); }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 600; background: var(--agi-ext-surface); color: var(--agi-ext-text); border-radius: var(--corner-field); padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; min-width: 0; }
     #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: var(--corner-control); padding: 3px 8px; color: var(--agi-ext-accent-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); font-weight: 500; cursor: pointer; transition: background var(--duration-instant), border-color var(--duration-instant); white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
@@ -4558,154 +4241,6 @@ function injectStyles(): void {
        home. */
     #sp-tab-bar { display: none; }
     #sp-tab-bar.sp-tab-bar-exit { display: flex; }
-
-    /* ── Phase 2: Settings drawer ──────────────────────────────────────────── */
-    #sp-drawer-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: var(--agi-ext-scrim);
-      z-index: var(--z-drawer-backdrop);
-    }
-    #sp-drawer-overlay.open { display: block; }
-    #sp-drawer {
-      position: fixed;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      width: 100%;
-      max-width: 100%;
-      background: var(--agi-ext-bg);
-      border-left: 1px solid var(--agi-ext-border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transform: translateX(100%);
-      transition: transform var(--duration-quick) var(--curve-standard);
-      z-index: var(--z-drawer);
-    }
-    #sp-drawer.open { transform: translateX(0); }
-    #sp-drawer-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--agi-ext-border);
-      flex-shrink: 0;
-    }
-    #sp-drawer-title {
-      font-size: var(--type-body-size);
-      line-height: var(--type-body-height);
-      font-weight: 600;
-      color: var(--agi-ext-text);
-    }
-    #sp-drawer-close {
-      background: transparent;
-      border: none;
-      color: var(--agi-ext-text-muted);
-      font-size: 18px;
-      line-height: 1;
-      cursor: pointer;
-      padding: 2px 6px;
-      min-width: var(--control-md);
-      min-height: var(--control-md);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: var(--corner-compact);
-      transition: color var(--duration-instant), background var(--duration-instant);
-    }
-    #sp-drawer-close:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
-    #sp-drawer-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0 0 8px;
-    }
-    #sp-drawer-body::-webkit-scrollbar { width: 4px; }
-    #sp-drawer-body::-webkit-scrollbar-track { background: transparent; }
-    #sp-drawer-body::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: var(--corner-compact); }
-    /* Drawer sections */
-    .sp-drawer-section {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--agi-ext-border);
-    }
-    .sp-drawer-section-title {
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 700;
-      color: var(--agi-ext-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 10px;
-    }
-    /* Launcher buttons (Workflows / Computer Use) */
-    .sp-drawer-launcher-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-field);
-      padding: 10px 12px;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 500;
-      cursor: pointer;
-      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
-      text-align: left;
-      margin-bottom: 6px;
-    }
-    .sp-drawer-launcher-btn:last-child { margin-bottom: 0; }
-    .sp-drawer-launcher-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--corner-control); background: var(--agi-ext-hover); }
-    .sp-drawer-launcher-label { flex: 1; }
-    .sp-drawer-launcher-desc { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
-    .sp-help-shortcuts {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 6px 12px;
-      margin: 0 0 10px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-help-shortcuts dt { color: var(--agi-ext-text); }
-    .sp-help-shortcuts dd { margin: 0; color: var(--agi-ext-text-muted); }
-    .sp-help-shortcuts kbd {
-      padding: 1px 6px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-compact);
-      background: var(--agi-ext-surface);
-      font-family: var(--type-code-family);
-      font-size: var(--type-caption-size);
-      white-space: nowrap;
-    }
-    .sp-drawer-launcher-chevron { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); flex-shrink: 0; }
-    /* Tools row */
-    .sp-drawer-tools-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .sp-drawer-tool-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 6px 11px;
-      cursor: pointer;
-      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
-      flex-shrink: 0;
-    }
-    .sp-drawer-tool-btn:hover:not(:disabled) { color: var(--agi-ext-text); border-color: var(--agi-ext-border-control); background: var(--agi-ext-hover); }
-    .sp-drawer-tool-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
-    .sp-drawer-tool-btn:disabled { cursor: wait; color: var(--agi-ext-text-muted); background: var(--agi-ext-hover); }
     /* History sub-list inside the drawer.
        CSP note (style-src 'self'): these rules used to be applied via
        element.style.cssText at runtime, which Chrome blocks on extension
@@ -4890,274 +4425,6 @@ function injectStyles(): void {
     }
     #sp-recents-archived[hidden] { display: none; }
     #sp-recents-archived[aria-pressed='true'] { border-color: var(--agi-ext-accent); color: var(--agi-ext-text); }
-    /* Connection / pairing */
-    .sp-drawer-pairing-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .sp-drawer-pairing-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
-    .sp-drawer-pairing-fingerprint {
-      font-size: var(--type-code-size);
-      font-family: var(--type-code-family);
-      color: var(--agi-ext-success-text);
-      background: var(--agi-ext-success-bg);
-      border: 1px solid var(--agi-ext-success-border);
-      border-radius: var(--corner-compact);
-      padding: 1px 6px;
-    }
-    .sp-drawer-pairing-error {
-      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
-      color: var(--agi-ext-danger-text);
-      min-height: 16px;
-      margin-bottom: 6px;
-    }
-    .sp-drawer-pairing-code-row {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    .sp-drawer-pairing-code-row[hidden] { display: none; }
-    .sp-drawer-pairing-hint { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
-    .sp-drawer-pairing-code-input {
-      font-family: var(--type-code-family);
-      font-size: var(--type-title-size);
-      line-height: var(--type-title-height);
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      padding: 6px 8px;
-      border-radius: var(--corner-control);
-      border: 1px solid var(--agi-ext-border-control);
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text);
-    }
-    .sp-drawer-btn-row { display: flex; gap: 6px; }
-    .sp-drawer-btn {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 5px 12px;
-      cursor: pointer;
-      transition: color var(--duration-quick), border-color var(--duration-quick), background var(--duration-quick);
-    }
-    .sp-drawer-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-    .sp-drawer-btn:disabled { cursor: not-allowed; background: var(--agi-ext-hover); color: var(--agi-ext-text-muted); }
-    .sp-drawer-btn-primary { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border-color: var(--agi-ext-primary); }
-    .sp-drawer-btn-primary:hover { background: var(--agi-ext-accent-hover); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
-    .sp-drawer-btn-danger { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    /* Allowlist */
-    .sp-drawer-allowlist-help { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); margin-bottom: 8px; }
-    .sp-drawer-allowlist-current-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .sp-drawer-allowlist-origin {
-      flex: 1;
-      font-size: var(--type-code-size);
-      line-height: var(--type-code-height);
-      font-family: var(--type-code-family);
-      color: var(--agi-ext-text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sp-drawer-allowlist-toggle-btn {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 3px 10px;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
-    }
-    .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-    .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
-    .sp-drawer-allowlist-toggle-btn.is-remove:hover { background: var(--agi-ext-danger-bg); }
-    .sp-drawer-allowlist-toggle-btn:disabled { color: var(--agi-ext-text-muted); cursor: not-allowed; }
-    .sp-drawer-allowlist-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-    .sp-drawer-allowlist-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-drawer-allowlist-item.is-current { border-color: var(--agi-ext-accent); }
-    .sp-drawer-allowlist-item-origin {
-      flex: 1;
-      font-family: var(--type-code-family);
-      color: var(--agi-ext-text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sp-drawer-allowlist-item-remove {
-      background: none;
-      border: none;
-      color: var(--agi-ext-danger-text);
-      font-size: var(--type-caption-size);
-      cursor: pointer;
-      padding: 1px 5px;
-      border-radius: var(--corner-compact);
-      transition: color var(--duration-instant), background var(--duration-instant);
-      flex-shrink: 0;
-    }
-    .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger-text); background: var(--agi-ext-danger-bg); }
-    .sp-drawer-allowlist-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 0; }
-    .sp-drawer-allowlist-status { font-size: var(--type-caption-size); color: var(--agi-ext-danger-text); line-height: var(--type-caption-height); padding: 4px 0; }
-    .sp-drawer-allowlist-status[hidden] { display: none; }
-    /* Memory */
-    .sp-drawer-memory-help { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); margin-bottom: 8px; }
-    .sp-drawer-memory-add-btn {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 5px 12px;
-      cursor: pointer;
-      transition: color var(--duration-instant), border-color var(--duration-instant);
-      margin-bottom: 8px;
-    }
-    .sp-drawer-memory-add-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-    .sp-drawer-memory-editor { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-    .sp-drawer-memory-editor.open { display: flex; }
-    .sp-drawer-memory-textarea {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      padding: 6px 9px;
-      outline: none;
-      font-family: inherit;
-      resize: none;
-      height: 64px;
-      line-height: var(--type-caption-height);
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .sp-drawer-memory-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-drawer-memory-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-drawer-memory-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
-    .sp-drawer-memory-item {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      padding: 7px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .sp-drawer-memory-item-content { font-size: var(--type-caption-size); color: var(--agi-ext-text); line-height: var(--type-caption-height); }
-    .sp-drawer-memory-item-meta { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
-    .sp-drawer-memory-item-row { display: flex; gap: 5px; margin-top: 2px; }
-    .sp-drawer-memory-item-edit-btn {
-      background: none; border: 1px solid var(--agi-ext-border); border-radius: var(--corner-compact);
-      color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
-      transition: color var(--duration-instant), border-color var(--duration-instant);
-    }
-    .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
-    .sp-drawer-memory-item-delete-btn {
-      background: none; border: 1px solid var(--agi-ext-danger-border); border-radius: var(--corner-compact);
-      color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); padding: 2px 6px; cursor: pointer;
-      transition: color var(--duration-instant), border-color var(--duration-instant), background var(--duration-instant);
-    }
-    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); background: var(--agi-ext-danger-bg); }
-    .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
-    .sp-drawer-memory-item-textarea {
-      background: var(--agi-ext-bg);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      padding: 5px 7px;
-      outline: none;
-      font-family: inherit;
-      resize: none;
-      height: 52px;
-      line-height: var(--type-caption-height);
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-memory-empty { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); padding: 4px 0; }
-    .sp-drawer-memory-item-link { color: var(--agi-ext-accent-text); text-decoration: underline; text-underline-offset: 2px; }
-    .sp-drawer-memory-block { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--agi-ext-border); }
-    .sp-drawer-memory-subtitle { margin: 0; color: var(--agi-ext-text); font-size: var(--type-label-size); font-weight: 600; line-height: var(--type-label-height); }
-    .sp-drawer-memory-block .sp-drawer-memory-help { margin-bottom: 0; }
-    .sp-drawer-memory-exclusion-form { display: flex; gap: 6px; }
-    .sp-drawer-memory-exclusion-input {
-      flex: 1;
-      min-width: 0;
-      min-height: 28px;
-      padding: 4px 8px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      background: var(--agi-ext-bg);
-      color: var(--agi-ext-text);
-      font: inherit;
-      font-size: var(--type-caption-size);
-    }
-    .sp-drawer-memory-exclusion-input::placeholder { color: var(--agi-ext-text-placeholder); }
-    .sp-drawer-memory-exclusion-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-drawer-memory-exclusions { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
-    .sp-drawer-memory-exclusion {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 4px 2px 9px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-pill);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-drawer-memory-exclusion-remove {
-      display: grid;
-      width: 24px;
-      height: 24px;
-      place-items: center;
-      padding: 0;
-      border: 0;
-      border-radius: var(--corner-pill);
-      background: transparent;
-      color: var(--agi-ext-text-muted);
-      cursor: pointer;
-    }
-    .sp-drawer-memory-exclusion-remove:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-drawer-memory-exclusion-remove:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
-    .sp-drawer-memory-status { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); line-height: var(--type-caption-height); padding: 4px 0; }
-    .sp-drawer-memory-retry-btn {
-      align-self: flex-start;
-      margin-top: 4px;
-      padding: 4px 8px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      color: var(--agi-ext-text);
-      background: transparent;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      cursor: pointer;
-    }
-    .sp-drawer-memory-retry-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
 
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
@@ -5171,351 +4438,6 @@ function injectStyles(): void {
         scroll-behavior: auto !important;
       }
     }
-    /* In-page panel toggle */
-    .sp-drawer-toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .sp-drawer-toggle-label { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
-    .sp-drawer-toggle-switch {
-      appearance: none;
-      width: var(--control-lg);
-      height: 18px;
-      border-radius: var(--corner-field);
-      background: var(--agi-ext-hover);
-      position: relative;
-      cursor: pointer;
-      transition: background var(--duration-quick);
-      flex-shrink: 0;
-      border: none;
-      outline: none;
-    }
-    .sp-drawer-toggle-switch:checked { background: var(--agi-ext-accent); }
-    .sp-drawer-toggle-switch:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-drawer-toggle-switch::after {
-      content: '';
-      position: absolute;
-      width: 13px;
-      height: 13px;
-      border-radius: var(--corner-pill);
-      background: var(--agi-ext-toggle-knob);
-      /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
-         the light theme, a plain white knob on it was ~1.05:1 and the OFF
-         state read as an empty pill. An outset ring costs no layout and
-         reads on both grounds. */
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.28);
-      top: 2.5px;
-      left: 2.5px;
-      transition: transform var(--duration-quick);
-    }
-    .sp-drawer-toggle-switch:checked::after { transform: translateX(16px); }
-    .sp-drawer-toggle-status {
-      min-height: 15px;
-      margin-top: 5px;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-drawer-toggle-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
-    /* Bridge URL inside drawer */
-    .sp-drawer-bridge-row { display: flex; gap: 6px; margin-top: 4px; }
-    .sp-drawer-bridge-input {
-      flex: 1;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-code-size);
-      line-height: var(--type-code-height);
-      padding: 5px 8px;
-      outline: none;
-      font-family: var(--type-code-family);
-      transition: border-color var(--duration-quick);
-      min-width: 0;
-    }
-    .sp-drawer-bridge-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-placeholder); opacity: 1; }
-    .sp-drawer-bridge-error { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-danger-text); padding: 2px 0; margin-top: 2px; }
-    /* Cloud unlock */
-    .sp-drawer-cloud-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      width: 100%;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 500;
-      padding: 8px 14px;
-      cursor: pointer;
-      transition: background var(--duration-quick), border-color var(--duration-quick);
-    }
-    .sp-drawer-cloud-btn:hover { background: var(--agi-ext-hover); border-color: var(--agi-ext-accent); }
-
-    /* ── AGI Cloud sign-in / quota UI ── */
-    .sp-cloud-account {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .sp-cloud-signed-in {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .sp-cloud-avatar {
-      width: 24px;
-      height: 24px;
-      border-radius: var(--corner-pill);
-      background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent);
-      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 35%, transparent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 700;
-      color: var(--agi-ext-accent-text);
-      flex-shrink: 0;
-    }
-    .sp-cloud-user-info {
-      flex: 1;
-      min-width: 0;
-    }
-    .sp-cloud-user-label {
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 600;
-      color: var(--agi-ext-text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .sp-cloud-user-tier {
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-cloud-name-edit {
-      padding: 0;
-      min-height: 24px;
-      border: none;
-      background: none;
-      color: var(--agi-ext-accent-text);
-      font: inherit;
-      font-size: var(--type-caption-size);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      cursor: pointer;
-    }
-    .sp-cloud-name-edit[hidden],
-    .sp-cloud-name-editor[hidden] { display: none; }
-    .sp-cloud-name-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-    .sp-cloud-name-actions { display: flex; gap: 6px; }
-    .sp-cloud-signout-btn {
-      background: transparent;
-      border: 1px solid var(--agi-ext-border-strong);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 3px 7px;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: color var(--duration-quick), border-color var(--duration-quick);
-    }
-    .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); }
-    .sp-cloud-signout-status {
-      width: 100%;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      color: var(--agi-ext-danger-text);
-    }
-    .sp-cloud-signout-status:empty { display: none; }
-
-    /* Quota bar */
-    .sp-quota-bar-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-windows,
-    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-models,
-    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-notice,
-    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-help-link { display: none; }
-    .sp-quota-bar-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-quota-bar-model {
-      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-quota-bar-bg {
-      height: 4px;
-      border-radius: var(--corner-detail);
-      background: var(--agi-ext-border);
-      overflow: hidden;
-    }
-    .sp-quota-bar-fill {
-      height: 100%;
-      border-radius: var(--corner-detail);
-      background: var(--agi-ext-accent);
-      transition: width var(--duration-moved) var(--curve-standard);
-    }
-    .sp-quota-bar-fill.exhausted {
-      background: var(--agi-ext-danger);
-    }
-    .sp-quota-upgrade-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .sp-quota-exhausted-label { color: var(--agi-ext-danger-text); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    .sp-quota-bar-wrap[data-upgrade-only='true'] .sp-quota-exhausted-label { color: var(--agi-ext-text-muted); }
-    .sp-quota-upgrade-btn {
-      font-size: var(--type-label-size); line-height: var(--type-label-height);
-      font-weight: 600;
-      color: var(--agi-ext-text);
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border-control);
-      border-radius: var(--corner-control);
-      padding: 3px 8px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: background var(--duration-instant);
-    }
-    .sp-quota-upgrade-btn:hover { background: var(--agi-ext-hover); }
-    .sp-quota-windows {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .sp-quota-windows:empty { display: none; }
-    .sp-quota-window {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .sp-quota-window-value {
-      color: var(--agi-ext-text);
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
-    .sp-quota-window-reset {
-      font-size: var(--type-caption-size); line-height: var(--type-caption-height);
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-quota-bar-fill.warning { background: var(--agi-ext-warning); }
-    .sp-quota-notice {
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      color: var(--agi-ext-text);
-    }
-    .sp-quota-notice:empty { display: none; }
-    .sp-quota-notice[data-severity='warning'] { color: var(--agi-ext-warning-text); }
-    .sp-quota-notice[data-severity='critical'] { color: var(--agi-ext-danger-text); }
-    .sp-quota-models {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .sp-quota-models:empty { display: none; }
-    .sp-quota-models-heading {
-      font-size: var(--type-label-size); line-height: var(--type-label-height);
-      font-weight: 600;
-      color: var(--agi-ext-text);
-    }
-    .sp-plan-compare > summary {
-      font-size: var(--type-label-size); line-height: var(--type-label-height);
-      font-weight: 600;
-      color: var(--agi-ext-text);
-      padding: 4px 0;
-      cursor: pointer;
-    }
-    .sp-plan-compare-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 6px;
-    }
-    .sp-plan-compare-row {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-plan-compare-name {
-      font-weight: 600;
-      color: var(--agi-ext-text);
-    }
-    .sp-plan-compare-detail {
-      color: var(--agi-ext-text-muted);
-    }
-    .sp-cloud-link-hint {
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-cloud-link-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-    }
-    .sp-cloud-link-btn {
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-text-muted);
-      cursor: pointer;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      padding: 4px 7px;
-    }
-    .sp-cloud-link-btn:hover {
-      border-color: var(--agi-ext-accent);
-      color: var(--agi-ext-accent-text);
-    }
-
-    /* Sign-in prompt (when not signed in) */
-    .sp-cloud-signin-prompt {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .sp-cloud-signin-desc {
-      font-size: var(--type-caption-size);
-      color: var(--agi-ext-text-muted);
-      line-height: var(--type-caption-height);
-    }
-    .sp-cloud-signin-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      width: 100%;
-      background: var(--agi-ext-primary);
-      border: none;
-      border-radius: var(--corner-control);
-      color: var(--agi-ext-on-primary);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 600;
-      padding: 8px 14px;
-      cursor: pointer;
-      transition: opacity var(--duration-quick);
-    }
-    .sp-cloud-signin-btn:hover { background: var(--agi-ext-primary-hover); }
     .sp-cloud-token-row {
       display: flex;
       gap: 6px;
@@ -5555,62 +4477,6 @@ function injectStyles(): void {
       font-size: var(--type-caption-size);
       color: var(--agi-ext-text-muted);
       line-height: var(--type-caption-height);
-    }
-
-    /* Quota badge in the chat header */
-    #sp-quota-badge {
-      display: none;
-      align-items: center;
-      gap: 4px;
-      font-size: var(--type-label-size); line-height: var(--type-label-height);
-      font-weight: 600;
-      border-radius: var(--corner-pill);
-      min-height: 24px;
-      padding: 2px 7px;
-      white-space: nowrap;
-      cursor: pointer;
-      transition: opacity var(--duration-quick);
-         renders as a badge. */
-      border: none;
-      background: none;
-      font-family: inherit;
-      color: inherit;
-    }
-    #sp-quota-badge.visible { display: flex; }
-    #sp-quota-badge.has-prompts {
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text-muted);
-      border: 1px solid var(--agi-ext-border);
-    }
-    #sp-quota-badge.exhausted {
-      background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger-text);
-      border: 1px solid var(--agi-ext-danger-border);
-    }
-    #sp-quota-badge:hover { background: var(--agi-ext-hover); }
-
-    /* Drawer footer */
-    #sp-drawer-footer {
-      padding: 10px 14px;
-      border-top: 1px solid var(--agi-ext-border);
-      flex-shrink: 0;
-      background: var(--agi-ext-bg);
-    }
-    .sp-drawer-about-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      color: var(--agi-ext-text-muted);
-      gap: 4px;
-    }
-    .sp-drawer-about-url {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 140px;
-      font-family: var(--type-code-family);
     }
     /* ⋮ button in header */
     #sp-menu-btn {
@@ -5754,20 +4620,6 @@ function injectStyles(): void {
       flex-shrink: 0;
     }
     .sp-ob-body:empty { display: none; }
-    .sp-drawer-memory-preferences { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
-    .sp-drawer-memory-preferences[hidden] { display: none; }
-    .sp-drawer-personalization { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
-    .sp-drawer-personalization[hidden] { display: none; }
-    .sp-drawer-memory-preference {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--agi-ext-text);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-    }
-    .sp-drawer-memory-preference input { flex-shrink: 0; margin: 0; accent-color: var(--agi-ext-accent); }
-    .sp-drawer-memory-preference input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-ob-action {
       min-height: var(--control-lg);
       padding: 6px 16px;
@@ -6125,7 +4977,6 @@ function injectStyles(): void {
     #sp-cloud-gate,
     #sp-blocked,
     .sp-agent-approval,
-    .sp-create-shortcut-modal,
     .sp-ob-row { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
@@ -6138,9 +4989,6 @@ function injectStyles(): void {
     #sp-cloud-gate-title { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
     #sp-cloud-gate-message { font-size: var(--type-caption-size); line-height: var(--type-caption-height); max-width: 260px; }
     #sp-cloud-gate-action { min-height: var(--control-lg); padding: 8px 18px; border-radius: var(--corner-field); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
-    #sp-drawer-header { min-height: 56px; padding: 10px 14px; }
-    .sp-drawer-section { border-radius: var(--corner-surface); }
-
 
     /* ── 2026-09 side panel: one quiet header, one glyph, one composer card ── */
     #sp-header { justify-content: flex-end; }
@@ -6451,67 +5299,8 @@ function injectStyles(): void {
     .sp-drawer-history-item.is-active .sp-drawer-history-title { font-weight: 600; }
     .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
-    #sp-drawer-menu { display: flex; flex-direction: column; }
-    #sp-drawer-menu[hidden],
-    #sp-drawer-page[hidden],
-    .sp-drawer-group[hidden] { display: none; }
-    .sp-drawer-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      min-height: 44px;
-      padding: 10px 4px;
-      border: 0;
-      border-bottom: 1px solid var(--agi-ext-border);
-      background: transparent;
-      color: var(--agi-ext-text);
-      font: inherit;
-      font-size: var(--type-body-large-size);
-      line-height: var(--type-body-large-height);
-      text-align: left;
-      cursor: pointer;
-    }
-    .sp-drawer-row:hover { background: var(--agi-ext-hover); }
-    .sp-drawer-row:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-drawer-row-label { flex: 1; min-width: 0; }
-    .sp-drawer-row-chevron { display: inline-flex; color: var(--agi-ext-text-muted); }
-    #sp-drawer-back {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      flex-shrink: 0;
-      border: none;
-      border-radius: var(--corner-field);
-      background: transparent;
-      color: var(--agi-ext-text-muted);
-      cursor: pointer;
-      transform: rotate(180deg);
-    }
-    #sp-drawer-back[hidden] { display: none; }
-    #sp-drawer-back:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    #sp-drawer-title { flex: 1; min-width: 0; }
-    .sp-drawer-section-title {
-      text-transform: none;
-      letter-spacing: 0;
-      font-size: var(--type-body-size);
-      line-height: var(--type-body-height);
-    }
-    .sp-drawer-group > .sp-drawer-section:first-child { margin-top: 0; }
-
     @media (max-width: 390px) {
       #sp-header { padding-inline: 10px; }
-      #sp-quota-badge.visible {
-        display: inline-flex;
-        max-width: 104px;
-        padding-inline: 6px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: var(--type-label-size); line-height: var(--type-label-height);
-      }
       #sp-model-badge { max-width: 132px; }
       #sp-messages { padding-inline: 11px; }
       #sp-input-area { padding-inline: 8px; }
@@ -6528,13 +5317,56 @@ function injectStyles(): void {
         background: Highlight;
         border: 1px solid CanvasText;
       }
-      .sp-drawer-toggle-switch::after,
-      .sp-wf-task-toggle::after,
       .sp-toggle-switch::after {
         background: CanvasText;
         box-shadow: none;
       }
     }
+
+    /* ── Panel chrome: More popover and conversation title row ── */
+    :where(#sp-recents-title, #sp-title-text) { margin: 0; }
+    #sp-more-wrap { position: relative; }
+    .sp-more-menu { min-width: 208px; }
+    .sp-more-footer {
+      margin-top: 4px;
+      padding: 8px 10px 4px;
+      border-top: 1px solid var(--agi-ext-border);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    #sp-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+      min-height: var(--control-md);
+      padding: 2px 12px;
+      border-bottom: 1px solid color-mix(in srgb, var(--agi-ext-border) 70%, transparent);
+      background: var(--agi-ext-bg);
+    }
+    #sp-title-row[hidden],
+    #sp-title-row.sp-tab-hidden { display: none; }
+    .sp-title-text {
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--agi-ext-text);
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
+      font-weight: 600;
+    }
+    #sp-title-row .sp-drawer-history-more-wrap { margin-right: 0; }
+    .sp-title-status {
+      flex: 1 1 100%;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-title-status:empty { display: none; }
   `;
   if (
     typeof CSSStyleSheet === 'function' &&
@@ -6546,13 +5378,9 @@ function injectStyles(): void {
         '\n' +
         COMPUTER_USE_PANEL_CSS +
         '\n' +
-        CLOUD_RUNS_PANEL_CSS +
         '\n' +
-        BROWSER_TOOLS_PANEL_CSS +
         '\n' +
-        PROJECTS_DRAWER_CSS +
         '\n' +
-        ARTIFACTS_DRAWER_CSS +
         '\n' +
         ARTIFACT_PANEL_CSS +
         '\n' +
@@ -6899,7 +5727,6 @@ function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
 }
 
 let promptShortcuts: PromptShortcut[] = [];
-let editPromptShortcut: (shortcut: PromptShortcut) => void = () => {};
 
 function loadPromptShortcuts(): void {
   chrome.storage.local.get(SHORTCUTS_STORAGE_KEY, (items) => {
@@ -6974,6 +5801,7 @@ async function refreshRecentProjects(): Promise<void> {
 }
 
 function renderMessages(): void {
+  renderConversationTitle();
   const container = document.getElementById('sp-messages')!;
   const emptyEl = document.getElementById('sp-empty');
 
@@ -10994,17 +9822,16 @@ function buildUI(): void {
   });
   headerRight.appendChild(newChatBtn);
 
-  const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
-  headerRight.appendChild(quotaBadgeSlot);
-
+  const moreWrap = el('div', { id: 'sp-more-wrap' });
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-menu-btn',
-    title: 'More',
-    'aria-label': 'Open AGI menu',
+    title: t('spMoreLabel'),
+    'aria-label': t('spMoreLabel'),
   });
   menuBtn.textContent = '⋮';
-  headerRight.appendChild(menuBtn);
+  moreWrap.appendChild(menuBtn);
+  headerRight.appendChild(moreWrap);
   header.appendChild(headerRight);
   document.body.appendChild(header);
 
@@ -11233,23 +10060,6 @@ function buildUI(): void {
     }
   };
 
-  const bridgeUrlInput = el('input', {
-    id: 'sp-bridge-url-input',
-    type: 'hidden',
-  }) as HTMLInputElement;
-  document.body.appendChild(bridgeUrlInput);
-
-  const drawerOverlay = el('div', { id: 'sp-drawer-overlay' });
-  const drawer = el('div', {
-    id: 'sp-drawer',
-    role: 'dialog',
-    'aria-modal': 'true',
-    'aria-label': 'AGI menu',
-    inert: '',
-  });
-
-  let drawerReturnFocus: HTMLElement = menuBtn;
-
   function explainExtensionFailure(message: string): string {
     if (/Receiving end does not exist|Could not establish connection/i.test(message)) {
       return "AGI isn't running on this page yet. Reload the tab, then try again.";
@@ -11263,116 +10073,78 @@ function buildUI(): void {
     return `Autofill failed: ${message}`;
   }
 
-  function openDrawer(trigger: HTMLElement = menuBtn): void {
-    drawerReturnFocus = trigger;
-    drawerOverlay.classList.add('open');
-    drawer.classList.add('open');
-    drawer.removeAttribute('inert');
-    showDrawerMenu();
-    void refreshDrawerTabInfo();
-    drawerClose.focus();
-  }
-  function closeDrawer(): void {
-    drawerOverlay.classList.remove('open');
-    drawer.classList.remove('open');
-    drawer.setAttribute('inert', '');
-    drawerReturnFocus.focus();
-  }
-
-  menuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (drawer.classList.contains('open')) {
-      closeDrawer();
-    } else {
-      openDrawer(menuBtn);
-    }
+  const moreMenu = el('div', {
+    id: 'sp-more-menu',
+    class: 'sp-history-menu sp-more-menu',
+    role: 'menu',
+    'aria-label': t('spMoreLabel'),
   });
-  drawerOverlay.addEventListener('click', closeDrawer);
-  drawer.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeDrawer();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = Array.from(
-      drawer.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((node) => node.getAttribute('aria-hidden') !== 'true' && !node.hasAttribute('hidden'));
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  });
-
-  const drawerHeader = el('div', { id: 'sp-drawer-header' });
-  const drawerBack = el('button', { id: 'sp-drawer-back', type: 'button', hidden: '' });
-  drawerBack.setAttribute('aria-label', t('spMenuBack'));
-  drawerBack.appendChild(renderIcon(ChevronRight, 14));
-  drawerHeader.appendChild(drawerBack);
-  const drawerTitle = el('h2', { id: 'sp-drawer-title' }, t('spMenuTitle'));
-  drawerHeader.appendChild(drawerTitle);
-  const drawerClose = el('button', { id: 'sp-drawer-close' });
-  drawerClose.setAttribute('aria-label', t('spMenuClose'));
-  drawerClose.appendChild(renderIcon(X, 14));
-  drawerClose.addEventListener('click', closeDrawer);
-  drawerHeader.appendChild(drawerClose);
-  drawer.appendChild(drawerHeader);
-
-  const drawerBody = el('div', { id: 'sp-drawer-body' });
-  const drawerMenu = el('div', { id: 'sp-drawer-menu', role: 'menu' });
-  drawerMenu.setAttribute('aria-label', t('spMenuTitle'));
-  wireMenuArrowKeys(drawerMenu);
-  const drawerPage = el('div', { id: 'sp-drawer-page', hidden: '' });
-  drawerBody.appendChild(drawerMenu);
-  drawerBody.appendChild(drawerPage);
-
-  interface DrawerGroup {
+  moreWrap.appendChild(moreMenu);
+  interface MoreDestination {
+    id: string;
     label: string;
-    body: HTMLElement;
-    refresh?: () => void;
+    run: () => void;
   }
-  const drawerGroups: DrawerGroup[] = [];
-  function drawerGroupBody(label: string, refresh?: () => void): HTMLElement {
-    const body = el('div', { class: 'sp-drawer-group', hidden: '' });
-    drawerGroups.push(refresh ? { label, body, refresh } : { label, body });
-    drawerPage.appendChild(body);
-    return body;
+  const moreMenuDestinations: MoreDestination[] = [
+    {
+      id: 'settings',
+      label: t('spExtensionSettings'),
+      run: () => openOptionsDestination(OPTIONS_DESTINATION.permissions),
+    },
+    {
+      id: 'shortcuts',
+      label: t('spMoreShortcuts'),
+      run: () => openOptionsDestination(OPTIONS_DESTINATION.shortcuts),
+    },
+    {
+      id: 'help',
+      label: t('spMoreHelp'),
+      run: () => openOptionsDestination(OPTIONS_DESTINATION.help),
+    },
+  ];
+  const openChatInWebItem = el(
+    'button',
+    { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
+    t('spHistoryOpenInWeb'),
+  );
+  const moreHandle = wirePopupMenu(menuBtn, moreMenu);
+  menuBtn.addEventListener(
+    'click',
+    () => {
+      const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
+      if (cloudConversationId && _ctx.messages.length > 0) {
+        openChatInWebItem.onclick = () => {
+          moreHandle.close();
+          void chrome.tabs.create({
+            url: agiWebUrl(`/chat/${encodeURIComponent(cloudConversationId)}`),
+          });
+        };
+        moreMenu.insertBefore(openChatInWebItem, moreMenu.children[1] ?? null);
+      } else {
+        openChatInWebItem.remove();
+      }
+    },
+    true,
+  );
+  for (const destination of moreMenuDestinations) {
+    const row = el(
+      'button',
+      { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
+      destination.label,
+    );
+    row.addEventListener('click', () => {
+      moreHandle.close();
+      destination.run();
+    });
+    moreMenu.appendChild(row);
   }
-  function showDrawerMenu(): void {
-    for (const group of drawerGroups) group.body.hidden = true;
-    drawerPage.hidden = true;
-    drawerMenu.hidden = false;
-    drawerBack.hidden = true;
-    drawerTitle.textContent = t('spMenuTitle');
-  }
-  function openDrawerGroup(group: DrawerGroup): void {
-    for (const entry of drawerGroups) entry.body.hidden = entry !== group;
-    drawerMenu.hidden = true;
-    drawerPage.hidden = false;
-    drawerBack.hidden = false;
-    drawerTitle.textContent = group.label;
-    group.refresh?.();
-  }
-  drawerBack.addEventListener('click', showDrawerMenu);
-
-  const chatActionsSection = el('div', { class: 'sp-drawer-section' });
-  const chatActionsRow = el('div', { class: 'sp-drawer-tools-row' });
-
-  const drawerHistoryBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-history-btn',
-    title: 'Conversation history',
-  });
-  drawerHistoryBtn.appendChild(renderIcon(Clock, 13));
-  drawerHistoryBtn.appendChild(document.createTextNode(' History'));
+  moreMenu.appendChild(
+    el(
+      'div',
+      { class: 'sp-more-footer', role: 'none' },
+      t('spMoreVersion', [chrome.runtime.getManifest().version]),
+    ),
+  );
 
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list' });
   const drawerHistorySearch = el('input', {
@@ -11398,6 +10170,7 @@ function buildUI(): void {
   function showHistoryStatus(message: string): void {
     drawerHistoryError.textContent = message;
     drawerHistoryError.removeAttribute('hidden');
+    showTitleStatus(message);
   }
 
   let showingArchived = false;
@@ -11445,6 +10218,7 @@ function buildUI(): void {
       resetConversationView();
     }
     await refreshDrawerHistory();
+    closeTitleEditors();
     showHistoryStatus(done);
   }
 
@@ -11476,7 +10250,7 @@ function buildUI(): void {
 
   function buildHistoryEditor(
     item: HTMLElement,
-    openButton: HTMLButtonElement,
+    openButton: HTMLElement,
     control: HTMLInputElement | HTMLSelectElement,
     save: () => void,
   ): void {
@@ -11523,7 +10297,7 @@ function buildUI(): void {
   function startHistoryRename(
     entry: ConversationEntry,
     item: HTMLElement,
-    openButton: HTMLButtonElement,
+    openButton: HTMLElement,
   ): void {
     const input = el('input', {
       class: 'sp-drawer-history-edit-input',
@@ -11542,7 +10316,7 @@ function buildUI(): void {
   function startHistoryMove(
     entry: ConversationEntry,
     item: HTMLElement,
-    openButton: HTMLButtonElement,
+    openButton: HTMLElement,
   ): void {
     const select = el('select', {
       class: 'sp-drawer-history-edit-input',
@@ -11574,25 +10348,30 @@ function buildUI(): void {
     });
   }
 
-  function confirmHistoryDelete(
+  function confirmHistoryAction(
     entry: ConversationEntry,
     item: HTMLElement,
-    trigger: HTMLButtonElement,
+    trigger: HTMLElement,
+    prompt: { question: string; actionLabel: string; danger: boolean },
+    run: (actionBtn: HTMLButtonElement) => void,
   ): void {
     item.querySelector('.sp-drawer-history-confirm')?.remove();
     const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
     const question = el(
       'p',
       { class: 'sp-drawer-history-confirm-text', id: `sp-history-confirm-${entry.id}` },
-      entry.cloudSync?.conversationId
-        ? t('spHistoryDeleteConfirmAccount')
-        : t('spHistoryDeleteConfirmDevice'),
+      prompt.question,
     );
     confirmRow.setAttribute('aria-labelledby', question.id);
-    const deleteBtn = el(
+    const actionBtn = el(
       'button',
-      { type: 'button', class: 'sp-drawer-history-edit-btn is-danger' },
-      t('spHistoryDelete'),
+      {
+        type: 'button',
+        class: prompt.danger
+          ? 'sp-drawer-history-edit-btn is-danger'
+          : 'sp-drawer-history-edit-btn is-primary',
+      },
+      prompt.actionLabel,
     ) as HTMLButtonElement;
     const cancelBtn = el(
       'button',
@@ -11610,20 +10389,61 @@ function buildUI(): void {
       confirmRow.remove();
       trigger.focus();
     });
-    deleteBtn.addEventListener('click', () => deleteHistoryEntry(entry, deleteBtn));
+    actionBtn.addEventListener('click', () => run(actionBtn));
     confirmRow.appendChild(question);
     const actions = el('div', { class: 'sp-drawer-history-edit' });
-    actions.appendChild(deleteBtn);
+    actions.appendChild(actionBtn);
     actions.appendChild(cancelBtn);
     confirmRow.appendChild(actions);
     item.appendChild(confirmRow);
-    deleteBtn.focus();
+    actionBtn.focus();
+  }
+
+  function confirmHistoryDelete(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLElement,
+  ): void {
+    confirmHistoryAction(
+      entry,
+      item,
+      trigger,
+      {
+        question: entry.cloudSync?.conversationId
+          ? t('spHistoryDeleteConfirmAccount')
+          : t('spHistoryDeleteConfirmDevice'),
+        actionLabel: t('spHistoryDelete'),
+        danger: true,
+      },
+      (deleteBtn) => deleteHistoryEntry(entry, deleteBtn),
+    );
+  }
+
+  function confirmHistoryArchive(
+    entry: ConversationEntry,
+    item: HTMLElement,
+    trigger: HTMLElement,
+  ): void {
+    confirmHistoryAction(
+      entry,
+      item,
+      trigger,
+      {
+        question: t('spHistoryArchiveConfirm'),
+        actionLabel: t('spHistoryArchive'),
+        danger: false,
+      },
+      () => {
+        item.querySelector('.sp-drawer-history-confirm')?.remove();
+        void changeHistoryEntry(entry, { archived: true }, t('spHistoryArchivedDone'));
+      },
+    );
   }
 
   function confirmHistoryShare(
     entry: ConversationEntry,
     item: HTMLElement,
-    trigger: HTMLButtonElement,
+    trigger: HTMLElement,
   ): void {
     item.querySelector('.sp-drawer-history-confirm')?.remove();
     const confirmRow = el('div', { class: 'sp-drawer-history-confirm', role: 'alertdialog' });
@@ -11748,23 +10568,31 @@ function buildUI(): void {
       });
   }
 
+  interface HistoryMenuOptions {
+    title?: { onSchedule: () => void };
+  }
+
   function buildHistoryMenu(
     entry: ConversationEntry,
     item: HTMLElement,
-    openButton: HTMLButtonElement,
+    openButton: HTMLElement,
+    options: HistoryMenuOptions = {},
   ): HTMLElement {
+    const forTitle = options.title !== undefined;
     const wrapper = el('div', { class: 'sp-drawer-history-more-wrap' });
     const moreBtn = el('button', {
       class: 'sp-drawer-history-more',
       type: 'button',
       title: t('spHistoryMore'),
       'aria-label': t('spHistoryMoreNamed', [entry.title]),
+      ...(forTitle ? { id: 'sp-title-menu-btn' } : {}),
     }) as HTMLButtonElement;
-    moreBtn.appendChild(renderIcon(Ellipsis, 14));
+    moreBtn.appendChild(renderIcon(forTitle ? ChevronDown : Ellipsis, 14));
     const menu = el('div', {
       class: 'sp-history-menu',
       role: 'menu',
       'aria-label': t('spHistoryMoreNamed', [entry.title]),
+      ...(forTitle ? { id: 'sp-title-menu' } : {}),
     });
     const handle = wirePopupMenu(moreBtn, menu);
     const addItem = (label: string, run: () => void, danger = false): void => {
@@ -11783,6 +10611,36 @@ function buildUI(): void {
       });
       menu.appendChild(menuItem);
     };
+    const cloudConversationId = entry.cloudSync?.conversationId;
+    const addArchive = (): void => {
+      if (!cloudConversationId) return;
+      if (entry.archived) {
+        addItem(t('spHistoryUnarchive'), () => {
+          void changeHistoryEntry(entry, { archived: false }, t('spHistoryUnarchived'));
+        });
+        return;
+      }
+      addItem(t('spHistoryArchive'), () => confirmHistoryArchive(entry, item, moreBtn));
+    };
+    if (options.title) {
+      addItem(t('spTitleSchedule'), options.title.onSchedule);
+      addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
+      addItem(entry.starred ? t('spHistoryUnstar') : t('spHistoryStar'), () => {
+        void changeHistoryStar(entry);
+      });
+      addItem(t('spTitleAddToProject'), () => startHistoryMove(entry, item, openButton));
+      addArchive();
+      addItem(t('spHistoryCopySessionId'), () => {
+        void navigator.clipboard.writeText(cloudConversationId ?? entry.id).then(
+          () => showHistoryStatus(t('spHistorySessionIdCopied')),
+          () => showHistoryStatus(t('spHistorySessionIdCopyFailed')),
+        );
+      });
+      addItem(t('spHistoryDelete'), () => confirmHistoryDelete(entry, item, moreBtn), true);
+      wrapper.appendChild(moreBtn);
+      wrapper.appendChild(menu);
+      return wrapper;
+    }
     addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
     addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
     if (!entry.archived) {
@@ -11798,15 +10656,8 @@ function buildUI(): void {
       });
       addItem(t('spHistoryMove'), () => startHistoryMove(entry, item, openButton));
     }
-    const cloudConversationId = entry.cloudSync?.conversationId;
+    addArchive();
     if (cloudConversationId) {
-      addItem(entry.archived ? t('spHistoryUnarchive') : t('spHistoryArchive'), () => {
-        void changeHistoryEntry(
-          entry,
-          { archived: !entry.archived },
-          entry.archived ? t('spHistoryUnarchived') : t('spHistoryArchivedDone'),
-        );
-      });
       addItem(t('spHistoryOpenInWeb'), () => {
         void chrome.tabs.create({
           url: agiWebUrl(`/chat/${encodeURIComponent(cloudConversationId)}`),
@@ -11984,6 +10835,7 @@ function buildUI(): void {
       return;
     drawerHistoryEntries = entries;
     renderDrawerHistory(drawerHistoryEntries);
+    void refreshActivePersistenceState();
   }
 
   async function pullDrawerHistoryFlags(): Promise<void> {
@@ -12002,28 +10854,7 @@ function buildUI(): void {
     renderDrawerHistory(drawerHistoryEntries);
   });
 
-  drawerHistoryBtn.addEventListener('click', () => {
-    closeDrawer();
-    openRecents();
-  });
-  chatActionsRow.appendChild(drawerHistoryBtn);
-
   historyBtn.addEventListener('click', openRecents);
-
-  const drawerSummarizeBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-summarize-btn',
-    title: 'Summarize current page',
-  });
-  drawerSummarizeBtn.appendChild(renderIcon(FileEdit, 13));
-  drawerSummarizeBtn.appendChild(document.createTextNode(' Summarize'));
-  drawerSummarizeBtn.addEventListener('click', () => {
-    closeDrawer();
-    if (!_ctx.isStreaming) sendMessage('/summarize');
-  });
-  chatActionsRow.appendChild(drawerSummarizeBtn);
-
-  chatActionsSection.appendChild(chatActionsRow);
 
   const recentsSheet = el('div', { id: 'sp-recents', role: 'dialog', 'aria-modal': 'true' });
   recentsSheet.hidden = true;
@@ -12115,624 +10946,94 @@ function buildUI(): void {
     }
   });
 
-  const chatGroupBody = drawerGroupBody(t('spMenuChat'));
-  chatGroupBody.appendChild(chatActionsSection);
+  const titleRow = el('div', { id: 'sp-title-row' });
+  titleRow.hidden = true;
+  const titleText = el('span', { id: 'sp-title-text', class: 'sp-title-text' });
+  const titleStatus = el('div', {
+    id: 'sp-title-status',
+    class: 'sp-title-status',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  titleRow.appendChild(titleText);
+  titleRow.appendChild(titleStatus);
+  document.body.appendChild(titleRow);
+  let titleMenuWrap: HTMLElement | null = null;
+  let renderedTitleKey = '';
+  let titleStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const viewsSection = el('div', { class: 'sp-drawer-section' });
+  function showTitleStatus(message: string): void {
+    titleStatus.textContent = message;
+    if (titleStatusTimer !== null) clearTimeout(titleStatusTimer);
+    titleStatusTimer = setTimeout(() => {
+      titleStatus.textContent = '';
+      titleStatusTimer = null;
+    }, 5_000);
+  }
 
-  const wfLaunchBtn = el('button', {
-    class: 'sp-drawer-launcher-btn',
-    id: 'sp-drawer-wf-btn',
-    title: 'Open Workflows',
-  });
-  const wfIcon = el('div', { class: 'sp-drawer-launcher-icon' });
-  wfIcon.appendChild(renderIcon(Zap, 14));
-  const wfTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
-  wfTextBlock.appendChild(el('div', {}, 'Workflows'));
-  wfTextBlock.appendChild(
-    el('div', { class: 'sp-drawer-launcher-desc' }, 'Shortcuts and scheduled tasks'),
-  );
-  wfLaunchBtn.appendChild(wfIcon);
-  wfLaunchBtn.appendChild(wfTextBlock);
-  wfLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '›'));
-  wfLaunchBtn.addEventListener('click', () => {
-    closeDrawer();
-    switchTab('workflows');
-  });
-  viewsSection.appendChild(wfLaunchBtn);
+  function closeTitleEditors(): void {
+    titleRow.querySelector('.sp-drawer-history-edit')?.remove();
+    titleRow.querySelector('.sp-drawer-history-confirm')?.remove();
+    titleText.hidden = false;
+    if (titleMenuWrap) titleMenuWrap.hidden = false;
+  }
 
-  const cuLaunchBtn = el('button', {
-    class: 'sp-drawer-launcher-btn',
-    id: 'sp-drawer-cu-btn',
-    title: 'Open Computer Use',
-  });
-  const cuIcon = el('div', { class: 'sp-drawer-launcher-icon' });
-  cuIcon.appendChild(renderIcon(Monitor, 14));
-  const cuTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
-  cuTextBlock.appendChild(el('div', {}, 'Computer Use'));
-  cuTextBlock.appendChild(
-    el('div', { class: 'sp-drawer-launcher-desc' }, 'Browser automation agent'),
-  );
-  cuLaunchBtn.appendChild(cuIcon);
-  cuLaunchBtn.appendChild(cuTextBlock);
-  cuLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '›'));
-  cuLaunchBtn.addEventListener('click', () => {
-    closeDrawer();
-    switchTab('computer-use');
-  });
-  if (import.meta.env.DEV) viewsSection.appendChild(cuLaunchBtn);
-
-  const runsLaunchBtn = el('button', {
-    class: 'sp-drawer-launcher-btn',
-    id: 'sp-drawer-runs-btn',
-    title: 'Open Work runs',
-  });
-  const runsIcon = el('div', { class: 'sp-drawer-launcher-icon' });
-  runsIcon.appendChild(renderIcon(Play, 14));
-  const runsTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
-  runsTextBlock.appendChild(el('div', {}, 'Work runs'));
-  runsTextBlock.appendChild(
-    el('div', { class: 'sp-drawer-launcher-desc' }, 'Runs you started on any device'),
-  );
-  runsLaunchBtn.appendChild(runsIcon);
-  runsLaunchBtn.appendChild(runsTextBlock);
-  runsLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '\u203A'));
-  runsLaunchBtn.addEventListener('click', () => {
-    closeDrawer();
-    switchTab('cloud-runs');
-  });
-  viewsSection.appendChild(runsLaunchBtn);
-
-  const pageLaunchBtn = el('button', {
-    class: 'sp-drawer-launcher-btn',
-    id: 'sp-drawer-page-btn',
-    title: 'Open page downloads, console and network',
-  });
-  const pageIcon = el('div', { class: 'sp-drawer-launcher-icon' });
-  pageIcon.appendChild(renderIcon(Terminal, 14));
-  const pageTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
-  pageTextBlock.appendChild(el('div', {}, 'Page'));
-  pageTextBlock.appendChild(
-    el('div', { class: 'sp-drawer-launcher-desc' }, 'Downloads, console and network'),
-  );
-  pageLaunchBtn.appendChild(pageIcon);
-  pageLaunchBtn.appendChild(pageTextBlock);
-  pageLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '\u203A'));
-  pageLaunchBtn.addEventListener('click', () => {
-    closeDrawer();
-    switchTab('page');
-  });
-  if (import.meta.env.DEV) viewsSection.appendChild(pageLaunchBtn);
-  const automateGroupBody = drawerGroupBody(t('spMenuAutomate'));
-  automateGroupBody.appendChild(viewsSection);
-
-  const projectsDrawer: ProjectsDrawerAPI = buildProjectsDrawerSection({
-    getActiveProject: () => _ctx.activeProject,
-    setActiveProject: (project) => selectActiveProject(project),
-    openConversation: (conversationId) => {
-      void chrome.tabs.create({
-        url: `${FREE_TRIAL_GATEWAY}/chat/${encodeURIComponent(conversationId)}?from=chrome-extension`,
-      });
-    },
-  });
-  drawerGroupBody(t('spMenuProjects'), () => {
-    void projectsDrawer.refresh();
-  }).appendChild(projectsDrawer.sectionEl);
-
-  const artifactsDrawer: ArtifactsDrawerAPI = buildArtifactsDrawerSection();
-  drawerGroupBody(t('spMenuArtifacts'), () => {
-    void artifactsDrawer.refresh();
-  }).appendChild(artifactsDrawer.sectionEl);
-
-  const toolsSection = el('div', { class: 'sp-drawer-section' });
-  const toolsRow = el('div', { class: 'sp-drawer-tools-row' });
-
-  const drawerCaptureBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-capture-btn',
-    title: 'Capture page screenshot',
-  });
-  drawerCaptureBtn.appendChild(renderIcon(Camera, 13));
-  drawerCaptureBtn.appendChild(document.createTextNode(t('spDrawerCapture')));
-  let drawerCaptureAttempt: ComposerAttachmentIntake | null = null;
-  drawerCaptureBtn.addEventListener('click', async () => {
-    const intake = beginComposerAttachmentIntake();
-    if (!intake) return;
-    drawerCaptureAttempt = intake;
-    const resetCaptureLabel = (): void => {
-      if (drawerCaptureAttempt !== intake || !composerAttachmentContextCurrent(intake)) return;
-      drawerCaptureBtn.replaceChildren(
-        renderIcon(Camera, 13),
-        document.createTextNode(t('spDrawerCapture')),
-      );
-      drawerCaptureBtn.classList.remove('active');
-      updateComposerAdmissionControls();
-    };
-    drawerCaptureBtn.textContent = t('spDrawerCapturing');
+  async function scheduleFromChat(entry: ConversationEntry): Promise<void> {
+    const firstPrompt = entry.messages.find(
+      (message) => message.role === 'user' && message.content.trim(),
+    )?.content;
     try {
-      const res = (await chrome.runtime.sendMessage({
-        type: 'CAPTURE_SCREENSHOT',
-        format: 'png',
-        quality: 90,
-      })) as { success: boolean; data?: string; error?: string };
-      if (!composerAttachmentIntakeCurrent(intake)) return;
-      if (!res.success || !res.data) throw new Error(res.error ?? 'No screenshot data returned');
-      composerAttachmentNotices = [];
-      const admitted = admitComposerAttachment(res.data, t('spScreenshotName'));
-      if (!admitted)
-        throw new Error(
-          composerAttachmentNotices[composerAttachmentNotices.length - 1] ??
-            t('spAttachmentCaptureFailed'),
-        );
-      drawerCaptureBtn.textContent = t('spDrawerCaptured');
-      drawerCaptureBtn.classList.add('active');
-      closeDrawer();
-      switchTab('chat');
-      inputEl.focus();
-      setTimeout(resetCaptureLabel, 1500);
-    } catch {
-      if (!composerAttachmentIntakeCurrent(intake)) return;
-      drawerCaptureBtn.textContent = t('spDrawerCaptureFailed');
-      setTimeout(resetCaptureLabel, 1500);
-    } finally {
-      finishComposerAttachmentIntake(intake);
-    }
-  });
-  toolsRow.appendChild(drawerCaptureBtn);
-
-  const drawerRefreshBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-refresh-btn',
-    title: 'Refresh panel data',
-  });
-  drawerRefreshBtn.appendChild(renderIcon(Loader2, 13));
-  drawerRefreshBtn.appendChild(document.createTextNode(' Refresh'));
-  drawerRefreshBtn.addEventListener('click', async () => {
-    (drawerRefreshBtn as HTMLButtonElement).disabled = true;
-    try {
-      await Promise.all([
-        refreshDrawerPairingState(),
-        refreshDrawerAllowlist(),
-        refreshDrawerMemory(),
-        refreshDrawerTabInfo(),
-      ]);
-    } finally {
-      (drawerRefreshBtn as HTMLButtonElement).disabled = false;
-    }
-  });
-  toolsRow.appendChild(drawerRefreshBtn);
-
-  const drawerGroupBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-group-btn',
-    title: 'Add current tab to group',
-  });
-  drawerGroupBtn.appendChild(renderIcon(Folder, 13));
-  const drawerGroupLabel = document.createTextNode(t('spDrawerGroupTab'));
-  drawerGroupBtn.appendChild(drawerGroupLabel);
-  drawerGroupBtn.addEventListener('click', () => {
-    requestTabGroupChange(!currentTabGrouped);
-  });
-  registerTabGroupStateRenderer((grouped, known) => {
-    drawerGroupBtn.disabled = !known;
-    drawerGroupLabel.textContent = grouped ? t('spDrawerUngroupTab') : t('spDrawerGroupTab');
-    drawerGroupBtn.classList.toggle('active', grouped && known);
-    drawerGroupBtn.title = known
-      ? grouped
-        ? t('spTabGroupRemoveTitle')
-        : t('spTabGroupAddTitle')
-      : t('spTabGroupChecking');
-  });
-  toolsRow.appendChild(drawerGroupBtn);
-
-  const drawerOptionsBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-options-btn',
-    title: 'Open AGI settings',
-  });
-  drawerOptionsBtn.appendChild(renderIcon(Settings, 13));
-  drawerOptionsBtn.appendChild(document.createTextNode(' Settings'));
-  drawerOptionsBtn.addEventListener('click', () => {
-    if (typeof chrome.runtime.openOptionsPage === 'function') {
-      chrome.runtime.openOptionsPage();
-      return;
-    }
-    void chrome.tabs.create({ url: chrome.runtime.getURL('src/options.html') });
-  });
-  toolsRow.appendChild(drawerOptionsBtn);
-
-  const drawerHelpBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-help-btn',
-    title: 'Open the AGI help centre',
-  });
-  drawerHelpBtn.appendChild(renderIcon(CircleHelp, 13));
-  drawerHelpBtn.appendChild(document.createTextNode(' Get help'));
-  drawerHelpBtn.addEventListener('click', () => {
-    void chrome.tabs.create({ url: HELP_URL });
-  });
-  toolsRow.appendChild(drawerHelpBtn);
-
-  toolsSection.appendChild(toolsRow);
-  const toolsGroupBody = drawerGroupBody(t('spMenuTools'), () => {
-    void refreshDrawerTabInfo();
-    refreshTabGroupUI();
-  });
-  toolsGroupBody.appendChild(toolsSection);
-
-  const pairingSection = el('div', { class: 'sp-drawer-section' });
-
-  const pairingRow = el('div', { class: 'sp-drawer-pairing-row' });
-  const pairingLabel = el(
-    'span',
-    { class: 'sp-drawer-pairing-label', id: 'sp-drawer-pairing-label' },
-    'Not paired',
-  );
-  const pairingFingerprint = el('span', {
-    class: 'sp-drawer-pairing-fingerprint',
-    id: 'sp-drawer-pairing-fingerprint',
-    hidden: '',
-  });
-  pairingRow.appendChild(pairingLabel);
-  pairingRow.appendChild(pairingFingerprint);
-  pairingSection.appendChild(pairingRow);
-
-  const pairingError = el('div', {
-    class: 'sp-drawer-pairing-error',
-    id: 'sp-drawer-pairing-error',
-  });
-  pairingSection.appendChild(pairingError);
-
-  const pairingCodeRow = el('div', { class: 'sp-drawer-pairing-code-row', hidden: '' });
-  const pairingCodeHint = el(
-    'div',
-    { class: 'sp-drawer-pairing-hint', id: 'sp-drawer-pairing-hint' },
-    t('spPairingCodeHint'),
-  );
-  const pairingCodeInput = el('input', {
-    type: 'text',
-    class: 'sp-drawer-pairing-code-input',
-    id: 'sp-drawer-pairing-code-input',
-    placeholder: t('spPairingCodePlaceholder'),
-    autocomplete: 'off',
-    spellcheck: 'false',
-    maxlength: '12',
-    'aria-label': t('spPairingCodeHint'),
-  }) as HTMLInputElement;
-  const pairingCodeSubmitBtn = el(
-    'button',
-    { class: 'sp-drawer-btn sp-drawer-btn-primary', id: 'sp-drawer-pairing-code-submit' },
-    t('spPairingCodeSubmit'),
-  );
-  pairingCodeRow.appendChild(pairingCodeHint);
-  pairingCodeRow.appendChild(pairingCodeInput);
-  pairingCodeRow.appendChild(pairingCodeSubmitBtn);
-  pairingSection.appendChild(pairingCodeRow);
-
-  const pairingSecretRow = el('div', { class: 'sp-drawer-pairing-code-row' });
-  pairingSecretRow.appendChild(
-    el('div', { class: 'sp-drawer-pairing-hint' }, t('spPairingSecretHint')),
-  );
-  const pairingSecretInput = el('input', {
-    type: 'password',
-    class: 'sp-drawer-pairing-code-input',
-    id: 'sp-drawer-bridge-secret-input',
-    placeholder: t('spPairingSecretPlaceholder'),
-    autocomplete: 'off',
-    spellcheck: 'false',
-    'aria-label': t('spPairingSecretHint'),
-  }) as HTMLInputElement;
-  const pairingSecretSaveBtn = el(
-    'button',
-    { class: 'sp-drawer-btn', id: 'sp-drawer-bridge-secret-save' },
-    t('spPairingSecretSave'),
-  );
-  pairingSecretRow.appendChild(pairingSecretInput);
-  pairingSecretRow.appendChild(pairingSecretSaveBtn);
-  if (import.meta.env.DEV) pairingSection.appendChild(pairingSecretRow);
-
-  const pairingBtnRow = el('div', { class: 'sp-drawer-btn-row' });
-  const drawerPairBtn = el(
-    'button',
-    {
-      class: 'sp-drawer-btn sp-drawer-btn-primary',
-      id: 'sp-drawer-pair-btn',
-    },
-    'Pair with Desktop',
-  );
-  const drawerUnpairBtn = el(
-    'button',
-    {
-      class: 'sp-drawer-btn sp-drawer-btn-danger',
-      id: 'sp-drawer-unpair-btn',
-      hidden: '',
-    },
-    'Unpair',
-  );
-
-  function applyDrawerPairingState(state: PairingState): void {
-    pairingError.textContent = '';
-    const awaitingCode = state.phase === 'awaiting-code' || state.phase === 'confirming';
-    if (awaitingCode) {
-      pairingCodeRow.removeAttribute('hidden');
-    } else {
-      pairingCodeRow.setAttribute('hidden', '');
-      pairingCodeInput.value = '';
-    }
-    (pairingCodeInput as HTMLInputElement).disabled = state.phase === 'confirming';
-    (pairingCodeSubmitBtn as HTMLButtonElement).disabled = state.phase === 'confirming';
-
-    if (state.phase === 'idle' || state.phase === 'error') {
-      pairingSecretRow.removeAttribute('hidden');
-    } else {
-      pairingSecretRow.setAttribute('hidden', '');
-    }
-
-    switch (state.phase) {
-      case 'idle':
-        pairingLabel.textContent = t('spPairingIdle');
-        pairingFingerprint.setAttribute('hidden', '');
-        drawerPairBtn.textContent = t('spPairingPair');
-        (drawerPairBtn as HTMLButtonElement).disabled = false;
-        drawerPairBtn.removeAttribute('hidden');
-        drawerUnpairBtn.setAttribute('hidden', '');
-        break;
-      case 'requesting':
-        pairingLabel.textContent = t('spPairingInProgress');
-        pairingFingerprint.setAttribute('hidden', '');
-        drawerPairBtn.textContent = t('spPairingInProgress');
-        (drawerPairBtn as HTMLButtonElement).disabled = true;
-        drawerUnpairBtn.setAttribute('hidden', '');
-        break;
-      case 'awaiting-code':
-        pairingLabel.textContent = t('spPairingAwaitingCode');
-        pairingFingerprint.setAttribute('hidden', '');
-        pairingCodeSubmitBtn.textContent = t('spPairingCodeSubmit');
-        drawerPairBtn.setAttribute('hidden', '');
-        drawerUnpairBtn.setAttribute('hidden', '');
-        if (state.error) pairingError.textContent = state.error;
-        break;
-      case 'confirming':
-        pairingLabel.textContent = t('spPairingInProgress');
-        pairingFingerprint.setAttribute('hidden', '');
-        pairingCodeSubmitBtn.textContent = t('spPairingInProgress');
-        drawerPairBtn.setAttribute('hidden', '');
-        drawerUnpairBtn.setAttribute('hidden', '');
-        break;
-      case 'paired':
-        pairingLabel.textContent = t('spPairingPaired');
-        if (state.fingerprint) {
-          pairingFingerprint.textContent = state.fingerprint;
-          pairingFingerprint.removeAttribute('hidden');
-        } else {
-          pairingFingerprint.setAttribute('hidden', '');
-        }
-        drawerPairBtn.setAttribute('hidden', '');
-        drawerUnpairBtn.removeAttribute('hidden');
-        break;
-      case 'error':
-        pairingLabel.textContent = t('spPairingFailed');
-        pairingFingerprint.setAttribute('hidden', '');
-        if (state.error) pairingError.textContent = state.error;
-        drawerPairBtn.textContent = t('spPairingRetry');
-        (drawerPairBtn as HTMLButtonElement).disabled = false;
-        drawerPairBtn.removeAttribute('hidden');
-        drawerUnpairBtn.setAttribute('hidden', '');
-        break;
+      await stageScheduleDraft(scheduleDraftFromChat(entry.title, firstPrompt ?? entry.title));
+      openOptionsDestination(OPTIONS_DESTINATION.shortcuts);
+    } catch (error) {
+      console.warn('[SidePanel] schedule draft failed:', error);
+      showHistoryStatus(t('spHistoryChangeFailed'));
     }
   }
 
-  drawerPairBtn.addEventListener('click', async () => {
-    applyDrawerPairingState({
-      phase: 'requesting',
-      fingerprint: null,
-      error: null,
-      requestId: null,
-      codeLength: null,
-      expiresAt: null,
+  renderConversationTitle = () => {
+    const owner = _ctx.managedCloudOwner;
+    if (_ctx.messages.length === 0 || _ctx.temporaryChat || !owner) {
+      titleRow.hidden = true;
+      renderedTitleKey = '';
+      return;
+    }
+    const active = activePersistenceEntry;
+    const entry =
+      active && active.id === _ctx.conversationId && sameManagedCloudOwner(active.owner, owner)
+        ? active
+        : null;
+    const title =
+      entry?.title ??
+      _ctx.messages
+        .find((message) => message.role === 'user')
+        ?.content.trim()
+        .slice(0, 80) ??
+      '';
+    titleRow.hidden = false;
+    const key = [
+      entry?.id ?? '',
+      title,
+      entry?.starred === true,
+      entry?.archived === true,
+      entry?.pinned === true,
+      entry?.projectId ?? '',
+      entry?.cloudSync?.conversationId ?? '',
+    ].join('|');
+    if (key === renderedTitleKey) return;
+    renderedTitleKey = key;
+    closeTitleEditors();
+    titleText.textContent = title;
+    titleText.title = title;
+    titleMenuWrap?.remove();
+    titleMenuWrap = null;
+    if (!entry) return;
+    titleMenuWrap = buildHistoryMenu(entry, titleRow, titleText, {
+      title: { onSchedule: () => void scheduleFromChat(entry) },
     });
-    const next = await beginPairing();
-    applyDrawerPairingState(next);
-  });
-  pairingCodeSubmitBtn.addEventListener('click', async () => {
-    const next = await submitPairingCode(pairingCodeInput.value);
-    applyDrawerPairingState(next);
-  });
-  pairingSecretSaveBtn.addEventListener('click', async () => {
-    const stored = await storeBridgeSecret(pairingSecretInput.value);
-    pairingSecretInput.value = '';
-    if (stored.phase === 'error') {
-      applyDrawerPairingState(stored);
-      return;
-    }
-    applyDrawerPairingState(await beginPairing());
-  });
-  pairingCodeInput.addEventListener('keydown', (event) => {
-    if ((event as KeyboardEvent).key !== 'Enter') return;
-    event.preventDefault();
-    void submitPairingCode(pairingCodeInput.value).then(applyDrawerPairingState);
-  });
-  drawerUnpairBtn.addEventListener('click', async () => {
-    const next = await unpair();
-    applyDrawerPairingState(next);
-  });
+    titleRow.insertBefore(titleMenuWrap, titleStatus);
+  };
 
-  pairingBtnRow.appendChild(drawerPairBtn);
-  pairingBtnRow.appendChild(drawerUnpairBtn);
-  pairingSection.appendChild(pairingBtnRow);
-  drawerGroupBody(t('spMenuPairing'), () => {
-    void refreshDrawerPairingState();
-  }).appendChild(pairingSection);
-
-  async function refreshDrawerPairingState(): Promise<void> {
-    const state = await loadPairingState();
-    applyDrawerPairingState(state);
-  }
-
-  const inPageSection = el('div', { class: 'sp-drawer-section' });
-  inPageSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
-  const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
-  inPageRow.appendChild(
-    el('span', { class: 'sp-drawer-toggle-label' }, t('spPageAssistantOverlay')),
-  );
-  const inPageToggle = el('input', {
-    type: 'checkbox',
-    class: 'sp-drawer-toggle-switch',
-    id: 'sp-drawer-in-page-toggle',
-    'aria-label': t('spPageAssistantToggleAria'),
-  }) as HTMLInputElement;
-  inPageToggle.checked = true;
-  chrome.storage.local.get(SP_IN_PAGE_PANEL_ENABLED_KEY, (result) => {
-    if (chrome.runtime.lastError) return;
-    const val = result[SP_IN_PAGE_PANEL_ENABLED_KEY] as boolean | undefined;
-    inPageToggle.checked = val !== false;
-  });
-  const inPageToggleStatus = el('div', {
-    class: 'sp-drawer-toggle-status',
-    role: 'status',
-    'aria-live': 'polite',
-    'aria-atomic': 'true',
-  });
-  inPageToggle.addEventListener('change', async () => {
-    const next = inPageToggle.checked;
-    inPageToggle.disabled = true;
-    inPageToggleStatus.textContent = t('spPageAssistantSaving');
-    inPageToggleStatus.removeAttribute('data-kind');
-    try {
-      await chrome.storage.local.set({ [SP_IN_PAGE_PANEL_ENABLED_KEY]: next });
-      inPageToggleStatus.textContent = next
-        ? t('spPageAssistantEnabled')
-        : t('spPageAssistantDisabled');
-    } catch {
-      inPageToggle.checked = !next;
-      inPageToggleStatus.textContent = t('spPreferenceSaveFailed');
-      inPageToggleStatus.setAttribute('data-kind', 'error');
-    } finally {
-      inPageToggle.disabled = false;
-    }
-  });
-  inPageRow.appendChild(inPageToggle);
-  inPageSection.appendChild(inPageRow);
-  inPageSection.appendChild(
-    el('div', { class: 'sp-drawer-toggle-status' }, t('spPageAssistantOneShot')),
-  );
-  inPageSection.appendChild(inPageToggleStatus);
-  const settingsGroupBody = drawerGroupBody(t('spMenuSettings'), () => {
-    void refreshDrawerAllowlist();
-    void refreshDrawerMemory();
-    void refreshModelUsageHistory();
-  });
-  settingsGroupBody.appendChild(inPageSection);
-
-  const dictationSection = el('div', { class: 'sp-drawer-section' });
-  dictationSection.appendChild(
-    el('h3', { class: 'sp-drawer-section-title' }, t('spDictationSectionTitle')),
-  );
-  const dictationRow = el('div', { class: 'sp-drawer-toggle-row' });
-  dictationRow.appendChild(
-    el('span', { class: 'sp-drawer-toggle-label' }, t('spDictationLanguageLabel')),
-  );
-  const dictationSelect = el('select', {
-    class: 'sp-wf-form-select',
-    id: 'sp-drawer-dictation-language',
-    'aria-label': t('spDictationLanguageAria'),
-    style: 'width: auto; max-width: 60%;',
-  }) as HTMLSelectElement;
-  dictationRow.appendChild(dictationSelect);
-  dictationSection.appendChild(dictationRow);
-  dictationSection.appendChild(
-    el('div', { class: 'sp-drawer-toggle-status' }, t('spDictationLanguageHelp')),
-  );
-  const dictationStatus = el('div', {
-    class: 'sp-drawer-toggle-status',
-    role: 'status',
-    'aria-live': 'polite',
-    'aria-atomic': 'true',
-  });
-  dictationSection.appendChild(dictationStatus);
-  void (async () => {
-    const stored = await readDictationLanguage();
-    const choices = dictationLanguageChoices(stored, navigator);
-    if (choices.length === 0) {
-      dictationSelect.disabled = true;
-      dictationStatus.textContent = t('spDictationLanguageUnavailable');
-      return;
-    }
-    for (const choice of choices) {
-      dictationSelect.appendChild(el('option', { value: choice.tag }, choice.label));
-    }
-    dictationSelect.value = resolveDictationLanguage(stored, navigator) ?? choices[0]!.tag;
-  })();
-  dictationSelect.addEventListener('change', async () => {
-    const next = dictationSelect.value;
-    dictationSelect.disabled = true;
-    dictationStatus.removeAttribute('data-kind');
-    try {
-      await writeDictationLanguage(next);
-      dictationStatus.textContent = t('spDictationLanguageSaved');
-    } catch {
-      dictationStatus.textContent = t('spPreferenceSaveFailed');
-      dictationStatus.setAttribute('data-kind', 'error');
-    } finally {
-      dictationSelect.disabled = false;
-    }
-  });
-  settingsGroupBody.appendChild(dictationSection);
-
-  const allowlistSection = el('div', { class: 'sp-drawer-section' });
-  allowlistSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
-  allowlistSection.appendChild(
-    el(
-      'p',
-      { class: 'sp-drawer-allowlist-help' },
-      'Approved sites are where the in-page assistant, page tools and job autofill can run. The in-page assistant can send up to 30,000 characters of redacted visible page text from an approved site to AGI Cloud. Browser control for computer use is granted per site in Settings. Add the current site, then reload it.',
-    ),
-  );
-
-  const allowlistCurrentRow = el('div', { class: 'sp-drawer-allowlist-current-row' });
-  const allowlistOriginLabel = el(
-    'span',
-    {
-      class: 'sp-drawer-allowlist-origin',
-      id: 'sp-drawer-allowlist-origin',
-    },
-    ', ',
-  );
-  const allowlistToggleBtn = el(
-    'button',
-    {
-      class: 'sp-drawer-allowlist-toggle-btn',
-      id: 'sp-drawer-allowlist-toggle',
-    },
-    'Add',
-  ) as HTMLButtonElement;
-  (allowlistToggleBtn as HTMLButtonElement).disabled = true;
-  allowlistCurrentRow.appendChild(allowlistOriginLabel);
-  allowlistCurrentRow.appendChild(allowlistToggleBtn);
-  allowlistSection.appendChild(allowlistCurrentRow);
-
-  const allowlistList = el('ul', {
-    class: 'sp-drawer-allowlist-list',
-    id: 'sp-drawer-allowlist-list',
-    'aria-label': 'Allowlisted origins',
-  });
-  const allowlistEmpty = el(
-    'div',
-    { class: 'sp-drawer-allowlist-empty', id: 'sp-drawer-allowlist-empty', hidden: '' },
-    'No sites allowlisted yet.',
-  );
-  const allowlistStatus = el('div', {
-    class: 'sp-drawer-allowlist-status',
-    id: 'sp-drawer-allowlist-status',
-    role: 'alert',
-    hidden: '',
-  });
-  allowlistSection.appendChild(allowlistList);
-  allowlistSection.appendChild(allowlistEmpty);
-  allowlistSection.appendChild(allowlistStatus);
-  settingsGroupBody.appendChild(allowlistSection);
-
-  let currentAllowlistOrigin: string | null = null;
   async function drawerReadAllowlist(): Promise<string[]> {
     try {
       const res = await chrome.storage.local.get(SP_SITE_ALLOWLIST_KEY);
@@ -12763,1436 +11064,6 @@ function buildUI(): void {
     cleaned.sort();
     await chrome.storage.local.set({ [SP_SITE_ALLOWLIST_KEY]: cleaned });
   }
-  function drawerCurrentTabOrigin(): Promise<string | null> {
-    return new Promise((resolve) => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const url = tabs[0]?.url;
-        if (!url) return resolve(null);
-        try {
-          const parsed = new URL(url);
-          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return resolve(null);
-          }
-          resolve(parsed.origin);
-        } catch {
-          resolve(null);
-        }
-      });
-    });
-  }
-  async function renderDrawerAllowlistList(
-    list: string[],
-    currentOrigin: string | null,
-  ): Promise<void> {
-    clearChildren(allowlistList);
-    if (list.length === 0) {
-      allowlistEmpty.removeAttribute('hidden');
-      return;
-    }
-    allowlistEmpty.setAttribute('hidden', '');
-    for (const origin of list) {
-      const li = el('li', {
-        class: `sp-drawer-allowlist-item${origin === currentOrigin ? ' is-current' : ''}`,
-      });
-      const originSpan = el('span', { class: 'sp-drawer-allowlist-item-origin' }, origin);
-      li.appendChild(originSpan);
-      const removeBtn = el(
-        'button',
-        {
-          type: 'button',
-          class: 'sp-drawer-allowlist-item-remove',
-          'aria-label': `Remove ${origin} from allowlist`,
-        },
-        'Remove',
-      );
-      removeBtn.addEventListener('click', async () => {
-        await removeApprovedSiteHostPermission(origin);
-        const cur = await drawerReadAllowlist();
-        await drawerWriteAllowlist(cur.filter((o) => o !== origin));
-        await refreshDrawerAllowlist();
-      });
-      li.appendChild(removeBtn);
-      allowlistList.appendChild(li);
-    }
-  }
-  async function refreshDrawerAllowlist(): Promise<void> {
-    const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
-    currentAllowlistOrigin = origin;
-    allowlistStatus.setAttribute('hidden', '');
-    allowlistOriginLabel.textContent = origin ?? t('spAllowlistNoSite');
-    (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
-    if (origin) {
-      const present = list.includes(origin);
-      allowlistToggleBtn.textContent = present ? t('spAllowlistRemove') : t('spAllowlistAdd');
-      allowlistToggleBtn.classList.toggle('is-remove', present);
-    } else {
-      allowlistToggleBtn.textContent = t('spAllowlistAdd');
-      allowlistToggleBtn.classList.remove('is-remove');
-    }
-    await renderDrawerAllowlistList(list, origin);
-  }
-  allowlistToggleBtn.addEventListener('click', async () => {
-    const origin = currentAllowlistOrigin;
-    if (!origin) return;
-    allowlistStatus.setAttribute('hidden', '');
-    const removing = allowlistToggleBtn.classList.contains('is-remove');
-    if (removing) {
-      await removeApprovedSiteHostPermission(origin);
-      const list = await drawerReadAllowlist();
-      await drawerWriteAllowlist(list.filter((o) => o !== origin));
-      await refreshDrawerAllowlist();
-      return;
-    }
-    // Must be the first await after the click: Chrome only honours
-    // chrome.permissions.request inside the still-live user gesture, and the
-    // allowlist must never claim a site is approved when Chrome refused it
-    // the read access page context actually needs.
-    const hostGranted = await requestApprovedSiteHostPermission(origin);
-    if (!hostGranted) {
-      allowlistStatus.textContent = t('spAllowlistHostPermissionRefused', [origin]);
-      allowlistStatus.removeAttribute('hidden');
-      return;
-    }
-    const list = await drawerReadAllowlist();
-    await drawerWriteAllowlist(list.includes(origin) ? list : [...list, origin]);
-    await refreshDrawerAllowlist();
-  });
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[SP_SITE_ALLOWLIST_KEY] && drawer.classList.contains('open')) {
-      void refreshDrawerAllowlist();
-    }
-  });
-
-  const personalizationSection = el('div', { class: 'sp-drawer-section' });
-  personalizationSection.appendChild(
-    el('h3', { class: 'sp-drawer-section-title' }, t('spPersonalizationTitle')),
-  );
-  personalizationSection.appendChild(
-    el('p', { class: 'sp-drawer-memory-help' }, t('spPersonalizationHelp')),
-  );
-  const personalizationBody = el('div', { class: 'sp-drawer-personalization', hidden: '' });
-  personalizationBody.appendChild(
-    el(
-      'label',
-      { class: 'sp-drawer-toggle-label', for: 'sp-drawer-instructions' },
-      t('spInstructionsLabel'),
-    ),
-  );
-  const instructionsInput = el('textarea', {
-    id: 'sp-drawer-instructions',
-    class: 'sp-drawer-memory-textarea',
-    maxlength: String(MAX_CUSTOM_INSTRUCTIONS_CHARS),
-    placeholder: t('spInstructionsPlaceholder'),
-  }) as HTMLTextAreaElement;
-  personalizationBody.appendChild(instructionsInput);
-  const instructionsToggle = el('input', {
-    type: 'checkbox',
-    id: 'sp-drawer-instructions-enabled',
-  }) as HTMLInputElement;
-  personalizationBody.appendChild(
-    el(
-      'div',
-      { class: 'sp-drawer-memory-preference' },
-      instructionsToggle,
-      el('label', { for: 'sp-drawer-instructions-enabled' }, t('spInstructionsEnabled')),
-    ),
-  );
-  const instructionsSaveBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-add-btn' },
-    t('spInstructionsSave'),
-  ) as HTMLButtonElement;
-  personalizationBody.appendChild(instructionsSaveBtn);
-  const responseStyleLabels: Record<ResponseStyle, string> = {
-    default: t('spResponseStyleDefault'),
-    concise: t('spResponseStyleConcise'),
-    explanatory: t('spResponseStyleExplanatory'),
-    formal: t('spResponseStyleFormal'),
-  };
-  const responseLengthLabels: Record<PreferredLength, string> = {
-    default: t('spResponseLengthDefault'),
-    shorter: t('spResponseLengthShorter'),
-    longer: t('spResponseLengthLonger'),
-  };
-  const responseStyleSelect = el('select', {
-    class: 'sp-wf-form-select',
-    id: 'sp-drawer-response-style',
-    style: 'width: auto; max-width: 60%;',
-  }) as HTMLSelectElement;
-  for (const style of RESPONSE_STYLES) {
-    responseStyleSelect.appendChild(el('option', { value: style }, responseStyleLabels[style]));
-  }
-  const responseLengthSelect = el('select', {
-    class: 'sp-wf-form-select',
-    id: 'sp-drawer-response-length',
-    style: 'width: auto; max-width: 60%;',
-  }) as HTMLSelectElement;
-  for (const length of PREFERRED_LENGTHS) {
-    responseLengthSelect.appendChild(el('option', { value: length }, responseLengthLabels[length]));
-  }
-  for (const [id, label, select] of [
-    ['sp-drawer-response-style', t('spResponseStyleLabel'), responseStyleSelect],
-    ['sp-drawer-response-length', t('spResponseLengthLabel'), responseLengthSelect],
-  ] as const) {
-    const row = el('div', { class: 'sp-drawer-toggle-row' });
-    row.appendChild(el('label', { class: 'sp-drawer-toggle-label', for: id }, label));
-    row.appendChild(select);
-    personalizationBody.appendChild(row);
-  }
-  const personalizationStatus = el('div', {
-    class: 'sp-drawer-toggle-status',
-    role: 'status',
-    'aria-live': 'polite',
-  });
-  personalizationBody.appendChild(personalizationStatus);
-  personalizationSection.appendChild(personalizationBody);
-  let personalizationSnapshot: AccountPersonalization | null = null;
-
-  function renderDrawerPersonalization(personalization: AccountPersonalization): void {
-    personalizationSnapshot = personalization;
-    instructionsInput.value = personalization.instructions;
-    instructionsToggle.checked = personalization.instructionsEnabled;
-    responseStyleSelect.value = personalization.style;
-    responseLengthSelect.value = personalization.preferredLength;
-    for (const control of [
-      instructionsInput,
-      instructionsToggle,
-      instructionsSaveBtn,
-      responseStyleSelect,
-      responseLengthSelect,
-    ]) {
-      control.disabled = false;
-    }
-    personalizationBody.hidden = false;
-  }
-
-  function savePersonalizationChange(
-    save: (token: string) => Promise<void>,
-    next: Partial<AccountPersonalization>,
-  ): void {
-    const previous = personalizationSnapshot;
-    if (!previous) return;
-    instructionsSaveBtn.disabled = true;
-    responseStyleSelect.disabled = true;
-    responseLengthSelect.disabled = true;
-    instructionsToggle.disabled = true;
-    personalizationStatus.textContent = t('spPersonalizationSaving');
-    void (async () => {
-      const auth = await getManagedCloudAuthContext();
-      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
-      await save(auth.token);
-      renderDrawerPersonalization({ ...previous, ...next });
-      personalizationStatus.textContent = t('spPersonalizationSaved');
-    })().catch((error: unknown) => {
-      renderDrawerPersonalization(previous);
-      personalizationStatus.textContent =
-        error instanceof Error ? error.message : t('spPersonalizationSaveFailed');
-    });
-  }
-
-  function saveDrawerInstructions(): void {
-    const instructions = {
-      instructions: instructionsInput.value.trim(),
-      instructionsEnabled: instructionsToggle.checked,
-    };
-    savePersonalizationChange(
-      (token) => saveAccountInstructions(token, instructions),
-      instructions,
-    );
-  }
-
-  function saveDrawerResponseStyle(): void {
-    const style = {
-      style: responseStyleSelect.value as ResponseStyle,
-      preferredLength: responseLengthSelect.value as PreferredLength,
-    };
-    savePersonalizationChange((token) => saveAccountResponseStyle(token, style), style);
-  }
-
-  instructionsSaveBtn.addEventListener('click', saveDrawerInstructions);
-  instructionsToggle.addEventListener('change', saveDrawerInstructions);
-  responseStyleSelect.addEventListener('change', saveDrawerResponseStyle);
-  responseLengthSelect.addEventListener('change', saveDrawerResponseStyle);
-
-  async function refreshDrawerPersonalization(token: string): Promise<void> {
-    try {
-      renderDrawerPersonalization(await fetchAccountPersonalization(token));
-      personalizationStatus.textContent = '';
-    } catch (error) {
-      personalizationBody.hidden = false;
-      for (const control of [
-        instructionsInput,
-        instructionsToggle,
-        instructionsSaveBtn,
-        responseStyleSelect,
-        responseLengthSelect,
-      ]) {
-        control.disabled = true;
-      }
-      personalizationStatus.textContent =
-        error instanceof Error ? error.message : t('spPersonalizationUnavailable');
-    }
-  }
-  const personalizationBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-add-btn' },
-    t('spPersonalizationOpen'),
-  );
-  personalizationBtn.addEventListener('click', () => {
-    void chrome.tabs.create({
-      url: `${FREE_TRIAL_GATEWAY}/settings/general?from=chrome-extension`,
-    });
-  });
-  personalizationSection.appendChild(personalizationBtn);
-  settingsGroupBody.appendChild(personalizationSection);
-
-  const memorySection = el('div', { class: 'sp-drawer-section' });
-  memorySection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Memory'));
-  memorySection.appendChild(
-    el(
-      'p',
-      { class: 'sp-drawer-memory-help' },
-      'Saved facts and preferences reused across sessions, shared with the AGI web and mobile apps on your account.',
-    ),
-  );
-  memorySection.appendChild(buildHelpArticleLink('memory', t('spHelpLinkMemory')));
-  const memoryScope = el('p', { class: 'sp-drawer-memory-help', hidden: '' });
-  memorySection.appendChild(memoryScope);
-
-  const memoryRememberToggle = el('input', {
-    type: 'checkbox',
-    id: 'sp-drawer-memory-remember',
-  }) as HTMLInputElement;
-  const memorySearchToggle = el('input', {
-    type: 'checkbox',
-    id: 'sp-drawer-memory-search',
-  }) as HTMLInputElement;
-  const memoryPreferenceStatus = el('p', {
-    class: 'sp-drawer-memory-help',
-    role: 'status',
-    hidden: '',
-  });
-  const memoryPreferencesBlock = el(
-    'div',
-    { class: 'sp-drawer-memory-preferences', hidden: '' },
-    el(
-      'div',
-      { class: 'sp-drawer-memory-preference' },
-      memoryRememberToggle,
-      el('label', { for: 'sp-drawer-memory-remember' }, t('spSetupMemoryRemember')),
-    ),
-    el(
-      'div',
-      { class: 'sp-drawer-memory-preference' },
-      memorySearchToggle,
-      el('label', { for: 'sp-drawer-memory-search' }, t('spSetupMemorySearch')),
-    ),
-    memoryPreferenceStatus,
-  );
-  memorySection.appendChild(memoryPreferencesBlock);
-  let memoryPreferenceSnapshot: MemoryPreferences | null = null;
-
-  function setMemoryPreferenceStatus(text: string): void {
-    memoryPreferenceStatus.textContent = text;
-    memoryPreferenceStatus.hidden = !text;
-  }
-
-  function renderMemoryPreferences(preferences: MemoryPreferences): void {
-    memoryPreferenceSnapshot = preferences;
-    memoryRememberToggle.checked = preferences.memory;
-    memorySearchToggle.checked = preferences.searchPastChats;
-    memoryRememberToggle.disabled = !preferences.organizationAllows;
-    memorySearchToggle.disabled = !preferences.organizationAllows;
-    setMemoryPreferenceStatus(preferences.organizationAllows ? '' : t('spSetupMemoryOrgOff'));
-    memoryPreferencesBlock.hidden = false;
-  }
-
-  function saveDrawerMemoryPreference(): void {
-    const previous = memoryPreferenceSnapshot;
-    if (!previous) return;
-    const next = {
-      memory: memoryRememberToggle.checked,
-      searchPastChats: memorySearchToggle.checked,
-    };
-    memoryRememberToggle.disabled = true;
-    memorySearchToggle.disabled = true;
-    void (async () => {
-      const auth = await getManagedCloudAuthContext();
-      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
-      await saveMemoryPreferences(auth.token, next);
-      renderMemoryPreferences({ ...previous, ...next });
-      setMemoryPreferenceStatus(t('spMemoryPreferenceSaved'));
-    })().catch((error: unknown) => {
-      renderMemoryPreferences(previous);
-      setMemoryPreferenceStatus(
-        error instanceof Error ? error.message : t('spMemoryPreferenceSaveFailed'),
-      );
-    });
-  }
-  memoryRememberToggle.addEventListener('change', saveDrawerMemoryPreference);
-  memorySearchToggle.addEventListener('change', saveDrawerMemoryPreference);
-
-  const memoryAddBtn = el(
-    'button',
-    {
-      class: 'sp-drawer-memory-add-btn',
-      id: 'sp-drawer-memory-add-btn',
-    },
-    'Add memory',
-  );
-  memorySection.appendChild(memoryAddBtn);
-
-  const memoryEditor = el('div', {
-    class: 'sp-drawer-memory-editor',
-    id: 'sp-drawer-memory-editor',
-  });
-  const memoryTextarea = el('textarea', {
-    class: 'sp-drawer-memory-textarea',
-    id: 'sp-drawer-memory-textarea',
-    placeholder: 'Enter a fact, preference, or pattern to remember…',
-    rows: '3',
-    maxlength: '2000',
-  }) as HTMLTextAreaElement;
-  const memoryEditorActions = el('div', { class: 'sp-drawer-memory-editor-actions' });
-  const memorySaveBtn = el(
-    'button',
-    { class: 'sp-drawer-btn sp-drawer-btn-primary', id: 'sp-drawer-memory-save-btn' },
-    'Save',
-  );
-  const memoryCancelBtn = el(
-    'button',
-    { class: 'sp-drawer-btn', id: 'sp-drawer-memory-cancel-btn' },
-    'Cancel',
-  );
-  memoryEditorActions.appendChild(memorySaveBtn);
-  memoryEditorActions.appendChild(memoryCancelBtn);
-  memoryEditor.appendChild(memoryTextarea);
-  memoryEditor.appendChild(memoryEditorActions);
-  memorySection.appendChild(memoryEditor);
-
-  const memoryList = el('ul', {
-    class: 'sp-drawer-memory-list',
-    id: 'sp-drawer-memory-list',
-    'aria-label': 'Saved memories',
-  });
-  const memoryEmpty = el(
-    'div',
-    { class: 'sp-drawer-memory-empty', id: 'sp-drawer-memory-empty', hidden: '' },
-    'No saved memories yet.',
-  );
-  const memoryStatus = el('div', {
-    class: 'sp-drawer-memory-status',
-    id: 'sp-drawer-memory-status',
-    role: 'status',
-    hidden: '',
-  });
-  const memoryRetryBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-retry-btn', id: 'sp-drawer-memory-retry-btn' },
-    'Try again',
-  ) as HTMLButtonElement;
-  const memoryCount = el('div', { class: 'sp-drawer-memory-status', hidden: '' });
-  const memoryMoreBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-retry-btn', hidden: '' },
-    t('spMemoryShowMore'),
-  ) as HTMLButtonElement;
-  memorySection.appendChild(memoryList);
-  memorySection.appendChild(memoryEmpty);
-  memorySection.appendChild(memoryCount);
-  memorySection.appendChild(memoryMoreBtn);
-  memorySection.appendChild(memoryStatus);
-  memorySection.appendChild(memoryRetryBtn);
-
-  const exclusionsBlock = el('div', { class: 'sp-drawer-memory-block', hidden: '' });
-  exclusionsBlock.appendChild(
-    el('h4', { class: 'sp-drawer-memory-subtitle' }, t('spMemoryNeverRememberTitle')),
-  );
-  exclusionsBlock.appendChild(
-    el('p', { class: 'sp-drawer-memory-help' }, t('spMemoryNeverRememberHelp')),
-  );
-  const exclusionForm = el('div', { class: 'sp-drawer-memory-exclusion-form' });
-  const exclusionInput = el('input', {
-    type: 'text',
-    class: 'sp-drawer-memory-exclusion-input',
-    maxlength: String(MEMORY_EXCLUSION_MAX_CHARS),
-    placeholder: t('spMemoryNeverRememberPlaceholder'),
-    'aria-label': t('spMemoryNeverRememberInputLabel'),
-  });
-  const exclusionAddBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-btn' },
-    t('spMemoryNeverRememberAdd'),
-  ) as HTMLButtonElement;
-  exclusionForm.appendChild(exclusionInput);
-  exclusionForm.appendChild(exclusionAddBtn);
-  exclusionsBlock.appendChild(exclusionForm);
-  const exclusionList = el('ul', {
-    class: 'sp-drawer-memory-exclusions',
-    'aria-label': t('spMemoryNeverRememberTitle'),
-  });
-  exclusionsBlock.appendChild(exclusionList);
-  const exclusionStatus = el('div', {
-    class: 'sp-drawer-memory-status',
-    role: 'status',
-    hidden: '',
-  });
-  exclusionsBlock.appendChild(exclusionStatus);
-  memorySection.appendChild(exclusionsBlock);
-
-  const conflictsBlock = el('div', { class: 'sp-drawer-memory-block', hidden: '' });
-  conflictsBlock.appendChild(
-    el('h4', { class: 'sp-drawer-memory-subtitle' }, t('spMemoryConflictsTitle')),
-  );
-  conflictsBlock.appendChild(
-    el('p', { class: 'sp-drawer-memory-help' }, t('spMemoryConflictsRule')),
-  );
-  const conflictList = el('ul', {
-    class: 'sp-drawer-memory-list',
-    'aria-label': t('spMemoryConflictsListLabel'),
-  });
-  conflictsBlock.appendChild(conflictList);
-  const conflictStatus = el('div', {
-    class: 'sp-drawer-memory-status',
-    role: 'status',
-    hidden: '',
-  });
-  conflictsBlock.appendChild(conflictStatus);
-  memorySection.appendChild(conflictsBlock);
-  settingsGroupBody.appendChild(memorySection);
-
-  type DrawerMemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
-  async function sendDrawerMemoryMsg(
-    type: DrawerMemoryMessageType,
-    payload: Record<string, unknown> = {},
-  ): Promise<Record<string, unknown>> {
-    try {
-      const res = (await chrome.runtime.sendMessage({ type, ...payload })) as Record<
-        string,
-        unknown
-      >;
-      return res ?? {};
-    } catch {
-      return { success: false };
-    }
-  }
-  function drawerFormatRelTime(iso: string): string {
-    try {
-      const diff = Date.now() - new Date(iso).getTime();
-      if (diff < 60_000) return 'just now';
-      const m = Math.floor(diff / 60_000);
-      if (m < 60) return `${m} min ago`;
-      const h = Math.floor(m / 60);
-      if (h < 24) return `${h} h ago`;
-      return `${Math.floor(h / 24)} d ago`;
-    } catch {
-      return '';
-    }
-  }
-
-  type DrawerMemoryItem = AccountMemory;
-
-  function buildDrawerMemoryOrigin(item: DrawerMemoryItem): HTMLElement {
-    const origin = el('span', { class: 'sp-drawer-memory-item-origin' });
-    if (item.source === 'auto') {
-      if (item.sourceConversationId) {
-        const link = el('a', {
-          class: 'sp-drawer-memory-item-link',
-          href: `${FREE_TRIAL_GATEWAY}/chat/${encodeURIComponent(item.sourceConversationId)}?from=chrome-extension`,
-          target: '_blank',
-          rel: 'noopener noreferrer',
-        });
-        link.textContent = item.sourceConversationTitle
-          ? t('spMemoryOriginLearnedFromTitled', [item.sourceConversationTitle])
-          : t('spMemoryOriginLearnedFromChat');
-        origin.appendChild(link);
-      } else {
-        origin.textContent = t('spMemoryOriginLearnedFromChat');
-      }
-    } else if (item.source?.startsWith('imported:')) {
-      origin.textContent = t('spMemoryOriginImported');
-    } else {
-      origin.textContent = t('spMemoryOriginAdded');
-    }
-    return origin;
-  }
-
-  function buildDrawerMemoryItem(item: DrawerMemoryItem): HTMLLIElement {
-    const li = el('li', { class: 'sp-drawer-memory-item' });
-    li.dataset['id'] = item.id;
-    const contentEl = el('span', { class: 'sp-drawer-memory-item-content' }, item.content);
-    const metaEl = el('span', { class: 'sp-drawer-memory-item-meta' });
-    metaEl.appendChild(buildDrawerMemoryOrigin(item));
-    metaEl.appendChild(
-      document.createTextNode(` · ${drawerFormatRelTime(item.updatedAt || item.createdAt)}`),
-    );
-    const actionRow = el('div', { class: 'sp-drawer-memory-item-row' });
-
-    const editBtn = el(
-      'button',
-      { type: 'button', class: 'sp-drawer-memory-item-edit-btn' },
-      'Edit',
-    );
-    const deleteBtn = el(
-      'button',
-      { type: 'button', class: 'sp-drawer-memory-item-delete-btn' },
-      'Delete',
-    ) as HTMLButtonElement;
-
-    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
-    deleteBtn.addEventListener('click', () => {
-      if (deleteBtn.classList.contains('is-confirm')) {
-        if (confirmTimer !== null) {
-          clearTimeout(confirmTimer);
-          confirmTimer = null;
-        }
-        sendDrawerMemoryMsg('DELETE_MEMORY', { id: item.id })
-          .then((res) => applyDrawerMemoryWrite(res))
-          .catch(() => {});
-      } else {
-        deleteBtn.classList.add('is-confirm');
-        deleteBtn.textContent = t('spMemoryDeleteConfirm');
-        confirmTimer = setTimeout(() => {
-          deleteBtn.classList.remove('is-confirm');
-          deleteBtn.textContent = t('spMemoryDelete');
-          confirmTimer = null;
-        }, DRAWER_DELETE_CONFIRM_MS);
-      }
-    });
-
-    editBtn.addEventListener('click', () => {
-      if (li.querySelector('.sp-drawer-memory-item-textarea')) return;
-      contentEl.hidden = true;
-      editBtn.hidden = true;
-      deleteBtn.hidden = true;
-      const editArea = el('textarea', {
-        class: 'sp-drawer-memory-item-textarea',
-        rows: '2',
-        maxlength: '2000',
-      }) as HTMLTextAreaElement;
-      editArea.value = item.content;
-      const editSave = el(
-        'button',
-        { type: 'button', class: 'sp-drawer-btn sp-drawer-btn-primary' },
-        'Save',
-      );
-      const editCancel = el('button', { type: 'button', class: 'sp-drawer-btn' }, 'Cancel');
-      const editActions = el('div', { class: 'sp-drawer-memory-editor-actions' });
-      editActions.appendChild(editSave);
-      editActions.appendChild(editCancel);
-      editSave.addEventListener('click', async () => {
-        const txt = editArea.value.trim();
-        if (!txt) return;
-        (editSave as HTMLButtonElement).disabled = true;
-        await applyDrawerMemoryWrite(
-          await sendDrawerMemoryMsg('UPDATE_MEMORY', { id: item.id, content: txt }),
-        );
-      });
-      editCancel.addEventListener('click', () => {
-        editArea.remove();
-        editActions.remove();
-        contentEl.hidden = false;
-        editBtn.hidden = false;
-        deleteBtn.hidden = false;
-      });
-      li.insertBefore(editArea, actionRow);
-      li.insertBefore(editActions, actionRow);
-      editArea.focus();
-    });
-
-    actionRow.appendChild(editBtn);
-    actionRow.appendChild(deleteBtn);
-    li.appendChild(contentEl);
-    li.appendChild(metaEl);
-    li.appendChild(actionRow);
-    return li;
-  }
-
-  function setDrawerMemoryStatus(text: string, retryable: boolean): void {
-    if (!text) {
-      memoryStatus.setAttribute('hidden', '');
-      memoryRetryBtn.setAttribute('hidden', '');
-      return;
-    }
-    memoryStatus.textContent = text;
-    memoryStatus.removeAttribute('hidden');
-    if (retryable) memoryRetryBtn.removeAttribute('hidden');
-    else memoryRetryBtn.setAttribute('hidden', '');
-  }
-
-  let drawerMemoryShown = 0;
-  let drawerMemoryGeneration = 0;
-
-  function renderDrawerMemoryCount(hasMore: boolean): void {
-    memoryCount.hidden = drawerMemoryShown === 0;
-    memoryCount.replaceChildren(
-      document.createTextNode(
-        hasMore
-          ? tPlural('spMemoryShowingMore', drawerMemoryShown)
-          : tPlural('spMemoryShowing', drawerMemoryShown),
-      ),
-    );
-    memoryMoreBtn.hidden = !hasMore;
-  }
-
-  function setDrawerMemoryExtrasHidden(hidden: boolean): void {
-    if (hidden) personalizationBody.hidden = true;
-    memoryScope.hidden = hidden;
-    if (hidden) memoryPreferencesBlock.hidden = true;
-    exclusionsBlock.hidden = hidden;
-    conflictsBlock.hidden = hidden;
-  }
-
-  async function refreshDrawerMemory(): Promise<void> {
-    const generation = ++drawerMemoryGeneration;
-    const res = await sendDrawerMemoryMsg('LIST_MEMORIES');
-    if (generation !== drawerMemoryGeneration) return;
-    const status = typeof res['status'] === 'string' ? res['status'] : 'unavailable';
-    const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
-    const items = raw.filter(isAccountMemory);
-    clearChildren(memoryList);
-    drawerMemoryShown = 0;
-    renderDrawerMemoryCount(false);
-
-    if (status === 'signed-out') {
-      memoryEmpty.setAttribute('hidden', '');
-      memoryAddBtn.setAttribute('hidden', '');
-      showDrawerMemoryEditor(false);
-      setDrawerMemoryExtrasHidden(true);
-      setDrawerMemoryStatus('Sign in to your AGI account to read and save memories.', false);
-      return;
-    }
-
-    memoryAddBtn.removeAttribute('hidden');
-    void refreshDrawerMemoryAccountDetails();
-
-    if (status !== 'ready') {
-      memoryEmpty.setAttribute('hidden', '');
-      setDrawerMemoryStatus(
-        typeof res['error'] === 'string' ? res['error'] : 'Memory is unavailable right now.',
-        true,
-      );
-      return;
-    }
-
-    setDrawerMemoryStatus(
-      res['fromCache'] === true && typeof res['error'] === 'string'
-        ? `Showing the last synced copy · ${res['error']}`
-        : '',
-      res['fromCache'] === true,
-    );
-
-    if (items.length === 0) {
-      memoryEmpty.removeAttribute('hidden');
-      return;
-    }
-    memoryEmpty.setAttribute('hidden', '');
-    for (const item of items) memoryList.appendChild(buildDrawerMemoryItem(item));
-    drawerMemoryShown = items.length;
-    renderDrawerMemoryCount(res['hasMore'] === true && res['fromCache'] !== true);
-  }
-
-  memoryMoreBtn.addEventListener('click', async () => {
-    const generation = drawerMemoryGeneration;
-    memoryMoreBtn.disabled = true;
-    const res = await sendDrawerMemoryMsg('LIST_MEMORIES', { offset: drawerMemoryShown });
-    memoryMoreBtn.disabled = false;
-    if (generation !== drawerMemoryGeneration) return;
-    if (res['status'] !== 'ready') {
-      setDrawerMemoryStatus(
-        typeof res['error'] === 'string' ? res['error'] : 'Memory is unavailable right now.',
-        false,
-      );
-      return;
-    }
-    const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
-    const items = raw.filter(isAccountMemory);
-    for (const item of items) memoryList.appendChild(buildDrawerMemoryItem(item));
-    drawerMemoryShown += items.length;
-    renderDrawerMemoryCount(res['hasMore'] === true);
-  });
-
-  let memoryExclusions: string[] = [];
-
-  function renderMemoryExclusions(): void {
-    clearChildren(exclusionList);
-    for (const term of memoryExclusions) {
-      const item = el('li', { class: 'sp-drawer-memory-exclusion' });
-      item.appendChild(el('span', {}, term));
-      const remove = el('button', {
-        type: 'button',
-        class: 'sp-drawer-memory-exclusion-remove',
-        'aria-label': t('spMemoryNeverRememberRemove', [term]),
-      });
-      remove.appendChild(renderIcon(X, 11));
-      remove.addEventListener('click', () => {
-        void saveDrawerMemoryExclusions(memoryExclusions.filter((existing) => existing !== term));
-      });
-      item.appendChild(remove);
-      exclusionList.appendChild(item);
-    }
-    if (memoryExclusions.length === 0) {
-      exclusionList.appendChild(
-        el('li', { class: 'sp-drawer-memory-empty' }, t('spMemoryNeverRememberEmpty')),
-      );
-    }
-  }
-
-  function setExclusionStatus(text: string): void {
-    exclusionStatus.textContent = text;
-    exclusionStatus.hidden = text.length === 0;
-  }
-
-  async function saveDrawerMemoryExclusions(next: string[]): Promise<void> {
-    const auth = await getManagedCloudAuthContext();
-    if (!auth) {
-      setExclusionStatus(t('spMemorySignedOut'));
-      return;
-    }
-    exclusionAddBtn.disabled = true;
-    try {
-      await saveMemoryExclusions(auth.token, next);
-      memoryExclusions = normalizeMemoryExclusions(next);
-      setExclusionStatus('');
-      renderMemoryExclusions();
-    } catch (error) {
-      setExclusionStatus(
-        error instanceof Error ? error.message : t('spMemoryNeverRememberSaveFailed'),
-      );
-    } finally {
-      exclusionAddBtn.disabled = false;
-    }
-  }
-
-  function addMemoryExclusion(): void {
-    const term = exclusionInput.value.trim().toLowerCase();
-    if (term.length < MEMORY_EXCLUSION_MIN_CHARS) {
-      setExclusionStatus(t('spMemoryNeverRememberTooShort', [String(MEMORY_EXCLUSION_MIN_CHARS)]));
-      return;
-    }
-    if (memoryExclusions.includes(term)) {
-      exclusionInput.value = '';
-      return;
-    }
-    if (memoryExclusions.length >= MEMORY_EXCLUSION_MAX_TERMS) {
-      setExclusionStatus(t('spMemoryNeverRememberFull', [String(MEMORY_EXCLUSION_MAX_TERMS)]));
-      return;
-    }
-    exclusionInput.value = '';
-    void saveDrawerMemoryExclusions([...memoryExclusions, term]);
-  }
-  exclusionAddBtn.addEventListener('click', addMemoryExclusion);
-  exclusionInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    addMemoryExclusion();
-  });
-
-  function renderMemoryConflicts(conflicts: readonly AccountMemoryConflict[]): void {
-    clearChildren(conflictList);
-    if (conflicts.length === 0) {
-      conflictList.appendChild(
-        el('li', { class: 'sp-drawer-memory-empty' }, t('spMemoryConflictsEmpty')),
-      );
-      return;
-    }
-    for (const conflict of conflicts) {
-      const item = el('li', { class: 'sp-drawer-memory-item' });
-      item.appendChild(
-        el(
-          'span',
-          { class: 'sp-drawer-memory-item-content' },
-          t('spMemoryConflictUsing', [conflict.keptContent]),
-        ),
-      );
-      item.appendChild(
-        el(
-          'span',
-          { class: 'sp-drawer-memory-item-meta' },
-          t('spMemoryConflictReplaced', [conflict.content]),
-        ),
-      );
-      const restore = el(
-        'button',
-        { type: 'button', class: 'sp-drawer-memory-item-edit-btn' },
-        t('spMemoryConflictRestore'),
-      ) as HTMLButtonElement;
-      restore.addEventListener('click', async () => {
-        const auth = await getManagedCloudAuthContext();
-        if (!auth) return;
-        restore.disabled = true;
-        try {
-          await restoreAccountMemory(auth.token, conflict.id);
-          await Promise.all([refreshDrawerMemory(), loadDrawerMemoryConflicts(auth.token)]);
-        } catch (error) {
-          restore.disabled = false;
-          conflictStatus.textContent =
-            error instanceof Error ? error.message : t('spMemoryConflictRestoreFailed');
-          conflictStatus.hidden = false;
-        }
-      });
-      const row = el('div', { class: 'sp-drawer-memory-item-row' });
-      row.appendChild(restore);
-      item.appendChild(row);
-      conflictList.appendChild(item);
-    }
-  }
-
-  async function loadDrawerMemoryConflicts(token: string): Promise<void> {
-    try {
-      renderMemoryConflicts(await fetchAccountMemoryConflicts(token));
-      conflictStatus.hidden = true;
-    } catch (error) {
-      clearChildren(conflictList);
-      conflictStatus.textContent =
-        error instanceof Error ? error.message : t('spMemoryConflictsLoadFailed');
-      conflictStatus.hidden = false;
-    }
-  }
-
-  async function refreshDrawerMemoryAccountDetails(): Promise<void> {
-    const auth = await getManagedCloudAuthContext();
-    if (!auth) {
-      setDrawerMemoryExtrasHidden(true);
-      return;
-    }
-    setDrawerMemoryExtrasHidden(false);
-    await Promise.all([
-      refreshDrawerPersonalization(auth.token),
-      fetchMemoryPreferences(auth.token)
-        .then(renderMemoryPreferences)
-        .catch(() => {
-          memoryPreferencesBlock.hidden = false;
-          memoryRememberToggle.disabled = true;
-          memorySearchToggle.disabled = true;
-          setMemoryPreferenceStatus(t('spSetupMemoryUnavailable'));
-        }),
-      fetchActiveMemoryWorkspace(auth.token)
-        .then((workspace) => {
-          memoryScope.textContent =
-            workspace.scope === 'organization' && workspace.name
-              ? t('spMemoryScopeWorkspace', [workspace.name])
-              : t('spMemoryScopePersonal');
-        })
-        .catch(() => {
-          memoryScope.hidden = true;
-        }),
-      fetchMemoryExclusions(auth.token)
-        .then((terms) => {
-          memoryExclusions = terms;
-          setExclusionStatus('');
-          renderMemoryExclusions();
-        })
-        .catch((error: unknown) => {
-          clearChildren(exclusionList);
-          setExclusionStatus(
-            error instanceof Error ? error.message : t('spMemoryNeverRememberLoadFailed'),
-          );
-        }),
-      loadDrawerMemoryConflicts(auth.token),
-    ]);
-  }
-
-  async function applyDrawerMemoryWrite(res: Record<string, unknown>): Promise<void> {
-    if (res['success'] !== true && typeof res['error'] === 'string') {
-      setDrawerMemoryStatus(res['error'], true);
-      return;
-    }
-    await refreshDrawerMemory();
-  }
-
-  function showDrawerMemoryEditor(show: boolean): void {
-    memoryEditor.classList.toggle('open', show);
-    if (show) {
-      memoryTextarea.value = '';
-      memoryTextarea.focus();
-    }
-  }
-  memoryAddBtn.addEventListener('click', () => showDrawerMemoryEditor(true));
-  memoryCancelBtn.addEventListener('click', () => showDrawerMemoryEditor(false));
-  memorySaveBtn.addEventListener('click', async () => {
-    const content = memoryTextarea.value.trim();
-    if (!content) return;
-    (memorySaveBtn as HTMLButtonElement).disabled = true;
-    const res = await sendDrawerMemoryMsg('ADD_MEMORY', { content });
-    (memorySaveBtn as HTMLButtonElement).disabled = false;
-    if (res['success'] === true) showDrawerMemoryEditor(false);
-    await applyDrawerMemoryWrite(res);
-  });
-  memoryRetryBtn.addEventListener('click', () => {
-    setDrawerMemoryStatus('', false);
-    void refreshDrawerMemory();
-  });
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (
-      area === 'local' &&
-      changes[ACCOUNT_MEMORY_CACHE_KEY] &&
-      drawer.classList.contains('open')
-    ) {
-      void refreshDrawerMemory();
-    }
-  });
-
-  const bridgeSection = el('div', { class: 'sp-drawer-section' });
-  bridgeSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'Bridge URL'));
-  const drawerBridgeInput = el('input', {
-    class: 'sp-drawer-bridge-input',
-    id: 'sp-drawer-bridge-input',
-    type: 'text',
-    placeholder: DEFAULT_AGI_BRIDGE_URL,
-    spellcheck: 'false',
-  }) as HTMLInputElement;
-  chrome.storage.local.get('agi_bridge_url', (result) => {
-    if (chrome.runtime.lastError) return;
-    const stored = result['agi_bridge_url'] as string | undefined;
-    if (stored) drawerBridgeInput.value = stored;
-  });
-  const drawerBridgeRow = el('div', { class: 'sp-drawer-bridge-row' });
-  drawerBridgeRow.appendChild(drawerBridgeInput);
-  const drawerBridgeSaveBtn = el(
-    'button',
-    { class: 'sp-drawer-btn', id: 'sp-drawer-bridge-save-btn' },
-    'Apply',
-  );
-  drawerBridgeRow.appendChild(drawerBridgeSaveBtn);
-  bridgeSection.appendChild(drawerBridgeRow);
-  const drawerBridgeError = el('div', { class: 'sp-drawer-bridge-error', hidden: '' });
-  bridgeSection.appendChild(drawerBridgeError);
-  settingsGroupBody.appendChild(bridgeSection);
-
-  function drawerSaveBridgeUrl(): void {
-    const raw = (drawerBridgeInput as HTMLInputElement).value.trim();
-    let persisted = '';
-    if (!raw) {
-      chrome.storage.local.remove('agi_bridge_url');
-    } else {
-      const validated = validateBridgeUrl(raw);
-      if (!validated) {
-        const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
-        drawerBridgeError.textContent = t('spBridgeUrlNotAllowed', [allowed]);
-        drawerBridgeError.removeAttribute('hidden');
-        setTimeout(() => drawerBridgeError.setAttribute('hidden', ''), 8000);
-        return;
-      }
-      persisted = validated;
-      chrome.storage.local
-        .set({ agi_bridge_url: validated })
-        .catch((err: unknown) => console.warn('[SidePanel] drawer bridge save failed:', err));
-    }
-    drawerBridgeInput.value = persisted;
-    drawerBridgeError.setAttribute('hidden', '');
-    chrome.runtime
-      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: persisted })
-      .catch((err: unknown) => console.warn('[SidePanel] drawer bridge notify failed:', err));
-    const oldInput = document.getElementById('sp-bridge-url-input') as HTMLInputElement | null;
-    if (oldInput) oldInput.value = persisted;
-  }
-  drawerBridgeSaveBtn.addEventListener('click', drawerSaveBridgeUrl);
-  drawerBridgeInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') drawerSaveBridgeUrl();
-  });
-
-  const cloudSection = el('div', { class: 'sp-drawer-section' });
-  cloudSection.appendChild(el('h3', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
-
-  const cloudAccountEl = el('div', { class: 'sp-cloud-account', id: 'sp-cloud-account' });
-
-  const signinPrompt = el('div', {
-    class: 'sp-cloud-signin-prompt',
-    id: 'sp-cloud-signin-prompt',
-  });
-  const signinDescription = el('span', { class: 'sp-cloud-signin-desc' }, t('spCloudSignInPrompt'));
-  signinPrompt.appendChild(signinDescription);
-
-  const signinBtn = el('button', { class: 'sp-cloud-signin-btn', id: 'sp-cloud-signin-btn' });
-  let signInAwaitingCompletion = false;
-  signinBtn.textContent = t('spCloudSignIn');
-  signinBtn.addEventListener('click', async () => {
-    signinBtn.setAttribute('disabled', '');
-    signinBtn.textContent = signInAwaitingCompletion
-      ? t('spCloudSignInChecking')
-      : t('spCloudSignInOpening');
-    try {
-      if (signInAwaitingCompletion) {
-        await refreshCloudAccountUI(true);
-      } else {
-        await openClerkSignIn();
-        signInAwaitingCompletion = true;
-        signinDescription.textContent = t('spCloudSignInReturnTab');
-      }
-    } catch (error) {
-      signinDescription.textContent =
-        error instanceof Error ? error.message : t('spCloudSignInOpenFailed');
-    } finally {
-      signinBtn.removeAttribute('disabled');
-      signinBtn.textContent = signInAwaitingCompletion
-        ? t('spCloudCheckSignIn')
-        : t('spCloudSignIn');
-    }
-  });
-  signinPrompt.appendChild(signinBtn);
-
-  const signedInView = el('div', {
-    class: 'sp-cloud-signed-in',
-    id: 'sp-cloud-signed-in',
-    style: 'display:none',
-  });
-  const avatarEl = el(
-    'div',
-    { class: 'sp-cloud-avatar', id: 'sp-cloud-avatar' },
-    t('spCloudAvatarFallback'),
-  );
-  const userInfoEl = el('div', { class: 'sp-cloud-user-info' });
-  const userLabelEl = el('div', {
-    class: 'sp-cloud-user-label',
-    id: 'sp-cloud-user-label',
-  });
-  userLabelEl.textContent = t('spCloudAccountFallbackName');
-  const userTierEl = el('div', { class: 'sp-cloud-user-tier', id: 'sp-cloud-user-tier' });
-  userTierEl.textContent = t('spCloudFreeTier');
-  userInfoEl.appendChild(userLabelEl);
-  userInfoEl.appendChild(userTierEl);
-  const nameEditBtn = el(
-    'button',
-    { type: 'button', class: 'sp-cloud-name-edit' },
-    t('spAccountNameEdit'),
-  ) as HTMLButtonElement;
-  const nameEditor = el('form', { class: 'sp-cloud-name-editor', hidden: '' });
-  const nameInput = el('input', {
-    type: 'text',
-    class: 'sp-wf-form-input',
-    id: 'sp-cloud-name-input',
-    autocomplete: 'name',
-    'aria-label': t('spAccountNameLabel'),
-  }) as HTMLInputElement;
-  const nameSaveBtn = el(
-    'button',
-    { type: 'submit', class: 'sp-drawer-memory-add-btn' },
-    t('spAccountNameSave'),
-  ) as HTMLButtonElement;
-  const nameCancelBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-add-btn' },
-    t('spAccountNameCancel'),
-  ) as HTMLButtonElement;
-  const nameStatus = el('div', { class: 'sp-drawer-toggle-status', role: 'status' });
-  nameEditor.append(
-    nameInput,
-    el('div', { class: 'sp-cloud-name-actions' }, nameSaveBtn, nameCancelBtn),
-  );
-  userInfoEl.appendChild(nameEditBtn);
-  userInfoEl.appendChild(nameEditor);
-  userInfoEl.appendChild(nameStatus);
-
-  function closeNameEditor(): void {
-    nameEditor.hidden = true;
-    nameEditBtn.hidden = false;
-    nameEditBtn.focus();
-  }
-
-  nameEditBtn.addEventListener('click', () => {
-    nameInput.value = accountDisplayName ?? '';
-    nameStatus.textContent = '';
-    nameEditBtn.hidden = true;
-    nameEditor.hidden = false;
-    nameInput.focus();
-    nameInput.select();
-  });
-  nameCancelBtn.addEventListener('click', closeNameEditor);
-  nameEditor.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeNameEditor();
-  });
-  nameEditor.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const name = nameInput.value.trim();
-    if (!name) {
-      nameStatus.textContent = t('spAccountNameRequired');
-      return;
-    }
-    nameSaveBtn.disabled = true;
-    nameStatus.textContent = t('spPersonalizationSaving');
-    void (async () => {
-      const auth = await getManagedCloudAuthContext();
-      if (!auth) throw new Error(t('spSetupMemorySignedOut'));
-      await saveAccountDisplayName(auth.token, name);
-      accountDisplayName = name;
-      userLabelEl.textContent = name;
-      nameStatus.textContent = t('spAccountNameSaved');
-      closeNameEditor();
-    })()
-      .catch((error: unknown) => {
-        nameStatus.textContent =
-          error instanceof Error ? error.message : t('spAccountNameSaveFailed');
-      })
-      .finally(() => {
-        nameSaveBtn.disabled = false;
-      });
-  });
-  const signoutBtn = el(
-    'button',
-    { class: 'sp-cloud-signout-btn', id: 'sp-cloud-signout-btn' },
-    'Sign out',
-  );
-  signedInView.appendChild(avatarEl);
-  signedInView.appendChild(userInfoEl);
-  signedInView.appendChild(signoutBtn);
-  const signoutStatusEl = el('div', {
-    class: 'sp-cloud-signout-status',
-    id: 'sp-cloud-signout-status',
-    role: 'status',
-  });
-
-  const quotaWrap = el('div', {
-    class: 'sp-quota-bar-wrap',
-    id: 'sp-quota-bar-wrap',
-    style: 'display:none',
-  });
-  const quotaLabelEl = el('span', { id: 'sp-quota-label' }, t('spQuotaPaidPlanRequired'));
-  quotaWrap.appendChild(quotaLabelEl);
-  const quotaWindowsEl = el('div', { class: 'sp-quota-windows', id: 'sp-quota-windows' });
-  quotaWrap.appendChild(quotaWindowsEl);
-  quotaWrap.appendChild(buildHelpArticleLink('usage-and-credits', t('spHelpLinkUsage')));
-  const quotaNoticeEl = el('div', {
-    class: 'sp-quota-notice',
-    id: 'sp-quota-notice',
-    role: 'status',
-  });
-  quotaWrap.appendChild(quotaNoticeEl);
-  const quotaModelsEl = el('div', { class: 'sp-quota-models', id: 'sp-quota-models' });
-  quotaWrap.appendChild(quotaModelsEl);
-  const planCompareEl = el(
-    'details',
-    { class: 'sp-plan-compare', id: 'sp-plan-compare' },
-    el('summary', {}, t('spPlansHeading')),
-  );
-  const planCompareListEl = el('div', { class: 'sp-plan-compare-list' });
-  const planComparePricingBtn = el(
-    'button',
-    { class: 'sp-quota-upgrade-btn', type: 'button' },
-    t('spPlansPricing'),
-  );
-  planComparePricingBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: agiWebUrl('/pricing') }).catch(() => {});
-  });
-  planCompareEl.appendChild(planCompareListEl);
-  planCompareEl.appendChild(planComparePricingBtn);
-  quotaWrap.appendChild(planCompareEl);
-
-  function renderPlanComparison(currentPlan: string | null | undefined): void {
-    clearChildren(planCompareListEl);
-    for (const view of planComparisonViews(currentPlan)) {
-      const row = el('div', { class: 'sp-plan-compare-row' });
-      row.appendChild(el('span', { class: 'sp-plan-compare-name' }, view.label));
-      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.usage));
-      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.features));
-      planCompareListEl.appendChild(row);
-    }
-  }
-
-  const quotaUpgradeRow = el('div', {
-    class: 'sp-quota-upgrade-row',
-    id: 'sp-quota-upgrade-row',
-    style: 'display:none',
-  });
-  const quotaExhaustedLabel = el(
-    'span',
-    { class: 'sp-quota-exhausted-label' },
-    t('spQuotaFreeElsewhere'),
-  );
-  const quotaUpgradeBtn = el(
-    'button',
-    { class: 'sp-quota-upgrade-btn', id: 'sp-quota-upgrade-btn' },
-    t('spQuotaUpgrade'),
-  );
-  quotaUpgradeRow.appendChild(quotaExhaustedLabel);
-  quotaUpgradeRow.appendChild(quotaUpgradeBtn);
-  quotaWrap.appendChild(quotaUpgradeRow);
-
-  cloudAccountEl.appendChild(signinPrompt);
-  cloudAccountEl.appendChild(signedInView);
-  cloudAccountEl.appendChild(signoutStatusEl);
-  cloudAccountEl.appendChild(quotaWrap);
-  const cloudLinkHint = el(
-    'div',
-    { class: 'sp-cloud-link-hint', style: 'display:none' },
-    'Cloud connectors open on Web. Browser page tools remain scoped to this extension.',
-  );
-  const cloudLinkRow = el('div', {
-    class: 'sp-cloud-link-row',
-    id: 'sp-cloud-link-row',
-    style: 'display:none',
-  });
-  const manageUsageBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Manage usage');
-  manageUsageBtn.addEventListener('click', () => {
-    void chrome.tabs.create({
-      url: agiWebUrl('/settings/usage?from=chrome-extension'),
-    });
-  });
-  const connectAppsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Connect apps');
-  connectAppsBtn.addEventListener('click', () => {
-    void chrome.tabs.create({ url: CONNECTORS_URL });
-  });
-  const teamsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Team & Enterprise');
-  teamsBtn.addEventListener('click', () => {
-    void chrome.tabs.create({ url: agiWebUrl('/teams?from=chrome-extension') });
-  });
-  cloudLinkRow.appendChild(manageUsageBtn);
-  cloudLinkRow.appendChild(connectAppsBtn);
-  cloudLinkRow.appendChild(teamsBtn);
-  cloudAccountEl.appendChild(cloudLinkHint);
-  cloudAccountEl.appendChild(cloudLinkRow);
-  cloudSection.appendChild(cloudAccountEl);
-  settingsGroupBody.appendChild(cloudSection);
-
-  let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
-  const inviteCodeSection = el('div', { class: 'sp-drawer-section' });
-  const drawerCloudBtn = el(
-    'button',
-    { class: 'sp-drawer-cloud-btn', id: 'sp-drawer-cloud-btn' },
-    'Redeem a code',
-  );
-  drawerCloudBtn.addEventListener('click', () => {
-    if (!drawerCloudModal) {
-      drawerCloudModal = mountInviteCodeModal(document.body, {
-        open: true,
-        source: 'computer-use',
-        defaultTab: 'invite',
-        onClose: () => drawerCloudModal?.update({ open: false }),
-        onRedeemed: (_inviteId) => {
-          void refreshCloudAccountUI();
-        },
-      });
-    } else {
-      drawerCloudModal.show();
-    }
-  });
-  inviteCodeSection.appendChild(drawerCloudBtn);
-  settingsGroupBody.appendChild(inviteCodeSection);
-
-  const helpGroupBody = drawerGroupBody(t('spMenuHelp'), () => void renderHelpShortcuts());
-  const helpLinksSection = el('div', { class: 'sp-drawer-section' });
-  const helpLinks: ReadonlyArray<{ label: string; detail: string; path: string; icon: string }> = [
-    { label: t('spHelpCenter'), detail: t('spHelpCenterDetail'), path: '/help', icon: CircleHelp },
-    { label: t('spHelpDocs'), detail: t('spHelpDocsDetail'), path: '/docs', icon: FileText },
-    {
-      label: t('spHelpContact'),
-      detail: t('spHelpContactDetail'),
-      path: '/support',
-      icon: MessageSquare,
-    },
-    {
-      label: t('spHelpReportBug'),
-      detail: t('spHelpReportBugDetail'),
-      path: '/support#bugs',
-      icon: Shield,
-    },
-    { label: t('spHelpStatus'), detail: t('spHelpStatusDetail'), path: '/status', icon: Globe },
-    {
-      label: t('spHelpReleaseNotes'),
-      detail: t('spHelpReleaseNotesDetail'),
-      path: '/changelog',
-      icon: Zap,
-    },
-  ];
-  for (const link of helpLinks) {
-    const button = el('button', { class: 'sp-drawer-launcher-btn', type: 'button' });
-    const icon = el('div', { class: 'sp-drawer-launcher-icon' });
-    icon.appendChild(renderIcon(link.icon, 14));
-    const text = el('div', { class: 'sp-drawer-launcher-label' });
-    text.appendChild(el('div', {}, link.label));
-    text.appendChild(el('div', { class: 'sp-drawer-launcher-desc' }, link.detail));
-    button.appendChild(icon);
-    button.appendChild(text);
-    button.addEventListener('click', () => {
-      const url = new URL(link.path, FREE_TRIAL_GATEWAY);
-      url.searchParams.set('from', 'chrome-extension');
-      void chrome.tabs.create({ url: url.toString() });
-    });
-    helpLinksSection.appendChild(button);
-  }
-  helpGroupBody.appendChild(helpLinksSection);
-
-  const helpShortcutsSection = el('div', { class: 'sp-drawer-section' });
-  helpShortcutsSection.appendChild(
-    el('h3', { class: 'sp-drawer-section-title' }, t('spHelpShortcutsTitle')),
-  );
-  const helpShortcutList = el('dl', { class: 'sp-help-shortcuts' });
-  helpShortcutsSection.appendChild(helpShortcutList);
-  const helpShortcutsChangeBtn = el(
-    'button',
-    { type: 'button', class: 'sp-drawer-memory-add-btn' },
-    t('spHelpShortcutsChange'),
-  );
-  helpShortcutsChangeBtn.addEventListener('click', () => {
-    void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-  });
-  helpShortcutsSection.appendChild(helpShortcutsChangeBtn);
-  helpShortcutsSection.appendChild(
-    buildHelpArticleLink('keyboard-shortcuts', t('spHelpLinkShortcuts')),
-  );
-  helpGroupBody.appendChild(helpShortcutsSection);
-
-  async function renderHelpShortcuts(): Promise<void> {
-    const mac = /mac/i.test(navigator.platform);
-    const modifier = mac ? '⌘' : t('spHelpKeyCtrl');
-    const commands = await chrome.commands.getAll().catch(() => []);
-    const commandKey = (name: string): string | null =>
-      commands.find((command) => command.name === name)?.shortcut || null;
-    const rows: Array<[string, string]> = [
-      [`${modifier} K`, t('spHelpShortcutPalette')],
-      [t('spHelpKeyEnter'), t('spHelpShortcutSend')],
-      [`${t('spHelpKeyShift')} ${t('spHelpKeyEnter')}`, t('spHelpShortcutNewLine')],
-      ['/', t('spHelpShortcutSlash')],
-      ['@', t('spHelpShortcutMention')],
-      [t('spHelpKeyEscape'), t('spHelpShortcutEscape')],
-    ];
-    const openPanel = commandKey('_execute_action');
-    if (openPanel) rows.push([openPanel, t('spHelpShortcutOpenPanel')]);
-    const capture = commandKey('capture_page');
-    if (capture) rows.push([capture, t('spHelpShortcutCapture')]);
-    helpShortcutList.replaceChildren();
-    for (const [keys, action] of rows) {
-      helpShortcutList.appendChild(el('dt', {}, el('kbd', {}, keys)));
-      helpShortcutList.appendChild(el('dd', {}, action));
-    }
-  }
-
-  const extensionSettingsRow = el(
-    'button',
-    { class: 'sp-drawer-row', type: 'button', role: 'menuitem' },
-    t('spExtensionSettings'),
-  );
-  extensionSettingsRow.addEventListener('click', () => {
-    closeDrawer();
-    if (typeof chrome.runtime.openOptionsPage === 'function') chrome.runtime.openOptionsPage();
-    else void chrome.tabs.create({ url: chrome.runtime.getURL('src/options.html') });
-  });
-  drawerMenu.appendChild(extensionSettingsRow);
-  for (const group of drawerGroups) {
-    const row = el('button', { class: 'sp-drawer-row', type: 'button', role: 'menuitem' });
-    row.appendChild(el('span', { class: 'sp-drawer-row-label' }, group.label));
-    const rowChevron = el('span', { class: 'sp-drawer-row-chevron' });
-    rowChevron.appendChild(renderIcon(ChevronRight, 14));
-    row.appendChild(rowChevron);
-    row.addEventListener('click', () => openDrawerGroup(group));
-    drawerMenu.appendChild(row);
-  }
-
-  const quotaBadgeEl = el('button', {
-    id: 'sp-quota-badge',
-    type: 'button',
-    title: 'AGI Cloud plan',
-    'aria-label': 'AGI Cloud plan and usage, open menu',
-  });
-  quotaBadgeEl.addEventListener('click', () => {
-    openDrawer(quotaBadgeEl);
-  });
-  const quotaSlot = document.getElementById('sp-quota-badge-slot');
-  if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
-  else document.body.appendChild(quotaBadgeEl);
 
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -14216,104 +11087,15 @@ function buildUI(): void {
     );
   }
 
-  function setQuotaNotice(text: string, severity: ManagedUsageWarning['severity'] | null): void {
-    quotaNoticeEl.textContent = text;
-    if (severity) quotaNoticeEl.dataset['severity'] = severity;
-    else delete quotaNoticeEl.dataset['severity'];
-  }
-
-  function clearManagedUsagePresentation(): void {
-    clearUsageResetTimer();
-    clearChildren(quotaWindowsEl);
-    setQuotaNotice('', null);
-    usageHistoryGeneration += 1;
-    clearChildren(quotaModelsEl);
-  }
-
-  let usageHistoryGeneration = 0;
-
-  function renderModelUsage(history: ManagedUsageHistory | null): void {
-    clearChildren(quotaModelsEl);
-    if (!history) {
-      quotaModelsEl.appendChild(
-        el('div', { class: 'sp-quota-window-reset' }, t('spQuotaByModelUnavailable')),
-      );
-      return;
-    }
-    const days = Math.max(
-      1,
-      Math.round((Date.parse(history.to) - Date.parse(history.from)) / 86_400_000),
-    );
-    quotaModelsEl.appendChild(
-      el('div', { class: 'sp-quota-models-heading' }, t('spQuotaByModelHeading', [String(days)])),
-    );
-    const rows = history.byModel.slice(0, MODEL_USAGE_ROW_LIMIT);
-    if (rows.length === 0) {
-      quotaModelsEl.appendChild(
-        el('div', { class: 'sp-quota-window-reset' }, t('spQuotaByModelEmpty')),
-      );
-      return;
-    }
-    for (const row of rows) {
-      const line = el('div', { class: 'sp-quota-bar-row' });
-      line.appendChild(el('span', {}, row.label ?? getModelBadgeLabel(row.modelId)));
-      line.appendChild(el('span', { class: 'sp-quota-window-value' }, formatCredits(row.credits)));
-      quotaModelsEl.appendChild(line);
-    }
-  }
-
-  async function refreshModelUsageHistory(): Promise<void> {
-    const generation = ++usageHistoryGeneration;
-    const accountGeneration = cloudAccountRefreshGeneration;
-    const access = managedModelAccess;
-    if (
-      !access ||
-      isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier)) ||
-      !canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')
-    ) {
-      clearChildren(quotaModelsEl);
-      return;
-    }
-    let history: ManagedUsageHistory | null = null;
-    try {
-      const authContext = await getManagedCloudAuthContext();
-      if (authContext) history = await getManagedUsageHistory(authContext.token);
-    } catch {
-      history = null;
-    }
-    if (
-      generation !== usageHistoryGeneration ||
-      accountGeneration !== cloudAccountRefreshGeneration
-    ) {
-      return;
-    }
-    renderModelUsage(history);
-  }
-
   function presentManagedUsage(access: ManagedModelAccess): void {
     clearUsageResetTimer();
     const usage = access.usage;
     const views = usageWindowViews(usage);
     const purchased = purchasedCreditsView(usage);
     const recovery = planQuotaRecovery(managedPlanTier(access));
-    const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
     const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier));
-    quotaWrap.dataset['upgradeOnly'] = String(upgradeOnly);
-    clearChildren(quotaWindowsEl);
-    if (!upgradeOnly) {
-      for (const view of views) quotaWindowsEl.appendChild(buildQuotaWindowRow(view));
-      if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
-    }
-    renderPlanComparison(access.subscriptionTier);
-    quotaLabelEl.textContent = upgradeOnly ? t('spQuotaFreeHeading') : t('spQuotaHeading');
-    quotaBadgeEl.classList.add('visible');
 
     if (usage.usage_allocation === 'pending') {
-      setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
-      quotaUpgradeRow.style.display = 'none';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('unavailable', {
         message: t('spQuotaAllocationPending'),
         action: 'retry',
@@ -14327,15 +11109,6 @@ function buildUI(): void {
       const notice = blocking ? usageLimitNotice(blocking, managedPlanTier(access)) : null;
       const message = notice ? describeUsageNotice(notice) : t('spGateUsageLimit');
       const recoveryLabel = quotaRecoveryLabel(recovery);
-      setQuotaNotice('', null);
-      quotaExhaustedLabel.textContent = message;
-      quotaUpgradeBtn.textContent = recoveryLabel;
-      quotaUpgradeBtn.dataset['destination'] = 'recovery';
-      quotaUpgradeBtn.dataset['href'] = recovery.href;
-      quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spQuotaManageUsage');
       setManagedCloudChatState('unavailable', {
         message,
         action: 'recovery',
@@ -14347,15 +11120,6 @@ function buildUI(): void {
     }
 
     if (upgradeOnly) {
-      setQuotaNotice('', null);
-      quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
-      quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
-      delete quotaUpgradeBtn.dataset['destination'];
-      delete quotaUpgradeBtn.dataset['href'];
-      quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = planLabel;
       setManagedCloudChatState('ready');
       renderUsageBanner(null);
       return;
@@ -14368,11 +11132,6 @@ function buildUI(): void {
       : warning
         ? { text: describeUsageNotice(warning), severity: warning.severity, recovery }
         : null;
-    setQuotaNotice(banner?.text ?? '', banner?.severity ?? null);
-    quotaUpgradeRow.style.display = 'none';
-    quotaBadgeEl.classList.add('has-prompts');
-    quotaBadgeEl.classList.remove('exhausted');
-    quotaBadgeEl.textContent = planLabel;
     setManagedCloudChatState('ready');
     renderUsageBanner(banner);
   }
@@ -14387,13 +11146,6 @@ function buildUI(): void {
     } catch {
       if (refreshGeneration !== cloudAccountRefreshGeneration) return;
       managedModelAccess = null;
-      signinPrompt.style.display = 'none';
-      signedInView.style.display = '';
-      quotaWrap.style.display = 'none';
-      cloudLinkHint.style.display = 'none';
-      cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
-      userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
         message: t('spGateVerifyFailed'),
         action: 'retry',
@@ -14415,19 +11167,6 @@ function buildUI(): void {
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
       _ctx.reasoningEffort = undefined;
-      signinDescription.textContent = isClerkExtensionAuthConfigured()
-        ? signInAwaitingCompletion
-          ? t('spCloudSignInFinishTab')
-          : t('spCloudSignInPrompt')
-        : t('spCloudSignInUnconfigured');
-      if (isClerkExtensionAuthConfigured()) signinBtn.removeAttribute('disabled');
-      else signinBtn.setAttribute('disabled', '');
-      signinPrompt.style.display = '';
-      signedInView.style.display = 'none';
-      quotaWrap.style.display = 'none';
-      cloudLinkHint.style.display = 'none';
-      cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
         message: isClerkExtensionAuthConfigured()
@@ -14466,15 +11205,8 @@ function buildUI(): void {
       _ctx.previousTaskType = undefined;
       _ctx.reasoningEffort = undefined;
       refreshModelPickerUI();
-      quotaWrap.style.display = 'none';
-      cloudLinkHint.style.display = 'none';
-      cloudLinkRow.style.display = 'none';
-      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof AccountUnavailableError) {
-        signinPrompt.style.display = 'none';
-        signedInView.style.display = '';
-        userTierEl.textContent = t('spCloudAccountUnavailable');
         setManagedCloudChatState('unavailable', {
           message: error.message,
           ...(error.recoveryPath
@@ -14492,9 +11224,6 @@ function buildUI(): void {
         await transitionManagedCloudOwner(null);
         await clearAuthToken();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-        signinDescription.textContent = t('spCloudSessionExpired');
-        signinPrompt.style.display = '';
-        signedInView.style.display = 'none';
         setManagedCloudChatState('signed_out', {
           message: t('spCloudSessionExpired'),
           action: 'sign_in',
@@ -14503,9 +11232,6 @@ function buildUI(): void {
         return;
       }
 
-      signinPrompt.style.display = 'none';
-      signedInView.style.display = '';
-      userTierEl.textContent = t('spCloudAccountUnavailable');
       setManagedCloudChatState('unavailable', {
         message: t('spGateVerifyFailed'),
         action: 'retry',
@@ -14522,7 +11248,6 @@ function buildUI(): void {
     applyCapabilityGates();
     managedModelAccess = access;
     refreshOnboardingAccount();
-    signInAwaitingCompletion = false;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
     const unavailableSelection =
@@ -14536,38 +11261,11 @@ function buildUI(): void {
     }
     refreshModelPickerUI();
 
-    signinPrompt.style.display = 'none';
-    signedInView.style.display = '';
-    cloudLinkHint.style.display = '';
-    cloudLinkRow.style.display = 'flex';
-    userLabelEl.textContent =
-      accountDisplayName ?? currentAccountProfile?.email ?? t('spCloudAccountFallbackName');
-    userLabelEl.title = currentAccountProfile?.email ?? '';
-    avatarEl.textContent = currentAccountProfile?.initials ?? t('spCloudAvatarFallback');
-    userTierEl.textContent = formatManagedTierLabel(
-      access.accountPlanTier ?? access.subscriptionTier,
-    );
-
     const subscriptionNeedsAttention =
       Boolean(access.accountPlanTier && access.accountPlanTier.toLowerCase() !== 'free') &&
       !isEntitledSubscriptionStatus(access.subscriptionStatus);
     if (subscriptionNeedsAttention) {
       const subscriptionStatusLabel = (access.subscriptionStatus ?? 'inactive').replace('_', ' ');
-      clearManagedUsagePresentation();
-      quotaWrap.style.display = '';
-      quotaLabelEl.textContent =
-        access.subscriptionStatus === 'past_due'
-          ? t('spBillingPastDue')
-          : access.subscriptionStatus === 'canceled'
-            ? t('spBillingCanceled')
-            : t('spBillingOtherStatus', [subscriptionStatusLabel]);
-      quotaExhaustedLabel.textContent = t('spBillingPaused');
-      quotaUpgradeBtn.textContent = t('spBillingManage');
-      quotaUpgradeBtn.dataset['destination'] = 'billing';
-      quotaUpgradeRow.style.display = '';
-      quotaBadgeEl.classList.add('visible', 'exhausted');
-      quotaBadgeEl.classList.remove('has-prompts');
-      quotaBadgeEl.textContent = t('spBillingBadge');
       setManagedCloudChatState('unavailable', {
         message:
           access.subscriptionStatus === 'past_due'
@@ -14580,7 +11278,6 @@ function buildUI(): void {
     }
 
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
-      quotaWrap.style.display = '';
       presentManagedUsage(access);
       if (authContext) {
         void freePlanNotices?.update({
@@ -14589,8 +11286,6 @@ function buildUI(): void {
           token,
         });
       }
-      if (ownerChanged) clearChildren(quotaModelsEl);
-      if (!settingsGroupBody.hidden) void refreshModelUsageHistory();
       if (managedCloudChatState !== 'ready') return;
       if (unavailableSelection !== null) {
         renderModelNotice(
@@ -14602,7 +11297,6 @@ function buildUI(): void {
       }
       refreshPageHostname();
       if (ownerChanged) {
-        refreshWorkflowsTasks();
         await loadMessages();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
         renderMessages();
@@ -14610,19 +11304,6 @@ function buildUI(): void {
       return;
     }
 
-    clearManagedUsagePresentation();
-    renderPlanComparison(access.subscriptionTier);
-    quotaWrap.style.display = '';
-    quotaLabelEl.textContent = t('spQuotaProRequired');
-    quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
-    quotaUpgradeBtn.textContent = t('spQuotaUpgrade');
-    quotaUpgradeBtn.dataset['destination'] = 'pricing';
-    quotaUpgradeRow.style.display = '';
-
-    quotaBadgeEl.classList.add('visible');
-    quotaBadgeEl.classList.remove('has-prompts');
-    quotaBadgeEl.classList.add('exhausted');
-    quotaBadgeEl.textContent = t('spQuotaUpgrade');
     setManagedCloudChatState('unavailable', {
       message: t('spQuotaProRequired'),
       action: 'upgrade',
@@ -14630,87 +11311,15 @@ function buildUI(): void {
     });
   };
 
-  signoutBtn.addEventListener('click', async () => {
-    signoutStatusEl.textContent = '';
-    const { webSessionEnded } = await signOutOfAccount();
-    if (!webSessionEnded) signoutStatusEl.textContent = t('spCloudSignOutSyncFailed');
-    await transitionManagedCloudOwner(null);
-    await refreshCloudAccountUI();
-  });
-
-  quotaUpgradeBtn.addEventListener('click', () => {
-    const recoveryHref = quotaUpgradeBtn.dataset['href'];
-    const url =
-      quotaUpgradeBtn.dataset['destination'] === 'recovery' && recoveryHref
-        ? agiWebUrl(recoveryHref)
-        : quotaUpgradeBtn.dataset['destination'] === 'billing'
-          ? agiWebUrl('/settings/billing?from=chrome-extension')
-          : quotaUpgradeBtn.dataset['destination'] === 'usage'
-            ? agiWebUrl('/settings/usage?from=chrome-extension')
-            : agiWebUrl('/pricing?from=chrome-extension&feature=managed_chat');
-    chrome.tabs.create({ url }).catch(() => {});
-  });
-
   if (isClerkExtensionAuthConfigured()) {
     void observeClerkAuth(() => {
       void refreshCloudAccountUI();
     }).catch((error) => {
       console.warn('[SidePanel] Clerk auth listener failed:', error);
     });
-  } else {
-    signinDescription.textContent = t('spCloudSignInUnconfigured');
-    signinBtn.setAttribute('disabled', '');
   }
 
   initialCloudAccountRefresh = refreshCloudAccountUI();
-
-  drawer.appendChild(drawerBody);
-
-  const drawerFooter = el('div', { id: 'sp-drawer-footer' });
-
-  const aboutRow = el('div', { class: 'sp-drawer-about-row' });
-  aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
-  const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' });
-  aboutRow.appendChild(aboutUrlSpan);
-  drawerFooter.appendChild(aboutRow);
-  drawer.appendChild(drawerFooter);
-
-  async function refreshDrawerTabInfo(): Promise<void> {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      const tab = tabs[0];
-      if (tab?.url) {
-        try {
-          const url = new URL(tab.url);
-          if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-            aboutUrlSpan.textContent = t('spAboutBrowserPage');
-            aboutUrlSpan.removeAttribute('title');
-          } else {
-            const chars = [...`${url.hostname}${url.pathname}`];
-            aboutUrlSpan.textContent =
-              chars.length > 28 ? chars.slice(0, 28).join('') + '…' : chars.join('');
-            aboutUrlSpan.title = tab.url;
-          }
-        } catch {
-          aboutUrlSpan.textContent = t('spAboutUnknownPage');
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  document.body.appendChild(drawerOverlay);
-  document.body.appendChild(drawer);
-
-  const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
-  const statusDot0 = document.createElement('span');
-  statusDot0.className = 'sp-status-dot';
-  statusPill.replaceChildren(statusDot0, 'Offline');
-
-  const authBar = el('div', { id: 'sp-auth-bar' });
-  authBar.appendChild(statusPill);
-  document.body.appendChild(authBar);
 
   const tabBar = el('div', { id: 'sp-tab-bar', role: 'tablist', 'aria-label': 'AGI views' });
   const chatTabBtn = el(
@@ -14726,19 +11335,6 @@ function buildUI(): void {
     },
     'Chat',
   );
-  const workflowsTabBtn = el(
-    'button',
-    {
-      class: 'sp-tab',
-      id: 'sp-tab-workflows',
-      'data-tab': 'workflows',
-      role: 'tab',
-      'aria-selected': 'false',
-      'aria-controls': 'sp-workflows',
-      tabindex: '-1',
-    },
-    'Workflows',
-  );
   const cuTabBtn = el(
     'button',
     {
@@ -14752,37 +11348,8 @@ function buildUI(): void {
     },
     'Computer Use',
   );
-  const runsTabBtn = el(
-    'button',
-    {
-      class: 'sp-tab',
-      id: 'sp-tab-cloud-runs',
-      'data-tab': 'cloud-runs',
-      role: 'tab',
-      'aria-selected': 'false',
-      'aria-controls': 'sp-runs-panel',
-      tabindex: '-1',
-    },
-    'Runs',
-  );
-  const pageTabBtn = el(
-    'button',
-    {
-      class: 'sp-tab',
-      id: 'sp-tab-page',
-      'data-tab': 'page',
-      role: 'tab',
-      'aria-selected': 'false',
-      'aria-controls': 'sp-page-panel',
-      tabindex: '-1',
-    },
-    'Page',
-  );
   tabBar.appendChild(chatTabBtn);
-  tabBar.appendChild(workflowsTabBtn);
   tabBar.appendChild(cuTabBtn);
-  tabBar.appendChild(runsTabBtn);
-  tabBar.appendChild(pageTabBtn);
   document.body.appendChild(tabBar);
 
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
@@ -14791,66 +11358,30 @@ function buildUI(): void {
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
   cuPanel.panelEl.setAttribute('aria-hidden', 'true');
 
-  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel({ fileAccess: answerFileAccess });
-  runsPanel.panelEl.setAttribute('role', 'tabpanel');
-  runsPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-cloud-runs');
-  runsPanel.panelEl.setAttribute('aria-hidden', 'true');
-
-  const pagePanel: BrowserToolsPanelAPI = buildBrowserToolsPanel();
-  pagePanel.panelEl.setAttribute('role', 'tabpanel');
-  pagePanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-page');
-  pagePanel.panelEl.setAttribute('aria-hidden', 'true');
-
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
-    const workflowsPanelEl = document.getElementById('sp-workflows');
     const inputAreaEl = document.getElementById('sp-input-area');
     const toolbarEl = document.getElementById('sp-toolbar');
     chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
-    workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
     cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
-    runsTabBtn.classList.toggle('sp-tab-active', tab === 'cloud-runs');
-    pageTabBtn.classList.toggle('sp-tab-active', tab === 'page');
     chatTabBtn.setAttribute('aria-selected', String(tab === 'chat'));
-    workflowsTabBtn.setAttribute('aria-selected', String(tab === 'workflows'));
     cuTabBtn.setAttribute('aria-selected', String(tab === 'computer-use'));
-    runsTabBtn.setAttribute('aria-selected', String(tab === 'cloud-runs'));
-    pageTabBtn.setAttribute('aria-selected', String(tab === 'page'));
     chatTabBtn.tabIndex = tab === 'chat' ? 0 : -1;
-    workflowsTabBtn.tabIndex = tab === 'workflows' ? 0 : -1;
     cuTabBtn.tabIndex = tab === 'computer-use' ? 0 : -1;
-    runsTabBtn.tabIndex = tab === 'cloud-runs' ? 0 : -1;
-    pageTabBtn.tabIndex = tab === 'page' ? 0 : -1;
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
-    if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
-    runsPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'cloud-runs');
-    pagePanel.panelEl.classList.toggle('sp-tab-visible', tab === 'page');
     chatPanelEl?.setAttribute('aria-hidden', String(tab !== 'chat'));
-    workflowsPanelEl?.setAttribute('aria-hidden', String(tab !== 'workflows'));
     cuPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'computer-use'));
-    runsPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'cloud-runs'));
-    pagePanel.panelEl.setAttribute('aria-hidden', String(tab !== 'page'));
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     tabBar.classList.toggle('sp-tab-bar-exit', tab !== 'chat');
-    if (tab === 'workflows') {
-      refreshWorkflowsShortcuts();
-      refreshWorkflowsTasks();
-    }
+    titleRow.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (tab === 'computer-use') {
       cuPanel.refreshAuthChip();
       refreshComputerUseSiteHook();
     }
-    // The runs list polls the gateway. Deactivating stops the timer and drops
-    // every rendered row, so a hidden tab costs nothing and holds no data.
-    runsPanel.setActive(tab === 'cloud-runs');
-    // The page lists poll the service worker. A hidden tab stops the timer and
-    // holds nothing, so console and request text is never retained unseen.
-    pagePanel.setActive(tab === 'page');
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
-  workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
   cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
   showComposerComputerUseTab = () => switchTab('computer-use');
   cuPanel.panelEl.querySelector('.sp-cu-stop-btn')?.addEventListener(
@@ -14872,9 +11403,7 @@ function buildUI(): void {
     },
     true,
   );
-  runsTabBtn.addEventListener('click', () => switchTab('cloud-runs'));
-  pageTabBtn.addEventListener('click', () => switchTab('page'));
-  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn, pageTabBtn];
+  const viewTabs = [chatTabBtn, cuTabBtn];
   tabBar.addEventListener('keydown', (event: KeyboardEvent) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -14916,15 +11445,12 @@ function buildUI(): void {
           tab.focus();
         },
       })),
-      ...drawerGroups.map((group, index): PaletteCommand => ({
-        id: `menu-${index}`,
+      ...moreMenuDestinations.map((destination): PaletteCommand => ({
+        id: `menu-${destination.id}`,
         section: 'go',
-        label: group.label,
+        label: destination.label,
         detail: t('spPaletteMenuDetail'),
-        run: () => {
-          openDrawer(menuBtn);
-          openDrawerGroup(group);
-        },
+        run: destination.run,
       })),
     ];
     const owner = _ctx.managedCloudOwner;
@@ -15078,754 +11604,11 @@ function buildUI(): void {
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 
-  const workflowsPanel = el('div', {
-    id: 'sp-workflows',
-    role: 'tabpanel',
-    'aria-labelledby': 'sp-tab-workflows',
-    'aria-hidden': 'true',
-  });
-  workflowsPanel.appendChild(
-    el('div', {
-      class: 'sp-wf-mutation-status',
-      id: 'sp-wf-mutation-status',
-      role: 'status',
-      'aria-live': 'polite',
-      'aria-atomic': 'true',
-    }),
-  );
-
-  const recordSection = el('div', { class: 'sp-wf-section' });
-  const recordHeader = el('div', { class: 'sp-wf-section-header' });
-  recordHeader.appendChild(el('h2', { class: 'sp-wf-section-title' }, 'Recording'));
-  recordSection.appendChild(recordHeader);
-  const recordBar = el('div', { class: 'sp-wf-record-bar' });
-  const recordBtn = el('button', { class: 'sp-wf-record-btn', id: 'sp-wf-record-btn' });
-  const actionCounter = el('div', { class: 'sp-wf-action-counter', id: 'sp-wf-action-counter' });
-  actionCounter.style.display = 'none';
-  function setRecordBtnLabel(label: string): void {
-    const dot = document.createElement('span');
-    dot.className = 'sp-wf-record-dot';
-    recordBtn.replaceChildren(dot, ` ${label}`);
-  }
-  function setActionCounterLabel(count: number): void {
-    const strong = document.createElement('strong');
-    strong.textContent = String(count);
-    actionCounter.replaceChildren(strong, ' actions recorded');
-  }
-  setRecordBtnLabel('Record');
-  recordBar.appendChild(recordBtn);
-  recordBar.appendChild(actionCounter);
-  recordSection.appendChild(recordBar);
-  const recordStatus = el('div', {
-    class: 'sp-wf-record-status',
-    role: 'status',
-    'aria-live': 'polite',
-  });
-  recordSection.appendChild(recordStatus);
-  function setRecordingStatus(message: string, kind: 'info' | 'error' = 'info'): void {
-    recordStatus.textContent = message;
-    recordStatus.setAttribute('data-kind', kind);
-  }
-
-  const captureRow = el('label', { class: 'sp-wf-capture-values' });
-  const captureToggle = el('input', {
-    type: 'checkbox',
-    id: 'sp-wf-capture-values',
-  }) as HTMLInputElement;
-  captureRow.appendChild(captureToggle);
-  captureRow.appendChild(
-    el('span', {}, 'Capture typed values (passwords & sensitive fields redacted)'),
-  );
-  function syncCaptureValues(): Promise<boolean> {
-    const next = captureToggle.checked;
-    captureToggle.disabled = true;
-    announceWorkflowMutation(t('spRecordingPrivacySaving'));
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'SET_RECORDING_VALUE_CAPTURE', enabled: next },
-        (response: { success?: boolean } | undefined) => {
-          const runtimeError = chrome.runtime.lastError;
-          captureToggle.disabled = false;
-          if (runtimeError || !response?.success) {
-            captureToggle.checked = !next;
-            announceWorkflowMutation(t('spRecordingPrivacySaveFailed'), 'error');
-            resolve(false);
-            return;
-          }
-          announceWorkflowMutation(
-            next ? t('spRecordingValueCaptureEnabled') : t('spRecordingValueCaptureDisabled'),
-            'success',
-          );
-          resolve(true);
-        },
-      );
-    });
-  }
-  captureToggle.addEventListener('change', () => {
-    void syncCaptureValues();
-  });
-  recordSection.appendChild(captureRow);
-
-  const saveDialog = el('div', { class: 'sp-wf-save-dialog', id: 'sp-wf-save-dialog' });
-  saveDialog.appendChild(el('div', { class: 'sp-wf-save-dialog-title' }, 'Save this recording'));
-  const saveNameInput = el('input', {
-    class: 'sp-wf-form-input',
-    placeholder: 'Workflow name...',
-    id: 'sp-wf-save-name',
-  }) as HTMLInputElement;
-  saveDialog.appendChild(saveNameInput);
-  const saveDialogActions = el('div', { class: 'sp-wf-form-actions' });
-  const saveCancelBtn = el('button', { class: 'sp-wf-form-cancel-btn' }, 'Discard');
-  const saveConfirmBtn = el('button', { class: 'sp-wf-form-save-btn' }, 'Save');
-  saveDialogActions.appendChild(saveCancelBtn);
-  saveDialogActions.appendChild(saveConfirmBtn);
-  saveDialog.appendChild(saveDialogActions);
-  recordSection.appendChild(saveDialog);
-
-  let recordingPollInterval: ReturnType<typeof setInterval> | null = null;
-  function startRecordingPoll() {
-    stopRecordingPoll();
-    recordingPollInterval = setInterval(() => {
-      chrome.runtime.sendMessage(
-        { type: 'GET_RECORDED_ACTIONS' },
-        (resp: { success?: boolean; actions?: unknown[] } | undefined) => {
-          if (chrome.runtime.lastError || !resp?.success) return;
-          recordingActionCount = resp.actions?.length ?? 0;
-          setActionCounterLabel(recordingActionCount);
-        },
-      );
-    }, 1500);
-  }
-  function stopRecordingPoll() {
-    if (recordingPollInterval !== null) {
-      clearInterval(recordingPollInterval);
-      recordingPollInterval = null;
-    }
-  }
-  recordBtn.addEventListener('click', async () => {
-    if (isRecording) {
-      chrome.runtime.sendMessage(
-        { type: 'STOP_RECORDING' },
-        (response: { success?: boolean; error?: string } | undefined) => {
-          if (chrome.runtime.lastError || !response?.success) {
-            setRecordingStatus(
-              response?.error ?? chrome.runtime.lastError?.message ?? 'Could not stop recording.',
-              'error',
-            );
-            return;
-          }
-          isRecording = false;
-          stopRecordingPoll();
-          recordBtn.classList.remove('recording');
-          setRecordBtnLabel('Record');
-          actionCounter.style.display = 'none';
-          saveDialog.classList.add('open');
-          saveNameInput.value = '';
-          saveNameInput.focus();
-          setRecordingStatus('Recording stopped. Name it to save the workflow.');
-        },
-      );
-    } else {
-      let activeTab: chrome.tabs.Tab | undefined;
-      try {
-        [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      } catch {
-        activeTab = undefined;
-      }
-      recordingStartUrl = normalizeShortcutStartUrl(activeTab?.url);
-      if (!recordingStartUrl) {
-        setRecordingStatus('Open an approved web page before starting a recording.', 'error');
-        return;
-      }
-      // Sync the value-capture choice to the active tab's content script before
-      // recording begins (the toggle may have been set on a different tab).
-      if (!(await syncCaptureValues())) {
-        recordingStartUrl = null;
-        setRecordingStatus(t('spRecordingPrivacySaveFailed'), 'error');
-        return;
-      }
-      chrome.runtime.sendMessage(
-        { type: 'START_RECORDING' },
-        (response: { success?: boolean; error?: string } | undefined) => {
-          if (chrome.runtime.lastError || !response?.success) {
-            recordingStartUrl = null;
-            setRecordingStatus(
-              response?.error ?? chrome.runtime.lastError?.message ?? 'Could not start recording.',
-              'error',
-            );
-            return;
-          }
-          isRecording = true;
-          recordingActionCount = 0;
-          recordBtn.classList.add('recording');
-          setRecordBtnLabel('Stop');
-          actionCounter.style.display = '';
-          setActionCounterLabel(0);
-          saveDialog.classList.remove('open');
-          startRecordingPoll();
-          setRecordingStatus(`Recording actions on ${new URL(recordingStartUrl!).host}.`);
-        },
-      );
-    }
-  });
-  saveCancelBtn.addEventListener('click', () => {
-    saveDialog.classList.remove('open');
-    recordingStartUrl = null;
-    setRecordingStatus('Recording discarded.');
-  });
-  saveConfirmBtn.addEventListener('click', () => {
-    const name = saveNameInput.value.trim();
-    if (!name) {
-      saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
-      setTimeout(() => {
-        saveNameInput.style.borderColor = '';
-      }, 1500);
-      return;
-    }
-    chrome.runtime.sendMessage(
-      { type: 'GET_RECORDED_ACTIONS' },
-      (recResp: { success?: boolean; actions?: unknown[] } | undefined) => {
-        if (chrome.runtime.lastError || !recResp?.success) {
-          const origPlaceholder = saveNameInput.placeholder;
-          saveNameInput.placeholder = t('spShortcutActionsFailed');
-          saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
-          setTimeout(() => {
-            saveNameInput.placeholder = origPlaceholder;
-            saveNameInput.style.borderColor = '';
-          }, 2000);
-          return;
-        }
-        const recActions = recResp.actions ?? [];
-        if (recActions.length === 0) {
-          saveDialog.classList.remove('open');
-          return;
-        }
-        chrome.runtime.sendMessage(
-          { type: 'SAVE_SHORTCUT', name, actions: recActions, startUrl: recordingStartUrl },
-          (saveResponse: { success?: boolean; error?: string } | undefined) => {
-            if (chrome.runtime.lastError || !saveResponse?.success) {
-              const origPlaceholder = saveNameInput.placeholder;
-              saveNameInput.placeholder = t('spShortcutSaveFailed');
-              saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
-              setRecordingStatus(
-                saveResponse?.error ??
-                  chrome.runtime.lastError?.message ??
-                  'Could not save recording.',
-                'error',
-              );
-              setTimeout(() => {
-                saveNameInput.placeholder = origPlaceholder;
-                saveNameInput.style.borderColor = '';
-              }, 2000);
-              return;
-            }
-            saveDialog.classList.remove('open');
-            recordingStartUrl = null;
-            setRecordingStatus('Workflow saved.');
-            refreshWorkflowsShortcuts();
-          },
-        );
-      },
-    );
-  });
-  saveNameInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') saveConfirmBtn.click();
-  });
-  workflowsPanel.appendChild(recordSection);
-
-  const shortcutsSection = el('div', { class: 'sp-wf-section' });
-  const shortcutsSectionHeader = el('div', { class: 'sp-wf-section-header' });
-  const shortcutsTitle = el('h2', { class: 'sp-wf-section-title' });
-  shortcutsTitle.appendChild(document.createTextNode('Saved Shortcuts '));
-  shortcutsTitle.appendChild(
-    createElementWith({
-      tag: 'span',
-      className: 'sp-wf-count-badge',
-      id: 'sp-wf-shortcuts-count',
-      text: '0',
-    }),
-  );
-  shortcutsSectionHeader.appendChild(shortcutsTitle);
-  const createShortcutBtn = el(
-    'button',
-    { class: 'sp-wf-create-shortcut-btn', id: 'sp-wf-create-shortcut-btn' },
-    '+ Create shortcut',
-  );
-  shortcutsSectionHeader.appendChild(createShortcutBtn);
-  shortcutsSection.appendChild(shortcutsSectionHeader);
-  const wfShortcutsList = el('div', { class: 'sp-wf-shortcuts-list', id: 'sp-wf-shortcuts-list' });
-  setChild(wfShortcutsList, {
-    tag: 'div',
-    className: 'sp-wf-empty',
-    text: 'Record your first workflow or create a prompt shortcut',
-  });
-  shortcutsSection.appendChild(wfShortcutsList);
-  workflowsPanel.appendChild(shortcutsSection);
-
-  const createShortcutOverlay = el('div', {
-    class: 'sp-create-shortcut-overlay',
-    id: 'sp-create-shortcut-overlay',
-    'aria-hidden': 'true',
-  });
-  const createShortcutModal = el('div', {
-    class: 'sp-create-shortcut-modal',
-    role: 'dialog',
-    'aria-modal': 'true',
-    'aria-labelledby': 'sp-create-shortcut-title',
-  });
-  const modalHeader = el('div', { class: 'sp-create-shortcut-header' });
-  const modalTitle = el(
-    'div',
-    { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
-    t('spShortcutCreate'),
-  );
-  modalHeader.appendChild(modalTitle);
-  const modalCloseBtn = el(
-    'button',
-    {
-      class: 'sp-create-shortcut-close',
-      type: 'button',
-      title: 'Close',
-      'aria-label': 'Close shortcut dialog',
-    },
-    '×',
-  );
-  modalHeader.appendChild(modalCloseBtn);
-  createShortcutModal.appendChild(modalHeader);
-
-  const nameField = el('div', { class: 'sp-create-shortcut-field' });
-  nameField.appendChild(
-    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-name' }, 'Name'),
-  );
-  const scNameInput = el('input', {
-    class: 'sp-create-shortcut-input',
-    placeholder: 'e.g. Daily research',
-    id: 'sp-sc-name',
-    'aria-describedby': 'sp-sc-command',
-  }) as HTMLInputElement;
-  nameField.appendChild(scNameInput);
-  const scCommandHint = el('div', { class: 'sp-create-shortcut-hint', id: 'sp-sc-command' });
-  nameField.appendChild(scCommandHint);
-  createShortcutModal.appendChild(nameField);
-
-  const promptField = el('div', { class: 'sp-create-shortcut-field' });
-  promptField.appendChild(
-    el('label', { class: 'sp-create-shortcut-label', for: 'sp-sc-prompt' }, 'Prompt'),
-  );
-  const scPromptInput = el('textarea', {
-    class: 'sp-create-shortcut-textarea',
-    placeholder: t('spShortcutPromptPlaceholder', [SHORTCUT_INPUT_PLACEHOLDER]),
-    id: 'sp-sc-prompt',
-    'aria-describedby': 'sp-sc-prompt-hint',
-  }) as HTMLTextAreaElement;
-  promptField.appendChild(scPromptInput);
-  promptField.appendChild(
-    el(
-      'div',
-      { class: 'sp-create-shortcut-hint', id: 'sp-sc-prompt-hint' },
-      t('spShortcutInputHint', [SHORTCUT_INPUT_PLACEHOLDER]),
-    ),
-  );
-  createShortcutModal.appendChild(promptField);
-
-  const scError = el('div', { class: 'sp-wf-form-error', role: 'status', 'aria-live': 'polite' });
-  createShortcutModal.appendChild(scError);
-
-  const modalActions = el('div', { class: 'sp-create-shortcut-actions' });
-  const scCancelBtn = el('button', { class: 'sp-create-shortcut-cancel' }, 'Cancel');
-  const scSaveBtn = el(
-    'button',
-    { class: 'sp-create-shortcut-save' },
-    t('spShortcutCreate'),
-  ) as HTMLButtonElement;
-  modalActions.appendChild(scCancelBtn);
-  modalActions.appendChild(scSaveBtn);
-  createShortcutModal.appendChild(modalActions);
-  createShortcutOverlay.appendChild(createShortcutModal);
-  document.body.appendChild(createShortcutOverlay);
-
-  let createShortcutReturnFocus: HTMLElement = createShortcutBtn;
-  let editingShortcutId: string | null = null;
-
-  function renderShortcutCommandHint(): void {
-    const command = shortcutCommand(scNameInput.value);
-    scCommandHint.textContent = command ? t('spShortcutCommandHint', [command]) : '';
-  }
-
-  function showShortcutProblem(
-    field: HTMLInputElement | HTMLTextAreaElement,
-    message: string,
-  ): void {
-    scNameInput.removeAttribute('aria-invalid');
-    scPromptInput.removeAttribute('aria-invalid');
-    field.setAttribute('aria-invalid', 'true');
-    scError.textContent = message;
-    field.focus();
-  }
-
-  function openShortcutModal(shortcut: PromptShortcut | null): void {
-    editingShortcutId = shortcut?.id ?? null;
-    scNameInput.value = shortcut?.name ?? '';
-    scPromptInput.value = shortcut?.prompt ?? '';
-    scNameInput.removeAttribute('aria-invalid');
-    scPromptInput.removeAttribute('aria-invalid');
-    scError.textContent = '';
-    modalTitle.textContent = shortcut ? t('spShortcutEditTitle') : t('spShortcutCreate');
-    scSaveBtn.textContent = shortcut ? t('spShortcutSaveChanges') : t('spShortcutCreate');
-    renderShortcutCommandHint();
-    if (document.activeElement instanceof HTMLElement) {
-      createShortcutReturnFocus = document.activeElement;
-    }
-    createShortcutOverlay.setAttribute('aria-hidden', 'false');
-    createShortcutOverlay.classList.add('open');
-    setTimeout(() => {
-      if (!createShortcutModal.contains(document.activeElement)) scNameInput.focus();
-    }, 50);
-  }
-  function closeCreateShortcutModal(): void {
-    createShortcutOverlay.classList.remove('open');
-    createShortcutOverlay.setAttribute('aria-hidden', 'true');
-    createShortcutReturnFocus.focus();
-  }
-  editPromptShortcut = openShortcutModal;
-
-  createShortcutBtn.addEventListener('click', () => openShortcutModal(null));
-  scNameInput.addEventListener('input', renderShortcutCommandHint);
-  modalCloseBtn.addEventListener('click', closeCreateShortcutModal);
-  scCancelBtn.addEventListener('click', closeCreateShortcutModal);
-  createShortcutOverlay.addEventListener('click', (e: MouseEvent) => {
-    if (e.target === createShortcutOverlay) closeCreateShortcutModal();
-  });
-  createShortcutModal.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeCreateShortcutModal();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const focusable = Array.from(
-      createShortcutModal.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((node) => !node.hasAttribute('hidden'));
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  });
-
-  scSaveBtn.addEventListener('click', () => {
-    const name = scNameInput.value.trim();
-    const prompt = scPromptInput.value.trim();
-    const editing = editingShortcutId;
-    const conflict = shortcutCommandConflict(name, promptShortcuts, editing ?? undefined);
-    if (conflict === 'unnamed') {
-      showShortcutProblem(scNameInput, t('spShortcutNameUnusable'));
-      return;
-    }
-    if (conflict === 'taken') {
-      showShortcutProblem(scNameInput, t('spShortcutNameTaken', [shortcutCommand(name)]));
-      return;
-    }
-    if (!prompt.split(SHORTCUT_INPUT_PLACEHOLDER).join('').trim()) {
-      showShortcutProblem(scPromptInput, t('spShortcutPromptMissing'));
-      return;
-    }
-    scNameInput.removeAttribute('aria-invalid');
-    scPromptInput.removeAttribute('aria-invalid');
-    scError.textContent = '';
-    scSaveBtn.disabled = true;
-    scSaveBtn.textContent = t('spShortcutSaving');
-    chrome.runtime.sendMessage(
-      editing
-        ? { type: 'UPDATE_SHORTCUT', shortcutId: editing, name, prompt }
-        : { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
-      (response: { success?: boolean; error?: string } | undefined) => {
-        scSaveBtn.disabled = false;
-        scSaveBtn.textContent = editing ? t('spShortcutSaveChanges') : t('spShortcutCreate');
-        const runtimeError = chrome.runtime.lastError;
-        if (runtimeError || !response?.success) {
-          scError.textContent =
-            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed');
-          return;
-        }
-        closeCreateShortcutModal();
-        announceWorkflowMutation(
-          editing ? t('spShortcutUpdated', [name]) : `Shortcut "${name}" created.`,
-          'success',
-        );
-        refreshWorkflowsShortcuts();
-      },
-    );
-  });
-
-  const tasksSection = el('div', { class: 'sp-wf-section' });
-  const tasksSectionHeader = el('div', { class: 'sp-wf-section-header' });
-  const tasksTitle = el('h2', { class: 'sp-wf-section-title' });
-  tasksTitle.appendChild(document.createTextNode('Scheduled Tasks '));
-  tasksTitle.appendChild(
-    createElementWith({
-      tag: 'span',
-      className: 'sp-wf-count-badge',
-      id: 'sp-wf-tasks-count',
-      text: '0',
-    }),
-  );
-  tasksSectionHeader.appendChild(tasksTitle);
-  const newTaskBtn = el(
-    'button',
-    { class: 'sp-wf-new-task-btn', id: 'sp-wf-new-task-btn' },
-    '+ New Task',
-  );
-  tasksSectionHeader.appendChild(newTaskBtn);
-  tasksSection.appendChild(tasksSectionHeader);
-  const wfTasksList = el('div', { class: 'sp-wf-tasks-list', id: 'sp-wf-tasks-list' });
-  setChild(wfTasksList, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
-  tasksSection.appendChild(wfTasksList);
-
-  const newTaskForm = el('div', { class: 'sp-wf-new-task-form', id: 'sp-wf-new-task-form' });
-  newTaskForm.appendChild(
-    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-name' }, 'Task Name'),
-  );
-  const ntNameInput = el('input', {
-    class: 'sp-wf-form-input',
-    placeholder: 'e.g. Check news',
-    id: 'sp-wf-nt-name',
-  }) as HTMLInputElement;
-  newTaskForm.appendChild(ntNameInput);
-  newTaskForm.appendChild(
-    el(
-      'label',
-      { class: 'sp-wf-form-label', for: 'sp-wf-nt-description' },
-      t('spTaskDescriptionLabel'),
-    ),
-  );
-  const ntDescriptionInput = el('input', {
-    class: 'sp-wf-form-input',
-    placeholder: t('spTaskDescriptionPlaceholder'),
-    id: 'sp-wf-nt-description',
-  }) as HTMLInputElement;
-  newTaskForm.appendChild(ntDescriptionInput);
-  newTaskForm.appendChild(
-    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-prompt' }, 'Prompt'),
-  );
-  const ntPromptInput = el('textarea', {
-    class: 'sp-wf-form-input sp-wf-form-textarea',
-    placeholder: 'What should the AI do?',
-    id: 'sp-wf-nt-prompt',
-    rows: '4',
-  }) as HTMLTextAreaElement;
-  newTaskForm.appendChild(ntPromptInput);
-  newTaskForm.appendChild(
-    el('label', { class: 'sp-wf-form-label', for: 'sp-wf-nt-schedule' }, 'Schedule'),
-  );
-  const ntScheduleSelect = el('select', {
-    class: 'sp-wf-form-select',
-    id: 'sp-wf-nt-schedule',
-  }) as HTMLSelectElement;
-  for (const opt of [
-    { value: 'hourly', label: 'Hourly' },
-    { value: 'daily', label: 'Daily' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'monthly', label: 'Monthly' },
-  ]) {
-    ntScheduleSelect.appendChild(el('option', { value: opt.value }, opt.label));
-  }
-  newTaskForm.appendChild(ntScheduleSelect);
-  const ntFormError = el('div', {
-    class: 'sp-wf-form-error',
-    id: 'sp-wf-nt-error',
-    role: 'status',
-    'aria-live': 'polite',
-  });
-  newTaskForm.appendChild(ntFormError);
-  const ntFormActions = el('div', { class: 'sp-wf-form-actions' });
-  const ntCancelBtn = el('button', { class: 'sp-wf-form-cancel-btn' }, 'Cancel');
-  const ntSaveBtn = el(
-    'button',
-    { class: 'sp-wf-form-save-btn', id: 'sp-wf-nt-save' },
-    'Create Task',
-  );
-  ntFormActions.appendChild(ntCancelBtn);
-  ntFormActions.appendChild(ntSaveBtn);
-  newTaskForm.appendChild(ntFormActions);
-  tasksSection.appendChild(newTaskForm);
-  workflowsPanel.appendChild(tasksSection);
-
-  let editingTask: ScheduledTaskRow | null = null;
-  const idleSaveLabel = (): string => (editingTask ? t('spTaskSaveChanges') : t('spTaskCreate'));
-
-  const resetNewTaskForm = (): void => {
-    newTaskForm.classList.remove('open');
-    editingTask = null;
-    ntNameInput.value = '';
-    ntDescriptionInput.value = '';
-    ntPromptInput.value = '';
-    ntScheduleSelect.value = 'daily';
-    ntNameInput.style.borderColor = '';
-    ntPromptInput.style.borderColor = '';
-    ntFormError.textContent = '';
-    ntSaveBtn.removeAttribute('disabled');
-    ntSaveBtn.textContent = t('spTaskCreate');
-  };
-  resetScheduledTaskDraftForOwnerTransition = resetNewTaskForm;
-  openScheduledTaskEditor = (task) => {
-    resetNewTaskForm();
-    editingTask = task;
-    ntNameInput.value = task.name;
-    ntDescriptionInput.value = task.description ?? '';
-    ntPromptInput.value = task.prompt ?? '';
-    ntScheduleSelect.value = task.scheduleType;
-    ntSaveBtn.textContent = idleSaveLabel();
-    newTaskForm.classList.add('open');
-    newTaskForm.scrollIntoView?.({ block: 'nearest' });
-    ntNameInput.focus();
-  };
-
-  newTaskBtn.addEventListener('click', () => {
-    if (editingTask) {
-      resetNewTaskForm();
-      newTaskForm.classList.add('open');
-    } else {
-      newTaskForm.classList.toggle('open');
-    }
-    ntFormError.textContent = '';
-    if (newTaskForm.classList.contains('open')) ntNameInput.focus();
-  });
-  ntCancelBtn.addEventListener('click', () => {
-    scheduledTaskCreateRequestFence.invalidate();
-    resetNewTaskForm();
-  });
-  ntSaveBtn.addEventListener('click', () => {
-    const name = ntNameInput.value.trim();
-    const description = ntDescriptionInput.value.trim();
-    const prompt = ntPromptInput.value.trim();
-    if (!name || !prompt) {
-      if (!name) {
-        ntNameInput.style.borderColor = 'var(--agi-ext-danger)';
-        setTimeout(() => {
-          ntNameInput.style.borderColor = '';
-        }, 1500);
-      }
-      if (!prompt) {
-        ntPromptInput.style.borderColor = 'var(--agi-ext-danger)';
-        setTimeout(() => {
-          ntPromptInput.style.borderColor = '';
-        }, 1500);
-      }
-      return;
-    }
-    const editing = editingTask;
-    ntFormError.textContent = '';
-    ntSaveBtn.setAttribute('disabled', 'true');
-    ntSaveBtn.textContent = editing ? t('spTaskSaving') : t('spTaskCreating');
-    const createRequest = scheduledTaskCreateRequestFence.begin(_ctx.managedCloudOwner);
-    const owner = createRequest.owner ? { owner: createRequest.owner } : {};
-    chrome.runtime.sendMessage(
-      editing
-        ? {
-            type: 'UPDATE_SCHEDULED_TASK',
-            ...owner,
-            taskId: editing.id,
-            updates: {
-              name,
-              description,
-              prompt,
-              scheduleType: ntScheduleSelect.value,
-            },
-          }
-        : {
-            type: 'CREATE_SCHEDULED_TASK',
-            ...owner,
-            task: {
-              name,
-              ...(description ? { description } : {}),
-              prompt,
-              enabled: true,
-              scheduleType: ntScheduleSelect.value,
-              scheduleValue: '',
-            },
-          },
-      (response: { success?: boolean; error?: string } | undefined) => {
-        if (!scheduledTaskCreateRequestFence.isCurrent(createRequest, _ctx.managedCloudOwner)) {
-          return;
-        }
-        ntSaveBtn.removeAttribute('disabled');
-        ntSaveBtn.textContent = idleSaveLabel();
-        const runtimeError = chrome.runtime.lastError?.message;
-        if (runtimeError || response?.success !== true) {
-          ntFormError.textContent =
-            runtimeError ||
-            response?.error ||
-            (editing ? t('spTaskSaveFailed') : t('spTaskCreateFailed'));
-          return;
-        }
-        resetNewTaskForm();
-        if (editing) announceWorkflowMutation(t('spTaskUpdated', [name]), 'success');
-        refreshWorkflowsTasks();
-      },
-    );
-  });
-
-  const groupsSection = el('div', { class: 'sp-wf-section' });
-  groupsSection.appendChild(
-    (() => {
-      const h = el('div', { class: 'sp-wf-section-header' });
-      h.appendChild(el('h2', { class: 'sp-wf-section-title' }, 'Tab Groups'));
-      return h;
-    })(),
-  );
-  groupsSection.appendChild(
-    el('div', { class: 'sp-wf-group-desc' }, 'Organize tabs into groups for focused workflows.'),
-  );
-  const groupBtnsRow = el('div', { class: 'sp-wf-group-btns' });
-  const wfGroupAddBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabAdd'));
-  const wfGroupRemoveBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabRemove'));
-  wfGroupAddBtn.addEventListener('click', () => {
-    requestTabGroupChange(true);
-  });
-  wfGroupRemoveBtn.addEventListener('click', () => {
-    requestTabGroupChange(false);
-  });
-  registerTabGroupStateRenderer((grouped, known) => {
-    wfGroupAddBtn.disabled = !known || grouped;
-    wfGroupRemoveBtn.disabled = !known || !grouped;
-    wfGroupAddBtn.classList.toggle('active', grouped && known);
-    wfGroupAddBtn.title = known
-      ? grouped
-        ? t('spTabGroupAlreadyGrouped')
-        : t('spTabGroupAddTitle')
-      : t('spTabGroupChecking');
-    wfGroupRemoveBtn.title = known
-      ? grouped
-        ? t('spTabGroupRemoveTitle')
-        : t('spTabGroupNotGrouped')
-      : t('spTabGroupChecking');
-  });
-  groupBtnsRow.appendChild(wfGroupAddBtn);
-  groupBtnsRow.appendChild(wfGroupRemoveBtn);
-  groupsSection.appendChild(groupBtnsRow);
-  workflowsPanel.appendChild(groupsSection);
-  document.body.appendChild(workflowsPanel);
-
   document.body.appendChild(cuPanel.panelEl);
-
-  document.body.appendChild(runsPanel.panelEl);
-
-  document.body.appendChild(pagePanel.panelEl);
 
   for (const [tabBtn, panel] of [
     [chatTabBtn, chatPanel],
-    [workflowsTabBtn, workflowsPanel],
     [cuTabBtn, cuPanel.panelEl],
-    [runsTabBtn, runsPanel.panelEl],
-    [pageTabBtn, pagePanel.panelEl],
   ] as const) {
     panel.prepend(el('h1', { class: 'sp-visually-hidden' }, tabBtn.textContent ?? ''));
   }
@@ -15876,9 +11659,6 @@ function buildUI(): void {
           switchTab('computer-use');
         }
       }
-    } else if (m['type'] === 'AGI_DOWNLOAD_CHANGED') {
-      const download = m['download'] as Parameters<BrowserToolsPanelAPI['applyDownload']>[0];
-      if (download && typeof download.id === 'number') pagePanel.applyDownload(download);
     } else if (m['type'] === 'AGI_CU_STEP') {
       if (!cuPanel.ownsRun(runId)) return;
       cuPanel.noteRunActivity();
@@ -17581,391 +13361,6 @@ function refreshShortcuts(): void {
   );
 }
 
-let workflowAnnouncements = 0;
-
-function announceWorkflowMutation(
-  message: string,
-  kind: 'info' | 'success' | 'error' = 'info',
-): number {
-  workflowAnnouncements += 1;
-  const status = document.getElementById('sp-wf-mutation-status');
-  if (status) {
-    status.textContent = message;
-    status.setAttribute('data-kind', kind);
-  }
-  return workflowAnnouncements;
-}
-
-function refreshWorkflowsShortcuts(): void {
-  chrome.runtime.sendMessage(
-    { type: 'LIST_SHORTCUTS' },
-    (
-      response:
-        | {
-            success?: boolean;
-            shortcuts?: Array<{
-              id: string;
-              name: string;
-              actions: unknown[];
-              createdAt: number;
-              prompt?: string;
-              startUrl?: string;
-              scheduled?: boolean;
-            }>;
-          }
-        | undefined,
-    ) => {
-      if (chrome.runtime.lastError || !response?.success) {
-        announceWorkflowMutation(t('spWorkflowLoadFailed'), 'error');
-        return;
-      }
-      const list = document.getElementById('sp-wf-shortcuts-list');
-      const countBadge = document.getElementById('sp-wf-shortcuts-count');
-      if (!list) return;
-      clearChildren(list);
-      const shortcuts = response.shortcuts ?? [];
-      if (countBadge) countBadge.textContent = String(shortcuts.length);
-      if (shortcuts.length === 0) {
-        setChild(list, {
-          tag: 'div',
-          className: 'sp-wf-empty',
-          text: 'Record your first workflow or create a prompt shortcut',
-        });
-        return;
-      }
-      const owner = _ctx.managedCloudOwner;
-      void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
-        .catch(() => [] as ConversationEntry[])
-        .then((entries) => renderShortcutRows(list, shortcuts, new Set(entries.map((e) => e.id))));
-    },
-  );
-}
-
-function renderShortcutRows(
-  list: HTMLElement,
-  shortcuts: Array<{
-    id: string;
-    name: string;
-    actions: unknown[];
-    createdAt: number;
-    prompt?: string;
-    startUrl?: string;
-    scheduled?: boolean;
-  }>,
-  storedConversationIds: ReadonlySet<string>,
-): void {
-  clearChildren(list);
-  const savedPromptShortcuts = promptShortcutsFromSaved(shortcuts);
-  for (const sc of shortcuts) {
-    const item = el('div', { class: 'sp-wf-shortcut-item' });
-    const promptShortcut = savedPromptShortcuts.find((candidate) => candidate.id === sc.id);
-    const isPromptBased = promptShortcut !== undefined;
-    const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
-    if (isPromptBased) {
-      shortcutIcon.textContent = '/';
-    } else {
-      shortcutIcon.appendChild(renderIcon(Zap, 14));
-    }
-    item.appendChild(shortcutIcon);
-    const info = el('div', { class: 'sp-wf-shortcut-info' });
-    info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
-    const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
-    const dateStr = new Date(sc.createdAt).toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    });
-    const command =
-      promptShortcut &&
-      shortcutCommandConflict(promptShortcut.name, savedPromptShortcuts, promptShortcut.id) === null
-        ? shortcutCommand(promptShortcut.name)
-        : '';
-    const metaText = isPromptBased
-      ? `${command || 'prompt shortcut'} · ${dateStr}`
-      : `${actionsCount} actions · ${dateStr}`;
-    info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
-    item.appendChild(info);
-    const btns = el('div', { class: 'sp-wf-shortcut-btns' });
-    const resultConversationId = backgroundConversationId('shortcut', sc.id);
-    const playBtn = el(
-      'button',
-      { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
-      t('spShortcutPlay'),
-    ) as HTMLButtonElement;
-    playBtn.addEventListener('click', () => {
-      playBtn.textContent = t('spWorkflowRunningButton');
-      playBtn.disabled = true;
-      announceWorkflowMutation(t('spWorkflowRunning', [sc.name]));
-      chrome.runtime.sendMessage(
-        { type: 'REPLAY_SHORTCUT', shortcutId: sc.id },
-        (resp: { success?: boolean } | undefined) => {
-          playBtn.textContent = t('spShortcutPlay');
-          playBtn.disabled = false;
-          if (chrome.runtime.lastError || !resp?.success) {
-            announceWorkflowMutation(t('spWorkflowRunFailed', [sc.name]), 'error');
-            return;
-          }
-          if (!isPromptBased || !resultConversationId) {
-            announceWorkflowMutation(t('spWorkflowCompleted', [sc.name]), 'success');
-            return;
-          }
-          void openStoredConversation(resultConversationId).then((opened) => {
-            announceWorkflowMutation(
-              opened
-                ? t('spWorkflowCompletedOpen', [sc.name])
-                : t('spWorkflowCompletedOpenFailed', [sc.name]),
-              opened ? 'success' : 'error',
-            );
-          });
-        },
-      );
-    });
-    btns.appendChild(playBtn);
-    if (isPromptBased && resultConversationId && storedConversationIds.has(resultConversationId)) {
-      const resultBtn = iconButton(
-        { class: 'sp-wf-task-result', title: 'View last result' },
-        MessageSquare,
-      ) as HTMLButtonElement;
-      resultBtn.dataset['conversationRestore'] = 'true';
-      resultBtn.disabled = _ctx.isStreaming || historyRestoreInProgress;
-      resultBtn.addEventListener('click', () => {
-        void openStoredConversation(resultConversationId);
-      });
-      btns.appendChild(resultBtn);
-    }
-    if (promptShortcut) {
-      const editBtn = iconButton(
-        { class: 'sp-wf-task-result', title: t('spShortcutEdit', [sc.name]) },
-        SquarePen,
-      ) as HTMLButtonElement;
-      editBtn.addEventListener('click', () => editPromptShortcut(promptShortcut));
-      btns.appendChild(editBtn);
-    }
-    const delBtn = iconButton(
-      { class: 'sp-wf-btn-delete', title: t('spShortcutDelete') },
-      Trash2,
-    ) as HTMLButtonElement;
-    let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
-    delBtn.addEventListener('click', () => {
-      if (!delBtn.classList.contains('is-confirm')) {
-        delBtn.classList.add('is-confirm');
-        delBtn.title = t('spShortcutDeleteAgain');
-        const confirmText = command
-          ? t('spShortcutDeleteConfirm', [sc.name, command])
-          : t('spWorkflowDeleteConfirm', [sc.name]);
-        const confirmation = announceWorkflowMutation(confirmText);
-        deleteConfirmTimer = setTimeout(() => {
-          delBtn.classList.remove('is-confirm');
-          delBtn.title = t('spShortcutDelete');
-          if (confirmation === workflowAnnouncements) announceWorkflowMutation('');
-          deleteConfirmTimer = null;
-        }, DRAWER_DELETE_CONFIRM_MS);
-        return;
-      }
-      if (deleteConfirmTimer !== null) clearTimeout(deleteConfirmTimer);
-      deleteConfirmTimer = null;
-      delBtn.classList.remove('is-confirm');
-      delBtn.disabled = true;
-      announceWorkflowMutation(t('spWorkflowDeleting', [sc.name]));
-      chrome.runtime.sendMessage(
-        { type: 'DELETE_SHORTCUT', shortcutId: sc.id },
-        (response: { success?: boolean } | undefined) => {
-          if (chrome.runtime.lastError || !response?.success) {
-            delBtn.disabled = false;
-            announceWorkflowMutation(t('spWorkflowDeleteFailed', [sc.name]), 'error');
-            return;
-          }
-          announceWorkflowMutation(t('spWorkflowDeleted', [sc.name]), 'success');
-          refreshWorkflowsShortcuts();
-        },
-      );
-    });
-    btns.appendChild(delBtn);
-    item.appendChild(btns);
-    list.appendChild(item);
-  }
-}
-
-function refreshWorkflowsTasks(): void {
-  const request = scheduledTasksRequestFence.begin(_ctx.managedCloudOwner);
-  chrome.runtime.sendMessage(
-    { type: 'LIST_SCHEDULED_TASKS', ...(request.owner ? { owner: request.owner } : {}) },
-    (
-      response:
-        | {
-            success?: boolean;
-            tasks?: ScheduledTaskRow[];
-          }
-        | undefined,
-    ) => {
-      if (!scheduledTasksRequestFence.isCurrent(request, _ctx.managedCloudOwner)) return;
-      if (chrome.runtime.lastError || !response?.success) {
-        announceWorkflowMutation(t('spTaskLoadFailed'), 'error');
-        return;
-      }
-      const list = document.getElementById('sp-wf-tasks-list');
-      const countBadge = document.getElementById('sp-wf-tasks-count');
-      if (!list) return;
-      clearChildren(list);
-      const tasks = response.tasks ?? [];
-      if (countBadge) countBadge.textContent = String(tasks.length);
-      if (tasks.length === 0) {
-        setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
-        return;
-      }
-      const owner = request.owner;
-      void (owner ? listConversations(owner) : Promise.resolve([] as ConversationEntry[]))
-        .catch(() => [] as ConversationEntry[])
-        .then((entries) => {
-          if (!scheduledTasksRequestFence.isCurrent(request, _ctx.managedCloudOwner)) return;
-          renderTaskRows(list, tasks, new Set(entries.map((e) => e.id)), owner);
-        });
-    },
-  );
-}
-
-function clearWorkflowsTaskRows(): void {
-  const list = document.getElementById('sp-wf-tasks-list');
-  const countBadge = document.getElementById('sp-wf-tasks-count');
-  if (countBadge) countBadge.textContent = '0';
-  if (list) {
-    setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
-  }
-}
-
-interface ScheduledTaskRow {
-  id: string;
-  name: string;
-  description?: string;
-  prompt?: string;
-  enabled: boolean;
-  scheduleType: string;
-  scheduleValue: string;
-  lastRun?: number;
-}
-
-function renderTaskRows(
-  list: HTMLElement,
-  tasks: ScheduledTaskRow[],
-  storedConversationIds: ReadonlySet<string>,
-  owner: ManagedCloudOwner | null,
-): void {
-  clearChildren(list);
-  for (const task of tasks) {
-    const item = el('div', { class: 'sp-wf-task-item' });
-    const toggle = el('input', {
-      type: 'checkbox',
-      class: 'sp-wf-task-toggle',
-      'aria-label': task.enabled
-        ? t('spTaskDisableAria', [task.name])
-        : t('spTaskEnableAria', [task.name]),
-    }) as HTMLInputElement;
-    toggle.checked = task.enabled;
-    toggle.addEventListener('change', () => {
-      const previousState = !toggle.checked;
-      const nextState = toggle.checked;
-      toggle.disabled = true;
-      announceWorkflowMutation(
-        nextState ? t('spTaskEnabling', [task.name]) : t('spTaskDisabling', [task.name]),
-      );
-      chrome.runtime.sendMessage(
-        {
-          type: 'UPDATE_SCHEDULED_TASK',
-          ...(owner ? { owner } : {}),
-          taskId: task.id,
-          updates: { enabled: toggle.checked },
-        },
-        (resp: { success?: boolean } | undefined) => {
-          toggle.disabled = false;
-          if (chrome.runtime.lastError || !resp?.success) {
-            toggle.checked = previousState;
-            announceWorkflowMutation(
-              nextState
-                ? t('spTaskEnableFailed', [task.name])
-                : t('spTaskDisableFailed', [task.name]),
-              'error',
-            );
-            return;
-          }
-          toggle.setAttribute(
-            'aria-label',
-            nextState ? t('spTaskDisableAria', [task.name]) : t('spTaskEnableAria', [task.name]),
-          );
-          announceWorkflowMutation(
-            nextState ? t('spTaskEnabled', [task.name]) : t('spTaskDisabled', [task.name]),
-            'success',
-          );
-        },
-      );
-    });
-    item.appendChild(toggle);
-    const info = el('div', { class: 'sp-wf-task-info' });
-    info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
-    if (task.description) {
-      info.appendChild(el('div', { class: 'sp-wf-task-description' }, task.description));
-    }
-    info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
-    item.appendChild(info);
-    const resultConversationId = backgroundConversationId('task', task.id);
-    if (resultConversationId && storedConversationIds.has(resultConversationId)) {
-      const resultBtn = iconButton(
-        { class: 'sp-wf-task-result', title: 'View last result' },
-        MessageSquare,
-      ) as HTMLButtonElement;
-      resultBtn.dataset['conversationRestore'] = 'true';
-      resultBtn.disabled = _ctx.isStreaming || historyRestoreInProgress;
-      resultBtn.addEventListener('click', () => {
-        void openStoredConversation(resultConversationId);
-      });
-      item.appendChild(resultBtn);
-    }
-    const editBtn = iconButton(
-      { class: 'sp-wf-task-result', title: t('spTaskEdit', [task.name]) },
-      SquarePen,
-    ) as HTMLButtonElement;
-    editBtn.addEventListener('click', () => openScheduledTaskEditor(task));
-    item.appendChild(editBtn);
-    const deleteTitle = `Delete task ${task.name}`;
-    const delBtn = iconButton(
-      { class: 'sp-wf-task-delete', title: deleteTitle },
-      Trash2,
-    ) as HTMLButtonElement;
-    let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null;
-    delBtn.addEventListener('click', () => {
-      if (!delBtn.classList.contains('is-confirm')) {
-        delBtn.classList.add('is-confirm');
-        delBtn.title = t('spShortcutDeleteAgain');
-        const confirmation = announceWorkflowMutation(t('spTaskDeleteConfirm', [task.name]));
-        deleteConfirmTimer = setTimeout(() => {
-          delBtn.classList.remove('is-confirm');
-          delBtn.title = deleteTitle;
-          if (confirmation === workflowAnnouncements) announceWorkflowMutation('');
-          deleteConfirmTimer = null;
-        }, DRAWER_DELETE_CONFIRM_MS);
-        return;
-      }
-      if (deleteConfirmTimer !== null) clearTimeout(deleteConfirmTimer);
-      deleteConfirmTimer = null;
-      delBtn.classList.remove('is-confirm');
-      delBtn.disabled = true;
-      announceWorkflowMutation(t('spWorkflowDeleting', [task.name]));
-      chrome.runtime.sendMessage(
-        { type: 'DELETE_SCHEDULED_TASK', taskId: task.id, ...(owner ? { owner } : {}) },
-        (resp: { success?: boolean } | undefined) => {
-          if (chrome.runtime.lastError || !resp?.success) {
-            delBtn.disabled = false;
-            announceWorkflowMutation(t('spWorkflowDeleteFailed', [task.name]), 'error');
-            return;
-          }
-          announceWorkflowMutation(t('spWorkflowDeleted', [task.name]), 'success');
-          refreshWorkflowsTasks();
-        },
-      );
-    });
-    item.appendChild(delBtn);
-    list.appendChild(item);
-  }
-}
-
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   const envelope = msg as { type: string };
 
@@ -18353,8 +13748,6 @@ async function checkPendingBackgroundResult(): Promise<void> {
   if (!conversationId) return;
   await openStoredConversation(conversationId);
 }
-
-const DRAWER_DELETE_CONFIRM_MS = 3000;
 
 const PENDING_CHAT_TTL_MS = 5 * 60_000;
 

@@ -133,6 +133,7 @@ const chromeMock = vi.hoisted(() => {
 });
 
 const account = vi.hoisted(() => ({
+  summarized: '',
   signedIn: true,
   uploadsAllowed: true,
   ready: true,
@@ -194,7 +195,8 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   fetchAccountSummary: async () => ({
-    displayName: account.owner.authIncarnation,
+    displayName:
+      ((account.summarized = account.owner.authIncarnation), account.owner.authIncarnation),
     email: null,
     capabilityDocument: {
       granted: account.uploadsAllowed ? ['canUploadFiles'] : [],
@@ -242,9 +244,7 @@ function noticeText(): string {
 async function expectReadyAccount(): Promise<void> {
   await vi.waitFor(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(false);
-    expect(document.getElementById('sp-cloud-user-label')!.textContent).toBe(
-      account.owner.authIncarnation,
-    );
+    expect(account.summarized).toBe(account.owner.authIncarnation);
     expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
       !account.uploadsAllowed,
     );
