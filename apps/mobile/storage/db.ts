@@ -119,24 +119,3 @@ export async function closeDb(): Promise<void> {
   dbOpenPromise = null;
   await db?.closeAsync?.();
 }
-
-export async function rekeyDb(newKey: string): Promise<void> {
-  if (!HEX_256_BIT_KEY.test(newKey)) {
-    throw new Error('SQLCipher key must be a 64-character lowercase hex string.');
-  }
-  const db = await getDb();
-  const oldKey = await SecureStore.getItemAsync(DB_KEY_STORAGE_ID);
-  await SecureStore.setItemAsync(DB_KEY_STORAGE_ID, newKey, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
-  try {
-    await db.execAsync(`PRAGMA rekey = "x'${newKey}'";`);
-  } catch (err) {
-    if (oldKey != null) {
-      await SecureStore.setItemAsync(DB_KEY_STORAGE_ID, oldKey, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-    }
-    throw err;
-  }
-}

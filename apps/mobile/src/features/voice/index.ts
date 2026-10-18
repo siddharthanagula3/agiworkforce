@@ -2,8 +2,6 @@ export * from './components/RecordingOverlay';
 export * from './components/VoiceInlineBar';
 export * from './components/VoiceInputButton';
 export * from './components/VoiceOrb';
-export * from './components/VoiceRecording';
-export * from './components/VoiceReview';
 export * from './components/VoiceSelector';
 export * from './components/Waveform';
 export * from './hooks/useVoicePlayback';

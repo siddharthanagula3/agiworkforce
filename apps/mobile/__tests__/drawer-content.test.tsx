@@ -159,15 +159,6 @@ describe('DrawerContent', () => {
     });
 
     useAuthStore.setState({
-      session: null,
-      user: {
-        id: 'user-1',
-        email: 'alice@example.com',
-        user_metadata: { full_name: 'Alice Smith' },
-        app_metadata: {},
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      } as never,
       isLoading: false,
       isInitialized: true,
     });

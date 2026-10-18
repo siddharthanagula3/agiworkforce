@@ -6,22 +6,6 @@ import {
   CLERK_PUBLISHABLE_KEY,
 } from '@/src/integrations/clerk';
 
-export interface MobileAuthUser {
-  id: string;
-  email?: string | null;
-  created_at?: string | null;
-  user_metadata?: {
-    full_name?: string | null;
-    name?: string | null;
-    [key: string]: unknown;
-  } | null;
-}
-
-export interface MobileAuthSession {
-  access_token: string;
-  user: MobileAuthUser;
-}
-
 export async function getAuthToken(): Promise<string | null> {
   return getClerkToken();
 }

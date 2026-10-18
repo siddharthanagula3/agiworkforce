@@ -36,4 +36,3 @@ export * from './components/StyleSelector';
 export * from './components/TaskChips';
 export * from './components/TemporaryChatToggle';
 export * from './components/ThinkingChip';
-export * from './components/TypingIndicator';

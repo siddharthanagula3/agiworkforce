@@ -61,7 +61,6 @@ const mockDb = {
 jest.mock('../storage/db', () => ({
   getDb: jest.fn().mockResolvedValue(mockDb),
   closeDb: jest.fn().mockResolvedValue(undefined),
-  rekeyDb: jest.fn().mockResolvedValue(undefined),
 }));
 
 import * as LegacyFS from 'expo-file-system/legacy';

@@ -369,7 +369,9 @@ async function attemptStream(
         'Idempotency-Key': createManagedChatIdempotencyKey({
           surface: 'mobile',
           purpose:
-            path === TOOL_APPROVAL_RESUME_PATH || path === DEVICE_STEP_RESUME_PATH
+            path === TOOL_APPROVAL_RESUME_PATH ||
+            path === TOOL_INPUT_RESUME_PATH ||
+            path === DEVICE_STEP_RESUME_PATH
               ? 'tool-resume'
               : 'send',
           operationId,

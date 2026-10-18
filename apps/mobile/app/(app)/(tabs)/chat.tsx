@@ -93,6 +93,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { API_URL } from '@/lib/constants';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -288,6 +289,7 @@ export default function ChatTabScreen() {
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
       providerMode: (activeMode === 'cloud' ? 'ManagedGateway' : 'Local') satisfies ProviderMode,
+      ...(activeMode === 'cloud' ? { destinationHost: new URL(API_URL).host } : {}),
       modelLabel: modelForSend ? getShortDisplayName(modelForSend, subscriptionTier) : undefined,
       modelId: modelForSend,
     }),

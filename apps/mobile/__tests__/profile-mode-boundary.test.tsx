@@ -123,8 +123,6 @@ function resetStores() {
     settingsUpdatedAt: null,
   });
   useAuthStore.setState({
-    session: null,
-    user: null,
     isLoading: false,
     isInitialized: true,
     isClerkSignedIn: false,

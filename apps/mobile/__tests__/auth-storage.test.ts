@@ -252,32 +252,11 @@ function getState() {
 
 function resetAuthStore() {
   useAuthStore.setState({
-    session: null,
-    user: null,
     isLoading: true,
     isInitialized: false,
+    isClerkSignedIn: false,
+    clerkUserId: null,
   });
-}
-
-function makeSession(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
-  return {
-    access_token: 'test-access-token',
-    refresh_token: 'test-refresh-token',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    token_type: 'bearer',
-    user: {
-      id: 'user-123',
-      email: 'test@example.com',
-      aud: 'authenticated',
-      role: 'authenticated',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      app_metadata: {},
-      user_metadata: {},
-    },
-    ...overrides,
-  };
 }
 
 describe('secureStorage adapter', () => {
@@ -412,7 +391,7 @@ describe('secureStorage adapter', () => {
       });
       mockGetItemAsync.mockImplementation(async (key) => stored[key] ?? null);
 
-      const payload = JSON.stringify({ session: makeSession() });
+      const payload = JSON.stringify({ session: { access_token: 'test-access-token' } });
 
       secureStorage.setItem('auth-store', payload);
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -449,41 +428,21 @@ describe('authStore, secure storage persistence', () => {
     });
   });
 
-  it('removes session from secure store after sign-out', async () => {
-    const session = makeSession();
-    useAuthStore.setState({ session: session as never, user: session['user'] as never });
-
-    await act(async () => {
-      await getState().signOut();
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(getState().session).toBeNull();
-    expect(getState().user).toBeNull();
-
-    expect(mockSetItemAsync).toHaveBeenCalledWith(
-      'auth-store',
-      expect.stringContaining('"session":null'),
-      expect.any(Object),
-    );
-  });
-
-  it('clears session when cloud-session cleanup fails (always-clear guarantee)', async () => {
+  it('clears the signed-in account when cloud-session cleanup fails (always-clear guarantee)', async () => {
     mockClearAuthSession.mockRejectedValue(new Error('Network error'));
 
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-123' });
 
     await act(async () => {
       await getState().signOut();
     });
 
-    expect(getState().session).toBeNull();
-    expect(getState().user).toBeNull();
+    expect(getState().isClerkSignedIn).toBe(false);
+    expect(getState().clerkUserId).toBeNull();
   });
 
   it('signOut resets settings sync cursor and clears personalization (account-B isolation)', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -510,7 +469,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('signOut clears every cached account entitlement (no stale plan/tool grants)', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -520,7 +479,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('signOut atomically returns the persisted app mode to Local', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -536,16 +495,10 @@ describe('authStore, secure storage persistence', () => {
         resolveExternalSignOut = resolve;
       }),
     );
-    useAuthStore.setState({
-      session: makeSession() as never,
-      user: {} as never,
-      isClerkSignedIn: true,
-    });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     const pendingSignOut = getState().signOut();
 
-    expect(getState().session).toBeNull();
-    expect(getState().user).toBeNull();
     expect(getState().isClerkSignedIn).toBe(false);
     expect(_appModeMock.useChatAppModeStore.setState).toHaveBeenCalledWith({ appMode: 'local' });
 
@@ -556,7 +509,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('signOut clears cloud artifacts (account-B isolation)', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -566,7 +519,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('signOut unregisters the device push token (account-B push-notification isolation)', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -578,7 +531,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('attempts the authenticated push-token DELETE before clearing Clerk credentials', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -591,7 +544,7 @@ describe('authStore, secure storage persistence', () => {
   });
 
   it('revokes the Siri token with the captured session before clearing Clerk credentials', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+    useAuthStore.setState({ isClerkSignedIn: true });
 
     await act(async () => {
       await getState().signOut();
@@ -602,42 +555,6 @@ describe('authStore, secure storage persistence', () => {
     expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(
       mockClearAuthSession.mock.invocationCallOrder[0],
     );
-  });
-
-  it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {
-    const session = makeSession();
-
-    const storePersistConfig = (
-      useAuthStore as unknown as {
-        persist: {
-          getOptions: () => {
-            onRehydrateStorage: () => (state: Record<string, unknown> | undefined) => void;
-          };
-        };
-      }
-    ).persist;
-    const options = storePersistConfig?.getOptions?.();
-    const outerCallback = options?.onRehydrateStorage?.();
-
-    expect(outerCallback).toBeDefined();
-
-    if (outerCallback) {
-      const simulatedState = {
-        session: session as never,
-        user: session['user'] as never,
-        isLoading: false, // would be set to false during normal rehydration
-        isInitialized: true, // would be set to true normally
-      };
-      outerCallback(simulatedState as never);
-
-      expect(simulatedState.session).toBeNull();
-      expect(simulatedState.isLoading).toBe(true);
-      expect(simulatedState.isInitialized).toBe(false);
-    } else {
-      throw new Error(
-        'persist API unavailable: Zustand .persist.getOptions() returned no callback',
-      );
-    }
   });
 });
 
