@@ -372,7 +372,7 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
    *
    * @internal SECURITY: the signature is NOT verified here, this only decodes
    * the `sub` claim, so the method is default-deny. Verify the token upstream
-   * (Clerk `verifyToken` / {@link ClerkAuthAdapter}) before opting in.
+   * (the identity provider's `verifySessionToken`) before opting in.
    *
    * @throws DataLayerConfigError when the opt-in flag is not set, or when the
    * JWT is malformed.
@@ -382,10 +382,9 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
       throw new DataLayerConfigError(
         'PostgresDatabaseAdapter.withUser() decodes an UNVERIFIED JWT `sub` and binds it ' +
           'as the RLS subject, forwarding an attacker-minted token here is an ' +
-          'impersonation footgun. Verify the token signature upstream (Clerk ' +
-          'verifyToken / ClerkAuthAdapter.verifyJwt) FIRST, then construct the ' +
-          'adapter with { unsafeAllowUnverifiedJwtSubject: true } to acknowledge ' +
-          'that precondition.',
+          'impersonation footgun. Verify the token signature upstream (the identity ' +
+          "provider's verifySessionToken) FIRST, then construct the adapter with " +
+          '{ unsafeAllowUnverifiedJwtSubject: true } to acknowledge that precondition.',
       );
     }
     const sub = decodeJwtSub(jwt, POSTGRES_ADAPTER_NAME);

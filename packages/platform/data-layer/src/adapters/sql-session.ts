@@ -73,7 +73,7 @@ function describe(error: unknown): string {
  * @internal SECURITY: this trusts an UNVERIFIED token. An attacker who can
  * reach a caller that forwards a self-minted JWT here controls the `sub` that
  * drives RLS, i.e. impersonation. It is ONLY safe when the caller has already
- * verified the signature (Clerk `verifyToken` / `ClerkAuthAdapter.verifyJwt`)
+ * verified the signature (the identity provider's `verifySessionToken`)
  * BEFORE handing the token to `withUser`. Because that precondition is
  * invisible from here, every `withUser` is default-deny: it refuses to call
  * this unless the adapter was explicitly constructed with

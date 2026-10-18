@@ -39,10 +39,9 @@
  * base64url-decodes the middle segment and reads `.sub`. Binding an
  * unverified `sub` to RLS is an impersonation footgun, so `withUser()` is
  * DEFAULT-DENY: it throws unless the adapter is constructed with
- * `unsafeAllowUnverifiedJwtSubject: true`. Verify the token upstream
- * (Clerk `verifyToken` / `ClerkAuthAdapter.verifyJwt`) BEFORE opting in.
- * The live web gateway never calls this path; it derives identity from
- * Clerk `auth()` directly.
+ * `unsafeAllowUnverifiedJwtSubject: true`. The only caller that opts in,
+ * `apps/web/lib/server/rls-db.ts`, verifies the session through the identity
+ * provider before binding the token.
  *
  * ## Connection pooling
  *
@@ -50,16 +49,6 @@
  * Node and over `fetch` for edge. You DO NOT run PgBouncer in front. For
  * one-shot edge invocations consider the `neon()` HTTP function instead;
  * for long-lived Node servers `Pool` is the right call (we use it here).
- *
- * ## Storage + Realtime
- *
- * Neon doesn't ship those. Pair this adapter with:
- *
- * - Storage: S3 / R2 / B2 (planned `s3.ts` adapter) or Vercel Blob.
- * - Realtime: Pusher / Ably / self-hosted ws or Vercel Edge Pub/Sub.
- *
- * The factory rejects `AGI_STORAGE_PROVIDER=s3` etc. today with a
- * `DataLayerConfigError` pointing at the current technical architecture.
  */
 
 import type { Pool, PoolClient, QueryResult } from '@neondatabase/serverless';
@@ -80,32 +69,6 @@ import {
   decodeJwtSub,
   withStatementContext,
 } from './sql-session';
-
-export const MIGRATION_GUIDE = `
-1. Provision a Neon project. Create a database. Copy the connection string
-   (Dashboard -> Connection Details -> "Pooled connection"); it looks like
-   "postgresql://user:pwd@ep-xxx.us-east-2.aws.neon.tech/db?sslmode=require".
-
-2. Apply the canonical Neon migrations under apps/web/db/neon/ with the
-   Neon CLI or your migration runner.
-
-3. Verify Clerk session tokens before calling db.withUser(jwt). The GUC
-   binding (set local request.jwt.claim.sub) drives your RLS policies.
-   withUser() is default-deny: it THROWS unless the adapter was constructed
-   with { unsafeAllowUnverifiedJwtSubject: true }, which acknowledges you
-   have already signature-verified the token upstream.
-
-4. Flip env vars (no code change required):
-     AGI_DATABASE_PROVIDER=neon
-     AGI_DATABASE_URL=postgresql://...neon.tech/db?sslmode=require
-   The createDatabaseClient() factory now returns NeonDatabaseAdapter.
-
-5. Verify. Run a smoke test: db.withUser(testJwt).query('select 1') from a
-   server route, plus an RLS-fenced read to confirm row filtering. Then
-   migrate hot paths to adapter.query/execute with parameterized SQL.
-
-Full guide: docs/product/definition.md and docs/architecture/overview.md.
-`.trim();
 
 type NeonModule = typeof import('@neondatabase/serverless');
 
@@ -294,6 +257,14 @@ const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
  */
 const DEFAULT_IDLE_TIMEOUT_MS = 5_000;
 
+/**
+ * `PoolClient.release(err)` destroys the connection instead of returning it to
+ * the pool. Used only when a rollback failed, where the client may still carry
+ * this request's transaction-local tenant scope and handing it to the next
+ * checkout would leak one tenant's subject into another's query.
+ */
+const DESTROY_ON_RELEASE = new Error('neon client released without a clean transaction');
+
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   pool?: Pool;
   poolPromise?: Promise<Pool>;
@@ -306,12 +277,9 @@ export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
    * picks the `sub` and impersonates any user. So `withUser()` THROWS unless
    * this flag is explicitly set to `true`, forcing the integrator to
    * acknowledge that the token has already been signature-verified upstream
-   * (Clerk `verifyToken` / {@link ClerkAuthAdapter}) before it reaches here.
-   *
-   * The live web gateway never sets this, it derives identity from Clerk
-   * `auth()` directly and never calls `withUser`. Leave it unset unless you
-   * are wiring a verified-token-only path and have proven the verification
-   * happens first.
+   * (the identity provider's `verifySessionToken`) before it reaches here.
+   * Leave it unset unless you are wiring a verified-token-only path and have
+   * proven the verification happens first.
    */
   unsafeAllowUnverifiedJwtSubject?: boolean;
 }
@@ -386,13 +354,28 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     return client;
   }
 
-  private releaseClient(client: PoolClient): void {
+  private releaseClient(client: PoolClient, destroy = false): void {
     const guard = this.checkoutGuards.get(client);
     if (guard) {
       this.checkoutGuards.delete(client);
       client.removeListener('error', guard);
     }
-    client.release();
+    if (destroy) client.release(DESTROY_ON_RELEASE);
+    else client.release();
+  }
+
+  /**
+   * Returns whether the client is safe to hand back to the pool. A client whose
+   * ROLLBACK failed may still hold the tenant scope this request bound, so it is
+   * destroyed rather than reused.
+   */
+  private static async rollbackQuietly(client: PoolClient): Promise<boolean> {
+    try {
+      await client.query(ROLLBACK_STATEMENT);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private reportTransportError(scope: DatabaseConnectionErrorScope, error: unknown): void {
@@ -435,66 +418,49 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     ]);
   }
 
-  /**
-   * Run a parameterized SELECT through the pool. If a JWT subject has been
-   * bound via `withUser()`, every call checks out a dedicated client, runs
-   * the RLS preamble (see {@link beginRlsScope}) first, then the user query,
-   * and releases the client. Otherwise we go straight through `pool.query`
-   * for the cheaper path.
-   */
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-    const pool = await this.getPool();
-    if (this.boundSub === null) {
-      try {
-        const result = (await pool.query(sql, params as unknown[])) as QueryResult;
-        return result.rows as T[];
-      } catch (err) {
-        throw withStatementContext(err, sql);
-      }
+    if (this.boundSub !== null) {
+      return this.runScoped(sql, params, (result) => result.rows as T[]);
     }
-    const client = await this.checkoutClient(pool);
+    const pool = await this.getPool();
     try {
-      await this.beginRlsScope(client);
-      const result = (await client.query(sql, params as unknown[])) as QueryResult;
-      await client.query(COMMIT_STATEMENT);
+      const result = (await pool.query(sql, params as unknown[])) as QueryResult;
       return result.rows as T[];
     } catch (err) {
-      try {
-        await client.query(ROLLBACK_STATEMENT);
-      } catch {
-        // best-effort rollback; surface the original error
-      }
-      throw err;
-    } finally {
-      this.releaseClient(client);
+      throw withStatementContext(err, sql);
     }
   }
 
   async execute(sql: string, params: unknown[] = []): Promise<number> {
-    const pool = await this.getPool();
-    if (this.boundSub === null) {
-      try {
-        const result = (await pool.query(sql, params as unknown[])) as QueryResult;
-        return result.rowCount ?? 0;
-      } catch (err) {
-        throw withStatementContext(err, sql);
-      }
+    if (this.boundSub !== null) {
+      return this.runScoped(sql, params, (result) => result.rowCount ?? 0);
     }
+    const pool = await this.getPool();
+    try {
+      const result = (await pool.query(sql, params as unknown[])) as QueryResult;
+      return result.rowCount ?? 0;
+    } catch (err) {
+      throw withStatementContext(err, sql);
+    }
+  }
+
+  private async runScoped<T>(
+    sql: string,
+    params: unknown[],
+    read: (result: QueryResult) => T,
+  ): Promise<T> {
+    const pool = await this.getPool();
     const client = await this.checkoutClient(pool);
     try {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query(COMMIT_STATEMENT);
-      return result.rowCount ?? 0;
-    } catch (err) {
-      try {
-        await client.query(ROLLBACK_STATEMENT);
-      } catch {
-        // best-effort rollback; surface the original error
-      }
-      throw withStatementContext(err, sql);
-    } finally {
       this.releaseClient(client);
+      return read(result);
+    } catch (err) {
+      const rolledBack = await NeonDatabaseAdapter.rollbackQuietly(client);
+      this.releaseClient(client, !rolledBack);
+      throw withStatementContext(err, sql);
     }
   }
 
@@ -503,19 +469,14 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     const client = await this.checkoutClient(pool);
     try {
       await this.beginRlsScope(client);
-      const tx = new NeonTransactionAdapter(client);
-      const result = await fn(tx);
+      const result = await fn(new NeonTransactionAdapter(client));
       await client.query(COMMIT_STATEMENT);
+      this.releaseClient(client);
       return result;
     } catch (err) {
-      try {
-        await client.query(ROLLBACK_STATEMENT);
-      } catch {
-        // best-effort rollback; surface the original error
-      }
+      const rolledBack = await NeonDatabaseAdapter.rollbackQuietly(client);
+      this.releaseClient(client, !rolledBack);
       throw err;
-    } finally {
-      this.releaseClient(client);
     }
   }
 
@@ -534,9 +495,8 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
    * its `sub` to RLS is an impersonation footgun, so this method is
    * DEFAULT-DENY: it throws unless the adapter was constructed with
    * `unsafeAllowUnverifiedJwtSubject: true`. The integrator MUST verify the
-   * token's signature upstream (Clerk `verifyToken` / {@link ClerkAuthAdapter})
-   * before opting in. The live web gateway never calls this path; it derives
-   * identity from Clerk `auth()` directly.
+   * token's signature upstream (the identity provider's `verifySessionToken`)
+   * before opting in.
    *
    * @throws DataLayerConfigError when the opt-in flag is not set, or when the
    * JWT is malformed (handled by {@link decodeJwtSub}).
@@ -546,11 +506,9 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       throw new DataLayerConfigError(
         'NeonDatabaseAdapter.withUser() decodes an UNVERIFIED JWT `sub` and binds it ' +
           'as the RLS subject, forwarding an attacker-minted token here is an ' +
-          'impersonation footgun. Verify the token signature upstream (Clerk ' +
-          'verifyToken / ClerkAuthAdapter.verifyJwt) FIRST, then construct the ' +
-          'adapter with { unsafeAllowUnverifiedJwtSubject: true } to acknowledge ' +
-          'that precondition. The live web gateway derives identity from Clerk ' +
-          'auth() directly and must not use this path.',
+          'impersonation footgun. Verify the token signature upstream (the identity ' +
+          "provider's verifySessionToken) FIRST, then construct the adapter with " +
+          '{ unsafeAllowUnverifiedJwtSubject: true } to acknowledge that precondition.',
       );
     }
     const sub = decodeJwtSub(jwt, NEON_ADAPTER_NAME);

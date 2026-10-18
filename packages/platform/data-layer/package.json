@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Vendor-neutral database and identity data-layer boundary for AGI Workforce",
+  "description": "Vendor-neutral database boundary for AGI Workforce: Neon and plain Postgres adapters behind one RLS-aware contract",
   "exports": {
     ".": "./src/index.ts",
     "./search": "./src/search/index.ts"
