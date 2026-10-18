@@ -102,6 +102,13 @@ unsandboxed and is the only supported way to proceed without the backend.
   so `npx` and `uvx` download a package once rather than on every start. Only
   sandboxed programs use it; your own `~/.npm` and other caches are never
   written, and nothing outside the sandbox reads this one.
+- Sandboxed hooks and sandboxed stdio servers cannot read credential
+  locations such as `~/.ssh` and `~/.aws`, or the entries in
+  `~/.agiworkforce` that hold keys, tokens or your conversations: `auth.json`,
+  `secrets/`, `config.toml`, `hooks.json`, `mcp.json`, `.mcp.json`,
+  `mcp-oauth.json`, `history.txt`, `conversations/`, `managed_sessions/` and
+  `managed_session_metadata/`. Scripts and servers kept elsewhere in
+  `~/.agiworkforce` still run. Set `"sandbox": false` to run one unsandboxed.
 - Stdio MCP servers in your own `~/.agiworkforce/.mcp.json` or `mcp.json`, or
   from a plugin you installed, run unsandboxed and start in the CLI config
   folder, not the project. `"sandbox": true` in the entry runs one sandboxed,

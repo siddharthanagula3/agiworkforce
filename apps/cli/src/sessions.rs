@@ -47,7 +47,7 @@ use crate::runtime::session::{
 };
 use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_DIR_NAME};
 
-const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
+pub(crate) const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
 const SESSION_METADATA_MAX_BYTES: u64 = 64 * 1024;
 
 static GITHUB_PR_URL_RE: LazyLock<Regex> = LazyLock::new(|| {

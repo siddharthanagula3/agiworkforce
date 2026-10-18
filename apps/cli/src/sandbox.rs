@@ -1189,15 +1189,40 @@ pub fn full_read_program(
     )
 }
 
-/// Where this user's credentials are kept: the locations
+/// What a sandboxed hook or stdio server may not read: the locations
 /// [`agiworkforce_sandbox_policy::credential_paths`] names under the home
-/// folder, and the CLI's own config folder, which holds its sign-in and
-/// every stored token.
+/// folder, and the entries in the CLI's own folder that hold a key, a token or
+/// the user's conversations. The rest of that folder stays readable, so a
+/// script or server kept there still runs.
 pub fn credential_locations() -> Vec<PathBuf> {
     let mut locations: Vec<PathBuf> = dirs::home_dir()
         .map(|home| agiworkforce_sandbox_policy::credential_paths(&home))
         .unwrap_or_default();
-    locations.extend(crate::config::CliConfig::config_dir().ok());
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        locations.extend(
+            [
+                "auth.json",
+                "auth.toml",
+                "secrets",
+                "history.txt",
+                crate::runtime::session_control::MANAGED_SESSION_DIR_NAME,
+                crate::sessions::SESSION_METADATA_DIR_NAME,
+            ]
+            .map(|name| config_dir.join(name)),
+        );
+    }
+    locations.extend(
+        [
+            crate::config::CliConfig::config_path(),
+            crate::hooks::hooks_path(),
+            crate::mcp::McpOAuthStore::store_path(),
+            crate::mcp::registry::McpRegistry::default_path(),
+            crate::ecosystem::global_mcp_config_path(),
+            crate::conversations::conversations_dir(),
+        ]
+        .into_iter()
+        .flatten(),
+    );
     locations
 }
 

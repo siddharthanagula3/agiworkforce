@@ -1505,9 +1505,9 @@ async fn run_hook_on_host(
 }
 
 /// The user's own hook under the full-read sandbox the desktop gives its
-/// hooks: it reads anywhere, so scripts and toolchains in the home folder
-/// still run, but writes only the workspace and a private scratch directory,
-/// and keeps the network. Nothing it leaves running outlives it. On a
+/// hooks: it reads anywhere but [`crate::sandbox::credential_locations`], so
+/// scripts and toolchains in the home folder still run, but writes only the
+/// workspace and a private scratch directory, and keeps the network. Nothing it leaves running outlives it. On a
 /// platform with no sandbox at all it runs as configured.
 async fn run_user_hook_sandboxed(
     hook: &Hook,
@@ -1522,11 +1522,12 @@ async fn run_user_hook_sandboxed(
         HookLaunch::Shell(script) => ("/bin/sh", vec!["-c".to_string(), script.to_string()]),
         HookLaunch::Program { program, args } => (program, args.to_vec()),
     };
-    let wrapped = crate::sandbox::full_read_program(
+    let wrapped = crate::sandbox::full_read_program_guarding(
         crate::sandbox::SandboxType::detect(),
         &workspace,
         &[],
         crate::sandbox::NetworkPolicy::Allow,
+        &crate::sandbox::credential_locations(),
         |name| std::env::var(name).ok(),
         program,
         &args,
