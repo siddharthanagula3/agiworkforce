@@ -160,14 +160,18 @@ test(
         '--input-type=module',
         '-e',
         String.raw`
-    import { writeFile } from 'node:fs/promises';
+    import { rename, writeFile } from 'node:fs/promises';
     const [ledger, revision, runId, name, owner] = process.argv.slice(1);
     const record = { revision, runId, producerPid: process.pid, containers: [], volumes: [] };
-    await writeFile(ledger, JSON.stringify(record));
+    const persist = async () => {
+      await writeFile(ledger + '.pending', JSON.stringify(record));
+      await rename(ledger + '.pending', ledger);
+    };
+    await persist();
     process.stdout.write('ready\n');
     process.stdin.once('data', async () => {
       record.containers.push([name, JSON.parse(owner)]);
-      await writeFile(ledger, JSON.stringify(record));
+      await persist();
       process.stdin.destroy();
     });
     process.stdin.resume();
