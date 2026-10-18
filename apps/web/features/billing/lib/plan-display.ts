@@ -1,6 +1,7 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import {
   MANAGED_USAGE_BASELINES,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canUseBillingPlanCapability,
   connectorsReleased,
   formatCredits,
@@ -29,12 +30,8 @@ import {
 } from './plan-capability-release';
 
 export type SelectablePaidPlan = SelfServePaidPlanTier;
-export const WEB_PAID_PLAN_ORDER: readonly SelectablePaidPlan[] = [
-  'basic',
-  'pro',
-  'max',
-  'max_15x',
-];
+export const WEB_PAID_PLAN_ORDER: readonly SelectablePaidPlan[] =
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER;
 
 export interface PlanCreditWindows {
   fiveHour: number;

@@ -51,7 +51,6 @@ describe('GET /api/billing/overage', () => {
     expect(await response.json()).toEqual({
       enabled: true,
       available_microusd: 5_000_000,
-      available_cents: 500,
     });
   });
 });

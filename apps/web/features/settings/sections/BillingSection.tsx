@@ -160,13 +160,10 @@ function humanizeStatus(status: string): string {
 interface OverageBody {
   enabled?: boolean;
   available_microusd?: number;
-  available_cents?: number;
 }
 
 function overageAvailableCreditsOf(body: OverageBody): number {
-  return typeof body.available_microusd === 'number'
-    ? creditsFromMicrousd(body.available_microusd)
-    : creditsFromCents(Number(body.available_cents ?? 0));
+  return creditsFromMicrousd(Number(body.available_microusd ?? 0));
 }
 
 function describeCard(card: NonNullable<PaymentMethod['card']>): string {

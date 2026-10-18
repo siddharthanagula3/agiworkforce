@@ -10,7 +10,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 
 const OverageRequestSchema = z.object({ enabled: z.boolean() }).strict();
 
@@ -37,14 +36,12 @@ const SELECT_OVERAGE = `
   where subscription.user_id = $1
   limit 1`;
 
-/** available_cents stays in the body for readers that predate 0182. */
 function toResponse(row: OverageRow | undefined) {
   const available = Number(row?.available_microusd ?? 0);
   const availableMicrousd = Number.isFinite(available) && available > 0 ? Math.floor(available) : 0;
   return NextResponse.json({
     enabled: row?.overage_enabled === true,
     available_microusd: availableMicrousd,
-    available_cents: ledgerCentsFromMicrousd(availableMicrousd),
   });
 }
 
