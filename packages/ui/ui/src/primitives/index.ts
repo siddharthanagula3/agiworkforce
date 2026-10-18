@@ -132,3 +132,4 @@ export {
 } from './Drawer';
 export { SonnerToaster, sonnerToast, type SonnerToasterProps } from './SonnerToaster';
 export { ThemeToggle } from './ThemeToggle';
+export { Calendar, type CalendarProps } from './Calendar';

@@ -66,7 +66,6 @@ import {
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 import {
   ARTIFACT_STORAGE_SCOPE_LIMIT_BYTES,
-  ARTIFACT_STORAGE_VALUE_LIMIT_BYTES,
   type ArtifactRuntimeConnector,
   type ArtifactRuntimeConnectorTool,
 } from '@agiworkforce/cloud-contracts';

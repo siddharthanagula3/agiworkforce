@@ -629,7 +629,9 @@ export async function setWorkspaceGroupMembers(
   },
 ): Promise<{ added: string[]; removed: string[] }> {
   const next = [...new Set(input.userIds)];
-  const outcome = await db.transaction(async (tx) => {
+  const outcome = await db.transaction<
+    { refused: RoleChangeCheck } | { change: { added: string[]; removed: string[] } }
+  >(async (tx) => {
     await requireWorkspaceGroup(tx, input.organizationId, input.groupId);
     if (next.length > 0) {
       const members = await tx.query<{ user_id: string }>(

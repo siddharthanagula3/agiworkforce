@@ -26,6 +26,68 @@ function legacyCopyToClipboard(text: string): boolean {
   return success;
 }
 
+export const safeLocalStorage = {
+  getItem(key: string): string | null {
+    if (!isBrowser) return null;
+
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.warn(`[safeLocalStorage] Failed to get item "${key}":`, error);
+      return null;
+    }
+  },
+
+  setItem(key: string, value: string): boolean {
+    if (!isBrowser) return false;
+
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      console.warn(`[safeLocalStorage] Failed to set item "${key}":`, error);
+      return false;
+    }
+  },
+
+  removeItem(key: string): boolean {
+    if (!isBrowser) return false;
+
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.warn(`[safeLocalStorage] Failed to remove item "${key}":`, error);
+      return false;
+    }
+  },
+
+  clear(): boolean {
+    if (!isBrowser) return false;
+
+    try {
+      localStorage.clear();
+      return true;
+    } catch (error) {
+      console.warn('[safeLocalStorage] Failed to clear:', error);
+      return false;
+    }
+  },
+
+  isAvailable(): boolean {
+    if (!isBrowser) return false;
+
+    const testKey = '__storage_test__';
+    try {
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  },
+};
+
 export const safeClipboard = {
   async writeText(text: string): Promise<boolean> {
     if (!isBrowser) return false;

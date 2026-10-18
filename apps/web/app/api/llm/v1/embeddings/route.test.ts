@@ -49,7 +49,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   };
 });
 
-const { POST, estimateEmbeddingCostCents } = await import('./route');
+const { POST } = await import('./route');
+const { estimateEmbeddingCostCents } = await import('@/lib/services/retrieval-embedding-service');
 
 const KEY = 'agi.embeddings.web.1234567890ab';
 const PROVIDER_ROOT = 'https://generativelanguage.googleapis.com/';

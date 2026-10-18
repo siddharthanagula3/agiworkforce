@@ -184,8 +184,6 @@ describe('CRIT-001 guard, present-tense copy requires a shipped adapter', () => 
 });
 
 describe('CRIT-001 guard, availability and health fail closed', () => {
-  const gmail = CONNECTORS.find((c) => c.id === 'gmail')!;
-
   it('treats an unknown connector id with no runtime evidence as not configured', () => {
     expect(resolveConnectorHealth({ connectorId: 'never-heard-of-it' })).toBe('not-configured');
     expect(resolveConnectorHealth({ connectorId: 'never-heard-of-it', available: true })).toBe(

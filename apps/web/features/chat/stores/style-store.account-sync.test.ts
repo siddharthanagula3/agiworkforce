@@ -20,9 +20,9 @@ const SERVER_STYLE = {
 
 async function freshStore() {
   vi.resetModules();
-  const module = await import('./style-store');
-  module.useStyleStore.setState({ customStyles: [] });
-  return module.useStyleStore;
+  const styleStore = await import('./style-store');
+  styleStore.useStyleStore.setState({ customStyles: [] });
+  return styleStore.useStyleStore;
 }
 
 beforeEach(() => {

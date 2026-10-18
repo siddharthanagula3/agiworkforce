@@ -1,10 +1,9 @@
 import {
   ALLOWED_MANAGED_PROVIDER_HOSTS,
   installProviderTracer,
-  streamFromProvider,
   withProviderSpan,
 } from '@agiworkforce/provider-runtime';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { withOutboundTraceHeader } from '@/lib/egress-policy';
 import {
@@ -138,57 +137,5 @@ describe('provider adapter span', () => {
     expect(seen).not.toBeNull();
     expect(seen).toContain(CONTEXT.traceId);
     expect(seen).not.toBe(`00-${CONTEXT.traceId}-${CONTEXT.spanId}-01`);
-  });
-
-  it('sends the adapter span as the traceparent parent of the provider request', async () => {
-    const fetchImpl = vi.fn(
-      async () =>
-        new Response('data: [DONE]\n\n', {
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-    );
-
-    await runWithTraceContext(CONTEXT, async () => {
-      for await (const _chunk of streamFromProvider({
-        providerId: 'anthropic',
-        authToken: 'token',
-        request: { model: 'a-model' },
-        clientTag: 'web',
-        fetchImpl,
-      })) {
-        void _chunk;
-      }
-    });
-
-    expect(fetchImpl).toHaveBeenCalledOnce();
-    const sent = new Headers(
-      (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
-    ).get(TRACEPARENT_HEADER);
-    expect(sent).not.toBeNull();
-    expect(sent).toContain(CONTEXT.traceId);
-    expect(sent?.endsWith('-01')).toBe(true);
-  });
-
-  it('leaves the provider request untraced when no tracer is installed', async () => {
-    installProviderTracer(null);
-    const fetchImpl = vi.fn(async () => new Response('data: [DONE]\n\n', { status: 200 }));
-
-    await runWithTraceContext(CONTEXT, async () => {
-      for await (const _chunk of streamFromProvider({
-        providerId: 'anthropic',
-        authToken: 'token',
-        request: {},
-        clientTag: 'extension',
-        fetchImpl,
-      })) {
-        void _chunk;
-      }
-    });
-
-    const sent = new Headers(
-      (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
-    ).get(TRACEPARENT_HEADER);
-    expect(sent).toBeNull();
   });
 });

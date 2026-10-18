@@ -169,7 +169,7 @@ beforeEach(() => {
     credits_remaining_cents: 990_000,
     credits_used_cents: 10_000,
   } as Awaited<ReturnType<typeof CreditService.getBalance>>);
-  vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(true);
+  vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
   vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
@@ -273,7 +273,7 @@ describe('workspace model policy is re-checked on every model this request can r
       .filter((model) => model.toLowerCase() !== PRO_CHAT_MODEL.toLowerCase());
     serveModelPolicy({ blockedModels: blocked });
 
-    vi.spyOn(CreditService, 'checkAvailable').mockResolvedValue(false);
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
     vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
 
     const result = await run('policy-downgrade-none', PRO_CHAT_MODEL);

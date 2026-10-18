@@ -160,9 +160,9 @@ import {
 } from '@agiworkforce/provider-protocol';
 import { CreditService, ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import {
   FREE_BUDGET_REACHED_ERROR_CLASS,
-  FREE_TRIAL_MODEL,
   applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
   fitsFreeTrialWindow,

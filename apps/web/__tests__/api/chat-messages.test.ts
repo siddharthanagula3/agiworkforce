@@ -48,7 +48,6 @@ vi.mock('@/lib/services/credit-service', () => ({
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
 
   CreditService: {
-    checkAvailable: vi.fn().mockResolvedValue(true),
     checkAvailableMicrousd: vi.fn().mockResolvedValue(true),
   },
 }));
@@ -119,7 +118,7 @@ describe('Chat Messages API', () => {
     mockQuery.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
 
-    vi.mocked(CreditService.checkAvailable).mockResolvedValue(true);
+    vi.mocked(CreditService.checkAvailableMicrousd).mockResolvedValue(true);
 
     mockFetch.mockResolvedValue({
       ok: true,

@@ -169,6 +169,8 @@ export {
   DrawerFooter,
   DrawerTitle,
   DrawerDescription,
+  Calendar,
+  type CalendarProps,
   SonnerToaster,
   sonnerToast,
   type SonnerToasterProps,

@@ -276,7 +276,7 @@ export default function PrivacyRequestsPanel() {
                       <td className="p-3 tabular-nums">{formatCount(outcome.deleted)}</td>
                       <td className="p-3 tabular-nums">{formatCount(outcome.accountBound)}</td>
                       <td className="p-3 text-xs text-muted-foreground">
-                        {outcome.error ?? (outcome.skipped ? 'not present in this schema' : 'done')}
+                        {outcome.error ?? 'done'}
                       </td>
                     </tr>
                   ))}
