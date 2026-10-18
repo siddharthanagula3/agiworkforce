@@ -59,4 +59,29 @@ describe('Quick Ask panel', () => {
     expect(windows[0]?.webContents.focus).toHaveBeenCalledOnce();
     expect(surfaced).toBe(windows[0]);
   });
+
+  it('reloads the route on the next raise after the warm-up load failed', () => {
+    quickAsk.warmUpQuickAsk();
+    const panel = windows[0]!;
+    const failed = panel.webContents.on.mock.calls.find(([name]) => name === 'did-fail-load')?.[1];
+    failed?.({}, -106, 'ERR_INTERNET_DISCONNECTED', 'http://localhost:3100/quick-ask', true);
+
+    quickAsk.surfaceQuickAsk(null);
+    quickAsk.surfaceQuickAsk(null);
+
+    expect(windows).toHaveLength(1);
+    expect(panel.loadURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reload after an aborted load or a failed subframe', () => {
+    quickAsk.warmUpQuickAsk();
+    const panel = windows[0]!;
+    const failed = panel.webContents.on.mock.calls.find(([name]) => name === 'did-fail-load')?.[1];
+    failed?.({}, -3, 'ERR_ABORTED', 'http://localhost:3100/quick-ask', true);
+    failed?.({}, -106, 'ERR_INTERNET_DISCONNECTED', 'https://frame.example/', false);
+
+    quickAsk.surfaceQuickAsk(null);
+
+    expect(panel.loadURL).toHaveBeenCalledOnce();
+  });
 });

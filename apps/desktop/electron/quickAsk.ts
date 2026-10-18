@@ -5,8 +5,11 @@ import { applyRemoteWindowPolicy } from './windowPolicy';
 
 const PANEL_WIDTH = 480;
 const PANEL_HEIGHT = 620;
+const ABORTED_LOAD_ERROR = -3;
+const QUICK_ASK_URL = `${CLOUD_APP_ORIGIN}/quick-ask`;
 
 let panel: BrowserWindow | null = null;
+let panelLoadFailed = false;
 let creating = false;
 let bridge: Pick<WebPreferences, 'preload' | 'additionalArguments'> = {};
 
@@ -55,11 +58,19 @@ function createPanel(): BrowserWindow {
     }
   });
 
-  win.on('closed', () => {
-    panel = null;
+  // The panel is warmed at launch and then kept, so a load that failed then,
+  // offline or mid-sleep, would otherwise stay blank until the app restarts.
+  win.webContents.on('did-fail-load', (_event, errorCode, _description, _url, isMainFrame) => {
+    if (isMainFrame && errorCode !== ABORTED_LOAD_ERROR) panelLoadFailed = true;
   });
 
-  void win.loadURL(`${CLOUD_APP_ORIGIN}/quick-ask`);
+  win.on('closed', () => {
+    panel = null;
+    panelLoadFailed = false;
+  });
+
+  panelLoadFailed = false;
+  void win.loadURL(QUICK_ASK_URL);
   return win;
 }
 
@@ -96,6 +107,10 @@ export function surfaceQuickAsk(mainWindow: BrowserWindow | null): BrowserWindow
   }
 
   const win = ensurePanel();
+  if (panelLoadFailed) {
+    panelLoadFailed = false;
+    void win.loadURL(QUICK_ASK_URL);
+  }
   reposition(win);
   win.show();
   win.focus();
