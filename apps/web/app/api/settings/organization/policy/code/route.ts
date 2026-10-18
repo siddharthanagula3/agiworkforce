@@ -11,6 +11,7 @@ import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readJsonBody } from '@/lib/read-json-body';
+import { CodeControlsPatchSchema } from '../controls-schema';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
@@ -34,31 +35,9 @@ import {
 export const runtime = 'nodejs';
 
 const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
-const MAX_CODE_HOSTS = 200;
-const HostSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^(\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/,
-    'Use a hostname such as example.com or *.example.com',
-  );
-
-const CodeControlsPatchSchema = z
-  .object({
-    allowDesktopCloudSync: z.boolean(),
-    allowGithubConnection: z.boolean(),
-    allowMcpServers: z.boolean(),
-    allowAutomatedReview: z.boolean(),
-    allowedMcpServers: z.array(HostSchema).max(MAX_CODE_HOSTS),
-    allowedEgressHosts: z.array(HostSchema).max(MAX_CODE_HOSTS),
-    sessionRetentionDays: z.number().int().min(1).max(3650).nullable(),
-  })
-  .partial()
-  .strict()
-  .refine((value) => Object.keys(value).length > 0, {
-    message: 'Provide at least one Code control to change',
-  });
+const CodeControlsPatch = CodeControlsPatchSchema.refine((value) => Object.keys(value).length > 0, {
+  message: 'Provide at least one Code control to change',
+});
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
@@ -191,7 +170,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
       .asUserSafe();
   }
 
-  const parsed = CodeControlsPatchSchema.safeParse(await readJsonBody(request));
+  const parsed = CodeControlsPatch.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid Code controls', parsed.error.issues);
   }

@@ -22,7 +22,7 @@ const ModelIdSchema = z
     (id) => isAutoModeModelId(id) || Boolean(getModelMetadataById(id)),
     'That model is not in the model catalog',
   );
-const MAX_CODE_HOSTS = 100;
+const MAX_CODE_HOSTS = 200;
 const CodeHostSchema = z
   .string()
   .trim()

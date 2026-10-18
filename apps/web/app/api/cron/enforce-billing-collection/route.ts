@@ -185,122 +185,142 @@ export async function enforceBillingCollection(
   const fromEmail = getHandoffConfig().fromEmail;
   const outcomes: CollectionStageOutcome[] = [];
 
+  const failures: unknown[] = [];
+
   for (const contract of contracts) {
-    const state = deriveCollectionState(nowMs, contract.oldest_open_invoice_due_at);
-    const changed = state.stage !== contract.collection_stage;
-    const nowIso = new Date(nowMs).toISOString();
+    try {
+      const state = deriveCollectionState(nowMs, contract.oldest_open_invoice_due_at);
+      const changed = state.stage !== contract.collection_stage;
+      const nowIso = new Date(nowMs).toISOString();
 
-    if (changed) {
-      await db.execute(
-        `update public.organization_billing_contracts
-            set collection_stage = $2,
-                collection_stage_changed_at = $3
-          where organization_id = $1`,
-        [contract.organization_id, state.stage, nowIso],
-      );
-      await recordAuditEvent({
-        organizationId: contract.organization_id,
-        eventType: 'plan_changed',
-        severity: state.stage === 'current' ? 'info' : 'warning',
-        endpoint: AUDIT_ENDPOINT,
-        surface: AUDIT_SURFACE,
-        detail: {
-          resourceType: 'organization_billing_contract',
-          resourceId: contract.organization_id,
-          reason: COLLECTION_STAGE_CHANGED_AUDIT_REASON,
-          status: state.stage,
-          previousPlanTier: contract.collection_stage,
-        },
-      });
-    }
-
-    let ownerNotified = false;
-    if (changed && OWNER_NOTICE_STAGES.has(state.stage)) {
-      const content = ownerNoticeContent(state.stage, state.daysPastDue);
-      if (contract.owner_user_id) {
-        await recordNotification(db, {
-          userId: contract.owner_user_id,
-          category: 'billing',
-          severity: state.stage === 'read_only' ? 'error' : 'warning',
-          title: content.subject,
-          message: content.text,
-          target: { kind: 'settings', id: 'billing' },
-          dedupeKey: `billing-collection:${contract.organization_id}:${state.stage}:${nowIso.slice(0, 10)}`,
+      if (changed) {
+        await db.execute(
+          `update public.organization_billing_contracts
+              set collection_stage = $2,
+                  collection_stage_changed_at = $3
+            where organization_id = $1`,
+          [contract.organization_id, state.stage, nowIso],
+        );
+        await recordAuditEvent({
+          organizationId: contract.organization_id,
+          eventType: 'plan_changed',
+          severity: state.stage === 'current' ? 'info' : 'warning',
+          endpoint: AUDIT_ENDPOINT,
+          surface: AUDIT_SURFACE,
+          detail: {
+            resourceType: 'organization_billing_contract',
+            resourceId: contract.organization_id,
+            reason: COLLECTION_STAGE_CHANGED_AUDIT_REASON,
+            status: state.stage,
+            previousPlanTier: contract.collection_stage,
+          },
         });
       }
-      if (contract.owner_email) {
-        const sent = await sendTransactionalEmail({
-          from: fromEmail,
-          to: contract.owner_email,
-          ...content,
-        });
-        ownerNotified = sent.delivered;
-        if (!sent.delivered) {
-          logger.error(
-            { organizationId: contract.organization_id, stage: state.stage, reason: sent.reason },
-            'Enterprise collection owner notice could not be delivered',
-          );
+
+      let ownerNotified = false;
+      if (changed && OWNER_NOTICE_STAGES.has(state.stage)) {
+        const content = ownerNoticeContent(state.stage, state.daysPastDue);
+        if (contract.owner_user_id) {
+          await recordNotification(db, {
+            userId: contract.owner_user_id,
+            category: 'billing',
+            severity: state.stage === 'read_only' ? 'error' : 'warning',
+            title: content.subject,
+            message: content.text,
+            target: { kind: 'settings', id: 'billing' },
+            dedupeKey: `billing-collection:${contract.organization_id}:${state.stage}:${nowIso.slice(0, 10)}`,
+          });
         }
-      } else {
-        logger.error(
-          { organizationId: contract.organization_id, stage: state.stage },
-          'Enterprise collection owner notice skipped: no owner email on file',
-        );
-      }
-    }
-
-    let internalNotified = false;
-    const wantsInternalNotice = changed || DAILY_INTERNAL_REPEAT_STAGES.has(state.stage);
-    if (wantsInternalNotice) {
-      if (!billingAlertEmail) {
-        logger.error(
-          { organizationId: contract.organization_id, stage: state.stage },
-          'BILLING_ALERT_EMAIL is not configured; internal collection escalation not sent',
-        );
-      } else if (
-        changed ||
-        internalNoticeThrottleAllows(contract.last_collection_notice_at, nowMs)
-      ) {
-        const content = internalNoticeContent(
-          contract.organization_id,
-          state.stage,
-          state.daysPastDue,
-        );
-        const sent = await sendTransactionalEmail({
-          from: fromEmail,
-          to: billingAlertEmail,
-          ...content,
-        });
-        internalNotified = sent.delivered;
-        if (sent.delivered) {
-          await db.execute(
-            `update public.organization_billing_contracts
-                set last_collection_notice_at = $2
-              where organization_id = $1`,
-            [contract.organization_id, nowIso],
-          );
+        if (contract.owner_email) {
+          const sent = await sendTransactionalEmail({
+            from: fromEmail,
+            to: contract.owner_email,
+            ...content,
+          });
+          ownerNotified = sent.delivered;
+          if (!sent.delivered) {
+            logger.error(
+              { organizationId: contract.organization_id, stage: state.stage, reason: sent.reason },
+              'Enterprise collection owner notice could not be delivered',
+            );
+          }
         } else {
           logger.error(
-            { organizationId: contract.organization_id, stage: state.stage, reason: sent.reason },
-            'Enterprise collection internal escalation could not be delivered',
+            { organizationId: contract.organization_id, stage: state.stage },
+            'Enterprise collection owner notice skipped: no owner email on file',
           );
         }
       }
+
+      let internalNotified = false;
+      const wantsInternalNotice = changed || DAILY_INTERNAL_REPEAT_STAGES.has(state.stage);
+      if (wantsInternalNotice) {
+        if (!billingAlertEmail) {
+          logger.error(
+            { organizationId: contract.organization_id, stage: state.stage },
+            'BILLING_ALERT_EMAIL is not configured; internal collection escalation not sent',
+          );
+        } else if (
+          changed ||
+          internalNoticeThrottleAllows(contract.last_collection_notice_at, nowMs)
+        ) {
+          const content = internalNoticeContent(
+            contract.organization_id,
+            state.stage,
+            state.daysPastDue,
+          );
+          const sent = await sendTransactionalEmail({
+            from: fromEmail,
+            to: billingAlertEmail,
+            ...content,
+          });
+          internalNotified = sent.delivered;
+          if (sent.delivered) {
+            await db.execute(
+              `update public.organization_billing_contracts
+                  set last_collection_notice_at = $2
+                where organization_id = $1`,
+              [contract.organization_id, nowIso],
+            );
+          } else {
+            logger.error(
+              { organizationId: contract.organization_id, stage: state.stage, reason: sent.reason },
+              'Enterprise collection internal escalation could not be delivered',
+            );
+          }
+        }
+      }
+
+      const seatCatchUp =
+        state.stage === CURRENT_COLLECTION_STAGE ? await reconcileSeatCatchUp(db, contract) : null;
+
+      outcomes.push({
+        organizationId: contract.organization_id,
+        previousStage: contract.collection_stage,
+        stage: state.stage,
+        daysPastDue: state.daysPastDue,
+        changed,
+        ownerNotified,
+        internalNotified,
+        seatCatchUp,
+      });
+    } catch (error) {
+      failures.push(error);
+      logger.error(
+        {
+          organizationId: contract.organization_id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Enterprise collection enforcement failed for one contract; the rest continue',
+      );
     }
+  }
 
-    const seatCatchUp =
-      state.stage === CURRENT_COLLECTION_STAGE ? await reconcileSeatCatchUp(db, contract) : null;
-
-    outcomes.push({
-      organizationId: contract.organization_id,
-      previousStage: contract.collection_stage,
-      stage: state.stage,
-      daysPastDue: state.daysPastDue,
-      changed,
-      ownerNotified,
-      internalNotified,
-      seatCatchUp,
-    });
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `${failures.length} enterprise contract(s) failed collection enforcement`,
+    );
   }
 
   return outcomes;
