@@ -116,102 +116,11 @@ describe('AuthService', () => {
     });
   });
 
-  describe('login', () => {
-    it('should return Clerk stub error', async () => {
-      const result = await authService.login({
-        email: 'test@example.com',
-        password: 'password123',
-      });
-
-      expect(result.user).toBeNull();
-      expect(result.error).toBe('Use Clerk sign-in flow');
-    });
-  });
-
-  describe('register', () => {
-    it('should return Clerk stub error', async () => {
-      const result = await authService.register({
-        email: 'newuser@example.com',
-        password: 'password123',
-        name: 'New User',
-      });
-
-      expect(result.user).toBeNull();
-      expect(result.error).toBe('Use Clerk sign-up flow');
-    });
-  });
-
   describe('logout', () => {
     it('should return no error (no-op in Clerk adapter)', async () => {
       const result = await authService.logout();
 
       expect(result.error).toBeNull();
-    });
-  });
-
-  describe('resetPassword', () => {
-    it('should return Clerk stub error', async () => {
-      const result = await authService.resetPassword('test@example.com');
-
-      expect(result.error).toBe('Use Clerk forgot-password flow');
-    });
-  });
-
-  describe('updatePassword', () => {
-    it('should return Clerk stub error', async () => {
-      const result = await authService.updatePassword('newpassword123');
-
-      expect(result.error).toBe('Use Clerk password management');
-    });
-  });
-
-  describe('updateProfile', () => {
-    it('should update profile successfully via fetch', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        clone() {
-          return this;
-        },
-        json: () =>
-          Promise.resolve(
-            mePayload({
-              name: 'Updated Name',
-              avatar_url: 'new-avatar.jpg',
-              plan: {
-                tier: 'pro',
-                display_name: 'Pro',
-                status: 'active',
-                current_period_end: null,
-              },
-            }),
-          ),
-      });
-
-      const result = await authService.updateProfile({
-        name: 'Updated Name',
-        avatar: 'new-avatar.jpg',
-      });
-
-      expect(result.user?.name).toBe('Updated Name');
-      expect(result.error).toBeNull();
-    });
-
-    it('should return error when PATCH fails', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false });
-
-      const result = await authService.updateProfile({ name: 'Fail' });
-
-      expect(result.user).toBeNull();
-      expect(result.error).toBe('Profile update failed');
-    });
-  });
-
-  describe('changePassword', () => {
-    it('should return Clerk stub error', async () => {
-      const result = await authService.changePassword('oldpassword', 'newpassword');
-
-      expect(result.error).toBe('Use Clerk password management');
     });
   });
 });

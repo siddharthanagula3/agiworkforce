@@ -94,20 +94,11 @@
       }
     },
     "web": {
-      "intentional": [
-        {
-          "pathPrefix": "apps/web/shared/components/agi/AgiChatDemo.tsx",
-          "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical HeroAppWindow preview instead."
-        }
-      ],
+      "intentional": [],
       "unreachableDebt": {
         "reason": "Pre-existing unreachable web modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",
-        "paths": [
-          "apps/web/features/index.ts",
-          "apps/web/shared/lib/async-hooks-stub.ts",
-          "apps/web/shared/lib/empty-module.ts"
-        ]
+        "paths": ["apps/web/features/index.ts", "apps/web/shared/lib/async-hooks-stub.ts"]
       }
     },
     "mobile": {

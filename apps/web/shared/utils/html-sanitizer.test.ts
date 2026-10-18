@@ -6,7 +6,6 @@ import {
   sanitizeArtifact,
   sanitizeHtmlForSandbox,
   buildSandboxSrcDoc,
-  isHtmlDocument,
   stripMetaRefreshFromSandboxHtml,
   hasXSSRisk,
 } from './html-sanitizer';
@@ -259,32 +258,6 @@ describe('hasXSSRisk', () => {
 
   it('returns false for plain safe HTML', () => {
     expect(hasXSSRisk('<p>Hello <strong>world</strong></p>')).toBe(false);
-  });
-});
-
-describe('isHtmlDocument', () => {
-  it('detects <!DOCTYPE html>', () => {
-    expect(isHtmlDocument('<!DOCTYPE html><html><body></body></html>')).toBe(true);
-  });
-
-  it('detects <!doctype html> (lowercase)', () => {
-    expect(isHtmlDocument('<!doctype html>\n<html><body></body></html>')).toBe(true);
-  });
-
-  it('detects bare <html> opening tag', () => {
-    expect(isHtmlDocument('<html><head></head><body></body></html>')).toBe(true);
-  });
-
-  it('detects <html lang="en">', () => {
-    expect(isHtmlDocument('<html lang="en"><body></body></html>')).toBe(true);
-  });
-
-  it('returns false for a bare fragment', () => {
-    expect(isHtmlDocument('<div id="count">0</div><button onclick="f()">+</button>')).toBe(false);
-  });
-
-  it('returns false for text content', () => {
-    expect(isHtmlDocument('Hello world')).toBe(false);
   });
 });
 

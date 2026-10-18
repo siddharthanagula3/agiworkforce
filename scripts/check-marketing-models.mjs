@@ -51,10 +51,7 @@ const modelFamilyPrefixes = [...validIdsRaw]
   .map((id) => id.toLowerCase().match(/^(.+?)(?=\d)/)?.[1])
   .filter(Boolean);
 
-const ANCHOR_FILES = [
-  join(WEB_DIR, 'lib/marketing-constants.ts'),
-  join(WEB_DIR, 'shared/components/agi/AgiChatDemo.tsx'),
-];
+const ANCHOR_FILES = [join(WEB_DIR, 'lib/marketing-constants.ts')];
 
 function walkDir(dir, files = []) {
   for (const entry of readdirSync(dir)) {

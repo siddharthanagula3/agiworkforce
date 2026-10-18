@@ -149,11 +149,7 @@ const UNLOCKED_HAND_ROLLED_MODALS: Record<string, string> = {
     'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',
   'packages/ui/unified-chat/src/components/ChatInterface.tsx':
     'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',
-  'packages/ui/unified-chat/src/components/CheckpointManager.tsx':
-    'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',
   'packages/ui/unified-chat/src/components/CommandPalette.tsx':
-    'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',
-  'packages/ui/unified-chat/src/components/SettingsShell.tsx':
     'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',
   'packages/ui/unified-chat/src/components/library/LibraryView.tsx':
     'hand-drawn dialog in the desktop chat package, no scroll lock; owned by the desktop lane (packages/ui/unified-chat)',

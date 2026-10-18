@@ -50,7 +50,6 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
       '@shared': path.resolve(__dirname, './shared'),
       '@features': path.resolve(__dirname, './features'),
-      '@webcontainer/api': path.resolve(__dirname, './test/__mocks__/webcontainer-api.ts'),
     },
   },
 });

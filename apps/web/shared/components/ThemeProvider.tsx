@@ -9,10 +9,6 @@ import {
 } from './ThemeConstants';
 import { ThemeContext } from './ThemeContext';
 
-const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
-  React.ComponentProps<typeof NextThemesProvider> & { nonce?: string }
->;
-
 function ThemeContextBridge({ children }: { children: React.ReactNode }) {
   const { theme: nextTheme, resolvedTheme, setTheme: setNextTheme } = useNextTheme();
 
@@ -43,7 +39,7 @@ function ThemeContextBridge({ children }: { children: React.ReactNode }) {
 
 export function ThemeProvider({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   return (
-    <NoncedNextThemesProvider
+    <NextThemesProvider
       attribute="class"
       defaultTheme={DEFAULT_THEME}
       storageKey={THEME_STORAGE_KEY}
@@ -52,6 +48,6 @@ export function ThemeProvider({ children, nonce }: { children: React.ReactNode; 
       nonce={nonce}
     >
       <ThemeContextBridge>{children}</ThemeContextBridge>
-    </NoncedNextThemesProvider>
+    </NextThemesProvider>
   );
 }

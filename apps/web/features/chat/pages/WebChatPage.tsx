@@ -125,7 +125,7 @@ import {
   resolveSelectableModelId,
   useModelStore,
 } from '@shared/stores/model-store';
-import { useNotificationStore } from '@shared/stores/notification-store';
+import { showReplyReadyNotification } from '@shared/lib/reply-ready-notification';
 import { useMediaStore } from '@shared/stores/media-store';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { useUIStore } from '@shared/stores/layout-store';
@@ -2084,19 +2084,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     const lastAssistant = [...displayedMessages].reverse().find((m) => m.role === 'assistant');
     if (!lastAssistant?.content) return;
 
-    useNotificationStore.getState().sendDesktopNotification({
-      id: lastAssistant.id,
-      type: 'info',
-      title: 'Reply ready',
-      message:
+    showReplyReadyNotification({
+      tag: lastAssistant.id,
+      body:
         lastAssistant.content.trim().slice(0, 140) ||
         displayedConversation?.title ||
         'Your response is ready.',
-      timestamp: new Date(),
-      read: false,
-      persistent: false,
-      priority: 'low',
-      category: 'chat',
     });
   }, [isStreaming, displayedMessages, chatError, displayedConversation, browserReplyReady]);
 

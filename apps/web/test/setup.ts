@@ -62,12 +62,6 @@ vi.mock('next/headers', () => ({
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@webcontainer/api', () => ({
-  WebContainer: {
-    boot: vi.fn().mockRejectedValue(new Error('WebContainer not available in test environment')),
-  },
-}));
-
 vi.mock('@/lib/csrf', async () => {
   const actual = await vi.importActual<typeof import('@/lib/csrf')>('@/lib/csrf');
   return {

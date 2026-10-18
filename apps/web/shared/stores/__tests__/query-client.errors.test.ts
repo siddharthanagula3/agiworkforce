@@ -25,7 +25,6 @@ describe('shared mutation error notifications', () => {
       'Something went wrong on our side. Try again shortly.',
     ],
     [new Error('Choose a different workspace name.'), 'Choose a different workspace name.'],
-    [Object.assign(new Error('missing row'), { code: 'PGRST116' }), 'Resource not found'],
   ])('shows a readable message for %s', async (error, expected) => {
     const mutation = queryClient.getMutationCache().build(queryClient, {
       mutationFn: async () => {

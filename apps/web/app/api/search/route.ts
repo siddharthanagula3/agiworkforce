@@ -489,14 +489,14 @@ async function handleGet(request: NextRequest) {
   };
 
   const crossSiteNavigation = request.headers.get('sec-fetch-site') === 'cross-site';
-  if (q.trim() && !crossSiteNavigation) {
+  if (q.trim() && !crossSiteNavigation && url.searchParams.get('track') !== 'false') {
     db.query('select track_search($1, $2, $3, $4)', [
       userId,
       organizationId,
       q,
       stats.totalResults,
-    ]).catch(() => {
-      // Non-critical - swallow errors silently
+    ]).catch((error: unknown) => {
+      logger.warn({ error, userId }, 'search history write failed');
     });
   }
 

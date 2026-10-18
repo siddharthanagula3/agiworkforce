@@ -1,25 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useArtifactStore } from './artifact-store';
+import { useArtifactsStore as useArtifactStore } from './artifacts-store';
 import type { ArtifactData } from '@features/chat/components/artifacts/ArtifactPreview';
-
-vi.mock('@shared/lib/cloud-db-client', () => ({
-  cloudDb: {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }),
-    },
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          gt: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
-        }),
-      }),
-    }),
-  },
-}));
 
 vi.mock('@shared/lib/logger', () => ({
   logger: { warn: vi.fn(), auth: vi.fn() },

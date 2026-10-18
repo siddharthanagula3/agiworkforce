@@ -35,11 +35,7 @@ function storeModule(state: Record<string, unknown>) {
   return { useTestStore: { getState: () => state } };
 }
 
-vi.mock('../mission-control-store', () => ({}));
-vi.mock('../notification-store', () => ({}));
-vi.mock('../artifact-store', () => ({}));
 vi.mock('../layout-store', () => ({}));
-vi.mock('../user-profile-store', () => ({}));
 vi.mock('../web-chat-store', () =>
   storeModule({
     stopStreaming,
@@ -57,8 +53,6 @@ vi.mock('../model-store', () => ({
 }));
 vi.mock('../thinking-store', () => ({}));
 vi.mock('../tool-store', () => ({}));
-vi.mock('../agent-metrics-store', () => ({}));
-vi.mock('../company-hub-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => storeModule({ cancelListening }));
 vi.mock('@/features/chat/stores/voice-session-store', () => ({

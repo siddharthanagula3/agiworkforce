@@ -57,10 +57,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: workspaceRoot,
     resolveAlias: {
-      '@webcontainer/api': {
-        browser: './shared/lib/empty-module.ts',
-        default: './shared/lib/empty-module.ts',
-      },
       'node:async_hooks': {
         browser: './shared/lib/async-hooks-stub.ts',
       },

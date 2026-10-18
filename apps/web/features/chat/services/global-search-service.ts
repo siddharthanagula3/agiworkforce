@@ -47,7 +47,6 @@ export function globalSearchResultHref(result: SearchResult, query?: string): st
 
 export interface SearchFilters {
   query: string;
-  sessionIds?: string[];
   startDate?: Date;
   endDate?: Date;
   role?: 'user' | 'assistant' | 'system';
@@ -75,12 +74,6 @@ export interface PopularSearch {
   query: string;
   searchCount: number;
   avgResults: number;
-}
-
-export interface SearchSuggestion {
-  suggestion: string;
-  source: 'recent' | 'popular';
-  score: number;
 }
 
 interface APISearchResult {
@@ -162,7 +155,7 @@ class GlobalSearchService {
   async search(
     _userId: string,
     filters: SearchFilters,
-    _options: { trackSearch?: boolean; signal?: AbortSignal } = { trackSearch: true },
+    options: { trackSearch?: boolean; signal?: AbortSignal } = { trackSearch: true },
   ): Promise<{ results: SearchResult[]; stats: SearchStats }> {
     const startTime = Date.now();
     const limit = filters.limit || this.DEFAULT_LIMIT;
@@ -170,6 +163,7 @@ class GlobalSearchService {
     const params = new URLSearchParams();
     params.set('q', filters.query);
     params.set('limit', String(limit));
+    if (options.trackSearch === false) params.set('track', 'false');
     if (filters.includeArchived) params.set('includeArchived', 'true');
     if (filters.role) params.set('role', filters.role);
     if (filters.startDate) params.set('startDate', filters.startDate.toISOString());
@@ -178,7 +172,7 @@ class GlobalSearchService {
     const headers = await buildReadHeaders();
     const res = await fetch(`/api/search?${params.toString()}`, {
       headers,
-      ...(_options.signal ? { signal: _options.signal } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
 
     if (!res.ok) {
@@ -340,77 +334,18 @@ class GlobalSearchService {
   }
 
   async clearSearchHistory(_userId: string): Promise<number> {
-    try {
-      const headers = await buildMutateHeaders();
-      const res = await fetch('/api/search', {
-        method: 'DELETE',
-        headers,
-      });
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/search', {
+      method: 'DELETE',
+      headers,
+    });
 
-      if (!res.ok) {
-        logger.error('[GlobalSearch] clear_search_history failed:', res.statusText);
-        return 0;
-      }
-
-      const data = (await res.json()) as { cleared: number };
-      return data.cleared ?? 0;
-    } catch (error) {
-      logger.error('[GlobalSearch] Failed to clear search history:', error);
-      return 0;
+    if (!res.ok) {
+      throw new Error(`Clearing search history failed: ${res.status} ${res.statusText}`);
     }
-  }
 
-  async getSearchSuggestions(
-    _userId: string,
-    partialQuery: string,
-    limit: number = 5,
-  ): Promise<SearchSuggestion[]> {
-    if (partialQuery.trim().length < 2) return [];
-
-    try {
-      const params = new URLSearchParams({
-        type: 'suggestions',
-        q: partialQuery,
-        limit: String(limit),
-      });
-      const headers = await buildReadHeaders();
-      const res = await fetch(`/api/search?${params.toString()}`, { headers });
-
-      if (!res.ok) {
-        logger.error('[GlobalSearch] get_search_suggestions failed:', res.statusText);
-        return [];
-      }
-
-      const data = (await res.json()) as {
-        suggestions: Array<{ suggestion: string; source: string; score: number }>;
-      };
-
-      return (data.suggestions || []).map((row) => ({
-        suggestion: row.suggestion,
-        source: row.source as 'recent' | 'popular',
-        score: row.score,
-      }));
-    } catch (error) {
-      logger.error('[GlobalSearch] Failed to get search suggestions:', error);
-      return [];
-    }
-  }
-
-  async autocomplete(_userId: string, partialQuery: string, limit: number = 5): Promise<string[]> {
-    if (partialQuery.trim().length < 2) return [];
-
-    try {
-      const suggestions = await this.getSearchSuggestions(_userId, partialQuery, limit);
-      return suggestions.map((s) => s.suggestion).slice(0, limit);
-    } catch (error) {
-      logger.error('[GlobalSearch] Autocomplete failed:', error);
-      return [];
-    }
-  }
-
-  async getTrendingSearchTerms(limit: number = 10): Promise<string[]> {
-    const popular = await this.getPopularSearches(limit, 7);
-    return popular.map((p) => p.query);
+    const data = (await res.json().catch(() => null)) as { cleared?: unknown } | null;
+    return typeof data?.cleared === 'number' ? data.cleared : 0;
   }
 }
 

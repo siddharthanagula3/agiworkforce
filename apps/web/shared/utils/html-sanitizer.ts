@@ -203,21 +203,6 @@ export function sanitizeHTML(html: string, level: SanitizeLevel = 'standard'): s
   return sanitized as string;
 }
 
-/**
- * True if `html` appears to be a full HTML document rather than a fragment.
- * Checks only the first 500 characters to avoid scanning large inputs.
- * Detects both `<!DOCTYPE html>` and a bare `<html` opening tag.
- *
- * NOTE: buildSandboxSrcDoc no longer uses this internally (it uses a unified
- * WHOLE_DOCUMENT:false + FORCE_BODY:true path that works for both full docs
- * and fragments). This is exported for external callers and tests that may
- * need document detection for other purposes.
- */
-export function isHtmlDocument(html: string): boolean {
-  const head = html.slice(0, 500).trimStart();
-  return /<!doctype\s+html/i.test(head) || /^<html[\s>]/i.test(head);
-}
-
 const FORBIDDEN_SANDBOX_VALUES = new Set([
   'allow-same-origin',
   'allow-top-navigation',
@@ -391,7 +376,6 @@ function runSandboxDOMPurify(html: string, wholeDoc: boolean): string {
   }
 }
 
-// We keep this as a separate exported helper so tests can call it directly.
 export function stripMetaRefreshFromSandboxHtml(html: string): string {
   return html.replace(/<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?[^>]*>/gi, '');
 }
@@ -438,27 +422,9 @@ export function buildSandboxSrcDoc(html: string): string {
 </html>`;
 }
 
-/**
- * @deprecated Use buildSandboxSrcDoc() instead. This function is kept for
- * backward compatibility with existing tests but should not be called from
- * production render paths.
- *
- * Returns the raw DOMPurify output (body content fragment only, no CSP
- * injection, no document shell). Using this result directly as a srcDoc is
- * WRONG for full HTML documents because it strips the outer <html>/<head>
- * without replacing them. Use buildSandboxSrcDoc() which wraps correctly.
- */
-export function sanitizeArtifactForSandbox(html: string): string {
-  if (!html || typeof html !== 'string') return '';
-  return runSandboxDOMPurify(html, false);
-}
-
-/**
- * @deprecated Use buildSandboxSrcDoc() instead.
- * Kept for backward compatibility with existing tests.
- */
 export function sanitizeHtmlForSandbox(html: string): string {
-  return stripMetaRefreshFromSandboxHtml(sanitizeArtifactForSandbox(html));
+  if (!html || typeof html !== 'string') return '';
+  return stripMetaRefreshFromSandboxHtml(runSandboxDOMPurify(html, false));
 }
 
 export function sanitizeArtifact(
@@ -578,23 +544,4 @@ export function sanitizeUserInput(input: string, maxLength: number = 10000): str
   sanitized = escapeHTML(sanitized);
 
   return sanitized;
-}
-
-export function stripHTML(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [],
-    KEEP_CONTENT: true,
-  });
-}
-
-export function sanitizeURL(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return '';
-    }
-    return url;
-  } catch {
-    return '';
-  }
 }

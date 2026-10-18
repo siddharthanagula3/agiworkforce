@@ -142,8 +142,7 @@ const PROVIDER_SYNONYMS: Readonly<Record<string, string>> = {
   // Google: `gemini` and `googleai` appear as provider-shaped ids on the client.
   gemini: 'google',
   googleai: 'google',
-  // Anthropic / OpenAI: the consumer-facing product names, which the
-  // `AIProvider` union in shared/types/common.ts still admits.
+  // Anthropic / OpenAI: the consumer-facing product names.
   claude: 'anthropic',
   chatgpt: 'openai',
   // NVIDIA: the catalog spells the NIM surface out, the client says `nvidia`.

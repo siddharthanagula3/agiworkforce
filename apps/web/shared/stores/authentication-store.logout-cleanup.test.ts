@@ -4,19 +4,13 @@ vi.mock('@shared/lib/logger', () => ({
   logger: { auth: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('./mission-control-store', () => ({}));
-vi.mock('./notification-store', () => ({}));
-vi.mock('./artifact-store', () => ({}));
 vi.mock('./layout-store', () => ({}));
-vi.mock('./user-profile-store', () => ({}));
 vi.mock('./web-chat-store', () => ({}));
 vi.mock('./web-settings-store', () => ({}));
 vi.mock('./media-store', () => ({}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
 vi.mock('./tool-store', () => ({}));
-vi.mock('./agent-metrics-store', () => ({}));
-vi.mock('./company-hub-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-session-store', () => ({}));

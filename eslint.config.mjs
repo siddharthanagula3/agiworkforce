@@ -740,7 +740,6 @@ export default [
       'apps/web/lib/llm-providers/google.ts',
       'apps/web/shared/config/supported-models.ts',
       'apps/web/shared/stores/chat-store.ts',
-      'apps/web/tests/fixtures/test-data-factory.ts',
       'apps/web/app/api/admin/directory-sync/route.ts',
       'apps/web/app/api/admin/security/route.ts',
       'apps/web/app/api/admin/sso/route.ts',

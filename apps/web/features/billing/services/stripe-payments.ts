@@ -177,28 +177,15 @@ export async function openBillingPortal(
     body: JSON.stringify({ ...(returnPath ? { returnPath } : {}), ...(flow ? { flow } : {}) }),
   });
 
+  const result = (await response.json().catch(() => null)) as { url?: unknown } | null;
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(extractErrorMessage(error, 'Failed to open billing portal'));
+    throw new Error(extractErrorMessage(result, 'Failed to open billing portal'));
+  }
+  if (typeof result?.url !== 'string' || !result.url) {
+    throw new Error('The billing portal did not return a link. Please try again.');
   }
 
-  const { url } = await response.json();
-
-  return goToHostedBilling(url, 'portal');
-}
-
-export function isStripeConfigured(): boolean {
-  const publishableKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
-  return !!publishableKey && publishableKey.startsWith('pk_');
-}
-
-export function getStripeConfig() {
-  return {
-    publishableKey: process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY']
-      ? `${process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'].substring(0, 20)}...`
-      : 'Not configured',
-    isConfigured: isStripeConfigured(),
-  };
+  return goToHostedBilling(result.url, 'portal');
 }
 
 export async function upgradeToProPlan(data: {

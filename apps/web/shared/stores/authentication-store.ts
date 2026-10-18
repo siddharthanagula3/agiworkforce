@@ -1,12 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import {
-  authService,
-  AuthUser,
-  LoginData,
-  RegisterData,
-} from '@shared/services/authentication-manager';
+import { authService, AuthUser } from '@shared/services/authentication-manager';
 import { logger } from '@shared/lib/logger';
 import {
   clerkSessionCookieValue,
@@ -49,7 +44,6 @@ function invokeStateMethod(state: unknown, method: string): boolean {
 
 const STORE_RESET_METHODS = ['resetOnLogout', 'reset', 'clearAll', 'clear'] as const;
 const MODULE_ACCOUNT_CLEANUP_METHODS = new Set([
-  'stopMissionCleanupInterval',
   'invalidateModelFavouritesCache',
   'invalidateConnectorsCache',
   'invalidateConnectorCapabilityCatalog',
@@ -71,19 +65,13 @@ function resetStoreState(
 }
 
 const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Promise<unknown> }> = [
-  { label: 'mission-control-store', load: () => import('./mission-control-store') },
-  { label: 'notification-store', load: () => import('./notification-store') },
-  { label: 'artifact-store', load: () => import('./artifact-store') },
   { label: 'layout-store', load: () => import('./layout-store') },
-  { label: 'user-profile-store', load: () => import('./user-profile-store') },
   { label: 'web-chat-store', load: () => import('./web-chat-store') },
   { label: 'web-settings-store', load: () => import('./web-settings-store') },
   { label: 'media-store', load: () => import('./media-store') },
   { label: 'model-store', load: () => import('./model-store') },
   { label: 'thinking-store', load: () => import('./thinking-store') },
   { label: 'tool-store', load: () => import('./tool-store') },
-  { label: 'agent-metrics-store', load: () => import('./agent-metrics-store') },
-  { label: 'company-hub-store', load: () => import('./company-hub-store') },
   { label: 'artifacts-store', load: () => import('@/features/chat/stores/artifacts-store') },
   { label: 'voice-input-store', load: () => import('@/features/chat/stores/voice-input-store') },
   {
@@ -111,13 +99,8 @@ const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Prom
 ];
 
 const WORKSPACE_SCOPED_STORE_LABELS = new Set([
-  'mission-control-store',
-  'notification-store',
-  'artifact-store',
   'web-chat-store',
   'media-store',
-  'agent-metrics-store',
-  'company-hub-store',
   'artifacts-store',
   'connectors-cache',
   'connector-capabilities-cache',
@@ -381,35 +364,17 @@ export async function applyCacheScope(scope: CacheScopeSelector): Promise<boolea
   return true;
 }
 
-export interface AuthResult {
-  success: boolean;
-  error: string | null;
-}
-
 export interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
-  error: string | null;
   isAuthenticated: boolean;
   initialized: boolean;
-  login: (loginData: LoginData) => Promise<{ success: boolean; error: string | null }>;
-  register: (registerData: RegisterData) => Promise<{ success: boolean; error: string | null }>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   initialize: () => Promise<void>;
   resyncSession: () => Promise<void>;
   updateUser: (user: AuthUser) => void;
-  setError: (error: string | null) => void;
   reset: () => void;
-  resetPassword: (email: string) => Promise<{ success: boolean; error: string | null }>;
-  updatePassword: (newPassword: string) => Promise<{ success: boolean; error: string | null }>;
-  changePassword: (
-    currentPassword: string,
-    newPassword: string,
-  ) => Promise<{ success: boolean; error: string | null }>;
-  updateProfile: (
-    updates: Partial<AuthUser>,
-  ) => Promise<{ success: boolean; error: string | null }>;
 }
 
 const enableDevtools = process.env.NODE_ENV !== 'production';
@@ -480,7 +445,6 @@ export const useAuthStore = create<AuthState>()(
     immer((set, get) => ({
       user: null,
       isLoading: true,
-      error: null,
       isAuthenticated: false,
       initialized: false,
 
@@ -540,50 +504,6 @@ export const useAuthStore = create<AuthState>()(
           _initializingPromise = null;
         });
         return _initializingPromise;
-      },
-
-      login: async (loginData) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user, error } = await authService.login(loginData);
-          if (error) {
-            set({
-              error,
-              isLoading: false,
-              isAuthenticated: false,
-              user: null,
-            });
-            return { success: false, error };
-          }
-          set({ user, isAuthenticated: !!user, isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false, isAuthenticated: false, user: null });
-          return { success: false, error };
-        }
-      },
-
-      register: async (registerData) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user, error } = await authService.register(registerData);
-          if (error) {
-            set({
-              error,
-              isLoading: false,
-              isAuthenticated: false,
-              user: null,
-            });
-            return { success: false, error };
-          }
-          set({ user, isAuthenticated: !!user, isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false, isAuthenticated: false, user: null });
-          return { success: false, error };
-        }
       },
 
       logout: async () => {
@@ -653,87 +573,14 @@ export const useAuthStore = create<AuthState>()(
         set({ user, isAuthenticated: !!user });
       },
 
-      setError: (error: string | null) => {
-        set({ error });
-      },
-
       reset: () => {
         clearSessionResolution();
         set({
           user: null,
           isAuthenticated: false,
-          error: null,
           isLoading: false,
           initialized: false,
         });
-      },
-
-      resetPassword: async (email: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { error } = await authService.resetPassword(email);
-          if (error) {
-            set({ error, isLoading: false });
-            return { success: false, error };
-          }
-          set({ isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false });
-          return { success: false, error };
-        }
-      },
-
-      updatePassword: async (newPassword: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { error } = await authService.updatePassword(newPassword);
-          if (error) {
-            set({ error, isLoading: false });
-            return { success: false, error };
-          }
-          set({ isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false });
-          return { success: false, error };
-        }
-      },
-
-      changePassword: async (currentPassword: string, newPassword: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { error } = await authService.changePassword(currentPassword, newPassword);
-          if (error) {
-            set({ error, isLoading: false });
-            return { success: false, error };
-          }
-          set({ isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false });
-          return { success: false, error };
-        }
-      },
-
-      updateProfile: async (updates: Partial<AuthUser>) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { user, error } = await authService.updateProfile(updates);
-          if (error) {
-            set({ error, isLoading: false });
-            return { success: false, error };
-          }
-          set({ user, isAuthenticated: !!user, isLoading: false });
-          return { success: true, error: null };
-        } catch (err: unknown) {
-          const error = err instanceof Error ? err.message : String(err);
-          set({ error, isLoading: false });
-          return { success: false, error };
-        }
       },
     })),
     { name: 'AuthStore', enabled: enableDevtools },
