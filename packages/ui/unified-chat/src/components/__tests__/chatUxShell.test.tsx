@@ -7,24 +7,12 @@ import { act } from 'react';
 
 import { BrandedGreeting } from '../BrandedGreeting';
 import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
-import { AdvancedEmptyState } from '../AdvancedEmptyState';
 import { ChatInterface } from '../ChatInterface';
 import { EmptyState } from '../EmptyState';
-import {
-  BriefStatus,
-  FloatingBriefStatus,
-  actionMessages,
-  type BriefStatusState,
-} from '../BriefStatus';
-import { ChatNotificationBadge, type BadgeNotificationType } from '../ChatNotificationBadge';
-import { BrowserActivityBadge } from '../BrowserActivityBadge';
 import { SlashCommandMenu, type CommandSuggestion } from '../SlashCommandMenu';
 import { SkillMentionPicker, type MentionSkill } from '../SkillMentionPicker';
-import { FileMentionPicker, type MentionFile } from '../FileMentionPicker';
-import { PromptSuggestionsDropdown, type PromptSuggestion } from '../PromptSuggestionsDropdown';
 
 import { useMentionStore } from '../../stores/mentionStore';
-import { usePromptStashStore } from '../../stores/promptStashStore';
 import { usePlanModeStore } from '../../stores/planModeStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useArtifactStore } from '../../stores/artifactStore';
@@ -33,7 +21,6 @@ import type { ChatRuntime } from '../../lib/runtime';
 
 function resetStores() {
   useMentionStore.setState({ activeTrigger: null, query: '', cursorIndex: 0 });
-  usePromptStashStore.setState({ entries: [] });
   usePlanModeStore.setState({ planMode: false, pendingPlan: null });
   useChatStore.setState({
     conversations: [],
@@ -74,18 +61,6 @@ describe('BrandedGreeting', () => {
     );
     expect(html).toContain('What should we build in');
     expect(html).toContain('agiworkforce');
-  });
-});
-
-describe('AdvancedEmptyState', () => {
-  it('renders an empty flex spacer', () => {
-    const html = renderToStaticMarkup(<AdvancedEmptyState />);
-    expect(html).toContain('flex-1');
-  });
-
-  it('applies custom className', () => {
-    const html = renderToStaticMarkup(<AdvancedEmptyState className="test-empty" />);
-    expect(html).toContain('test-empty');
   });
 });
 
@@ -153,170 +128,6 @@ describe('ChatInterface host ownership slots', () => {
     expect(html).toContain('Local Mode');
     expect(html).not.toContain('Upgrade');
     expect(html).not.toContain('Cloud Sync');
-  });
-});
-
-describe('BriefStatus', () => {
-  it('renders null when message is null', () => {
-    const status: BriefStatusState = { message: null, isComplete: false, isError: false };
-    const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toBe('');
-  });
-
-  it('renders message text when set', () => {
-    const status: BriefStatusState = {
-      message: 'Opening Chrome...',
-      isComplete: false,
-      isError: false,
-    };
-    const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toContain('Opening Chrome...');
-  });
-
-  it('applies error styles when isError is true', () => {
-    const status: BriefStatusState = {
-      message: 'Failed',
-      isComplete: false,
-      isError: true,
-    };
-    const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toContain('text-danger-text');
-  });
-
-  it('applies success styles when isComplete is true', () => {
-    const status: BriefStatusState = {
-      message: 'Done!',
-      isComplete: true,
-      isError: false,
-    };
-    const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toContain('text-success-text');
-  });
-});
-
-describe('FloatingBriefStatus', () => {
-  it('renders null when message is null', () => {
-    const status: BriefStatusState = { message: null, isComplete: false, isError: false };
-    const html = renderToStaticMarkup(<FloatingBriefStatus status={status} />);
-    expect(html).toBe('');
-  });
-
-  it('renders with fixed positioning', () => {
-    const status: BriefStatusState = { message: 'Working...', isComplete: false, isError: false };
-    const html = renderToStaticMarkup(<FloatingBriefStatus status={status} />);
-    expect(html).toContain('fixed');
-  });
-});
-
-describe('useBriefStatus (logic only)', () => {
-  it('createStatus creates non-complete, non-error status', () => {
-    const createStatus = (message: string): BriefStatusState => ({
-      message,
-      isComplete: false,
-      isError: false,
-    });
-    const s = createStatus('Hello');
-    expect(s.message).toBe('Hello');
-    expect(s.isComplete).toBe(false);
-    expect(s.isError).toBe(false);
-  });
-});
-
-describe('actionMessages', () => {
-  it('openingBrowser uses hostname', () => {
-    expect(actionMessages.openingBrowser('https://google.com/search')).toBe(
-      'Opening google.com...',
-    );
-  });
-
-  it('openingBrowser fallback without URL', () => {
-    expect(actionMessages.openingBrowser()).toBe('Opening browser...');
-  });
-
-  it('done returns Done!', () => {
-    expect(actionMessages.done()).toBe('Done!');
-  });
-
-  it('failed with reason', () => {
-    expect(actionMessages.failed('timeout')).toBe('Failed: timeout');
-  });
-});
-
-describe('ChatNotificationBadge', () => {
-  it('renders nothing when count is 0', () => {
-    const html = renderToStaticMarkup(<ChatNotificationBadge count={0} />);
-    expect(html).not.toContain('bg-blue-500');
-  });
-
-  it('renders dot badge for count 1', () => {
-    const html = renderToStaticMarkup(<ChatNotificationBadge count={1} />);
-    expect(html).toContain('unread');
-  });
-
-  it('renders count for count 5', () => {
-    const html = renderToStaticMarkup(<ChatNotificationBadge count={5} />);
-    expect(html).toContain('5');
-  });
-
-  it('caps at 99+', () => {
-    const html = renderToStaticMarkup(<ChatNotificationBadge count={150} />);
-    expect(html).toContain('99+');
-  });
-
-  it('uses alert color class for alert type', () => {
-    const html = renderToStaticMarkup(
-      <ChatNotificationBadge count={3} type={'alert' as BadgeNotificationType} />,
-    );
-    expect(html).toContain('bg-danger-fill');
-  });
-
-  it('uses success color class for success type', () => {
-    const html = renderToStaticMarkup(
-      <ChatNotificationBadge count={2} type={'success' as BadgeNotificationType} />,
-    );
-    expect(html).toContain('bg-success-fill');
-  });
-});
-
-describe('BrowserActivityBadge', () => {
-  it('renders nothing when not connected and idle with no URL', () => {
-    const html = renderToStaticMarkup(
-      <BrowserActivityBadge extensionConnected={false} agentStatus="idle" />,
-    );
-    expect(html).toBe('');
-  });
-
-  it('renders disconnected label when not connected but URL present', () => {
-    const html = renderToStaticMarkup(
-      <BrowserActivityBadge
-        extensionConnected={false}
-        agentStatus="idle"
-        currentPageUrl="https://example.com"
-      />,
-    );
-    expect(html).toContain('disconnected');
-  });
-
-  it('renders planning label when agent is planning', () => {
-    const html = renderToStaticMarkup(
-      <BrowserActivityBadge
-        extensionConnected={true}
-        agentStatus="planning"
-        currentPageUrl="https://example.com"
-      />,
-    );
-    expect(html).toContain('Planning');
-  });
-
-  it('shows execute label when executing', () => {
-    const html = renderToStaticMarkup(
-      <BrowserActivityBadge
-        extensionConnected={true}
-        agentStatus="executing"
-        currentPageUrl="https://example.com"
-      />,
-    );
-    expect(html).toContain('Acting');
   });
 });
 
@@ -400,98 +211,6 @@ describe('SkillMentionPicker', () => {
   });
 });
 
-describe('FileMentionPicker', () => {
-  const staticEntries: MentionFile[] = [
-    { name: 'index.ts', path: '/project/src/index.ts', isDir: false, size: 1024 },
-    { name: 'styles.css', path: '/project/src/styles.css', isDir: false, size: 512 },
-    { name: 'components', path: '/project/src/components', isDir: true, size: 0 },
-  ];
-
-  it('renders file list header', () => {
-    const html = renderToStaticMarkup(
-      <FileMentionPicker
-        query=""
-        onSelect={() => {}}
-        onClose={() => {}}
-        staticEntries={staticEntries}
-      />,
-    );
-    expect(html).toContain('Files');
-  });
-
-  it('shows all entries on empty query', () => {
-    const html = renderToStaticMarkup(
-      <FileMentionPicker
-        query=""
-        onSelect={() => {}}
-        onClose={() => {}}
-        staticEntries={staticEntries}
-      />,
-    );
-    expect(html).toContain('index.ts');
-    expect(html).toContain('styles.css');
-    expect(html).toContain('components');
-  });
-
-  it('filters entries by name on non-empty query', () => {
-    const html = renderToStaticMarkup(
-      <FileMentionPicker
-        query="index"
-        onSelect={() => {}}
-        onClose={() => {}}
-        staticEntries={staticEntries}
-      />,
-    );
-    expect(html).toContain('index.ts');
-    expect(html).not.toContain('styles.css');
-  });
-});
-
-describe('PromptSuggestionsDropdown', () => {
-  const suggestions: PromptSuggestion[] = [
-    { text: 'Add unit tests', description: 'Add test coverage', type: 'expansion', icon: '🧪' },
-    { text: 'Refactor this', description: 'Improve code structure', type: 'alternative' },
-  ];
-
-  it('renders nothing when not visible', () => {
-    const html = renderToStaticMarkup(
-      <PromptSuggestionsDropdown
-        suggestions={suggestions}
-        isVisible={false}
-        selectedIndex={0}
-        onSelectSuggestion={() => {}}
-      />,
-    );
-    expect(html).toBe('');
-  });
-
-  it('renders suggestions when visible', () => {
-    const html = renderToStaticMarkup(
-      <PromptSuggestionsDropdown
-        suggestions={suggestions}
-        isVisible={true}
-        selectedIndex={0}
-        onSelectSuggestion={() => {}}
-      />,
-    );
-    expect(html).toContain('Add unit tests');
-    expect(html).toContain('Refactor this');
-  });
-
-  it('renders type badges', () => {
-    const html = renderToStaticMarkup(
-      <PromptSuggestionsDropdown
-        suggestions={suggestions}
-        isVisible={true}
-        selectedIndex={0}
-        onSelectSuggestion={() => {}}
-      />,
-    );
-    expect(html).toContain('expansion');
-    expect(html).toContain('alternative');
-  });
-});
-
 describe('mentionStore', () => {
   beforeEach(() => resetStores());
 
@@ -528,47 +247,6 @@ describe('mentionStore', () => {
     useMentionStore.setState({ cursorIndex: 0 });
     useMentionStore.getState().moveCursor('up', 3);
     expect(useMentionStore.getState().cursorIndex).toBe(2);
-  });
-});
-
-describe('promptStashStore', () => {
-  beforeEach(() => resetStores());
-
-  it('starts with empty entries', () => {
-    expect(usePromptStashStore.getState().entries).toHaveLength(0);
-  });
-
-  it('save adds an entry', () => {
-    usePromptStashStore.getState().save('Tell me about Rust');
-    expect(usePromptStashStore.getState().entries).toHaveLength(1);
-    expect(usePromptStashStore.getState().entries[0]!.text).toBe('Tell me about Rust');
-  });
-
-  it('save adds label when provided', () => {
-    usePromptStashStore.getState().save('Write tests', 'Test writing prompt');
-    expect(usePromptStashStore.getState().entries[0]!.label).toBe('Test writing prompt');
-  });
-
-  it('remove deletes an entry by id', () => {
-    usePromptStashStore.getState().save('Entry A');
-    usePromptStashStore.getState().save('Entry B');
-    const id = usePromptStashStore.getState().entries[0]!.id;
-    usePromptStashStore.getState().remove(id);
-    expect(usePromptStashStore.getState().entries).toHaveLength(1);
-    expect(usePromptStashStore.getState().entries[0]!.text).toBe('Entry A');
-  });
-
-  it('clear removes all entries', () => {
-    usePromptStashStore.getState().save('A');
-    usePromptStashStore.getState().save('B');
-    usePromptStashStore.getState().clear();
-    expect(usePromptStashStore.getState().entries).toHaveLength(0);
-  });
-
-  it('most recent entry is first (prepend order)', () => {
-    usePromptStashStore.getState().save('First');
-    usePromptStashStore.getState().save('Second');
-    expect(usePromptStashStore.getState().entries[0]!.text).toBe('Second');
   });
 });
 

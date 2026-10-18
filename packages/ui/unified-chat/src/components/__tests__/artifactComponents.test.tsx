@@ -4,7 +4,6 @@ import { ArtifactRenderer } from '../ArtifactRenderer';
 import { ReactPreview, buildReactPreviewDocument } from '../artifact-components/ReactPreview';
 import { PresentationArtifact } from '../artifact-components/PresentationArtifact';
 import { SpreadsheetArtifact } from '../artifact-components/SpreadsheetArtifact';
-import { SidecarPanel } from '../sidecar/SidecarPanel';
 import type { Artifact } from '../../lib/types';
 
 function makeArtifact(overrides: {
@@ -360,86 +359,5 @@ describe('SpreadsheetArtifact', () => {
     render(<SpreadsheetArtifact artifact={artifact} />);
     expect(screen.getByTestId('spreadsheet-artifact-fallback')).toBeDefined();
     expect(screen.getByText('not-json')).toBeDefined();
-  });
-});
-
-describe('SidecarPanel', () => {
-  it('renders panel body when not minimized', () => {
-    render(
-      <SidecarPanel panelType="artifact">
-        <div>Panel content</div>
-      </SidecarPanel>,
-    );
-    expect(screen.getByTestId('sidecar-panel')).toBeDefined();
-    expect(screen.getByText('Panel content')).toBeDefined();
-  });
-
-  it('minimizes when minimize button is clicked', () => {
-    render(
-      <SidecarPanel panelType="artifact">
-        <div>Panel content</div>
-      </SidecarPanel>,
-    );
-    fireEvent.click(screen.getByLabelText('Minimize sidecar'));
-    expect(screen.getByTestId('sidecar-panel-minimized')).toBeDefined();
-    expect(screen.queryByTestId('sidecar-panel')).toBeNull();
-  });
-
-  it('restores when expand button is clicked after minimize', () => {
-    render(
-      <SidecarPanel panelType="artifact">
-        <div>Panel content</div>
-      </SidecarPanel>,
-    );
-    fireEvent.click(screen.getByLabelText('Minimize sidecar'));
-    fireEvent.click(screen.getByLabelText('Expand sidecar'));
-    expect(screen.getByTestId('sidecar-panel')).toBeDefined();
-  });
-
-  it('starts minimized when defaultMinimized=true', () => {
-    render(
-      <SidecarPanel panelType="terminal" defaultMinimized={true}>
-        <div>x</div>
-      </SidecarPanel>,
-    );
-    expect(screen.getByTestId('sidecar-panel-minimized')).toBeDefined();
-  });
-
-  it('calls onClose when close button is clicked', () => {
-    const onClose = vi.fn();
-    render(
-      <SidecarPanel panelType="artifact" onClose={onClose}>
-        <div>x</div>
-      </SidecarPanel>,
-    );
-    fireEvent.click(screen.getByLabelText('Close sidecar'));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders allowed security badge by default', () => {
-    render(
-      <SidecarPanel panelType="artifact">
-        <div>x</div>
-      </SidecarPanel>,
-    );
-    expect(screen.getByText('Allowed')).toBeDefined();
-  });
-
-  it('renders restricted security badge when allowStatus=restricted', () => {
-    render(
-      <SidecarPanel panelType="artifact" allowStatus="restricted">
-        <div>x</div>
-      </SidecarPanel>,
-    );
-    expect(screen.getByText('Restricted')).toBeDefined();
-  });
-
-  it('shows panel label in header', () => {
-    render(
-      <SidecarPanel panelType="terminal">
-        <div>x</div>
-      </SidecarPanel>,
-    );
-    expect(screen.getByText('Terminal')).toBeDefined();
   });
 });

@@ -169,14 +169,12 @@ export type { InterruptedTurnNoticeProps } from './components/InterruptedTurnNot
 
 export { useChat } from './hooks/useChat';
 export { useTheme } from './hooks/useTheme';
-export { useSidebar } from './hooks/useSidebar';
 export { useArtifact } from './hooks/useArtifact';
 export { useSameDocumentScriptSupport } from './hooks/useSameDocumentScriptSupport';
 export { useKeyboard } from './hooks/useKeyboard';
 export { useModel } from './hooks/useModel';
 
 export { Button, type ButtonProps, ScrollArea } from '@agiworkforce/ui';
-export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
@@ -315,8 +313,6 @@ export { SendButton } from './components/SendButton';
 export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
 
-export { UserProfile } from './components/UserProfile';
-
 export { MessageList } from './components/MessageList';
 export {
   ResearchStatusChip,
@@ -419,14 +415,8 @@ export type {
 } from './components/MessageGeneratedFiles';
 export { SendPreview } from './components/SendPreview';
 export type { SendPreviewProps } from './components/SendPreview';
-export { ImageGenCard } from './components/ImageGenCard';
-export type { ImageGenCardProps } from './components/ImageGenCard';
-export { VideoGenCard } from './components/VideoGenCard';
-export type { VideoGenCardProps } from './components/VideoGenCard';
 
 export { SettingsModal } from './components/SettingsModal';
-export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsShell';
-export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
 export { MemoryEditor } from './components/MemoryEditor';
 export type {
   MemoryEditorDataAdapter,
@@ -443,12 +433,7 @@ export { useMemoryStore, selectMemoryFacts, selectMemoryCount } from './stores/m
 export type { MemoryFact } from './stores/memoryStore';
 export { CommandPalette } from './components/CommandPalette';
 
-export { BudgetTracker } from './components/BudgetTracker';
-export { BudgetAlertsPanel } from './components/BudgetAlertsPanel';
-export { TokenCounter } from './components/TokenCounter';
-export type { TokenCounterProps } from './components/TokenCounter';
 export { getUsageUrgency, type UrgencyLevel } from './components/usage-urgency';
-export { CurrentActionBadge, CurrentActionStack } from './components/CurrentActionBadge';
 export {
   useBudgetStore,
   selectBudget,
@@ -464,28 +449,6 @@ export type {
   ActionTrailEntryType,
 } from './stores/budgetStore';
 
-export { AgenticLoopStatusBar } from './components/AgenticLoopStatusBar';
-export { AgentStepTimeline } from './components/AgentStepTimeline';
-export type {
-  AgentStep,
-  AgentStepTimelineProps,
-  AgentType,
-  StepStatus,
-} from './components/AgentStepTimeline';
-export { AgentProgressFooter } from './components/AgentProgressFooter';
-export { ActionLogTimeline, ActionLogTimelineContent } from './components/ActionLogTimeline';
-export type {
-  ActionLogTimelineProps,
-  ActionLogTimelineContentProps,
-} from './components/ActionLogTimeline';
-export { StatusTrail, StatusTrailContent, FloatingStatusTrail } from './components/StatusTrail';
-export type {
-  StatusTrailProps,
-  StatusTrailContentProps,
-  FloatingStatusTrailProps,
-} from './components/StatusTrail';
-export { SubtaskTimeline } from './components/SubtaskTimeline';
-export type { SubtaskStep, SubtaskTimelineProps } from './components/SubtaskTimeline';
 export { TaskPhaseTimeline } from './components/TaskPhaseTimeline';
 export type {
   TaskPhaseTimelineProps,
@@ -536,23 +499,8 @@ export { InlineToolCallGroup } from './components/InlineToolCallGroup';
 export type { InlineToolCallGroupProps } from './components/InlineToolCallGroup';
 export { RewindTimeline } from './components/RewindTimeline';
 export type { RewindTimelineProps, CodingCheckpoint } from './components/RewindTimeline';
-export {
-  useAgentLoopStore,
-  selectAgentLoop,
-  selectActiveGoal,
-  selectActionLog,
-} from './stores/agentLoopStore';
-export type {
-  AgentLoopStatus,
-  ActiveGoal,
-  ActionLogEntry,
-  ActionLogEntryType,
-  ActionLogStatus,
-} from './stores/agentLoopStore';
 export { useReducedMotion } from './hooks/useReducedMotion';
 
-export { CheckpointManager } from './components/CheckpointManager';
-export type { CheckpointManagerProps, ManagerCheckpoint } from './components/CheckpointManager';
 export { BranchNavigator, BranchNavigatorContainer } from './components/BranchNavigator';
 export type {
   BranchNavigatorProps,
@@ -571,8 +519,6 @@ export type { Checkpoint, Branch } from './stores/checkpointStore';
 
 export { ArtifactRenderer, isTabularType } from './components/ArtifactRenderer';
 export type { ArtifactRendererProps } from './components/ArtifactRenderer';
-export { SidecarPanel } from './components/sidecar/SidecarPanel';
-export type { SidecarPanelProps, SidecarPanelType } from './components/sidecar/SidecarPanel';
 export { PresentationArtifact } from './components/artifact-components/PresentationArtifact';
 export type { PresentationArtifactProps } from './components/artifact-components/PresentationArtifact';
 export { ChartArtifact } from './components/artifact-components/ChartArtifact';
@@ -641,29 +587,6 @@ export {
   resolveGreetingHeadline,
 } from '@agiworkforce/utils/greeting';
 export type { GreetingGroup, GreetingTimeBand } from '@agiworkforce/utils/greeting';
-export { AdvancedEmptyState } from './components/AdvancedEmptyState';
-export type { AdvancedEmptyStateProps } from './components/AdvancedEmptyState';
-export {
-  BriefStatus,
-  FloatingBriefStatus,
-  useBriefStatus,
-  actionMessages,
-} from './components/BriefStatus';
-export type {
-  BriefStatusState,
-  BriefStatusProps,
-  FloatingBriefStatusProps,
-} from './components/BriefStatus';
-export { ChatNotificationBadge } from './components/ChatNotificationBadge';
-export type {
-  ChatNotificationBadgeProps,
-  BadgeNotificationType,
-} from './components/ChatNotificationBadge';
-export { BrowserActivityBadge } from './components/BrowserActivityBadge';
-export type {
-  BrowserActivityBadgeProps,
-  BrowserAgentStatus,
-} from './components/BrowserActivityBadge';
 export {
   CHAT_SHORTCUTS,
   COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
@@ -692,16 +615,6 @@ export type {
 } from './components/SlashCommandMenu';
 export { SkillMentionPicker } from './components/SkillMentionPicker';
 export type { SkillMentionPickerProps, MentionSkill } from './components/SkillMentionPicker';
-export { FileMentionPicker } from './components/FileMentionPicker';
-export type { FileMentionPickerProps, MentionFile } from './components/FileMentionPicker';
-export { PromptStash } from './components/PromptStash';
-export type { PromptStashProps } from './components/PromptStash';
-export { PromptSuggestionsDropdown } from './components/PromptSuggestionsDropdown';
-export type {
-  PromptSuggestionsDropdownProps,
-  PromptSuggestion,
-  PromptSuggestionType,
-} from './components/PromptSuggestionsDropdown';
 export {
   useMentionStore,
   selectActiveMentionTrigger,
@@ -709,12 +622,6 @@ export {
   selectMentionCursorIndex,
 } from './stores/mentionStore';
 export type { MentionTrigger } from './stores/mentionStore';
-export {
-  usePromptStashStore,
-  selectPromptStashEntries,
-  selectPromptStashCount,
-} from './stores/promptStashStore';
-export type { PromptStashEntry } from './stores/promptStashStore';
 export {
   selectPlanMode,
   selectPendingPlan,
@@ -728,8 +635,6 @@ export {
 } from './stores/mediaModeStore';
 export type { MediaKind, MediaMode, MediaGenerationSupport } from './stores/mediaModeStore';
 
-export { MaxUpgradePrompt } from './components/MaxUpgradePrompt';
-export type { MaxUpgradePromptProps } from './components/MaxUpgradePrompt';
 export {
   useTierStore,
   selectTier,

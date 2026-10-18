@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { CheckpointManager } from '../CheckpointManager';
-import type { CheckpointManagerProps } from '../CheckpointManager';
 import { BranchNavigator } from '../BranchNavigator';
 import type { BranchItem } from '../BranchNavigator';
 import { RewindTimeline } from '../RewindTimeline';
@@ -35,49 +33,6 @@ function makeBranch(overrides?: Partial<BranchItem>): BranchItem {
     ...overrides,
   };
 }
-
-function makeManagerProps(overrides?: Partial<CheckpointManagerProps>): CheckpointManagerProps {
-  return {
-    conversationId: 'conv-test',
-    onLoad: vi.fn().mockResolvedValue([]),
-    onCreate: vi.fn().mockResolvedValue(makeCheckpoint()),
-    onRestore: vi.fn().mockResolvedValue(undefined),
-    onDelete: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  };
-}
-
-describe('CheckpointManager', () => {
-  it('renders loading state initially (SSR)', () => {
-    const html = renderToStaticMarkup(<CheckpointManager {...makeManagerProps()} />);
-    expect(typeof html).toBe('string');
-    expect(html.length).toBeGreaterThan(0);
-  });
-
-  it('renders the "Checkpoints" heading', () => {
-    const html = renderToStaticMarkup(<CheckpointManager {...makeManagerProps()} />);
-    expect(html).toContain('Checkpoints');
-  });
-
-  it('renders "Create Checkpoint" button', () => {
-    const html = renderToStaticMarkup(<CheckpointManager {...makeManagerProps()} />);
-    expect(html).toContain('Create Checkpoint');
-  });
-
-  it('accepts optional onFork prop without crashing', () => {
-    const html = renderToStaticMarkup(
-      <CheckpointManager {...makeManagerProps()} onFork={vi.fn().mockResolvedValue(undefined)} />,
-    );
-    expect(html).toContain('Checkpoints');
-  });
-
-  it('renders with className applied', () => {
-    const html = renderToStaticMarkup(
-      <CheckpointManager {...makeManagerProps()} className="my-custom-class" />,
-    );
-    expect(html).toContain('my-custom-class');
-  });
-});
 
 describe('BranchNavigator', () => {
   it('renders nothing when total relevant branches <= 1', () => {

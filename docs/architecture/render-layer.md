@@ -1175,7 +1175,7 @@ All ten are blocked on the same thing: `help.openai.com` and `openai.com` return
 2. **Offset drift** between the buffer, citation spans, placeholder spans and outline offsets. Mitigation: one reducer, one pass, patch, undo push, citation re-anchor, placeholder recompute, outline recompute all happen in the same synchronous call. Never in a `useEffect`.
 3. **The registry gap recurs.** `itinerary.v1` proves a fully-specified type can ship with no renderer and no alarm `[REPO]`. Mitigation: the coverage test in phase 1, with an explicit waiver set. Do not weaken it.
 4. **Two chat render stacks.** unified-chat's `MessageBubble`/`CitationPill`/`ArtifactRenderer` reach only desktop; web and mobile each have their own `MessageBubble` `[REPO]`. This spec puts the _contract, edit controller, outline and citation logic_ in shared packages and lets each surface own its components. Resist the urge to unify the components in this workstream, that is a separate, larger migration.
-5. **`unified-chat`'s `ArtifactRenderer` / `CheckpointManager` / `BranchNavigator` / `RewindTimeline` have no confirmed consumer outside the package's own tests** `[REPO]`. Before reusing any of them, confirm they are live somewhere; if not, do not build phase 5 on top of dead code.
+5. **`unified-chat`'s `ArtifactRenderer` / `BranchNavigator` / `RewindTimeline` have no confirmed consumer outside the package's own tests** `[REPO]`. Before reusing any of them, confirm they are live somewhere; if not, do not build phase 5 on top of dead code.
 6. **Published pages are live, not snapshots** (§8.5). If a user publishes a document and then edits it, the shared link changes under the recipient. Ship the correct copy in the publish dialog in phase 2, and fix it properly in phase 6.
 
 ---

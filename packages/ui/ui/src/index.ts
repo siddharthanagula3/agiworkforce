@@ -26,7 +26,6 @@ export {
 } from './i18n';
 export { translateUi, translateUiPlural } from './lib/translate';
 export { isApplePlatform, primaryModifierLabel, shortcutLabel } from './platformKeys';
-export { lucideToolIcon } from './toolIcon';
 export {
   Alert,
   AlertTitle,
