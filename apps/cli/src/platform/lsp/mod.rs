@@ -6,7 +6,7 @@ pub mod client;
 pub mod types;
 
 #[allow(unused_imports)]
-pub use client::{DiagnosticsBuffer, LspClient};
+pub use client::LspClient;
 #[allow(unused_imports)]
 pub use types::{
     CompletionItem, Diagnostic, DocumentSymbol, Hover, Location, Position, Range, TextEdit,

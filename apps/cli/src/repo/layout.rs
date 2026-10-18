@@ -445,7 +445,6 @@ pub fn repository_config(config: &BTreeMap<String, String>) -> BTreeMap<String, 
 }
 
 /// Which remote a command with no remote argument should use.
-///.
 pub fn resolve_default_remote(
     remotes: &[RepositoryRemote],
     configured: Option<&str>,

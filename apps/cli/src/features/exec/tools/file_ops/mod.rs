@@ -73,7 +73,6 @@ fn saved_denial_message(action: &str) -> String {
 }
 
 /// Render a diff preview for the terminal.
-///.
 fn diff_preview_lines(diff: &str) -> Vec<String> {
     diff.lines()
         .map(|line| {

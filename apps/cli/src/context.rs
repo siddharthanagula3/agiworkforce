@@ -229,7 +229,6 @@ pub fn describe_repository_shape(
 }
 
 /// Detect project type by checking for well-known config files in the cwd.
-///.
 pub fn detect_project_type(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -273,7 +272,6 @@ pub fn detect_project_type(cwd: &str) -> Option<String> {
 }
 
 /// Detect the primary language of a project by inspecting config files.
-///.
 pub fn detect_project_language(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -314,7 +312,6 @@ pub fn detect_project_language(cwd: &str) -> Option<String> {
 }
 
 /// Detect CI/CD providers from config files in the project root.
-///.
 /// The file or directory each CI provider is recognised by, read both as a
 /// provider list and as a setup source.
 pub const CI_MARKERS: &[(&str, &str)] = &[
@@ -345,7 +342,6 @@ pub fn detect_ci_providers(cwd: &str) -> Vec<String> {
 }
 
 /// Detect monorepo orchestration tool from well-known config files.
-///.
 pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
 
@@ -368,13 +364,11 @@ pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
 }
 
 /// Detect the package manager / build system from lockfile presence.
-///.
 pub fn detect_package_manager(cwd: &str) -> Option<String> {
     crate::repo::setup::package_manager_label(Path::new(cwd)).map(str::to_string)
 }
 
 /// Detect containerization / orchestration technologies.
-///.
 pub fn detect_containerization(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
     let mut tools = Vec::new();
@@ -396,7 +390,6 @@ pub fn detect_containerization(cwd: &str) -> Vec<String> {
 }
 
 /// Detect editor / IDE configuration directories.
-///.
 pub fn detect_editor_configs(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
     let mut editors = Vec::new();

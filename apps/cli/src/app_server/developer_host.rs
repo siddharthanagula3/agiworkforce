@@ -121,10 +121,8 @@ const MAX_STEER_QUEUE_DEPTH: usize = 20;
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 /// Tools that build a second `AgentSession` this host never sees.
-///.
 const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
-///.
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
 const MAX_PROPOSED_CONTENT_BYTES: usize = 1_000_000;
 const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
@@ -493,7 +491,6 @@ struct PendingUserInput {
 type PendingUserInputs = Arc<Mutex<HashMap<String, PendingUserInput>>>;
 
 /// Canonical local developer runtime shared by the CLI and VS Code.
-///.
 pub struct CliDeveloperSessionHost {
     config: Arc<CliConfig>,
     workspace_root: PathBuf,
@@ -6367,8 +6364,6 @@ fn apply_agent_controls(
     Ok(())
 }
 
-/// Classify the error that ended a turn into the protocol's closed set.
-///.
 /// The terminal stop reason for a turn that has settled.
 ///
 /// Nothing in this process produced an [`AgentEventStopReason`] before, so
@@ -6417,7 +6412,6 @@ fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
 }
 
 /// Re-persist the thread's branch and worktree root now that a turn has ended.
-///.
 async fn refresh_persisted_workspace_state(
     store: &ManagedSessionStore,
     workspace_root: &Path,
