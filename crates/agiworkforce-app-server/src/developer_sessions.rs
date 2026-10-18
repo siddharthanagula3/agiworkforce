@@ -916,15 +916,23 @@ impl fmt::Display for DeveloperSessionHostError {
 impl std::error::Error for DeveloperSessionHostError {}
 
 /// Methods whose host work runs git over a whole checkout, waits on a model
-/// to summarize, or waits on a person to approve a sign-in in the browser,
-/// and can take minutes. A transport runs each on its own task, so approvals,
-/// interrupts and notifications on the same connection are not held behind
-/// it. Every response still carries its request's id; one may arrive after
-/// responses to requests sent later.
+/// to summarize, waits on a person to approve a sign-in in the browser,
+/// connects to an MCP server, opens a pull request, or installs a skill or a
+/// plugin with its dependencies, and can take minutes. A transport runs each
+/// on its own task, so approvals, interrupts and notifications on the same
+/// connection are not held behind it. Every response still carries its
+/// request's id; one may arrive after responses to requests sent later.
 pub fn runs_detached(method: &str) -> bool {
     matches!(
         method,
         method::ACCOUNT_LOGIN_WAIT
+            | method::MCP_LOGIN
+            | method::MCP_TEST
+            | method::MCP_TOOLS
+            | method::MCP_INSPECT
+            | method::GIT_PULL_REQUEST
+            | method::SKILLS_INSTALL
+            | method::PLUGINS_INSTALL
             | method::WORKTREE_CREATE
             | method::MANAGED_WORKTREE_CREATE
             | method::WORKTREE_DELETE

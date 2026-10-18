@@ -123,6 +123,7 @@ const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // exact serialized message objects included in `thread/read`.
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
+const SHUTDOWN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
 /// Tools that build a second `AgentSession` this host never sees.
 const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 /// Ceiling on turns running at once across every thread this host owns.
@@ -882,6 +883,15 @@ impl CliDeveloperSessionHost {
             ));
         }
         Ok(guard)
+    }
+
+    /// Resolves once shutdown has started. A request that waits on a person
+    /// races its wait against this, so it gives its admission back instead of
+    /// holding shutdown behind a browser window nobody answers.
+    async fn shutdown_requested(&self) {
+        while !self.shutdown_started.load(Ordering::Acquire) {
+            tokio::time::sleep(SHUTDOWN_POLL_INTERVAL).await;
+        }
     }
 
     pub fn capabilities(&self) -> AppServerCapabilities {
@@ -4308,9 +4318,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             )));
         }
 
-        let state = crate::mcp::login_to_remote_server_for_client(&server.name, &server.config)
-            .await
-            .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
+        let login = crate::mcp::login_to_remote_server_for_client(&server.name, &server.config);
+        let state = tokio::select! {
+            state = login => {
+                state.map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?
+            }
+            () = self.shutdown_requested() => {
+                return Err(DeveloperSessionHostError::unavailable(
+                    "The app-server is shutting down",
+                ));
+            }
+        };
         Ok(McpLoginResponse {
             name: server.name,
             status: match state {
@@ -6514,7 +6532,7 @@ fn repository_without_credentials(remote: &str) -> Option<String> {
         return None;
     }
     let Some((scheme, rest)) = remote.split_once("://") else {
-        return Some(remote.to_string());
+        return Some(scp_remote_without_password(remote));
     };
     let (authority, path) = match rest.find('/') {
         Some(index) => rest.split_at(index),
@@ -6524,6 +6542,28 @@ fn repository_without_credentials(remote: &str) -> Option<String> {
         .rsplit_once('@')
         .map_or(authority, |(_, host)| host);
     Some(format!("{scheme}://{host}{path}"))
+}
+
+/// An scp-style remote, `[user[:password]@]host:path`, keeps the user ssh
+/// logs in as and loses any password typed after it. The `@` that ends the
+/// userinfo is the last one before `host:`, so neither a password nor a path
+/// holding an `@` moves it.
+fn scp_remote_without_password(remote: &str) -> String {
+    let head = &remote[..remote.find('/').unwrap_or(remote.len())];
+    let Some(at) = head
+        .match_indices('@')
+        .map(|(index, _)| index)
+        .rev()
+        .find(|index| head[index + 1..].contains(':'))
+    else {
+        return remote.to_string();
+    };
+    let (userinfo, host_and_path) = (&remote[..at], &remote[at + 1..]);
+    match userinfo.split_once(':') {
+        None => remote.to_string(),
+        Some(("", _)) => host_and_path.to_string(),
+        Some((user, _)) => format!("{user}@{host_and_path}"),
+    }
 }
 
 /// Which surface a connection speaks for, from the name it introduced itself
@@ -11222,6 +11262,30 @@ mod tests {
         );
         assert_eq!(repository_without_credentials("bad\nremote"), None);
         assert_eq!(repository_without_credentials("  "), None);
+    }
+
+    #[test]
+    fn an_scp_remote_keeps_its_user_and_loses_the_password_typed_after_it() {
+        assert_eq!(
+            repository_without_credentials("me:hunter2@host.example:org/repo.git").as_deref(),
+            Some("me@host.example:org/repo.git")
+        );
+        assert_eq!(
+            repository_without_credentials("me:p@ss@host.example:repo.git").as_deref(),
+            Some("me@host.example:repo.git")
+        );
+        assert_eq!(
+            repository_without_credentials(":hunter2@host.example:repo.git").as_deref(),
+            Some("host.example:repo.git")
+        );
+        assert_eq!(
+            repository_without_credentials("git@host.example:repo@v1").as_deref(),
+            Some("git@host.example:repo@v1")
+        );
+        assert_eq!(
+            repository_without_credentials("/srv/git/repo.git").as_deref(),
+            Some("/srv/git/repo.git")
+        );
     }
 
     /// Nothing in this process produced a stop reason before, so every client
