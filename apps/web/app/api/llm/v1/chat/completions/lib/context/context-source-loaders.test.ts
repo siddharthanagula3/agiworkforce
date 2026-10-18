@@ -4,7 +4,6 @@ import { loadManagedMemoryContext } from '@/lib/services/managed-memory-context-
 import { loadPastChatExcerpts } from '@/lib/services/past-chat-context-service';
 import { loadProjectContext } from '@/lib/services/project-context-service';
 import { agiWorkGoalContextSource, agiWorkPlanContextSource } from '../agiwork-plan';
-import { buildContextManifest } from './context-manifest';
 
 function expectWellFormed(source: ContextSource) {
   expect(isContextSourceClass(source.sourceClass)).toBe(true);
@@ -131,8 +130,7 @@ describe('every loader returns typed context sources', () => {
     expectWellFormed(goal);
     expectWellFormed(plan);
 
-    const manifest = buildContextManifest([goal, plan]);
-    expect(manifest.instructions).toHaveLength(2);
-    expect(manifest.external).toHaveLength(0);
+    expect([goal, plan].filter((source) => source.trust.isInstruction)).toHaveLength(2);
+    expect([goal, plan].filter((source) => source.trust.isExternal)).toHaveLength(0);
   });
 });

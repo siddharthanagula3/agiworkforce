@@ -1,11 +1,6 @@
 /**
- * Confirmation copy for the sidebar's destructive session/project actions.
- *
- * WebChatPage and WebAppShell each mount their own Sidebar with their own
- * handlers, and both dialogs were hand-matched strings with nothing enforcing
- * sameness (duplication/chat-shells.md Finding 2, the sibling nav-items array
- * had already drifted under exactly this pattern, which is why
- * `app-nav-items.ts` exists). One definition, two call sites.
+ * Confirmation copy and row actions for the sidebar's sessions and projects,
+ * shared by WebChatPage and WebAppShell, which each mount their own Sidebar.
  */
 
 import { toast } from 'sonner';
@@ -20,9 +15,8 @@ export interface DestructiveConfirmCopy {
  * The row menu closes the instant an item is chosen, so a mutation that fails
  * after that point leaves the user looking at an unchanged row with nothing to
  * read. `useConversations` reports every one of these as `false` and records
- * the reason in the chat store, which no shell outside `/chat` renders. The
- * project half of the same menu has said so through a toast since it was
- * written (`sidebar-project-actions.ts`); this is the conversation half.
+ * the reason in the chat store, which no shell outside `/chat` renders, so the
+ * failure is a toast, as it is for projects (`sidebar-project-actions.ts`).
  */
 export type SessionRowAction =
   'rename' | 'pin' | 'unpin' | 'archive' | 'restore' | 'moveToProject' | 'delete';

@@ -207,36 +207,3 @@ if (typeof window !== 'undefined') {
     if (wasSignedIn) useBillingStore.getState()._reset();
   });
 }
-
-export interface UseAuthReturn {
-  user: User | null;
-  subscription: SubscriptionPlan | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  error: string | null;
-  signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
-
-export function useAuth(): UseAuthReturn {
-  const user = useBillingStore((s) => s.user);
-  const subscription = useBillingStore((s) => s.subscription);
-  const isLoading = useBillingStore((s) => s.isLoading);
-  const error = useBillingStore((s) => s.error);
-  const signOut = useBillingStore((s) => s.signOut);
-  const refreshUser = useBillingStore((s) => s.refreshUser);
-
-  return {
-    user,
-    subscription,
-    isAuthenticated: user !== null,
-    isLoading,
-    error,
-    signOut,
-    refreshUser,
-  };
-}
-
-// removed. It exported seven null-rendering React components shadowing real
-
-export { useBillingStore as useBillingUsageStore };

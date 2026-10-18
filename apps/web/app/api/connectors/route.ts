@@ -883,8 +883,8 @@ function oauthVendorNotice(connectorId: string, disconnect: ConnectorDisconnectO
 async function handleDeleteConnector(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
-  const csrfError2 = await requireCsrfToken(request);
-  if (csrfError2) return csrfError2 as NextResponse;
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
@@ -927,10 +927,10 @@ async function handleDeleteConnector(request: NextRequest) {
   }
 
   if (connectorId === GITHUB_CONNECTOR_ID) {
-    // Deleting the row on its own left the App installed with its granted
-    // repository access intact, while the product reported success. The
-    // installation is revoked first, and a failure is surfaced rather than
-    // reported as a disconnect, exactly as /api/github/installations does.
+    // Deleting the row alone would leave the App installed with its granted
+    // repository access intact. The installation is revoked first, and a
+    // failure is surfaced rather than reported as a disconnect, exactly as
+    // /api/github/installations does.
     let installationRows: Array<{ installation_id: number }> = [];
     try {
       installationRows = await db.query<{ installation_id: number }>(

@@ -1,14 +1,4 @@
-/**
- * The recents list both web shells hand to the shared `<Sidebar>`.
- *
- * WebChatPage and WebAppShell each mapped conversations to `SidebarSession`
- * by hand, and the two copies had already drifted: only the chat shell hid
- * temporary conversations, and only the other shell set `unread`, so the same
- * conversation row showed a different list and a different kebab menu
- * depending on which route the user happened to be on. Same rationale as
- * `app-nav-items.ts` and `sidebar-session-actions.ts`: one definition, two
- * call sites.
- */
+/** The recents list both web shells hand to the shared `<Sidebar>`. */
 
 import type { SidebarSession } from '@agiworkforce/ui';
 

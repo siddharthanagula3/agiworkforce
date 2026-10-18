@@ -32,10 +32,7 @@ export type VoiceSpeed = 'slow' | 'normal' | 'fast';
 
 export type FollowUpBehavior = 'queue' | 'steer';
 
-/**
- * SpeechSynthesisUtterance.rate. 1.05 was the hardcoded value before this was
- * a preference, so 'normal' keeps exactly what everyone already hears.
- */
+/** SpeechSynthesisUtterance.rate for each voice speed. */
 export const VOICE_SPEED_RATES: Readonly<Record<VoiceSpeed, number>> = {
   slow: 0.8,
   normal: 1.05,
@@ -58,14 +55,14 @@ interface SettingsState {
   newChatsTemporary: boolean;
   /** Composer microphone dictation. Read by the composer's dictation entry point. */
   dictationEnabled: boolean;
-  /**
-   * A follow-up sent while a cloud chat reply runs. Steer stops the reply, so
-   * queue is the default and Enter never interrupts a reply unasked.
-   */
   /** A follow-up sent while a local coding agent works; steer joins the running turn. */
   codeFollowUpQueueMode: FollowUpQueueMode;
   codeBlockWrap: boolean;
   followUpSuggestionsEnabled: boolean;
+  /**
+   * A follow-up sent while a cloud chat reply runs. Steer stops the reply, so
+   * queue is the default and Enter never interrupts a reply unasked.
+   */
   followUpBehavior: FollowUpBehavior;
   accentColor: AccentColor;
   highContrast: boolean;

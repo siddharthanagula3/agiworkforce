@@ -165,10 +165,9 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    // Approval IS the grant, exactly as in /api/auth/device/approve. Stashing a
-    // Clerk session token here handed the device a credential that expires in
-    // about a minute and carries no refresh; the poll below mints the same
-    // durable device credential /api/auth/device/token issues instead.
+    // Approval IS the grant, exactly as in /api/auth/device/approve: the poll
+    // mints the same durable device credential /api/auth/device/token issues,
+    // rather than a short-lived session token with no refresh.
     const updated = await db.query<{ status: string }>(
       `UPDATE device_authorization_codes
           SET status        = 'approved',

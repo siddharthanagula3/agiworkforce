@@ -246,14 +246,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return fail(OAUTH_START_STATUS_UNAVAILABLE, 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
   }
 
-  // After the cheap refusals and before any credential is exchanged. The
-  // workspace policy was consulted only when tools were READ for a chat turn,
-  // so a member could complete an OAuth flow for a connector their
-  // administrator forbids and have the tokens stored; the policy caught up
-  // afterwards by hiding the resulting tools. An administrator reads "these
-  // connectors only" as binding at the point their organization's data starts
-  // moving, which is here. It resolves the active workspace, so it runs only
-  // once this request is actually going to attempt a connection.
+  // After the cheap refusals and before any credential is exchanged: an
+  // administrator reads "these connectors only" as binding at the point their
+  // organization's data starts moving, which is here. It resolves the active
+  // workspace, so it runs only once this request is going to attempt a
+  // connection.
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,

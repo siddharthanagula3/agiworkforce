@@ -36,7 +36,7 @@ import {
 } from '@agiworkforce/ui';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
-import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
+import { normalizeModelId } from '@agiworkforce/types';
 import {
   PENDING_CONVERSATION_KEY,
   useChatStore,
@@ -88,7 +88,6 @@ const SEARCH_RESULT_TYPES: Readonly<
   developer_session: { icon: SquareTerminal, label: 'Code session' },
 };
 
-const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
 const COMMAND_PALETTE_LISTBOX_ID = 'command-palette-listbox';
 const RECENTS_LIMIT = 5;
 const EMPTY_HIDDEN_NAV_IDS: string[] = [];
@@ -173,8 +172,7 @@ function useCommands(
   const recents = recentConversationCommands(conversations, router);
 
   // The rail (`buildAppNavItems`) is the one place page destinations are
-  // defined; reusing it here means this list can never drift the way the
-  // hand-duplicated copy this replaced eventually did.
+  // defined, so this list reuses it.
   const { t } = useTranslation('common');
   const pageActions: CommandOption[] = buildAppNavItems({
     pathname: pathname ?? '/chat',
@@ -306,7 +304,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const { top: topCommands, modelCommands } = useCommands(
     setActiveSubMenu,
-    currentModelId || DEFAULT_COMMAND_PALETTE_MODEL,
+    currentModelId,
     (modelId) => {
       handleModelSwitch(modelId);
       onOpenChange(false);
@@ -437,9 +435,8 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         className="p-0 overflow-hidden bg-popover text-popover-foreground border border-border shadow-e4 max-w-xl [&>button]:hidden"
         onOpenAutoFocus={(event) => {
           // React applies `autoFocus` during commit, before DialogContent reads
-          // what to restore on close, so the field autofocused itself and the
-          // dialog recorded its own input as the opener. That node is gone by
-          // the time Escape lands, and focus fell to <body>.
+          // what to restore on close, so an autofocused field would be recorded
+          // as the opener and focus would fall to <body> on Escape.
           event.preventDefault();
           inputRef.current?.focus();
         }}

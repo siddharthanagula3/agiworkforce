@@ -71,10 +71,8 @@ async function handleClaimOffer(request: NextRequest) {
       throw createError.validation('Invalid invite code');
     }
 
-    // claim_beta_invite is `returns json`, so `select *` yields ONE column named
-    // after the function holding the whole object. Reading the row as the result
-    // made every field undefined, so a valid redemption reported failure after
-    // the function had already consumed the invite and written the subscription.
+    // claim_beta_invite is `returns json`: the whole object arrives in one
+    // column, aliased `result`, not as the row's own fields.
     type ClaimResult = {
       success: boolean;
       error: string | null;

@@ -212,10 +212,9 @@ export async function generateManagedImage(
     return NextResponse.json(
       {
         error: {
-          // `error.message` is the serialized issue array, and this string is
-          // what every media client renders to the user, so an unsupported
-          // aspect ratio printed a JSON blob into the chat. The video route's
-          // wording is the house format.
+          // Every media client renders this string to the user, so it is built
+          // from the issues rather than `error.message`, in the video route's
+          // wording.
           message: `Invalid request: ${validationResult.error.issues
             .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
             .join('; ')}`,

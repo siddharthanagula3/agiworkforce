@@ -2,16 +2,13 @@
  * The theme bootstrap, inlined as the first child of <body> so it runs before
  * page content is parsed and before first paint.
  *
- * It must not be fetched. Loading it as an external file, which is what
- * `next/script src="/theme-init.js"` did, costs a network round-trip the
- * browser will not wait for, so the first paint uses the wrong theme and the
- * page visibly flips once the file lands. `async` made that certain rather
- * than merely likely.
+ * It must not be fetched: an external file costs a network round-trip the
+ * browser will not wait for, so the first paint would use the wrong theme and
+ * flip once the file lands.
  *
  * It also must not go through `next/script` at all. `strategy="beforeInteractive"`
- * hoists the tag into <head> during SSR, where it collided with the JSON-LD
- * block already rendered there; React then reconciled the two <script> elements
- * against each other and the whole tree failed hydration. The root layout
+ * hoists the tag into <head> during SSR, where React reconciles it against the
+ * JSON-LD block already rendered there and the tree fails hydration. The root layout
  * deliberately leaves <head> to the App Router and places this inline script
  * first in <body>.
  *

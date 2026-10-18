@@ -52,14 +52,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
 
-  // installation_id is `bigint` (db/neon/0017_github.sql:4) and no int8 type
-  // parser is registered, so the driver hands it back as a string even though
-  // GitHubInstallationRow types it as a number. The settings panel validates this
-  // body with z.number(), so an un-coerced row failed safeParse and the panel
-  // showed "installations could not be loaded" and rendered GitHub as not
-  // connected - for a user who was connected, and retrying never helped.
-  // Every other bigint column in this codebase is already coerced the same way,
-  // including this very column in lib/user-connector-tools.ts.
+  // installation_id is `bigint` and no int8 type parser is registered, so the
+  // driver hands it back as a string even though GitHubInstallationRow types it
+  // as a number, and the settings panel validates this body with z.number().
   return NextResponse.json({
     installations: installations.map((row) => ({
       ...row,
@@ -69,8 +64,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * pr_review_enabled gates the webhook's pull-request review branch. It defaults
- * to false and nothing wrote it, so that branch could never run for anyone.
+ * pr_review_enabled gates the webhook's pull-request review branch and defaults
+ * to false; this is the only writer.
  *
  * review_model is deliberately not writable here: the webhook resolves the
  * review model from the catalog rather than from this column, so a value stored

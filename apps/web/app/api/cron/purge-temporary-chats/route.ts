@@ -11,15 +11,11 @@ export const maxDuration = 300;
 
 /**
  * Batched rather than one unbounded DELETE, and counted rather than returning
- * every id.
- *
- * The single statement it replaces had no LIMIT and no duration ceiling, so the
- * first night the backlog outgrew the function timeout it rolled back, deleted
- * nothing, and faced a strictly larger set the next night, a one-way ratchet
- * that ends with the 30-day retention promise silently unkept. Matches the
- * idiom `retention-service.ts` already uses for the workspace sweep: small
- * statements that do not hold locks on the table serving live chat, and a loop
- * that stops as soon as a batch comes back short.
+ * every id: an unbounded statement that outgrows the function timeout rolls
+ * back, deletes nothing, and faces a larger set the next night. Same idiom as
+ * the workspace sweep in `retention-service.ts`: small statements that do not
+ * hold locks on the table serving live chat, and a loop that stops as soon as
+ * a batch comes back short.
  */
 const PURGE_BATCH = 500;
 const MAX_BATCHES = 200;

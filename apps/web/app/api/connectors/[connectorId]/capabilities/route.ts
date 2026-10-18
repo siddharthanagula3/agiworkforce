@@ -53,8 +53,7 @@ async function handleGet(
   const limited = await withRateLimit(request, 'chat-conversation');
   if (limited) return limited;
 
-  const { connectorId: encodedRef } = await context.params;
-  const connectorRef = encodedRef;
+  const { connectorId: connectorRef } = await context.params;
   if (!CONNECTOR_REF_PATTERN.test(connectorRef)) {
     throw createError.validation('Invalid connector identifier');
   }

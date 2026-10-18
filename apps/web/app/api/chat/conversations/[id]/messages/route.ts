@@ -1,9 +1,3 @@
-/**
- * Chat Messages API
- *
- * POST /api/chat/conversations/[id]/messages - Send a message and get AI response
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -100,7 +94,6 @@ async function handleListMessages(request: NextRequest, context: RouteContext) {
 async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
-  // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -149,9 +142,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   });
 
   return NextResponse.json({
-    // Normalize the RETURNING row's Date timestamps to ISO before validating, or
-    // the wire schema throws a ZodError (created_at "expected string, received
-    // Date") -> 400 -> the client's "Couldn't save your message" toast.
+    // The RETURNING row carries Date timestamps; the wire schema expects ISO strings.
     message: ManagedCloudMessageWireSchema.parse(withIsoTimestamps([message])[0]),
   });
 }

@@ -369,7 +369,7 @@ async function reviewBudgetAllows(
     if (recentSamePR[0]?.status === 'pending') {
       logger.info(
         { installationId, prNumber, debounceWindowMs: DEBOUNCE_WINDOW_MS },
-        'web-HIGH-3: skipping review · another attempt is in flight',
+        'Skipping review · another attempt is in flight',
       );
       await recordSkip('skipped_debounce');
       return false;
@@ -390,7 +390,7 @@ async function reviewBudgetAllows(
     if (quotaCount >= MAX_REVIEWS_PER_INSTALLATION_PER_30_DAYS) {
       logger.warn(
         { installationId, prNumber, quotaCount, cap: MAX_REVIEWS_PER_INSTALLATION_PER_30_DAYS },
-        'web-HIGH-3: monthly review quota reached · skipping LLM call',
+        'Monthly review quota reached · skipping LLM call',
       );
       await recordSkip('skipped_quota');
       // Only a mention gets an answer. An automatic review that announced its
@@ -409,7 +409,7 @@ async function reviewBudgetAllows(
   } catch (quotaErr) {
     logger.warn(
       { quotaErr, installationId, prNumber },
-      'web-HIGH-3: spend-cap check failed · proceeding (best-effort)',
+      'Review spend-cap check failed · proceeding (best-effort)',
     );
   }
   return true;
@@ -468,13 +468,13 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
     } catch (insertErr) {
       logger.warn(
         { insertErr, installationId, prNumber },
-        'web-HIGH-3: failed to record pending attempt · proceeding without idempotency row',
+        'Failed to record pending review attempt · proceeding without idempotency row',
       );
     }
 
     const rawDiff = await getPrDiff(token, owner, repo, prNumber);
     if (rawDiff.includes('\x00')) {
-      logger.warn({ owner, repo, prNumber }, 'RT-03: binary diff rejected');
+      logger.warn({ owner, repo, prNumber }, 'Binary diff rejected');
       if (target.trigger === 'mention') {
         await postIssueComment(
           token,

@@ -99,22 +99,11 @@ export interface ScheduleTitleGenerationInput {
 }
 
 /**
- * WebChatPage's own client-side auto-title effect (`AUTO_TITLE_PLACEHOLDERS`
- * in features/chat/pages/WebChatPage.tsx) races this generation: it fires the
- * instant a second message renders, reading a LOCAL conversation cache that
- * has not yet learned about this route's stage-1 write (the messages POST
- * response only ever returns `{ message }`), so it still sees the
- * conversation's creation-time placeholder and unconditionally re-truncates
- * the SAME first message to 60 chars via its own PUT
- * (`content.trim().slice(0, 60).replace(/\n/g, ' ')`). That write almost
- * always lands before this generation call returns. Treating ONLY the exact
- * stage-1 string as safe-to-replace would make this feature lose that race on
- * effectively every first message; accepting this second, independently
- * computed candidate as equally safe-to-replace (it is exactly as disposable
- * a placeholder as the stage-1 truncation -- neither is a human's rename)
- * closes that gap without weakening the "never clobber a real rename" rule.
- * The durable fix is in that client effect, not here (outside this file's
- * ownership) -- see remainingWork notes.
+ * WebChatPage's auto-title effect (`clientFallbackTitle` in
+ * features/chat/pages/WebChatPage.tsx) writes its own truncation of the first
+ * message when it has not yet read a server title. That truncation is as
+ * disposable a placeholder as the stage-1 one, neither is a human's rename, so
+ * both may be replaced here. Keep the two truncations identical.
  */
 function clientTruncatedTitleCandidate(rawContent: string): string {
   return rawContent.trim().slice(0, 60).replace(/\n/g, ' ');

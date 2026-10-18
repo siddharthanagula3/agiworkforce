@@ -42,16 +42,13 @@ export interface AccountMenuItemsProps {
 
 /**
  * The one account menu, shared by WebChatPage's and WebAppShell's expanded
- * footer and collapsed-rail triggers alike. A product has one account menu.
- * this is the single place its contents and order are decided, so the two
- * shells cannot drift into different menus again.
+ * footer and collapsed-rail triggers alike: the single place its contents and
+ * order are decided.
  *
- * The three legal-reachability links are unconditional: an audit found the
- * signed-in shell rendered no route to any policy (every legal link lived on
- * the marketing footer, which a signed-in user never sees), and the DPDP
- * grievance route in particular has to be reachable from the page that made
- * someone want to use it. They stay on every surface this menu renders on,
- * one level down under Learn more, as Claude and ChatGPT place theirs.
+ * The three legal-reachability links are unconditional: a signed-in user never
+ * sees the marketing footer, and the DPDP grievance route has to be reachable
+ * from the page that made someone want to use it. They sit one level down
+ * under Learn more, as Claude and ChatGPT place theirs.
  */
 export function AccountMenuItems({
   email,
@@ -117,9 +114,7 @@ export function AccountMenuItems({
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       <DropdownMenuSeparator />
-      {/* Hidden once there is nothing left to buy: this menu offered
-          "Upgrade" to max_15x accounts, which reads as a billing error next
-          to the plan badge in the same sidebar. */}
+      {/* Hidden once there is nothing left to buy. */}
       {showUpgrade ? (
         <DropdownMenuItem onClick={onUpgrade}>
           <CreditCard className="me-2 h-4 w-4" />

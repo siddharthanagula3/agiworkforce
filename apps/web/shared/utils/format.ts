@@ -1,12 +1,3 @@
-/**
- * Formatting utilities for the web application.
- *
- * This module re-exports formatting functions from @agiworkforce/utils
- * for consistency across the codebase.
- *
- * @module format
- */
-
 export {
   formatDate,
   formatDateTime,

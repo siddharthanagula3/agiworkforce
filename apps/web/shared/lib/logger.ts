@@ -1,4 +1,3 @@
-
 const isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 
 function shouldLog(level: 'debug' | 'info' | 'warn' | 'error'): boolean {
@@ -21,9 +20,6 @@ export const logger = {
   },
   auth: (message: string, ...args: unknown[]) => {
     if (isDevelopment) console.info(`[AUTH] ${message}`, ...args);
-  },
-  app: (message: string, ...args: unknown[]) => {
-    console.info(`[APP] ${message}`, ...args);
   },
 };
 

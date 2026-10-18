@@ -20,10 +20,8 @@ const NAMESPACE = 'privacy';
  * Mounted at the app root so the mirror is corrected on first visit instead of
  * on first visit TO SETTINGS.
  *
- * Signed-in only. There is no account-side consent for a signed-out visitor to
- * mirror, so firing this on the public marketing pages fetched an authenticated
- * endpoint that could only ever answer 401, twice per visit under StrictMode.
- * and printed those failures to the console of every anonymous visitor.
+ * Signed-in only: there is no account-side consent for a signed-out visitor to
+ * mirror, and the endpoint could only answer 401.
  */
 export function TelemetryConsentSync() {
   const { isLoaded, isSignedIn } = useSession();

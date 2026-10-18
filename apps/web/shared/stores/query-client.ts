@@ -50,9 +50,9 @@ export const queryClient = new QueryClient({
   mutationCache,
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
 
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      gcTime: 10 * 60 * 1000,
 
       retry: (failureCount, error: unknown) => {
         if (error && typeof error === 'object' && 'status' in error) {

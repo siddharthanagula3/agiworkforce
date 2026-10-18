@@ -616,9 +616,7 @@ export function resolveChatAccountDisplay(
   isLoading: boolean;
 } {
   // Shared normalisation (see @agiworkforce/utils/display-name): the identity
-  // provider's stored casing is not a presentation decision. Without this the
-  // chat sidebar shouted "SIDDHARTHA NAGULA" under a greeting that read
-  // "Siddhartha".
+  // provider's stored casing is not a presentation decision.
   const rawName = user?.name?.trim() || user?.email?.trim().split('@')[0]?.trim();
   const displayName = rawName ? normalizeDisplayName(rawName) : undefined;
 

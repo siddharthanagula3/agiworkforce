@@ -1,10 +1,3 @@
-/**
- * Session Timeout Hook
- * Tracks user activity and enforces session timeout based on user preferences
- *
- * @module shared/hooks/useSessionTimeout
- */
-
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useUserSettings } from '@features/settings/hooks/use-settings-queries';
@@ -78,25 +71,8 @@ function clearLastActivity(): void {
 }
 
 /**
- * Hook to track user activity and enforce session timeout
- *
- * Features:
- * - Tracks user activity (mouse, keyboard, touch, scroll)
- * - Compares against user's sessionTimeout preference from settings
- * - Shows warning before timeout
- * - Auto-logout when session expires
- * - Persists activity across tabs via localStorage
- *
- * @param options - Configuration options
- * @returns Session timeout state and controls
- *
- * @example
- * ```tsx
- * const { isWarningActive, secondsUntilTimeout, extendSession } = useSessionTimeout({
- *   onTimeout: () => navigate('/login'),
- *   onWarning: (seconds) => console.log(`Session expires in ${seconds}s`),
- * });
- * ```
+ * Signs the user out after the inactivity window from their `session_timeout`
+ * setting, warning first. Activity is shared across tabs through localStorage.
  */
 export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSessionTimeoutReturn {
   const { enabled = true, onTimeout, onWarning, onSessionExtended } = options;

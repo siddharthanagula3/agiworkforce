@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * "Mark as unread" from the chat row menu has no server column (conversations
- * carry pinned/starred/archived, all real DB fields; unread would need a
- * migration, and the founder-gated migration list has no room for a
- * cosmetic per-viewer flag). Stored per-browser instead, the same tier as a
- * collapsed sidebar section or a remembered tab: durable enough to survive a
- * reload, private to this device, never claimed as synced state elsewhere.
+ * "Mark as unread" from the chat row menu has no server column. It is stored
+ * per-browser, the same tier as a collapsed sidebar section or a remembered
+ * tab: durable enough to survive a reload, private to this device, never
+ * claimed as synced state elsewhere.
  */
 const UNREAD_STORAGE_KEY = 'agi.sidebar.unreadConversationIds';
 

@@ -55,12 +55,6 @@ export const safePlatform = {
   },
 };
 
-export function safeNavigate(url: string): void {
-  if (isBrowser) {
-    window.location.href = url;
-  }
-}
-
 declare global {
   interface Navigator {
     userAgentData?: {

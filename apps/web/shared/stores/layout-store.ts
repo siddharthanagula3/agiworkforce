@@ -49,9 +49,9 @@ export interface UIActions {
 
   /**
    * Sign-out cleanup verb. Invoked dynamically, `authentication-store.ts`
-   * lists this module in `USER_SCOPED_STORE_MODULES` (:99) and calls the first
-   * matching name in `STORE_RESET_METHODS` (:76) on every exported zustand
-   * handle, so there is no literal `reset()` call site to grep for.
+   * lists this module in `USER_SCOPED_STORE_MODULES` and calls the first
+   * matching name in `STORE_RESET_METHODS` on every exported zustand handle,
+   * so there is no literal `reset()` call site to grep for.
    */
   reset: () => void;
 }

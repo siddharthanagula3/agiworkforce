@@ -90,9 +90,8 @@ async function handlePost(request: NextRequest) {
 
   // A custom connector is an arbitrary member-supplied MCP endpoint, and
   // `allowCustomConnectors` is the switch an administrator sets to say no to
-  // exactly that. It was consulted only when tools were read, so the endpoint
-  // was created, probed and stored first and hidden afterwards. Refused before
-  // the body is parsed, so nothing is reached and nothing is written.
+  // exactly that. Refused before the body is parsed, so nothing is reached and
+  // nothing is written.
   // organizationId is omitted, not passed: this route reads the database on a
   // deliberately null-org scope, and the gate reads an explicit null as
   // "personal account, skip policy" before its own workspace lookup runs.

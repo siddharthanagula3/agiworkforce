@@ -1,13 +1,6 @@
 /**
- * Behaviour for the sidebar's project rows, shared by the two web shells.
- *
- * WebChatPage and WebAppShell each mount their own `<Sidebar>`, and the same
- * three-dot menu behaved differently depending on which route the user was on:
- * pin persisted on `/chat` and was store-only (lost on reload) on
- * `/chat/projects`, delete rolled back on one shell and not the other, and the
- * project links were encoded on one side only. Same rationale as
- * `app-nav-items.ts` and `sidebar-session-actions.ts`: one definition, two
- * call sites.
+ * Behaviour for the sidebar's project rows, shared by the two web shells
+ * (WebChatPage and WebAppShell each mount their own `<Sidebar>`).
  */
 
 import { toast } from 'sonner';

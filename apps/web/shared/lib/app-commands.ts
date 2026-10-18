@@ -3,11 +3,9 @@
 /**
  * Commands one part of the app asks another to carry out.
  *
- * The two below open overlays the chat surface owns and renders. They already
- * travelled as `window` events, which is why this is an event bus rather than a
- * store: the listeners existed with nothing dispatching to them, so a native
- * menu item or any other caller had no way to reach them. Naming the events in
- * one place is what makes the pair a contract instead of two matching strings.
+ * The two below open overlays the chat surface owns and renders, reachable from
+ * a native menu item or any other caller. Naming the events in one place is
+ * what makes the pair a contract instead of two matching strings.
  */
 export const APP_COMMANDS = ['open-search', 'open-shortcuts'] as const;
 

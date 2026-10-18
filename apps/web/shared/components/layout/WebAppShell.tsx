@@ -95,8 +95,7 @@ import {
 import { onAppCommand } from '@shared/lib/app-commands';
 import { resolveAccountIdentity, type AccountIdentity } from './account-identity';
 
-// A fresh [] each render changes the identity every time and defeats the
-// memoization below, which is what the exhaustive-deps warning was pointing at.
+// A stable empty list, so the nav memoization below keeps its identity.
 const EMPTY_NAV_IDS: string[] = [];
 
 export const CONTENT_OVERLAY_ROOT_ID = 'webappshell-content-overlay-root';
@@ -181,13 +180,11 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
 
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
-  // ---- Viewport tiers (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
-  // Below 768px the persistent ~260px sidebar reduced every route on this
-  // shell to a clipped strip. Compact viewports get a header with an "Open
-  // navigation" control and a modal drawer; a tablet in portrait keeps the
-  // icon rail and expands it over the content; wider windows keep the
-  // persistent/collapsible sidebar. Tracked separately from the manual
-  // collapse toggle so widening the window restores the user's choice.
+  // Compact viewports get a header with an "Open navigation" control and a
+  // modal drawer; a tablet in portrait keeps the icon rail and expands it over
+  // the content; wider windows keep the persistent/collapsible sidebar.
+  // Tracked separately from the manual collapse toggle so widening the window
+  // restores the user's choice.
   const shellLayout = useShellLayout();
   const isNarrowViewport = shellLayout.tier === 'compact';
   const showsRail = rail && shellLayout.sidebarMode !== 'drawer';
@@ -217,7 +214,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   }, [shellLayout.tier, shellLayout.orientation]);
 
   // The same overlay commands the chat surface answers, so a native menu item
-  // or a keyboard shortcut reaches them on the project surfaces too.
+  // or a keyboard shortcut reaches them on these surfaces too.
   useEffect(() => {
     const stopSearch = onAppCommand('open-search', () =>
       openAfterMobileNavClose(() => setSearchDialogOpen(true)),
@@ -230,9 +227,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       stopShortcuts();
     };
   }, [openAfterMobileNavClose]);
-
-  // Escape closes; focus moves into the drawer on open and back to the
-  // trigger on close (the cleanup also runs on unmount, which is harmless).
 
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
   const {
@@ -388,9 +382,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const handleProjectDelete = useCallback(
     (projectId: string) => {
       // The shared <Sidebar> invokes this straight from the project row's
-      // three-dot menu with no confirmation of its own, so this shell deleted a
-      // project on a single stray click, worse than the native confirm the chat
-      // shell at least had. Same dialog and copy as ProjectSettingsDialog.
+      // three-dot menu with no confirmation of its own.
       const project = storeProjects.find((p) => p.id === projectId);
       if (!project) return;
       openAfterMobileNavClose(() =>
@@ -444,9 +436,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     onToggleSidebar: rail ? handleToggleSidebar : undefined,
   });
 
-  // ONE rail definition, shared with WebChatPage, see `app-nav-items.ts` for
-  // why (the two hand-maintained copies had drifted and this shell was the only
-  // one exposing Tasks).
   const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
   const healthSpaceAvailable = useHealthSpaceAvailable();
   const { t } = useTranslation('common');
@@ -466,10 +455,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   );
 
   // ---- Account footer ----
-  // Normalised through the shared helper: Clerk stores this profile as
-  // "SIDDHARTHA NAGULA", and the raw value rendered a shouting, truncated
-  // "SIDDHARTH…" in the sidebar while the greeting headline four inches away
-  // said "Siddhartha". One rule, one source, every surface.
   const displayName = resolveAccountDisplayName(accountUser?.name, accountUser?.email);
   const userInitial = accountInitial(displayName);
   // `?? 'free'` alone would sell an upgrade to a paying subscriber whenever
@@ -554,10 +539,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     </div>
   );
 
-  // collapsedFooterSlot: the icon rail has no room for the full account row,
-  // but still needs a way into Settings and the legal-reachability links.
-  // without it, collapsing the sidebar hid all of that with no other entry
-  // point on this shell.
+  // The icon rail has no room for the full account row, but still needs a way
+  // into Settings and the legal-reachability links.
   const collapsedFooterSlot = isAccountLoading ? undefined : (
     <TooltipProvider>
       <DropdownMenu>
@@ -626,15 +609,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   };
 
   // The shell ends where the consent banner begins rather than running under
-  // it. The banner is fixed at z-[var(--z-dropdown)] and its card takes pointer events, so
-  // anything the app painted in that strip was unreachable until it was
-  // answered: measured at 390x844, where the banner is 267px tall, the
-  // "Create Your First Schedule" button on /chat/schedules and Preview,
-  // Download and Delete on /chat/library all sat underneath it. Padding the
-  // scroll container was tried first and does nothing here - it lets the page
-  // scroll further, but a fixed overlay still covers whatever ends up in that
-  // strip at any scroll position. Shrinking the shell is what actually keeps
-  // content out from under it.
+  // it: the banner is fixed and takes pointer events, so padding the scroll
+  // container would still leave whatever scrolls into that strip unreachable.
   return (
     <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       <ProductNoticeHost />
@@ -650,7 +626,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       />
       {/* Desktop: persistent/collapsible sidebar. Tablet portrait: the icon
           rail, expanding into the drawer. Compact: the header trigger + modal
-          drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
+          drawer below. */}
       {showsRail && (
         <Sidebar
           {...sharedSidebarProps}

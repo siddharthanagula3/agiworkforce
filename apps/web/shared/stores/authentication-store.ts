@@ -395,7 +395,6 @@ function clearSessionResolution(): void {
 function clearStaleAuthStorage(): void {
   try {
     localStorage.removeItem('__clerk_db_jwt');
-    localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
   } catch (_e) {
     logger.debug('Could not clear localStorage');
   }
@@ -549,10 +548,7 @@ export const useAuthStore = create<AuthState>()(
         if (error) {
           // A failed refetch (a rate limit, a dropped connection) is not proof
           // the session ended: only replace a previously resolved user with
-          // null when this attempt actually settled one way or the other. The
-          // sidebar account row reads this store, and clearing it on every
-          // transient error was showing "User" over an account that was
-          // signed in seconds earlier.
+          // null when this attempt actually settled one way or the other.
           set((state) => ({
             user: settled ? null : state.user,
             isAuthenticated: settled ? false : state.isAuthenticated,
