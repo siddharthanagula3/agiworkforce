@@ -78,13 +78,6 @@ const FALLBACK_ERROR_REPORTER = `<script>
 })();
 </script>`;
 
-/**
- * AUDIT-FIX ART-5: splice {@link FALLBACK_ERROR_REPORTER} into a srcDoc.
- *
- * Placed immediately after `<head>` when one exists (so it runs before any of
- * the artifact's scripts), after `<html>` otherwise, and prepended for bare
- * fragments. Returns the document unchanged when it is empty.
- */
 const INLINE_SCRIPT = /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script>/i;
 
 /**
@@ -101,6 +94,11 @@ export function fallbackWillRunScripts(srcDoc: string): boolean {
   return !INLINE_SCRIPT.test(srcDoc);
 }
 
+/**
+ * Placed immediately after `<head>` when one exists, so it runs before any of
+ * the artifact's scripts, after `<html>` otherwise, and prepended for bare
+ * fragments.
+ */
 export function withFallbackErrorReporter(srcDoc: string): string {
   if (!srcDoc) return srcDoc;
   if (/<head\b[^>]*>/i.test(srcDoc)) {
@@ -156,7 +154,6 @@ export function SandboxedIframe({
     () => (runtime ? { ...payload, runtime: true } : payload),
     [payload, runtime],
   );
-  const [, setRenderError] = useState<string | null>(null);
   const fallbackDocument = useMemo(
     () => withFallbackErrorReporter(fallbackSrcDoc),
     [fallbackSrcDoc],
@@ -230,11 +227,9 @@ export function SandboxedIframe({
   useLayoutEffect(() => {
     if (!sandboxOrigin) return undefined;
     const onMessage = (event: MessageEvent) => {
-      // Origin alone is not enough, which the sandbox document says in its own
-      // listener: any window that can reach this one can post to it, so a
-      // nested frame or an opener on the sandbox origin would otherwise drive
-      // the error text this renders. The fallback listener below already did
-      // this; the primary one did not.
+      // Origin alone is not enough: any window that can reach this one can post
+      // to it, so a nested frame or an opener on the sandbox origin could
+      // otherwise report render errors and runtime requests for this frame.
       if (!event.source || event.source !== iframeRef.current?.contentWindow) return;
       if (!isFromSandbox(event)) return;
       const data = event.data as SandboxIncomingMessage | undefined;
@@ -261,9 +256,7 @@ export function SandboxedIframe({
         if (pickerRef.current?.active) pickerRef.current.onCancel();
       } else if (data.type === 'render-error') {
         markConnected();
-        const message = data.error ?? 'unknown render error';
-        setRenderError(message);
-        console.error('[artifact-preview] render failed', message);
+        console.error('[artifact-preview] render failed', data.error ?? 'unknown render error');
         onRenderError?.(ARTIFACT_RENDER_FAILURE_MESSAGE);
       } else if (data.type === 'runtime-request') {
         const id = parseRuntimeRequestId(data.id);
@@ -350,9 +343,10 @@ export function SandboxedIframe({
         { [FALLBACK_MESSAGE_MARKER]?: boolean; type?: string; error?: string } | undefined;
       if (!data || typeof data !== 'object' || data[FALLBACK_MESSAGE_MARKER] !== true) return;
       if (data.type !== 'render-error') return;
-      const message = data.error || 'The artifact failed to render.';
-      setRenderError(message);
-      console.error('[artifact-preview] fallback render failed', message);
+      console.error(
+        '[artifact-preview] fallback render failed',
+        data.error || 'The artifact failed to render.',
+      );
       onRenderError(ARTIFACT_RENDER_FAILURE_MESSAGE);
     };
     window.addEventListener('message', onFallbackMessage);

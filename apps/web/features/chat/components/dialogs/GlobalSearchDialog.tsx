@@ -153,6 +153,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     try {
       const deletedCount = await globalSearchService.clearSearchHistory(user.id);
       setRecentSearches([]);
+      setPopularSearches([]);
       toast.success(
         plural('counts.searchHistoryCleared', deletedCount, {
           one: 'Cleared {{count}} search from history',
@@ -380,7 +381,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
             </DialogDescription>
           </DialogHeader>
 
-          {/* Search Input */}
           <div className="border-b bg-muted/30 px-6 py-4">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -430,11 +430,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
               </Button>
             </div>
 
-            {/* Filters Panel */}
             {showFilters && (
               <div className="mt-4 space-y-4 rounded-lg border bg-background p-4">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {/* Role Filter */}
                   <div className="space-y-2">
                     <Label className="text-xs">Message Type</Label>
                     <Select
@@ -455,7 +453,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     </Select>
                   </div>
 
-                  {/* Start Date */}
                   <div className="space-y-2">
                     <Label className="text-xs">From Date</Label>
                     <Popover>
@@ -482,7 +479,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     </Popover>
                   </div>
 
-                  {/* End Date */}
                   <div className="space-y-2">
                     <Label className="text-xs">To Date</Label>
                     <Popover>
@@ -510,7 +506,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   </div>
                 </div>
 
-                {/* Additional Options */}
                 <div className="flex items-center justify-between border-t pt-2">
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -531,7 +526,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
             )}
           </div>
 
-          {/* Search Stats */}
           {stats && (
             <div className="border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
               Found {stats.totalResults} results ({stats.sessionMatches} conversations,{' '}
@@ -541,7 +535,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
             </div>
           )}
 
-          {/* Results */}
           <ScrollArea className="flex-1 max-h-[400px] px-6 py-4">
             {isSearching ? (
               <div className="flex items-center justify-center py-12">
@@ -549,7 +542,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
               </div>
             ) : results.length === 0 && !query.trim() && showSuggestions ? (
               <div className="space-y-6">
-                {/* Recent Searches */}
                 {recentSearches.length > 0 && (
                   <div>
                     <div className="mb-3 flex items-center justify-between">
@@ -587,12 +579,11 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   </div>
                 )}
 
-                {/* Popular/Trending Searches */}
                 {popularSearches.length > 0 && (
                   <div>
                     <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                       <TrendingUp className="h-4 w-4" />
-                      Trending Searches
+                      Your frequent searches
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {popularSearches.map((search, index) => (
@@ -615,7 +606,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   </div>
                 )}
 
-                {/* Empty state when no history */}
                 {recentSearches.length === 0 &&
                   popularSearches.length === 0 &&
                   !isLoadingHistory && (
@@ -628,7 +618,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     </div>
                   )}
 
-                {/* Loading history */}
                 {isLoadingHistory && (
                   <div className="flex items-center justify-center py-8">
                     <Spinner size="sm" aria-label="Loading search history…" />
@@ -656,7 +645,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     onClick={() => handleResultClick(result)}
                     className="group w-full rounded-lg border p-3 text-start transition-colors hover:bg-accent"
                   >
-                    {/* Header */}
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         {result.type === 'project' ? (
@@ -684,7 +672,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                       </div>
                     </div>
 
-                    {/* Content Preview with Highlighting */}
                     <div className="line-clamp-2 text-xs text-muted-foreground">
                       {result.contextBefore && (
                         <span className="opacity-70">...{result.contextBefore}</span>
@@ -695,7 +682,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                       )}
                     </div>
 
-                    {/* Badges */}
                     <div className="mt-2 flex items-center gap-2">
                       <Badge variant="outline" className="px-1.5 py-0 text-caption">
                         {RESULT_TYPE_LABELS[result.type] ?? result.role}
@@ -707,7 +693,6 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
             )}
           </ScrollArea>
 
-          {/* Footer */}
           <div className="border-t bg-muted/20 px-6 py-3">
             <p className="text-center text-xs text-muted-foreground">
               Press <kbd className={FOOTER_KEY_CLASS}>Enter</kbd> to search,{' '}

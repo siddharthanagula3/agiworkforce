@@ -499,13 +499,10 @@ export function VoiceModeSurface({
         </div>
       ) : null}
 
-      {/* The orb keeps its own slot in the column in both states, resting on
-          the composer. As a fixed full-viewport overlay in focus mode it was
-          painted over the notice, the error row and the composer whenever they
-          reached the middle of a short viewport. The canvas reserves room for
-          the orb's glow, so the slot pulls the composer up under that margin;
-          the composer follows it and paints over the overlap, and nothing
-          above the orb is covered. */}
+      {/* The orb keeps its own slot in the column in both states, so on a short
+          viewport it never covers the notice, error row or composer. The canvas
+          reserves room for the orb's glow; the negative margin pulls the
+          composer up under it, and the composer paints over the overlap. */}
       <div
         data-testid="voice-orb-slot"
         className="-mb-14 flex shrink-0 items-center justify-center"

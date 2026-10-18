@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * ResearchPanel
- *
- * Right-sidebar panel that shows a list of web search sources associated with
- * the most recent assistant message that contained search results. Mirrors the
- * ArtifactsPanel pattern: inline panel on desktop, full-screen overlay on mobile.
- *
- * Opened via the ResearchToggleButton in the chat header (see WebChatPage) or
- * programmatically via useResearchPanelStore.openPanel(...).
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Brain, Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
 import type { ManagedMemoryCitations, ResearchReport } from '@agiworkforce/types';
@@ -33,10 +22,6 @@ import {
   useDetachedWindowTitle,
 } from '@/features/desktop-host/components/PanelWindow';
 import type { PanelWindowControls } from '@/features/desktop-host/lib/panel-windows';
-
-// ============================================================================
-// Source row
-// ============================================================================
 
 const TITLE_FALLBACK_MAX_LENGTH = 60;
 const RESEARCH_WINDOW_TITLE = 'Research';
@@ -133,7 +118,6 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         </span>
       )}
 
-      {/* Favicon */}
       <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
         {faviconSrc ? (
           <img
@@ -147,7 +131,6 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         )}
       </div>
 
-      {/* Text content */}
       <div className="min-w-0 flex-1 space-y-0.5">
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {displayTitle}
@@ -211,10 +194,6 @@ function MemorySources({ memories }: { memories: ManagedMemoryCitations }) {
   );
 }
 
-// ============================================================================
-// Empty state
-// ============================================================================
-
 function SourcesEmptyState() {
   return (
     <EmptyState
@@ -225,10 +204,6 @@ function SourcesEmptyState() {
     />
   );
 }
-
-// ============================================================================
-// Persisted report tab (CAP-045 slice 3)
-// ============================================================================
 
 /**
  * Loads the durable reports this conversation produced and renders the newest
@@ -336,10 +311,6 @@ function ReportTab({
   );
 }
 
-// ============================================================================
-// Main panel
-// ============================================================================
-
 interface ResearchPanelProps {
   /**
    * Send a grounded follow-up into the chat this panel sits beside. Supplied
@@ -395,7 +366,6 @@ export function ResearchPanel({
 
   return (
     <>
-      {/* Mobile backdrop */}
       {detached ? null : (
         <div
           className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
@@ -404,7 +374,6 @@ export function ResearchPanel({
         />
       )}
 
-      {/* Panel */}
       <div
         ref={panelRef}
         className={
@@ -413,10 +382,8 @@ export function ResearchPanel({
             : cn(
                 'flex flex-col border-s border-border/30',
                 'bg-card/95 backdrop-blur-xl',
-                // Mobile: full-screen overlay
                 'fixed inset-y-0 end-0 z-[var(--z-panel)] w-full',
                 'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
-                // Slide-in animation
                 'animate-in slide-in-from-right duration-moved',
               )
         }
@@ -429,7 +396,6 @@ export function ResearchPanel({
         {!detached && layout === 'desktop' && (
           <SidePanelResizeHandle label="Resize research panel" />
         )}
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
             <PanelRight className="h-4 w-4 text-muted-foreground" />
@@ -519,7 +485,6 @@ export function ResearchPanel({
           </div>
         ) : (
           <>
-            {/* Query line (if present) */}
             {query && (
               <div className="border-b border-border/20 px-4 py-2">
                 <div className="inline-flex items-center gap-1.5 rounded-compact bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
@@ -563,10 +528,6 @@ export function ResearchPanel({
   );
 }
 
-// ============================================================================
-// Toggle button (for chat header)
-// ============================================================================
-
 export function ResearchToggleButton({
   count = 0,
   onToggle,
@@ -597,10 +558,6 @@ export function ResearchToggleButton({
     </button>
   );
 }
-
-// ============================================================================
-// Compact sources control (used inside MessageBubble's action row)
-// ============================================================================
 
 function sourceDisplay(source: ResearchSource): { host: string; favicon?: string } {
   const domain = citationPublisherDomain(source);

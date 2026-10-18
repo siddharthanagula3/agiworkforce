@@ -348,11 +348,9 @@ function PlanCardView(props: PlanCardViewProps) {
 export function UpgradePlanDialog({
   open,
   onOpenChange,
-  // NOT defaulted to 'free'. `undefined` means "the plan is not known yet"
-  // (e.g. `/api/me` is refreshing or answered 401) and must stay distinct from
-  // "the user is on Free". Defaulting here is what previously showed a Max 15x
-  // subscriber a Free card marked "Your current plan" next to an
-  // "Upgrade to Basic, $7/month" button.
+  // Not defaulted to 'free': `undefined` means the plan is not known yet
+  // (`/api/me` is refreshing or answered 401), which must stay distinct from
+  // "the user is on Free", or a paid subscriber is shown Free as their plan.
   currentTier: reportedTier,
   targetTier = null,
   waitlistApplies = false,

@@ -237,7 +237,6 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-5 pt-5">
-        {/* Pros / Cons side-by-side */}
         {hasProsCons && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {items.map((item, idx) => (
@@ -304,7 +303,6 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
           </div>
         )}
 
-        {/* Feature comparison table */}
         {hasFeatures && (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm" role="table">
@@ -352,7 +350,6 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
           </div>
         )}
 
-        {/* Winner callout */}
         {winner && winnerReason && (
           <div className="flex items-start gap-3 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3">
             <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />

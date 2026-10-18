@@ -163,10 +163,6 @@ type ArtifactOriginSource = Pick<
 export type ArtifactOriginMessage = Pick<Message, 'id' | 'model' | 'metadata'>;
 
 /**
- * SECURITY-FIX F3 (CWE-863): the publish button used to declare
- * `privacyMode: 'managed'` for every artifact, which made the managed-cloud
- * upload unconditional.
- *
  * The boundary is derived from every signal the conversation actually carries,
  * reduced most-restrictive-first, and is `undefined` when the conversation
  * carries none, which `publishArtifact` refuses rather than guessing at. Only
@@ -252,7 +248,6 @@ export function ArtifactsPanel({
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const taskDockOpen = useUIStore((s) => s.taskDockOpen);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
-  // re-exported through `useArtifact`) with no caller for the setter and a
   const panelWidth = useSidePanelWidth();
   const layout = useOverlayLayout();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -445,14 +440,12 @@ export function ArtifactsPanel({
 
   return (
     <>
-      {/* Mobile backdrop */}
       <div
         className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
         onClick={() => setPanelOpen(false)}
         aria-hidden="true"
       />
 
-      {/* Panel */}
       <div
         ref={panelRef}
         data-testid="artifacts-panel"
@@ -470,16 +463,9 @@ export function ArtifactsPanel({
         )}
       >
         {layout === 'desktop' && <SidePanelResizeHandle label="Resize artifacts panel" />}
-        {/* Header, slim strip: panel title + count badge + Download all.
-            Close X only shown here when no artifact is selected (no toolbar
-            Close visible). When an artifact IS selected, the ArtifactPreview
-            panel-variant toolbar carries the Close button. This ensures the
-            panel is always closeable on mobile even with zero or unresolved
-            artifact selections. */}
-        {/* @container, same reason as the ArtifactPreview toolbar: this strip
-            lives INSIDE the split pane, which the user can drag down to
-            MIN_SIDE_PANEL_WIDTH while the window stays wide. Viewport breakpoints
-            here reveal labels at a width this bar never has. */}
+        {/* @container: this strip lives inside the split pane, which can be
+            dragged down to MIN_SIDE_PANEL_WIDTH while the window stays wide, so
+            viewport breakpoints would reveal labels at a width it never has. */}
         <div className="@container flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -489,8 +475,6 @@ export function ArtifactsPanel({
                 {artifacts.length}
               </span>
             )}
-            {/* AUDIT-FIX ART-20: quota-exhausted persistence is stated, not
-                hidden. Without this the artifacts simply vanish on reload. */}
             {persistenceDegraded && (
               <span
                 className="shrink-0 whitespace-nowrap text-caption text-danger"
@@ -535,8 +519,8 @@ export function ArtifactsPanel({
                 <span className="ms-1 hidden @[26rem]:inline">Download all</span>
               </Button>
             )}
-            {/* Show Close here only when the viewer toolbar is not visible
-                (empty panel or no artifact selected) to avoid duplicating it. */}
+            {/* A selected artifact's preview toolbar carries Close, so this one
+                appears only when nothing is selected. */}
             {!selectedArtifact && (
               <Button
                 variant="ghost"
@@ -559,7 +543,6 @@ export function ArtifactsPanel({
           <ArtifactsEmptyState />
         ) : (
           <>
-            {/* Tabs · horizontal scrollable list */}
             <div className="border-b border-border/20 px-3 py-2">
               <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {artifacts.map((artifact) => (
@@ -570,7 +553,6 @@ export function ArtifactsPanel({
                     onSelect={() => selectArtifact(artifact.id)}
                   />
                 ))}
-                {/* Live streaming artifact tab · pulsing dot marks the write in progress */}
                 {streamingArtifact && (
                   <button
                     onClick={() => selectArtifact(streamingArtifact.artifactId)}
@@ -592,9 +574,6 @@ export function ArtifactsPanel({
               </div>
             </div>
 
-            {/* A push the server refused. Saying so is the point: the panel is
-                showing someone else's version and the edit it replaced is one
-                click away, where before both facts were invisible. */}
             {selectedConflict && (
               <div
                 className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2"
@@ -625,7 +604,6 @@ export function ArtifactsPanel({
               </div>
             )}
 
-            {/* Content */}
             <div className="flex flex-1 flex-col overflow-hidden bg-background">
               {showStreamingView && streamingArtifact ? (
                 <StreamingArtifactView artifact={streamingArtifact} />
@@ -674,7 +652,6 @@ export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = 
       title="Artifacts"
     >
       <Code2 className="h-4 w-4" />
-      {/* Badge showing count */}
       {artifacts.length > 0 && !panelOpen && (
         <span className="absolute -end-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {artifacts.length}

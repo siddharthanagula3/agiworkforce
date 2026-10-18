@@ -367,7 +367,7 @@ export function FollowUpSuggestions({
           isUserTyping && 'pointer-events-none opacity-0',
           className,
         )}
-        role="list"
+        role="group"
         aria-label="Follow-up suggestions"
       >
         {followUps.map((fu) => {
@@ -375,9 +375,9 @@ export function FollowUpSuggestions({
           return (
             <motion.button
               key={fu.id}
+              type="button"
               variants={pillVariants}
               onClick={() => onSelect(fu.text)}
-              role="listitem"
               className={cn(
                 'group/pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5',
                 'pointer-coarse:min-h-11',
@@ -395,6 +395,7 @@ export function FollowUpSuggestions({
           );
         })}
         <motion.button
+          type="button"
           variants={pillVariants}
           onClick={() => setDismissed(true)}
           className={cn(

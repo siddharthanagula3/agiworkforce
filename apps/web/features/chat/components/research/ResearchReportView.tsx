@@ -1,21 +1,5 @@
 'use client';
 
-/**
- * ResearchReportView (CAP-045 slice 3)
- *
- * A persisted Deep Research report rendered as a durable artifact, mirroring
- * the ArtifactsPanel layout ResearchPanel already follows: header with title
- * and actions, scrollable body, source list at the foot.
- *
- * Everything shown comes from the stored `ResearchReport`. Sections the report
- * does not have (no key findings, no citations) are simply absent, none of
- * them are synthesized here.
- *
- * Export reuses the EXISTING document-export-service (the same one
- * EnhancedExportDialog calls). No new export machinery: markdown, PDF, and
- * DOCX are whatever that service already produces.
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -65,10 +49,6 @@ import { documentExportService } from '../../services/document-export-service';
 import { formatSourceDate } from '../../utils/research-sources';
 import { toUserMessage } from '@/lib/user-error-message';
 
-// ============================================================================
-// Markdown assembly (export payload)
-// ============================================================================
-
 /**
  * The report as one self-contained markdown document: title, summary, key
  * findings, body, and a numbered Sources list whose numbers match the report's
@@ -97,10 +77,6 @@ export function researchReportToMarkdown(report: ResearchReport): string {
   return parts.join('\n\n');
 }
 
-// ============================================================================
-// Follow-up prompt
-// ============================================================================
-
 /** How much of the report rides along as grounding for a follow-up question. */
 const FOLLOW_UP_GROUNDING_CHARS = 8_000;
 
@@ -124,10 +100,6 @@ export function researchReportFollowUpPrompt(report: ResearchReport, question: s
     question.trim(),
   ].join('\n\n');
 }
-
-// ============================================================================
-// Table of contents
-// ============================================================================
 
 export interface ReportHeading {
   id: string;
@@ -181,10 +153,6 @@ export function extractMarkdownHeadings(markdown: string): ReportHeading[] {
   return headings;
 }
 
-// ============================================================================
-// Artifact hand-off
-// ============================================================================
-
 export interface ReportArtifactInput {
   title: string;
   language: string;
@@ -209,10 +177,6 @@ export function researchReportFilename(report: ResearchReport): string {
     .slice(0, 80);
   return base || 'research-report';
 }
-
-// ============================================================================
-// Citation row
-// ============================================================================
 
 function citationDateLabel(citation: Citation): string | null {
   const published = formatSourceDate(citation.publishedDate);
@@ -286,10 +250,6 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
     </li>
   );
 }
-
-// ============================================================================
-// Report view
-// ============================================================================
 
 const EXPORT_FORMATS: Array<{ id: DocumentFormat; label: string }> = [
   { id: 'markdown', label: 'Markdown' },
@@ -401,15 +361,6 @@ export function ResearchReportView({
   useDialogKeyboard({ open: reading, onClose: closeReader, panelRef: readerRef });
 
   useEffect(() => {
-    if (!reading || typeof document === 'undefined') return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [reading]);
-
-  useEffect(() => {
     if (wasReadingRef.current && !reading) readerToggleRef.current?.focus();
     wasReadingRef.current = reading;
     if (!reading) return;
@@ -498,7 +449,6 @@ export function ResearchReportView({
 
   const view = (
     <div className="flex h-full min-h-0 flex-col" data-testid="research-report-view">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-border/30 px-4 py-3">
         <div className="flex min-w-0 items-start gap-2">
           <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -680,7 +630,6 @@ export function ResearchReportView({
         </p>
       )}
 
-      {/* Body */}
       <div
         className={cn(
           'min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]',
@@ -762,11 +711,6 @@ export function ResearchReportView({
             </nav>
           )}
 
-          {/*
-          The stored body is markdown, so it goes through the same renderer the
-          chat transcript uses. Rendering it as preformatted text showed saved
-          reports as literal `##`, `**`, and `[text](url)` syntax.
-        */}
           <article
             ref={bodyRef}
             className={cn(

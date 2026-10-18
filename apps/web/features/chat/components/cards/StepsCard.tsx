@@ -1,13 +1,3 @@
-/**
- * StepsCard - Step-by-step guide with interactive progress
- *
- * Displays numbered steps parsed from markdown with:
- * - Clickable checkmarks for progress tracking
- * - Visual progress indicator
- * - Collapsible details per step
- * - Completion celebration state
- */
-
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -51,17 +41,14 @@ function parseSteps(content: string): ParsedSteps {
     const trimmed = (lines[i] ?? '').trim();
     if (!trimmed) continue;
 
-    // Extract title from first heading
     if (!title && /^#{1,2}\s+/.test(trimmed)) {
       title = trimmed.replace(/^#{1,2}\s+/, '').replace(/\*\*/g, '');
       continue;
     }
 
-    // Detect step headers: "## Step N: ...", "### Step N ...", "N. **Title**", etc.
     const stepHeaderMatch = trimmed.match(
       /^(?:#{2,4}\s+)?(?:step\s+)?(\d+)[.:)\s]+\s*\*?\*?(.+?)\*?\*?\s*$/i,
     );
-    // Also match: "## Step N: Title" or "**Step N: Title**"
     const altStepMatch = trimmed.match(
       /^(?:#{2,4}\s+)?\*?\*?step\s+(\d+)[.:)\s]+\s*(.+?)\*?\*?\s*$/i,
     );
@@ -98,13 +85,11 @@ function parseSteps(content: string): ParsedSteps {
       continue;
     }
 
-    // Preamble text
     if (inPreamble) {
       descLines.push(trimmed);
       continue;
     }
 
-    // Step detail lines (belongs to last step)
     const lastStep = steps[steps.length - 1];
     if (lastStep) {
       const detailText = trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
@@ -164,8 +149,7 @@ interface StepsCardProps {
 
 /**
  * Ticking a step is a user edit, not a render detail, so it has to outlive the
- * component. It previously lived in `useState` alone, which meant every reload
- * or navigation silently reset a half-finished checklist back to 0/N.
+ * component, or a reload resets a half-finished checklist back to 0/N.
  *
  * The assistant message id is client-generated and sent to the API as
  * `assistant_message_id`, so the persisted row keeps the same id the browser
@@ -291,7 +275,6 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
           </Badge>
         </div>
 
-        {/* Progress bar */}
         <div className="mt-3 space-y-1.5">
           <Progress
             value={progressPercent}
@@ -324,7 +307,6 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
               >
                 <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(index)}>
                   <div className="flex items-center gap-3 p-3">
-                    {/* Checkmark button */}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -350,7 +332,6 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                       )}
                     </button>
 
-                    {/* Step title */}
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"
@@ -381,7 +362,6 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                     </CollapsibleTrigger>
                   </div>
 
-                  {/* Expandable details */}
                   {hasDetails && (
                     <CollapsibleContent>
                       <div className="px-3 pb-3 ps-[3.75rem]">

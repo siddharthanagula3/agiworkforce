@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  CHAT_ATTACHMENT_MIME_TYPES,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
@@ -21,26 +20,6 @@ import {
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 const MAX_MESSAGE_BYTES = MAX_CHAT_ATTACHMENT_MESSAGE_BYTES;
-
-/**
- * MIME allowlist for `addFiles`. Exported (with the helpers below) so the
- * composer that owns the `<input type="file">` element can build its
- * `accept` attribute and gating logic from this single source of truth
- * instead of hardcoding a separate, narrower list that drifts out of sync
- * with what this hook actually accepts.
- *
- * `ChatComposerNew.tsx` uses `getAcceptAttribute()` (this full allowlist) and
- * accepts every type listed here, the old `accept="image/*"` narrowing and the
- * "web chat accepts images only" message it described are both gone.
- *
- * AUDIT-FIX CMP-27: because the picker offers documents as well as images, the
- * composer's capability gate can no longer be an `image/*` test. Images and
- * PDFs travel as provider media/document blocks and need a multimodal model;
- * text and code files are inlined as text and any model can read them. The
- * composer classifies with `isChatImageMimeType` + `application/pdf` from the
- * same policy module this file imports, so the two cannot drift.
- */
-export const ALLOWED_MIME_TYPES = new Set<string>(CHAT_ATTACHMENT_MIME_TYPES);
 
 export function getAcceptAttribute(): string {
   return chatAttachmentAcceptAttribute();
@@ -200,16 +179,6 @@ function refusalOf(issue: IntakeIssue): ChatDraftRefusal | null {
   };
 }
 
-/**
- * Exported so callers (e.g. the composer's drop/paste/file-input handlers)
- * can pre-filter or validate a `File[]` using the exact same rule `addFiles`
- * enforces internally, rather than hand-rolling a narrower `file.type.startsWith('image/')`
- * check that silently drops valid non-image documents.
- */
-export function isAllowedType(file: File): boolean {
-  return isSupportedChatAttachment(file.name, file.type);
-}
-
 export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachmentsReturn {
   const {
     maxFiles = MAX_FILE_COUNT,
@@ -321,7 +290,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           });
           continue;
         }
-        if (!isAllowedType(file)) {
+        if (!isSupportedChatAttachment(file.name, file.type)) {
           issues.push({ file, reason: 'unsupported' });
           continue;
         }
@@ -431,5 +400,3 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     clearAll,
   };
 }
-
-export default useAttachments;

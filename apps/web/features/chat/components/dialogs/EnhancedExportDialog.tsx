@@ -114,7 +114,6 @@ function EnhancedExportDialogImpl({
       const contentOptions = { includeTimestamps };
       const options = {
         title: session.title,
-        author: 'Chat Session Export',
         metadata: includeMetadata
           ? {
               Created: session.createdAt.toLocaleString(),
@@ -167,8 +166,7 @@ function EnhancedExportDialogImpl({
   };
 
   const selectedFormatData = EXPORT_FORMATS.find((f) => f.id === selectedFormat);
-  const supportsMetadataOption =
-    selectedFormat === 'markdown' || selectedFormat === 'pdf' || selectedFormat === 'docx';
+  const supportsMetadataOption = selectedFormat === 'markdown';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

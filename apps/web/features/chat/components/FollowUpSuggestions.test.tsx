@@ -470,6 +470,11 @@ describe('deriveFollowUps() · result shape', () => {
 describe('FollowUpSuggestions component', () => {
   const CONTENT_WITH_CODE =
     'Here is a function that handles the user request and returns the proper response component.';
+  const SUGGESTIONS_LABEL = 'Follow-up suggestions';
+  const suggestionPills = () =>
+    screen
+      .queryAllByRole('button')
+      .filter((button) => button.getAttribute('aria-label') !== 'Hide suggestions');
 
   it('renders suggestion pills when conditions are met', () => {
     render(
@@ -479,8 +484,8 @@ describe('FollowUpSuggestions component', () => {
         isGenerating={false}
       />,
     );
-    expect(screen.getByRole('list')).toBeInTheDocument();
-    const items = screen.getAllByRole('listitem');
+    expect(screen.getByRole('group', { name: SUGGESTIONS_LABEL })).toBeInTheDocument();
+    const items = suggestionPills();
     expect(items.length).toBeGreaterThan(0);
   });
 
@@ -550,7 +555,7 @@ describe('FollowUpSuggestions component', () => {
       />,
     );
 
-    const pills = screen.getAllByRole('listitem');
+    const pills = suggestionPills();
     fireEvent.click(pills[0]!);
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(typeof onSelect.mock.calls[0]?.[0]).toBe('string');
@@ -597,11 +602,11 @@ describe('FollowUpSuggestions component', () => {
     const hideBtn = screen.getByRole('button', { name: 'Hide suggestions' });
     fireEvent.click(hideBtn);
 
-    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: SUGGESTIONS_LABEL })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hide suggestions' })).not.toBeInTheDocument();
   });
 
-  it('renders the container with accessible role="list" and aria-label', () => {
+  it('renders the suggestions as buttons inside a labelled group', () => {
     render(
       <FollowUpSuggestions
         lastAssistantContent={CONTENT_WITH_CODE}
@@ -609,8 +614,10 @@ describe('FollowUpSuggestions component', () => {
         isGenerating={false}
       />,
     );
-    const list = screen.getByRole('list');
-    expect(list).toHaveAttribute('aria-label', 'Follow-up suggestions');
+    const group = screen.getByRole('group', { name: SUGGESTIONS_LABEL });
+    expect(group).toHaveAttribute('aria-label', SUGGESTIONS_LABEL);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    for (const pill of suggestionPills()) expect(pill.tagName).toBe('BUTTON');
   });
 
   it('passes messageCount to influence summarize pill visibility', () => {
@@ -621,7 +628,7 @@ describe('FollowUpSuggestions component', () => {
         messageCount={0}
       />,
     );
-    let texts = screen.queryAllByRole('listitem').map((el) => el.textContent ?? '');
+    let texts = suggestionPills().map((el) => el.textContent ?? '');
     expect(texts.some((t) => t.includes('Summarize this conversation'))).toBe(false);
 
     rerender(
@@ -631,7 +638,7 @@ describe('FollowUpSuggestions component', () => {
         messageCount={10}
       />,
     );
-    texts = screen.queryAllByRole('listitem').map((el) => el.textContent ?? '');
+    texts = suggestionPills().map((el) => el.textContent ?? '');
     expect(texts.some((t) => t.includes('Summarize this conversation'))).toBe(true);
   });
 });
