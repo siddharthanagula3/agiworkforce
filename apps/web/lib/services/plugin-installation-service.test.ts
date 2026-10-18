@@ -17,12 +17,11 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
 import { pluginSignaturePayload } from '@agiworkforce/client-runtime/plugins';
 import {
-  approvePendingPluginPermissions,
   countPluginInstallations,
   getPluginInstallationSettings,
   installWebPlugin,
   listEnabledPluginIds,
-  listPluginPermissionReviews,
+  PluginPermissionReviewRequiredError,
   setWebPluginEnabled,
   uninstallWebPlugin,
   updatePluginInstallationSettings,
@@ -470,38 +469,6 @@ describe('installWebPlugin', () => {
   });
 });
 
-describe('approvePendingPluginPermissions', () => {
-  it('is the only way out of review, and only for a row actually in review', async () => {
-    const db = database([INSTALLATION_ROW]);
-    await approvePendingPluginPermissions(db, 'user-1', 'research-pack');
-    const sql = String(db.query.mock.calls[0]?.[0]).toLowerCase();
-    expect(sql).toContain('review_required = true');
-    expect(sql).toContain('approved_permissions = coalesce(pending_permissions');
-    expect(sql).toContain('enabled = true');
-  });
-});
-
-describe('listPluginPermissionReviews', () => {
-  it('reports what the update added over what the member approved', async () => {
-    const db = database([
-      {
-        plugin_id: 'research-pack',
-        approved_permissions: ['network'],
-        pending_permissions: ['network', 'shell'],
-      },
-    ]);
-    await expect(listPluginPermissionReviews(db, 'user-1')).resolves.toEqual([
-      {
-        pluginId: 'research-pack',
-        approved: ['network'],
-        pending: ['network', 'shell'],
-        added: ['shell'],
-        removed: [],
-      },
-    ]);
-  });
-});
-
 describe('setWebPluginEnabled', () => {
   beforeEach(() => {
     getNeonDbMock.mockReset();
@@ -522,6 +489,21 @@ describe('setWebPluginEnabled', () => {
     const installation = await setWebPluginEnabled(db, 'user-1', 'research-pack', true);
 
     expect(installation).toBeNull();
+  });
+
+  it('refuses to turn on an installation whose new permissions are still unapproved', async () => {
+    const db = database([
+      { approved_permissions: ['network'], pending_permissions: ['network', 'shell'] },
+    ]);
+
+    const refused = await setWebPluginEnabled(db, 'user-1', 'research-pack', true).catch(
+      (error: unknown) => error,
+    );
+
+    expect(refused).toBeInstanceOf(PluginPermissionReviewRequiredError);
+    expect(refused).toMatchObject({ statusCode: 409, added: ['shell'] });
+    expect((refused as Error).message).toContain('choose its new version');
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 });
 

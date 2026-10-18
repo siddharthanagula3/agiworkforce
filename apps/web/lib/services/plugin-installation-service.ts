@@ -101,7 +101,7 @@ export class PluginPermissionReviewRequiredError extends AppError {
   constructor(pluginId: string, added: string[], approved: string[]) {
     super(
       ErrorCode.CONFLICT,
-      `${pluginId} now asks for permissions you have not approved: ${added.join(', ')}. Review them before it runs again.`,
+      `${pluginId} now asks for permissions you have not approved: ${added.join(', ')}. Open the plugin, choose its new version and approve these permissions before it runs again.`,
       409,
     );
     Object.setPrototypeOf(this, PluginPermissionReviewRequiredError.prototype);
@@ -395,72 +395,32 @@ async function writeInstallation(
   return rows[0] ? mapInstallation(rows[0]) : null;
 }
 
-/**
- * The only way out of review, and an explicit member act: the expanded set is
- * written as approved, never inferred from the registry.
- */
-export async function approvePendingPluginPermissions(
+async function assertNoPendingPermissionReview(
   db: DatabaseAdapter,
   userId: string,
   pluginId: string,
-): Promise<PluginInstallation | null> {
-  const rows = await db.query<PluginInstallationRow>(
-    `update public.plugin_installations
-        set approved_permissions = coalesce(pending_permissions, approved_permissions),
-            pending_permissions = null,
-            review_required = false,
-            enabled = true,
-            updated_at = now()
-      where user_id = $1 and plugin_id = $2 and review_required = true
-      returning plugin_id, installed_version, enabled, installed_at, updated_at`,
+): Promise<void> {
+  const [review] = await db.query<{ approved_permissions: unknown; pending_permissions: unknown }>(
+    `select approved_permissions, pending_permissions
+       from public.plugin_installations
+      where user_id = $1 and plugin_id = $2 and review_required = true`,
     [userId, pluginId],
   );
-  return rows[0] ? mapInstallation(rows[0]) : null;
+  if (!review) return;
+  const approved = toStringArray(review.approved_permissions);
+  const { added } = diffPluginPermissions(approved, toStringArray(review.pending_permissions));
+  throw new PluginPermissionReviewRequiredError(pluginId, added, approved);
 }
 
-export interface PluginPermissionReview {
-  pluginId: string;
-  approved: string[];
-  pending: string[];
-  added: string[];
-  removed: string[];
-}
-
-export async function listPluginPermissionReviews(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<PluginPermissionReview[]> {
-  const rows = await db.query<{
-    plugin_id: string;
-    approved_permissions: unknown;
-    pending_permissions: unknown;
-  }>(
-    `select plugin_id, approved_permissions, pending_permissions
-       from public.plugin_installations
-      where user_id = $1 and review_required = true
-      order by plugin_id asc`,
-    [userId],
-  );
-  return rows.map((row) => {
-    const approved = toStringArray(row.approved_permissions);
-    const pending = toStringArray(row.pending_permissions);
-    const diff = diffPluginPermissions(approved, pending);
-    return {
-      pluginId: row.plugin_id,
-      approved,
-      pending,
-      added: diff.added,
-      removed: diff.removed,
-    };
-  });
-}
-
+// Turning a plugin on is not how its new permissions get approved: the version
+// update records them, and until then the runtime would skip it anyway.
 export async function setWebPluginEnabled(
   db: DatabaseAdapter,
   userId: string,
   pluginId: string,
   enabled: boolean,
 ): Promise<PluginInstallation | null> {
+  if (enabled) await assertNoPendingPermissionReview(db, userId, pluginId);
   const rows = await db.query<PluginInstallationRow>(
     `update public.plugin_installations
         set enabled = $3, updated_at = now()
