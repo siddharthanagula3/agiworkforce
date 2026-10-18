@@ -1,7 +1,8 @@
 //! Codex-style workspace-write sandbox: the program may read anywhere on the
 //! machine, so toolchains under `$HOME` (`~/.cargo`, `~/.nvm`, shell profiles)
-//! keep working, but it may write only to the workspace, the extra roots the
-//! caller names and a private scratch TMPDIR.
+//! keep working, except the credential locations [`credential_paths`] names,
+//! but it may write only to the workspace, the extra roots the caller names
+//! and a private scratch TMPDIR.
 //!
 //! [`crate::wrap`] keeps the narrow profile that also confines reads; this is
 //! the wider one for commands a person or agent runs in a project.
@@ -365,29 +366,32 @@ fn full_read_args(
     program: &str,
     args: &[String],
 ) -> Result<Vec<String>, String> {
-    match backend {
-        SandboxBackend::MacosSeatbelt => {
-            let scratch_dir = scratch_dir.ok_or_else(|| {
-                "Seatbelt execution requires a private scratch directory".to_string()
-            })?;
-            let mut wrapped = vec![
-                "-p".to_string(),
-                full_read_seatbelt_profile(spec, scratch_dir)?,
-                "/usr/bin/env".to_string(),
-            ];
-            wrapped.extend(
-                seatbelt_environment(scratch_dir)?
-                    .into_iter()
-                    .map(|(name, value)| format!("{name}={value}")),
-            );
-            wrapped.push(program.to_string());
-            wrapped.extend(args.iter().cloned());
-            Ok(wrapped)
-        }
-        SandboxBackend::LinuxBubblewrap => {
-            protected_args(backend, spec, &[], &[], None, program, args).map(|(wrapped, _)| wrapped)
-        }
-    }
+    protected_args(backend, spec, &[], &[], scratch_dir, program, args).map(|(wrapped, _)| wrapped)
+}
+
+/// The Seatbelt launcher arguments for `program` under the full-read
+/// profile, before any read denial or protection rule is added to it.
+fn seatbelt_full_read_args(
+    spec: &FullReadSpec<'_>,
+    scratch_dir: Option<&Path>,
+    program: &str,
+    args: &[String],
+) -> Result<Vec<String>, String> {
+    let scratch_dir = scratch_dir
+        .ok_or_else(|| "Seatbelt execution requires a private scratch directory".to_string())?;
+    let mut wrapped = vec![
+        "-p".to_string(),
+        full_read_seatbelt_profile(spec, scratch_dir)?,
+        "/usr/bin/env".to_string(),
+    ];
+    wrapped.extend(
+        seatbelt_environment(scratch_dir)?
+            .into_iter()
+            .map(|(name, value)| format!("{name}={value}")),
+    );
+    wrapped.push(program.to_string());
+    wrapped.extend(args.iter().cloned());
+    Ok(wrapped)
 }
 
 /// A program rewritten by [`full_read_program_protecting`].
@@ -428,10 +432,11 @@ pub fn full_read_program_protecting(
 }
 
 /// [`full_read_program_protecting`] for a program that must not read
-/// `unreadable` either, such as [`credential_paths`]. The full-read sandbox
-/// reads everywhere else, so a program that also keeps the network, as an
-/// MCP server does, is given no key, token or keychain to send out. A
-/// writable root inside one of them stays readable.
+/// `unreadable` either, such as a host's own token folder. Every full-read
+/// program is kept from [`credential_paths`] under the home folder already;
+/// the sandbox reads everywhere else, so a program that also keeps the
+/// network, as an MCP server does, is given no key, token or keychain to
+/// send out. A writable root inside one of them stays readable.
 pub fn full_read_program_guarding(
     backend: SandboxBackend,
     spec: &FullReadSpec<'_>,
@@ -470,25 +475,31 @@ fn protected_args(
 ) -> Result<(Vec<String>, Vec<PathBuf>), String> {
     match backend {
         SandboxBackend::MacosSeatbelt => {
-            let mut wrapped = full_read_args(backend, spec, scratch_dir, program, args)?;
+            let mut wrapped = seatbelt_full_read_args(spec, scratch_dir, program, args)?;
             let mut rules = seatbelt_protection_rules(protected_paths)?;
-            if !unreadable.is_empty() {
-                let policy = write_policy(spec);
-                let narrow = SandboxSpec {
-                    policy: &policy,
-                    workspace_dir: spec.workspace_dir,
-                    network_policy: spec.network_policy,
-                    protected_paths: &[],
-                };
-                let mut readable: Vec<PathBuf> = writable_roots(&narrow)?
-                    .into_iter()
-                    .map(|root| root.resolved)
-                    .collect();
-                if let Some(scratch_dir) = scratch_dir {
-                    readable.push(verify_scratch_root(scratch_dir)?);
-                }
-                rules.push_str(&seatbelt_read_denials(unreadable, &readable)?);
+            // The credentials bubblewrap always hides are denied here too, so
+            // a program that reads anywhere is given no key on either system.
+            let hidden: Vec<PathBuf> = dirs::home_dir()
+                .map(|home| credential_paths(&home))
+                .unwrap_or_default()
+                .into_iter()
+                .chain(unreadable.iter().cloned())
+                .collect();
+            let policy = write_policy(spec);
+            let narrow = SandboxSpec {
+                policy: &policy,
+                workspace_dir: spec.workspace_dir,
+                network_policy: spec.network_policy,
+                protected_paths: &[],
+            };
+            let mut readable: Vec<PathBuf> = writable_roots(&narrow)?
+                .into_iter()
+                .map(|root| root.resolved)
+                .collect();
+            if let Some(scratch_dir) = scratch_dir {
+                readable.push(verify_scratch_root(scratch_dir)?);
             }
+            rules.push_str(&seatbelt_read_denials(&hidden, &readable)?);
             let profile = wrapped
                 .get_mut(1)
                 .ok_or_else(|| "Seatbelt profile is missing".to_string())?;
@@ -678,18 +689,28 @@ mod tests {
     }
 
     #[test]
-    fn a_program_that_is_not_guarded_reads_as_before() {
-        let (args, _) = protected_args(
+    fn every_full_read_program_is_denied_the_home_credentials() {
+        let home = dirs::home_dir().expect("home dir");
+        let ssh = crate::wrap::resolve_existing_prefix(&home.join(".ssh"));
+        let ssh_denied = format!("(deny file-read* (subpath \"{}\"))", ssh.display());
+        let args = full_read_args(
             SandboxBackend::MacosSeatbelt,
-            &spec(&[], NetworkPolicy::Deny),
-            &[],
-            &[],
+            &spec(&[], NetworkPolicy::AllowExternal),
             Some(Path::new("/private/tmp/agi-scratch")),
             "/bin/bash",
             &[],
         )
         .expect("wrap");
-        assert!(!args[1].contains("deny file-read"));
+        let profile = &args[1];
+        let read_everywhere = profile
+            .find("(allow file-read*)\n")
+            .expect("reads everywhere");
+        assert!(
+            profile
+                .find(&ssh_denied)
+                .is_some_and(|denied| denied > read_everywhere),
+            "{ssh_denied} is missing after the read allow in:\n{profile}"
+        );
     }
 
     #[test]
