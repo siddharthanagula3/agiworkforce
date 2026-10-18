@@ -131,7 +131,7 @@ pub async fn run_voice_mode(
             if privacy_mode == PrivacyMode::Local && !voice_cloud_opt_in {
                 output::print_error(
                     "Voice mode in Local privacy mode requires a local whisper binary on PATH.\n\
-                     Install `whisper` or `whisper-cpp` for fully local transcription, or set\n\
+                     Install the openai-whisper `whisper` CLI for fully local transcription, or set\n\
                      `AGIWORKFORCE_VOICE_ALLOW_CLOUD=1` to explicitly allow audio egress to OpenAI cloud.",
                 );
             } else {
@@ -423,7 +423,7 @@ enum TranscriptionBackend {
 
 /// Detect the best available transcription backend.
 ///
-/// Priority: OpenAI API (if key set) > local binary > none.
+/// Priority: a Managed account > OpenAI API (if key set) > local whisper > none.
 fn detect_backend(privacy_mode: &PrivacyMode) -> TranscriptionBackend {
     if *privacy_mode == PrivacyMode::Managed {
         if let Some(token) = crate::tier_cache::load_jwt() {
@@ -435,30 +435,7 @@ fn detect_backend(privacy_mode: &PrivacyMode) -> TranscriptionBackend {
         return TranscriptionBackend::OpenAiApi;
     }
 
-    // Check for local whisper binary
-    if let Ok(output) = std::process::Command::new("which").arg("whisper").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return TranscriptionBackend::LocalBinary(PathBuf::from(path));
-            }
-        }
-    }
-
-    // Also check `whisper-cpp` as an alternative
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("whisper-cpp")
-        .output()
-    {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return TranscriptionBackend::LocalBinary(PathBuf::from(path));
-            }
-        }
-    }
-
-    TranscriptionBackend::None
+    find_local_binary_backend()
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +468,7 @@ fn gate_cloud_egress(
                      would send audio to the OpenAI cloud Whisper API.\n\
                      \n\
                      Options:\n\
-                     • Install `whisper` or `whisper-cpp` for fully on-device transcription.\n\
+                     • Install the openai-whisper `whisper` CLI for fully on-device transcription.\n\
                      • Set `AGIWORKFORCE_VOICE_ALLOW_CLOUD=1` to explicitly allow cloud egress \
                        (this will leave Local mode for voice transcription only).\n\
                      \n\
@@ -529,15 +506,14 @@ fn gate_backend(
     }
 }
 
-/// Probe for an on-device whisper binary without checking the API key.
+/// Probe for the openai-whisper CLI without checking the API key. whisper.cpp is
+/// not detected: it takes different flags and needs a model file path.
 fn find_local_binary_backend() -> TranscriptionBackend {
-    for bin in &["whisper", "whisper-cpp"] {
-        if let Ok(output) = std::process::Command::new("which").arg(bin).output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() {
-                    return TranscriptionBackend::LocalBinary(PathBuf::from(path));
-                }
+    if let Ok(output) = std::process::Command::new("which").arg("whisper").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return TranscriptionBackend::LocalBinary(PathBuf::from(path));
             }
         }
     }
@@ -1105,7 +1081,7 @@ async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Re
     Ok(text.trim().to_string())
 }
 
-/// Transcribe using a local whisper binary (whisper or whisper-cpp).
+/// Transcribe using the local openai-whisper `whisper` CLI.
 async fn transcribe_local(
     wav_path: &std::path::Path,
     binary_path: &std::path::Path,

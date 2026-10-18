@@ -86,7 +86,11 @@ async fn worktree_approval_denial(
                     }
                     ApprovalDecision::AlwaysAllow => {
                         perms.allow_always(permission_command);
-                        let _ = perms.save();
+                        if let Err(error) = perms.save() {
+                            crate::output::print_warn(&format!(
+                                "The Always Allow rule was not saved: {error:#}"
+                            ));
+                        }
                     }
                     _ => {}
                 }

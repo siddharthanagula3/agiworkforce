@@ -55,7 +55,11 @@ fn persist_file_permission_decision(
             for path in paths {
                 perms.allow_file_always(operation, path);
             }
-            let _ = perms.save();
+            if let Err(error) = perms.save() {
+                crate::output::print_warn(&format!(
+                    "The Always Allow rule was not saved: {error:#}"
+                ));
+            }
         }
         _ => {}
     }

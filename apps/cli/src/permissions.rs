@@ -386,6 +386,16 @@ impl PermissionStore {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir)?;
         let path = Self::path()?;
+        if path.exists() {
+            let existing =
+                std::fs::read_to_string(&path).context("Failed to read permissions.toml")?;
+            if toml::from_str::<PermissionStore>(&existing).is_err() {
+                anyhow::bail!(
+                    "{} could not be read, so nothing was saved over the rules it holds. Fix or remove that file, then try again.",
+                    path.display()
+                );
+            }
+        }
         let contents = toml::to_string_pretty(self).context("Failed to serialize permissions")?;
         std::fs::write(&path, &contents).context("Failed to write permissions.toml")?;
         // Restrict file permissions to owner-only (contains allow/deny lists)
