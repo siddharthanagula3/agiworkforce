@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isSensitiveFile } from '@agiworkforce/utils';
+import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -195,7 +195,7 @@ export function scanUploadForCredentials(
     });
   }
 
-  if (filename && isSensitiveFile(sanitizeFilename(filename))) {
+  if (filename && isCredentialPath(sanitizeFilename(filename))) {
     findings.push({
       code: 'sensitive_filename',
       detail: `${sanitizeFilename(filename)} is the name of a credential file`,

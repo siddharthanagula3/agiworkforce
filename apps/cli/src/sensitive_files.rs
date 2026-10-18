@@ -4,8 +4,8 @@ use regex::RegexSet;
 pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
     r"(?i)(^|/)\.env(\..+)?$",
     r"(?i)(^|/)\.envrc$",
-    r"(?i)(^|/)secrets?\.(json|ya?ml|toml|env|txt|js|ts)$",
-    r"(?i)(^|/).*credentials?(\.[A-Za-z0-9]+)?$",
+    r"(?i)(^|/)secrets?\.(json|ya?ml|toml|env|txt)$",
+    r"(?i)(^|/)[^/]*credentials?(\.(json|ya?ml|toml|txt|ini|db|csv|xml))?$",
     r"(?i)(^|/)\.netrc$",
     r"(?i)(^|/)\.npmrc$",
     r"(?i)(^|/)\.pypirc$",
@@ -40,11 +40,29 @@ pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
 static SENSITIVE_SET: Lazy<RegexSet> =
     Lazy::new(|| RegexSet::new(SENSITIVE_FILE_PATTERNS).expect("sensitive file patterns compile"));
 
+const ENVIRONMENT_PATTERN_COUNT: usize = 2;
+const ENVIRONMENT_TEMPLATE_SUFFIXES: [&str; 3] = [".example", ".sample", ".template"];
+
+fn is_environment_template(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    name.starts_with(".env.")
+        && ENVIRONMENT_TEMPLATE_SUFFIXES
+            .iter()
+            .any(|suffix| name.ends_with(suffix))
+}
+
 pub fn is_sensitive_file(path_like: &str) -> bool {
     if path_like.is_empty() {
         return false;
     }
-    SENSITIVE_SET.is_match(&path_like.replace('\\', "/"))
+    let normalized = path_like.replace('\\', "/");
+    let matches = SENSITIVE_SET.matches(&normalized);
+    if is_environment_template(&normalized) {
+        return matches
+            .iter()
+            .any(|index| index >= ENVIRONMENT_PATTERN_COUNT);
+    }
+    matches.matched_any()
 }
 
 pub fn sensitive_refusal(path_like: &str) -> String {
@@ -107,6 +125,10 @@ mod tests {
             "environment.ts",
             "docs/credentials-guide.md",
             "keyboard.ts",
+            "apps/web/lib/server/account-security/secrets.ts",
+            "src/vault_credentials.rs",
+            ".env.example",
+            "apps/web/.env.local.template",
         ] {
             assert!(!is_sensitive_file(path), "should be readable: {path}");
         }
@@ -129,13 +151,13 @@ mod parity {
     use super::SENSITIVE_FILE_PATTERNS;
     use std::path::Path;
 
-    /// The TypeScript surfaces gate on `packages/platform/utils/src/sensitiveFiles.ts`.
+    /// The TypeScript surfaces gate on `packages/contracts/local-runtime/src/filesystem.ts`.
     /// Two lists that drift leave one surface reading what the other refuses, so the
     /// count is pinned here and the file is named for whoever changes either side.
     #[test]
     fn matches_the_typescript_policy_pattern_for_pattern() {
         let ts = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/platform/utils/src/sensitiveFiles.ts");
+            .join("../../packages/contracts/local-runtime/src/filesystem.ts");
         let source =
             std::fs::read_to_string(&ts).unwrap_or_else(|e| panic!("read {}: {e}", ts.display()));
         let ts_count = source
@@ -147,7 +169,7 @@ mod parity {
         assert_eq!(
             ts_count,
             SENSITIVE_FILE_PATTERNS.len(),
-            "sensitiveFiles.ts has {} patterns, this module has {}; add the missing rule to both",
+            "filesystem.ts has {} patterns, this module has {}; add the missing rule to both",
             ts_count,
             SENSITIVE_FILE_PATTERNS.len()
         );

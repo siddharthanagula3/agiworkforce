@@ -137,8 +137,6 @@ export * from './voice';
 
 export { sha256, timingSafeEqual } from './crypto';
 
-export { SENSITIVE_FILE_PATTERNS, isSensitiveFile, matchSensitivePattern } from './sensitiveFiles';
-
 export { buildLocalToByokHandoffDraft, type HandoffTarget } from './privacyHandoff';
 export type {
   BuildLocalToByokHandoffDraftParams,

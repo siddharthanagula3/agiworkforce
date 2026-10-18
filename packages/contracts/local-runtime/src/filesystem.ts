@@ -88,8 +88,50 @@ const CREDENTIAL_EXTENSIONS: readonly string[] = ['.pem', '.key', '.p12', '.pfx'
 
 const CREDENTIAL_DIRECTORIES: readonly string[] = ['.ssh'];
 
-const SSH_PRIVATE_KEY = /^id_(rsa|dsa|ecdsa|ed25519|xmss)(_sk)?([-_.].*)?$/u;
-const SSH_PUBLIC_KEY_SUFFIX = '.pub';
+const SSH_KEY = /^id_(rsa|dsa|ecdsa|ed25519|xmss)(_sk)?([-_.].*)?$/u;
+
+/**
+ * Credential files by path shape, read case-insensitively on the path with
+ * either separator. Every line below is mirrored, in order, by
+ * `SENSITIVE_FILE_PATTERNS` in `apps/cli/src/sensitive_files.rs`, whose parity
+ * test counts them. The environment patterns come first because a checked-in
+ * template is exempt from them alone.
+ */
+const ENVIRONMENT_FILE_PATTERNS: readonly RegExp[] = [/(^|\/)\.env(\..+)?$/i, /(^|\/)\.envrc$/i];
+
+const CREDENTIAL_FILE_PATTERNS: readonly RegExp[] = [
+  /(^|\/)secrets?\.(json|ya?ml|toml|env|txt)$/i,
+  /(^|\/)[^/]*credentials?(\.(json|ya?ml|toml|txt|ini|db|csv|xml))?$/i,
+  /(^|\/)\.netrc$/i,
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)\.pypirc$/i,
+  /(^|\/)\.dockercfg$/i,
+  /(^|\/)\.docker\/config\.json$/i,
+  /(^|\/)id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i,
+  /\.(pem|p12|pfx|key|crt|cer|gpg|asc)$/i,
+  /(^|\/)authorized_keys$/i,
+  /(^|\/)known_hosts$/i,
+  /(^|\/)\.ssh\//i,
+  /(^|\/)\.gnupg\//i,
+  /(^|\/)\.aws\//i,
+  /(^|\/)\.gcloud\//i,
+  /(^|\/)\.config\/gcloud\//i,
+  /(^|\/)\.azure\//i,
+  /(^|\/)\.kube\/config$/i,
+  /(^|\/)\.git\/(config|credentials)$/i,
+  /(^|\/)\.git-credentials$/i,
+  /(^|\/)\.(github|gitlab)_token$/i,
+  // Terraform state holds every resource attribute in plain text, including the
+  // secrets a provider generated, and a .tfvars file is where the inputs to it
+  // are kept. Both are ordinary-looking project files.
+  /(^|\/).*\.tfstate(\.backup)?$/i,
+  /(^|\/)terraform\.tfstate\.d\//i,
+  /(^|\/).*\.auto\.tfvars(\.json)?$/i,
+  /(^|\/)terraform\.tfvars(\.json)?$/i,
+  /(^|\/)\.terraform\/terraform\.tfstate$/i,
+  /(^|\/)\.terraformrc$/i,
+  /(^|\/)terraform\.rc$/i,
+];
 
 const FOLD_ROUNDS = 3;
 
@@ -131,21 +173,7 @@ function pathSegments(value: string): string[] {
   return rawSegments(value).map(foldedFileName);
 }
 
-/**
- * Refused outright: reading one of these would hand over credentials
- * wholesale. Matched on names alone, folded as `foldedFileName` folds them,
- * so the answer is the same for a path that does not exist yet and on a
- * volume that folds case. The two exceptions, a template and a public key,
- * are read from the name as written: a wider fold there would open a file
- * that only resembles one.
- */
-export function isCredentialPath(filePath: string): boolean {
-  const segments = pathSegments(filePath);
-  const base = segments[segments.length - 1];
-  const raw = rawSegments(filePath);
-  const written = raw[raw.length - 1]?.toLowerCase();
-  if (base === undefined || written === undefined) return false;
-  if (segments.some((segment) => CREDENTIAL_DIRECTORIES.includes(segment))) return true;
+function holdsCredentialsByName(segments: readonly string[], base: string): boolean {
   if (CREDENTIAL_BASENAMES.includes(base)) return true;
   if (
     CREDENTIAL_PATH_TAILS.some((tail) =>
@@ -154,11 +182,37 @@ export function isCredentialPath(filePath: string): boolean {
   ) {
     return true;
   }
-  if (base.startsWith(ENVIRONMENT_FILE_PREFIX)) {
-    return !ENVIRONMENT_TEMPLATE_SUFFIXES.some((suffix) => written.endsWith(suffix));
-  }
+  if (base.startsWith(ENVIRONMENT_FILE_PREFIX)) return true;
   if (CREDENTIAL_EXTENSIONS.some((extension) => base.endsWith(extension))) return true;
-  return SSH_PRIVATE_KEY.test(base) && !written.endsWith(SSH_PUBLIC_KEY_SUFFIX);
+  return SSH_KEY.test(base);
+}
+
+/**
+ * Refused outright: reading one of these would hand over credentials
+ * wholesale, public keys and host lists included. Matched on names alone,
+ * folded as `foldedFileName` folds them, and on path shape, so the answer is
+ * the same for a path that does not exist yet and on a volume that folds
+ * case. The one exception, a checked-in environment template, is read from the
+ * name as written: a wider fold there would open a file that only resembles
+ * one.
+ */
+export function isCredentialPath(filePath: string): boolean {
+  const segments = pathSegments(filePath);
+  const base = segments[segments.length - 1];
+  const raw = rawSegments(filePath);
+  const written = raw[raw.length - 1]?.toLowerCase();
+  if (base === undefined || written === undefined) return false;
+  if (segments.some((segment) => CREDENTIAL_DIRECTORIES.includes(segment))) return true;
+  const normalized = filePath.replace(/\\/g, '/');
+  if (CREDENTIAL_FILE_PATTERNS.some((pattern) => pattern.test(normalized))) return true;
+  const environmentTemplate =
+    base.startsWith(ENVIRONMENT_FILE_PREFIX) &&
+    ENVIRONMENT_TEMPLATE_SUFFIXES.some((suffix) => written.endsWith(suffix));
+  if (environmentTemplate) return false;
+  return (
+    holdsCredentialsByName(segments, base) ||
+    ENVIRONMENT_FILE_PATTERNS.some((pattern) => pattern.test(normalized))
+  );
 }
 
 export const GIT_METADATA_ENTRY = '.git';

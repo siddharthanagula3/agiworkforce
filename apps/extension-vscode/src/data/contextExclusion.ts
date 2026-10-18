@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
-import { isSensitiveFile } from '@agiworkforce/utils';
+import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 import { Config } from '../platform/config';
 import { safeResolveWorkspacePath, type SafeResolveResult } from '../utils/pathSafety';
 
@@ -111,7 +111,7 @@ function matchesExcludeSetting(uri: vscode.Uri, folder: vscode.WorkspaceFolder):
 }
 
 export function settingsWithholdReason(filePath: string): ContextWithholdReason | undefined {
-  if (isSensitiveFile(filePath)) return 'credential';
+  if (isCredentialPath(filePath)) return 'credential';
   const uri = vscode.Uri.file(filePath);
   const folder = vscode.workspace.getWorkspaceFolder(uri);
   if (folder === undefined) return undefined;

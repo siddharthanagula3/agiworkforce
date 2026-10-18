@@ -7,7 +7,7 @@ import {
   type LlmChatMessage,
 } from '../../utils/api';
 import { Config } from '../../platform/config';
-import { isSensitiveFile } from '../../utils/pathSafety';
+import { isCredentialPath } from '../../utils/pathSafety';
 import { limitResetAt, showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
 
 const SECRETY_NAME_PATTERN =
@@ -100,7 +100,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     }
 
     const fsPath = document.uri.fsPath;
-    if (isSensitiveFile(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
+    if (isCredentialPath(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
       return [];
     }
 

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
-import { isSensitiveFile } from '@agiworkforce/utils';
+import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 import { resolveContained, type ContainmentResult } from '@agiworkforce/utils/path-containment';
 
 export type SafeResolveResult =
@@ -53,7 +53,7 @@ export async function safeResolveWorkspacePath(
     if (result.ok) {
       let resolvedPath = result.resolved;
       let resolvedFolder = folder;
-      if (checkSensitive && isSensitiveFile(result.resolved)) {
+      if (checkSensitive && isCredentialPath(result.resolved)) {
         return { ok: false, reason: 'sensitive' };
       }
       if (!allowSymlinkEscape) {
@@ -66,7 +66,7 @@ export async function safeResolveWorkspacePath(
           if (!realCheck.ok) {
             return { ok: false, reason: 'symlink-escape' };
           }
-          if (checkSensitive && isSensitiveFile(real)) {
+          if (checkSensitive && isCredentialPath(real)) {
             return { ok: false, reason: 'sensitive' };
           }
           resolvedPath = real;
@@ -115,4 +115,4 @@ export function describeRejection(
   }
 }
 
-export { isSensitiveFile } from '@agiworkforce/utils';
+export { isCredentialPath } from '@agiworkforce/local-runtime-contract';

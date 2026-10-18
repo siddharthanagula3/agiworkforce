@@ -107,6 +107,22 @@ describe('isCredentialPath', () => {
     'home/me/.ssh/authorized_keys',
     '/Users/me/project/.ssh/id_rsa.pub',
     'C:\\Users\\me\\project\\.env.local',
+    'id_rsa.pub',
+    'keys/id_ed25519.pub',
+    'known_hosts',
+    'authorized_keys',
+    'config/secrets.json',
+    'deploy/secret.yaml',
+    'credentials.json',
+    'aws_credentials',
+    'my-credential.json',
+    '.aws/config',
+    '.gnupg/secring.gpg',
+    'certs/server.crt',
+    '.github_token',
+    'infra/prod.tfstate',
+    'prod.auto.tfvars.json',
+    'C:\\Users\\me\\.aws\\credentials',
   ])('refuses %s', (candidate) => {
     expect(isCredentialPath(candidate)).toBe(true);
   });
@@ -127,9 +143,12 @@ describe('isCredentialPath', () => {
     '.env.sample',
     'apps/web/.env.local.template',
     'src/id_generator.ts',
-    'id_rsa.pub',
-    'keys/id_ed25519.pub',
     'src/credentials.ts',
+    'apps/web/lib/server/account-security/secrets.ts',
+    'src/features/security/legacyProviderCredentials.ts',
+    'src/sys/security/vault_credentials.rs',
+    'docs/credentials-guide.md',
+    'infra/main.tf',
     'docs/pem-format.md',
     'src/keyboard.ts',
     '.sshconfig',
@@ -157,12 +176,17 @@ describe('isCredentialPath', () => {
     expect(isCredentialPath(candidate)).toBe(true);
   });
 
-  it('reads a template and a public key from the name as written, so a look-alike is not let through', () => {
+  it('reads a template from the name as written, so a look-alike is not let through', () => {
     expect(isCredentialPath('.env.example')).toBe(false);
     expect(isCredentialPath('.ENV.EXAMPLE')).toBe(false);
+    expect(isCredentialPath('apps/web/.env.local.template')).toBe(false);
     expect(isCredentialPath('.env.\uFF45xample')).toBe(true);
-    expect(isCredentialPath('id_rsa.pub')).toBe(false);
     expect(isCredentialPath('id_rsa.\uFF50ub')).toBe(true);
+  });
+
+  it('still refuses a template inside a credential directory', () => {
+    expect(isCredentialPath('.ssh/.env.example')).toBe(true);
+    expect(isCredentialPath('.aws/.env.example')).toBe(true);
   });
 });
 
