@@ -15,6 +15,7 @@ import { getIdentityProvider } from '@/lib/server/identity';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import { finishIntentRevocation, revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
 
@@ -78,9 +79,15 @@ async function handleChangePassword(request: NextRequest) {
   }
 
   const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);
+  const deviceCredentialsRevoked = await revokeEveryDeviceRefreshCredential(db, userId);
   logger.info(
-    { userId, endedCount: signOut.ended.length, failedCount: signOut.failed.length },
-    'Password changed; other sessions ended',
+    {
+      userId,
+      endedCount: signOut.ended.length,
+      failedCount: signOut.failed.length,
+      deviceCredentialsRevoked,
+    },
+    'Password changed; other sessions and device credentials ended',
   );
 
   await announceTwoFactorChange({
@@ -103,6 +110,7 @@ async function handleChangePassword(request: NextRequest) {
     success: true,
     otherSessionsEnded: signOut.ended.length,
     otherSessionsRemaining: signOut.failed.length,
+    deviceCredentialsRevoked,
   });
 }
 

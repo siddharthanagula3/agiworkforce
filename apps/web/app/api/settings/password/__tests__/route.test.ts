@@ -16,8 +16,16 @@ const mocks = vi.hoisted(() => ({
   factors: vi.fn(),
   revoke: vi.fn(),
   finishIntent: vi.fn(),
+  revokeDevices: vi.fn(),
   announce: vi.fn(),
   logAuthFailure: vi.fn(),
+}));
+
+vi.mock('@/lib/server/refresh-token-family', () => ({
+  REFRESH_FAMILY_COMPROMISE_REASONS: ['replayed', 'device_lost', 'admin_revoked'],
+  finishFamilyAsCompromised: vi.fn(),
+  revokeDeviceRefreshCredentials: vi.fn(),
+  revokeEveryDeviceRefreshCredential: mocks.revokeDevices,
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -132,6 +140,7 @@ describe('POST /api/settings/password', () => {
     mocks.setPassword.mockResolvedValue(undefined);
     mocks.revoke.mockResolvedValue({ ended: ['a', 'b'], failed: ['c'] });
     mocks.finishIntent.mockResolvedValue(true);
+    mocks.revokeDevices.mockResolvedValue(3);
   });
 
   it('returns the CSRF refusal before resolving the caller', async () => {
@@ -212,6 +221,7 @@ describe('POST /api/settings/password', () => {
       error: { message: 'Password has been found in a breach' },
     });
     expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.revokeDevices).not.toHaveBeenCalled();
   });
 
   it('changes the password, ends other sessions and announces it', async () => {
@@ -221,7 +231,9 @@ describe('POST /api/settings/password', () => {
       success: true,
       otherSessionsEnded: 2,
       otherSessionsRemaining: 1,
+      deviceCredentialsRevoked: 3,
     });
+    expect(mocks.revokeDevices).toHaveBeenCalledWith(DB, 'user-1');
     expect(mocks.verifyPassword).toHaveBeenCalledWith('user-1', 'old');
     expect(mocks.setPassword).toHaveBeenCalledWith('user-1', 'longenough');
     expect(mocks.revoke).toHaveBeenCalledWith(expect.anything(), 'user-1', 'sess-1');
@@ -241,6 +253,13 @@ describe('POST /api/settings/password', () => {
     const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
     expect(response.status).toBe(503);
     expect(mocks.announce).toHaveBeenCalled();
+  });
+
+  it('does not report success when the device credentials could not be revoked', async () => {
+    mocks.revokeDevices.mockRejectedValueOnce(new Error('connection reset'));
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
+    expect(response.status).toBe(500);
+    expect(mocks.announce).not.toHaveBeenCalled();
   });
 
   it('sets a first password after step-up for an account without one', async () => {
