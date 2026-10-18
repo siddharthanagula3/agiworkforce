@@ -52,7 +52,11 @@ function assistantWithTool(status: 'awaiting_approval' | 'completed'): Message {
     role: 'assistant',
     content: '',
     createdAt: new Date(0).toISOString(),
-    metadata: { tools: [{ id: 'tool-1', name: 'run_build', status }] },
+    metadata: {
+      tools: [
+        { id: 'tool-1', name: 'run_build', status, requiresApproval: true, toolCallId: 'call-1' },
+      ],
+    },
   };
 }
 
