@@ -26,11 +26,7 @@ import type {
   StreamChunk,
 } from '@agiworkforce/types';
 import { CHAT_MODEL_TYPES, getModelMetadataById } from '@agiworkforce/types';
-import {
-  detectOpenAICompletionsCompat,
-  resolveOpenAIResponsesPayloadPolicy,
-  applyOpenAIResponsesPayloadPolicy,
-} from '@agiworkforce/provider-protocol';
+import { detectOpenAICompletionsCompat } from '@agiworkforce/provider-protocol';
 
 import {
   classifyError,
@@ -350,20 +346,7 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
           provider: 'openai',
         });
 
-        const policy = resolveOpenAIResponsesPayloadPolicy(
-          {
-            provider: 'openai',
-            api: 'openai-completions',
-            ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-            id: req.model,
-          },
-          {
-            enablePromptCacheStripping: true,
-            enableServerCompaction: false,
-          },
-        );
         const payload = params as unknown as Record<string, unknown>;
-        applyOpenAIResponsesPayloadPolicy(payload, policy);
 
         if (config.serviceTier && payload['service_tier'] === undefined) {
           payload['service_tier'] = config.serviceTier;

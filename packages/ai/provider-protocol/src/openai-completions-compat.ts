@@ -1,4 +1,3 @@
-
 import type { ProviderEndpointClass, ProviderRequestCapabilities } from './provider-attribution';
 import { resolveProviderRequestCapabilities } from './provider-attribution';
 
@@ -104,9 +103,6 @@ export function detectOpenAICompletionsCompat(model: {
     provider: model.provider,
     api: 'openai-completions',
     baseUrl: model.baseUrl,
-    capability: 'llm',
-    transport: 'stream',
-    modelId: model.id,
     compat:
       model.compat && typeof model.compat === 'object'
         ? (model.compat as { supportsStore?: boolean })

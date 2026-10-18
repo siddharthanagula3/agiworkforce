@@ -199,8 +199,6 @@ export function resolveAnthropicPayloadPolicy(
     provider: input.provider,
     api: input.api,
     baseUrl: input.baseUrl,
-    capability: 'llm',
-    transport: 'stream',
   });
 
   return {

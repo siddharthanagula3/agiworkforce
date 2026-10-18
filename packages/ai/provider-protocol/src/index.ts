@@ -18,20 +18,10 @@
 
 export { streamChunkToAgentEvent, agentEventToStreamChunk } from './agent-event-envelope';
 
-export {
-  resolveOpenAIResponsesPayloadPolicy,
-  applyOpenAIResponsesPayloadPolicy,
-  resolveBundledOpenAIResponsesEndpointClass,
-} from './openai-responses-payload-policy';
-export type {
-  OpenAIResponsesPayloadModel,
-  OpenAIResponsesPayloadPolicy,
-  OpenAIResponsesPayloadPolicyOptions,
-  OpenAIResponsesEndpointClass,
-} from './openai-responses-payload-policy';
+export { resolveBundledOpenAIResponsesEndpointClass } from './openai-responses-payload-policy';
+export type { OpenAIResponsesEndpointClass } from './openai-responses-payload-policy';
 
 export {
-  normalizeOpenAIReasoningEffort,
   resolveOpenAISupportedReasoningEfforts,
   supportsOpenAIReasoningEffort,
   resolveOpenAIReasoningEffortForModel,
@@ -52,8 +42,6 @@ export type {
   ProviderRequestCapabilities,
   ProviderRequestCapabilitiesInput,
   ProviderEndpointClass as ProviderAttributionEndpointClass,
-  ProviderRequestCapability,
-  ProviderRequestTransport,
 } from './provider-attribution';
 
 export {

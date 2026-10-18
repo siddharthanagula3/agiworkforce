@@ -1,37 +1,15 @@
-import { readStringValue, normalizeOptionalLowercaseString } from './lib/string-utils';
-import { resolveBundledOpenAIResponsesEndpointClass } from './openai-responses-payload-policy';
+import { normalizeOptionalLowercaseString } from './lib/string-utils';
+import {
+  resolveBundledOpenAIResponsesEndpointClass,
+  type OpenAIResponsesEndpointClass,
+} from './openai-responses-payload-policy';
 
-export type ProviderRequestTransport = 'stream' | 'websocket' | 'http' | 'media-understanding';
-export type ProviderRequestCapability = 'llm' | 'audio' | 'image' | 'video' | 'other';
-export type ProviderEndpointClass =
-  | 'default'
-  | 'anthropic-public'
-  | 'chutes-native'
-  | 'deepseek-native'
-  | 'github-copilot-native'
-  | 'groq-native'
-  | 'mistral-public'
-  | 'moonshot-native'
-  | 'modelstudio-native'
-  | 'openai-public'
-  | 'openai-codex'
-  | 'opencode-native'
-  | 'openrouter'
-  | 'xai-native'
-  | 'zai-native'
-  | 'google-generative-ai'
-  | 'google-vertex'
-  | 'local'
-  | 'custom'
-  | 'invalid';
+export type ProviderEndpointClass = OpenAIResponsesEndpointClass;
 
 export interface ProviderRequestCapabilitiesInput {
   provider?: string | null;
   api?: string | null;
   baseUrl?: string | null;
-  transport?: ProviderRequestTransport;
-  capability?: ProviderRequestCapability;
-  modelId?: string | null;
   compat?: unknown;
 }
 
@@ -127,11 +105,6 @@ export function resolveProviderRequestCapabilities(
 
   const supportsResponsesStoreField =
     readCompatBoolean(input.compat, 'supportsStore') !== false && isResponsesApi;
-
-  void input.transport;
-  void input.capability;
-  void input.modelId;
-  void readStringValue;
 
   return {
     ...(provider !== undefined ? { provider } : {}),

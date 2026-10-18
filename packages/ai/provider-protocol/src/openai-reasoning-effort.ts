@@ -1,16 +1,9 @@
-
 import { getModelMetadataById } from '@agiworkforce/types';
 
 import { normalizeLowercaseStringOrEmpty } from './lib/string-utils';
 
 export type OpenAIReasoningEffort =
-  | 'none'
-  | 'minimal'
-  | 'low'
-  | 'medium'
-  | 'high'
-  | 'xhigh'
-  | 'max';
+  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export type OpenAIApiReasoningEffort = OpenAIReasoningEffort | (string & {});
 
@@ -24,10 +17,6 @@ type OpenAIReasoningModel = {
 
 const OPENAI_CODEX_GENERIC_REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 const GENERIC_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
-
-export function normalizeOpenAIReasoningEffort(effort: string): string {
-  return effort === 'minimal' ? 'minimal' : effort;
-}
 
 function readCompatReasoningEfforts(compat: unknown): OpenAIApiReasoningEffort[] | undefined {
   if (!compat || typeof compat !== 'object') {
@@ -82,9 +71,7 @@ export function supportsOpenAIReasoningEffort(
   model: OpenAIReasoningModel,
   effort: string,
 ): boolean {
-  return resolveOpenAISupportedReasoningEfforts(model).includes(
-    normalizeOpenAIReasoningEffort(effort) as OpenAIApiReasoningEffort,
-  );
+  return resolveOpenAISupportedReasoningEfforts(model).includes(effort as OpenAIApiReasoningEffort);
 }
 
 export function resolveOpenAIReasoningEffortForModel(params: {
@@ -92,9 +79,8 @@ export function resolveOpenAIReasoningEffortForModel(params: {
   effort: string;
   fallbackMap?: Record<string, string>;
 }): OpenAIApiReasoningEffort | undefined {
-  const requested = normalizeOpenAIReasoningEffort(params.effort);
-  const mapped = params.fallbackMap?.[requested] ?? requested;
-  const normalized = normalizeOpenAIReasoningEffort(mapped);
+  const requested = params.effort;
+  const normalized = params.fallbackMap?.[requested] ?? requested;
   const supported = resolveOpenAISupportedReasoningEfforts(params.model);
   if (supported.includes(normalized as OpenAIApiReasoningEffort)) {
     return normalized as OpenAIApiReasoningEffort;

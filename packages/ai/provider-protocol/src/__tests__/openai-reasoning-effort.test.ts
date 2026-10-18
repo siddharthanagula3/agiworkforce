@@ -7,7 +7,6 @@ import {
 } from '@agiworkforce/types';
 
 import {
-  normalizeOpenAIReasoningEffort,
   resolveOpenAIReasoningEffortForModel,
   resolveOpenAISupportedReasoningEfforts,
   supportsOpenAIReasoningEffort,
@@ -131,12 +130,5 @@ describe('resolveOpenAIReasoningEffortForModel, fallback ladder', () => {
         fallbackMap: { medium: 'high' },
       }),
     ).toBe('high');
-  });
-});
-
-describe('normalizeOpenAIReasoningEffort', () => {
-  it('returns the same string (identity for current shape)', () => {
-    expect(normalizeOpenAIReasoningEffort('minimal')).toBe('minimal');
-    expect(normalizeOpenAIReasoningEffort('high')).toBe('high');
   });
 });

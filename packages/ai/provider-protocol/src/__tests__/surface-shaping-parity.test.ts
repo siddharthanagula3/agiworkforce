@@ -6,7 +6,6 @@ import { EFFORT_LABEL, type Effort } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 import {
-  normalizeOpenAIReasoningEffort,
   resolveOpenAIReasoningEffortForModel,
   type OpenAIReasoningEffort,
 } from '../openai-reasoning-effort';
@@ -150,7 +149,6 @@ describe('canonical effort vocabulary reaches the OpenAI shaping layer', () => {
     for (const effort of Object.keys(EFFORT_LABEL) as Effort[]) {
       const resolved = resolveOpenAIReasoningEffortForModel({ model, effort });
       expect(resolved === undefined || ['low', 'high'].includes(resolved)).toBe(true);
-      expect(normalizeOpenAIReasoningEffort(effort)).toBe(effort);
     }
   });
 });
