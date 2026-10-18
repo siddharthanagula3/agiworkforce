@@ -7,10 +7,10 @@ import {
   getModelMetadataById,
   managedUsageBucketLabel,
   usageWorkloadLabel,
-  type AccountUsageAllowances,
+  type AccountUsageLimitsResponse,
   type AccountUsageHistoryGranularity,
-  type AccountUsageHistoryRow,
-  type AccountUsageHistorySummary,
+  type AccountUsageBreakdownRow,
+  type AccountUsageHistoryResponse,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
 } from '@agiworkforce/types';
@@ -34,6 +34,8 @@ import { getBillingPlanPricing, isFreeBillingPlanTier } from '@agiworkforce/type
 import { formatBytes } from '@agiworkforce/utils/format';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+
+type HistoryRow = Pick<AccountUsageBreakdownRow, 'key' | 'label' | 'requests' | 'credits'>;
 
 function formatResetDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -371,7 +373,7 @@ function CreditBalancesCard({ credits }: { credits: ManagedUsageCredits }) {
   );
 }
 
-function AllowancesCard({ resource }: { resource: UsageResource<AccountUsageAllowances> }) {
+function AllowancesCard({ resource }: { resource: UsageResource<AccountUsageLimitsResponse> }) {
   const allowances = resource.data;
   const units =
     allowances?.units.filter((unit) => unit.hardLimit !== null || unit.consumed > 0) ?? [];
@@ -426,7 +428,7 @@ function AllowancesCard({ resource }: { resource: UsageResource<AccountUsageAllo
   );
 }
 
-function StorageCard({ resource }: { resource: UsageResource<AccountUsageAllowances> }) {
+function StorageCard({ resource }: { resource: UsageResource<AccountUsageLimitsResponse> }) {
   const storage = resource.data?.storage ?? null;
   if (!storage || storage.usedBytes === null || resource.loading || resource.error) return null;
   return (
@@ -452,8 +454,8 @@ function HistoryRows({
   labelFor,
 }: {
   caption: string;
-  rows: readonly AccountUsageHistoryRow[];
-  labelFor: (row: AccountUsageHistoryRow) => string;
+  rows: readonly HistoryRow[];
+  labelFor: (row: HistoryRow) => string;
 }) {
   const colors = useThemeColors();
   if (rows.length === 0) return null;
@@ -483,7 +485,7 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
   const colors = useThemeColors();
   const [granularity, setGranularity] = useState<AccountUsageHistoryGranularity>('day');
   const load = useCallback(() => fetchUsageHistory(granularity), [granularity]);
-  const resource = useUsageResource<AccountUsageHistorySummary>(
+  const resource = useUsageResource<AccountUsageHistoryResponse>(
     `${accountKey}:${granularity}`,
     load,
     'Could not load your usage history.',
@@ -563,12 +565,12 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
             rows={history.byModel}
             labelFor={(row) => row.label ?? getModelMetadataById(row.key)?.name ?? row.key}
           />
-          {history.unsettledRequests > 0 ? (
+          {history.freshness.unsettledRequests > 0 ? (
             <Text
               accessibilityRole="text"
               style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
             >
-              {`${formatCount(history.unsettledRequests, 'request is', 'requests are')} still settling and not counted above.`}
+              {`${formatCount(history.freshness.unsettledRequests, 'request is', 'requests are')} still settling and not counted above.`}
             </Text>
           ) : null}
         </>
@@ -610,7 +612,7 @@ export default function CloudUsageScreen() {
   const isFreePlan = snapshot ? isFreeBillingPlanTier(snapshot.planTier) : false;
   const accountKey =
     isClerkSignedIn && isCloudModeActive && clerkUserId && !isFreePlan ? clerkUserId : null;
-  const allowances = useUsageResource<AccountUsageAllowances>(
+  const allowances = useUsageResource<AccountUsageLimitsResponse>(
     accountKey,
     fetchUsageAllowances,
     'Could not load this month’s usage.',

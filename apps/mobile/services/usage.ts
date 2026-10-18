@@ -1,11 +1,11 @@
 import { api } from './api';
 import {
-  parseAccountUsageAllowances,
-  parseAccountUsageHistory,
+  parseAccountUsageHistoryResponse,
+  parseAccountUsageLimitsResponse,
   parseManagedUsageSummaryResponse,
-  type AccountUsageAllowances,
+  type AccountUsageLimitsResponse,
   type AccountUsageHistoryGranularity,
-  type AccountUsageHistorySummary,
+  type AccountUsageHistoryResponse,
   type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
@@ -53,16 +53,16 @@ export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
 
 export async function fetchUsageHistory(
   granularity: AccountUsageHistoryGranularity,
-): Promise<AccountUsageHistorySummary> {
-  const history = parseAccountUsageHistory(
+): Promise<AccountUsageHistoryResponse> {
+  const history = parseAccountUsageHistoryResponse(
     await api.get<unknown>(`/api/usage/history?granularity=${granularity}`),
   );
   if (!history) throw new Error('The usage history could not be read.');
   return history;
 }
 
-export async function fetchUsageAllowances(): Promise<AccountUsageAllowances> {
-  const allowances = parseAccountUsageAllowances(await api.get<unknown>('/api/usage/limits'));
+export async function fetchUsageAllowances(): Promise<AccountUsageLimitsResponse> {
+  const allowances = parseAccountUsageLimitsResponse(await api.get<unknown>('/api/usage/limits'));
   if (!allowances) throw new Error('The monthly allowances could not be read.');
   return allowances;
 }
