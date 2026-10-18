@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-10-17T20:26:45.242973+00:00",
+  "capturedAt": "2026-10-17T21:15:32.540646+00:00",
   "baselineCommit": "0a33ec585aafe398ed39c22fead37d80a3488d51",
-  "status": "selected source implementation and configured operational acceptance; release gates remain open",
+  "status": "Owner-requested wrap-up; selected implementation delivered; E10 and production release incomplete",
   "environment": {
     "platform": "Darwin",
     "architecture": "arm64",
@@ -589,14 +589,14 @@
         "status": "VERIFIED_EXACT_PUBLIC_COMMIT_ONLY"
       },
       "authentication": {
-        "status": "AUTHORIZED_DEVICE_SIGN_IN_AWAITING_OWNER_CREDENTIALS",
-        "reason": "The owner explicitly authorized a temporary admin account session on the named task-owned VM, followed by revocation. The normal device flow is waiting at the admin browser sign-in; no Desktop credential was copied or forwarded.",
+        "status": "DEVICE_FLOWS_EXPIRED_SIGNED_OUT_AT_TEARDOWN",
+        "reason": "No successful remote account sign-in occurred; confirmed signed out before terminating the exact task VM. No Desktop credential was forwarded.",
         "priorAuthorizationRefusal": {
           "reason": "Automatic approval review rejected starting a remote account sign-in because persistent VM account access was not specifically authorized. No workaround or remote sign-in was attempted. The Desktop account changed; the pending question now names the current admin account.",
           "status": "BLOCKED_EXPLICIT_AUTHORIZATION_PENDING"
         }
       },
-      "boundary": "External transport, trust refusal, protocol 8, reconnect, configuration change, directory replacement and disconnect passed. Same-account model/session admission remains NOT_RUN pending the authorized device sign-in. The temporary local SSH configuration was removed.",
+      "boundary": "External real SSH transport, public adapter controls and current Linux CLI protocol passed. Same-account model journey was not run. Host and local bridge terminated at owner-requested wrap-up.",
       "lifecycleExtension": {
         "at": "2026-10-17T20:10:31.485Z",
         "sandboxId": "iqw3t7zc14apsqe25qdwx",
@@ -604,6 +604,57 @@
         "previousEndAt": "2026-10-17T20:20:15.546Z",
         "endAt": "2026-10-17T21:10:31.395Z",
         "reason": "Active authorized admin sign-in and external SSH acceptance pending"
+      },
+      "currentPublicBuild": {
+        "at": "2026-10-17T20:31:54.508Z",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "commit": "9fc0784512a897a456b10f037681c18131092ba4",
+        "status": "PASSED_EXACT_PUBLIC_NATIVE_SOURCE_BUILD",
+        "scope": "Download exact anonymously public GitHub source on the existing task-owned VM; no Mac source or account credentials exported",
+        "publicTree": "18db8633ed594a9d48c65d1f629f54e0a712a5a8",
+        "startedAt": "2026-10-17T20:31:55.633Z",
+        "commandPid": 13302,
+        "exitCode": 0,
+        "completedAt": "2026-10-17T20:33:27.180Z",
+        "cliSha256": "20d98b0a0aa9c0fac0872364347cf943ac1e6478c095b26cb5160115734b3e37",
+        "archiveSha256": "77a5cf5a0c48154367733084b88b310285352e12619a13d856083f0def344e7b",
+        "nativeSourceMatchesCurrentCommittedHead": true
+      },
+      "currentProtocol": {
+        "at": "2026-10-17T21:00:29.285077+00:00",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "sourceCommit": "9fc0784512a897a456b10f037681c18131092ba4",
+        "cliSha256": "20d98b0a0aa9c0fac0872364347cf943ac1e6478c095b26cb5160115734b3e37",
+        "scope": "Actual rebuilt Linux CLI reached over the existing pinned real SSH transport; read-only protocol and account metadata; no model turn",
+        "status": "PASSED_REAL_SSH_CURRENT_CLI_PROTOCOL",
+        "protocolVersion": 8,
+        "workspace": "/home/user/project",
+        "signedIn": false,
+        "threadListAnswered": true,
+        "accountIdentifiersOmitted": true,
+        "positiveManagedTurn": "NOT_RUN_OWNER_DEVICE_APPROVAL_PENDING",
+        "adminAccountMatch": null
+      },
+      "cleanup": {
+        "at": "2026-10-17T21:14:21.193Z",
+        "sandboxId": "iqw3t7zc14apsqe25qdwx",
+        "reason": "Owner requested wrap-up",
+        "priorCleanupProbe": "Two initial probes omitted required clientInfo.title and did not terminate the VM; corrected before teardown",
+        "purpose": "e10-external-ssh-01a142a4",
+        "account": {
+          "signedInBefore": false,
+          "signedInAfter": false,
+          "logoutRequested": false,
+          "identifiersOmitted": true
+        },
+        "killResult": true,
+        "status": "TASK_VM_TERMINATED_ACCOUNT_SIGNED_OUT",
+        "completedAt": "2026-10-17T21:14:21.936Z",
+        "localBridge": {
+          "pid": 73743,
+          "exactCommandVerified": true,
+          "terminated": true
+        }
       }
     }
   },
@@ -677,7 +728,7 @@
     {
       "status": "PASSED",
       "gate": "signed macOS application and DMG notarization; arm64 installation, updater, preference restart and manual rollback",
-      "boundary": "owned candidates; arm64 and Intel 0.0.3 execution passed; no public rollout"
+      "boundary": "Signed/notarized v8 arm64 installation and real Intel execution passed; updater/restart/rollback proof remains scoped to earlier candidates; no public rollout"
     },
     {
       "status": "PASSED",
@@ -692,12 +743,12 @@
     {
       "status": "NOT_RUN",
       "gate": "actual notification delivery providers and retries",
-      "reason": "no test provider/recipient setup"
+      "reason": "Owned recipient supplied; Resend API key and sender configuration remain unavailable; no test email sent"
     },
     {
       "status": "NOT_RUN",
       "gate": "same-account admission on external SSH host",
-      "reason": "Temporary admin test-host sign-in is explicitly authorized. The normal device flow awaits owner credentials in the opened browser tab."
+      "reason": "Normal device flows expired; account confirmed signed out and exact task-owned VM terminated during owner wrap-up"
     },
     {
       "status": "NOT_RUN",
@@ -705,15 +756,15 @@
       "reason": "no spare host for disruptive test"
     },
     {
-      "status": "NOT_RUN",
+      "status": "PASSED",
       "gate": "native Intel macOS packaged smoke",
-      "reason": "Final signed v7 Intel execution passed with verified receipt; new v8 asset awaits its own run.",
+      "reason": "Exact signed v8 passed real Intel run 39067960953; controlled hosted renderer, no model turns",
       "version": "0.0.8-e10.20261017"
     },
     {
       "status": "BLOCKED",
       "gate": "public release readiness",
-      "reason": "Enterprise access and real v8 native file-read exactly once are verified. Current CI/Intel, native visual capture/reopen, production Web rollout/provider return, external same-account device sign-in, notification delivery and physical sleep remain open. Owner-deferred Tauri signing remains quarantined separately."
+      "reason": "Native v8 real read-once and Intel package passed. Production Web rollout, provider return, visual reopen, external account journey, email delivery, physical sleep and final combined CI remain incomplete."
     }
   ],
   "unsupportedFirstScope": [
@@ -1535,8 +1586,8 @@
     "V7 Intel passed. V8 signed CLI completed a real production-provider file-read exactly once, but actual installed native read-once and renderer accessibility also passed; native image capture/reopen remain unresolved. V8 CI/Intel, external same-account owner device sign-in, provider email, physical sleep and production Web rollout remain open."
   ],
   "releaseContinuation": {
-    "status": "IN_PROGRESS",
-    "updatedAt": "2026-10-17T20:26:45.242973+00:00",
+    "status": "Owner-requested wrap-up; selected implementation delivered; E10 and production release incomplete",
+    "updatedAt": "2026-10-17T21:15:32.540646+00:00",
     "cleanCandidateVersion": "0.0.3-e10.20261017",
     "officeCloud": {
       "environment": {
@@ -1681,12 +1732,13 @@
       }
     },
     "outstanding": [
-      "actual notification provider delivery and owned recipient setup",
-      "external SSH same-account journey after owner device sign-in, followed by teardown and credential revocation",
-      "physical sleep/offline host acceptance",
-      "current installed v8 visual rendering/capture and reopen verification; actual native read-once already passed",
-      "production Web rollout and real provider return-to-app",
-      "v8 current-source combined CI and native Intel execution"
+      "production Web rollout and real provider return-to-app; current Web login/cookie/local-permission fixes are not live",
+      "installed v8 native visual capture and reopen verification; real native read-once and renderer accessibility passed",
+      "external same-account SSH journey; device authorization expired, host confirmed signed out and terminated at owner wrap-up",
+      "actual notification delivery; owned recipient supplied but Resend key/sender configuration unavailable",
+      "physical sleep/offline acceptance",
+      "combined current-head CI completion; final snapshot has five running jobs and no failures",
+      "bounded store-listing guard repair is tested but uncommitted in the clean checkout; patch retained separately"
     ],
     "intelCandidate": {
       "at": "2026-10-17T19:39:51.530Z",
@@ -1698,7 +1750,7 @@
       "sha256": "14e7725cafffe8c45d5e7d044b9ba5e0607a0342c0de38da1dab5f1aaebd5dbb",
       "size": 136467204,
       "publication": "private draft only",
-      "status": "UPLOADED_NATIVE_INTEL_PENDING",
+      "status": "PASSED_NATIVE_INTEL_PACKAGE",
       "permissionRepair": {
         "status": "USER_APPROVED_APPLIED",
         "scope": "verify-desktop-candidate.yml:intel-package:contents write",
@@ -1706,7 +1758,80 @@
       },
       "requiresBrowserSignInCancellationContract": true,
       "requiresProcessWorkspaceConsentContract": true,
-      "boundary": "New immutable draft asset; prior v7 execution does not certify v8"
+      "boundary": "Unchanged signed v8 on real Intel runner with controlled hosted renderer; zero model turns; no public release",
+      "runId": 39067960953,
+      "jobId": 117499444751,
+      "headRevision": "c86971ce48a7d0f81e3d660df2d305fe44491f63",
+      "evidence": {
+        "path": "/tmp/agi-implementation-checks/e10-v8-intel-acceptance.json",
+        "sha256": "c152e3a032815e9602feb252c241572a80ae526d8d45ec8fa1cf4757cc86f7d4"
+      },
+      "checks": {
+        "strictSignature": "passed",
+        "gatekeeper": "passed",
+        "notarizationTicket": "Processing: /Users/runner/work/_temp/candidate/installed/AGI Cloud.app\nThe validate action worked!",
+        "bundleId": "com.agiworkforce.desktop.cloud",
+        "version": "0.0.8-e10.20261017",
+        "architecture": "x86_64",
+        "protocolHandshake": "Packaged CLI serves developer-session protocol 8",
+        "workspaceConsent": {
+          "handshake": "passed",
+          "ordinaryRefusal": "passed",
+          "processLifetime": "passed",
+          "modelTurns": 0
+        },
+        "packagedHostedBridge": {
+          "platform": "electron-darwin",
+          "version": "0.0.8-e10.20261017",
+          "node": "undefined",
+          "status": {
+            "ok": true,
+            "value": {
+              "available": true,
+              "name": "agi",
+              "version": "0.0.1",
+              "path": "~/work/_temp/candidate/installed/AGI Cloud.app/Contents/Resources/agi-cli/agi",
+              "hint": null,
+              "source": "bundled",
+              "accountSyncError": null,
+              "capabilities": []
+            }
+          },
+          "routines": {
+            "ok": true,
+            "value": {
+              "deviceId": "bbd73b97-9777-4bbf-8250-6e246c54f943",
+              "suspended": false,
+              "error": null,
+              "routines": []
+            }
+          }
+        },
+        "browserSignIn": {
+          "cancellation": true,
+          "before": {
+            "ok": true,
+            "value": {
+              "kind": "idle"
+            }
+          },
+          "cancelled": {
+            "ok": true,
+            "value": {
+              "cancelled": true
+            }
+          },
+          "after": {
+            "ok": true,
+            "value": {
+              "kind": "idle"
+            }
+          }
+        },
+        "sessionApprovalAlerts": true,
+        "updateFeedRequested": true,
+        "updaterNoRelease": true
+      }
     },
     "sourceCommit": "264a606571",
     "sourceCommitBoundary": "initial 0.0.3 candidates and initial hosted snapshot predate this commit; later candidate records use their own artifact hashes and verified source pins",
@@ -2146,23 +2271,19 @@
     },
     "cleanChecks": {
       "status": "passed",
-      "verifiedCodeCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+      "verifiedCodeCommit": "c86971ce48a7d0f81e3d660df2d305fe44491f63",
       "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
       "declaredChainCommands": 226,
-      "logSha256": "8bfd9731bf1ac7c79f8358fd6f5e20b9e7b21ed8b0f2d0b14b14656f8d6c409b",
-      "boundary": "All 226 declared guards, nested checks and diff checks passed through the actual normal-hook v7 push. The later handoff repair requires its own normal-hook push.",
+      "logSha256": "4d38569ca49a8e1cd0048cb87fc9d481281d032ab7c5734db6b6b428ebe6866d",
+      "boundary": "Complete 226-command guard chain and diff checks passed through normal-hook pushes for both 9fc0784 and c86971c; latest CI is a separate partial snapshot",
       "latestAttempt": {
-        "status": "CORRECTED_SOURCE_NORMAL_PUSH_PENDING",
-        "superseded": {
-          "at": "2026-10-17T19:52:23.326334+00:00",
-          "source": "80cc8d6c6d6af3eeb20f4dc4c0386759712a0b49",
-          "status": "INTERRUPTED_SUPERSEDED_SOURCE",
-          "reason": "Self-review regression demonstrated a new opaque-frame compatibility failure; full checks will restart on corrected code",
-          "rootPid": 66290,
-          "signaledPids": [41182, 41197, 41211, 66290, 66311, 66312, 66313, 66321, 66322, 66334],
-          "scope": "Exact owned pre-push tree only; no user app, another task, or product test host stopped"
-        },
-        "boundary": "The exact owned earlier push process tree was stopped before publication when final review exposed the opaque-frame regression. It is an interrupted superseded attempt, not a passing check."
+        "at": "2026-10-17T20:43:58.882656+00:00",
+        "status": "PASSED_NORMAL_PUSH",
+        "commit": "c86971ce48a7d0f81e3d660df2d305fe44491f63",
+        "guardCommandsDeclared": 226,
+        "normalHooks": true,
+        "logSha256": "4d38569ca49a8e1cd0048cb87fc9d481281d032ab7c5734db6b6b428ebe6866d",
+        "boundary": "Complete normal-hook guard chain and diff checks passed; CI and the exact v8 Intel package have separate operational results."
       },
       "previousVerified": {
         "commit": "d91a738003201a5c1064760166bddb1c35b7479c",
@@ -2179,6 +2300,27 @@
         "finding": "quarantine operational statement lacked its historical-record index entry",
         "logSha256": "48852d9f81cb74f06ad0ff45f47dba0bbbbcf99d5be647c9b1e935445336a752",
         "repair": "matching historical-record entry added; all 13 security-claims self-tests and complete final push validation passed; guard unchanged"
+      },
+      "priorCheckpointAtWrapUp": {
+        "status": "passed",
+        "verifiedCodeCommit": "30a9d63fa767a93ce69347aebfe4676ba4396f79",
+        "command": "pnpm check:llm-operability plus both diff checks through initialized clean-checkout pre-push",
+        "declaredChainCommands": 226,
+        "logSha256": "8bfd9731bf1ac7c79f8358fd6f5e20b9e7b21ed8b0f2d0b14b14656f8d6c409b",
+        "boundary": "All 226 declared guards, nested checks and diff checks passed through the actual normal-hook v7 push. The later handoff repair requires its own normal-hook push.",
+        "latestAttempt": {
+          "status": "CORRECTED_SOURCE_NORMAL_PUSH_PENDING",
+          "superseded": {
+            "at": "2026-10-17T19:52:23.326334+00:00",
+            "source": "80cc8d6c6d6af3eeb20f4dc4c0386759712a0b49",
+            "status": "INTERRUPTED_SUPERSEDED_SOURCE",
+            "reason": "Self-review regression demonstrated a new opaque-frame compatibility failure; full checks will restart on corrected code",
+            "rootPid": 66290,
+            "signaledPids": [41182, 41197, 41211, 66290, 66311, 66312, 66313, 66321, 66322, 66334],
+            "scope": "Exact owned pre-push tree only; no user app, another task, or product test host stopped"
+          },
+          "boundary": "The exact owned earlier push process tree was stopped before publication when final review exposed the opaque-frame regression. It is an interrupted superseded attempt, not a passing check."
+        }
       }
     },
     "normalDesktopStartup": {
@@ -4092,6 +4234,80 @@
         }
       },
       "boundary": "Code page tests use existing host facades. The production hosted renderer has not received this Web source change; no native visual pass is inferred."
+    },
+    "wrapUp": {
+      "at": "2026-10-17T21:15:32.540646+00:00",
+      "requestedByOwner": true,
+      "pushedHead": "c86971ce48a7d0f81e3d660df2d305fe44491f63",
+      "pullRequest": "https://github.com/siddharthanagula3/agiworkforce/pull/554",
+      "delivery": "draft PR; not merged or deployed",
+      "production": {
+        "commit": "4bab0f222015650c2f49bca3b343e60a2df60e5b",
+        "deployment": "dpl_ADSujvQY1nwTzYWky5jUY1Pr6g5B",
+        "checkedAt": "2026-10-17T21:05:00Z",
+        "branchFixesLive": false,
+        "remainingPath": "Merge then exact-main CI/staging and protected production-fly/production-web human environment reviews"
+      },
+      "ciSnapshot": {
+        "at": "2026-10-17T21:14:29.151Z",
+        "head": "c86971ce48a7d0f81e3d660df2d305fe44491f63",
+        "total": 44,
+        "counts": {
+          "neutral": 1,
+          "in_progress": 5,
+          "skipped": 9,
+          "success": 29
+        },
+        "pending": [
+          {
+            "name": "CodeQL (rust)",
+            "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39067933695/job/117499734805"
+          },
+          {
+            "name": "Web E2E and accessibility audit",
+            "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39067933716/job/117499642974"
+          },
+          {
+            "name": "Mobile E2E (iOS simulator)",
+            "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39067933716/job/117499642867"
+          },
+          {
+            "name": "JS lint, typecheck, test, build",
+            "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39067933716/job/117499538229"
+          },
+          {
+            "name": "test-l1",
+            "url": "https://github.com/siddharthanagula3/agiworkforce/actions/runs/39067933820/job/117499459456"
+          }
+        ],
+        "scope": "One final snapshot; pending CI not awaited during owner-requested wrap-up"
+      },
+      "cleanup": {
+        "path": "/tmp/agi-implementation-checks/e10-external-ssh-cleanup.json",
+        "sha256": "4c017e6cb1344ea2b28fdae25bb178b6e7cf1efb4b4dabba051bed1afd029632"
+      },
+      "memoryHeartbeat": "PAUSED",
+      "userApps": "left open",
+      "tauriChat": "separate owner chat left undisturbed",
+      "guardRepair": {
+        "status": "TESTED_UNCOMMITTED_SEPARATE_PATCH",
+        "checkout": "/tmp/agi-e10-clean-checkout",
+        "patch": {
+          "path": "/tmp/agi-implementation-checks/e10-store-listing-repair.patch",
+          "sha256": "56f4a35f03de41014de1ba7e65c6ba243ec304965342a430dfc8aa0ca81c721b"
+        },
+        "files": [
+          "scripts/lib/rollout/store-listing.mjs",
+          "scripts/lib/rollout/release-guards.test.mjs",
+          "scripts/release/check-store-listing-claims.mjs"
+        ],
+        "tests": "25/25 passed; actual listing command, Prettier and diff check passed; ESLint ignores these mjs paths",
+        "boundary": "Native IAP capability checked from exported Expo config and runtime dependency; no billing/listing/publication flags changed; no live store purchase claim"
+      },
+      "sourceFilesRevalidated": 199,
+      "preservedUnrelatedChanges": ["audit/README.md"],
+      "sourceDigestUnchanged": "2642721058cfff919d823c9b46cc6aa44a62c1596dcc50f0c58dd82a3f857146",
+      "localLedgerBoundary": "This final closure record is saved locally after the last pushed code; it is not a new pushed code revision"
     }
   },
   "priorSourceFilesDigest": "cbaad43318153cb9ad020e5209c887884fe7e493a5fc25c2a549416610bcbdee",

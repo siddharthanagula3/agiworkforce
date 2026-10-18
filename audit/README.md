@@ -13,6 +13,8 @@ The [Claude desktop implementation ledger](ledger/claude-desktop-implementation.
 
 The [retained Tauri validation scope](codex-reaudit/open-work.md#retained-tauri-validation) consolidates the October 2 desktop comparison and release proposal into the existing defect owners. It records native checks still needed, without changing the public Electron/internal Tauri roles or claiming a release.
 
+The [October 17 Tauri completeness review](flows/tauri-desktop-completeness-2026-10-17.md) separates the older running executable from the rebuilt hosted-Cloud candidate, records live UI failures and source gaps, and classifies what to keep, finish, connect, or retire.
+
 The [expanded ecosystem review of 2026-09-29](flows/competitive-ecosystem-review-2026-09-29.md)
 audits the newer local integration and distinct satellite/worktree changes.
 It is in progress. Its source hashes, actual reading scopes and fresh checklist
