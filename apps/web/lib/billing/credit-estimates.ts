@@ -63,7 +63,7 @@ export function creditsPerMillionTokens(
   };
 }
 
-export function researchSearchCredits(): number {
+function researchSearchCredits(): number {
   return chargeCreditsForMicrousd(customerChargeMicrousd(RESEARCH_SEARCH_FEATURE));
 }
 
@@ -86,7 +86,7 @@ export function estimateResearchCredits(
   return { modelCredits, searchCredits, total: modelCredits + searchCredits };
 }
 
-export function defaultVideoDurationSecs(): number {
+function defaultVideoDurationSecs(): number {
   return ManagedMediaVideoGenerationRequestSchema.shape.duration_secs.parse(undefined);
 }
 

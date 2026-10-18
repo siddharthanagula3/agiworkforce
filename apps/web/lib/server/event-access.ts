@@ -161,13 +161,3 @@ export function eventAllowsModel(
   if (!canonicalModelId) return false;
   return promotion.modelIds.has(canonicalModelId);
 }
-
-/** The models the promotion adds for this plan, for badges and copy. */
-export function eventModelIdsFor(
-  planTier: string | null | undefined,
-  promotion: EventPromotion = readEventPromotion(),
-): ReadonlySet<string> {
-  if (!promotion.active) return new Set<string>();
-  if ((planTier ?? '').trim().toLowerCase() !== PROMOTED_PLAN_TIER) return new Set<string>();
-  return promotion.modelIds;
-}

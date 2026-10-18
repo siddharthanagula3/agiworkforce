@@ -14,7 +14,6 @@ import {
   EVENT_MODELS_ENV,
   EVENT_STARTS_AT_ENV,
   eventAllowsModel,
-  eventModelIdsFor,
   readEventPromotion,
 } from '@/lib/server/event-access';
 import { EVENT_BUDGET_USD_ENV } from '@/lib/server/event-budget';
@@ -210,14 +209,6 @@ describe('event access overlay', () => {
     // The overlay adds nothing for a paid plan, and because it only ever adds,
     // it cannot take anything away either.
     expect(eventAllowsModel(PROMOTED, tier)).toBe(false);
-    expect(eventModelIdsFor(tier).size).toBe(0);
-  });
-
-  it('reports the promoted set for badges', () => {
-    live({ [EVENT_MODELS_ENV]: `${PROMOTED},${PROMOTED_OTHER}` });
-
-    expect([...eventModelIdsFor('free')].sort()).toEqual([PROMOTED, PROMOTED_OTHER]);
-    expect(eventModelIdsFor('pro').size).toBe(0);
   });
 
   /**

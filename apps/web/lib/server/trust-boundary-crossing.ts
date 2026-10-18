@@ -21,7 +21,7 @@ import { scanForSecrets, type SecretDetection } from '@/lib/security/secrets-aud
 
 export type CrossingDecision = 'allowed' | 'refused';
 
-export const CROSSING_REFUSAL_REASONS = [
+const CROSSING_REFUSAL_REASONS = [
   'secret-in-payload',
   'platform-key-not-permitted',
   'fallback-needs-approval',
