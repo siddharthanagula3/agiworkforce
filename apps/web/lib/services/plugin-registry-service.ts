@@ -18,6 +18,8 @@ import {
   type PluginVersionRef,
 } from '@agiworkforce/types';
 
+import { logger } from '@/lib/logger';
+
 export const PLUGIN_REGISTRY_DEFAULT_LIMIT = 50;
 export const PLUGIN_REGISTRY_MAX_LIMIT = 100;
 
@@ -183,8 +185,8 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
     distribution,
     integrity: {
       sha256: isPluginSha256(row.sha256) ? row.sha256 : null,
-      signature: null,
-      signatureAlgorithm: null,
+      signature: row.signature,
+      signatureAlgorithm: row.signature_algorithm,
     },
     homepageUrl: row.homepage_url,
     createdAt: toIso(row.created_at),
@@ -229,6 +231,7 @@ export async function listPluginRegistryEntries(
       entries.push(rowToEntry(row));
     } catch (error) {
       if (!(error instanceof PluginRegistryDataError)) throw error;
+      logger.warn({ pluginId: row.id, error: error.message }, '[plugins] registry row withheld');
     }
   }
 

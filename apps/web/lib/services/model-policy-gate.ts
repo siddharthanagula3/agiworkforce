@@ -62,41 +62,16 @@ export async function evaluateModelAccessForOrganization(
   ask: ModelAccessAsk,
 ): Promise<ModelAccessDecision> {
   if (!organizationId) return UNGOVERNED;
-
-  try {
-    const policy = await readModelPolicy(db, organizationId);
-    const decision = evaluateModelAccess(policy, ask);
-
-    if (!decision.allowed) {
-      notePolicyRefusal(organizationId);
-      logger.info(
-        { organizationId, provider: ask.provider, model: ask.modelId, code: decision.code },
-        '[model-policy] model refused by workspace policy',
-      );
-    }
-    return decision;
-  } catch (error) {
-    logger.error({ error, organizationId }, '[model-policy] policy read failed; request refused');
-    return MODEL_POLICY_UNAVAILABLE;
-  }
+  return decideUnderWorkspacePolicy(db, organizationId, ask);
 }
 
-export async function evaluateActiveWorkspaceModelAccess(
+async function decideUnderWorkspacePolicy(
   db: DatabaseAdapter,
-  userId: string,
+  organizationId: string,
   ask: ModelAccessAsk,
-  request?: WorkspaceScopedRequest,
+  caller: { userId?: string; request?: WorkspaceScopedRequest } = {},
 ): Promise<ModelAccessDecision> {
-  let organizationId: string | null;
-  try {
-    organizationId = await resolveActiveOrganizationId(db, userId, request);
-  } catch (error) {
-    logger.error({ error, userId }, '[model-policy] workspace unresolved; request refused');
-    return MODEL_POLICY_UNAVAILABLE;
-  }
-
-  if (!organizationId) return UNGOVERNED;
-
+  const { userId, request } = caller;
   try {
     const policy = await readModelPolicy(db, organizationId);
     const decision = evaluateModelAccess(policy, ask);
@@ -116,6 +91,24 @@ export async function evaluateActiveWorkspaceModelAccess(
     );
     return MODEL_POLICY_UNAVAILABLE;
   }
+}
+
+export async function evaluateActiveWorkspaceModelAccess(
+  db: DatabaseAdapter,
+  userId: string,
+  ask: ModelAccessAsk,
+  request?: WorkspaceScopedRequest,
+): Promise<ModelAccessDecision> {
+  let organizationId: string | null;
+  try {
+    organizationId = await resolveActiveOrganizationId(db, userId, request);
+  } catch (error) {
+    logger.error({ error, userId }, '[model-policy] workspace unresolved; request refused');
+    return MODEL_POLICY_UNAVAILABLE;
+  }
+
+  if (!organizationId) return UNGOVERNED;
+  return decideUnderWorkspacePolicy(db, organizationId, ask, { userId, request });
 }
 
 /**

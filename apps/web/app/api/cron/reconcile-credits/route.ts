@@ -186,7 +186,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   let videoAlertFailure: ReconciliationFailure | null = null;
   try {
-    const videoAlerts = await deliverDueVideoIncidentAlerts(getNeonDb(), 20);
+    const videoAlerts = await deliverDueVideoIncidentAlerts(getNeonDb());
     if (videoAlerts.pending > 0 || videoAlerts.exhausted > 0) {
       logger.error(
         { event: 'video_billing_incident_alerts_pending', ...videoAlerts },

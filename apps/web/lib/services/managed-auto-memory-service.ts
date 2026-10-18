@@ -69,12 +69,10 @@ function runAfterResponse(task: Promise<void>): void {
 async function resolveMeteringDb(
   params: RecordManagedAutoMemoryTurnParams,
 ): Promise<DatabaseAdapter> {
-  const reserved = params.processed.managedUsage?.db;
-  if (reserved) {
-    if (params.processed.managedUsage?.userId !== params.userId) {
-      throw new Error('Managed memory tenant mismatch');
-    }
-    return reserved;
+  const reservation = params.processed.managedUsage;
+  if (reservation) {
+    if (reservation.userId !== params.userId) throw new Error('Managed memory tenant mismatch');
+    return reservation.db;
   }
   if (!params.request) throw new Error('Managed memory request context is unavailable');
   const scoped = await getUserScopedDb(params.request);
@@ -88,18 +86,11 @@ async function persistTurnCandidates(
 ): Promise<void> {
   if (candidates.length === 0) return;
   try {
-    let db = params.db ?? params.processed.managedUsage?.db;
-    if (params.processed.managedUsage?.userId !== undefined) {
-      if (params.processed.managedUsage.userId !== params.userId) {
-        throw new Error('Managed memory tenant mismatch');
-      }
+    const reservation = params.processed.managedUsage;
+    if (reservation && reservation.userId !== params.userId) {
+      throw new Error('Managed memory tenant mismatch');
     }
-    if (!db) {
-      if (!params.request) throw new Error('Managed memory request context is unavailable');
-      const scoped = await getUserScopedDb(params.request);
-      if (scoped.userId !== params.userId) throw new Error('Managed memory tenant mismatch');
-      db = scoped.db;
-    }
+    const db = params.db ?? (await resolveMeteringDb(params));
 
     // A fact learned inside a project belongs to that project. Writing it
     // unscoped would put a client's details into every unrelated chat, which is

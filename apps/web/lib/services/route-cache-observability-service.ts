@@ -5,9 +5,9 @@ import { getNeonDb } from '@/lib/server/neon-db';
 
 export type ObservabilityDimension = 'route' | 'model' | 'user' | 'tenant';
 
-export const OBSERVABILITY_BREAKDOWN_LIMIT = 50;
-export const OBSERVABILITY_JOIN_SLACK_MS = 24 * 60 * 60 * 1000;
-export const OBSERVABILITY_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const OBSERVABILITY_BREAKDOWN_LIMIT = 50;
+const OBSERVABILITY_JOIN_SLACK_MS = 24 * 60 * 60 * 1000;
+const OBSERVABILITY_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export interface ObservabilityMetricsRow {
   key: string;

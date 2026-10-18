@@ -60,12 +60,15 @@ import {
   generateSigningSecret,
   hashSecret,
   hasActiveAuditStreamDestinations,
-  signPayload,
   upsertAuditDestination,
-  verifySignature,
-  AUDIT_STREAM_MAX_BODY_BYTES,
 } from '../audit-streaming-service';
-import { AUDIT_SIGNATURE_HEADER, AUDIT_TIMESTAMP_HEADER } from '../audit-streaming-proxy';
+import {
+  AUDIT_SIGNATURE_HEADER,
+  AUDIT_STREAM_MAX_BODY_BYTES,
+  AUDIT_TIMESTAMP_HEADER,
+  signPayload,
+  verifySignature,
+} from '../audit-streaming-proxy';
 import { formatAuditEvent } from '../enterprise-audit-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';

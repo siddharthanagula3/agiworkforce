@@ -3,8 +3,8 @@ import { intersects, satisfies, valid, validRange } from 'semver';
 
 import { AppError, ErrorCode } from '@/lib/errors';
 
-export const MAX_PLUGIN_DEPENDENCY_DEPTH = 8;
-export const MAX_RESOLVED_PLUGINS = 32;
+const MAX_PLUGIN_DEPENDENCY_DEPTH = 8;
+const MAX_RESOLVED_PLUGINS = 32;
 
 const MARKETPLACE_NAME_PATTERN = /^[^\s@/]{1,200}$/;
 

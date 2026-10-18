@@ -1,9 +1,9 @@
 import type { CloudCodeAgentStep, CloudCodeAgentStopReason } from '@agiworkforce/types';
 
-export const CLOUD_CODE_CHECK_KINDS = ['typecheck', 'lint', 'tests', 'build'] as const;
+const CLOUD_CODE_CHECK_KINDS = ['typecheck', 'lint', 'tests', 'build'] as const;
 export type CloudCodeCheckKind = (typeof CLOUD_CODE_CHECK_KINDS)[number];
 
-export const CLOUD_CODE_CHECK_LABELS: Readonly<Record<CloudCodeCheckKind, string>> = Object.freeze({
+const CLOUD_CODE_CHECK_LABELS: Readonly<Record<CloudCodeCheckKind, string>> = Object.freeze({
   typecheck: 'Typecheck',
   lint: 'Lint',
   tests: 'Tests',

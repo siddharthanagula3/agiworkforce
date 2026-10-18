@@ -5,6 +5,7 @@ import {
   PURCHASED_CREDIT_EXPIRY_RULES,
   creditsFromMicrousd,
   formatCredits,
+  type PurchasedCreditExpiryRule,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { absoluteUrl } from '@/lib/seo/site';
@@ -83,10 +84,19 @@ export async function expireDuePurchasedCredits(
   return summary;
 }
 
+const REGION_NAMES = new Intl.DisplayNames('en-US', { type: 'region' });
+
+function expiryRuleSentence(rule: PurchasedCreditExpiryRule): string {
+  const region = REGION_NAMES.of(rule.country) ?? rule.country;
+  const period = `${rule.months} ${rule.months === 1 ? 'month' : 'months'}`;
+  return `Credits bought in ${region} expire ${period} after purchase, so use them before that date.`;
+}
+
 async function remindAccount(
   db: DatabaseAdapter,
   userId: string,
   purchases: readonly DuePurchase[],
+  rule: PurchasedCreditExpiryRule,
 ): Promise<boolean> {
   const lots = await db.query<{ lot_id: string; remaining_microusd: number | string }>(
     `select lot_id, remaining_microusd
@@ -110,7 +120,7 @@ async function remindAccount(
     await sendBillingNotice(db, {
       userId,
       title: `Purchased credits expire on ${formatDate(earliest.expires_at)}`,
-      message: `${lines.join(' ')} Credits bought in Japan expire six months after purchase, so use them before that date.`,
+      message: `${lines.join(' ')} ${expiryRuleSentence(rule)}`,
       target: { kind: 'settings', id: 'usage' },
       dedupeKey: `purchased-credit-expiry:${userId}:${earliest.id}`,
       action: { label: 'See your credits', url: absoluteUrl('/settings/usage') },
@@ -160,7 +170,7 @@ export async function remindExpiringPurchasedCredits(
     }
     for (const [userId, purchases] of byUser) {
       try {
-        const reminded = await remindAccount(db, userId, purchases);
+        const reminded = await remindAccount(db, userId, purchases, rule);
         summary.users += 1;
         if (reminded) summary.reminded += purchases.length;
       } catch (error) {

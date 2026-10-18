@@ -42,7 +42,7 @@ export function apiKeyExpiryProblem(expiresAt: Date, now: number): ApiKeyExpiryP
   return null;
 }
 
-export function apiKeyExpiryMessage(problem: ApiKeyExpiryProblem): string {
+function apiKeyExpiryMessage(problem: ApiKeyExpiryProblem): string {
   if (problem === 'not_a_time') return 'Expiry must be a date and time';
   if (problem === 'in_the_past') return 'Expiry must be in the future';
   return `Expiry must be no more than ${apiKeyMaxLifetimeDays()} days away`;
@@ -116,26 +116,6 @@ export class ApiKeyService {
     return { apiKey: rows[0], rawKey: raw };
   }
 
-  static async listApiKeys(
-    db: DatabaseAdapter,
-    userId: string,
-  ): Promise<
-    Array<
-      Pick<
-        ApiKeyRow,
-        'id' | 'user_id' | 'name' | 'scopes' | 'created_at' | 'expires_at' | 'last_used_at'
-      >
-    >
-  > {
-    return db.query<ApiKeyRow>(
-      `SELECT id, user_id, name, scopes, created_at, expires_at, last_used_at
-       FROM api_keys
-       WHERE user_id = $1
-       ORDER BY created_at DESC`,
-      [userId],
-    );
-  }
-
   static async revokeApiKey(db: DatabaseAdapter, id: string, userId: string): Promise<void> {
     await db.execute(
       'UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL',
@@ -185,8 +165,6 @@ export class ApiKeyService {
     });
 
     const { key_hash: _h, key_prefix: _p, ...keyWithoutSecrets } = key;
-    void _h;
-    void _p;
     return keyWithoutSecrets;
   }
 }

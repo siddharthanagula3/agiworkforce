@@ -173,7 +173,7 @@ describe('video billing incident alerts', () => {
     mocks.get.mockResolvedValue(job);
     mocks.send.mockResolvedValue({ delivered: true, providerMessageId: 'message-1' });
 
-    await expect(deliverDueVideoIncidentAlerts({} as never, 20)).resolves.toEqual({
+    await expect(deliverDueVideoIncidentAlerts({} as never)).resolves.toEqual({
       found: 1,
       delivered: 1,
       pending: 0,
@@ -218,7 +218,7 @@ describe('video billing incident alerts', () => {
     mocks.listSettlements.mockResolvedValue([settlementIncident.id]);
     mocks.send.mockResolvedValue({ delivered: true, providerMessageId: 'message-2' });
 
-    await expect(deliverDueVideoIncidentAlerts({} as never, 20)).resolves.toEqual({
+    await expect(deliverDueVideoIncidentAlerts({} as never)).resolves.toEqual({
       found: 1,
       delivered: 1,
       pending: 0,
@@ -232,7 +232,7 @@ describe('video billing incident alerts', () => {
   it('surfaces an exhausted incident without attempting unbounded email retries', async () => {
     mocks.countExhaustedJobs.mockResolvedValue(1);
 
-    await expect(deliverDueVideoIncidentAlerts({} as never, 20)).resolves.toEqual({
+    await expect(deliverDueVideoIncidentAlerts({} as never)).resolves.toEqual({
       found: 1,
       delivered: 0,
       pending: 0,
@@ -247,7 +247,7 @@ describe('video billing incident alerts', () => {
     mocks.list.mockResolvedValue([job.id]);
     mocks.send.mockResolvedValue({ delivered: true, providerMessageId: 'message-2' });
 
-    await expect(deliverDueVideoIncidentAlerts({} as never, 20)).resolves.toMatchObject({
+    await expect(deliverDueVideoIncidentAlerts({} as never)).resolves.toMatchObject({
       delivered: 1,
       pending: 0,
     });

@@ -91,8 +91,8 @@ function providerSearchUrl(provider: 'google_maps' | 'openstreetmap', query: str
 export type MapSearchToolOutcome =
   { ok: true; content: string; card: InteractiveCard } | { ok: false; content: string };
 
-export const MAP_SEARCH_TILES_ACROSS = 2.5;
-export const MAP_SEARCH_TILES_DOWN = 340 / 256;
+const MAP_SEARCH_TILES_ACROSS = 2.5;
+const MAP_SEARCH_TILES_DOWN = 340 / 256;
 
 export async function executeMapSearchTool(
   args: Record<string, unknown>,

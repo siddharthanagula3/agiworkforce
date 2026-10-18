@@ -7,6 +7,7 @@ import {
   type CreateCloudCodeSessionInput,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import {
   HARNESS_CREDENTIAL_UNAVAILABLE_CODE,
@@ -58,7 +59,14 @@ export async function openCloudCodeSession(
     : null;
   const requestedRuntimeId =
     typeof body['runtimeId'] === 'string' ? body['runtimeId'].trim() || null : null;
-  const requestedExtraHostCount = Array.isArray(body['extraHosts']) ? body['extraHosts'].length : 0;
+  let requestedExtraHosts: string[];
+  try {
+    requestedExtraHosts = normalizeExtraEgressHosts(body['extraHosts']);
+  } catch (error) {
+    if (error instanceof InvalidExtraEgressHostsError) throw createError.validation(error.message);
+    throw error;
+  }
+  const requestedExtraHostCount = requestedExtraHosts.length;
   const hasExplicitHarnessCredential =
     typeof body['harnessCredential'] === 'string' && body['harnessCredential'].trim().length > 0;
   if (
@@ -116,11 +124,11 @@ export async function openCloudCodeSession(
   );
   if (codeGate) return codeGate;
 
-  for (const host of Array.isArray(body['extraHosts']) ? body['extraHosts'] : []) {
+  for (const host of requestedExtraHosts) {
     const hostGate = await buildWorkspaceCodeGateResponse(
       db,
       owner.userId,
-      { act: 'reach_host', host: typeof host === 'string' ? host : null },
+      { act: 'reach_host', host },
       request,
     );
     if (hostGate) return hostGate;

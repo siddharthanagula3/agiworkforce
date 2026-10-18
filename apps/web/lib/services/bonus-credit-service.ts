@@ -106,7 +106,7 @@ export async function revokeBonusCreditGrant(
   return toNumber(row?.revoked_microusd);
 }
 
-export async function reconcileBonusCredits(
+async function reconcileBonusCredits(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<BonusCreditReconciliation> {

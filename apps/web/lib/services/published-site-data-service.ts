@@ -18,7 +18,7 @@ import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service
  * counted here.
  */
 
-export const SITE_DATA_LIST_LIMIT = 1_000;
+const SITE_DATA_LIST_LIMIT = 1_000;
 
 const RUNNABLE_KINDS: ReadonlySet<string> = new Set(['html', 'react']);
 

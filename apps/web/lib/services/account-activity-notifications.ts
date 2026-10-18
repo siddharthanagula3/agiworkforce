@@ -54,7 +54,7 @@ export async function notifyIdentitySecurityEvent(
   });
 }
 
-export const SECURITY_EMAIL_PREFERENCE_KEY = 'emailSecurityAlerts';
+const SECURITY_EMAIL_PREFERENCE_KEY = 'emailSecurityAlerts';
 
 async function securityAlertsRequired(db: DatabaseAdapter, userId: string): Promise<boolean> {
   try {

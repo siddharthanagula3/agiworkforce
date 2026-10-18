@@ -12,6 +12,7 @@ import {
 
 const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';
 const OPEN_ROUTER_PROVIDER = 'open_router';
+const OPEN_ROUTER_DISPATCH_PROVIDER = 'openrouter';
 const BLOCKED_ROUTE_COMMERCIAL_STATUS: RouteCommercialStatus = 'blocked';
 const EXPERIMENTAL_ROUTE_COMMERCIAL_STATUS: RouteCommercialStatus = 'experimental_only';
 
@@ -22,11 +23,17 @@ function providerApiModelId(model: ModelMetadata): string {
   return model.apiModelId ?? model.id;
 }
 
+const NON_CHAT_MODEL_TYPES: ReadonlySet<string> = new Set([
+  'image',
+  'video',
+  'audio',
+  'embedding',
+  'tts',
+  'stt',
+]);
+
 function isCatalogChatModel(model: ModelMetadata): boolean {
-  return (
-    isModelLive(model) &&
-    !new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']).has(model.modelType)
-  );
+  return isModelLive(model) && !NON_CHAT_MODEL_TYPES.has(model.modelType);
 }
 
 function isPermanentOpenRouterRoute(model: ModelMetadata): boolean {
@@ -35,7 +42,7 @@ function isPermanentOpenRouterRoute(model: ModelMetadata): boolean {
 
 function isOpenRouterFailoverRoute(model: ModelMetadata): boolean {
   return (
-    model.provider !== 'open_router' &&
+    model.provider !== OPEN_ROUTER_PROVIDER &&
     !isPermanentOpenRouterRoute(model) &&
     isCatalogChatModel(model)
   );
@@ -53,7 +60,7 @@ export function isManagedOpenRouterRoute(apiModelId: string): boolean {
 export function dispatchProviderForRoute(routeId: string): string | undefined {
   const route = getRegistryRoute(routeId);
   if (!route) return undefined;
-  return route.provider === OPEN_ROUTER_PROVIDER ? 'openrouter' : route.provider;
+  return route.provider === OPEN_ROUTER_PROVIDER ? OPEN_ROUTER_DISPATCH_PROVIDER : route.provider;
 }
 
 export function dispatchProviderForSelectedRoute(route: {
@@ -133,7 +140,8 @@ export function openRouterFailoverSlugFor(apiModelId: string): string | undefine
 
 export function canFailoverToOpenRouter(providerId: string, apiModelId: string): boolean {
   if (!process.env['OPENROUTER_API_KEY']) return false;
-  if (providerId === 'openrouter' || providerId === 'open_router') return false;
+  if (providerId === OPEN_ROUTER_DISPATCH_PROVIDER || providerId === OPEN_ROUTER_PROVIDER)
+    return false;
   return openRouterFailoverSlugFor(apiModelId) !== undefined;
 }
 

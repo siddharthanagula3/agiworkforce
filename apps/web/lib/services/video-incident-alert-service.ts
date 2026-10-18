@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import {
   claimVideoIncidentAlert,
@@ -20,6 +21,9 @@ import {
 } from '@/lib/server/video-generation-jobs';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
+
+// One per invocation, so this safety net fits the shortest deployed function.
+const ALERTS_PER_SWEEP = 1;
 
 function environmentLabel(): string {
   return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
@@ -64,7 +68,7 @@ export async function deliverPendingVideoIncidentAlert(
     to: getHandoffConfig().fallbackEmail,
     subject: `[AGI WARNING] ${environment} video billing settlement requires review`,
     text,
-    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${text}</pre>`,
+    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
     idempotencyKey: `video-billing:${job.id}`,
   });
 
@@ -134,7 +138,7 @@ async function deliverClaimedVideoSettlementIncident(
     to: getHandoffConfig().fallbackEmail,
     subject: `[AGI WARNING] ${environment} video reservation settlement requires review`,
     text,
-    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${text}</pre>`,
+    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
     idempotencyKey: `video-billing-settlement:${incident.id}`,
   });
   const error = sent.delivered ? undefined : `${sent.reason}: ${sent.detail}`;
@@ -206,14 +210,11 @@ async function deliverVideoSettlementIncidentById(
  */
 export async function deliverDueVideoIncidentAlerts(
   db: DatabaseAdapter,
-  limit = 20,
 ): Promise<VideoIncidentAlertSweepSummary> {
-  // per invocation so this safety net fits the shortest deployed function
-  const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 1));
-  const settlementIds = await listPendingVideoSettlementIncidentIds(db, boundedLimit);
+  const settlementIds = await listPendingVideoSettlementIncidentIds(db, ALERTS_PER_SWEEP);
   const ids =
-    settlementIds.length < boundedLimit
-      ? await listPendingVideoIncidentAlertIds(db, boundedLimit - settlementIds.length)
+    settlementIds.length < ALERTS_PER_SWEEP
+      ? await listPendingVideoIncidentAlertIds(db, ALERTS_PER_SWEEP - settlementIds.length)
       : [];
   const exhausted =
     (await countExhaustedVideoIncidentAlerts(db)) +

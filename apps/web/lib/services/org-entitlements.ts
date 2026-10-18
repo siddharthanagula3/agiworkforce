@@ -6,7 +6,6 @@ import {
   normalizeBillingPlanTier,
   toEnforceableBillingPlanLimit,
   type BillingPlanTier,
-  type CapabilityDenialReason,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -136,65 +135,18 @@ export function isOrgResourceLimitError(error: unknown): boolean {
   );
 }
 
-export interface OrganizationLimitDenial {
-  reason: CapabilityDenialReason;
-  message: string;
-}
-
-/**
- * A limit of zero is the plan not including the feature at all, which is an
- * upgrade; a limit already spent is a quota. They read the same to a caller
- * that only has the sentence.
- */
-function limitDenialReason(limit: number | null): CapabilityDenialReason {
-  if (limit === null) return 'entitlement_missing';
-  return limit === 0 ? 'requires_upgrade' : 'quota_exceeded';
-}
-
-export function getSharedProjectLimitDenial(limit: number | null): OrganizationLimitDenial {
-  if (limit === null) {
-    return {
-      reason: limitDenialReason(limit),
-      message: 'Your organization cannot share more projects right now.',
-    };
-  }
-  if (limit === 0) {
-    return {
-      reason: limitDenialReason(limit),
-      message:
-        'Your organization’s plan does not include shared projects. Upgrade to share a project with your members.',
-    };
-  }
-  return {
-    reason: limitDenialReason(limit),
-    message: `Your organization can share up to ${limit} ${limit === 1 ? 'project' : 'projects'}. Un-share one to share another.`,
-  };
-}
-
-export function getSharedConnectorLimitDenial(limit: number | null): OrganizationLimitDenial {
-  if (limit === null) {
-    return {
-      reason: limitDenialReason(limit),
-      message: 'Your organization cannot share more connectors right now.',
-    };
-  }
-  if (limit === 0) {
-    return {
-      reason: limitDenialReason(limit),
-      message:
-        'Your organization’s plan does not include shared connectors. Upgrade to share a connector with your members.',
-    };
-  }
-  return {
-    reason: limitDenialReason(limit),
-    message: `Your organization can share up to ${limit} custom ${limit === 1 ? 'connector' : 'connectors'}. Un-share one to share another.`,
-  };
-}
-
 export function getSharedProjectLimitErrorMessage(limit: number | null): string {
-  return getSharedProjectLimitDenial(limit).message;
+  if (limit === null) return 'Your organization cannot share more projects right now.';
+  if (limit === 0) {
+    return 'Your organization’s plan does not include shared projects. Upgrade to share a project with your members.';
+  }
+  return `Your organization can share up to ${limit} ${limit === 1 ? 'project' : 'projects'}. Un-share one to share another.`;
 }
 
 export function getSharedConnectorLimitErrorMessage(limit: number | null): string {
-  return getSharedConnectorLimitDenial(limit).message;
+  if (limit === null) return 'Your organization cannot share more connectors right now.';
+  if (limit === 0) {
+    return 'Your organization’s plan does not include shared connectors. Upgrade to share a connector with your members.';
+  }
+  return `Your organization can share up to ${limit} custom ${limit === 1 ? 'connector' : 'connectors'}. Un-share one to share another.`;
 }

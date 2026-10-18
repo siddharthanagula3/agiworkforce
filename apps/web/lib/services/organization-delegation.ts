@@ -14,7 +14,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 
 /** Long enough for a quarter-end handover, short enough to notice it lapse. */
 export const DELEGATION_MAX_DURATION_MS = 90 * 24 * 60 * 60_000;
-export const DELEGATION_MIN_DURATION_MS = 5 * 60_000;
+const DELEGATION_MIN_DURATION_MS = 5 * 60_000;
 const MAX_SCOPES = 32;
 const MAX_REASON_CHARS = 500;
 

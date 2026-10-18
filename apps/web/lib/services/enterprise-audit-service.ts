@@ -7,7 +7,7 @@ export const AUDIT_PAGE_SIZE_DEFAULT = 50;
 export const AUDIT_PAGE_SIZE_MAX = 200;
 
 /** Batch size for export reads. Bounded so one export cannot pin the connection. */
-export const AUDIT_EXPORT_BATCH = 500;
+const AUDIT_EXPORT_BATCH = 500;
 
 export interface AuditEventFilters {
   actorUserId?: string;

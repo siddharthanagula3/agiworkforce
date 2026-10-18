@@ -27,7 +27,7 @@ import {
 
 export type UsageHistoryGranularity = AccountUsageHistoryGranularity;
 
-export const USAGE_HISTORY_PERIOD_COUNT: Readonly<Record<UsageHistoryGranularity, number>> = {
+const USAGE_HISTORY_PERIOD_COUNT: Readonly<Record<UsageHistoryGranularity, number>> = {
   day: 30,
   week: 12,
   month: 12,

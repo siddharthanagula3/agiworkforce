@@ -68,8 +68,8 @@ export async function getPushTokensForUser(
   notificationType?: string,
   now: Date = new Date(),
 ): Promise<string[]> {
-  const rows = await getNeonDb().query<{ push_token: string; push_preferences?: unknown }>(
-    `select push_token, to_jsonb(mobile_devices) -> 'push_preferences' as push_preferences
+  const rows = await getNeonDb().query<{ push_token: string; push_preferences: unknown }>(
+    `select push_token, push_preferences
        from public.mobile_devices
       where user_id = $1
         and push_token is not null

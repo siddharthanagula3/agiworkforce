@@ -32,7 +32,7 @@ import {
   evaluateConnectorAccess,
   evaluateMcpHostAccess,
   type ConnectorAccessPolicy,
-} from '@/lib/services/connector-policy-evaluator';
+} from '@agiworkforce/client-runtime';
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
@@ -1865,7 +1865,6 @@ async function applyConnectorPolicy(
   if (!organizationId || defs.length === 0) return defs;
 
   const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
-  const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
   const { getNeonDb } = await import('@/lib/server/neon-db');
 
   let policy;
@@ -1923,7 +1922,6 @@ async function connectorPolicyAllows(
   if (!organizationId) return true;
   try {
     const { readConnectorPolicy } = await import('@/lib/services/connector-policy-service');
-    const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
     const policy = await readConnectorPolicy(getNeonDb(), organizationId);
     return policy
       ? evaluateConnectorAccess(policy, { connectorId, isCustom, ...(url ? { url } : {}) }).allowed

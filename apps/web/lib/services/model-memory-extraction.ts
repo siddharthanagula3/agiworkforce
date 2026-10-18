@@ -53,7 +53,7 @@ const MEMORY_FACT_EXTRACTION_ALL_TOPICS_PROMPT_ID = 'product.memory_fact_extract
 const MEMORY_EXTRACTION_NAMESPACE = 'memory-extraction';
 
 /** Matches the pattern path's own `slice(0, 5)`, so the flag cannot widen the write. */
-export const MAX_AUTO_MEMORY_FACTS = 5;
+const MAX_AUTO_MEMORY_FACTS = 5;
 
 /**
  * A list of five short sentences. The cap is generous enough for a reasoning

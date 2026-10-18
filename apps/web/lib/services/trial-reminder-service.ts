@@ -73,7 +73,7 @@ export function formatChargeAmount(amountMinor: number, currency: string): strin
   }).format(amount);
 }
 
-export function formatTrialEnd(seconds: number): string {
+function formatTrialEnd(seconds: number): string {
   return new Date(seconds * 1000).toLocaleString('en-US', {
     month: 'long',
     day: 'numeric',

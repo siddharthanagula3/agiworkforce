@@ -162,28 +162,33 @@ export class SecurityMonitoringService {
   static async getMetrics(): Promise<SecurityMetrics> {
     try {
       const db = getNeonDb();
-      const now = new Date();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const now = Date.now();
+      const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+      const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      const events = await db.query<
-        Pick<
-          StoredSecurityAuditLogRow,
-          'event_type' | 'severity' | 'ip_address' | 'user_id' | 'created_at'
-        >
-      >(
-        `select event_type, severity, ip_address, user_id, created_at
-         from security_audit_logs
-         where created_at >= $1`,
-        [sevenDaysAgo],
-      );
-
-      const allEvents = events;
-
-      const events24h = allEvents.filter(
-        (e) => new Date(e.created_at) >= new Date(twentyFourHoursAgo),
-      );
-      const events7d = allEvents;
+      const [[totals], groups] = await Promise.all([
+        db.query<{
+          events_24h: number;
+          events_7d: number;
+          unique_ips_24h: number;
+          unique_users_24h: number;
+        }>(
+          `select count(*) filter (where created_at >= $2)::int as events_24h,
+                  count(*)::int as events_7d,
+                  count(distinct ip_address) filter (where created_at >= $2)::int as unique_ips_24h,
+                  count(distinct user_id) filter (where created_at >= $2)::int as unique_users_24h
+             from security_audit_logs
+            where created_at >= $1`,
+          [sevenDaysAgo, twentyFourHoursAgo],
+        ),
+        db.query<{ event_type: string; severity: StoredSecurityEventSeverity; count: number }>(
+          `select event_type, severity, count(*)::int as count
+             from security_audit_logs
+            where created_at >= $1
+            group by event_type, severity`,
+          [twentyFourHoursAgo],
+        ),
+      ]);
 
       const bySeverity: Record<SecurityEventSeverity, number> = {
         low: 0,
@@ -204,42 +209,22 @@ export class SecurityMonitoringService {
         retention_purge: 0,
       };
 
-      const uniqueIps = new Set<string>();
-      const uniqueUsers = new Set<string>();
-      let criticalCount = 0;
-      let highCount = 0;
-
-      for (const event of events24h) {
-        const severity = normalizeSecuritySeverity(event.severity);
-        bySeverity[severity]++;
-
-        if (event.event_type in byEventType) {
-          byEventType[event.event_type as SecurityEventType]++;
-        }
-
-        if (event.ip_address) {
-          uniqueIps.add(event.ip_address);
-        }
-        if (event.user_id) {
-          uniqueUsers.add(event.user_id);
-        }
-
-        if (severity === 'critical') {
-          criticalCount++;
-        } else if (severity === 'high') {
-          highCount++;
+      for (const group of groups) {
+        bySeverity[normalizeSecuritySeverity(group.severity)] += group.count;
+        if (group.event_type in byEventType) {
+          byEventType[group.event_type as SecurityEventType] += group.count;
         }
       }
 
       return {
-        total_events_24h: events24h.length,
-        total_events_7d: events7d.length,
+        total_events_24h: totals?.events_24h ?? 0,
+        total_events_7d: totals?.events_7d ?? 0,
         by_severity: bySeverity,
         by_event_type: byEventType,
-        unique_ips_24h: uniqueIps.size,
-        unique_users_24h: uniqueUsers.size,
-        critical_events_24h: criticalCount,
-        high_severity_events_24h: highCount,
+        unique_ips_24h: totals?.unique_ips_24h ?? 0,
+        unique_users_24h: totals?.unique_users_24h ?? 0,
+        critical_events_24h: bySeverity.critical,
+        high_severity_events_24h: bySeverity.high,
       };
     } catch (error) {
       logger.error({ error }, 'Error in getMetrics');
@@ -323,23 +308,15 @@ export class SecurityMonitoringService {
       const db = getNeonDb();
       const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
 
-      const rows = await db.query<Pick<SecurityAuditLogRow, 'ip_address'>>(
-        `select ip_address from security_audit_logs
-         where created_at >= $1 and ip_address is not null`,
-        [windowStart],
+      return await db.query<{ ip_address: string; event_count: number }>(
+        `select ip_address, count(*)::int as event_count
+           from security_audit_logs
+          where created_at >= $1 and ip_address is not null
+          group by ip_address
+          order by event_count desc, ip_address asc
+          limit $2`,
+        [windowStart, limit],
       );
-
-      const ipCounts = new Map<string, number>();
-      for (const row of rows) {
-        if (row.ip_address) {
-          ipCounts.set(row.ip_address, (ipCounts.get(row.ip_address) || 0) + 1);
-        }
-      }
-
-      return Array.from(ipCounts.entries())
-        .map(([ip_address, event_count]) => ({ ip_address, event_count }))
-        .sort((a, b) => b.event_count - a.event_count)
-        .slice(0, limit);
     } catch (error) {
       logger.error({ error }, 'Error in getTopIpAddresses');
       throw error;

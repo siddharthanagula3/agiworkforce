@@ -28,8 +28,8 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
  * inferred from rows that are not there.
  */
 
-export const SEMANTIC_RESPONSE_CACHE_ENABLED_ENV = 'AGI_SEMANTIC_RESPONSE_CACHE_ENABLED';
-export const SEMANTIC_RESPONSE_CACHE_MECHANISM = 'agi_semantic_response_cache';
+const SEMANTIC_RESPONSE_CACHE_ENABLED_ENV = 'AGI_SEMANTIC_RESPONSE_CACHE_ENABLED';
+const SEMANTIC_RESPONSE_CACHE_MECHANISM = 'agi_semantic_response_cache';
 
 const REDIS_KEY_PREFIX = 'agi-src';
 const UNKNOWN_RELEASE_SHA = 'unknown';
@@ -96,7 +96,7 @@ export interface SemanticCacheLookup {
   reason?: SemanticCacheIneligibility;
 }
 
-export function isSemanticResponseCacheEnabled(): boolean {
+function isSemanticResponseCacheEnabled(): boolean {
   const configured = getOptionalEnv(SEMANTIC_RESPONSE_CACHE_ENABLED_ENV)?.trim().toLowerCase();
   if (!configured) return true;
   return !DISABLED_ENV_VALUES.has(configured);

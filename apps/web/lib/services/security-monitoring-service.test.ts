@@ -78,3 +78,35 @@ describe('SecurityMonitoringService severity contract', () => {
     ]);
   });
 });
+
+describe('SecurityMonitoringService metrics', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('aggregates in the database and folds both severity vocabularies together', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      /group by event_type, severity/.test(sql)
+        ? [
+            { event_type: 'auth_failed', severity: 'warning', count: 3 },
+            { event_type: 'auth_failed', severity: 'medium', count: 2 },
+            { event_type: 'legacy_event', severity: 'critical', count: 1 },
+          ]
+        : [{ events_24h: 6, events_7d: 40, unique_ips_24h: 4, unique_users_24h: 2 }],
+    );
+
+    const metrics = await SecurityMonitoringService.getMetrics();
+
+    expect(metrics).toMatchObject({
+      total_events_24h: 6,
+      total_events_7d: 40,
+      unique_ips_24h: 4,
+      unique_users_24h: 2,
+      critical_events_24h: 1,
+      high_severity_events_24h: 0,
+    });
+    expect(metrics.by_severity).toEqual({ low: 0, medium: 5, high: 0, critical: 1 });
+    expect(metrics.by_event_type.auth_failed).toBe(5);
+    for (const [sql] of mocks.query.mock.calls as [string][]) {
+      expect(sql).toMatch(/count\(/);
+    }
+  });
+});

@@ -93,7 +93,7 @@ export async function readReleaseLedger(
   }));
 }
 
-export function servingVersion(): ServingVersion {
+function servingVersion(): ServingVersion {
   return {
     commit: releaseSha() ?? null,
     environment: deployEnvironment() ?? null,

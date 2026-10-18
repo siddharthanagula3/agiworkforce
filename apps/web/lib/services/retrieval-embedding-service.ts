@@ -114,7 +114,7 @@ export function resolveRetrievalEmbeddingRoute(
   return null;
 }
 
-export function estimateEmbeddingTokens(texts: readonly string[]): number {
+function estimateEmbeddingTokens(texts: readonly string[]): number {
   const characters = texts.reduce((total, text) => total + text.length, 0);
   return Math.max(1, Math.ceil(characters / CHARS_PER_TOKEN_ESTIMATE));
 }

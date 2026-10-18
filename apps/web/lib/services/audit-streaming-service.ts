@@ -10,12 +10,6 @@ import { getKeyValueStore } from '@/lib/server/key-value';
 import { organizationKeyRing } from '@/lib/server/organization-encryption-keys';
 import { buildBoundedDeliveryBody, deliverAuditBatch } from '@/lib/services/audit-streaming-proxy';
 
-export {
-  AUDIT_STREAM_MAX_BODY_BYTES,
-  signPayload,
-  verifySignature,
-} from '@/lib/services/audit-streaming-proxy';
-
 export const AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY = 'agi-audit-stream:active-organizations';
 
 const NO_ACTIVE_DESTINATIONS = 0;

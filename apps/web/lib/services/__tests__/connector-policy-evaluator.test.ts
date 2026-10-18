@@ -7,7 +7,7 @@ import {
   evaluatePluginAccess,
   mcpHostMatches,
   type ConnectorAccessPolicy,
-} from '../connector-policy-evaluator';
+} from '@agiworkforce/client-runtime';
 
 function policy(over: Partial<ConnectorAccessPolicy> = {}): ConnectorAccessPolicy {
   return {

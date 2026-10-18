@@ -131,7 +131,7 @@ export async function runShadowDecision(input: {
   });
 }
 
-export function swallowShadowFailure(kind: DecisionKind, requestId: string) {
+function swallowShadowFailure(kind: DecisionKind, requestId: string) {
   return (error: unknown) => {
     try {
       logger.warn({ error, kind, requestId }, '[semantic-decisions] shadow failed');

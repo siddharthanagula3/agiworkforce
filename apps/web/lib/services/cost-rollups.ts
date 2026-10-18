@@ -149,7 +149,7 @@ export async function readCostRollup(input: {
 }
 
 export const DEFAULT_LOOP_EVENT_THRESHOLD = 25;
-export const DEFAULT_LOOP_WINDOW_MINUTES = 15;
+const DEFAULT_LOOP_WINDOW_MINUTES = 15;
 
 export interface CostLoopSuspect {
   readonly operationId: string;

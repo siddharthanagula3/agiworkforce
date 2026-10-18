@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
-import type { ConnectorAccessPolicy } from './connector-policy-evaluator';
+import type { ConnectorAccessPolicy } from '@agiworkforce/client-runtime';
 
 export interface OrganizationConnectorPolicy extends ConnectorAccessPolicy {
   allowedPlugins: string[];

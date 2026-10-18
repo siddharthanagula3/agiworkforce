@@ -41,7 +41,7 @@ import { CloudCodeTurnStillRunningError, runCloudCodeTurn } from './cloud-code-t
 import { resolveEntitledPlanTier } from './entitlement-resolution';
 import { assertWorkspaceCodeAccess } from './organization-policy-code-gate';
 
-export const GITHUB_CODE_TASK_MENTION = '@agi-workforce';
+const GITHUB_CODE_TASK_MENTION = '@agi-workforce';
 
 const MENTION = new RegExp(`(^|[^\\w-])${GITHUB_CODE_TASK_MENTION}(?![\\w-])`, 'i');
 const EVERY_MENTION = new RegExp(MENTION.source, 'gi');
@@ -198,7 +198,10 @@ async function readTaskInstallation(installationId: number): Promise<TaskInstall
         limit 1`,
       [installationId],
     )
-    .catch(() => [] as TaskInstallation[]);
+    .catch((error: unknown) => {
+      logger.error({ error, installationId }, '[code-task] installation unreadable; task skipped');
+      return [] as TaskInstallation[];
+    });
   const row = rows[0] ?? null;
   return row?.pr_review_enabled ? row : null;
 }
@@ -263,7 +266,13 @@ export async function runGitHubCodeTask(request: GitHubCodeTaskRequest): Promise
         request.owner,
         request.repo,
         pullRequest.headSha,
-      ).catch(() => []);
+      ).catch((error: unknown) => {
+        logger.warn(
+          { error, ...request },
+          '[code-task] failed checks unreadable; task runs without them',
+        );
+        return [];
+      });
       branch = pullRequest.headRef;
       goal = taskGoal(request, { pullRequest, checks });
     } else {

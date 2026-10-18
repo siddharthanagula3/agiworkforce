@@ -160,11 +160,11 @@ describe('listPluginRegistryEntries', () => {
     expect(missingResult.entries[0]?.examplePrompts).toEqual([]);
   });
 
-  it('never surfaces a signature, even when a row somehow carries one', async () => {
+  it('carries the stored signature to the install gate, which verifies it', async () => {
     const signed = database([{ ...ROW, signature: 'ZmFrZQ==', signature_algorithm: 'ed25519' }]);
     const result = await listPluginRegistryEntries(signed);
-    expect(result.entries[0]?.integrity.signature).toBeNull();
-    expect(result.entries[0]?.integrity.signatureAlgorithm).toBeNull();
+    expect(result.entries[0]?.integrity.signature).toBe('ZmFrZQ==');
+    expect(result.entries[0]?.integrity.signatureAlgorithm).toBe('ed25519');
   });
 
   it('drops a version ref with a loose version and a malformed digest', async () => {

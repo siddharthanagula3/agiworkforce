@@ -1,5 +1,12 @@
 import 'server-only';
 
+import {
+  evaluateConnectorAccess,
+  evaluatePluginAccess,
+  type ConnectorAccessCode,
+  type ConnectorAccessDecision,
+  type ConnectorAccessPolicy,
+} from '@agiworkforce/client-runtime';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
@@ -10,12 +17,6 @@ import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { createError } from '@/lib/errors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
-import {
-  evaluateConnectorAccess,
-  evaluatePluginAccess,
-  type ConnectorAccessDecision,
-  type ConnectorAccessPolicy,
-} from '@/lib/services/connector-policy-evaluator';
 
 /**
  * @file One place the connect, authorize and create paths ask the same question.
@@ -36,7 +37,13 @@ import {
  * A policy read failure must not turn an administrator's restriction into an
  * unrestricted connection or credential exchange.
  */
-export interface ConnectorPolicyGateResult extends ConnectorAccessDecision {
+type ConnectorGateRefusalCode =
+  'connectors_unavailable' | 'connectors_coming_soon' | 'email_unconfirmed';
+
+export interface ConnectorPolicyGateResult {
+  allowed: boolean;
+  code: ConnectorAccessCode | ConnectorGateRefusalCode;
+  reason: string;
   organizationId: string | null;
 }
 
