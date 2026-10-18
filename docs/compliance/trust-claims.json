@@ -437,9 +437,9 @@
       "ledger": "COMPLIANCE",
       "label": "DPDP (India): grievance redressal under s.13",
       "owner": "Founder",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-08-14",
-      "digest": "a75b42668d79377e",
+      "reviewedOn": "2026-10-18",
+      "asOf": "2026-10-18",
+      "digest": "4cee022a4080c4e7",
       "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
       "scope": "Data principals in India",
       "implementation": ["apps/web/lib/legal-constants.ts#GRIEVANCE_OFFICER_DESIGNATE"],
@@ -452,7 +452,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/__tests__/legal-constants.grievance.test.tsx",
-          "name": "points the footer grievance route at the provisioned mailbox"
+          "name": "publishes the grievance route on every policy page that names it"
         }
       ],
       "external": "Designating a named officer is a founder decision."

@@ -16,6 +16,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 const webRoot = join(__dirname, '..', '..');
 
 const GRIEVANCE_SURFACES = [
+  'app/dpa/page.tsx',
   'app/privacy/india/page.tsx',
   'app/privacy/requests/page.tsx',
   'app/terms/page.tsx',
@@ -37,6 +38,14 @@ describe('published grievance officer', () => {
 
   it('derives the published name from the designation seam', () => {
     expect(GRIEVANCE_OFFICER_NAME).toBe(grievanceOfficerLabel(GRIEVANCE_OFFICER_DESIGNATE));
+  });
+
+  it('publishes the grievance route on every policy page that names it', () => {
+    for (const relative of GRIEVANCE_SURFACES) {
+      const source = readSurface(relative);
+      expect(source).toContain('GRIEVANCE_OFFICER_NAME');
+      expect(source).toContain('dpdpGrievance');
+    }
   });
 
   it('leaves the officer to the policy pages rather than the footer', () => {

@@ -150,7 +150,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'DPDP (India): grievance redressal under s.13',
     value:
-      'Published, as a role. A grievance route published in the site footer, on /privacy/india and in the terms, reachable without an account. It names a role rather than an individual because no named officer has been designated: designating one is an open founder decision, not an engineering task. As of 2026-08-14.',
+      'Published, as a role. A grievance route published on /privacy/india, /privacy/requests, in the terms and in the DPA, reachable without an account. It names a role rather than an individual because no named officer has been designated: designating one is an open founder decision, not an engineering task. As of 2026-10-18.',
   },
   {
     label: 'DPDP (India): verifiable parental consent under s.9',

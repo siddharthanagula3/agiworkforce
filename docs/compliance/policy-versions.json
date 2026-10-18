@@ -682,6 +682,11 @@
           "digest": "7c1b91383ab852b7",
           "note": "Date moved to 2026-10-18, the day the corrected row went live in production. The Desktop credential storage row said Electron Desktop refuses to store account credentials unless operating-system encryption is available; the secret store behind that was removed when Desktop moved to loading only the hosted web app, so the row now says Desktop writes no account credential of its own and the sign-in session lives in a persistent browser profile that belongs to the app alone. The page's change record gains a 2026-10-18 entry. No other row changed and the next review date is unchanged.",
           "summary": "Corrects the Desktop credential storage row. Electron Desktop no longer keeps its own encrypted credential store; it writes no account credential of its own, and the sign-in session lives in a persistent browser profile that belongs to the app alone."
+        },
+        {
+          "date": "2026-10-18",
+          "digest": "5d7ac3ffd1d700b1",
+          "note": "Editorial. The DPDP grievance row named the site footer as one place the grievance route is published; the footer no longer carries it, so the row lists where it is published: /privacy/india, /privacy/requests, the terms and the DPA. The officer, the mailbox and every other row are unchanged, so the date stays."
         }
       ]
     },
