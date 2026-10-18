@@ -4247,5 +4247,47 @@
   "spExtensionSettings": {
     "message": "Extension settings",
     "description": "Main menu entry for user-facing extension settings"
+  },
+  "spFreePlanTrainingNoticeTitle": {
+    "message": "Free models and your prompts",
+    "description": "Accessible name of the Free plan notice about free model providers and training; same copy as the web chat notice"
+  },
+  "spFreePlanTrainingNoticeLead": {
+    "message": "Is your content used for training?",
+    "description": "Opening question of the Free plan training notice above the composer"
+  },
+  "spFreePlanTrainingNoticeDisclosure": {
+    "message": "Not by AGI. Free model providers may.",
+    "description": "Answer in the Free plan training notice: AGI does not train on content, free model providers may"
+  },
+  "spFreePlanTrainingNoticeTail": {
+    "message": "Opt out in Settings > Privacy.",
+    "description": "Closing line of the Free plan training notice naming the account privacy setting"
+  },
+  "spFreePlanTrainingNoticeLink": {
+    "message": "What happens to your data",
+    "description": "Link in the Free plan training notice to the data use page"
+  },
+  "spFreePlanTrainingNoticeDismiss": {
+    "message": "Dismiss the free model data notice",
+    "description": "Accessible name of the button that closes the Free plan training notice"
+  },
+  "spFreeModelPromotionNoticeTitle": {
+    "message": "Free model promotion",
+    "description": "Accessible name of the notice that a model is free for Free plan accounts for a limited time"
+  },
+  "spFreeModelPromotionHeadline": {
+    "message": "$MODEL$ is free for a limited time.",
+    "description": "Free model promotion notice above the composer",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "the promoted model"
+      }
+    }
+  },
+  "spFreeModelPromotionDismiss": {
+    "message": "Dismiss the free model promotion notice",
+    "description": "Accessible name of the button that closes the free model promotion notice"
   }
 }

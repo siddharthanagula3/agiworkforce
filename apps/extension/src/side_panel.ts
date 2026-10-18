@@ -169,6 +169,12 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import {
+  applyResolvedRoute,
+  resolvedRouteFrom,
+  type ResolvedRoute,
+} from './features/side-panel/answeredModel';
+import { buildFreePlanNotices, type FreePlanNotices } from './features/side-panel/freePlanNotices';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
 import {
   expandPromptShortcut,
@@ -827,6 +833,7 @@ interface ChatChunk {
     taskType: RoutingTaskType;
     reason: string;
     effort?: Effort;
+    answeredModel?: string;
   };
 }
 
@@ -887,6 +894,7 @@ const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
 let managedChatKeepalivePort: chrome.runtime.Port | null = null;
 let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
 let composerComputerUsePanel: ComputerUsePanelAPI | null = null;
+let freePlanNotices: FreePlanNotices | null = null;
 let showComposerComputerUseTab: (() => void) | null = null;
 let contextHandoffPreview: ContextHandoffPreviewController | null = null;
 let activeContextHandoffId: string | null = null;
@@ -971,16 +979,8 @@ function previousAnswerModel(streamId: string): string | undefined {
 
 function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
-  const metadata = getModelMetadataById(routing.modelKey);
-  if (!metadata) return false;
-  const chosenByAuto = routing.reason !== 'explicit';
-  const movedFrom = chosenByAuto ? previousAnswerModel(streamId) : undefined;
-  const route: ResolvedRoute = {
-    model: metadata.id,
-    provider: metadata.provider,
-    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
-    ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
-  };
+  const route = resolvedRouteFrom(routing, () => previousAnswerModel(streamId));
+  if (!route) return false;
   resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
@@ -990,13 +990,7 @@ function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): 
 
 function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   const route = resolvedRouteByStreamId.get(streamId);
-  if (!route) return;
-  assistant.model = route.model;
-  assistant.provider = route.provider;
-  if (route.autoRouteReason) assistant.autoRouteReason = route.autoRouteReason;
-  else delete assistant.autoRouteReason;
-  if (route.movedFromModel) assistant.movedFromModel = route.movedFromModel;
-  else delete assistant.movedFromModel;
+  if (route) applyResolvedRoute(assistant, route);
 }
 
 function managedQuickModeActive(): boolean {
@@ -1142,13 +1136,6 @@ interface ComposerAttachmentIntake {
 const composerAttachmentIntakes = new Set<ComposerAttachmentIntake>();
 const composerAttachmentReads = new Map<FileReader, () => void>();
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-interface ResolvedRoute {
-  model: string;
-  provider: string;
-  autoRouteReason?: string;
-  movedFromModel?: string;
-}
-
 const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
@@ -8402,6 +8389,7 @@ function handleStreamError(
       : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
+  const failedRoute = resolvedRouteByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
@@ -8435,6 +8423,7 @@ function handleStreamError(
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
+    if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
     // cloud-ineligible (isCloudPersistenceEligible requires every message to be
     // managed-cloud); this turn is managed-cloud, so mark it as such.
@@ -13892,6 +13881,7 @@ function buildUI(): void {
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
+    if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
       capabilityDocument = null;
       applyCapabilityGates();
@@ -14068,6 +14058,13 @@ function buildUI(): void {
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
       presentManagedUsage(access);
+      if (authContext) {
+        void freePlanNotices?.update({
+          accountId: authContext.owner.accountId,
+          subscriptionTier: access.subscriptionTier,
+          token,
+        });
+      }
       if (ownerChanged) clearChildren(quotaModelsEl);
       if (!settingsGroupBody.hidden) void refreshModelUsageHistory();
       if (managedCloudChatState !== 'ready') return;
@@ -16824,6 +16821,8 @@ function buildUI(): void {
     buildHelpArticleLink('temporary-chats', t('spHelpLinkTemporary')),
   );
 
+  freePlanNotices = buildFreePlanNotices();
+  inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);
