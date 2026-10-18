@@ -128,11 +128,10 @@ describe('video completion notice', () => {
   });
 
   /**
-   * `completion_notified_at` arrives with migration 0183. Until it is applied
-   * the claim raises, and the job's own result, which is already durable and
-   * rendered by the next load, must not be disturbed by a failed announcement.
+   * The job's own result is already durable and rendered by the next load, so a
+   * claim that raises must not be disturbed into a failed announcement.
    */
-  it('sends nothing when the claim column does not exist yet', async () => {
+  it('sends nothing when the claim fails', async () => {
     mocks.claim.mockRejectedValue(new Error('column "completion_notified_at" does not exist'));
 
     await expect(deliverVideoCompletionNotice(db, job())).resolves.toBe(false);

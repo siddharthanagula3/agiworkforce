@@ -329,14 +329,6 @@ async function isOwnSubscriptionEntitled(
   );
 }
 
-/**
- * The one entitlement-resolution entry point. A team member holds no
- * `subscriptions` row of their own, so precedence is: the user's own entitled
- * paid row, then a seat (the active workspace's first, then the earliest-joined
- * organization) that has a seat-bearing plan, an entitled owner subscription
- * and a seat for them within `licensed_seats`, then the user's own lapsed or
- * free row, then none.
- */
 async function holdsWorkspaceMembership(db: DatabaseAdapter, userId: string): Promise<boolean> {
   const rows = await db.query<{ member: number }>(
     'select 1 as member from public.organization_members where user_id = $1 limit 1',
@@ -361,6 +353,14 @@ async function withOwnerSeat(userId: string, own: SubscriptionInfo): Promise<Sub
   }
 }
 
+/**
+ * The one entitlement-resolution entry point. A team member holds no
+ * `subscriptions` row of their own, so precedence is: the user's own entitled
+ * paid row, then a seat (the active workspace's first, then the earliest-joined
+ * organization) that has a seat-bearing plan, an entitled owner subscription
+ * and a seat for them within `licensed_seats`, then the user's own lapsed or
+ * free row, then none.
+ */
 export async function resolveEntitlementBundle(
   db: DatabaseAdapter,
   userId: string,

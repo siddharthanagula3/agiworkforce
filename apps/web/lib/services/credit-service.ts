@@ -28,7 +28,6 @@ export interface CreditBalance {
   credits_allocated_cents: number;
   credits_used_cents: number;
   credits_remaining_cents: number;
-  percentage_used?: number;
   daily_limit_cents?: number;
   daily_used_cents?: number;
   daily_remaining_cents?: number;
@@ -45,20 +44,6 @@ export function creditBalanceHasAvailableMicrousd(
     balance.daily_remaining_microusd === undefined ||
     balance.daily_remaining_microusd >= amountMicrousd
   );
-}
-
-export interface DeductCreditsResult {
-  success: boolean;
-  account_id?: string;
-  remaining_microusd?: number;
-  remaining_cents?: number;
-  error?: string;
-  code?: string;
-  available?: number;
-  required?: number;
-  daily_limit?: number;
-  daily_used?: number;
-  daily_remaining?: number;
 }
 
 /**
@@ -250,14 +235,6 @@ export class CreditService {
     }
   }
 
-  static async checkAvailable(
-    db: DatabaseAdapter,
-    userId: string,
-    amountCents: number,
-  ): Promise<boolean> {
-    return this.checkAvailableMicrousd(db, userId, microusdFromLedgerCents(amountCents));
-  }
-
   static async checkAvailableMicrousd(
     db: DatabaseAdapter,
     userId: string,
@@ -279,81 +256,10 @@ export class CreditService {
         'RPC check_credits_available_microusd failed, trying fallback',
       );
       try {
-        const balance = await this.getBalance(db, userId);
-        if (!balance?.account_id) return false;
-        return balance.credits_remaining_microusd >= amountMicrousd;
+        return creditBalanceHasAvailableMicrousd(await this.getBalance(db, userId), amountMicrousd);
       } catch {
         return false;
       }
-    }
-  }
-
-  static deductCredits(
-    db: DatabaseAdapter,
-    userId: string,
-    amountCents: number,
-    description?: string,
-    metadata?: Record<string, unknown>,
-    idempotencyKey?: string,
-  ): Promise<DeductCreditsResult> {
-    return this.deductCreditsMicrousd(
-      db,
-      userId,
-      microusdFromLedgerCents(amountCents),
-      description,
-      metadata,
-      idempotencyKey,
-    );
-  }
-
-  static async deductCreditsMicrousd(
-    db: DatabaseAdapter,
-    userId: string,
-    amountMicrousd: number,
-    description?: string,
-    metadata?: Record<string, unknown>,
-    idempotencyKey?: string,
-  ): Promise<DeductCreditsResult> {
-    try {
-      const rows = await db.query<Record<string, unknown>>(
-        'select * from deduct_credits_microusd($1, $2, $3, $4, $5)',
-        [
-          userId,
-          Math.round(amountMicrousd),
-          description || null,
-          JSON.stringify(metadata || {}),
-          idempotencyKey || null,
-        ],
-      );
-      const row = rows[0];
-      if (row === undefined) return { success: false, error: 'No result' };
-      const remainingMicrousd = numeric(row['remaining_microusd']);
-      return {
-        success: row['success'] === true,
-        ...(remainingMicrousd !== null
-          ? {
-              remaining_microusd: remainingMicrousd,
-              remaining_cents: ledgerCentsFromMicrousd(remainingMicrousd),
-            }
-          : {}),
-        ...(typeof row['error'] === 'string' ? { error: row['error'] } : {}),
-        ...(typeof row['code'] === 'string' ? { code: row['code'] } : {}),
-        ...(numeric(row['daily_limit_microusd']) !== null
-          ? { daily_limit: ledgerCentsFromMicrousd(numeric(row['daily_limit_microusd'])!) }
-          : {}),
-        ...(numeric(row['daily_used_microusd']) !== null
-          ? { daily_used: ledgerCentsFromMicrousd(numeric(row['daily_used_microusd'])!) }
-          : {}),
-        ...(numeric(row['daily_remaining_microusd']) !== null
-          ? { daily_remaining: ledgerCentsFromMicrousd(numeric(row['daily_remaining_microusd'])!) }
-          : {}),
-      };
-    } catch (error) {
-      logger.error({ error, userId, amountMicrousd }, 'Error in deductCredits');
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
     }
   }
 
