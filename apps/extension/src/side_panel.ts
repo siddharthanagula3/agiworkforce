@@ -174,6 +174,7 @@ import {
   resolvedRouteFrom,
   type ResolvedRoute,
 } from './features/side-panel/answeredModel';
+import { buildFreePlanNotices, type FreePlanNotices } from './features/side-panel/freePlanNotices';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
 import {
   expandPromptShortcut,
@@ -893,6 +894,7 @@ const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
 let managedChatKeepalivePort: chrome.runtime.Port | null = null;
 let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
 let composerComputerUsePanel: ComputerUsePanelAPI | null = null;
+let freePlanNotices: FreePlanNotices | null = null;
 let showComposerComputerUseTab: (() => void) | null = null;
 let contextHandoffPreview: ContextHandoffPreviewController | null = null;
 let activeContextHandoffId: string | null = null;
@@ -13879,6 +13881,7 @@ function buildUI(): void {
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
+    if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
       capabilityDocument = null;
       applyCapabilityGates();
@@ -14055,6 +14058,13 @@ function buildUI(): void {
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
       presentManagedUsage(access);
+      if (authContext) {
+        void freePlanNotices?.update({
+          accountId: authContext.owner.accountId,
+          subscriptionTier: access.subscriptionTier,
+          token,
+        });
+      }
       if (ownerChanged) clearChildren(quotaModelsEl);
       if (!settingsGroupBody.hidden) void refreshModelUsageHistory();
       if (managedCloudChatState !== 'ready') return;
@@ -16811,6 +16821,8 @@ function buildUI(): void {
     buildHelpArticleLink('temporary-chats', t('spHelpLinkTemporary')),
   );
 
+  freePlanNotices = buildFreePlanNotices();
+  inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);
