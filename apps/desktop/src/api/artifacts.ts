@@ -1,4 +1,4 @@
-import { invoke, isTauri } from '../lib/tauri-mock';
+import { invoke } from '../lib/tauri-mock';
 
 export type ArtifactType =
   'code' | 'document' | 'spreadsheet' | 'diagram' | 'web' | 'chart' | 'presentation' | 'image';
@@ -118,27 +118,6 @@ function unwrapVoid(response: ArtifactResponse<void>): void {
   }
 }
 
-const MOCK_ID = () => `mock_artifact_${Date.now()}`;
-const MOCK_TIMESTAMP = () => new Date().toISOString();
-
-function mockArtifact(overrides: Partial<Artifact> = {}): Artifact {
-  return {
-    id: MOCK_ID(),
-    title: 'Mock Artifact',
-    artifact_type: 'code',
-    content: '',
-    metadata: { Generic: {} },
-    status: 'complete',
-    versions: [],
-    current_version: 1,
-    created_at: MOCK_TIMESTAMP(),
-    updated_at: MOCK_TIMESTAMP(),
-    tags: [],
-    pinned: false,
-    ...overrides,
-  };
-}
-
 export async function artifactCreate(
   title: string,
   artifactType: ArtifactType,
@@ -148,9 +127,6 @@ export async function artifactCreate(
   messageId?: number,
   tags?: string[],
 ): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ title, artifact_type: artifactType, content, metadata, tags });
-  }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_create', {
     title,
     artifactType,
@@ -164,9 +140,6 @@ export async function artifactCreate(
 }
 
 export async function artifactGet(id: string): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ id });
-  }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_get', { id });
   return unwrap(response);
 }
@@ -179,9 +152,6 @@ export async function artifactUpdate(
   metadata?: ArtifactMetadata,
   tags?: string[],
 ): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ id, content, title: title ?? 'Updated Artifact' });
-  }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_update', {
     id,
     content,
@@ -194,33 +164,26 @@ export async function artifactUpdate(
 }
 
 export async function artifactRollback(id: string, version: number): Promise<Artifact> {
-  if (!isTauri) {
-    return mockArtifact({ id, current_version: version });
-  }
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_rollback', { id, version });
   return unwrap(response);
 }
 
 export async function artifactDelete(id: string): Promise<void> {
-  if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_delete', { id });
   unwrapVoid(response);
 }
 
 export async function artifactArchive(id: string): Promise<void> {
-  if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_archive', { id });
   unwrapVoid(response);
 }
 
 export async function artifactUnarchive(id: string): Promise<void> {
-  if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_unarchive', { id });
   unwrapVoid(response);
 }
 
 export async function artifactPin(id: string, pinned: boolean): Promise<void> {
-  if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_pin', { id, pinned });
   unwrapVoid(response);
 }
@@ -229,7 +192,6 @@ export async function artifactListPersisted(
   conversationId?: string,
   limit?: number,
 ): Promise<ArtifactSummary[]> {
-  if (!isTauri) return [];
   const response = await invoke<ArtifactResponse<ArtifactSummary[]>>('artifact_list_persisted', {
     conversationId: conversationId ?? null,
     limit: limit ?? null,

@@ -1,5 +1,5 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-import { invoke, isTauri, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
@@ -220,57 +220,12 @@ export function scheduledTaskFromJob(job: ScheduledJob): ScheduledTask {
   };
 }
 
-function computeNextRunAt(schedule: TaskSchedule): number | null {
-  const now = Date.now();
-
-  if (schedule.type === 'once') {
-    if (schedule.runAt && schedule.runAt > now) {
-      return schedule.runAt;
-    }
-    return null;
-  }
-
-  switch (schedule.interval) {
-    case 'hourly':
-      return now + 60 * 60 * 1000;
-    case 'daily':
-      return now + 24 * 60 * 60 * 1000;
-    case 'weekly':
-      return now + 7 * 24 * 60 * 60 * 1000;
-    case 'monthly': {
-      const APPROX_DAYS_PER_MONTH = 30;
-      return now + APPROX_DAYS_PER_MONTH * 24 * 60 * 60 * 1000;
-    }
-    default:
-      return null;
-  }
-}
-
-const TASKS_STORAGE_KEY = 'agiworkforce-scheduled-tasks-fallback';
-
 async function readRunningTaskIds(): Promise<string[] | null> {
   try {
     const ids = await invoke<string[]>('scheduler_running_jobs');
     return Array.isArray(ids) ? ids : null;
   } catch {
     return null;
-  }
-}
-
-function persistTasksToStorage(tasks: ScheduledTask[]): void {
-  try {
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function loadTasksFromStorage(): ScheduledTask[] {
-  try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ScheduledTask[]) : [];
-  } catch {
-    return [];
   }
 }
 
@@ -619,18 +574,9 @@ export const useSchedulerStore = create<SchedulerState>()(
               'scheduler/fetchTasks/success',
             );
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to fetch tasks from backend:', error);
-              set(
-                { error: errorMessage, isLoading: false },
-                undefined,
-                'scheduler/fetchTasks/error',
-              );
-              return;
-            }
-            const tasks = loadTasksFromStorage();
-            set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/fallback');
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to fetch tasks from backend:', error);
+            set({ error: errorMessage, isLoading: false }, undefined, 'scheduler/fetchTasks/error');
           }
         },
 
@@ -644,37 +590,11 @@ export const useSchedulerStore = create<SchedulerState>()(
             });
             await get().fetchTasks();
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to create task on backend:', error);
-              set({ error: errorMessage }, undefined, 'scheduler/createTask/error');
-              toast.error(`Failed to create task: ${errorMessage}`);
-              throw error;
-            }
-            const now = Date.now();
-            const newTask: ScheduledTask = {
-              ...input,
-              id: crypto.randomUUID(),
-              actionType: 'agiTask',
-              status: 'active',
-              createdAt: now,
-              runCount: 0,
-              failureCount: 0,
-              lastProblem: null,
-              lastRunWasDueAt: null,
-              lastRunAt: null,
-              nextRunAt: computeNextRunAt(input.schedule),
-              lastOutput: null,
-            };
-            set(
-              (state) => {
-                const tasks = [newTask, ...state.tasks];
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/createTask/fallback',
-            );
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to create task on backend:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/createTask/error');
+            toast.error(`Failed to create task: ${errorMessage}`);
+            throw error;
           }
         },
 
@@ -688,33 +608,11 @@ export const useSchedulerStore = create<SchedulerState>()(
             });
             await get().fetchTasks();
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to update task on backend:', error);
-              set({ error: errorMessage }, undefined, 'scheduler/updateTask/error');
-              toast.error(`Failed to update task: ${errorMessage}`);
-              throw error;
-            }
-            set(
-              (state) => {
-                const tasks = state.tasks.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        ...updates,
-                        nextRunAt:
-                          updates.schedule != null
-                            ? computeNextRunAt(updates.schedule)
-                            : t.nextRunAt,
-                      }
-                    : t,
-                );
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/updateTask/fallback',
-            );
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to update task on backend:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/updateTask/error');
+            toast.error(`Failed to update task: ${errorMessage}`);
+            throw error;
           }
         },
 
@@ -723,22 +621,11 @@ export const useSchedulerStore = create<SchedulerState>()(
             await invoke('scheduler_remove_job', { jobId: id });
             await get().fetchTasks();
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to delete task on backend:', error);
-              set({ error: errorMessage }, undefined, 'scheduler/deleteTask/error');
-              toast.error(`Failed to delete task: ${errorMessage}`);
-              throw error;
-            }
-            set(
-              (state) => {
-                const tasks = state.tasks.filter((t) => t.id !== id);
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/deleteTask/fallback',
-            );
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to delete task on backend:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/deleteTask/error');
+            toast.error(`Failed to delete task: ${errorMessage}`);
+            throw error;
           }
         },
 
@@ -746,30 +633,15 @@ export const useSchedulerStore = create<SchedulerState>()(
           const task = get().tasks.find((t) => t.id === id);
           if (!task) return;
 
-          const newStatus: TaskStatus = task.status === 'active' ? 'paused' : 'active';
-
           try {
             await invoke('scheduler_toggle_job', { id });
             await get().fetchTasks();
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to toggle task on backend:', error);
-              set({ error: errorMessage }, undefined, 'scheduler/toggleTask/error');
-              toast.error(`Failed to toggle task: ${errorMessage}`);
-              throw error;
-            }
-            set(
-              (state) => {
-                const tasks = state.tasks.map((t) =>
-                  t.id === id ? { ...t, status: newStatus } : t,
-                );
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/toggleTask/fallback',
-            );
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to toggle task on backend:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/toggleTask/error');
+            toast.error(`Failed to toggle task: ${errorMessage}`);
+            throw error;
           }
         },
 
@@ -790,32 +662,11 @@ export const useSchedulerStore = create<SchedulerState>()(
             await invoke('scheduler_run_job_now', { id });
             await get().fetchTasks();
           } catch (error) {
-            if (isTauri) {
-              const errorMessage = getSimpleErrorMessage(error);
-              console.error('[schedulerStore] Failed to run task on backend:', error);
-              set({ error: errorMessage }, undefined, 'scheduler/runNow/error');
-              toast.error(`Failed to run task: ${errorMessage}`);
-              throw error;
-            }
-            const now = Date.now();
-            set(
-              (state) => {
-                const tasks = state.tasks.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        lastRunAt: now,
-                        runCount: t.runCount + 1,
-                        nextRunAt: computeNextRunAt(t.schedule),
-                      }
-                    : t,
-                );
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/runNow/fallback',
-            );
+            const errorMessage = getSimpleErrorMessage(error);
+            console.error('[schedulerStore] Failed to run task on backend:', error);
+            set({ error: errorMessage }, undefined, 'scheduler/runNow/error');
+            toast.error(`Failed to run task: ${errorMessage}`);
+            throw error;
           }
         },
       })),
@@ -825,14 +676,13 @@ export const useSchedulerStore = create<SchedulerState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        partialize: (state) =>
-          isTauri ? { jobs: state.jobs } : { jobs: state.jobs, tasks: state.tasks },
+        partialize: (state) => ({ jobs: state.jobs }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SchedulerState> | undefined;
           return {
             ...currentState,
             jobs: persisted?.jobs ?? currentState.jobs,
-            tasks: isTauri ? currentState.tasks : (persisted?.tasks ?? currentState.tasks),
+            tasks: currentState.tasks,
           };
         },
         onRehydrateStorage: () => (state) => {
