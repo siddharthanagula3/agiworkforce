@@ -559,6 +559,9 @@ importers:
       '@agiworkforce/cloud-contracts':
         specifier: workspace:*
         version: link:../../packages/contracts/cloud-contracts
+      '@agiworkforce/compliance':
+        specifier: workspace:*
+        version: link:../../packages/contracts/compliance
       '@agiworkforce/design-tokens':
         specifier: workspace:*
         version: link:../../packages/ui/design-tokens
@@ -592,9 +595,15 @@ importers:
       dompurify:
         specifier: '>=3.4.16'
         version: 3.4.16
+      katex:
+        specifier: ^0.18.9
+        version: 0.18.10
       markdown-it:
         specifier: '>=14.2.0'
         version: 15.0.2
+      markdown-it-footnote:
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       '@types/chrome':
         specifier: ^0.3.1
@@ -14194,6 +14203,9 @@ packages:
     resolution: {integrity: sha512-2cawcYFcP7ISfXbBcL9lmVgTNWo88v/52ND1gnywHtVT/pX0//puPnf0iMPV9ZgmuvNOE+zkIhDgZ9M2c2dDDg==}
     engines: {node: '>=12.0.0'}
     hasBin: true
+
+  markdown-it-footnote@4.0.0:
+    resolution: {integrity: sha512-WYJ7urf+khJYl3DqofQpYfEYkZKbmXmwxQV8c8mO/hGIhgZ1wOe7R4HLFNwqx7TjILbnC98fuyeSsin19JdFcQ==}
 
   markdown-it@15.0.2:
     resolution: {integrity: sha512-q4IGxMv56jCqT4OCRCADBoDP3LO4MhmTXjFbphHPXs4g3j9Xg5RDnxqN8IF/3vIWEU+VCnUq+7JUg/cfy2E6Qw==}
@@ -32194,6 +32206,8 @@ snapshots:
       lop: 0.4.2
       underscore: 1.13.8
       xmlbuilder: 10.1.1
+
+  markdown-it-footnote@4.0.0: {}
 
   markdown-it@15.0.2:
     dependencies:

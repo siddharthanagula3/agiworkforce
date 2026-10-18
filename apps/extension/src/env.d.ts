@@ -15,3 +15,14 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare module 'markdown-it-footnote' {
+  import type { MarkdownIt } from 'markdown-it';
+  const footnote: (md: MarkdownIt) => void;
+  export default footnote;
+}
+
+declare module '*.css?inline' {
+  const css: string;
+  export default css;
+}

@@ -4248,6 +4248,112 @@
     "message": "Extension settings",
     "description": "Main menu entry for user-facing extension settings"
   },
+  "spCodeCopy": {
+    "message": "Copy code",
+    "description": "Button that copies a code block in an answer"
+  },
+  "spCodeCopied": {
+    "message": "Copied",
+    "description": "Status after a code block was copied"
+  },
+  "spCodeCopyFailed": {
+    "message": "The code could not be copied. Try again.",
+    "description": "Status after copying a code block failed"
+  },
+  "spCodeCopyRetry": {
+    "message": "Retry copying code",
+    "description": "Code block copy button after a failed copy"
+  },
+  "spFootnotes": {
+    "message": "Footnotes",
+    "description": "Accessible name of the footnote list at the end of an answer"
+  },
+  "spFootnoteBackref": {
+    "message": "Back to reference $NUMBER$",
+    "description": "Accessible name of the link from a footnote back to where it is cited",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spCopyFailed": {
+    "message": "Could not copy. Try again.",
+    "description": "Status after copying a message or response failed"
+  },
+  "spCopyRetry": {
+    "message": "Retry copy",
+    "description": "Message copy button after a failed copy"
+  },
+  "spMathUnavailable": {
+    "message": "Maths could not be displayed, so its source is shown.",
+    "description": "Tooltip on maths shown as source text because the renderer failed to load"
+  },
+  "spFreePlanTrainingNoticeOptOut": {
+    "message": "Opt out in your account’s privacy settings.",
+    "description": "Link in the Free plan training notice that opens the AGI web account privacy settings, where the no-training model setting lives"
+  },
+  "spImageFrom": {
+    "message": "Image from $HOST$",
+    "description": "Notice for an answer image that has not been loaded yet",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spImageLoad": {
+    "message": "Load image",
+    "description": "Button that loads an answer image from another site"
+  },
+  "spImageLoadLabel": {
+    "message": "Load image from $HOST$",
+    "description": "Accessible name of the button that loads an answer image",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spImageFailed": {
+    "message": "Image failed to load",
+    "description": "Shown in place of an answer image that could not be loaded"
+  },
+  "spImageFailedLabel": {
+    "message": "Image failed to load: $ALT$",
+    "description": "Accessible name of a failed answer image with alt text",
+    "placeholders": {
+      "alt": {
+        "content": "$1",
+        "example": "Sales chart"
+      }
+    }
+  },
+  "spImageRetry": {
+    "message": "Retry",
+    "description": "Button that tries to load a failed answer image again"
+  },
+  "spImageDownload": {
+    "message": "Download image",
+    "description": "Link to download an answer image that failed to load"
+  },
+  "spImageOpen": {
+    "message": "Open image in a new tab",
+    "description": "Accessible name of a loaded answer image"
+  },
+  "spImageOpenLabel": {
+    "message": "Open image in a new tab: $ALT$",
+    "description": "Accessible name of a loaded answer image with alt text",
+    "placeholders": {
+      "alt": {
+        "content": "$1",
+        "example": "Sales chart"
+      }
+    }
+  },
   "spArtifactCardsLabel": {
     "message": "Artifacts in this reply",
     "description": "Accessible name of the list of artifact cards under an answer"

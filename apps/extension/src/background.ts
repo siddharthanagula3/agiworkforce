@@ -1867,6 +1867,7 @@ async function resumeScheduledTaskJournal(
             ...(state.journal.routing.effort ? { effort: state.journal.routing.effort } : {}),
           }
         : undefined,
+      state.journal.routing?.answeredModel,
     );
     deliveryFailure = !stored;
   }
@@ -4002,22 +4003,35 @@ async function handleMessageAsync(
     }
 
     case 'CAPTURE_SCREENSHOT': {
-      let resolvedTabId = tabId;
-      let resolvedWindowId = windowId;
-
-      if (sender.tab) {
-        resolvedTabId = sender.tab.id;
-        resolvedWindowId = sender.tab.windowId;
-      } else if (!resolvedTabId || resolvedWindowId === undefined) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        resolvedTabId = resolvedTabId ?? activeTab?.id;
-        resolvedWindowId = resolvedWindowId ?? activeTab?.windowId;
+      const requestedTab =
+        sender.tab ?? (tabId ? await chrome.tabs.get(tabId).catch(() => undefined) : undefined);
+      if (tabId && !requestedTab) {
+        return {
+          success: false,
+          error: 'The tab to capture is no longer open.',
+        } as ExtensionResponse;
       }
+      const targetWindowId = requestedTab?.windowId ?? windowId;
+      const visibleTabIn = async (): Promise<chrome.tabs.Tab | undefined> =>
+        (
+          await chrome.tabs.query(
+            targetWindowId !== undefined
+              ? { active: true, windowId: targetWindowId }
+              : { active: true, currentWindow: true },
+          )
+        )[0];
 
-      if (!resolvedTabId && resolvedWindowId === undefined) {
+      const visibleTab = await visibleTabIn();
+      if (visibleTab?.id === undefined) {
         return {
           success: false,
           error: 'No active tab/window for screenshot',
+        } as ExtensionResponse;
+      }
+      if (requestedTab && requestedTab.id !== visibleTab.id) {
+        return {
+          success: false,
+          error: 'The tab is not the one showing in its window, so it cannot be captured.',
         } as ExtensionResponse;
       }
 
@@ -4030,15 +4044,18 @@ async function handleMessageAsync(
           format: screenshotMsg.format ?? 'png',
           quality: screenshotMsg.quality ?? 90,
         };
-        const canvas =
-          resolvedWindowId !== undefined
-            ? await chrome.tabs.captureVisibleTab(resolvedWindowId, options)
-            : await chrome.tabs.captureVisibleTab(options);
+        const canvas = await chrome.tabs.captureVisibleTab(visibleTab.windowId, options);
+        if ((await visibleTabIn())?.id !== visibleTab.id) {
+          return {
+            success: false,
+            error: 'The tab changed while the screenshot was taken. Try again.',
+          } as ExtensionResponse;
+        }
 
         return {
           success: true,
           data: canvas,
-          tabId: resolvedTabId,
+          tabId: visibleTab.id,
           timestamp: Date.now(),
         } as ExtensionResponse;
       } catch (error) {
@@ -5827,6 +5844,7 @@ async function handleChatMessage(
         owner,
         answer,
         routing ? { selectedModel: 'auto', currentModelKey: routing.modelKey } : undefined,
+        routing?.answeredModel,
       );
       if (!stored) {
         const message = 'The background answer could not be proven durable.';

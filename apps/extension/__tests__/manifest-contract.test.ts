@@ -203,4 +203,18 @@ describe('Chrome manifest trust contract', () => {
     expect(extensionPages).not.toMatch(/script-src[^;]*'unsafe-inline'/);
     expect(extensionPages).not.toMatch(/script-src[^;]*'unsafe-eval'/);
   });
+
+  it('lets answer images load from https only, and only as images', () => {
+    const contentSecurityPolicy = manifest['content_security_policy'] as
+      { extension_pages?: unknown } | undefined;
+    const extensionPages = String(contentSecurityPolicy?.extension_pages ?? '');
+    const directive = (name: string): string | undefined =>
+      new RegExp(`(?:^|;\\s*)${name} ([^;]+)`).exec(extensionPages)?.[1]?.trim();
+
+    expect(directive('img-src')).toBe("'self' data: https:");
+    expect(directive('default-src')).toBe("'self'");
+    expect(directive('font-src')).toBeUndefined();
+    expect(directive('media-src')).toBe("'self' blob:");
+    expect(directive('frame-src')).toBe(`'self' ${ARTIFACT_SANDBOX_ORIGIN}`);
+  });
 });

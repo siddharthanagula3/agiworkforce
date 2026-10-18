@@ -166,6 +166,7 @@ function makeErrorResponse(status: number, bodyText: string): Response {
   return {
     ok: false,
     status,
+    headers: new Headers(),
     body: null,
     text: vi.fn().mockResolvedValue(bodyText),
   } as unknown as Response;
@@ -1154,15 +1155,26 @@ describe('streamFreeChat, SSE happy path', () => {
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
   });
 
-  it('bounds total visible streamed output', async () => {
-    const oversized = 'x'.repeat(MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS + 1);
+  it('bounds total visible streamed output across individually valid frames', async () => {
+    const frameText = 'x'.repeat(Math.floor(MANAGED_CHAT_MAX_SSE_FRAME_CHARS * 0.9));
+    const frameCount = Math.floor(MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS / frameText.length) + 1;
     fetchMock.mockResolvedValueOnce(
-      makeStreamResponse([JSON.stringify({ content: oversized, done: false }), '[DONE]']),
+      makeStreamResponse([
+        ...Array.from({ length: frameCount }, () =>
+          JSON.stringify({ content: frameText, done: false }),
+        ),
+        '[DONE]',
+      ]),
     );
 
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
 
-    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toHaveLength(frameCount - 1);
+    expect(chunks.at(-1)).toEqual({
+      type: 'error',
+      message: 'AGI Cloud returned more output than this surface can safely render.',
+      code: 'protocol_error',
+    });
   });
 
   it('sends Authorization: Bearer header with the token', async () => {

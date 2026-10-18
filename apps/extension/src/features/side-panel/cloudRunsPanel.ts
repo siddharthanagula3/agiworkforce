@@ -51,7 +51,7 @@ import {
 } from './schedulesSection';
 import { el } from './dom';
 import { buildHelpArticleLink } from './helpLinks';
-import { renderMarkdown, sanitizeHtml } from './markdown';
+import { renderMarkdownInto } from './markdown';
 import { t } from '../../i18n';
 
 export const CLOUD_RUNS_PANEL_CSS =
@@ -1399,7 +1399,7 @@ export function buildCloudRunsPanel(
       ),
     );
     const body = el('div', { class: 'sp-run-result' });
-    body.innerHTML = sanitizeHtml(renderMarkdown(text));
+    renderMarkdownInto(body, text);
     section.appendChild(body);
     return section;
   }

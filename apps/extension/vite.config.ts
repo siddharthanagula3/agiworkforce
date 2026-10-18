@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      // The extension CSP has no data: in font-src, so a font inlined as a
+      // data URI is refused and KaTeX falls back to the wrong glyphs.
+      assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
       minify: 'terser',
       sourcemap: mode !== 'production',
       rollupOptions: {
@@ -77,6 +80,17 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: 'agi-katex-woff2-only',
+        enforce: 'pre',
+        transform(code, id) {
+          if (!/katex\/dist\/katex\.min\.css(?:\?|$)/.test(id)) return null;
+          return code.replace(
+            /,url\(fonts\/[^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g,
+            '',
+          );
+        },
+      },
       {
         name: 'agi-configured-chrome-manifest',
         generateBundle() {

@@ -101,6 +101,19 @@ The extension declares no sandbox page.
 `media-src` adds `blob:` only, so a video the user asked AGI to create plays in
 the side panel after the extension downloads it from the user's own account.
 
+### Images in answers
+
+The extension-pages CSP allows `img-src 'self' data: https:`. An answer can
+include a markdown image hosted anywhere on the web, and the side panel shows it
+the way the AGI web chat does: nothing is fetched until the user clicks "Load
+image" for that image, the request is sent with no referrer, and a failed image
+offers two retries and a download link. `https:` applies to images only; scripts
+and fonts stay limited to files packaged with the extension, and frames and media
+add only the sources described above.
+Dashboard text: "Answers can contain images hosted on the web. The side panel
+loads one only after the user chooses to load it, without sending a referrer;
+no remote image can run code."
+
 ## Data use disclosures
 
 Tick these in the Dashboard's Privacy tab, and nothing else.

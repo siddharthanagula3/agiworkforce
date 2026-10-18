@@ -170,6 +170,12 @@ import {
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
 import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import {
+  applyResolvedRoute,
+  resolvedRouteFrom,
+  type ResolvedRoute,
+} from './features/side-panel/answeredModel';
+import { buildFreePlanNotices, type FreePlanNotices } from './features/side-panel/freePlanNotices';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
 import {
   expandPromptShortcut,
@@ -841,6 +847,7 @@ interface ChatChunk {
     taskType: RoutingTaskType;
     reason: string;
     effort?: Effort;
+    answeredModel?: string;
   };
 }
 
@@ -901,6 +908,7 @@ const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
 let managedChatKeepalivePort: chrome.runtime.Port | null = null;
 let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
 let composerComputerUsePanel: ComputerUsePanelAPI | null = null;
+let freePlanNotices: FreePlanNotices | null = null;
 let showComposerComputerUseTab: (() => void) | null = null;
 let contextHandoffPreview: ContextHandoffPreviewController | null = null;
 let activeContextHandoffId: string | null = null;
@@ -985,16 +993,8 @@ function previousAnswerModel(streamId: string): string | undefined {
 
 function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
   if (!routing) return false;
-  const metadata = getModelMetadataById(routing.modelKey);
-  if (!metadata) return false;
-  const chosenByAuto = routing.reason !== 'explicit';
-  const movedFrom = chosenByAuto ? previousAnswerModel(streamId) : undefined;
-  const route: ResolvedRoute = {
-    model: metadata.id,
-    provider: metadata.provider,
-    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
-    ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
-  };
+  const route = resolvedRouteFrom(routing, () => previousAnswerModel(streamId));
+  if (!route) return false;
   resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
@@ -1004,13 +1004,7 @@ function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): 
 
 function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
   const route = resolvedRouteByStreamId.get(streamId);
-  if (!route) return;
-  assistant.model = route.model;
-  assistant.provider = route.provider;
-  if (route.autoRouteReason) assistant.autoRouteReason = route.autoRouteReason;
-  else delete assistant.autoRouteReason;
-  if (route.movedFromModel) assistant.movedFromModel = route.movedFromModel;
-  else delete assistant.movedFromModel;
+  if (route) applyResolvedRoute(assistant, route);
 }
 
 function managedQuickModeActive(): boolean {
@@ -1156,13 +1150,6 @@ interface ComposerAttachmentIntake {
 const composerAttachmentIntakes = new Set<ComposerAttachmentIntake>();
 const composerAttachmentReads = new Map<FileReader, () => void>();
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
-interface ResolvedRoute {
-  model: string;
-  provider: string;
-  autoRouteReason?: string;
-  movedFromModel?: string;
-}
-
 const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
@@ -2063,7 +2050,9 @@ function injectStyles(): void {
       border-radius: var(--corner-surface);
       line-height: var(--type-body-height);
       font-size: var(--type-body-size);
-      word-break: break-word;
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
     .sp-bubble-user {
@@ -2166,6 +2155,16 @@ function injectStyles(): void {
     }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
     .sp-copy-btn.copied { color: var(--agi-ext-success-text); opacity: 1; }
+    .sp-copy-btn.failed { color: var(--agi-ext-danger-text); opacity: 1; }
+    .sp-copy-control { display: inline-flex; align-items: center; min-width: 0; }
+    .sp-copy-status {
+      color: var(--agi-ext-danger-text);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-copy-status:not(:empty) { margin-left: 4px; }
+    [data-math-source] { font-family: var(--type-code-family); }
     .sp-answer-meta {
       padding: 0 3px;
       color: var(--agi-ext-text-muted);
@@ -2507,6 +2506,97 @@ function injectStyles(): void {
       padding: 0;
       color: inherit;
     }
+    .sp-code-block { min-width: 0; max-width: 100%; margin: 4px 0; }
+    .sp-code-block > pre { margin: 0; }
+    .sp-code-block__bar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      min-height: 24px;
+    }
+    .sp-code-block__status {
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-code-block__copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-code-block__copy:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+    .sp-code-block__copy:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-code-block__copy[data-state="copied"] { color: var(--agi-ext-success-text); }
+    .sp-code-block__copy[data-state="failed"] { color: var(--agi-ext-danger-text); }
+    .sp-code-block__bar:has([data-state="failed"]) .sp-code-block__status { color: var(--agi-ext-danger-text); }
+    .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+    .sp-md-image-notice {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 8px;
+      max-width: 100%;
+      margin: 6px 0;
+      padding: 6px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
+    .sp-md-image-notice__label { min-width: 0; color: var(--agi-ext-text); }
+    .sp-md-image-button {
+      min-height: 24px;
+      padding: 0 8px;
+      border: 1px solid var(--agi-ext-border-control);
+      border-radius: var(--corner-compact);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      cursor: pointer;
+    }
+    .sp-md-image-button:hover { background: var(--agi-ext-hover); }
+    .sp-md-image-button:focus-visible,
+    .sp-md-image:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-md-image {
+      display: inline-block;
+      max-width: 100%;
+      margin: 6px 0;
+      vertical-align: top;
+      cursor: zoom-in;
+    }
+    .sp-md-image--loading {
+      width: 100%;
+      max-width: 384px;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-hover);
+    }
+    .sp-md-image img {
+      display: block;
+      max-width: 100%;
+      max-height: 512px;
+      object-fit: contain;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+    }
+    .sp-bubble-assistant section {
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-assistant section ol { padding-left: 16px; }
     .sp-bubble-assistant strong { color: var(--agi-ext-text); font-weight: 600; }
     .sp-bubble-assistant em { color: var(--agi-ext-text-muted); font-style: italic; }
     .sp-bubble-assistant a { color: var(--agi-ext-accent-text); text-decoration: underline; }
@@ -8650,6 +8740,7 @@ function handleStreamError(
       : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
+  const failedRoute = resolvedRouteByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
@@ -8683,6 +8774,7 @@ function handleStreamError(
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
+    if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
     // cloud-ineligible (isCloudPersistenceEligible requires every message to be
     // managed-cloud); this turn is managed-cloud, so mark it as such.
@@ -14175,6 +14267,7 @@ function buildUI(): void {
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const token = authContext?.token ?? null;
+    if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
       capabilityDocument = null;
       applyCapabilityGates();
@@ -14351,6 +14444,13 @@ function buildUI(): void {
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
       presentManagedUsage(access);
+      if (authContext) {
+        void freePlanNotices?.update({
+          accountId: authContext.owner.accountId,
+          subscriptionTier: access.subscriptionTier,
+          token,
+        });
+      }
       if (ownerChanged) clearChildren(quotaModelsEl);
       if (!settingsGroupBody.hidden) void refreshModelUsageHistory();
       if (managedCloudChatState !== 'ready') return;
@@ -17145,6 +17245,8 @@ function buildUI(): void {
     buildHelpArticleLink('temporary-chats', t('spHelpLinkTemporary')),
   );
 
+  freePlanNotices = buildFreePlanNotices();
+  inputArea.appendChild(freePlanNotices.element);
   inputArea.appendChild(usageWarningBanner);
   inputArea.appendChild(modelNotice);
   inputArea.appendChild(temporaryNotice);

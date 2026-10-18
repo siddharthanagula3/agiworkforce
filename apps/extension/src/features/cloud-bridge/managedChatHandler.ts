@@ -47,6 +47,7 @@ import {
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
 import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
+import { normalizeAnsweredModel } from './answeredModel';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 
 const MAX_MESSAGE_CHARS = 32_000;
@@ -472,7 +473,12 @@ export function normalizeChromeManagedRoutingMetadata(
   const taskType = record['taskType'];
   const reason = record['reason'];
   const requestedEffort = record['effort'];
+  const answeredModel =
+    record['answeredModel'] === undefined
+      ? undefined
+      : normalizeAnsweredModel(record['answeredModel']);
   if (
+    answeredModel === null ||
     typeof modelKey !== 'string' ||
     modelKey.length === 0 ||
     modelKey.length > MAX_IDENTIFIER_CHARS ||
@@ -498,6 +504,7 @@ export function normalizeChromeManagedRoutingMetadata(
     taskType: taskType as RoutingTaskType,
     reason,
     ...(requestedEffort === undefined ? {} : { effort: requestedEffort as Effort }),
+    ...(answeredModel ? { answeredModel } : {}),
   };
 }
 
@@ -688,7 +695,7 @@ export async function executeChromeManagedChat(
     request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
   const routedModelSearches = getModelMetadataById(routing.modelKey)?.capabilities.search === true;
 
-  const routingResult: ChromeManagedRoutingResult = {
+  let routingResult: ChromeManagedRoutingResult = {
     modelKey: routing.modelKey,
     taskType: routing.taskType,
     reason: routing.reason,
@@ -757,6 +764,13 @@ export async function executeChromeManagedChat(
       await dependencies.onQuotaWarning?.(chunk.warning);
       continue;
     }
+    if (chunk.type === 'answered-model') {
+      if (chunk.model !== (routingResult.answeredModel ?? routingResult.modelKey)) {
+        routingResult = { ...routingResult, answeredModel: chunk.model };
+        await dependencies.onRouting?.(routingResult);
+      }
+      continue;
+    }
     if (chunk.type === 'error') {
       return {
         status: 'error',
@@ -819,6 +833,7 @@ async function relayManagedResume(
       await dependencies.onQuotaWarning?.(chunk.warning);
       continue;
     }
+    if (chunk.type === 'answered-model') continue;
     if (chunk.type === 'error') {
       return {
         status: 'error',
