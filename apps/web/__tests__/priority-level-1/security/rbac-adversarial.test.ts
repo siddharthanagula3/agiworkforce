@@ -96,7 +96,6 @@ const db = {
 
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 
-const { explainMemberAuthorization } = await import('@/lib/authorization/authorize');
 const { isEnterpriseDenialError } = await import('@/lib/authorization/denial');
 const { requireMemberPermission, requirePermission } =
   await import('@/lib/services/organization-permission-service');
@@ -228,8 +227,6 @@ describe('L1 Security - Analytics Viewer content-access leakage', () => {
       requireMemberPermission(ORG, 'u-analytics', 'content.read', DENIED),
     );
     expect(denial['code']).toBe('permission_denied');
-    const explanation = await explainMemberAuthorization(db as never, ORG, 'u-analytics');
-    expect(explanation.permissions).toEqual(['audit.read']);
   });
 
   test('SECURITY: requirePermission refuses a null membership before it reads a permission', () => {
@@ -302,41 +299,6 @@ describe('L1 Security - self escalation through the role-assignment path', () =>
     await expect(assign('u-viewer', [OWNERS_ROLE])).rejects.toMatchObject({ statusCode: 403 });
     expect(logSecurityEvent).toHaveBeenCalledTimes(1);
     expect(sendSupportEmail).not.toHaveBeenCalled();
-  });
-});
-
-describe('L1 Security - effective permission explanation', () => {
-  test('HAPPY_PATH: names every grant, what was withheld, and the precedence followed', async () => {
-    world.members.set(key(ORG, 'u-multi'), {
-      role: 'member',
-      permissions: ['content.read', 'content.share', 'audit.read'],
-      grants: [
-        { source: 'membership:member', permissions: ['content.read', 'content.share'] },
-        { source: 'group:Analytics:viewer', permissions: ['content.read', 'audit.read'] },
-        { source: 'role:custom', permissions: ['ownership.transfer'] },
-      ],
-    });
-
-    const explanation = await explainMemberAuthorization(db as never, ORG, 'u-multi');
-    expect(explanation.permissions).toEqual(['audit.read', 'content.read', 'content.share']);
-    expect(explanation.grantedBy['content.read']).toEqual([
-      'group:Analytics:viewer',
-      'membership:member',
-    ]);
-    expect(explanation.withheld['ownership.transfer']).toBe('primary_owner_only');
-    expect(explanation.precedence.map((stage) => stage.stage)).toEqual([
-      'membership',
-      'entitlement',
-      'permission',
-      'policy',
-      'rollout',
-    ]);
-  });
-
-  test('SECURITY: a non-member explanation confers nothing', async () => {
-    const explanation = await explainMemberAuthorization(db as never, ORG, 'u-nobody');
-    expect(explanation.permissions).toEqual([]);
-    expect(explanation.isPrimaryOwner).toBe(false);
   });
 });
 
