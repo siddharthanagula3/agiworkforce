@@ -101,7 +101,9 @@ const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
 const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // Backstop for a hung discovery pipeline only. Must exceed the per-server
-// `McpTimeouts.initialize` (30s): a single stalled server is skipped by its.
+// `McpTimeouts.initialize` (30s): a single stalled server is skipped by its
+// own timeout and discovery still resolves to `mcp/ready`. Equal values race
+// the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
@@ -117,7 +119,8 @@ const MAX_PLAN_FEEDBACK_CHARS: usize = 4_000;
 const MAX_IMAGE_INPUT_ENCODED_BYTES: usize = MAX_IMAGE_INPUT_BYTES.div_ceil(3) * 4;
 const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // The VS Code JSONL client rejects any single line above 4 MiB. Reserve ample
-// headroom for the JSON-RPC envelope and thread summary while measuring the.
+// headroom for the JSON-RPC envelope and thread summary while measuring the
+// exact serialized message objects included in `thread/read`.
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
 /// Tools that build a second `AgentSession` this host never sees.
@@ -1094,7 +1097,8 @@ impl CliDeveloperSessionHost {
         let workspace_root = self.workspace_root.clone();
         tokio::spawn(async move {
             // Discovery may launch MCP subprocesses, so it participates in the
-            // same admission barrier as requests. Shutdown either waits for.
+            // same admission barrier as requests. Shutdown either waits for
+            // this whole pipeline or prevents it from starting.
             let _admission = lifecycle.read().await;
             if shutdown_started.load(Ordering::Acquire) {
                 return;
@@ -1716,7 +1720,8 @@ impl CliDeveloperSessionHost {
                 .collect()
         } else {
             // Managed provider failover belongs behind the AGI gateway. Feeding
-            // upstream IDs into the CLI's direct-provider fallback chain would.
+            // upstream IDs into the CLI's direct-provider fallback chain would
+            // silently cross the Managed trust boundary.
             Vec::new()
         };
 
@@ -2034,7 +2039,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         };
         let provider_override = match auto_trust {
             // Auto resolves to an upstream provider model ID, but Managed
-            // sessions must retain the AGI gateway as their provider/trust.
+            // sessions must retain the AGI gateway as their provider/trust
+            // authority. Detecting from the concrete model here would silently
+            // turn Managed Auto into a direct BYOK route.
             Some(agiworkforce_model_registry::TrustMode::ManagedCloud) => Some("managed_cloud"),
             Some(_) => auto_vendor.as_deref(),
             None => models::selection_provider_override(
@@ -2716,6 +2723,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ThreadRewindRestore::Conversation => crate::agent::RewindMode::Conversation,
             ThreadRewindRestore::Code => crate::agent::RewindMode::Code,
         };
+        // Restoring files touches the workspace every thread of this host
+        // edits, so it waits out a revert or stage and refuses while a turn in
+        // any thread runs, as `thread/revert` does. Taken before the table of
+        // running turns, the order a turn's finish takes them in.
+        let _workspace_files = if matches!(mode, crate::agent::RewindMode::Conversation) {
+            None
+        } else {
+            Some(self.lock_workspace_files(&params.thread_id).await?)
+        };
         let running_turns = self.running_turns.lock().await;
         if running_turns.contains_key(&params.thread_id) {
             return Err(DeveloperSessionHostError::conflict(
@@ -3049,7 +3065,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let session = self.load_agent(&params.thread_id).await?;
         self.claim_worktree(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
-        // Keeping this guard through session setup prevents a losing concurrent.
+        // Keeping this guard through session setup prevents a losing concurrent
+        // request from changing the model, controls, messages, or attachments.
         let mut running_turns = self.running_turns.lock().await;
         if let Some(accepted) = client_turn_id
             .as_deref()
@@ -3303,7 +3320,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut unsent_steers = 0u32;
 
             // A route that cannot start is refused before any work is announced,
-            // so a client shows the failure alone rather than an activity row.
+            // so a client shows the failure alone rather than an activity row
+            // that ended with an error.
             let route_block = match refused_turn {
                 Some(error) => Some(error),
                 None => {
@@ -3847,7 +3865,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         };
         let process_owner = running.process_owner;
         // Order matters: the turn task holds the session mutex across
-        // `agent.send`, and the two steps below need it. `abort` releases it.
+        // `agent.send`, and the two steps below need it. `abort` releases it
+        // only because `SubagentManager::wait_all` polls instead of blocking on
+        // `join`; without that await point this lock and that join wedge each
+        // other. Join last: awaiting the aborted task before the subagents are
+        // cancelled waits for exactly the work the interrupt is meant to stop.
         running.handle.abort();
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &[process_owner],
@@ -4103,6 +4125,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             })?;
 
         loop {
+            // The wait holds an admission, so shutdown, which waits for every
+            // admission to end, is kept waiting at most one poll interval.
+            if self.shutdown_started.load(Ordering::Acquire) {
+                return Err(DeveloperSessionHostError::unavailable(
+                    "The app-server is shutting down",
+                ));
+            }
             if std::time::Instant::now() >= pending.deadline {
                 return Ok(AccountLoginWaitResponse {
                     outcome: AccountLoginOutcome::Expired,
@@ -4942,6 +4971,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: WorktreeApplyParams,
     ) -> Result<WorktreeApplyResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        // Applying writes into this host's own folder, which its threads edit,
+        // so it waits out a revert or stage and refuses while a turn runs.
+        let _workspace_files = if params.preview {
+            None
+        } else {
+            Some(self.lock_workspace_files("").await?)
+        };
         let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
         let outcome = manager
             .apply_to_local(&params.worktree_id, params.preview)
@@ -5172,7 +5208,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             run.handle.abort();
         }
         // Same ordering as `interrupt_turn`, and the same dependency on
-        // `wait_all` yielding: the session locks below are unreachable until.
+        // `wait_all` yielding: the session locks below are unreachable until
+        // the aborted turns drop their guards, and one wedged session would
+        // otherwise stall shutdown for every other session in this loop.
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &process_owners,
             PROCESS_TREE_SHUTDOWN_TIMEOUT,
@@ -5292,7 +5330,8 @@ fn emit_writer_change(
 }
 
 /// Keep a running turn's lease alive. When another process has explicitly
-/// taken the thread, say so once; the turn still finishes and its messages are.
+/// taken the thread, say so once; the turn still finishes and its messages are
+/// kept by the collision check on save.
 async fn renew_writer_lease(
     session_path: PathBuf,
     identity: &'static WriterIdentity,
@@ -6488,7 +6527,8 @@ fn repository_without_credentials(remote: &str) -> Option<String> {
 }
 
 /// Which surface a connection speaks for, from the name it introduced itself
-/// with. The exact name is kept separately on the thread; this is the coarse.
+/// with. The exact name is kept separately on the thread; this is the coarse
+/// bucket a client groups and filters by.
 fn source_from_client(client: &AppServerClientInfo) -> DeveloperSessionSource {
     let name = client.name.to_ascii_lowercase();
     if name.contains("vscode") {
@@ -6967,7 +7007,9 @@ mod tests {
     }
 
     /// `createdBy` is the coarse surface a client groups by; `client` is the
-    /// exact name the connection introduced itself with. A desktop client used.
+    /// exact name the connection introduced itself with. A desktop client used
+    /// to land in the `cli` bucket, so every desktop thread was
+    /// indistinguishable from one started in a terminal.
     #[test]
     fn a_clients_name_decides_its_surface_in_both_directions() {
         for (name, expected) in [
@@ -7001,7 +7043,9 @@ mod tests {
     }
 
     /// The branch comes from what the host persisted, never from probing while
-    /// listing: a picker over a hundred threads must not spawn a hundred git.
+    /// listing: a picker over a hundred threads must not spawn a hundred git
+    /// processes, and a thread whose checkout has since moved should still say
+    /// where its work happened.
     #[tokio::test]
     async fn a_threads_branch_and_worktree_come_from_what_was_persisted() {
         let workspace = tempdir().expect("workspace");
@@ -7057,7 +7101,8 @@ mod tests {
     }
 
     /// A free-text error cannot tell a client whether to offer a sign-in, a
-    /// retry, or nothing at all. The code can, and it is derived from the.
+    /// retry, or nothing at all. The code can, and it is derived from the
+    /// typed error rather than by matching on prose that changes per provider.
     #[test]
     fn a_failed_turn_classifies_into_a_code_a_client_can_act_on() {
         let missing =
@@ -7664,7 +7709,8 @@ mod tests {
         let path = store.save(&session).expect("save valid session");
 
         // Simulate a user-edited JSONL header containing a C1 control. Serde
-        // accepts the escaped string, but it must not cross the protocol or be.
+        // accepts the escaped string, but it must not cross the protocol or be
+        // trusted for execution.
         let persisted = std::fs::read_to_string(&path).expect("read session");
         let (header, records) = persisted.split_once('\n').expect("JSONL header");
         let mut header: serde_json::Value = serde_json::from_str(header).expect("parse header");
@@ -7850,7 +7896,10 @@ mod tests {
     }
 
     /// Regression: the Effort picker used to be stored ONLY as its Anthropic
-    /// projection, which collapses Low and Medium to the same `None`. Every.
+    /// projection, which collapses Low and Medium to the same `None`. Every
+    /// non-Anthropic provider therefore ran at its own default no matter what
+    /// the user selected. The level itself must survive so the request boundary
+    /// can derive the OpenAI and Gemini forms too.
     #[test]
     fn developer_effort_survives_for_non_anthropic_providers() {
         let mut agent = test_agent();
@@ -8323,7 +8372,8 @@ mod tests {
             Some(&resolved.provider_model_id)
         );
         // The registry now hands back a cross-provider ladder behind the cached
-        // model. The host must chain it verbatim, once each, and every entry has.
+        // model. The host must chain it verbatim, once each, and every entry has
+        // to be a BYOK-reachable catalog model.
         let expected = crate::model_catalog::resolve_auto_model_with_context(
             "auto-economy",
             agiworkforce_model_registry::RoutingTaskType::Coding,
@@ -9986,7 +10036,8 @@ mod tests {
         base.default.model = crate::model_catalog::default_model().to_string();
 
         // This is the derivation `subagent::run_subagent` performs for its own
-        // session. Against the process defaults it resolves to nothing, so the.
+        // session. Against the process defaults it resolves to nothing, so the
+        // child re-derives a route the parent never authorized.
         assert!(crate::models::selection_provider_override(
             &agent.model,
             &base.default.model,
@@ -10084,7 +10135,9 @@ mod tests {
     }
 
     /// A turn task shaped like one that spawned a subagent: its work runs on a
-    /// separate thread under the turn's process owner, and the task itself.
+    /// separate thread under the turn's process owner, and the task itself
+    /// parks on a synchronous join with no await point for `abort` to land on.
+    /// It leaves that join only once the process tree is gone.
     #[cfg(unix)]
     async fn parked_subagent_turn(
         process_owner: crate::process_tree::ProcessTreeOwner,
