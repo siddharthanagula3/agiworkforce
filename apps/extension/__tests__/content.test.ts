@@ -225,26 +225,6 @@ describe('handleMessage, GET_PAGE_INFO', () => {
   });
 });
 
-describe('handleMessage, GET_FORMS', () => {
-  it('returns success with a forms array', async () => {
-    const response = await dispatchMessage({ type: 'GET_FORMS' });
-    expect(response).toMatchObject({ success: true, forms: expect.any(Array) });
-  });
-
-  it('returns forms present in the document', async () => {
-    document.body.innerHTML = '<form id="f1" method="post"><input name="q" /></form>';
-    const { formUtils } = await import('../src/utils');
-    (formUtils.getForms as ReturnType<typeof vi.fn>).mockReturnValueOnce([
-      document.getElementById('f1'),
-    ]);
-    (formUtils.getFormFields as ReturnType<typeof vi.fn>).mockReturnValueOnce([
-      document.querySelector('input[name="q"]'),
-    ]);
-    const response = (await dispatchMessage({ type: 'GET_FORMS' })) as { forms: unknown[] };
-    expect(Array.isArray(response.forms)).toBe(true);
-  });
-});
-
 describe('handleMessage, CLICK', () => {
   it('returns success=false for an invalid selector', async () => {
     const { validators } = await import('../src/utils');
@@ -326,102 +306,6 @@ describe('handleMessage, GET_TEXT', () => {
 
     const response = await dispatchMessage({ type: 'GET_TEXT', selector: '#p' });
     expect(response).toMatchObject({ success: true, text: 'Hello' });
-  });
-});
-
-describe('handleMessage, SET_ATTRIBUTE security', () => {
-  it('blocks event handler attributes (onclick)', async () => {
-    document.body.innerHTML = '<div id="d"></div>';
-    const el = document.getElementById('d')!;
-    const { validators, domUtils } = await import('../src/utils');
-    (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
-    (domUtils.querySelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(el);
-
-    const response = await dispatchMessage({
-      type: 'SET_ATTRIBUTE',
-      selector: '#d',
-      attribute: 'onclick',
-      value: 'alert(1)',
-    });
-    expect(response).toMatchObject({ success: false });
-    expect((response as { error: string }).error).toContain('onclick');
-  });
-
-  it('allows data-* attributes', async () => {
-    document.body.innerHTML = '<div id="d"></div>';
-    const el = document.getElementById('d')!;
-    const { validators, domUtils } = await import('../src/utils');
-    (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
-    (domUtils.querySelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(el);
-
-    const response = await dispatchMessage({
-      type: 'SET_ATTRIBUTE',
-      selector: '#d',
-      attribute: 'data-custom',
-      value: 'value',
-    });
-    expect(response).toMatchObject({ success: true });
-  });
-
-  it('blocks src attribute on script elements', async () => {
-    document.body.innerHTML = '<script id="s"></script>';
-    const el = document.getElementById('s')!;
-    const { validators, domUtils } = await import('../src/utils');
-    (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
-    (domUtils.querySelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(el);
-
-    const response = await dispatchMessage({
-      type: 'SET_ATTRIBUTE',
-      selector: '#s',
-      attribute: 'src',
-      value: 'https://evil.com/script.js',
-    });
-    expect(response).toMatchObject({ success: false });
-  });
-});
-
-describe('handleMessage, EXECUTE_SCRIPT allowlist', () => {
-  it('rejects unknown script operations', async () => {
-    const response = (await dispatchMessage({
-      type: 'EXECUTE_SCRIPT',
-      script: 'eval',
-      args: ['alert(1)'],
-    })) as { success: boolean; error: string };
-
-    expect(response.success).toBe(false);
-    expect(response.error).toContain('not allowed');
-  });
-
-  it('allows scrollTo operation', async () => {
-    const response = await dispatchMessage({
-      type: 'EXECUTE_SCRIPT',
-      script: 'scrollTo',
-      args: [0, 500],
-    });
-    expect(response).toMatchObject({ success: true });
-  });
-
-  it('allows getScrollPosition operation', async () => {
-    const response = (await dispatchMessage({
-      type: 'EXECUTE_SCRIPT',
-      script: 'getScrollPosition',
-    })) as { success: boolean; result: { x: number; y: number } };
-
-    expect(response.success).toBe(true);
-    expect(response.result).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
-  });
-
-  it('allows getViewportSize operation', async () => {
-    const response = (await dispatchMessage({
-      type: 'EXECUTE_SCRIPT',
-      script: 'getViewportSize',
-    })) as { success: boolean; result: { width: number; height: number } };
-
-    expect(response.success).toBe(true);
-    expect(response.result).toMatchObject({
-      width: expect.any(Number),
-      height: expect.any(Number),
-    });
   });
 });
 
@@ -604,65 +488,6 @@ describe('handleMessage, RUN_PAGE_ACTIONS', () => {
 });
 
 describe('handleMessage, additional message types routing', () => {
-  const invalidSelectorSetup = async () => {
-    const { validators } = await import('../src/utils');
-    (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
-  };
-
-  it('DOUBLE_CLICK: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'DOUBLE_CLICK', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('RIGHT_CLICK: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'RIGHT_CLICK', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('HOVER: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'HOVER', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('FOCUS: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'FOCUS', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('BLUR: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'BLUR', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('SCROLL (no selector): returns success using window.scrollTo', async () => {
-    window.scrollTo = vi.fn();
-    const response = await dispatchMessage({ type: 'SCROLL', x: 0, y: 200 });
-    expect(response).toMatchObject({ success: true });
-  });
-
-  it('SELECT_OPTION: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'SELECT_OPTION', selector: '##', value: 'a' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('CHECK: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'CHECK', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('UNCHECK: returns error for invalid selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({ type: 'UNCHECK', selector: '##' });
-    expect(response).toMatchObject({ success: false });
-  });
-
   it('BUILD_ACCESSIBILITY_TREE: returns a tree with success=true', async () => {
     const response = (await dispatchMessage({ type: 'BUILD_ACCESSIBILITY_TREE' })) as {
       success: boolean;
@@ -686,86 +511,6 @@ describe('handleMessage, additional message types routing', () => {
     }
   });
 
-  it('FILL_FORM: refuses to write to every form on the page', async () => {
-    document.body.innerHTML =
-      '<form id="a"><input name="email" /></form><form id="b"><input name="email" /></form>';
-    const { formUtils } = await import('../src/utils');
-
-    const response = await dispatchMessage({
-      type: 'FILL_FORM',
-      formSelector: null,
-      data: { email: 'test@example.com' },
-    });
-
-    expect(response).toMatchObject({
-      success: false,
-      error: 'FILL_FORM requires a valid formSelector',
-    });
-    expect(formUtils.getFormFields).not.toHaveBeenCalled();
-    expect(formUtils.fillField).not.toHaveBeenCalled();
-  });
-
-  it('FILL_FORM: fails when the selector resolves to no form', async () => {
-    const response = await dispatchMessage({
-      type: 'FILL_FORM',
-      formSelector: '#missing',
-      data: { email: 'test@example.com' },
-    });
-    expect(response).toMatchObject({ success: false, error: 'Form not found: #missing' });
-  });
-
-  it('FILL_FORM: fills only the named form', async () => {
-    document.body.innerHTML =
-      '<form id="a"><input name="email" /></form><form id="b"><input name="email" /></form>';
-    const { formUtils } = await import('../src/utils');
-    (formUtils.getFormFields as ReturnType<typeof vi.fn>).mockImplementationOnce(
-      (form: HTMLFormElement) => Array.from(form.querySelectorAll('input')),
-    );
-
-    const response = (await dispatchMessage({
-      type: 'FILL_FORM',
-      formSelector: '#a',
-      data: { email: 'test@example.com' },
-    })) as { success: boolean; fieldsFilled: number };
-
-    expect(response.success).toBe(true);
-    expect(response.fieldsFilled).toBe(1);
-    expect(formUtils.getFormFields).toHaveBeenCalledWith(document.getElementById('a'));
-  });
-
-  it("SUBMIT_FORM: refuses to submit the page's first form without a target", async () => {
-    document.body.innerHTML = '<form id="a"></form>';
-    const { formUtils } = await import('../src/utils');
-
-    const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: null });
-
-    expect(response).toMatchObject({
-      success: false,
-      error: 'SUBMIT_FORM requires a valid formSelector',
-    });
-    expect(formUtils.submitForm).not.toHaveBeenCalled();
-  });
-
-  it('SUBMIT_FORM: fails when the selector does not resolve to a form', async () => {
-    document.body.innerHTML = '<div id="d"></div>';
-    const { formUtils } = await import('../src/utils');
-
-    const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: '#d' });
-
-    expect(response).toMatchObject({ success: false, error: 'Form not found: #d' });
-    expect(formUtils.submitForm).not.toHaveBeenCalled();
-  });
-
-  it('SUBMIT_FORM: submits the named form', async () => {
-    document.body.innerHTML = '<form id="a"></form>';
-    const { formUtils } = await import('../src/utils');
-
-    const response = await dispatchMessage({ type: 'SUBMIT_FORM', formSelector: '#a' });
-
-    expect(response).toMatchObject({ success: true });
-    expect(formUtils.submitForm).toHaveBeenCalledWith(document.getElementById('a'));
-  });
-
   it('WAIT_FOR_SELECTOR: returns success with found=false after timeout', async () => {
     const { domUtils } = await import('../src/utils');
     (domUtils.waitForSelector as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
@@ -780,40 +525,12 @@ describe('handleMessage, additional message types routing', () => {
     expect(response.found).toBe(false);
   });
 
-  it('GET_ATTRIBUTE: returns value of an attribute', async () => {
-    document.body.innerHTML = '<a id="link" href="https://example.com">Link</a>';
-    const el = document.getElementById('link')!;
-    const { validators, domUtils } = await import('../src/utils');
-    (validators.isValidSelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
-    (domUtils.querySelector as ReturnType<typeof vi.fn>).mockReturnValueOnce(el);
-
-    const response = (await dispatchMessage({
-      type: 'GET_ATTRIBUTE',
-      selector: '#link',
-      attribute: 'href',
-    })) as { success: boolean; value: string };
-
-    expect(response.success).toBe(true);
-    expect(response.value).toBe('https://example.com');
-  });
-
-  it('DRAG_DROP: returns error for invalid source selector', async () => {
-    await invalidSelectorSetup();
-    const response = await dispatchMessage({
-      type: 'DRAG_DROP',
-      sourceSelector: '##bad',
-      targetSelector: '#target',
-    });
-    expect(response).toMatchObject({ success: false });
-  });
-
-  it('CLICK_AT_COORDINATES: returns error when no element at coordinates', async () => {
-    const response = (await dispatchMessage({
-      type: 'CLICK_AT_COORDINATES',
-      x: 9999,
-      y: 9999,
-    })) as { success: boolean; error?: string };
-
-    expect(typeof response.success).toBe('boolean');
+  it('no longer accepts the DOM message types nothing sends', async () => {
+    for (const type of ['EXECUTE_SCRIPT', 'SET_ATTRIBUTE', 'FILL_FORM', 'DRAG_DROP']) {
+      expect(await dispatchMessage({ type })).toMatchObject({
+        success: false,
+        error: 'Invalid message',
+      });
+    }
   });
 });

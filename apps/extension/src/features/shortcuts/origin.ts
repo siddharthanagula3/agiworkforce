@@ -5,7 +5,6 @@ export function normalizeShortcutStartUrl(value: unknown): string | null {
   try {
     const parsed = new URL(value.trim());
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    // Origin is sufficient for replay safety and avoids persisting URL paths,
     return parsed.origin;
   } catch {
     return null;

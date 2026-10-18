@@ -27,18 +27,10 @@ export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'er
 export type NativeMessageType =
   | 'CAPTURE_SCREENSHOT'
   | 'CLICK'
-  | 'DOUBLE_CLICK'
-  | 'RIGHT_CLICK'
   | 'TYPE'
   | 'GET_TEXT'
-  | 'GET_ATTRIBUTE'
-  | 'SET_ATTRIBUTE'
   | 'WAIT_FOR_SELECTOR'
-  | 'EXECUTE_SCRIPT'
   | 'GET_PAGE_INFO'
-  | 'GET_FORMS'
-  | 'FILL_FORM'
-  | 'SUBMIT_FORM'
   | 'GET_CONNECTION_STATUS'
   | 'GET_CLOUD_AUTH_TOKEN'
   | 'MANAGED_CLOUD_AUTH_CHANGED'
@@ -75,17 +67,8 @@ export type NativeMessageType =
   | 'START_RECORDING'
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
-  | 'SELECT_OPTION'
   | 'FIND_ELEMENTS'
   | 'FILL_FIELDS'
-  | 'CHECK'
-  | 'UNCHECK'
-  | 'FOCUS'
-  | 'BLUR'
-  | 'HOVER'
-  | 'SCROLL'
-  | 'DRAG_DROP'
-  | 'CLICK_AT_COORDINATES'
   | 'BUILD_ACCESSIBILITY_TREE'
   | 'BRIDGE_URL_CHANGED'
   | 'WEBMCP_DISCOVER_TOOLS'
@@ -159,25 +142,9 @@ export interface ClickResponse {
   error?: string;
 }
 
-export interface DoubleClickMessage extends BaseMessage {
-  type: 'DOUBLE_CLICK';
-  selector: string;
-  options?: {
-    delay?: number;
-  };
-}
-
 export interface DoubleClickResponse {
   success: boolean;
   error?: string;
-}
-
-export interface RightClickMessage extends BaseMessage {
-  type: 'RIGHT_CLICK';
-  selector: string;
-  options?: {
-    delay?: number;
-  };
 }
 
 export interface RightClickResponse {
@@ -212,23 +179,10 @@ export interface GetTextResponse {
   error?: string;
 }
 
-export interface GetAttributeMessage extends BaseMessage {
-  type: 'GET_ATTRIBUTE';
-  selector: string;
-  attribute: string;
-}
-
 export interface GetAttributeResponse {
   success: boolean;
   value?: string;
   error?: string;
-}
-
-export interface SetAttributeMessage extends BaseMessage {
-  type: 'SET_ATTRIBUTE';
-  selector: string;
-  attribute: string;
-  value: string;
 }
 
 export interface SetAttributeResponse {
@@ -249,12 +203,6 @@ export interface WaitForSelectorResponse {
   success: boolean;
   found?: boolean;
   error?: string;
-}
-
-export interface ExecuteScriptMessage extends BaseMessage {
-  type: 'EXECUTE_SCRIPT';
-  script: string;
-  args?: unknown[];
 }
 
 export interface ExecuteScriptResponse {
@@ -293,34 +241,16 @@ export interface FormField {
   options?: string[];
 }
 
-export interface GetFormsMessage extends BaseMessage {
-  type: 'GET_FORMS';
-}
-
 export interface GetFormsResponse {
   success: boolean;
   forms?: FormInfo[];
   error?: string;
 }
 
-export interface FillFormMessage extends BaseMessage {
-  type: 'FILL_FORM';
-  formSelector?: string;
-  data: Record<string, string>;
-  options?: {
-    delay?: number;
-  };
-}
-
 export interface FillFormResponse {
   success: boolean;
   fieldsFilled?: number;
   error?: string;
-}
-
-export interface SubmitFormMessage extends BaseMessage {
-  type: 'SUBMIT_FORM';
-  formSelector?: string;
 }
 
 export interface SubmitFormResponse {
@@ -746,59 +676,6 @@ export interface FillFieldsMessage extends BaseMessage {
   fields: Array<{ selector: string; value: string }>;
 }
 
-export interface SelectOptionMessage extends BaseMessage {
-  type: 'SELECT_OPTION';
-  selector: string;
-  value: string;
-}
-
-export interface CheckMessage extends BaseMessage {
-  type: 'CHECK';
-  selector: string;
-}
-
-export interface UncheckMessage extends BaseMessage {
-  type: 'UNCHECK';
-  selector: string;
-}
-
-export interface FocusMessage extends BaseMessage {
-  type: 'FOCUS';
-  selector: string;
-}
-
-export interface BlurMessage extends BaseMessage {
-  type: 'BLUR';
-  selector: string;
-}
-
-export interface HoverMessage extends BaseMessage {
-  type: 'HOVER';
-  selector: string;
-}
-
-export interface ScrollMessage extends BaseMessage {
-  type: 'SCROLL';
-  selector?: string;
-  x?: number;
-  y?: number;
-  deltaX?: number;
-  deltaY?: number;
-}
-
-export interface DragDropMessage extends BaseMessage {
-  type: 'DRAG_DROP';
-  sourceSelector: string;
-  targetSelector: string;
-}
-
-export interface ClickAtCoordinatesMessage extends BaseMessage {
-  type: 'CLICK_AT_COORDINATES';
-  x: number;
-  y: number;
-  button?: 'left' | 'middle' | 'right';
-}
-
 export interface BridgeUrlChangedMessage extends BaseMessage {
   type: 'BRIDGE_URL_CHANGED';
   url?: string;
@@ -1179,18 +1056,10 @@ export interface PageWatchResponse {
 export type ExtensionMessage =
   | CaptureScreenshotMessage
   | ClickMessage
-  | DoubleClickMessage
-  | RightClickMessage
   | TypeMessage
   | GetTextMessage
-  | GetAttributeMessage
-  | SetAttributeMessage
   | WaitForSelectorMessage
-  | ExecuteScriptMessage
   | GetPageInfoMessage
-  | GetFormsMessage
-  | FillFormMessage
-  | SubmitFormMessage
   | ConnectionStatusMessage
   | GetCloudAuthTokenMessage
   | ManagedCloudAuthChangedMessage
@@ -1219,17 +1088,8 @@ export type ExtensionMessage =
   | StartRecordingMessage
   | StopRecordingMessage
   | GetRecordedActionsMessage
-  | SelectOptionMessage
   | FindElementsMessage
   | FillFieldsMessage
-  | CheckMessage
-  | UncheckMessage
-  | FocusMessage
-  | BlurMessage
-  | HoverMessage
-  | ScrollMessage
-  | DragDropMessage
-  | ClickAtCoordinatesMessage
   | BridgeUrlChangedMessage
   | WebMCPDiscoverToolsMessage
   | WebMCPCallToolMessage

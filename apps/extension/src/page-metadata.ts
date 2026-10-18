@@ -113,7 +113,7 @@ function getMainHeading(): string | null {
   return h1?.textContent?.trim() ?? null;
 }
 
-function extractSchemaTypes(): string[] {
+function extractSchemaTypes(jsonLd: readonly unknown[]): string[] {
   const types = new Set<string>();
 
   const itemScoped = document.querySelectorAll('[itemscope][itemtype]');
@@ -127,16 +127,7 @@ function extractSchemaTypes(): string[] {
     }
   }
 
-  // Also extract @type from JSON-LD (already parsed above, but we
-  const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-  for (const script of scripts) {
-    const text = script.textContent;
-    if (!text) continue;
-    const parsed = safeJsonParse<unknown>(text, MAX_JSON_LD_BYTES);
-    if (parsed !== undefined) {
-      collectJsonLdTypes(parsed, types);
-    }
-  }
+  for (const block of jsonLd) collectJsonLdTypes(block, types);
 
   return Array.from(types);
 }
@@ -177,6 +168,7 @@ function collectJsonLdTypes(data: unknown, types: Set<string>, depth = 0): void 
 
 export function extractPageMetadata(): PageMetadata {
   try {
+    const jsonLd = extractJsonLd();
     const description = getMetaContent('description') ?? '';
     const keywordsRaw = getMetaContent('keywords') ?? '';
     const keywords = keywordsRaw
@@ -198,8 +190,8 @@ export function extractPageMetadata(): PageMetadata {
       mainHeading: getMainHeading(),
       openGraph: extractOpenGraph(),
       twitterCard: extractTwitterCard(),
-      jsonLd: extractJsonLd(),
-      schemaTypes: extractSchemaTypes(),
+      jsonLd,
+      schemaTypes: extractSchemaTypes(jsonLd),
     };
   } catch (e) {
     logger.error('Failed to extract page metadata', e);

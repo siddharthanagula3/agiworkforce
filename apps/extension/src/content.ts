@@ -10,16 +10,9 @@ import type {
   RunPageAction,
   ConnectionStatusChangedMessage,
   ClickMessage,
-  DoubleClickMessage,
-  RightClickMessage,
   TypeMessage,
   GetTextMessage,
-  GetAttributeMessage,
-  SetAttributeMessage,
   WaitForSelectorMessage,
-  ExecuteScriptMessage,
-  FillFormMessage,
-  SubmitFormMessage,
   RunPageActionsMessage,
   AutoFillJobApplicationMessage,
 } from './types';
@@ -196,78 +189,28 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'CLICK':
       return handleClick(message as ClickMessage);
 
-    case 'DOUBLE_CLICK':
-      return handleDoubleClick(message as DoubleClickMessage);
-
-    case 'RIGHT_CLICK':
-      return handleRightClick(message as RightClickMessage);
-
     case 'TYPE':
       return handleType(message as TypeMessage);
 
     case 'GET_TEXT':
       return handleGetText(message as GetTextMessage);
 
-    case 'GET_ATTRIBUTE':
-      return handleGetAttribute(message as GetAttributeMessage);
-
-    case 'SET_ATTRIBUTE':
-      return handleSetAttribute(message as SetAttributeMessage);
-
     case 'WAIT_FOR_SELECTOR':
       return handleWaitForSelector(message as WaitForSelectorMessage);
-
-    case 'EXECUTE_SCRIPT':
-      return handleExecuteScript(message as ExecuteScriptMessage);
 
     case 'GET_PAGE_INFO':
       return handleGetPageInfo();
 
-    case 'GET_FORMS':
-      return handleGetForms();
-
-    case 'FILL_FORM':
-      return handleFillForm(message as FillFormMessage);
-
-    case 'SUBMIT_FORM':
-      return handleSubmitForm(message as SubmitFormMessage);
     case 'RUN_PAGE_ACTIONS':
       return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
       return handleAutoFillJobApplication(message as AutoFillJobApplicationMessage);
-
-    case 'SELECT_OPTION':
-      return handleSelectOption(message as import('./types').SelectOptionMessage);
 
     case 'FIND_ELEMENTS':
       return handleFindElements(message as import('./types').FindElementsMessage);
 
     case 'FILL_FIELDS':
       return handleFillFields(message as import('./types').FillFieldsMessage);
-
-    case 'CHECK':
-      return handleCheck(message as import('./types').CheckMessage, true);
-
-    case 'UNCHECK':
-      return handleCheck(message as import('./types').UncheckMessage, false);
-
-    case 'FOCUS':
-      return handleFocusBlur(message as import('./types').FocusMessage, 'focus');
-
-    case 'BLUR':
-      return handleFocusBlur(message as import('./types').BlurMessage, 'blur');
-
-    case 'HOVER':
-      return handleHover(message as import('./types').HoverMessage);
-
-    case 'SCROLL':
-      return handleScroll(message as import('./types').ScrollMessage);
-
-    case 'DRAG_DROP':
-      return handleDragDrop(message as import('./types').DragDropMessage);
-
-    case 'CLICK_AT_COORDINATES':
-      return handleClickAtCoordinates(message as import('./types').ClickAtCoordinatesMessage);
 
     case 'GET_ACCESSIBILITY_TREE':
     case 'BUILD_ACCESSIBILITY_TREE':
@@ -665,69 +608,6 @@ async function handleClick(message: ClickMessage): Promise<ClickResponse> {
   }
 }
 
-async function handleDoubleClick(message: DoubleClickMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector, options = {} } = message;
-
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector' };
-    }
-
-    const element = domUtils.querySelector(selector);
-    if (!element) {
-      return { success: false, error: 'Element not found' };
-    }
-
-    if (options.delay) {
-      await sleep(options.delay);
-    }
-
-    const event = new MouseEvent('dblclick', {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    });
-
-    element.dispatchEvent(event);
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleRightClick(message: RightClickMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector, options = {} } = message;
-
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector' };
-    }
-
-    const element = domUtils.querySelector(selector);
-    if (!element) {
-      return { success: false, error: 'Element not found' };
-    }
-
-    if (options.delay) {
-      await sleep(options.delay);
-    }
-
-    const event = new MouseEvent('contextmenu', {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      buttons: 2,
-    });
-
-    element.dispatchEvent(event);
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
 async function handleType(message: TypeMessage): Promise<ExtensionResponse> {
   try {
     const { selector, text, options = {} } = message;
@@ -815,106 +695,6 @@ async function handleGetText(message: GetTextMessage): Promise<ExtensionResponse
   }
 }
 
-async function handleGetAttribute(message: GetAttributeMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector, attribute } = message;
-
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector' };
-    }
-
-    const element = domUtils.querySelector(selector);
-    if (!element) {
-      return { success: false, error: 'Element not found' };
-    }
-
-    const value = element.getAttribute(attribute);
-
-    return { success: true, value: value ?? undefined };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-const SAFE_ATTRIBUTES = new Set([
-  'class',
-  'id',
-  'name',
-  'value',
-  'placeholder',
-  'type',
-  'checked',
-  'disabled',
-  'readonly',
-  'selected',
-  'title',
-  'alt',
-  'role',
-  'tabindex',
-  'width',
-  'height',
-  'min',
-  'max',
-  'step',
-  'pattern',
-  'maxlength',
-]);
-
-const DANGEROUS_URL_ATTRIBUTES = new Set(['src', 'href', 'action', 'formaction']);
-
-const SENSITIVE_URL_ELEMENTS = new Set([
-  'SCRIPT',
-  'LINK',
-  'FORM',
-  'IFRAME',
-  'OBJECT',
-  'EMBED',
-  'A',
-]);
-
-function isAttributeAllowed(attribute: string, element: Element): boolean {
-  const lowerAttr = attribute.toLowerCase();
-
-  if (lowerAttr.startsWith('on')) {
-    return false;
-  }
-
-  if (lowerAttr.startsWith('data-') || lowerAttr.startsWith('aria-')) {
-    return true;
-  }
-
-  if (DANGEROUS_URL_ATTRIBUTES.has(lowerAttr) && SENSITIVE_URL_ELEMENTS.has(element.tagName)) {
-    return false;
-  }
-
-  return SAFE_ATTRIBUTES.has(lowerAttr);
-}
-
-async function handleSetAttribute(message: SetAttributeMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector, attribute, value } = message;
-
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector' };
-    }
-
-    const element = domUtils.querySelector(selector);
-    if (!element) {
-      return { success: false, error: 'Element not found' };
-    }
-
-    if (!isAttributeAllowed(attribute, element)) {
-      return { success: false, error: `Attribute "${attribute}" is not allowed on this element` };
-    }
-
-    element.setAttribute(attribute, value);
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
 async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<ExtensionResponse> {
   try {
     const { selector, timeout = 5000, options = {} } = message;
@@ -926,91 +706,6 @@ async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<E
     const element = await domUtils.waitForSelector(selector, timeout, options.visible);
 
     return { success: true, found: element !== null };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown> = {
-  navigateTo: (...args: unknown[]) => {
-    const url = String(args[0] ?? '');
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error(`Only http/https URLs are allowed: ${url}`);
-    }
-    window.location.href = parsed.toString();
-    return parsed.toString();
-  },
-  scrollTo: (...args: unknown[]) =>
-    window.scrollTo((args[0] as number) ?? 0, (args[1] as number) ?? 0),
-  scrollBy: (...args: unknown[]) =>
-    window.scrollBy((args[0] as number) ?? 0, (args[1] as number) ?? 0),
-  scrollIntoView: (...args: unknown[]) => {
-    const selector = String(args[0] ?? '');
-    if (!validators.isValidSelector(selector)) return false;
-    const el = document.querySelector(selector);
-    el?.scrollIntoView(
-      (args[1] as ScrollIntoViewOptions) ?? { behavior: 'smooth', block: 'center' },
-    );
-    return !!el;
-  },
-  getScrollPosition: () => ({ x: window.scrollX, y: window.scrollY }),
-  getViewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
-  getComputedStyle: (...args: unknown[]) => {
-    const selector = String(args[0] ?? '');
-    if (!validators.isValidSelector(selector)) return null;
-    const el = document.querySelector(selector);
-    if (!el) return null;
-    const style = window.getComputedStyle(el);
-    return args[1] ? style.getPropertyValue(args[1] as string) : null;
-  },
-  getBoundingRect: (...args: unknown[]) => {
-    const selector = String(args[0] ?? '');
-    if (!validators.isValidSelector(selector)) return null;
-    const el = document.querySelector(selector);
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
-  },
-  focusElement: (...args: unknown[]) => {
-    const selector = String(args[0] ?? '');
-    if (!validators.isValidSelector(selector)) return false;
-    const el = document.querySelector(selector) as HTMLElement | null;
-    el?.focus();
-    return !!el;
-  },
-  blurElement: (...args: unknown[]) => {
-    const selector = String(args[0] ?? '');
-    if (!validators.isValidSelector(selector)) return false;
-    const el = document.querySelector(selector) as HTMLElement | null;
-    el?.blur();
-    return !!el;
-  },
-  // SECURITY (H-3): getLocalStorage, setLocalStorage, clearLocalStorage removed.
-  // Any allowlisted origin could invoke these via EXECUTE_SCRIPT, reading or
-  // destroying auth tokens and session data on any tab the user is viewing.
-  // Legitimate session-management operations (e.g. post-autofill cleanup on
-  // linkedin.com) must be implemented as a specific named operation that is
-  // authorized on a per-call basis via native messaging rather than being freely
-  // callable by any allowlisted origin. Do NOT re-add these three operations.
-};
-
-async function handleExecuteScript(message: ExecuteScriptMessage): Promise<ExtensionResponse> {
-  try {
-    const { script, args = [] } = message;
-
-    const operation = ALLOWED_SCRIPT_OPERATIONS[script];
-    if (!operation) {
-      return {
-        success: false,
-        error: `Script operation "${String(script)}" is not allowed. Supported operations: ${Object.keys(ALLOWED_SCRIPT_OPERATIONS).join(', ')}`,
-      };
-    }
-
-    const result = operation(...args);
-    const finalResult = result instanceof Promise ? await result : result;
-
-    return { success: true, result: finalResult };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1067,7 +762,7 @@ function handleGetForms(): GetFormsResponse {
               ? Array.from(field.options).map((opt) => opt.value)
               : undefined,
         }))
-        .filter((f) => f.name), // Only include named fields
+        .filter((f) => f.name),
     }));
 
     return { success: true, forms: formData };
@@ -1076,43 +771,6 @@ function handleGetForms(): GetFormsResponse {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
-  }
-}
-
-async function handleFillForm(message: FillFormMessage): Promise<ExtensionResponse> {
-  try {
-    const { formSelector, data, options = {} } = message;
-
-    if (!formSelector || !validators.isValidSelector(formSelector)) {
-      return { success: false, error: 'FILL_FORM requires a valid formSelector' };
-    }
-
-    const form = domUtils.querySelector(formSelector);
-    if (!form) {
-      return { success: false, error: `Form not found: ${formSelector}` };
-    }
-
-    const fields = formUtils.getFormFields(form as HTMLFormElement);
-
-    let fieldsFilled = 0;
-
-    for (const field of fields) {
-      const value = data[field.name];
-
-      if (value !== undefined && value !== null) {
-        if (formUtils.fillField(field, String(value))) {
-          fieldsFilled++;
-
-          if (options.delay) {
-            await sleep(options.delay);
-          }
-        }
-      }
-    }
-
-    return { success: true, fieldsFilled };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -1148,7 +806,6 @@ async function handleAutoFillJobApplication(
   const options =
     typeof message.options === 'object' && message.options !== null ? message.options : {};
 
-  // Safety gate: autoSubmit always requires explicit user confirmation via a
   const safeOptions = { ...options };
   if (safeOptions.autoSubmit === true) {
     const confirmed = window.confirm(
@@ -1237,25 +894,6 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
   }
 }
 
-async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionResponse> {
-  try {
-    const { formSelector } = message;
-
-    if (!formSelector || !validators.isValidSelector(formSelector)) {
-      return { success: false, error: 'SUBMIT_FORM requires a valid formSelector' };
-    }
-
-    const form = domUtils.querySelector(formSelector);
-    if (!(form instanceof HTMLFormElement)) {
-      return { success: false, error: `Form not found: ${formSelector}` };
-    }
-
-    return { success: formUtils.submitForm(form) };
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
 function handleFindElements(message: import('./types').FindElementsMessage): ExtensionResponse {
   try {
     const query = typeof message.query === 'string' ? message.query : undefined;
@@ -1277,199 +915,6 @@ function handleFillFields(message: import('./types').FillFieldsMessage): Extensi
       return { success: false, error: 'FILL_FIELDS needs at least one selector and value' };
     }
     return { success: true, ...fillPageFields(fields) } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleSelectOption(
-  message: import('./types').SelectOptionMessage,
-): Promise<ExtensionResponse> {
-  try {
-    const { selector, value } = message;
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector for select_option' };
-    }
-    const element = domUtils.querySelector(selector) as HTMLSelectElement | null;
-    if (!element || element.tagName.toLowerCase() !== 'select') {
-      return { success: false, error: `Select element not found: ${selector}` };
-    }
-    const receipt = selectOptionElement(element, { value });
-    return { success: true, value: receipt.selectedValue, ...receipt } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleCheck(
-  message: import('./types').CheckMessage | import('./types').UncheckMessage,
-  checked: boolean,
-): Promise<ExtensionResponse> {
-  try {
-    const { selector } = message;
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: `Invalid selector for ${checked ? 'check' : 'uncheck'}` };
-    }
-    const element = domUtils.querySelector(selector) as HTMLInputElement | null;
-    if (!element) {
-      return { success: false, error: `Element not found: ${selector}` };
-    }
-    element.checked = checked;
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    return { success: true, checked } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleFocusBlur(
-  message: import('./types').FocusMessage | import('./types').BlurMessage,
-  action: 'focus' | 'blur',
-): Promise<ExtensionResponse> {
-  try {
-    const { selector } = message;
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: `Invalid selector for ${action}` };
-    }
-    const element = domUtils.querySelector(selector) as HTMLElement | null;
-    if (!element) {
-      return { success: false, error: `Element not found: ${selector}` };
-    }
-    if (action === 'focus' && typeof element.focus === 'function') {
-      element.focus();
-    } else if (action === 'blur' && typeof element.blur === 'function') {
-      element.blur();
-    }
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleHover(message: import('./types').HoverMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector } = message;
-    if (!validators.isValidSelector(selector)) {
-      return { success: false, error: 'Invalid selector for hover' };
-    }
-    const element = domUtils.querySelector(selector);
-    if (!element) {
-      return { success: false, error: `Element not found: ${selector}` };
-    }
-    element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-    element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false, cancelable: true }));
-    element.dispatchEvent(
-      new MouseEvent('mousemove', { bubbles: true, cancelable: true, view: window }),
-    );
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleScroll(message: import('./types').ScrollMessage): Promise<ExtensionResponse> {
-  try {
-    const { selector, x = 0, y = 0, deltaX = 0, deltaY = 0 } = message;
-    if (selector) {
-      if (!validators.isValidSelector(selector)) {
-        return { success: false, error: 'Invalid selector for scroll' };
-      }
-      const element = domUtils.querySelector(selector);
-      if (!element) {
-        return { success: false, error: `Element not found: ${selector}` };
-      }
-      element.scrollBy({ left: deltaX, top: deltaY, behavior: 'smooth' });
-    } else if (deltaX !== 0 || deltaY !== 0) {
-      window.scrollBy({ left: deltaX, top: deltaY, behavior: 'smooth' });
-    } else {
-      window.scrollTo({ left: x, top: y, behavior: 'smooth' });
-    }
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleDragDrop(
-  message: import('./types').DragDropMessage,
-): Promise<ExtensionResponse> {
-  try {
-    const { sourceSelector, targetSelector } = message;
-    if (!validators.isValidSelector(sourceSelector)) {
-      return { success: false, error: 'Invalid source selector for drag_drop' };
-    }
-    if (!validators.isValidSelector(targetSelector)) {
-      return { success: false, error: 'Invalid target selector for drag_drop' };
-    }
-    const source = domUtils.querySelector(sourceSelector);
-    const target = domUtils.querySelector(targetSelector);
-    if (!source) {
-      return { success: false, error: `Source element not found: ${sourceSelector}` };
-    }
-    if (!target) {
-      return { success: false, error: `Target element not found: ${targetSelector}` };
-    }
-    const sourceRect = source.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const baseOpts: EventInit = { bubbles: true, cancelable: true };
-    const dragInit: DragEventInit = { ...baseOpts, view: window, dataTransfer: new DataTransfer() };
-    source.dispatchEvent(new MouseEvent('mousedown', { ...baseOpts, view: window }));
-    source.dispatchEvent(new DragEvent('dragstart', dragInit));
-    target.dispatchEvent(new DragEvent('dragenter', { ...dragInit, dataTransfer: null }));
-    target.dispatchEvent(new DragEvent('dragover', { ...dragInit, dataTransfer: null }));
-    target.dispatchEvent(
-      new DragEvent('drop', {
-        ...dragInit,
-        dataTransfer: null,
-        clientX: targetRect.x,
-        clientY: targetRect.y,
-      }),
-    );
-    source.dispatchEvent(
-      new DragEvent('dragend', {
-        ...dragInit,
-        dataTransfer: null,
-        clientX: sourceRect.x,
-        clientY: sourceRect.y,
-      }),
-    );
-    return { success: true } as ExtensionResponse;
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function handleClickAtCoordinates(
-  message: import('./types').ClickAtCoordinatesMessage,
-): Promise<ExtensionResponse> {
-  try {
-    const { x, y, button = 'left' } = message;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
-      return { success: false, error: `Coordinates (${x}, ${y}) out of bounds` };
-    }
-    const buttonIndex = button === 'right' ? 2 : button === 'middle' ? 1 : 0;
-    const target = document.elementFromPoint(x, y);
-    if (!target) {
-      return { success: false, error: `No element at coordinates (${x}, ${y})` };
-    }
-    const opts: MouseEventInit = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: x,
-      clientY: y,
-      button: buttonIndex,
-    };
-    target.dispatchEvent(new MouseEvent('mousedown', opts));
-    target.dispatchEvent(new MouseEvent('mouseup', opts));
-    target.dispatchEvent(new MouseEvent('click', opts));
-    return {
-      success: true,
-      element: {
-        tag: target.tagName.toLowerCase(),
-        id: target.id || undefined,
-      },
-    } as ExtensionResponse;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -1919,35 +1364,18 @@ async function handleWebMCPCallTool(
 
 const VALID_MESSAGE_TYPES = new Set([
   'CLICK',
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
   'TYPE',
   'GET_TEXT',
-  'GET_ATTRIBUTE',
-  'SET_ATTRIBUTE',
   'WAIT_FOR_SELECTOR',
-  'EXECUTE_SCRIPT',
   'GET_PAGE_INFO',
-  'GET_FORMS',
-  'FILL_FORM',
-  'SUBMIT_FORM',
   'RUN_PAGE_ACTIONS',
   'AUTO_FILL_JOB_APPLICATION',
   'GET_CONNECTION_STATUS',
   'CONNECTION_STATUS_CHANGED',
   'TAB_READY',
   'SYNC_PAGE_CONTEXT',
-  'SELECT_OPTION',
   'FIND_ELEMENTS',
   'FILL_FIELDS',
-  'CHECK',
-  'UNCHECK',
-  'FOCUS',
-  'BLUR',
-  'HOVER',
-  'SCROLL',
-  'DRAG_DROP',
-  'CLICK_AT_COORDINATES',
   'GET_ACCESSIBILITY_TREE',
   'BUILD_ACCESSIBILITY_TREE',
   'START_RECORDING',

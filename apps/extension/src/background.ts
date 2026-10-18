@@ -4469,17 +4469,8 @@ async function handleMessageAsync(
       return forwardToContentScript(resolvedTabId, message);
     }
 
-    case 'SELECT_OPTION':
     case 'FIND_ELEMENTS':
-    case 'FILL_FIELDS':
-    case 'CHECK':
-    case 'UNCHECK':
-    case 'FOCUS':
-    case 'BLUR':
-    case 'HOVER':
-    case 'SCROLL':
-    case 'DRAG_DROP':
-    case 'CLICK_AT_COORDINATES': {
+    case 'FILL_FIELDS': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });

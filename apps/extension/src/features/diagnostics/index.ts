@@ -3,8 +3,7 @@ import { platformRequestHeaders } from '../../platformHeaders';
 
 /**
  * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. The server validates and
- * redacts it, so the popup never hands the user a file the server has not
- * cleaned.
+ * redacts it, so the user is never handed a file the server has not cleaned.
  */
 export interface ExtensionDiagnosticsBundle {
   collectedAt: string;
@@ -70,8 +69,7 @@ export function collectExtensionDiagnostics(
     timeZone: readTimeZone(),
     viewport: hasWindow ? { width: window.innerWidth, height: window.innerHeight } : null,
     online: hasNavigator && typeof navigator.onLine === 'boolean' ? navigator.onLine : null,
-    // A popup's own path says nothing about the page the user was on, and the
-    // page URL is not the extension's to report.
+    // The page URL is not the extension's to report.
     pagePath: null,
     conversationId: input.conversationId ?? null,
     recentEvents: [...(input.recentEvents ?? [])].slice(-MAX_DIAGNOSTIC_EVENTS),

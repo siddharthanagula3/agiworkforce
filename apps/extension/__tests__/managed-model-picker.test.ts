@@ -19,7 +19,6 @@ import {
 } from '@agiworkforce/types';
 import { buildModelPickerShortList } from '@agiworkforce/unified-chat/model-picker';
 import {
-  formatManagedTierLabel,
   buildManagedModelPickerMenu,
   filterManagedModelOptions,
   canUseManagedQuickRouting,
@@ -27,7 +26,6 @@ import {
   getManagedModelBadgeLabel,
   getManagedModelPickerOptions,
   getManagedOutboundEffort,
-  isFreeManagedTier,
   reconcileManagedModelSelection,
 } from '../src/features/cloud-bridge/managedModelPicker';
 
@@ -188,19 +186,8 @@ describe('managed model picker', () => {
     expect(reconcileManagedModelSelection(admittedModel, null)).toBe('auto');
   });
 
-  it('derives labels and free-tier behavior without UI hardcoding', () => {
+  it('derives the badge label from the catalog', () => {
     expect(getManagedModelBadgeLabel(admittedModel)).not.toBe(admittedModel);
-    expect(isFreeManagedTier('FREE')).toBe(true);
-    expect(isFreeManagedTier('hobby')).toBe(false);
-    expect(isFreeManagedTier('pro')).toBe(false);
-    expect(formatManagedTierLabel('enterprise')).toBe('Enterprise plan');
-  });
-
-  it('names the plan with its catalog label rather than a capitalised tier key', () => {
-    expect(formatManagedTierLabel('max_15x')).toBe('Max 20x plan');
-    expect(formatManagedTierLabel('max')).toBe(`${getBillingPlanPricing('max').label} plan`);
-    expect(formatManagedTierLabel('hobby')).toBe(`${getBillingPlanPricing('basic').label} plan`);
-    expect(formatManagedTierLabel('  ')).toBe('Account');
   });
 
   it('keeps Auto effort explicitly unresolved until a concrete route exists', () => {

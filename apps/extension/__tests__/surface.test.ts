@@ -4,12 +4,11 @@ import {
   isDeveloperSessionSurface,
   isSyncedAppSurface,
 } from '@agiworkforce/types';
-import { SOURCE_SURFACE, DEVELOPER_SURFACE } from '../src/surface';
+import { SOURCE_SURFACE } from '../src/surface';
 
 describe('chrome SOURCE_SURFACE', () => {
   it('is the literal "chrome"', () => {
     expect(SOURCE_SURFACE).toBe('chrome');
-    expect(DEVELOPER_SURFACE).toBe('chrome');
   });
 
   it('is classified as a developer surface', () => {

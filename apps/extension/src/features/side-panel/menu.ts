@@ -31,11 +31,7 @@ export function wireMenuArrowKeys(menu: HTMLElement): void {
 
 export function wirePopupMenu(trigger: HTMLElement, menu: HTMLElement): PopupMenuHandle {
   const items = (): HTMLElement[] =>
-    Array.from(
-      menu.querySelectorAll<HTMLElement>(
-        '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])',
-      ),
-    );
+    Array.from(menu.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR));
 
   const onOutsidePointer = (event: Event): void => {
     const target = event.target as Node | null;

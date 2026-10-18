@@ -131,8 +131,7 @@ export function getPlatformPrompt(url: string): string | null {
       if (!best || key.length > best.key.length) best = { key, prompt };
     }
     return best?.prompt ?? null;
-  } catch (err) {
-    void err;
+  } catch {
+    return null;
   }
-  return null;
 }
