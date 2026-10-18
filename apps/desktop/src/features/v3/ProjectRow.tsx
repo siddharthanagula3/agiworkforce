@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { useConfirmAction, useMenuKeyboard } from '@agiworkforce/ui';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -80,8 +80,8 @@ export function ProjectRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState(project.name);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -98,7 +98,6 @@ export function ProjectRow({
     const openUp = rect.bottom + MENU_EST_HEIGHT > window.innerHeight;
     const top = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
     setMenuPos({ top, left });
-    setConfirmDelete(false);
     setMenuOpen(true);
   }, []);
 
@@ -331,21 +330,23 @@ export function ProjectRow({
             <MenuItem
               icon={Trash2}
               danger
-              label={
-                confirmDelete ? t('sidebar.actions.confirmDelete') : t('sidebar.actions.delete')
-              }
+              label={t('sidebar.actions.delete')}
               onClick={() => {
-                if (confirmDelete) {
-                  onDelete(project.id);
-                  setMenuOpen(false);
-                } else {
-                  setConfirmDelete(true);
-                }
+                setMenuOpen(false);
+                confirm({
+                  title: `Delete the project “${name}”?`,
+                  description:
+                    'The project and its instructions and settings are removed for good. Its chats are not deleted. A deleted project cannot be restored.',
+                  confirmLabel: 'Delete project',
+                  destructive: true,
+                  onConfirm: () => onDelete(project.id),
+                });
               }}
             />
           </div>,
           document.body,
         )}
+      {confirmDialog}
     </div>
   );
 }

@@ -1,18 +1,9 @@
 import { Suspense, lazy } from 'react';
-import { Loader2 } from 'lucide-react';
+import { TabFallback } from '../TabFallback';
 
 const LazySkillsPluginsSettings = lazy(() =>
   import('../../SkillsPluginsSettings').then((m) => ({ default: m.SkillsPluginsSettings })),
 );
-
-function Fallback() {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>Loading plugins...</span>
-    </div>
-  );
-}
 
 export function PluginsTab() {
   return (
@@ -23,7 +14,7 @@ export function PluginsTab() {
           Claude Code plugins on this machine. AGI Workforce chat does not load them.
         </p>
       </div>
-      <Suspense fallback={<Fallback />}>
+      <Suspense fallback={<TabFallback label="Loading plugins..." />}>
         <LazySkillsPluginsSettings />
       </Suspense>
     </div>

@@ -209,7 +209,3 @@ export function useCheckpointAvailability(
 }
 
 export const selectCheckpoints = (state: CodingCheckpointState) => state.checkpoints;
-export const selectCheckpointLoading = (state: CodingCheckpointState) => state.isLoading;
-export const selectCheckpointRewinding = (state: CodingCheckpointState) => state.isRewinding;
-export const selectLastRewindedPaths = (state: CodingCheckpointState) => state.lastRewindedPaths;
-export const selectCheckpointError = (state: CodingCheckpointState) => state.error;

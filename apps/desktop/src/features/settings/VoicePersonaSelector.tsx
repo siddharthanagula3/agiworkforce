@@ -175,7 +175,7 @@ export function VoicePersonaSelector({ selectedPersona, onSelect }: VoicePersona
                   'flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors',
                   isPlaying
                     ? 'bg-teal-500/20 text-teal-400 border border-teal-500/50'
-                    : 'text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground',
+                    : 'text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted hover:text-foreground',
                 )}
               >
                 {isPlaying ? <Square size={10} /> : <Play size={10} />}

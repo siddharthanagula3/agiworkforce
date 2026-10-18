@@ -247,7 +247,16 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
   };
 
   const requestScreenRecording = async () => {
-    await automation.requestAutomationPermission('screen_recording').catch(() => undefined);
+    try {
+      await automation.requestAutomationPermission('screen_recording');
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'System Settings did not open. Turn on Screen Recording for this app there.',
+      );
+      return;
+    }
     await checkPermissions();
   };
 

@@ -8,6 +8,8 @@ export function MCPServerSettings() {
   const { config, loading, error, fetchConfig, startServer, stopServer, updateConfig } =
     useMcpServerStore();
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [toolNotice, setToolNotice] = useState<string | null>(null);
   const [tokenVisible, setTokenVisible] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -40,16 +42,36 @@ export function MCPServerSettings() {
       null,
       2,
     );
-    await navigator.clipboard.writeText(snippet);
+    setCopyError(null);
+    try {
+      await navigator.clipboard.writeText(snippet);
+    } catch {
+      setCopyError('The snippet could not be copied. Show the token and copy it by hand.');
+      return;
+    }
     setCopied(true);
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
+  const exposedTools = config
+    ? config.enabled_tools.length === 0
+      ? ALL_TOOLS
+      : config.enabled_tools
+    : [];
+
   const toggleTool = async (tool: string) => {
     if (!config) return;
-    const current = config.enabled_tools;
-    const next = current.includes(tool) ? current.filter((t) => t !== tool) : [...current, tool];
+    const next = exposedTools.includes(tool)
+      ? exposedTools.filter((t) => t !== tool)
+      : [...exposedTools, tool];
+    if (next.length === 0) {
+      setToolNotice(
+        'At least one tool stays exposed while the server runs. Stop the server to expose none.',
+      );
+      return;
+    }
+    setToolNotice(null);
     await updateConfig(undefined, next);
   };
 
@@ -159,7 +181,7 @@ export function MCPServerSettings() {
             >
               <input
                 type="checkbox"
-                checked={config?.enabled_tools.includes(tool) ?? false}
+                checked={exposedTools.includes(tool)}
                 onChange={() => toggleTool(tool)}
                 className="rounded"
               />
@@ -167,6 +189,11 @@ export function MCPServerSettings() {
             </label>
           ))}
         </div>
+        {toolNotice && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {toolNotice}
+          </p>
+        )}
       </div>
 
       {/* Copy MCP client snippet */}
@@ -178,6 +205,11 @@ export function MCPServerSettings() {
         {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
         {copied ? 'Copied!' : 'Copy MCP client config snippet'}
       </button>
+      {copyError && (
+        <p role="alert" className="text-xs text-destructive">
+          {copyError}
+        </p>
+      )}
     </div>
   );
 }

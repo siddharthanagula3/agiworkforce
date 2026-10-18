@@ -363,19 +363,3 @@ export const useTerminalStore = create<TerminalState>()(
     { name: 'TerminalStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export const selectTerminalSessions = (state: TerminalState) => state.sessions;
-export const selectActiveSessionId = (state: TerminalState) => state.activeSessionId;
-export const selectAvailableShells = (state: TerminalState) => state.availableShells;
-export const selectTerminalListeners = (state: TerminalState) => state.listeners;
-
-export const selectActiveSession = (state: TerminalState) =>
-  state.sessions.find((s) => s.id === state.activeSessionId);
-export const selectSessionById = (sessionId: string) => (state: TerminalState) =>
-  state.sessions.find((s) => s.id === sessionId);
-export const selectSessionCount = (state: TerminalState) => state.sessions.length;
-export const selectHasActiveSessions = (state: TerminalState) => state.sessions.length > 0;
-export const selectAvailableShellTypes = (state: TerminalState) =>
-  state.availableShells.filter((shell) => shell.available);
-export const selectShellByType = (shellType: ShellTypeLiteral) => (state: TerminalState) =>
-  state.availableShells.find((shell) => shell.shell_type === shellType);

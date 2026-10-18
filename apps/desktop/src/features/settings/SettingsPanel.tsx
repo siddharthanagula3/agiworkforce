@@ -296,9 +296,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }],
       });
-      if (savePath) await writeTextFile(savePath, exportData);
+      if (!savePath) return;
+      await writeTextFile(savePath, exportData);
+      toast.success('Settings exported', { description: savePath });
     } catch (err) {
       console.error('Failed to export settings:', err);
+      toast.error('Your settings were not exported', {
+        description: getSimpleErrorMessage(err),
+      });
     }
   }, []);
 

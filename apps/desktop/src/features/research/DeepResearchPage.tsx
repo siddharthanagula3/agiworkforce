@@ -153,6 +153,9 @@ export function DeepResearchPage({ className }: DeepResearchPageProps) {
       await cancelResearch();
     } catch (err) {
       console.error('Failed to cancel research:', err);
+      toast.error('The research is still running. It could not be stopped.', {
+        description: err instanceof Error ? err.message : String(err),
+      });
     }
   }, [cancelResearch]);
 

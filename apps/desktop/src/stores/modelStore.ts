@@ -725,15 +725,6 @@ export const useModelStore = create<ModelState>()(
   ),
 );
 
-export const selectSelectedModel = (state: ModelState) => state.selectedModel;
-export const selectSelectedProvider = (state: ModelState) => state.selectedProvider;
-export const selectFavorites = (state: ModelState) => state.favorites;
-export const selectRecentModels = (state: ModelState) => state.recentModels;
-export const selectProviderStatuses = (state: ModelState) => state.providerStatuses;
-export const selectUsageStats = (state: ModelState) => state.usageStats;
-export const selectLoading = (state: ModelState) => state.loading;
-export const selectError = (state: ModelState) => state.error;
-
 export const selectFavoriteModelsMetadata = (state: ModelState): ModelMetadata[] => {
   return state.favorites
     .map((id) => getModelMetadata(id))
@@ -753,18 +744,7 @@ export const selectSelectedModelMetadata = (state: ModelState): ModelMetadata | 
 export const selectIsModelFavorite = (modelId: string) => (state: ModelState) =>
   state.favorites.includes(normalizeModelId(modelId) ?? modelId);
 
-export const selectProviderStatus = (provider: Provider) => (state: ModelState) =>
-  state.providerStatuses[provider];
-
-export const selectOllamaModels = (state: ModelState) => state.ollamaModels;
-export const selectOllamaAvailable = (state: ModelState) => state.ollamaAvailable;
-export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
-export const selectOllamaError = (state: ModelState) => state.ollamaError;
-
-export const selectSpeedQualityMode = (state: ModelState) => state.speedQualityMode;
 export const selectIsAutoMode = (state: ModelState) => state.selectedModel === 'auto';
-
-export const selectRouterSuggestion = (state: ModelState) => state.routerSuggestion;
 
 export const formatOllamaModelSize = (sizeInBytes: number): string => {
   const gb = sizeInBytes / (1024 * 1024 * 1024);

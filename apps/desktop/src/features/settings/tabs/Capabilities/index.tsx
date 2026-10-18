@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Loader2 } from 'lucide-react';
+import { TabFallback } from '../TabFallback';
 
 const LazyCapabilityToggles = lazy(() =>
   import('../../CapabilityToggles').then((m) => ({ default: m.CapabilityToggles })),
@@ -16,32 +16,23 @@ const LazySkillMarketplace = lazy(() =>
   })),
 );
 
-function Fallback({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 export function CapabilitiesTab() {
   return (
-    <Suspense fallback={<Fallback label="Loading capabilities..." />}>
+    <Suspense fallback={<TabFallback label="Loading capabilities..." />}>
       <>
         <LazyCapabilityToggles />
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading computer use..." />}>
+          <Suspense fallback={<TabFallback label="Loading computer use..." />}>
             <LazyComputerUseSettings />
           </Suspense>
         </div>
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading web search..." />}>
+          <Suspense fallback={<TabFallback label="Loading web search..." />}>
             <LazyResearchSettings />
           </Suspense>
         </div>
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading skills..." />}>
+          <Suspense fallback={<TabFallback label="Loading skills..." />}>
             <LazySkillMarketplace />
           </Suspense>
         </div>

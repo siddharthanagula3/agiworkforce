@@ -116,21 +116,6 @@ test.describe('Windows: Title Bar', () => {
       expect(barBox?.height ?? 0).toBeLessThanOrEqual(60);
     }
   });
-
-  test('TitleBar component renders with window control affordances', async ({ page }) => {
-    const titleBar = page
-      .locator('[data-testid="title-bar"]')
-      .or(page.locator('[data-tauri-drag-region]'))
-      .first();
-
-    const titleBarVisible = await titleBar.isVisible({ timeout: 3000 }).catch(() => false);
-    if (titleBarVisible) {
-      await expect(titleBar).toBeVisible();
-    }
-    // If the component is absent (fully native OS chrome), the test passes
-    // because decorations: true means the OS provides all chrome.
-    // Platform-conditional: absence of element is valid on this OS configuration
-  });
 });
 
 test.describe('Windows: System Tray', () => {

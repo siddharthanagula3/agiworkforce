@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 import { PLAN_DISPLAY_NAMES } from '../../../../lib/cloudAccountTypes';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
+import { TabFallback } from '../TabFallback';
 
 const LazyResourceMonitor = lazy(() =>
   import('@/features/resource-monitor').then((m) => ({ default: m.ResourceMonitor })),
@@ -35,15 +36,6 @@ const LazyKeybindingsSettings = lazy(() =>
 const LazyNetworkProxySettings = lazy(() =>
   import('../../NetworkProxySettings').then((m) => ({ default: m.NetworkProxySettings })),
 );
-
-function Fallback({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
 
 function AppModeSection() {
   const mode = useAppModeStore(selectMode);
@@ -375,7 +367,7 @@ export function GeneralTab({
                     className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Use Tauri accelerator format, e.g.{' '}
+                    Join modifier keys and a key with +, for example{' '}
                     <code className="rounded bg-muted px-1 py-0.5">{defaultGlobalHotkeyCombo}</code>
                   </p>
                 </div>
@@ -427,7 +419,7 @@ export function GeneralTab({
           <p className="text-sm text-muted-foreground mb-4">
             Configure corporate proxy, authentication, bypass, and trust settings for model traffic.
           </p>
-          <Suspense fallback={<Fallback label="Loading network settings..." />}>
+          <Suspense fallback={<TabFallback label="Loading network settings..." />}>
             <LazyNetworkProxySettings />
           </Suspense>
         </div>
@@ -440,7 +432,7 @@ export function GeneralTab({
             Device-only CPU, memory, and runtime controls. These do not change your Managed Cloud
             allowance or cloud sandbox resources.
           </p>
-          <Suspense fallback={<Fallback label="Loading system resource settings..." />}>
+          <Suspense fallback={<TabFallback label="Loading system resource settings..." />}>
             <LazyResourceMonitor showTools={true} />
           </Suspense>
         </div>
@@ -453,7 +445,7 @@ export function GeneralTab({
             macOS permissions for actions performed on this device. Managed Cloud tool approvals and
             sandbox permissions are enforced separately by your account policy.
           </p>
-          <Suspense fallback={<Fallback label="Loading automation permissions..." />}>
+          <Suspense fallback={<TabFallback label="Loading automation permissions..." />}>
             <LazyAutomationPermissionsSettings />
           </Suspense>
         </div>
@@ -461,7 +453,7 @@ export function GeneralTab({
 
       {isTauri && (
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading update settings..." />}>
+          <Suspense fallback={<TabFallback label="Loading update settings..." />}>
             <LazyUpdateSettings />
           </Suspense>
         </div>
@@ -475,7 +467,7 @@ export function GeneralTab({
 
       <div className="pt-6 border-t border-border">
         <h3 className="text-h3 mb-4">Keybindings</h3>
-        <Suspense fallback={<Fallback label="Loading keybindings..." />}>
+        <Suspense fallback={<TabFallback label="Loading keybindings..." />}>
           <LazyKeybindingsSettings />
         </Suspense>
       </div>

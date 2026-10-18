@@ -769,41 +769,12 @@ export const useUIStore = create<UIState>()(
   ),
 );
 
-export const selectErrors = (state: UIState) => state.errors;
-export const selectToasts = (state: UIState) => state.toasts;
-export const selectUndismissedErrors = (state: UIState) => state.errors.filter((e) => !e.dismissed);
-
-export const selectDraft = (conversationId: number | null) => (state: UIState) =>
-  state.drafts.get(conversationId)?.content ?? '';
-export const selectAttachments = (state: UIState) => state.attachments;
-export const selectAttachmentCount = (state: UIState) => state.attachments.length;
-export const selectIsRecording = (state: UIState) => state.isRecording;
-export const selectVoiceRecordings = (state: UIState) => state.voiceRecordings;
-export const selectContextMetadata = (state: UIState) => state.contextMetadata;
-export const selectInputHeight = (state: UIState) => state.inputHeight;
-export const selectShowMarkdownPreview = (state: UIState) => state.showMarkdownPreview;
-
-export const selectSidecarOpen = (state: UIState) => state.sidecarOpen;
-export const selectSidecarSection = (state: UIState) => state.sidecarSection;
-export const selectSidecarWidth = (state: UIState) => state.sidecarWidth;
-export const selectSidecarUserSelected = (state: UIState) => state.sidecarUserSelected;
-export const selectSidebarWidth = (state: UIState) => state.sidebarWidth;
 export const selectSidebarCollapsed = (state: UIState) => state.sidebarCollapsed;
-export const selectSidecar = (state: UIState) => state.sidecar;
-export const selectIsSidecarVisible = (state: UIState) => state.sidecarOpen || state.sidecar.isOpen;
-export const selectActiveSidecarMode = (state: UIState) => state.sidecar.activeMode;
-
-export const selectOnboardingCompleted = (state: UIState) => state.onboardingCompleted;
 
 /**
  * @deprecated Use useUIStore instead. This alias is for backwards compatibility.
  */
 export const useErrorStore = useUIStore;
-
-/**
- * @deprecated Use useUIStore instead. This alias is for backwards compatibility.
- */
-export const useInputStore = useUIStore;
 
 /**
  * @deprecated Use useUIStore instead. This alias is for backwards compatibility.

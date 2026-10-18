@@ -411,14 +411,3 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
     { name: 'ChatExecutionStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export const selectIsLoading = (state: ChatExecutionState) => state.isLoading;
-export const selectIsLoadingMessages = (state: ChatExecutionState) => state.isLoadingMessages;
-export const selectIsStreaming = (state: ChatExecutionState) => state.isStreaming;
-export const selectCurrentStreamingMessageId = (state: ChatExecutionState) =>
-  state.currentStreamingMessageId;
-export const selectPendingMessages = (state: ChatExecutionState) => state.pendingMessages;
-export const selectToolTimelineByMessage = (state: ChatExecutionState) =>
-  state.toolTimelineByMessage;
-export const selectThinkingByMessage = (state: ChatExecutionState) => state.thinkingByMessage;
-export const selectAgenticLoopStatus = (state: ChatExecutionState) => state.agenticLoopStatus;

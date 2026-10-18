@@ -193,15 +193,3 @@ export const useExecutionSidecarStore = create<ExecutionSidecarState>()(
     { name: 'ExecutionSidecarStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export const selectIsOpen = (state: ExecutionSidecarState) => state.isOpen;
-export const selectIsCollapsed = (state: ExecutionSidecarState) => state.isCollapsed;
-export const selectWidth = (state: ExecutionSidecarState) => state.width;
-export const selectActiveContext = (state: ExecutionSidecarState) => state.activeContext;
-export const selectUserOverrideContext = (state: ExecutionSidecarState) =>
-  state.userOverrideContext;
-export const selectFilmstripScreenshots = (state: ExecutionSidecarState) =>
-  state.filmstripScreenshots;
-export const selectHighlightedToolId = (state: ExecutionSidecarState) => state.highlightedToolId;
-export const selectUserClosedThisSession = (state: ExecutionSidecarState) =>
-  state.userClosedThisSession;

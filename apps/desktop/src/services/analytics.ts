@@ -277,17 +277,12 @@ class AnalyticsService {
     safeRemoveItem('privacy_consent');
 
     this.eventQueue = [];
-
-    try {
-      await analyticsDeleteAllData();
-    } catch (error) {
-      console.error('Failed to delete backend analytics data:', error);
-    }
-
     this.userId = undefined;
     this.config.enabled = false;
     this.privacyConsent = undefined;
     this.syncNativeConsent(undefined);
+
+    await analyticsDeleteAllData();
   }
 
   public async flushQueue() {

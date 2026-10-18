@@ -34,15 +34,19 @@ type View = 'status' | 'setup' | 'unlock' | 'change' | 'remove' | 'migration';
 export function MasterPasswordSettings() {
   const [status, setStatus] = useState<MasterPasswordStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [view, setView] = useState<View>('status');
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const s = await invoke<MasterPasswordStatus>('master_password_get_status');
       setStatus(s);
     } catch (err) {
       console.error('Failed to load master password status:', err);
+      setStatus(null);
+      setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -62,6 +66,19 @@ export function MasterPasswordSettings() {
       <div className="rounded-lg border border-border bg-card p-6 flex items-center gap-3 text-sm text-muted-foreground">
         <RefreshCw className="h-4 w-4 animate-spin" />
         <span>Loading security status...</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-lg border border-border bg-card p-6 space-y-3">
+        <p className="text-sm text-foreground">
+          Whether a master password protects your saved keys could not be read. {loadError}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => void loadStatus()}>
+          Try again
+        </Button>
       </div>
     );
   }

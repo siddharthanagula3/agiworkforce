@@ -80,6 +80,3 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
 
   reset: () => set({ ...EMPTY, status: 'idle' }),
 }));
-
-export const selectCloudTaskNeedsUserCount = (state: CloudTaskBadgeState): number =>
-  state.needsUserCount;

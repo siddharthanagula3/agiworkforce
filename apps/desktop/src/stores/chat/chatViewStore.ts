@@ -283,13 +283,3 @@ export function initializeChatViewModelSubscription(): void {
     // modelStore not yet available
   }
 }
-
-export const selectFocusMode = (state: ChatViewState) => state.focusMode;
-export const selectActiveView = (state: ChatViewState) => state.activeView;
-export const selectConversationMode = (state: ChatViewState) => state.conversationMode;
-export const selectDraftContent = (state: ChatViewState) => state.draftContent;
-export const selectEditingMessageId = (state: ChatViewState) => state.editingMessageId;
-export const selectShowMessageTimestamps = (state: ChatViewState) => state.showMessageTimestamps;
-export const selectSelectedMessage = (state: ChatViewState) => state.selectedMessage;
-export const selectCitations = (state: ChatViewState) => state.citations;
-export const selectTokenUsage = (state: ChatViewState) => state.tokenUsage;

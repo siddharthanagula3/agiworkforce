@@ -923,17 +923,12 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
   ),
 );
 
-export const selectIsAuthReady = (state: UnifiedAuthStore): boolean =>
-  state._hasHydrated && state.sessionValidated;
-
 export const selectUser = (state: UnifiedAuthStore) => state.user;
-export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthenticated;
 export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean =>
   state.isAuthenticated &&
   !state.isLocalDeviceAccount &&
   Boolean(state.user?.id) &&
   Boolean(state.accessToken);
-export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;
 export const selectAuthError = (state: UnifiedAuthStore) => state.error;
 
 export const selectAccount = (state: UnifiedAuthStore) => ({
@@ -960,21 +955,6 @@ export const selectAccount = (state: UnifiedAuthStore) => ({
 });
 export const selectPlan = (state: UnifiedAuthStore) => state.plan;
 export const selectPlanDisplayName = (state: UnifiedAuthStore) => state.planDisplayName;
-export const selectSubscriptionFetchStatus = (state: UnifiedAuthStore) =>
-  state.subscriptionFetchStatus;
-export const selectIsPro = (state: UnifiedAuthStore) => state.isPro;
-export const selectIsEnterprise = (state: UnifiedAuthStore) => state.isEnterprise;
-export const selectDisplayName = (state: UnifiedAuthStore) => state.user?.name || null;
-export const selectEmail = (state: UnifiedAuthStore) => state.user?.email || null;
-export const selectAvatar = (state: UnifiedAuthStore) => state.user?.avatar || null;
-export const selectFeatureFlags = (state: UnifiedAuthStore) => state.featureFlags;
-export const selectIsTierLoading = (state: UnifiedAuthStore) =>
-  state.plan === null || state.subscriptionFetchStatus === 'fetching';
-
-export const selectStripeCustomer = (state: UnifiedAuthStore) => state.stripeCustomer;
-export const selectStripeSubscription = (state: UnifiedAuthStore) => state.stripeSubscription;
-export const selectCreditBalance = (state: UnifiedAuthStore) => state.creditBalance_cents;
-export const selectIsHydrated = (state: UnifiedAuthStore) => state._hasHydrated;
 
 export function waitForAuthReady(): Promise<void> {
   return new Promise((resolve) => {
@@ -1007,43 +987,8 @@ export function waitForHydration(): Promise<void> {
   });
 }
 
-export const waitForBillingHydration = waitForHydration;
-
-export function cleanupUnifiedAuthStore(): void {
-  resetRetryCount();
-  clearCachedSubscription();
-}
-
 export const useAuthStore = useUnifiedAuthStore;
 export const useAccountStore = useUnifiedAuthStore;
 export const useBillingStore = useUnifiedAuthStore;
 
-export const cleanupAccountStore = cleanupUnifiedAuthStore;
-
-export const selectCustomer = selectStripeCustomer;
-export const selectSubscription = selectStripeSubscription;
-
 export type { CustomerInfo, SubscriptionInfo } from '../types/billing';
-
-export interface DesktopAccount {
-  id: string | null;
-  email: string | null;
-  displayName: string | null;
-  avatar?: string | null;
-  plan: PlanTier | null;
-  planDisplayName: string;
-  subscriptionStatus: SubscriptionStatus;
-  subscriptionFetchStatus: SubscriptionFetchStatus;
-  currentPeriodEnd: number | null;
-  subscriptionCancelAtPeriodEnd: boolean;
-  subscriptionSource: SubscriptionSource;
-  stripeCustomerId?: string | null;
-  featureFlags: Record<string, boolean>;
-  credits?: CreditBalance | null;
-  accessToken?: string | null;
-  refreshToken?: string | null;
-  deviceLinkId?: string | null;
-  deviceLinkCode?: string | null;
-  createdAt: number;
-  lastSyncedAt: number | null;
-}

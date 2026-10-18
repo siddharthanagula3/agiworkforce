@@ -85,6 +85,7 @@ export function ComputerUseSettings() {
   const [alwaysBlocked, setAlwaysBlocked] = useState<string[]>([]);
   const [activeWindow, setActiveWindow] = useState<ActiveWindowInfo | null>(null);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
 
   const [computerUseModel, setComputerUseModel] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
@@ -97,11 +98,13 @@ export function ComputerUseSettings() {
 
   const refreshPermissions = useCallback(async () => {
     setPermissionsLoading(true);
+    setPermissionsError(null);
     try {
       const list = await invoke<AppPermissionEntry[]>('app_permissions_list');
       setPermissions(list);
     } catch (err) {
       console.warn('[ComputerUseSettings] Failed to list app permissions:', err);
+      setPermissionsError(err instanceof Error ? err.message : String(err));
     } finally {
       setPermissionsLoading(false);
     }
@@ -428,7 +431,14 @@ export function ComputerUseSettings() {
               </div>
             )}
 
-            {permissions.length === 0 && (
+            {permissionsError ? (
+              <p role="alert" className="text-xs text-destructive">
+                The apps you approved or blocked could not be read, so this list may be incomplete.{' '}
+                {permissionsError}
+              </p>
+            ) : null}
+
+            {permissions.length === 0 && !permissionsError && (
               <p className="text-xs text-muted-foreground italic">
                 No app permissions configured yet. The agent will request approval for each new app
                 on first encounter.

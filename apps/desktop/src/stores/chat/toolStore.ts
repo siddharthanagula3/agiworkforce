@@ -1029,32 +1029,6 @@ export const useToolStore = create<ToolState>()(
   ),
 );
 
-export const selectFileOperations = (state: ToolState) => state.fileOperations;
-export const selectTerminalCommands = (state: ToolState) => state.terminalCommands;
-export const selectScreenshots = (state: ToolState) => state.screenshots;
-export const selectActionLog = (state: ToolState) => state.actionLog;
-export const selectPendingApprovals = (state: ToolState) => state.pendingApprovals;
-export const selectTrustedWorkflows = (state: ToolState) => state.trustedWorkflows;
-export const selectActiveContext = (state: ToolState) => state.activeContext;
-export const selectWorkflowContext = (state: ToolState) => state.workflowContext;
-export const selectPlan = (state: ToolState) => state.plan;
-export const selectActiveToolStreams = (state: ToolState) => state.activeToolStreams;
-export const selectFilters = (state: ToolState) => state.filters;
-
-export const selectRecentFileOperations = (state: ToolState) => state.fileOperations.slice(0, 50);
-
-export const selectSuccessfulTerminalCommands = (state: ToolState) =>
-  state.terminalCommands.filter((cmd) => cmd.exitCode === 0);
-
-export const selectFailedTerminalCommands = (state: ToolState) =>
-  state.terminalCommands.filter((cmd) => cmd.exitCode !== undefined && cmd.exitCode !== 0);
-
-export const selectHighRiskApprovals = (state: ToolState) =>
-  state.pendingApprovals.filter((a) => a.riskLevel === 'high');
-
-export const selectRunningToolStreams = (state: ToolState) =>
-  Array.from(state.activeToolStreams.values()).filter((stream) => stream.status === 'running');
-
 export type { ContextItem };
 
 export interface ToolEventPayload {

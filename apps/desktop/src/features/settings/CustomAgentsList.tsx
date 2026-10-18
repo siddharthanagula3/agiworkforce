@@ -34,7 +34,7 @@ function AgentCard({ agent, onClick, onEdit, onDelete }: AgentCardProps) {
     <>
       <div className="group relative w-full text-left rounded-lg border border-border bg-card p-4 hover:bg-accent/50 transition-colors">
         {/* Hover action buttons */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 absolute top-2 right-2">
+        <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex gap-1 absolute top-2 right-2">
           <button
             type="button"
             aria-label="Edit agent"

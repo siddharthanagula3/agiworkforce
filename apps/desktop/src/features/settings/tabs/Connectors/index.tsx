@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Loader2 } from 'lucide-react';
+import { TabFallback } from '../TabFallback';
 
 const LazyConnectorGallery = lazy(() =>
   import('@/features/connectors/ConnectorGallery').then((m) => ({ default: m.ConnectorGallery })),
@@ -17,38 +17,29 @@ const LazyCloudStoragePanel = lazy(() =>
   import('@/features/cloud/CloudStoragePanel').then((m) => ({ default: m.CloudStoragePanel })),
 );
 
-function Fallback({ label = 'Loading connectors...' }: { label?: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 export function ConnectorsTab() {
   return (
     <div>
-      <Suspense fallback={<Fallback />}>
+      <Suspense fallback={<TabFallback label="Loading connectors..." />}>
         <LazyConnectorGallery />
       </Suspense>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading connector health..." />}>
+        <Suspense fallback={<TabFallback label="Loading connector health..." />}>
           <LazyConnectorHealthDashboard />
         </Suspense>
       </div>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading MCP servers..." />}>
+        <Suspense fallback={<TabFallback label="Loading MCP servers..." />}>
           <LazyMCPServerSettings />
         </Suspense>
       </div>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading MCP workspace..." />}>
+        <Suspense fallback={<TabFallback label="Loading MCP workspace..." />}>
           <LazyMcpWorkspace />
         </Suspense>
       </div>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading cloud storage..." />}>
+        <Suspense fallback={<TabFallback label="Loading cloud storage..." />}>
           <LazyCloudStoragePanel />
         </Suspense>
       </div>

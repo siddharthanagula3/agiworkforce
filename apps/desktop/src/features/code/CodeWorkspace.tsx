@@ -623,10 +623,11 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                       onClick={(e) => requestCloseTab(file.path, e)}
                       className={cn(
                         'text-muted-foreground hover:text-foreground',
-                        'transition-colors opacity-0 group-hover:opacity-100',
+                        'transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                         isActive && 'opacity-100',
                       )}
                       title="Close tab"
+                      aria-label={`Close ${formatPathForToast(file.path)}`}
                     >
                       <X className="h-3 w-3" />
                     </button>

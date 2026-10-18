@@ -458,34 +458,3 @@ export const useBrowserStore = create<BrowserState>()(
 export function cleanupBrowserStore() {
   useBrowserStore.getState().cleanup();
 }
-
-export const selectBrowserSessions = (state: BrowserState) => state.sessions;
-export const selectActiveSessionId = (state: BrowserState) => state.activeSessionId;
-export const selectBrowserInitialized = (state: BrowserState) => state.initialized;
-
-export const selectScreenshots = (state: BrowserState) => state.screenshots;
-export const selectBrowserActions = (state: BrowserState) => state.actions;
-export const selectDomSnapshots = (state: BrowserState) => state.domSnapshots;
-export const selectHighlightedElement = (state: BrowserState) => state.highlightedElement;
-
-export const selectIsStreaming = (state: BrowserState) => state.isStreaming;
-export const selectStreamIntervalId = (state: BrowserState) => state.streamIntervalId;
-
-export const selectActiveSession = (state: BrowserState) =>
-  state.sessions.find((s) => s.id === state.activeSessionId);
-export const selectSessionById = (sessionId: string) => (state: BrowserState) =>
-  state.sessions.find((s) => s.id === sessionId);
-export const selectActiveTabs = (state: BrowserState) => {
-  const session = state.sessions.find((s) => s.id === state.activeSessionId);
-  return session?.tabs ?? [];
-};
-export const selectActiveTab = (state: BrowserState) => {
-  const session = state.sessions.find((s) => s.id === state.activeSessionId);
-  return session?.tabs.find((t) => t.active);
-};
-export const selectSessionCount = (state: BrowserState) => state.sessions.length;
-export const selectHasActiveSessions = (state: BrowserState) => state.sessions.length > 0;
-export const selectLatestScreenshot = (state: BrowserState) =>
-  state.screenshots[state.screenshots.length - 1];
-export const selectScreenshotCount = (state: BrowserState) => state.screenshots.length;
-export const selectActionCount = (state: BrowserState) => state.actions.length;

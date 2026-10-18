@@ -139,6 +139,8 @@ export function VoiceSettings() {
   const [downloadPercent, setDownloadPercent] = useState<Record<string, number>>({});
   const [localWhisperAvailable, setLocalWhisperAvailable] = useState(false);
   const [whisperModelsFailed, setWhisperModelsFailed] = useState(false);
+  const [piperVoicesFailed, setPiperVoicesFailed] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string>(
     () => localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) ?? 'professional',
   );
@@ -151,6 +153,7 @@ export function VoiceSettings() {
   useEffect(() => {
     fetchCapabilities().catch((err: unknown) => {
       console.error('Failed to fetch voice capabilities:', err);
+      setCapabilitiesError(err instanceof Error ? err.message : String(err));
     });
     listWhisperModels()
       .then(setWhisperModels)
@@ -162,6 +165,7 @@ export function VoiceSettings() {
       .then(setPiperVoices)
       .catch((err: unknown) => {
         console.error('Failed to load Piper voices:', err);
+        setPiperVoicesFailed(true);
       });
     voiceCheckLocalWhisper()
       .then(setLocalWhisperAvailable)
@@ -531,14 +535,19 @@ export function VoiceSettings() {
         </div>
       </div>
 
-      {/* Advanced Voice Features -- wired to Rust backend */}
       <div>
         <h3 className="text-lg font-semibold mb-1">Advanced Voice Features</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Native voice capabilities powered by the Rust backend.
+          Voice features that run on this device.
         </p>
 
         <div className="rounded-lg border border-border bg-card p-6 space-y-5">
+          {capabilitiesError && (
+            <p role="alert" className="text-xs text-destructive">
+              What this device supports could not be checked, so these features may show as
+              unavailable. {capabilitiesError}
+            </p>
+          )}
           {/* Capabilities status */}
           {capabilities && (
             <div className="space-y-2">
@@ -899,7 +908,9 @@ export function VoiceSettings() {
                 </div>
               ))}
               {piperVoices.length === 0 && (
-                <p className="text-xs text-muted-foreground">Loading voices...</p>
+                <p className="text-xs text-muted-foreground">
+                  {piperVoicesFailed ? 'The voice list could not be loaded.' : 'Loading voices...'}
+                </p>
               )}
             </div>
           </div>

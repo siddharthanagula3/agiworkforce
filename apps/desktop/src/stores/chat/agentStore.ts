@@ -216,15 +216,6 @@ export const useAgentStore = create<AgentState>()(
   ),
 );
 
-export const selectAgents = (state: AgentState) => state.agents;
-export const selectAgentStatus = (state: AgentState) => state.agentStatus;
-export const selectActionTrail = (state: AgentState) => state.actionTrail;
-export const selectIsAutonomousMode = (state: AgentState) => state.isAutonomousMode;
-export const selectMissionControlOpen = (state: AgentState) => state.missionControlOpen;
-
-export const selectRunningAgents = (state: AgentState) =>
-  state.agents.filter((a) => a.status === 'running');
-
 export type AgentStatusPayload = Partial<AgentStatus> & {
   id: string;
   status?: AgentStatus['status'] | string;

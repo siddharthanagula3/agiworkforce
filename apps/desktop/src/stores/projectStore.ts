@@ -513,22 +513,6 @@ export const useProjectStore = create<ProjectState>()(
   ),
 );
 
-export const selectActiveProject = (state: ProjectState) => {
-  if (!state.activeProjectId) return null;
-  return state.projects.find((p) => p.id === state.activeProjectId) || null;
-};
-
-export const selectActiveProjects = (state: ProjectState) =>
-  state.projects.filter((p) => !p.isArchived);
-
-export const selectArchivedProjects = (state: ProjectState) =>
-  state.projects.filter((p) => p.isArchived);
-
-export const selectProjectById = (id: string) => (state: ProjectState) =>
-  state.projects.find((p) => p.id === id) || null;
-
 export const selectCurrentFolder = (state: ProjectState) => state.currentFolder;
-export const selectRecentFolders = (state: ProjectState) => state.recentFolders;
-export const selectHasCurrentFolder = (state: ProjectState) => state.currentFolder !== null;
 
 export { formatFolderPath };

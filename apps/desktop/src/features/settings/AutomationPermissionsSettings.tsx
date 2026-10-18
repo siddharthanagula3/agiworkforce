@@ -125,6 +125,7 @@ export function AutomationPermissionsSettings() {
   const [permissions, setPermissions] = useState<AutomationPermissions | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState<PermissionKind | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -153,11 +154,17 @@ export function AutomationPermissionsSettings() {
   const handleRequest = useCallback(
     async (kind: PermissionKind) => {
       setRequesting(kind);
+      setRequestError(null);
       try {
         await automation.requestAutomationPermission(kind);
         refreshTimerRef.current = setTimeout(() => void refresh(), 2000);
       } catch (err) {
         console.error('Failed to open System Settings:', err);
+        setRequestError(
+          `System Settings did not open. Open it yourself and turn on the permission for this app. ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       } finally {
         setRequesting(null);
       }
@@ -231,6 +238,12 @@ export function AutomationPermissionsSettings() {
             />
           ))}
         </div>
+      )}
+
+      {requestError && (
+        <p role="alert" className="mt-4 text-xs text-destructive">
+          {requestError}
+        </p>
       )}
 
       {missingWindowProgram && (

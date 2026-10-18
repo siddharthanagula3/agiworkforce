@@ -3,7 +3,6 @@ import type { SubscriptionTier } from './planModels';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   canAccessModelForSubscriptionTier,
-  formatModelPriceInCredits,
   getAutoRoutingProfiles as getCatalogAutoRoutingProfiles,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
   getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
@@ -181,10 +180,6 @@ export function getModelContextWindow(modelId: string): number {
   return publishedContextWindow ?? 128_000;
 }
 
-export function formatCost(inputCost?: number, outputCost?: number, cachedCost?: number): string {
-  return formatModelPriceInCredits(inputCost, outputCost, cachedCost);
-}
-
 export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
@@ -220,12 +215,6 @@ export function getAllowedAutoModesForTier(
   _tier: SubscriptionTier | string | null | undefined,
 ): string[] {
   return ['auto'];
-}
-
-export function getBestAutoModeForTier(
-  _tier: SubscriptionTier | string | null | undefined,
-): string {
-  return 'auto';
 }
 
 export function canAccessManualModelSelection(

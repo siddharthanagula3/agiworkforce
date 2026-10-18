@@ -1,4 +1,4 @@
-import { MessageSquare, Sliders, User } from 'lucide-react';
+import { Sliders, User } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
@@ -256,96 +256,6 @@ export function PersonalizationSettings() {
           </p>
         </div>
       </div>
-
-      {/* ── Section: Custom Instructions (response style) ─────────────── */}
-      <div className="space-y-4 pt-6 border-t border-border">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-foreground shrink-0" />
-          <h3 className="text-h3">Custom Instructions</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Tell the AI specifically how you'd like it to respond. These are appended to every
-          conversation.
-        </p>
-
-        {/* Delegate to the dedicated CustomInstructionsSettings component */}
-        <div className="rounded-lg border border-border bg-card p-5">
-          <CustomInstructionsInline />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CustomInstructionsInline() {
-  const [instructions, setInstructions] = useState('');
-  const [isDirty, setIsDirty] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unsubRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    import('../../stores/customInstructionsStore')
-      .then(({ useCustomInstructionsStore }) => {
-        if (cancelled) return;
-        const val = useCustomInstructionsStore.getState().globalInstructions;
-        setInstructions(val);
-        unsubRef.current = useCustomInstructionsStore.subscribe((s) => {
-          if (!cancelled) {
-            setInstructions(s.globalInstructions);
-          }
-        });
-      })
-      .catch((err: unknown) => {
-        console.error('[PersonalizationSettings] Failed to load custom instructions store:', err);
-      });
-
-    return () => {
-      cancelled = true;
-      unsubRef.current?.();
-      unsubRef.current = null;
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  const handleChange = (value: string) => {
-    setInstructions(value);
-    setIsDirty(true);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      import('../../stores/customInstructionsStore')
-        .then(({ useCustomInstructionsStore }) => {
-          useCustomInstructionsStore.getState().setGlobalInstructions(value);
-          setIsDirty(false);
-        })
-        .catch((err: unknown) => {
-          console.error('[PersonalizationSettings] Failed to save custom instructions:', err);
-        });
-      debounceRef.current = null;
-    }, 600);
-  };
-
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="personalization-instructions">How would you like responses?</Label>
-      <textarea
-        id="personalization-instructions"
-        value={instructions}
-        onChange={(e) => handleChange(e.target.value)}
-        placeholder={
-          'e.g. Always explain your reasoning step by step. Prefer concise answers unless detail is requested.'
-        }
-        rows={4}
-        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
-      {isDirty && <p className="text-xs text-warning-text">Saving...</p>}
-      <p className="text-xs text-muted-foreground">
-        For more options including enable/disable toggle, see the full{' '}
-        <span className="font-medium text-foreground">Custom Instructions</span> panel in the
-        Appearance tab.
-      </p>
     </div>
   );
 }

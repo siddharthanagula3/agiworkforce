@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
-import { Check, Database, Download, Loader2 } from 'lucide-react';
+import { Check, Database, Download } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { isTauri, relaunchApp } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
@@ -11,6 +11,7 @@ import { Spinner } from '@/ui/Spinner';
 import { errorTracking } from '../../../../services/errorTracking';
 import { MASTER_PASSWORD_SCOPE } from '../../masterPasswordScope';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
+import { TabFallback } from '../TabFallback';
 
 const LazyMasterPasswordSettings = lazy(() =>
   import('../../MasterPasswordSettings').then((m) => ({ default: m.MasterPasswordSettings })),
@@ -38,15 +39,6 @@ const LazySafetyPolicies = lazy(() =>
   import('@/features/governance/SafetyPolicies').then((m) => ({ default: m.SafetyPolicies })),
 );
 
-function Fallback({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 function hostMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -65,6 +57,7 @@ function DataPrivacySection() {
     return errorTracking.getConfig().enabled;
   });
   const [savingCrashReporting, setSavingCrashReporting] = useState(false);
+  const [crashReportingError, setCrashReportingError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -155,6 +148,7 @@ function DataPrivacySection() {
 
   const handleToggleCrashReporting = useCallback(async (enabled: boolean) => {
     setSavingCrashReporting(true);
+    setCrashReportingError(null);
     try {
       await onboarding.setUserPreference(
         'crash_reporting_enabled',
@@ -167,6 +161,7 @@ function DataPrivacySection() {
       setCrashReportingEnabled(enabled);
     } catch (err) {
       console.error('Failed to save crash reporting preference:', err);
+      setCrashReportingError(`Crash reporting was not changed. ${hostMessage(err)}`);
     } finally {
       setSavingCrashReporting(false);
     }
@@ -267,8 +262,6 @@ function DataPrivacySection() {
           )}
         </div>
 
-        {/* Cloud sync toggle removed for v1 LOCAL ONLY. Re-add when cloud is ungated. */}
-
         <div className="rounded-lg border border-danger-fill/20 bg-danger-fill/5 p-6">
           <div className="flex items-start gap-4">
             <div className="rounded-md bg-danger-fill/10 p-3">
@@ -325,9 +318,8 @@ function DataPrivacySection() {
         <div className="rounded-lg border border-warning-fill/50 bg-warning-fill/10 p-4">
           <h4 className="font-semibold text-warning-text mb-2">GDPR Compliance</h4>
           <p className="text-sm text-warning-text">
-            AGI Workforce respects your right to data portability and privacy. Use the export
-            feature above to exercise your GDPR rights. To delete all your data, simply uninstall
-            the application and remove the data directory.
+            AGI Workforce respects your right to data portability and privacy. Use Export data above
+            to take a copy of your data, and Delete all data to erase it from this device.
           </p>
         </div>
 
@@ -368,6 +360,11 @@ function DataPrivacySection() {
           <p className="text-xs text-muted-foreground mt-1">
             This preference applies immediately and is not controlled by Save/Cancel.
           </p>
+          {crashReportingError ? (
+            <p role="alert" className="mt-2 text-xs text-danger-text">
+              {crashReportingError}
+            </p>
+          ) : null}
         </div>
       </div>
       {confirmActionDialog}
@@ -386,7 +383,7 @@ function AnalyticsPrivacySection() {
       <p className="text-sm text-muted-foreground mb-4">
         This device-wide preference applies to both Local and Cloud mode.
       </p>
-      <Suspense fallback={<Fallback label="Loading analytics settings..." />}>
+      <Suspense fallback={<TabFallback label="Loading analytics settings..." />}>
         <LazyAnalyticsSettings />
       </Suspense>
     </div>
@@ -433,13 +430,13 @@ function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
       </div>
       {governanceOpen && (
         <div className="pt-4">
-          <Suspense fallback={<Fallback label="Loading governance..." />}>
+          <Suspense fallback={<TabFallback label="Loading governance..." />}>
             <LazyGovernanceDashboard />
           </Suspense>
         </div>
       )}
       <div className="pt-6">
-        <Suspense fallback={<Fallback label="Loading governance policies..." />}>
+        <Suspense fallback={<TabFallback label="Loading governance policies..." />}>
           <LazySafetyPolicies />
         </Suspense>
       </div>
@@ -462,7 +459,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
           </p>
         </div>
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading cloud account data controls..." />}>
+          <Suspense fallback={<TabFallback label="Loading cloud account data controls..." />}>
             <LazyCloudDataSection />
           </Suspense>
         </div>
@@ -477,7 +474,7 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
       <div>
         <h3 className="text-h3 mb-1">Master Password</h3>
         <p className="text-sm text-muted-foreground mb-4">{MASTER_PASSWORD_SCOPE}</p>
-        <Suspense fallback={<Fallback label="Loading security settings..." />}>
+        <Suspense fallback={<TabFallback label="Loading security settings..." />}>
           <LazyMasterPasswordSettings />
         </Suspense>
       </div>
@@ -486,18 +483,18 @@ export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
       </div>
       {hasCloudAccountSession && (
         <div className="pt-6 border-t border-border">
-          <Suspense fallback={<Fallback label="Loading cloud account data controls..." />}>
+          <Suspense fallback={<TabFallback label="Loading cloud account data controls..." />}>
             <LazyCloudDataSection />
           </Suspense>
         </div>
       )}
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading cache settings..." />}>
+        <Suspense fallback={<TabFallback label="Loading cache settings..." />}>
           <LazyCacheManagement />
         </Suspense>
       </div>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading filesystem permissions..." />}>
+        <Suspense fallback={<TabFallback label="Loading filesystem permissions..." />}>
           <LazyAllowedDirectoriesSettings />
         </Suspense>
       </div>

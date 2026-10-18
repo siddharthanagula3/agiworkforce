@@ -100,7 +100,6 @@ if (typeof window !== 'undefined' && !window.localStorage.getItem('app-mode-stor
 export const selectMode = (state: AppModeState): AppMode => state.mode;
 export const selectIsCloud = (state: AppModeState): boolean => state.mode === 'cloud';
 export const selectIsLocal = (state: AppModeState): boolean => state.mode === 'local';
-export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnboarded;
 
 export const selectPrivacyMode = (state: AppModeState): PrivacyMode => {
   return state.mode === 'local' ? 'local' : 'managed';

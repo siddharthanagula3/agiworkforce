@@ -318,10 +318,7 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
 
 export const selectActiveSession = (state: ResearchState) => state.activeSession;
 export const selectHistory = (state: ResearchState) => state.history;
-export const selectConfig = (state: ResearchState) => state.config;
 export const selectIsResearching = (state: ResearchState) =>
   state.activeSession.status === 'researching';
-export const selectHasResult = (state: ResearchState) =>
-  state.activeSession.status === 'complete' && state.activeSession.result !== null;
 
 export default useResearchStore;

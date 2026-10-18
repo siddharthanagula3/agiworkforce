@@ -25,9 +25,4 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
   ),
 );
 
-export const selectCostOverview = (state: BillingUsageStore) => state.costOverview;
 export const selectCostAnalytics = (state: BillingUsageStore) => state.costAnalytics;
-export const selectCostFilters = (state: BillingUsageStore) => state.costFilters;
-export const selectCostLoading = (state: BillingUsageStore) =>
-  state.loadingCostOverview || state.loadingCostAnalytics;
-export const selectCostError = (state: BillingUsageStore) => state.costError;

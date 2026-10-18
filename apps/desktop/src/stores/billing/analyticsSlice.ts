@@ -1,6 +1,5 @@
 import { analytics } from '../../services/analytics';
 import { ErrorSeverity, errorTracking } from '../../services/errorTracking';
-import { analyticsDeleteAllData } from '../../api/analytics';
 import type { PrivacyConsent } from '../../types/analytics';
 
 export interface AnalyticsSliceState {
@@ -50,9 +49,8 @@ export const createAnalyticsSlice = (
 
   deleteAllAnalyticsData: async () => {
     try {
-      await analytics.deleteAllData();
-      await analyticsDeleteAllData();
       set({ privacyConsent: null });
+      await analytics.deleteAllData();
     } catch (error) {
       console.error('Failed to delete analytics data:', error);
       errorTracking.captureError(error instanceof Error ? error : new Error(String(error)), {

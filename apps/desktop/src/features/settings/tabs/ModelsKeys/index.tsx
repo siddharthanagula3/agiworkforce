@@ -14,6 +14,7 @@ import { Progress } from '@/ui/Progress';
 import { Spinner } from '@/ui/Spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
+import { TabFallback } from '../TabFallback';
 
 const LazyLocalRuntimeSettings = lazy(() =>
   import('./LocalRuntimeSettings').then((m) => ({ default: m.LocalRuntimeSettings })),
@@ -26,15 +27,6 @@ const LazyOllamaMemorySettings = lazy(() =>
 const LazyDailyBudgetSettings = lazy(() =>
   import('./DailyBudgetSettings').then((m) => ({ default: m.DailyBudgetSettings })),
 );
-
-function Fallback({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
 
 const BYOK_PROVIDERS: ReadonlyArray<{ id: Provider; name: string; placeholder: string }> = [
   { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...' },
@@ -620,7 +612,7 @@ export function ModelsKeysTab({
                           </p>
                         )}
                       </div>
-                      <Suspense fallback={<Fallback label="Loading models in memory..." />}>
+                      <Suspense fallback={<TabFallback label="Loading models in memory..." />}>
                         <LazyOllamaMemorySettings installedModels={ollamaModels} />
                       </Suspense>
                     </div>
@@ -659,13 +651,13 @@ export function ModelsKeysTab({
             </div>
           </div>
 
-          <Suspense fallback={<Fallback label="Loading local runtime settings..." />}>
+          <Suspense fallback={<TabFallback label="Loading local runtime settings..." />}>
             <LazyLocalRuntimeSettings />
           </Suspense>
         </div>
       </div>
 
-      <Suspense fallback={<Fallback label="Loading spend cap..." />}>
+      <Suspense fallback={<TabFallback label="Loading spend cap..." />}>
         <LazyDailyBudgetSettings />
       </Suspense>
 

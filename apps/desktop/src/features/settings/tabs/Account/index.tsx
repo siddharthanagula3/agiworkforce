@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react';
-import { Loader2, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
+import { TabFallback } from '../TabFallback';
 
 const LazyAccountSettings = lazy(() =>
   import('../../AccountSettings').then((m) => ({ default: m.AccountSettings })),
@@ -9,15 +10,6 @@ const LazyAccountSettings = lazy(() =>
 const LazyCloudAccountControls = lazy(() =>
   import('./CloudAccountControls').then((m) => ({ default: m.CloudAccountControls })),
 );
-function Fallback({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
 
@@ -62,11 +54,11 @@ export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
 
   return (
     <div className="flex flex-col gap-8">
-      <Suspense fallback={<Fallback label="Loading account settings..." />}>
+      <Suspense fallback={<TabFallback label="Loading account settings..." />}>
         <LazyAccountSettings />
       </Suspense>
       <div className="border-t border-border pt-8">
-        <Suspense fallback={<Fallback label="Loading account controls..." />}>
+        <Suspense fallback={<TabFallback label="Loading account controls..." />}>
           <LazyCloudAccountControls />
         </Suspense>
       </div>

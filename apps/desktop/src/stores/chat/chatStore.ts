@@ -1854,34 +1854,6 @@ useChatStore.setState = (
 
 useChatStore.subscribe = useChatMessageStore.subscribe as typeof useChatMessageStore.subscribe;
 
-export const selectConversations = (state: ChatState) => state.conversations;
-export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
-export const selectMessages = (state: ChatState) => state.messages;
-export const selectIsLoading = (state: ChatState) => state.isLoading;
-export const selectIsLoadingMessages = (state: ChatState) => state.isLoadingMessages;
-export const selectIsStreaming = (state: ChatState) => state.isStreaming;
-export const selectCurrentStreamingMessageId = (state: ChatState) =>
-  state.currentStreamingMessageId;
-export const selectPendingMessages = (state: ChatState) => state.pendingMessages;
-export const selectCitations = (state: ChatState) => state.citations;
-export const selectTokenUsage = (state: ChatState) => state.tokenUsage;
-export const selectFocusMode = (state: ChatState) => state.focusMode;
-export const selectActiveView = (state: ChatState) => state.activeView;
-export const selectConversationMode = (state: ChatState) => state.conversationMode;
-export const selectDraftContent = (state: ChatState) => state.draftContent;
-export const selectEditingMessageId = (state: ChatState) => state.editingMessageId;
-export const selectShowMessageTimestamps = (state: ChatState) => state.showMessageTimestamps;
-export const selectSelectedMessage = (state: ChatState) => state.selectedMessage;
-export const selectActiveConversation = (state: ChatState) =>
-  state.conversations.find((c) => c.id === state.activeConversationId);
-export const selectNonArchivedConversations = (state: ChatState) =>
-  state.conversations.filter((c) => !c.archived);
-export const selectPinnedConversations = (state: ChatState) =>
-  state.conversations.filter((c) => c.pinned && !c.archived);
-export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimelineByMessage;
-export const selectThinkingByMessage = (state: ChatState) => state.thinkingByMessage;
-export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;
-
 const IS_TEST_ENVIRONMENT =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
 

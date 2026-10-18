@@ -328,8 +328,3 @@ export function unsubscribeFromBackgroundAgents(): void {
   }
   backgroundAgentUnlisteners = [];
 }
-
-export const selectBackgroundAgents = (state: BackgroundAgentState) => state.agents;
-export const selectActiveBackgroundAgents = (state: BackgroundAgentState) =>
-  state.agents.filter((agent) => !isTerminalBackgroundAgentStatus(agent.status));
-export const selectBackgroundAgentError = (state: BackgroundAgentState) => state.error;

@@ -72,12 +72,6 @@ export interface CloudConversation {
 
 export type CloudUsage = ManagedUsageSummaryResponse;
 
-export interface SendMessageRequest {
-  conversation_id?: string;
-  message: string;
-  model: string;
-}
-
 export type CloudChatMessageContent =
   | string
   | Array<
@@ -389,12 +383,6 @@ export interface CloudModelInfo {
   id: string;
   name: string;
   provider: string;
-}
-
-export interface CloudModelsResponse {
-  models: CloudModelInfo[];
-  version?: string;
-  lastUpdated?: string;
 }
 
 export interface CloudGeneratedImage {

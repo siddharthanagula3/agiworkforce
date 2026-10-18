@@ -313,9 +313,10 @@ export function TerminalWorkspace({ className }: TerminalWorkspaceProps) {
                   onClick={(e) => handleCloseSession(session.id, e)}
                   className={cn(
                     'text-muted-foreground transition-colors hover:text-foreground',
-                    'opacity-0 group-hover:opacity-100',
+                    'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                     isActive && 'opacity-100',
                   )}
+                  aria-label={`Close ${session.title}`}
                 >
                   <X className="h-3 w-3" />
                 </button>

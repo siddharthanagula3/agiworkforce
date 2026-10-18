@@ -196,11 +196,6 @@ const UpdateDialog = lazy(() =>
     default: m.UpdateDialog,
   })),
 );
-const AutomationPermissionsModal = lazy(() =>
-  import('./features/settings/AutomationPermissionsModal').then((m) => ({
-    default: m.AutomationPermissionsModal,
-  })),
-);
 const MasterPasswordLaunchUnlock = lazy(() =>
   import('./features/settings/MasterPasswordLaunchUnlock').then((m) => ({
     default: m.MasterPasswordLaunchUnlock,
@@ -1389,6 +1384,9 @@ const DesktopShell = () => {
           await update(shortcut.backendId, toBackendAccelerator(combo));
         } catch (error) {
           console.error('[App] Failed to re-apply saved hotkey', shortcut.id, error);
+          toast.error(`Your shortcut for “${shortcut.description}” is not active`, {
+            description: `${getSimpleErrorMessage(error)} Set it again in Settings, under Keybindings.`,
+          });
         }
       }
     })();
@@ -1877,11 +1875,6 @@ const DesktopShell = () => {
         {isTauri && (
           <Suspense fallback={null}>
             <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
-          </Suspense>
-        )}
-        {isTauri && (
-          <Suspense fallback={null}>
-            <AutomationPermissionsModal />
           </Suspense>
         )}
         {isTauri && (
