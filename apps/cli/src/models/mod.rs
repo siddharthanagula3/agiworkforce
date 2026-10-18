@@ -143,7 +143,7 @@ pub fn qwen_provider() -> Provider {
 pub fn moonshot_provider() -> Provider {
     Provider::OpenAICompatible {
         name: "moonshot",
-        base_url: "https://api.moonshot.cn/v1/chat/completions",
+        base_url: "https://api.moonshot.ai/v1/chat/completions",
         api_key_env: Some("MOONSHOT_API_KEY"),
     }
 }
