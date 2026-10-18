@@ -5,12 +5,10 @@ import { join } from 'node:path';
 
 import {
   CONTACT_EMAIL,
-  CONTACT_SUBJECTS,
   GRIEVANCE_OFFICER_DESIGNATE,
   GRIEVANCE_OFFICER_NAME,
   GRIEVANCE_OFFICER_ROLE,
   LEGAL_ENTITY,
-  contactMailto,
   grievanceOfficerLabel,
 } from '../legal-constants';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -21,7 +19,6 @@ const GRIEVANCE_SURFACES = [
   'app/privacy/india/page.tsx',
   'app/privacy/requests/page.tsx',
   'app/terms/page.tsx',
-  'features/marketing/components/system/MarketingFooter.tsx',
 ];
 
 const readSurface = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
@@ -42,21 +39,11 @@ describe('published grievance officer', () => {
     expect(GRIEVANCE_OFFICER_NAME).toBe(grievanceOfficerLabel(GRIEVANCE_OFFICER_DESIGNATE));
   });
 
-  it('names the officer once in the footer instead of stuttering the role', () => {
+  it('leaves the officer to the policy pages rather than the footer', () => {
     const { container } = render(<MarketingFooter />);
-    const strip = container.querySelector('.agi-ds-footer-legal');
-    const text = strip?.textContent ?? '';
+    const text = container.querySelector('.agi-ds-footer-legal')?.textContent ?? '';
 
-    expect(text).toContain(GRIEVANCE_OFFICER_NAME);
-    expect(text.match(new RegExp(GRIEVANCE_OFFICER_ROLE, 'gi')) ?? []).toHaveLength(1);
-  });
-
-  it('points the footer grievance route at the provisioned mailbox', () => {
-    const { container } = render(<MarketingFooter />);
-    const link = container.querySelector(`.agi-ds-footer-legal a[href^="mailto:"]`);
-
-    expect(link?.getAttribute('href')).toBe(contactMailto(CONTACT_SUBJECTS.dpdpGrievance));
-    expect(link?.textContent).toBe(CONTACT_EMAIL);
+    expect(text).not.toMatch(new RegExp(GRIEVANCE_OFFICER_ROLE, 'i'));
   });
 
   it.each(GRIEVANCE_SURFACES)('reads the officer from the seam in %s', (relative) => {
