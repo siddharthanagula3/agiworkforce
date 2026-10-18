@@ -17,7 +17,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   getImageGenerationJob,
   isImageGenerationJobRetryable,
-  isImageJobStoreReady,
   requeueImageGenerationJob,
 } from '@/lib/server/image-generation-jobs';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
@@ -79,11 +78,6 @@ async function handleImageRetry(request: NextRequest): Promise<NextResponse> {
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
     throw createError.forbidden('You do not have permission to retry this job');
-  }
-  if (!(await isImageJobStoreReady(scoped.db))) {
-    throw createError.serviceUnavailable(
-      'Durable image jobs are not available on this deployment.',
-    );
   }
 
   const existing = await getImageGenerationJob(scoped.db, parsed.data.job_id, userId);

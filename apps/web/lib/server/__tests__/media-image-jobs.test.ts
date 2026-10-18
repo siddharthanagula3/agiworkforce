@@ -10,7 +10,6 @@ import {
   failImageGenerationJob,
   getImageGenerationJob,
   isImageGenerationJobRetryable,
-  isImageJobStoreReady,
   listImageGenerationJobAssetIds,
   requeueImageGenerationJob,
   type ImageGenerationJob,
@@ -287,12 +286,5 @@ describe('durable image job persistence boundary', () => {
     const assetDb = { query: assetQuery } as never;
     await expect(listImageGenerationJobAssetIds(assetDb, JOB_ID)).resolves.toEqual([ASSET_ID]);
     expect((assetQuery.mock.calls[0] as [string])[0]).toMatch(/order by candidate_index/);
-  });
-
-  it('reports the store as unready until both tables exist', async () => {
-    const readyDb = { query: vi.fn().mockResolvedValue([{ provisioned: true }]) } as never;
-    const unreadyDb = { query: vi.fn().mockResolvedValue([{ provisioned: false }]) } as never;
-    await expect(isImageJobStoreReady(readyDb)).resolves.toBe(true);
-    await expect(isImageJobStoreReady(unreadyDb)).resolves.toBe(false);
   });
 });

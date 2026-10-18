@@ -22,7 +22,6 @@ import {
 } from '@/lib/moderation';
 import { recordMediaSafety } from '@/lib/observability/media-telemetry';
 import { annotateActiveSpan } from '@/lib/observability/span';
-import { isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { isImageStorageConfigured } from '@/lib/server/media-storage';
 import {
   MODEL_MAY_TRAIN_MESSAGE,
@@ -45,7 +44,6 @@ import {
 import {
   createImageGenerationJob,
   getImageGenerationJobByIdempotencyKey,
-  isImageJobStoreReady,
   IMAGE_JOB_CLAIM_SECONDS,
   IMAGE_JOB_LEASE_SECONDS,
   type ImageGenerationJob,
@@ -486,32 +484,6 @@ export async function generateManagedImage(
       },
     );
   }
-  let mediaCatalogConfigured = false;
-  try {
-    mediaCatalogConfigured = await isMediaAssetStoreReady((await input.scope()).db);
-  } catch (error) {
-    logger.error(
-      { error, userId, provider, model: catalogModel.id },
-      'Image generation unavailable because media catalog readiness could not be verified',
-    );
-  }
-  if (!mediaCatalogConfigured) {
-    return NextResponse.json(
-      {
-        error: {
-          message:
-            'Image generation is temporarily unavailable because generated images cannot be cataloged. Please try again later.',
-          type: 'server_error',
-          code: 'media_catalog_unavailable',
-        },
-      },
-      {
-        status: 503,
-        headers,
-      },
-    );
-  }
-
   // The other half of the safety floor: client-supplied image bytes. A benign
   // prompt must not be a way to push prohibited imagery through the edit
   // endpoints, so both refs are resolved and hash-checked here, ahead of the
@@ -683,7 +655,6 @@ export async function generateManagedImage(
   let sourceSurface: ManagedMediaSurface;
   let organizationId: string | null;
   let scopedDb: UserScopedDb['db'];
-  let jobStoreReady = false;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
     const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
@@ -716,15 +687,6 @@ export async function generateManagedImage(
           'conversation_not_found',
         );
       }
-    }
-
-    jobStoreReady = await isImageJobStoreReady(scoped.db).catch(() => false);
-    if (wantsAsync && !jobStoreReady) {
-      throw new ManagedUsageRequestError(
-        'Durable image jobs are not available on this deployment yet. Retry without "async".',
-        503,
-        'image_job_store_unavailable',
-      );
     }
 
     // The durable job holds one reservation across every attempt, which is what
@@ -790,56 +752,13 @@ export async function generateManagedImage(
   }
 
   let job: ImageGenerationJob;
-  if (jobStoreReady) {
-    try {
-      job = await createImageGenerationJob({
-        db: scopedDb,
-        id: randomUUID(),
-        userId,
-        organizationId,
-        conversationId,
-        idempotencyKey: reservation.idempotencyKey,
-        requestHash: reservation.requestHash,
-        billingLeaseToken: reservation.leaseToken,
-        provider: jobProvider,
-        model: catalogModel.id,
-        operation,
-        prompt,
-        plan,
-        ...(sourceImageSha256 ? { sourceImageSha256 } : {}),
-        ...(maskImageSha256 ? { maskImageSha256 } : {}),
-        imageCount: n,
-        sourceSurface,
-        estimatedCostMicrousd,
-      });
-    } catch (error) {
-      const existing = await getImageGenerationJobByIdempotencyKey(
-        scopedDb,
-        userId,
-        reservation.idempotencyKey,
-      ).catch(() => null);
-      if (!existing) {
-        logger.error({ error, userId }, 'Durable image job could not be persisted');
-        return managedUsageErrorResponse(
-          headers,
-          new ManagedUsageRequestError(
-            'Image generation is temporarily unavailable. Please try again later.',
-            503,
-            'image_job_unavailable',
-          ),
-        );
-      }
-      job = existing;
-    }
-  } else {
-    // 0226 is not applied on this deployment. The same executor runs, with no
-    // durable row behind it, so image generation keeps working and only the
-    // job handle is missing.
-    job = {
+  try {
+    job = await createImageGenerationJob({
+      db: scopedDb,
       id: randomUUID(),
       userId,
       organizationId,
-      conversationId: conversationId ?? null,
+      conversationId,
       idempotencyKey: reservation.idempotencyKey,
       requestHash: reservation.requestHash,
       billingLeaseToken: reservation.leaseToken,
@@ -848,41 +767,41 @@ export async function generateManagedImage(
       operation,
       prompt,
       plan,
-      sourceImageSha256: sourceImageSha256 ?? null,
-      maskImageSha256: maskImageSha256 ?? null,
+      ...(sourceImageSha256 ? { sourceImageSha256 } : {}),
+      ...(maskImageSha256 ? { maskImageSha256 } : {}),
       imageCount: n,
       sourceSurface,
       estimatedCostMicrousd,
-      actualCostMicrousd: null,
-      status: 'queued',
-      attempts: 0,
-      maxAttempts: 1,
-      attemptStartedAt: null,
-      retryable: false,
-      publicError: null,
-      cancelRequestedAt: null,
-      billingOutcome: null,
-      billingSettlementStatus: null,
-      nextAttemptAt: new Date().toISOString(),
-      claimToken: null,
-      claimExpiresAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      terminalAt: null,
-    };
+    });
+  } catch (error) {
+    const existing = await getImageGenerationJobByIdempotencyKey(
+      scopedDb,
+      userId,
+      reservation.idempotencyKey,
+    ).catch(() => null);
+    if (!existing) {
+      logger.error({ error, userId }, 'Durable image job could not be persisted');
+      return managedUsageErrorResponse(
+        headers,
+        new ManagedUsageRequestError(
+          'Image generation is temporarily unavailable. Please try again later.',
+          503,
+          'image_job_unavailable',
+        ),
+      );
+    }
+    job = existing;
   }
 
   // The request that submits a job is not what finishes it. A drive queued for
   // every durable job is what carries the work when this process is killed
   // mid-attempt, whether or not the caller ever asks about it again. It is a
   // no-op once the job is terminal.
-  if (jobStoreReady) {
-    await scheduleImageGenerationJobDrive({
-      db: scopedDb,
-      job,
-      delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
-    });
-  }
+  await scheduleImageGenerationJobDrive({
+    db: scopedDb,
+    job,
+    delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
+  });
 
   if (wantsAsync) {
     const detachedJob = job;
@@ -915,7 +834,6 @@ export async function generateManagedImage(
     db: scopedDb,
     job,
     inlineEdit,
-    detached: !jobStoreReady,
   });
 
   if (outcome.job.status !== 'completed') {
@@ -945,7 +863,8 @@ export async function generateManagedImage(
         provider,
         model: outcome.providerModel ?? 'unknown',
         latency_ms: Date.now() - startTime,
-        ...(jobStoreReady ? { job_id: outcome.job.id, retryable: outcome.job.retryable } : {}),
+        job_id: outcome.job.id,
+        retryable: outcome.job.retryable,
         ...(outcome.failureKind === 'persistence' ? { persisted: false } : {}),
         ...(outcome.retryAfterSeconds !== undefined
           ? { retry_after_seconds: outcome.retryAfterSeconds }
@@ -990,7 +909,7 @@ export async function generateManagedImage(
       latency_ms: Date.now() - startTime,
       persisted: storageConfigured,
       provenance: outcome.provenance,
-      ...(jobStoreReady ? { job_id: outcome.job.id } : {}),
+      job_id: outcome.job.id,
     },
     {
       headers: {

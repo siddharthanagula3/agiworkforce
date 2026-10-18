@@ -49,7 +49,6 @@ vi.mock('@/lib/error-handler', async () => {
 const mocks = vi.hoisted(() => ({
   authUser: vi.fn(),
   scoped: vi.fn(),
-  storeReady: vi.fn(),
   getJob: vi.fn(),
   assetIds: vi.fn(),
   runAttempt: vi.fn(),
@@ -86,7 +85,6 @@ vi.mock('@/lib/server/image-generation-jobs', async () => {
   const actual = await vi.importActual<ScanModule3>('@/lib/server/image-generation-jobs');
   return {
     ...actual,
-    isImageJobStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
     getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
     listImageGenerationJobAssetIds: (...args: unknown[]) => mocks.assetIds(...args),
     closeCancelledImageGenerationJob: (...args: unknown[]) => mocks.closeCancelled(...args),
@@ -165,7 +163,6 @@ describe('GET /api/media/image/status', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.scoped.mockResolvedValue({ userId: 'user-1', organizationId: null, db: {} });
-    mocks.storeReady.mockResolvedValue(true);
     mocks.assetIds.mockResolvedValue([]);
     mocks.finalize.mockResolvedValue({ settlementStatus: 'succeeded', requestStatus: 'released' });
     mocks.closeCancelled.mockResolvedValue(null);

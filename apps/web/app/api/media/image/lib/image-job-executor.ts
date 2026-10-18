@@ -165,19 +165,7 @@ async function closeAttemptAsFailed(input: {
   reason: string;
   retryable: boolean;
   retryAfterSeconds?: number;
-  detached?: boolean;
 }): Promise<ImageGenerationJob> {
-  if (input.detached) {
-    await settleFailure(input.db, input.job, input.reason);
-    return {
-      ...input.job,
-      status: 'failed',
-      retryable: false,
-      publicError: input.publicError,
-      terminalAt: new Date().toISOString(),
-    };
-  }
-
   const attemptsLeft = input.job.attempts < input.job.maxAttempts;
   if (input.retryable && attemptsLeft) {
     const retryAfterSeconds = input.retryAfterSeconds ?? IMAGE_ATTEMPT_BACKOFF_SECONDS;
@@ -496,16 +484,11 @@ async function persistGeneratedImages(input: {
  * request, a later status poll that finds the previous attempt abandoned, or an
  * explicit retry. Whoever wins the claim runs the provider call; everyone else
  * gets the current snapshot back.
- *
- * `detached` is the path taken while 0226 is unapplied: the same provider,
- * persistence and settlement code runs against an in-memory job so image
- * generation keeps working, with no durable handle to retry or poll.
  */
 export function runImageGenerationJobAttempt(input: {
   db: DatabaseAdapter;
   job: ImageGenerationJob;
   inlineEdit?: ImageJobInlineEdit | undefined;
-  detached?: boolean;
 }): Promise<ImageJobAttemptOutcome> {
   return withMediaAttemptSpan(
     {
@@ -524,18 +507,14 @@ async function executeImageGenerationJobAttempt(input: {
   db: DatabaseAdapter;
   job: ImageGenerationJob;
   inlineEdit?: ImageJobInlineEdit | undefined;
-  detached?: boolean;
 }): Promise<ImageJobAttemptOutcome> {
-  const detached = input.detached === true;
   const claimToken = randomUUID();
-  const claimed = detached
-    ? { ...input.job, status: 'processing' as const, attempts: input.job.attempts + 1 }
-    : await claimImageGenerationJobAttempt({
-        db: input.db,
-        jobId: input.job.id,
-        userId: input.job.userId,
-        claimToken,
-      });
+  const claimed = await claimImageGenerationJobAttempt({
+    db: input.db,
+    jobId: input.job.id,
+    userId: input.job.userId,
+    claimToken,
+  });
   if (!claimed) {
     const current =
       (await getImageGenerationJob(input.db, input.job.id, input.job.userId)) ?? input.job;
@@ -549,7 +528,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError: 'The requested image model is no longer available for this provider.',
       reason: 'model_unavailable',
       retryable: false,
@@ -565,7 +543,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError:
         error instanceof Error
           ? error.message
@@ -584,7 +561,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError:
         'The billing reservation for this image is no longer active. Start a new generation.',
       reason: 'billing_state_conflict',
@@ -664,7 +640,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError,
       reason: 'provider_failed',
       retryable,
@@ -691,7 +666,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError: refusal.refusal,
       reason: 'output_moderation',
       retryable: false,
@@ -739,7 +713,6 @@ async function executeImageGenerationJobAttempt(input: {
       db: input.db,
       job,
       claimToken,
-      detached,
       publicError:
         'The image was generated but could not be saved to your library, so it was not charged. Try again; if this keeps happening, contact support.',
       reason: 'image_persistence_failed',
@@ -782,23 +755,14 @@ async function executeImageGenerationJobAttempt(input: {
     );
   }
 
-  const completed = detached
-    ? {
-        ...job,
-        status: 'completed' as const,
-        actualCostMicrousd,
-        billingOutcome: 'completed' as const,
-        billingSettlementStatus,
-        terminalAt: new Date().toISOString(),
-      }
-    : await completeImageGenerationJob({
-        db: input.db,
-        jobId: job.id,
-        claimToken,
-        assetIds: persisted.assetIds,
-        actualCostMicrousd,
-        billingSettlementStatus,
-      });
+  const completed = await completeImageGenerationJob({
+    db: input.db,
+    jobId: job.id,
+    claimToken,
+    assetIds: persisted.assetIds,
+    actualCostMicrousd,
+    billingSettlementStatus,
+  });
 
   logger.info(
     {

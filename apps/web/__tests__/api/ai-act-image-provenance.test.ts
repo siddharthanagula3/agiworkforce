@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/error-handler');
 type ScanModule1 = typeof import('@/lib/server/media-storage');
 type ScanModule2 = typeof import('@/lib/services/managed-usage-request-service');
+type ScanModule3 = typeof import('@/lib/server/image-generation-jobs');
 
 vi.mock('server-only', () => ({}));
 
@@ -64,13 +65,99 @@ const assetMocks = vi.hoisted(() => ({
     'asset-1',
   ]),
   byId: vi.fn(),
-  ready: vi.fn(async () => true),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: assetMocks.insert,
   insertMediaAssetsAtomically: assetMocks.insertMany,
   getActiveWorkspaceMediaAssetById: assetMocks.byId,
-  isMediaAssetStoreReady: assetMocks.ready,
+}));
+
+const imageJobs = vi.hoisted(() => {
+  type Job = Record<string, unknown> & { id: string };
+  const store = new Map<string, Job>();
+  const update = (jobId: string, patch: Record<string, unknown>): Job => {
+    const next = { ...store.get(jobId)!, ...patch, updatedAt: new Date().toISOString() };
+    store.set(jobId, next);
+    return next;
+  };
+  return {
+    store,
+    create: async (input: Record<string, unknown>): Promise<Job> => {
+      const now = new Date().toISOString();
+      const job: Job = {
+        id: String(input['id']),
+        userId: input['userId'],
+        organizationId: input['organizationId'] ?? null,
+        conversationId: input['conversationId'] ?? null,
+        idempotencyKey: input['idempotencyKey'],
+        requestHash: input['requestHash'],
+        billingLeaseToken: input['billingLeaseToken'],
+        provider: input['provider'],
+        model: input['model'],
+        operation: input['operation'],
+        prompt: input['prompt'],
+        plan: input['plan'],
+        sourceImageSha256: input['sourceImageSha256'] ?? null,
+        maskImageSha256: input['maskImageSha256'] ?? null,
+        imageCount: input['imageCount'],
+        sourceSurface: input['sourceSurface'],
+        estimatedCostMicrousd: input['estimatedCostMicrousd'],
+        actualCostMicrousd: null,
+        status: 'queued',
+        attempts: 0,
+        maxAttempts: 3,
+        attemptStartedAt: null,
+        retryable: false,
+        publicError: null,
+        cancelRequestedAt: null,
+        billingOutcome: null,
+        billingSettlementStatus: null,
+        nextAttemptAt: now,
+        claimToken: null,
+        claimExpiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+        terminalAt: null,
+      };
+      store.set(job.id, job);
+      return job;
+    },
+    claim: async (input: { jobId: string; claimToken: string }) => {
+      const job = store.get(input.jobId);
+      if (!job) return null;
+      return update(input.jobId, {
+        status: 'processing',
+        attempts: Number(job['attempts']) + 1,
+        claimToken: input.claimToken,
+      });
+    },
+    complete: async (input: { jobId: string; actualCostMicrousd: number }) =>
+      update(input.jobId, {
+        status: 'completed',
+        actualCostMicrousd: input.actualCostMicrousd,
+        billingOutcome: 'completed',
+        terminalAt: new Date().toISOString(),
+      }),
+    fail: async (input: { jobId: string; publicError: string }) =>
+      update(input.jobId, {
+        status: 'failed',
+        retryable: false,
+        publicError: input.publicError,
+        terminalAt: new Date().toISOString(),
+      }),
+    defer: async (input: { jobId: string; publicError: string }) =>
+      update(input.jobId, { status: 'failed', retryable: true, publicError: input.publicError }),
+  };
+});
+vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule3>()),
+  createImageGenerationJob: imageJobs.create,
+  claimImageGenerationJobAttempt: imageJobs.claim,
+  completeImageGenerationJob: imageJobs.complete,
+  failImageGenerationJob: imageJobs.fail,
+  deferImageGenerationJobFailure: imageJobs.defer,
+  getImageGenerationJobByIdempotencyKey: async () => null,
+  listImageGenerationJobAssetIds: async () => [],
 }));
 
 const managedUsageMocks = vi.hoisted(() => ({
@@ -162,6 +249,7 @@ describe('Article 50(2), generated image provenance', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    imageJobs.store.clear();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
     rlsMocks.getUserScopedDb.mockResolvedValue({
@@ -215,7 +303,6 @@ describe('Article 50(2), generated image provenance', () => {
     // The scope is resolved once for the entitlement read, so the guarantee
     // here is that nothing is catalogued or reserved, not that no connection
     // was opened.
-    expect(assetMocks.ready).not.toHaveBeenCalled();
     expect(assetMocks.insertMany).not.toHaveBeenCalled();
     expect(providerCalls()).toEqual([]);
   });
@@ -424,6 +511,7 @@ describe('Article 50(2), the mark survives to the download', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    imageJobs.store.clear();
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: {},

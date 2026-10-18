@@ -252,7 +252,6 @@ const managedUsageMocks = vi.hoisted(() => ({
 }));
 const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
 const mediaAssetReadinessMocks = vi.hoisted(() => ({
-  ready: vi.fn(async () => true),
   insertAtomically: vi.fn(),
 }));
 
@@ -261,7 +260,6 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/server/media-assets', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  isMediaAssetStoreReady: mediaAssetReadinessMocks.ready,
   insertMediaAssetsAtomically: mediaAssetReadinessMocks.insertAtomically,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -289,24 +287,20 @@ vi.mock('next/server', async () => {
   };
 });
 
-// 0226 is unapplied on a deployment that has not run it, and every case below
-// predates the durable job, so the store reads as absent unless a case says
-// otherwise. That keeps this file measuring the synchronous contract the other
-// surfaces still speak.
 const imageJobMocks = vi.hoisted(() => ({
-  storeReady: vi.fn(async (..._args: unknown[]) => false),
   create: vi.fn(),
   claim: vi.fn(),
   complete: vi.fn(),
   fail: vi.fn(),
+  defer: vi.fn(),
 }));
 vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
   ...(await importOriginal<ScanModule8>()),
-  isImageJobStoreReady: (...args: unknown[]) => imageJobMocks.storeReady(...args),
   createImageGenerationJob: (...args: unknown[]) => imageJobMocks.create(...args),
   claimImageGenerationJobAttempt: (...args: unknown[]) => imageJobMocks.claim(...args),
   completeImageGenerationJob: (...args: unknown[]) => imageJobMocks.complete(...args),
   failImageGenerationJob: (...args: unknown[]) => imageJobMocks.fail(...args),
+  deferImageGenerationJobFailure: (...args: unknown[]) => imageJobMocks.defer(...args),
 }));
 
 const jobQueueMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
@@ -424,7 +418,14 @@ describe('POST /api/media/image/generate', () => {
     vi.clearAllMocks();
     afterCallbacks.length = 0;
     jobQueueMocks.enqueue.mockResolvedValue({ id: 'bg-1', status: 'queued', created: true });
-    imageJobMocks.storeReady.mockResolvedValue(false);
+    imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+    imageJobMocks.defer.mockImplementation(async (input: { publicError: string }) => ({
+      ...DURABLE_IMAGE_JOB,
+      status: 'failed' as const,
+      attempts: 1,
+      retryable: true,
+      publicError: input.publicError,
+    }));
     imageJobMocks.claim.mockImplementation(async () => ({
       ...DURABLE_IMAGE_JOB,
       status: 'processing' as const,
@@ -463,7 +464,6 @@ describe('POST /api/media/image/generate', () => {
       userId: TEST_USER.userId,
       organizationId: null,
     });
-    mediaAssetReadinessMocks.ready.mockResolvedValue(true);
     mediaAssetReadinessMocks.insertAtomically.mockResolvedValue([]);
     mediaPersistenceMocks.storageConfigured.mockReturnValue(false);
     mediaPersistenceMocks.storeMedia.mockResolvedValue({
@@ -598,19 +598,6 @@ describe('POST /api/media/image/generate', () => {
   });
 
   describe('Durable media catalog admission', () => {
-    it('fails before reservation or provider work when the deployed media schema is partial', async () => {
-      mediaAssetReadinessMocks.ready.mockResolvedValueOnce(false);
-
-      const response = await POST(makeAuthedRequest({ prompt: 'a catalog-safe image' }));
-      const data = await response.json();
-
-      expect(response.status).toBe(503);
-      expect(data.error).toMatchObject({ code: 'media_catalog_unavailable' });
-      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
-      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
     it('rejects unowned conversation provenance before reservation or provider work', async () => {
       const conversationId = '0190a000-0000-7000-8000-000000000091';
       const scopedQuery = vi.fn().mockResolvedValue([]);
@@ -1071,7 +1058,6 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('creates a durable job and hands back its handle once the store exists', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(true);
       imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1095,7 +1081,6 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('returns the job handle before the provider call when the caller asks to poll', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(true);
       imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
 
       const response = await POST(
@@ -1113,7 +1098,6 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('hands every durable job to the background queue, not only the ones polled for', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(true);
       imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1128,30 +1112,6 @@ describe('POST /api/media/image/generate', () => {
         (call) => (call[1] as Record<string, unknown>)['idempotencyKey'],
       );
       expect(queued).toContain(`image-job:${DURABLE_IMAGE_JOB.id}:0`);
-    });
-
-    it('queues nothing for a deployment with no durable store', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(false);
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ url: 'https://example.com/generated-image.png' }] }),
-      });
-
-      await POST(makeAuthedRequest({ prompt: 'a cat on a throne', provider: 'openai' }));
-
-      expect(jobQueueMocks.enqueue).not.toHaveBeenCalled();
-    });
-
-    it('refuses an async request on a deployment without the durable store', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(false);
-
-      const response = await POST(
-        makeAuthedRequest({ prompt: 'a cat', provider: 'openai', async: true }),
-      );
-
-      expect(response.status).toBe(503);
-      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
-      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('should return 200 with hd quality model', async () => {
@@ -1749,7 +1709,6 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('refuses a generated image on the attempt that runs after the response', async () => {
-      imageJobMocks.storeReady.mockResolvedValue(true);
       imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
       mockFetch.mockResolvedValueOnce({
         ok: true,

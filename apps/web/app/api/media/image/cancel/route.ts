@@ -13,7 +13,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   getImageGenerationJob,
   getImageGenerationJobByIdempotencyKey,
-  isImageJobStoreReady,
   requestImageGenerationCancellation,
 } from '@/lib/server/image-generation-jobs';
 import {
@@ -67,11 +66,6 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
     throw createError.forbidden('You do not have permission to cancel this job');
-  }
-  if (!(await isImageJobStoreReady(scoped.db))) {
-    throw createError.serviceUnavailable(
-      'Durable image jobs are not available on this deployment.',
-    );
   }
 
   const existing =

@@ -37,7 +37,6 @@ vi.mock('@/lib/error-handler', async () => {
 const mocks = vi.hoisted(() => ({
   authUser: vi.fn(),
   scoped: vi.fn(),
-  storeReady: vi.fn(),
   getJob: vi.fn(),
   requeue: vi.fn(),
   runAttempt: vi.fn(),
@@ -75,7 +74,6 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => {
   const actual = await importOriginal<ScanModule2>();
   return {
     ...actual,
-    isImageJobStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
     getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
     requeueImageGenerationJob: (...args: unknown[]) => mocks.requeue(...args),
     listImageGenerationJobAssetIds: (...args: unknown[]) => mocks.assetIds(...args),
@@ -153,7 +151,6 @@ describe('POST /api/media/image/retry', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.scoped.mockResolvedValue({ userId: 'user-1', organizationId: null, db: {} });
-    mocks.storeReady.mockResolvedValue(true);
     mocks.assetIds.mockResolvedValue([ASSET_ID]);
   });
 

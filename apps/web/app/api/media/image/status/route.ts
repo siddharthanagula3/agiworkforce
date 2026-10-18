@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { getImageGenerationJob, isImageJobStoreReady } from '@/lib/server/image-generation-jobs';
+import { getImageGenerationJob } from '@/lib/server/image-generation-jobs';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
 import {
   imageJobDeliveredImages,
@@ -55,11 +55,6 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
     throw createError.forbidden('You do not have permission to check this job');
-  }
-  if (!(await isImageJobStoreReady(scoped.db))) {
-    throw createError.serviceUnavailable(
-      'Durable image jobs are not available on this deployment.',
-    );
   }
 
   const found = await getImageGenerationJob(scoped.db, jobId, userId);

@@ -217,20 +217,6 @@ async function queryJob(
   return rows[0] ? mapImageGenerationJob(rows[0]) : null;
 }
 
-/**
- * Whether 0226 is applied. Image generation predates the durable job model and
- * is live on every surface, so an unapplied migration degrades the request to
- * the synchronous path rather than taking the capability down; only a caller
- * that explicitly asked for a job handle is refused.
- */
-export async function isImageJobStoreReady(db: DatabaseAdapter): Promise<boolean> {
-  const rows = await db.query<{ provisioned: boolean }>(
-    `select to_regclass('public.image_generation_jobs') is not null
-        and to_regclass('public.image_generation_job_assets') is not null as provisioned`,
-  );
-  return rows[0]?.provisioned === true;
-}
-
 export async function createImageGenerationJob(input: {
   db: DatabaseAdapter;
   id: string;
