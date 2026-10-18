@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { api } from './api';
+import { getAuthToken } from './authSession';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { notificationAllowed, vibrationAllowed } from './notificationGate';
 import {
@@ -64,6 +65,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   }
   const modeSettings = useCloudSettingsStore.getState?.();
   if (!modeSettings?.notificationsEnabled) {
+    return BackgroundTask.BackgroundTaskResult.Success;
+  }
+  // A headless launch has no signed-in Clerk session to read, and an unsigned
+  // request would trip the 401 path that signs the account out.
+  if (!(await getAuthToken())) {
     return BackgroundTask.BackgroundTaskResult.Success;
   }
 

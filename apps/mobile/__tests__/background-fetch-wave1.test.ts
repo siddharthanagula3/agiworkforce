@@ -43,6 +43,10 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => 'clerk-session-token'),
+}));
+
 jest.mock('../stores/settingsStore', () => ({
   useSettingsStore: {
     getState: jest.fn(() => ({

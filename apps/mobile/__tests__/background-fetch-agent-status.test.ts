@@ -33,6 +33,11 @@ jest.mock('@/stores/settings/cloudSettingsStore', () => ({
 
 jest.mock('../services/api', () => ({ api: { get: jest.fn() } }));
 
+const mockGetAuthToken = jest.fn();
+jest.mock('../services/authSession', () => ({
+  getAuthToken: () => mockGetAuthToken(),
+}));
+
 jest.mock('../stores/settingsStore', () => ({
   useSettingsStore: {
     getState: jest.fn(() => ({ backgroundFetchEnabled: true, notificationsEnabled: true })),
@@ -62,6 +67,7 @@ function pause(id: string, kind: 'approval' | 'input') {
 describe('backgroundFetch agent-status polling', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAuthToken.mockResolvedValue('clerk-session-token');
     resetBackgroundFetchAccountState();
     mockApiGet.mockResolvedValue({ pendingApprovals: [], runningAgents: 0 });
   });
@@ -110,5 +116,14 @@ describe('backgroundFetch agent-status polling', () => {
     ];
     expect(request.content.body).toBe('2 agent actions are waiting on you');
     expect(request.content.data['runId']).toBeUndefined();
+  });
+
+  it('sends nothing when the launch has no signed-in session to authorize the poll', async () => {
+    mockGetAuthToken.mockResolvedValue(null);
+
+    await expect(mockDefinedTask!()).resolves.toBe('Success');
+
+    expect(mockApiGet).not.toHaveBeenCalled();
+    expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });
