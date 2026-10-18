@@ -133,6 +133,25 @@ describe('resealConnectorSecrets', () => {
     expect(outcome).toMatchObject({ scanned: 5, rebound: 5, complete: true });
   });
 
+  it('does not report a walk cut short by the batch ceiling as complete', async () => {
+    const keys = ring();
+    const rows: Record<string, string> = {};
+    for (let index = 0; index < 5; index += 1) {
+      rows[`row-${index}`] = sealEnvelope(keys, `token-${index}`, 'hex-triple');
+    }
+    const { db } = fakeStore(rows);
+
+    const outcome = await resealConnectorSecrets({
+      db,
+      ring: keys,
+      columns: [TARGET],
+      batchSize: 2,
+      maxBatches: 2,
+    });
+
+    expect(outcome).toMatchObject({ scanned: 4, rebound: 4, complete: false });
+  });
+
   it('covers every declared secret purpose with a column', () => {
     const covered = new Set(CONNECTOR_SECRET_COLUMNS.map((entry) => entry.purpose));
     for (const purpose of CONNECTOR_SECRET_PURPOSES) expect(covered).toContain(purpose);

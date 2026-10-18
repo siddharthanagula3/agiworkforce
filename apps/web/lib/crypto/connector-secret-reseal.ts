@@ -276,12 +276,17 @@ export async function resealConnectorSecrets(
   let rebound = 0;
   let alreadyBound = 0;
   let remaining = 0;
+  let walkedEveryRow = true;
 
   for (const target of columns) {
     let after: string | null = null;
+    let reachedEnd = false;
     for (let batch = 0; batch < maxBatches; batch += 1) {
       const rows = await readBatch(input.db, target, batchSize, after);
-      if (rows.length === 0) break;
+      if (rows.length === 0) {
+        reachedEnd = true;
+        break;
+      }
       after = rows[rows.length - 1]?.key ?? null;
       scanned += rows.length;
 
@@ -311,8 +316,12 @@ export async function resealConnectorSecrets(
         );
         rebound += 1;
       }
-      if (rows.length < batchSize) break;
+      if (rows.length < batchSize) {
+        reachedEnd = true;
+        break;
+      }
     }
+    if (!reachedEnd) walkedEveryRow = false;
   }
 
   remaining = failures.length;
@@ -321,7 +330,7 @@ export async function resealConnectorSecrets(
     rebound,
     alreadyBound,
     remaining,
-    complete: failures.length === 0,
+    complete: walkedEveryRow && failures.length === 0,
     failures,
   };
 }

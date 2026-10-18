@@ -1,11 +1,7 @@
 import 'server-only';
 
 import { openEnvelope, sealEnvelope, type KeyRing } from './envelope';
-import {
-  PlatformKeyProviderUnavailableError,
-  platformKeyProviderId,
-  platformKeyRing,
-} from './platform-keys';
+import { platformKeyProviderId, platformKeyRing } from './platform-keys';
 import { assertValidTotpKeysource } from './totp-keysource';
 
 const TOTP_KEY_ENV = 'TOTP_ENCRYPTION_KEY';
@@ -23,16 +19,7 @@ function totpKeyRing(): KeyRing {
     throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
   }
   if (platformKeyProviderId() === 'env') assertValidTotpKeysource(raw);
-  try {
-    return platformKeyRing(TOTP_KEY_ENV, { encoding: 'utf8' });
-  } catch (error) {
-    if (error instanceof PlatformKeyProviderUnavailableError) throw error;
-    throw new Error(
-      `${TOTP_KEY_ENV} must start with 32 single-byte characters; a multi-byte character ` +
-        'yields the wrong AES-256 key length. Use a 64-character hex key.',
-      { cause: error },
-    );
-  }
+  return platformKeyRing(TOTP_KEY_ENV, { encoding: 'utf8' });
 }
 
 export function sealTotpSecret(secret: string): string {
