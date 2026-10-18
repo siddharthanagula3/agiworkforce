@@ -122,6 +122,15 @@ export {
   FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
 } from './free-plan-training-disclosure';
 
+export {
+  FREE_MODEL_PROMOTION_PICKER_LABEL,
+  FREE_MODEL_PROMOTION_NOTICE_TITLE,
+  FREE_MODEL_PROMOTION_DISMISS_LABEL,
+  freeModelPromotionHeadline,
+} from './free-model-promotion-copy';
+
+export { noticeAccountFingerprint } from './notice-account-fingerprint';
+
 import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,

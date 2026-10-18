@@ -559,6 +559,9 @@ importers:
       '@agiworkforce/cloud-contracts':
         specifier: workspace:*
         version: link:../../packages/contracts/cloud-contracts
+      '@agiworkforce/compliance':
+        specifier: workspace:*
+        version: link:../../packages/contracts/compliance
       '@agiworkforce/design-tokens':
         specifier: workspace:*
         version: link:../../packages/ui/design-tokens

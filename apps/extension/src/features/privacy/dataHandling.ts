@@ -1,4 +1,17 @@
+import {
+  getDefaultModelFor,
+  getModelMetadataById,
+  getProviderDisplayLabel,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 import { MAX_PAGE_TEXT_CHARACTERS } from '../content/in-page-panel/pageActions';
+
+const freePlanDefaultModel = getModelMetadataById(
+  getDefaultModelFor(normalizeBillingPlanTier(null), 'chat'),
+);
+if (!freePlanDefaultModel) throw new Error('The Free plan default model is not in the catalog.');
+const FREE_PLAN_DEFAULT_MODEL = freePlanDefaultModel.name;
+const FREE_PLAN_DEFAULT_PROVIDER = getProviderDisplayLabel(freePlanDefaultModel.provider);
 
 export interface DataHandlingDisclosure {
   id: 'page-injection' | 'debugger' | 'cookies' | 'cloud-mirroring' | 'training' | 'retention';
@@ -30,7 +43,7 @@ export const DATA_HANDLING_DISCLOSURES: DataHandlingDisclosure[] = [
   {
     id: 'training',
     label: 'Model training',
-    body: 'We do not sell your data, and we do not train AGI-owned models on your prompts, responses or files. There is no training opt-in, because that data path does not exist. Each request goes to the hosted provider serving the model you selected, under that provider’s terms. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in your account’s privacy settings.',
+    body: `We do not sell your data, and we do not train AGI-owned models on your prompts, responses or files. There is no training opt-in, because that data path does not exist. Each request goes to the hosted provider serving the model you selected, under that provider’s terms. On the Free plan, a chat on the default model goes to a provider AGI chooses, not one you pick: in this extension that is ${FREE_PLAN_DEFAULT_PROVIDER}, answering with ${FREE_PLAN_DEFAULT_MODEL}. While a free model promotion runs, a Free chat on the promoted model goes to that model’s provider, and a turn the promotion cannot take is answered by the default model instead. Each reply shows the model that answered. What a provider does with a prompt is governed by its terms, not ours; to keep your chats out of training, turn on Only use models that do not train on your chats in your account’s privacy settings.`,
   },
   {
     id: 'retention',

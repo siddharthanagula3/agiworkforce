@@ -12,6 +12,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelMetadataById, getPickerModels } from '@agiworkforce/types';
+import {
+  FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD,
+  FREE_PLAN_TRAINING_DATA_DISCLOSURE,
+  FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
+  FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
+  FREE_PLAN_TRAINING_NOTICE_TITLE,
+  freeModelPromotionHeadline,
+} from '@agiworkforce/compliance';
+import { agiWebUrl } from '../src/lib/webOrigin';
 
 type ClerkAuthModule = typeof import('../src/features/cloud-bridge/clerkAuth');
 
@@ -24,7 +33,6 @@ vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
 }));
 
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const REPO_ROOT = join(APP_ROOT, '..', '..');
 
 const catalog = JSON.parse(
   readFileSync(join(APP_ROOT, '_locales', 'en', 'messages.json'), 'utf8'),
@@ -203,19 +211,31 @@ describe('the Free plan training notice', () => {
     expect(visit.trainingVisible()).toBe(false);
   });
 
-  it('uses the web chat copy and links to the data use page', async () => {
+  it('uses the shared copy and links to the web privacy settings and data use page', async () => {
     const visit = panel();
     await visit.notices.update(freeAccount());
     const text = visit.training().textContent ?? '';
 
-    expect(text).toContain('Is your content used for training?');
-    expect(text).toContain('Not by AGI. Free model providers may.');
-    expect(text).toContain('Opt out in Settings > Privacy.');
-    const link = visit.training().querySelector<HTMLAnchorElement>('a')!;
-    expect(link.textContent).toBe('What happens to your data');
-    expect(new URL(link.href).pathname).toBe('/data-use');
+    expect(text).toContain(
+      `${FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD} ${FREE_PLAN_TRAINING_DATA_DISCLOSURE}`,
+    );
+    expect(text).not.toContain('Settings > Privacy');
+    const links = [...visit.training().querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Opt out in your account’s privacy settings.',
+      FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
+    ]);
+    expect(links.map((link) => new URL(link.href).origin)).toEqual([
+      new URL(agiWebUrl('/')).origin,
+      new URL(agiWebUrl('/')).origin,
+    ]);
+    expect(links.map((link) => new URL(link.href).pathname)).toEqual([
+      '/settings/privacy',
+      '/data-use',
+    ]);
+    expect(visit.training().getAttribute('aria-label')).toBe(FREE_PLAN_TRAINING_NOTICE_TITLE);
     expect(visit.training().querySelector('button')!.getAttribute('aria-label')).toBe(
-      'Dismiss the free model data notice',
+      FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
     );
   });
 });
@@ -225,7 +245,7 @@ describe('the free model promotion notice', () => {
     const first = panel(RUNNING_OFFER);
     await first.notices.update(freeAccount());
     expect(first.promotionVisible()).toBe(true);
-    expect(first.promotion().textContent).toBe(`${PROMOTED_NAME} is free for a limited time.`);
+    expect(first.promotion().textContent).toBe(freeModelPromotionHeadline(PROMOTED_NAME));
     expect(first.promotion().textContent?.toLowerCase()).not.toMatch(/unlimited|usage|remaining/);
     expect(
       local[`${FREE_MODEL_PROMOTION_NOTICE_STORAGE_PREFIX}.${PROMOTED}.${RUNNING_OFFER.endsAt}`],
@@ -267,55 +287,5 @@ describe('the free model promotion notice', () => {
     await paid.notices.update(freeAccount('user_a', 'max'));
     expect(paid.fetchPromotion).not.toHaveBeenCalled();
     expect(paid.promotionVisible()).toBe(false);
-  });
-});
-
-describe('the notice copy matches the web chat', () => {
-  function exportedString(source: string, name: string): string {
-    const match = source.match(new RegExp(`export const ${name}\\s*=\\s*'([^']*)'`));
-    if (!match) throw new Error(`${name} was not found`);
-    return match[1]!;
-  }
-
-  it('carries the shared Free plan training disclosure word for word', () => {
-    const disclosure = readFileSync(
-      join(REPO_ROOT, 'packages/contracts/compliance/src/free-plan-training-disclosure.ts'),
-      'utf8',
-    );
-    expect(catalog['spFreePlanTrainingNoticeTitle']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_NOTICE_TITLE'),
-    );
-    expect(catalog['spFreePlanTrainingNoticeLead']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD'),
-    );
-    expect(catalog['spFreePlanTrainingNoticeDisclosure']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_DATA_DISCLOSURE'),
-    );
-    expect(catalog['spFreePlanTrainingNoticeTail']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_CHAT_NOTICE_TAIL'),
-    );
-    expect(catalog['spFreePlanTrainingNoticeLink']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_NOTICE_LINK_LABEL'),
-    );
-    expect(catalog['spFreePlanTrainingNoticeDismiss']!.message).toBe(
-      exportedString(disclosure, 'FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL'),
-    );
-  });
-
-  it('carries the web promotion copy word for word', () => {
-    const copy = readFileSync(
-      join(REPO_ROOT, 'apps/web/features/chat/lib/free-model-promotion-copy.ts'),
-      'utf8',
-    );
-    expect(catalog['spFreeModelPromotionNoticeTitle']!.message).toBe(
-      exportedString(copy, 'FREE_MODEL_PROMOTION_NOTICE_TITLE'),
-    );
-    expect(catalog['spFreeModelPromotionDismiss']!.message).toBe(
-      exportedString(copy, 'FREE_MODEL_PROMOTION_DISMISS_LABEL'),
-    );
-    expect(copy).toContain('return `${modelName} is free for a limited time.`;');
-    expect(getMessage('spFreeModelPromotionHeadline', ['Model'])).toBe(
-      'Model is free for a limited time.',
-    );
   });
 });

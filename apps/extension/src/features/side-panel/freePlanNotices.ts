@@ -1,5 +1,15 @@
 import type { FreeModelPromotionOffer } from '@agiworkforce/cloud-contracts';
 import {
+  FREE_MODEL_PROMOTION_DISMISS_LABEL,
+  FREE_MODEL_PROMOTION_NOTICE_TITLE,
+  FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD,
+  FREE_PLAN_TRAINING_DATA_DISCLOSURE,
+  FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
+  FREE_PLAN_TRAINING_NOTICE_LINK_LABEL,
+  FREE_PLAN_TRAINING_NOTICE_TITLE,
+  freeModelPromotionHeadline,
+} from '@agiworkforce/compliance';
+import {
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -14,6 +24,8 @@ import { chromeNoticeStore, claimFirstShowing, type NoticeStore } from './shownO
 
 export const FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY = 'agi.notice.free-plan-training';
 export const FREE_MODEL_PROMOTION_NOTICE_STORAGE_PREFIX = 'agi.notice.free-model-promotion';
+const PRIVACY_SETTINGS_PATH = '/settings/privacy';
+const DATA_USE_PATH = '/data-use';
 
 export interface FreePlanNoticeAccount {
   accountId: string;
@@ -61,6 +73,19 @@ function buildNotice(
   return { element, decided: null };
 }
 
+function webLink(path: string, ...label: (Node | string)[]): HTMLAnchorElement {
+  return el(
+    'a',
+    {
+      class: 'sp-help-link',
+      href: agiWebUrl(`${path}?from=chrome-extension`),
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
+    ...label,
+  );
+}
+
 function promotionStorageKey(offer: FreeModelPromotionOffer): string {
   return `${FREE_MODEL_PROMOTION_NOTICE_STORAGE_PREFIX}.${offer.modelId}.${offer.endsAt}`;
 }
@@ -72,25 +97,20 @@ export function buildFreePlanNotices(
   const fetchPromotion = dependencies.fetchPromotion ?? fetchFreeModelPromotion;
   const now = dependencies.now ?? Date.now;
 
-  const dataUseLink = el('a', {
-    class: 'sp-help-link',
-    href: agiWebUrl('/data-use?from=chrome-extension'),
-    target: '_blank',
-    rel: 'noopener noreferrer',
-  });
-  dataUseLink.append(t('spFreePlanTrainingNoticeLink'), renderIcon(ExternalLink, 12));
   const training = buildNotice(
     'free-plan-training-notice',
-    t('spFreePlanTrainingNoticeTitle'),
-    t('spFreePlanTrainingNoticeDismiss'),
-    `${t('spFreePlanTrainingNoticeLead')} ${t('spFreePlanTrainingNoticeDisclosure')} ${t('spFreePlanTrainingNoticeTail')} `,
-    dataUseLink,
+    FREE_PLAN_TRAINING_NOTICE_TITLE,
+    FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL,
+    `${FREE_PLAN_TRAINING_CHAT_NOTICE_LEAD} ${FREE_PLAN_TRAINING_DATA_DISCLOSURE} `,
+    webLink(PRIVACY_SETTINGS_PATH, t('spFreePlanTrainingNoticeOptOut')),
+    ' ',
+    webLink(DATA_USE_PATH, FREE_PLAN_TRAINING_NOTICE_LINK_LABEL, renderIcon(ExternalLink, 12)),
   );
   const headline = el('strong', {});
   const promotion = buildNotice(
     'free-model-promotion-notice',
-    t('spFreeModelPromotionNoticeTitle'),
-    t('spFreeModelPromotionDismiss'),
+    FREE_MODEL_PROMOTION_NOTICE_TITLE,
+    FREE_MODEL_PROMOTION_DISMISS_LABEL,
     headline,
   );
 
@@ -145,7 +165,7 @@ export function buildFreePlanNotices(
     const offer = freeAccount ? await promotionFor(freeAccount) : null;
     const running = offer && Date.parse(offer.endsAt) > now() ? offer : null;
     const modelName = running ? getModelMetadataById(running.modelId)?.name : undefined;
-    if (running && modelName) headline.textContent = t('spFreeModelPromotionHeadline', [modelName]);
+    if (running && modelName) headline.textContent = freeModelPromotionHeadline(modelName);
     await decide(
       promotion,
       running && modelName ? promotionStorageKey(running) : null,
