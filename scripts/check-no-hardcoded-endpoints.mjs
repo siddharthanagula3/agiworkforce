@@ -99,11 +99,6 @@ const BUDGETS = [
     why: "Web's single declaration of managed-provider API roots for direct fetch call sites, including authenticated OpenRouter media jobs.",
   },
   {
-    file: 'apps/web/lib/egress-policy.ts',
-    max: 1,
-    why: 'RETIRED_PROVIDER_HOSTS, the subtraction applied to the canonical allowlist.',
-  },
-  {
     file: 'apps/web/app/terms/page.tsx',
     max: 1,
     why: 'Public provider terms hyperlink in the legal policy; never used for outbound inference.',
