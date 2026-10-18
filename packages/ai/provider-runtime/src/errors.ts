@@ -837,6 +837,23 @@ function matchesConnection(name: string | undefined, message: string): boolean {
   );
 }
 
+const REQUEST_TIMEOUT_STATUS = 408;
+const TOO_MANY_REQUESTS_STATUS = 429;
+
+/**
+ * A 4xx other than 408 and 429 is the provider refusing the request itself. Its
+ * message can name a `timeout` parameter, and retrying it can never succeed.
+ */
+function isRequestRejectedStatus(status: number | undefined): boolean {
+  return (
+    typeof status === 'number' &&
+    status >= 400 &&
+    status < 500 &&
+    status !== REQUEST_TIMEOUT_STATUS &&
+    status !== TOO_MANY_REQUESTS_STATUS
+  );
+}
+
 /**
  * Classify a thrown error from any provider into the canonical taxonomy.
  *
@@ -910,10 +927,11 @@ function classifyWithExhaustionEvidence(
   const overageHint = extractAnthropicOverageHint(e);
   const lower = message.toLowerCase();
 
-  if (matchesConnection(e.name, message) || lower.includes('timeout')) {
+  const timedOut = lower.includes('timeout') && !isRequestRejectedStatus(status);
+  if (matchesConnection(e.name, message) || timedOut) {
     return {
-      category: lower.includes('timeout') ? 'api_timeout' : 'connection',
-      code: lower.includes('timeout') ? 'api_timeout' : 'connection_error',
+      category: timedOut ? 'api_timeout' : 'connection',
+      code: timedOut ? 'api_timeout' : 'connection_error',
       retryable: true,
       fallbackable: false,
       ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),

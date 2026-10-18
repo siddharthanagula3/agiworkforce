@@ -97,6 +97,27 @@ describe('classifyError', () => {
     expect(c.fallbackable).toBe(false);
   });
 
+  it.each([
+    [400, "Invalid value for 'timeout': must be a positive integer."],
+    [422, 'timeout_ms is not a supported parameter'],
+  ])('keeps a %i that names a timeout parameter a non-retryable rejection', (status, message) => {
+    const c = classifyError({ status, message });
+    expect(c.category).not.toBe('api_timeout');
+    expect(c.retryable).toBe(false);
+  });
+
+  it('still classifies a 408 timeout as api_timeout/retryable', () => {
+    const c = classifyError({ status: 408, message: 'Request timeout' });
+    expect(c.category).toBe('api_timeout');
+    expect(c.retryable).toBe(true);
+  });
+
+  it('still classifies a network timeout without a status as api_timeout/retryable', () => {
+    const c = classifyError(new Error('The operation timeout elapsed before a response arrived'));
+    expect(c.category).toBe('api_timeout');
+    expect(c.retryable).toBe(true);
+  });
+
   it('classifies ECONNRESET as connection/retryable', () => {
     const err = new Error('socket: ECONNRESET');
     const c = classifyError(err);
