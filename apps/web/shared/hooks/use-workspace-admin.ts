@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentUser } from '@/lib/identity/client';
+import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
 
 /**
  * Whether the signed-in user holds the organisation admin/owner role.
@@ -14,6 +15,5 @@ import { useCurrentUser } from '@/lib/identity/client';
 export function useIsWorkspaceAdmin(): boolean {
   const { user, isLoaded } = useCurrentUser();
   if (!isLoaded || !user) return false;
-  const role = (user.publicMetadata as Record<string, unknown> | null | undefined)?.['role'];
-  return role === 'admin' || role === 'owner';
+  return hasAdminConsoleAccess(user.publicMetadata);
 }

@@ -1,4 +1,3 @@
-
 export function getItem<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue;
   try {
@@ -34,7 +33,11 @@ export function setItem<T>(key: string, value: T): boolean {
 
 export function removeItem(key: string): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(key);
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    console.warn(`Error removing localStorage key "${key}":`, error);
+  }
 }
 
 export function safeGetJSON<T>(key: string, defaultValue: T): T {
@@ -44,8 +47,3 @@ export function safeGetJSON<T>(key: string, defaultValue: T): T {
 export function safeSetJSON<T>(key: string, value: T): boolean {
   return setItem(key, value);
 }
-export const storageFallback = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
-};

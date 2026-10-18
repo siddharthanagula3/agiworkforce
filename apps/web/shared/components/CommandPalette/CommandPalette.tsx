@@ -26,7 +26,7 @@ import {
   TerminalSquare,
   X,
 } from 'lucide-react';
-import { cn } from '@shared/utils/cn';
+import { cn } from '@shared/lib/utils';
 import {
   Dialog,
   DialogContent,

@@ -27,7 +27,7 @@ import { formatCredits } from '@agiworkforce/types';
 import { describeCronCadence } from '@agiworkforce/utils/cron';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
-import { cn } from '@shared/utils/cn';
+import { cn } from '@shared/lib/utils';
 import { formatRelativeTime } from '@shared/utils/format';
 import type { ScheduleRun, ScheduleTask } from '../types';
 import {
