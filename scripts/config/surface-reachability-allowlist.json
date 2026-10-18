@@ -31,16 +31,7 @@
       "unreachableDebt": {
         "reason": "Pre-existing unreachable mobile modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",
-        "paths": [
-          "apps/mobile/src/features/auth/index.ts",
-          "apps/mobile/src/features/billing/index.ts",
-          "apps/mobile/src/features/index.ts",
-          "apps/mobile/src/features/model-picker/index.ts",
-          "apps/mobile/src/features/notifications/index.ts",
-          "apps/mobile/src/features/onboarding/index.ts",
-          "apps/mobile/src/integrations/index.ts",
-          "apps/mobile/src/shared/components/index.ts"
-        ]
+        "paths": []
       }
     },
     "chrome": {

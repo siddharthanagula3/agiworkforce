@@ -76,10 +76,6 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-jest.mock('../src/features/billing', () => ({
-  fetchPortalSessionUrl: jest.fn(async () => 'https://agiworkforce.com/settings/billing'),
-}));
-
 import ProfileScreen from '../app/(app)/profile';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
