@@ -119,6 +119,7 @@ const allowedLiveNonMarkdownFiles = new Set([
   'audit/baselines/theme-only-text-colours.json',
   'audit/baselines/raw-error-to-user.json',
   'docs/compliance/policy-versions.json',
+  'docs/compliance/soc2-controls.json',
   'docs/compliance/trust-claims.json',
   'docs/security/security-claims.json',
   'docs/product/surface-feature-matrix.json',
