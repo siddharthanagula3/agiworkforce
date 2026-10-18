@@ -100,10 +100,6 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'the webhook writes the rows Stripe reports on',
   },
   {
-    path: 'apps/web/app/api/claim-offer/route.ts',
-    why: 'an offer is claimed against the subscription the payer owns',
-  },
-  {
     path: 'apps/web/lib/services/code-trial-expiry.ts',
     why: 'ends the code-granted trial rows themselves once their period is over',
   },

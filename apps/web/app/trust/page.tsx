@@ -182,7 +182,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Desktop credential storage',
     value:
-      'Implemented. Electron Desktop refuses to store account credentials unless operating-system encryption is available. Desktop uses Managed Cloud and does not accept provider API keys. As of 2026-09-19.',
+      'Implemented. Electron Desktop writes no account credential of its own. It loads the hosted web app, whose sign-in session lives in a persistent browser profile that belongs to the app alone, apart from your default browser. Desktop uses Managed Cloud and does not accept provider API keys. As of 2026-10-18.',
   },
   {
     label: 'CLI provider-key storage',

@@ -140,8 +140,8 @@ pages open. This tab is the list of everyone who submitted one.
   open whatever the switch says, and the card says so when it is set.
 - **Access codes.** Create a code (typed or generated, with a redemption limit,
   an optional expiry and a note), see how many accounts redeemed each, and
-  disable one. A code grants upgrade access only: `/api/claim-offer` refuses it,
-  so it never grants a plan or a trial. Disabling stops further redemptions;
+  disable one. A code grants upgrade access only, never a plan or a trial.
+  Disabling stops further redemptions;
   accounts that already redeemed keep their access. Each creation and each
   disabling writes an `admin_action` audit row with the invite id, never the
   code.

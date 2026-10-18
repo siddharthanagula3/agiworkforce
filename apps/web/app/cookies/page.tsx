@@ -150,14 +150,6 @@ const STORAGE: StorageRow[] = [
     source: 'lib/sentry-shared.ts',
   },
   {
-    key: 'agi-user-profile-store',
-    store: 'Local storage',
-    holds:
-      'A cached copy of your account profile so the app can render before the server answers: your name, email, avatar, and your plan and its renewal dates. It is a copy of what we already hold, not a separate collection.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/stores/user-profile-store.ts',
-  },
-  {
     key: 'agi-artifacts-store',
     store: 'Local storage',
     holds:
@@ -172,29 +164,6 @@ const STORAGE: StorageRow[] = [
       'Your app settings, including any custom commands you wrote. Those are your own text, held on your device.',
     clearedBy: 'Signing out, or clearing site data.',
     source: 'shared/stores/web-settings-store.ts',
-  },
-  {
-    key: 'agi-notification-store',
-    store: 'Local storage',
-    holds:
-      'In-app notifications you have received, their read state, and your notification settings.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/stores/notification-store.ts',
-  },
-  {
-    key: 'agi-company-hub-store',
-    store: 'Local storage',
-    holds: 'Your AGI Work sessions and which one is active.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/stores/company-hub-store.ts',
-  },
-  {
-    key: 'agent-metrics-storage',
-    store: 'Local storage',
-    holds:
-      'Counters the app keeps for you about your own runs: sessions, completed and failed tasks, tokens and messages, and recent activity. Device-local, never sent to us, and not the metering we bill from.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/stores/agent-metrics-store.ts',
   },
   {
     key: 'agi-tool-permissions',
@@ -212,13 +181,13 @@ const STORAGE: StorageRow[] = [
     source: 'shared/stores/web-chat-store.ts',
   },
   {
-    key: 'agi-model-store, agi-response-style, agi-thinking-store, agi-ui-store, tool-storage',
+    key: 'agi-model-store, agi-response-style, agi-thinking-store, agi-ui-store',
     store: 'Local storage',
     holds:
-      'Interface preferences with no personal data in them: the model and provider you last picked, your response style, your thinking-effort setting, panel and layout state, and your tool filters and trusted workflows.',
+      'Interface preferences with no personal data in them: the model and provider you last picked, your response style, your thinking-effort setting, and panel and layout state.',
     clearedBy: 'Signing out, or clearing site data.',
     source:
-      'shared/stores/model-store.ts, features/chat/stores/style-store.ts, shared/stores/thinking-store.ts, shared/stores/layout-store.ts, shared/stores/tool-store.ts',
+      'shared/stores/model-store.ts, features/chat/stores/style-store.ts, shared/stores/thinking-store.ts, shared/stores/layout-store.ts',
   },
   {
     key: 'agi_last_activity',

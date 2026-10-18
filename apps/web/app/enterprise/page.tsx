@@ -132,8 +132,8 @@ export default function EnterprisePage() {
                   between 1 and 3650 days and decides whether it is enforced; until enforcement is
                   on, the window is recorded, nothing is deleted. On a plan that carries the
                   enterprise controls entitlement that window is a contractual commitment, so the
-                  console reports it as required and says plainly when it is not yet being deleted
-                  against. Legal holds exempt any thread.
+                  console reports it as required and not yet enforced until an owner turns
+                  enforcement on. Legal holds exempt any thread.
                 </p>
               }
               points={[

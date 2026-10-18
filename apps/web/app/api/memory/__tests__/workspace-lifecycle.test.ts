@@ -37,7 +37,6 @@ import {
   GET as getMemory,
   PUT as updateMemory,
 } from '@/app/api/memory/[id]/route';
-import { GET as searchMemories } from '@/app/api/memory/search/route';
 import { GET as syncMemories } from '@/app/api/memory/sync/route';
 import { answerMemoryPolicyQuery } from '@/lib/services/__tests__/memory-policy-stub';
 
@@ -111,13 +110,12 @@ describe('memory reads are bound to the active workspace in SQL', () => {
     expect(params[3]).toBeNull();
   });
 
-  it('scopes a single read, delete and search to the workspace', async () => {
+  it('scopes a single read and delete to the workspace', async () => {
     await getMemory(new NextRequest(`http://localhost/api/memory/${MEMORY_ID}`), routeContext);
     await deleteMemory(
       new NextRequest(`http://localhost/api/memory/${MEMORY_ID}`, { method: 'DELETE' }),
       routeContext,
     );
-    await searchMemories(new NextRequest('http://localhost/api/memory/search?q=berlin'));
 
     const [getSql, getParams] = memoryCalls()[0]!;
     expect(getSql).toContain('organization_id is not distinct from $3::uuid');
@@ -127,11 +125,6 @@ describe('memory reads are bound to the active workspace in SQL', () => {
     const [deleteSql, deleteParams] = mocks.execute.mock.calls[0] as unknown as Call;
     expect(deleteSql).toContain('organization_id is not distinct from $3::uuid');
     expect(deleteParams).toEqual([MEMORY_ID, 'user-1', ORG]);
-
-    const [searchSql, searchParams] = memoryCalls()[1]!;
-    expect(searchSql).toContain('organization_id is not distinct from $3::uuid');
-    expect(searchSql).toContain('superseded_by is null');
-    expect(searchParams[2]).toBe(ORG);
   });
 
   it('scopes the sync status to active rows of the workspace', async () => {

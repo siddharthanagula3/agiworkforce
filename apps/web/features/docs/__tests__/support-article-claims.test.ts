@@ -212,7 +212,9 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(local).toMatch(/pub async fn ensure_local_model_available[\s\S]{0,450}probe_ollama/u);
     expect(local).toContain('probe_openai_compatible_local(client, provider, base_url).await');
     expect(local).toContain('if !probe.running {');
-    expect(local).toContain('if probe.models.iter().any(|candidate| candidate.id == model)');
+    expect(local).toMatch(
+      /if probe\.models\.iter\(\)\.any\(\|candidate\| \{\s+candidate\.id == model/u,
+    );
     expect(local).toContain('return Ok(probe.base_url);');
     const commands = repoText('apps', 'cli', 'src', 'lib.rs');
     expect(commands).toContain(

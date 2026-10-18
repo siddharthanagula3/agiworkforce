@@ -110,6 +110,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'retired managed-execution endpoint kept so an old client gets one fixed refusal; only registries name it',
   },
   {
+    url: '/api/v1/providers/[providerId]/stream',
+    why: 'retired managed-execution endpoint kept so an old client gets one fixed refusal; streamFromProvider, its last caller, was removed',
+  },
+  {
     url: '/api/admin/data-region',
     why: 'platform staff record a workspace region cutover through the API; no product screen calls it',
   },

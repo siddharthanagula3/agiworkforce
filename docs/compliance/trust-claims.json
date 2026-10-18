@@ -547,12 +547,15 @@
       "ledger": "POSTURE",
       "label": "Desktop credential storage",
       "owner": "Platform lead",
-      "reviewedOn": "2026-09-21",
-      "asOf": "2026-09-19",
-      "digest": "b33ca82518027c24",
-      "implementation": ["apps/desktop/electron/secretStore.ts#isEncryptionAvailable"],
+      "reviewedOn": "2026-10-18",
+      "asOf": "2026-10-18",
+      "digest": "d386b370d0ae8ea9",
+      "implementation": [
+        "apps/desktop/electron/config.ts#REMOTE_SESSION_PARTITION",
+        "apps/desktop/electron/main.ts#REMOTE_SESSION_PARTITION"
+      ],
       "proof": [],
-      "reason": "setSecret in apps/desktop/electron/secretStore.ts throws when operating-system encryption is unavailable, and no test exercises that refusal yet."
+      "reason": "main.ts opens the hosted web app in the REMOTE_SESSION_PARTITION profile and nothing under apps/desktop/electron writes a credential to disk, but no test asserts that absence yet."
     },
     {
       "page": "apps/web/app/trust/page.tsx",

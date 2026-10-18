@@ -145,8 +145,8 @@ function isUniqueViolation(error: unknown): boolean {
 
 /**
  * A code that only opens the upgrade gate. Its kind is written on the row
- * because the same table backs trial offers: /api/claim-offer refuses a row of
- * this kind, so handing somebody upgrade access never hands them a free plan.
+ * because the same table backs trial offers, and redeeming it records upgrade
+ * access only, never a plan or a trial.
  */
 export async function createUpgradeAccessCode(
   operatorUserId: string,

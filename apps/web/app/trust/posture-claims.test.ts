@@ -145,10 +145,18 @@ describe('the connector call log holds what /trust and /security say it holds', 
       .map((file) => path.relative(WEB_ROOT, file))
       .filter((file) => file !== path.join('lib', 'services', 'connector-call-log-service.ts'))
       .sort();
-    expect(writers).toEqual([
-      path.join('lib', 'connectors', 'health.ts'),
-      path.join('lib', 'user-connector-tools.ts'),
-    ]);
+    expect(writers).toEqual([path.join('lib', 'connectors', 'health.ts')]);
+
+    const meters = [
+      ...sourceFiles(path.join(WEB_ROOT, 'lib')),
+      ...sourceFiles(path.join(WEB_ROOT, 'app')),
+      ...sourceFiles(path.join(WEB_ROOT, 'features')),
+    ]
+      .filter((file) => /\bmeterConnectorCall\(/u.test(readFileSync(file, 'utf8')))
+      .map((file) => path.relative(WEB_ROOT, file))
+      .filter((file) => file !== path.join('lib', 'connectors', 'health.ts'))
+      .sort();
+    expect(meters).toEqual([path.join('lib', 'user-connector-tools.ts')]);
   });
 
   it('is described the same way on /trust and /security', () => {

@@ -300,7 +300,7 @@ describe('/cookies accounts for every key the app puts in browser storage', () =
   const written = directlyWrittenKeys();
 
   it('found the keys to check, so an empty scan cannot pass this suite', () => {
-    expect(persisted.length).toBeGreaterThan(10);
+    expect(persisted.length).toBeGreaterThan(5);
     expect(written.length).toBeGreaterThan(5);
   });
 

@@ -42,10 +42,6 @@
       "reason": "the only owner-pool call is the workspace policy gate, which reads the organization admin policy, billing contract and funding-membership rows a member scoped connection cannot see and whose read failure fails the gate open; the storage probe, the subscription read and every other statement run on the caller connection"
     },
     {
-      "path": "apps/web/app/api/claim-offer/route.ts",
-      "reason": "a beta invite belongs to nobody until it is redeemed, and claim_beta_invite locks the invite row, spends a use and writes the redemption the claimant does not own yet; only the subscription read-back is caller-scoped"
-    },
-    {
       "path": "apps/web/app/api/copyright-notice/route.ts",
       "reason": "public unauthenticated DMCA-style intake, the reporter has no account to scope by"
     },
@@ -284,10 +280,6 @@
     {
       "path": "apps/web/lib/services/security-monitoring-service.ts",
       "reason": "platform abuse detection reached only from the admin security route, per-user counts cannot detect an attacker spraying accounts from one IP"
-    },
-    {
-      "path": "apps/web/lib/services/subscription-service.ts",
-      "reason": "the profile provisioning and Stripe self-heal writes already run under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; every other method takes the caller connection"
     },
     {
       "path": "apps/web/lib/services/web-push-service.ts",
