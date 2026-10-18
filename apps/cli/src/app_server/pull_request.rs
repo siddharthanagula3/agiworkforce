@@ -62,7 +62,7 @@ pub async fn plan(root: &Path) -> Result<GitPullRequestPlanResponse, DeveloperSe
     let plan = push_plan(root).await?;
     let base = repository_policy(root)
         .default_branch
-        .filter(|base| *base != plan.branch);
+        .filter(|base| *base != plan.destination);
     Ok(GitPullRequestPlanResponse {
         remote: plan.remote.clone(),
         branch: plan.branch.clone(),
@@ -219,7 +219,7 @@ pub async fn create(
             "No pull request was opened: {reason}"
         )));
     }
-    if plan.branch == base {
+    if plan.destination == base {
         return Err(invalid(format!(
             "{base} is the branch to merge into; switch to the branch with your changes first"
         )));
@@ -262,7 +262,7 @@ pub async fn create(
         "pr",
         "create",
         "--head",
-        plan.branch.as_str(),
+        plan.destination.as_str(),
         "--base",
         base.as_str(),
         "--title",
@@ -301,7 +301,7 @@ pub async fn create(
             ))
         })?;
     let Some(url) = github_repository(remote_url.trim())
-        .and_then(|(owner, repo)| compare_url(&owner, &repo, &base, &plan.branch, title, body))
+        .and_then(|(owner, repo)| compare_url(&owner, &repo, &base, &plan.destination, title, body))
     else {
         return Err(DeveloperSessionHostError::conflict(format!(
             "The pull request could not be opened: {gh_failure}"

@@ -2913,11 +2913,29 @@ fn render_overlay(
 // Event handling
 // ---------------------------------------------------------------------------
 
+/// What ended the session, as the Stop hook reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuitReason {
+    QuitKey,
+    Interrupt,
+    ExitCommand,
+}
+
+impl QuitReason {
+    fn label(self) -> &'static str {
+        match self {
+            Self::QuitKey => "quit_key",
+            Self::Interrupt => "interrupt",
+            Self::ExitCommand => "exit_command",
+        }
+    }
+}
+
 #[derive(Debug)]
 enum InputAction {
     None,
     SendMessage(String),
-    Quit,
+    Quit(QuitReason),
     ScrollUp,
     ScrollDown,
     Redraw,
@@ -2957,7 +2975,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             .keybindings
             .matches(crate::keybindings::KeybindingAction::Quit, key)
         {
-            return InputAction::Quit;
+            return InputAction::Quit(QuitReason::QuitKey);
         }
         return InputAction::None;
     }
@@ -2990,7 +3008,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             .is_some_and(|armed| armed.elapsed() <= EXIT_CONFIRM_WINDOW)
         {
             app.exit_armed_at = None;
-            return InputAction::Quit;
+            return InputAction::Quit(QuitReason::QuitKey);
         }
         app.exit_armed_at = Some(Instant::now());
         app.status_notice = Some((
@@ -3048,7 +3066,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                 .is_some_and(|armed| armed.elapsed() <= EXIT_CONFIRM_WINDOW)
             {
                 app.exit_armed_at = None;
-                return InputAction::Quit;
+                return InputAction::Quit(QuitReason::Interrupt);
             }
             app.exit_armed_at = Some(Instant::now());
             app.status_notice = Some((
@@ -5792,7 +5810,7 @@ pub async fn run(
         crate::hooks::HookEvent::SessionStart,
         &crate::hooks::HookInput {
             event: "SessionStart".to_string(),
-            session_id: None,
+            session_id: Some(session.runtime_session_id.clone()),
             model: Some(model.to_string()),
             tool_name: None,
             tool_args: None,
@@ -5875,7 +5893,7 @@ pub async fn run(
         crate::hooks::HookEvent::SessionEnd,
         &crate::hooks::HookInput {
             event: "SessionEnd".to_string(),
-            session_id: None,
+            session_id: Some(app.session.runtime_session_id.clone()),
             model: Some(app.session.model.clone()),
             tool_name: None,
             tool_args: None,
@@ -6008,23 +6026,8 @@ async fn run_event_loop(
                         }
                     }
                 }
-                InputAction::Quit => {
-                    let hcfg = app.session.hooks_config().clone();
-                    crate::hooks::run_hooks(
-                        &hcfg,
-                        crate::hooks::HookEvent::Stop,
-                        &crate::hooks::HookInput {
-                            event: "Stop".to_string(),
-                            session_id: None,
-                            model: Some(app.session.model.clone()),
-                            tool_name: None,
-                            tool_args: None,
-                            tool_output: None,
-                            message: Some("Esc".to_string()),
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
+                InputAction::Quit(reason) => {
+                    run_stop_hook(app, reason).await;
                     app.should_quit = true;
                 }
 
@@ -6066,7 +6069,7 @@ async fn run_event_loop(
                             crate::hooks::HookEvent::PlanModeChanged,
                             &crate::hooks::HookInput {
                                 event: "PlanModeChanged".to_string(),
-                                session_id: None,
+                                session_id: Some(app.session.runtime_session_id.clone()),
                                 model: Some(app.session.model.clone()),
                                 tool_name: None,
                                 tool_args: None,
@@ -6117,7 +6120,7 @@ async fn run_event_loop(
                                 crate::hooks::HookEvent::PlanModeChanged,
                                 &crate::hooks::HookInput {
                                     event: "PlanModeChanged".to_string(),
-                                    session_id: None,
+                                    session_id: Some(app.session.runtime_session_id.clone()),
                                     model: Some(app.session.model.clone()),
                                     tool_name: None,
                                     tool_args: None,
@@ -6158,6 +6161,7 @@ async fn run_event_loop(
                     if !handled_as_mode_command {
                         match handle_slash(&text, app) {
                             SlashResult::Quit => {
+                                run_stop_hook(app, QuitReason::ExitCommand).await;
                                 app.should_quit = true;
                             }
                             SlashResult::SystemMessage(msg) => {
@@ -6534,6 +6538,24 @@ async fn run_event_loop(
     Ok(())
 }
 
+async fn run_stop_hook(app: &TuiApp, reason: QuitReason) {
+    crate::hooks::run_hooks(
+        app.session.hooks_config(),
+        crate::hooks::HookEvent::Stop,
+        &crate::hooks::HookInput {
+            event: "Stop".to_string(),
+            session_id: Some(app.session.runtime_session_id.clone()),
+            model: Some(app.session.model.clone()),
+            tool_name: None,
+            tool_args: None,
+            tool_output: None,
+            message: Some(reason.label().to_string()),
+            tool_execution: None,
+        },
+    )
+    .await;
+}
+
 /// Settle every cell the turn left mid-flight. A cancelled turn, or a tool
 /// whose completion event never arrived, otherwise leaves a `Running` row whose
 /// glyph is the spinner frame, and the spinner only advances while a turn is in
@@ -6680,7 +6702,7 @@ async fn send_message_with_prompt(
         crate::hooks::HookEvent::UserPromptSubmit,
         &crate::hooks::HookInput {
             event: "UserPromptSubmit".to_string(),
-            session_id: None,
+            session_id: Some(app.session.runtime_session_id.clone()),
             model: Some(app.session.model.clone()),
             tool_name: None,
             tool_args: None,
@@ -8701,7 +8723,7 @@ mod tests {
 
         let action = handle_key_event(&mut app, ctrl_c());
         assert!(
-            matches!(action, InputAction::Quit),
+            matches!(action, InputAction::Quit(QuitReason::Interrupt)),
             "raw mode swallows SIGINT, so a repeated Ctrl-C is the keyboard exit"
         );
     }

@@ -610,9 +610,12 @@ pub enum GitOperation {
         remote: String,
         branch: Option<String>,
     },
+    /// Send the local `branch` to `destination` on `remote`, which differs
+    /// from it when the branch tracks a differently named upstream.
     Push {
         remote: String,
         branch: String,
+        destination: String,
         set_upstream: bool,
         force: PushForce,
     },
@@ -1021,6 +1024,7 @@ impl GitOperation {
             Self::Push {
                 remote,
                 branch,
+                destination,
                 set_upstream,
                 force,
             } => {
@@ -1033,7 +1037,8 @@ impl GitOperation {
                 }
                 argv.push(checked_remote(remote)?);
                 let branch = checked_ref(branch, "branch")?;
-                argv.push(format!("refs/heads/{branch}:refs/heads/{branch}"));
+                let destination = checked_ref(destination, "destination")?;
+                argv.push(format!("refs/heads/{branch}:refs/heads/{destination}"));
                 argv
             }
             Self::RevList { branch, exclude } => {
@@ -1530,6 +1535,9 @@ impl PushReason {
 pub struct PushPlan {
     pub remote: String,
     pub branch: String,
+    /// The branch on `remote` the push updates: the upstream's when it tracks
+    /// one there, otherwise the local branch's own name.
+    pub destination: String,
     pub head: String,
     pub upstream: Option<String>,
     pub force: PushForce,
@@ -1547,6 +1555,7 @@ impl PushPlan {
         GitOperation::Push {
             remote: self.remote.clone(),
             branch: self.branch.clone(),
+            destination: self.destination.clone(),
             set_upstream: self.sets_upstream(),
             force: self.force,
         }
@@ -1594,7 +1603,7 @@ impl PushPlan {
             self.commits.len(),
             self.branch,
             self.remote,
-            self.branch
+            self.destination
         )
     }
 }
@@ -2108,13 +2117,16 @@ impl GitApi {
         })
     }
 
+    /// Git words "already up to date" in the user's language, so an
+    /// integration that changed nothing is told apart by `HEAD` not moving.
     async fn integrating(&self, operation: GitOperation) -> Result<MergeOutcome> {
+        let before = self.rev_parse("HEAD").await.ok().map(|head| head.commit);
         let output = self.run(&operation).await?;
         if output.success {
-            if output.stdout.contains("Already up to date") {
+            let head = self.rev_parse("HEAD").await.ok().map(|head| head.commit);
+            if head.is_some() && head == before {
                 return Ok(MergeOutcome::AlreadyUpToDate);
             }
-            let head = self.rev_parse("HEAD").await.ok().map(|head| head.commit);
             return Ok(MergeOutcome::Merged { head });
         }
         let conflicts = self.conflicts().await.unwrap_or_default();
@@ -2199,6 +2211,7 @@ impl GitApi {
             return Ok(PushPlan {
                 remote: remote.to_string(),
                 branch: String::new(),
+                destination: String::new(),
                 head: String::new(),
                 upstream: None,
                 force,
@@ -2214,15 +2227,27 @@ impl GitApi {
             .into_iter()
             .find(|entry| entry.name == branch)
             .and_then(|entry| entry.upstream);
-        let exclude = match &upstream {
-            Some(upstream) => vec![upstream.clone()],
-            None => self
-                .branches(true)
-                .await?
-                .into_iter()
-                .filter(|entry| entry.is_remote && entry.name.starts_with(&format!("{remote}/")))
-                .map(|entry| entry.name)
-                .collect(),
+        let remote_prefix = format!("{remote}/");
+        let destination = upstream
+            .as_deref()
+            .and_then(|upstream| upstream.strip_prefix(&remote_prefix))
+            .unwrap_or(branch.as_str())
+            .to_string();
+        // Counted against what the destination already holds; a destination
+        // the remote does not have yet is new, so everything the remote holds
+        // on any branch is left out instead.
+        let remote_branches: Vec<String> = self
+            .branches(true)
+            .await?
+            .into_iter()
+            .filter(|entry| entry.is_remote && entry.name.starts_with(&remote_prefix))
+            .map(|entry| entry.name)
+            .collect();
+        let destination_ref = format!("{remote_prefix}{destination}");
+        let exclude = if remote_branches.contains(&destination_ref) {
+            vec![destination_ref]
+        } else {
+            remote_branches
         };
         let commits = self.commits_not_in(&branch, &exclude).await?;
 
@@ -2230,11 +2255,11 @@ impl GitApi {
         if upstream.is_none() {
             reasons.push(PushReason::NoUpstream);
         }
-        if policy.is_protected(&branch) {
+        if policy.is_protected(&destination) {
             reasons.push(PushReason::ProtectedBranch);
         }
         if !policy.allow_direct_push_to_default
-            && policy.default_branch.as_deref() == Some(branch.as_str())
+            && policy.default_branch.as_deref() == Some(destination.as_str())
         {
             reasons.push(PushReason::DefaultBranch);
         }
@@ -2247,6 +2272,7 @@ impl GitApi {
         Ok(PushPlan {
             remote: remote.to_string(),
             branch,
+            destination,
             head,
             upstream,
             force,
@@ -2494,6 +2520,7 @@ pub(crate) mod test_support {
         PushPlan {
             remote: remote.to_string(),
             branch: branch.to_string(),
+            destination: branch.to_string(),
             head: head.to_string(),
             upstream: None,
             force: PushForce::Never,
@@ -3120,6 +3147,7 @@ mod tests {
         let push = GitOperation::Push {
             remote: "origin".into(),
             branch: "main".into(),
+            destination: "main".into(),
             set_upstream: false,
             force: PushForce::Never,
         };
@@ -3869,6 +3897,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_branch_tracking_a_differently_named_upstream_pushes_to_and_counts_against_it() {
+        let (_dir, work) = repo_with_remote();
+        git_run(&work, &["branch", "--set-upstream-to=origin/main"]);
+        let git = GitApi::at(&work);
+
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+
+        assert_eq!(plan.branch, "feature");
+        assert_eq!(plan.destination, "main");
+        assert_eq!(plan.upstream.as_deref(), Some("origin/main"));
+        let subjects: Vec<&str> = plan
+            .commits
+            .iter()
+            .map(|commit| commit.subject.as_str())
+            .collect();
+        assert_eq!(subjects, vec!["add the feature"]);
+        assert!(
+            plan.reasons.contains(&PushReason::DefaultBranch),
+            "the policy is asked about the branch the push updates: {:?}",
+            plan.reasons
+        );
+        assert!(
+            plan.summary().ends_with("to origin/main"),
+            "{}",
+            plan.summary()
+        );
+        let argv = plan.operation().argv().expect("argv");
+        assert_eq!(
+            argv.last().map(String::as_str),
+            Some("refs/heads/feature:refs/heads/main")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_merge_that_changes_nothing_is_known_by_head_not_by_git_wording() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+
+        assert_eq!(
+            git.merge("main", HookPolicy::Respect).await.expect("merge"),
+            MergeOutcome::AlreadyUpToDate
+        );
+    }
+
+    #[tokio::test]
     async fn a_push_plan_names_the_branch_the_upstream_and_every_commit_it_would_send() {
         let (_dir, work) = repo_with_remote();
         let git = GitApi::at(&work);
@@ -4213,6 +4289,7 @@ mod tests {
         let plan = GitOperation::Push {
             remote: "origin".into(),
             branch: "feature".into(),
+            destination: "feature".into(),
             set_upstream: false,
             force: PushForce::WithLease,
         };

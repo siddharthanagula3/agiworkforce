@@ -14,6 +14,7 @@ const SHORT_COMMIT_CHARS: usize = 12;
 pub struct PushApprovalPrompt {
     remote: String,
     branch: String,
+    destination: String,
     head: String,
     commits: usize,
     force: PushForce,
@@ -35,6 +36,7 @@ impl PushApprovalPrompt {
         Self {
             remote: plan.remote.clone(),
             branch: plan.branch.clone(),
+            destination: plan.destination.clone(),
             head: plan.head.clone(),
             commits: plan.commits.len(),
             force: plan.force,
@@ -49,6 +51,11 @@ impl PushApprovalPrompt {
 
     pub fn branch(&self) -> &str {
         &self.branch
+    }
+
+    /// The branch on the remote the push updates.
+    pub fn destination(&self) -> &str {
+        &self.destination
     }
 
     pub fn head(&self) -> &str {
@@ -81,6 +88,7 @@ impl PushApprovalPrompt {
 pub struct PushConsent {
     remote: String,
     branch: String,
+    destination: String,
     head: String,
     commits: usize,
     force: PushForce,
@@ -111,6 +119,7 @@ impl PushConsent {
     pub fn covers(&self, plan: &PushPlan) -> bool {
         self.remote == plan.remote
             && self.branch == plan.branch
+            && self.destination == plan.destination
             && self.head == plan.head
             && self.commits == plan.commits.len()
             && self.force == plan.force
@@ -140,6 +149,7 @@ pub async fn request_push_consent(
     Some(PushConsent {
         remote: prompt.remote,
         branch: prompt.branch,
+        destination: prompt.destination,
         head: prompt.head,
         commits: prompt.commits,
         force: prompt.force,
@@ -270,6 +280,13 @@ mod tests {
         assert!(!consent.covers(&plan_for("release", "aaaaaaa", 1)));
         assert!(!consent.covers(&plan_for("feature", "bbbbbbb", 1)));
         assert!(!consent.covers(&plan_for("feature", "aaaaaaa", 2)));
+
+        let mut retargeted = first.clone();
+        retargeted.destination = "main".to_string();
+        assert!(
+            !consent.covers(&retargeted),
+            "consent names the remote branch it updates"
+        );
     }
 
     #[tokio::test]
