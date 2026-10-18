@@ -18,7 +18,6 @@ interface ImageGenProgressProps {
   prompt: string;
   progress?: number;
   status: 'pending' | 'generating' | 'completed' | 'failed';
-  estimatedTime?: number;
   errorMessage?: string;
   onRetry?: () => void;
   onStop?: () => void;
@@ -28,7 +27,6 @@ export function ImageGenProgress({
   prompt,
   progress,
   status,
-  estimatedTime,
   errorMessage,
   onRetry,
   onStop,
@@ -185,17 +183,6 @@ export function ImageGenProgress({
               >
                 {Math.round(normalizedProgress)}% complete
               </Text>
-
-              {estimatedTime != null && estimatedTime > 0 ? (
-                <Text
-                  style={{
-                    fontSize: typeScale.caption,
-                    color: colors.textMuted,
-                  }}
-                >
-                  ~{estimatedTime}s remaining
-                </Text>
-              ) : null}
             </View>
           </View>
         )}

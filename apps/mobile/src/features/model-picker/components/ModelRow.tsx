@@ -284,7 +284,7 @@ export function ModelRow({
         </View>
       ) : null}
 
-      {isDownloading ? (
+      {isDownloading && installStatus.cancellable ? (
         <View style={{ paddingLeft: 58, paddingRight: 16, paddingBottom: 10 }}>
           <PressableBox
             testID={`model-cancel-${model.id}`}

@@ -106,7 +106,6 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   artifacts?: Artifact[];
   toolCalls?: ToolCall[];
   pendingToolInput?: PendingToolInput;
-  approvalRequests?: ApprovalRequest[];
   steps?: StatusStep[];
   type?: MessageType;
   imageUrl?: string;
@@ -116,7 +115,6 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   isGeneratingImage?: boolean;
   imageGenProgress?: number;
   imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';
-  imageGenEstimatedTime?: number;
   imageGenError?: string;
   imageGenPrompt?: string;
   videoUrl?: string;
@@ -168,9 +166,3 @@ export interface ConversationSummary {
 }
 
 export type ConversationGroup = 'Today' | 'Yesterday' | 'This Week' | 'Older';
-
-export interface StreamChunk {
-  type: 'content' | 'thinking' | 'artifact' | 'done' | 'error';
-  content?: string;
-  error?: string;
-}

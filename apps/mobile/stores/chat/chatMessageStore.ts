@@ -124,7 +124,6 @@ interface MessageState {
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
-  setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   moveConversationToProject: (id: string, projectId: string | null) => Promise<boolean>;
   makeConversationPermanent: (id: string) => void;
@@ -203,7 +202,6 @@ interface MessageState {
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   failOfflineMessage: (conversationId: string, queueId: string) => void;
-  clearQueuedPlaceholders: (conversationId: string) => void;
   appendVoiceTurn: (
     conversationId: string,
     turn: { id: string; role: 'user' | 'assistant'; content: string; model: string },
@@ -622,7 +620,8 @@ export const useChatMessageStore = create<MessageState>()(
             conversation?.title ?? '',
             cloudConversation ? 'cloud' : 'local',
           );
-        } catch {
+        } catch (error) {
+          console.warn('[chatMessageStore] Messages could not be loaded:', error);
           if (!cloudConversation) {
             set((state) => ({
               messages: {
@@ -693,36 +692,6 @@ export const useChatMessageStore = create<MessageState>()(
           }
         }
         return true;
-      },
-
-      setConversationProject: async (id, projectId) => {
-        const nextProjectId = projectId ?? undefined;
-        if (get().conversations.some((c) => c.id === id)) {
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c.id === id ? { ...c, projectId: nextProjectId } : c,
-            ),
-          }));
-          return true;
-        }
-        const cloudStore = getCloudStore();
-        const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
-        if (!cloudConversation) return false;
-        const previousProjectId = cloudConversation.projectId;
-        cloudStore.getState().patchCloudConversation(id, { projectId: nextProjectId });
-        if (!shouldSyncConversationRemote(cloudConversation)) return true;
-        try {
-          await managedCloudChat.updateConversation(id, { projectId });
-          markConversationForSync(id);
-          return true;
-        } catch {
-          cloudStore.getState().patchCloudConversation(id, { projectId: previousProjectId });
-          Alert.alert(
-            projectId ? 'Could not move chat to project' : 'Could not remove chat from project',
-            'The change has been undone. Check your connection and try again.',
-          );
-          return false;
-        }
       },
 
       pinConversation: async (id) => {
@@ -1462,20 +1431,6 @@ export const useChatMessageStore = create<MessageState>()(
           };
         });
       },
-
-      clearQueuedPlaceholders: (conversationId) => {
-        const ownerStore = getConversationMessageStore(conversationId);
-        ownerStore.setState((state) => {
-          const msgs = state.messages[conversationId];
-          if (!msgs) return state;
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: msgs.filter((m) => !m.isStreaming && !m.isQueued && !m.queueFailed),
-            },
-          };
-        });
-      },
     }),
     {
       name: 'chat-message-store-local',
@@ -1614,8 +1569,8 @@ function captureArtifactsForLoadedMessages(
         ),
       );
     if (artifacts.length > 0) useArtifactStore.getState().addArtifacts(artifacts);
-  } catch {
-    return;
+  } catch (error) {
+    console.warn('[chatMessageStore] Artifacts could not be read from loaded messages:', error);
   }
 }
 

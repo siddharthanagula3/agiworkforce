@@ -73,7 +73,6 @@ jest.mock('@/src/features/chat/components/InlineArtifactCard', () => ({
 jest.mock('@/src/features/chat/components/ArtifactFullScreen', () => ({
   ArtifactFullScreen: () => null,
 }));
-jest.mock('@/src/features/chat/components/ApprovalCard', () => ({ ApprovalCard: () => null }));
 jest.mock('@/src/features/chat/components/StatusStep', () => ({ StatusStep: () => null }));
 jest.mock('@/src/features/chat/components/GeneratedImage', () => ({ GeneratedImage: () => null }));
 jest.mock('@/src/features/chat/components/ImageGenProgress', () => ({

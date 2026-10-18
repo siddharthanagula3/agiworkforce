@@ -274,20 +274,10 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
   }
 
   if (raw.includes('/Encrypt')) {
-    throw new DocParseError(
-      'PDF is encrypted, password-protected PDFs are not supported in Wave 0',
-      'ENCRYPTED_PDF',
-    );
+    throw new DocParseError('PDF is password protected', 'ENCRYPTED_PDF');
   }
 
-  let pages = 0;
-  const pageRegex = /\/Type\s*\/Page[^s]/g;
-  let match;
-  while ((match = pageRegex.exec(raw)) !== null) {
-    void match;
-    pages++;
-  }
-  if (pages === 0) pages = 1;
+  const pages = Math.max(1, raw.match(/\/Type\s*\/Page[^s]/g)?.length ?? 0);
 
   const textParts: string[] = [];
   let extractedChars = 0;
@@ -373,10 +363,7 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
       }
       const { text, pages } = extractTextFromPdfBuffer(base64);
       if (!text.trim()) {
-        throw new DocParseError(
-          'No text layer found in PDF, image-only PDFs require Wave 1 vision support',
-          'EMPTY_DOCUMENT',
-        );
+        throw new DocParseError('No readable text was found in this PDF', 'EMPTY_DOCUMENT');
       }
       return {
         text,

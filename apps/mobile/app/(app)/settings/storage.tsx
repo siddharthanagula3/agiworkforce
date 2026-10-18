@@ -124,7 +124,7 @@ export default function StorageManagerScreen() {
             text: 'Delete',
             style: 'destructive',
             onPress: async () => {
-              await deleteDownloadedModel(model.id, model.format);
+              await deleteDownloadedModel(model.id);
               await deleteInstalledModel(model.id);
               forgetInstalledModel(model.id);
               setModels((prev) => prev.filter((m) => m.id !== model.id));

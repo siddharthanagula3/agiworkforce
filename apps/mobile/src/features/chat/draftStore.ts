@@ -130,18 +130,13 @@ export function clearDraft(key: string | undefined, provenance?: DraftProvenance
 }
 
 export function clearAccountScopedDrafts(): void {
-  try {
-    const keys = storage.getAllKeys?.() ?? [];
-    for (const storageKey of keys) {
-      if (!storageKey.startsWith(PREFIX)) continue;
-      const raw = mmkvStorage.getItem(storageKey) as string | null;
-      const record = raw ? parseStoredDraft(raw) : null;
-      if (!record || record.provenance.scope !== 'local') {
-        mmkvStorage.removeItem(storageKey);
-      }
+  const keys = storage.getAllKeys?.() ?? [];
+  for (const storageKey of keys) {
+    if (!storageKey.startsWith(PREFIX)) continue;
+    const raw = mmkvStorage.getItem(storageKey) as string | null;
+    const record = raw ? parseStoredDraft(raw) : null;
+    if (!record || record.provenance.scope !== 'local') {
+      mmkvStorage.removeItem(storageKey);
     }
-  } catch {
-    // Account teardown is best-effort per store; its caller retries after
-    // hydration and independently prevents Cloud data from rendering.
   }
 }

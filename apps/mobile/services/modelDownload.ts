@@ -289,6 +289,11 @@ async function downloadFileWithResume(params: {
     : createDownloadResumable(url, destPath, {}, progressCallback);
 
   _activeDownloads.set(activeKey, downloadResumable);
+  const releaseActive = (): boolean => {
+    if (_activeDownloads.get(activeKey) !== downloadResumable) return true;
+    _activeDownloads.delete(activeKey);
+    return false;
+  };
 
   let result: FileSystemDownloadResult | undefined;
   try {
@@ -301,13 +306,13 @@ async function downloadFileWithResume(params: {
           encoding: EncodingType.UTF8,
         });
       }
-    } catch {
-      // Best-effort
+    } catch (saveError) {
+      console.warn('[modelDownload] Could not keep the partial download to resume:', saveError);
     }
-    _activeDownloads.delete(activeKey);
+    const cancelled = releaseActive();
 
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
+    if (cancelled || msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
       throw new ModelDownloadError('cancelled', 'Download was cancelled.');
     }
     if (msg.toLowerCase().includes('disk') || msg.toLowerCase().includes('space')) {
@@ -319,7 +324,7 @@ async function downloadFileWithResume(params: {
     throw new ModelDownloadError('network_error', `Download failed: ${msg}`);
   }
 
-  _activeDownloads.delete(activeKey);
+  if (releaseActive()) throw new ModelDownloadError('cancelled', 'Download was cancelled.');
 
   if (!result || (result.status !== 200 && result.status !== 206)) {
     throw new ModelDownloadError(
@@ -461,9 +466,8 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   return record;
 }
 
-export async function deleteDownloadedModel(modelId: string, _format: ModelFormat): Promise<void> {
+export async function deleteDownloadedModel(modelId: string): Promise<void> {
   await deleteAsync(modelDir(modelId), { idempotent: true });
-  // DB row removed by caller via storage/installedModels.deleteInstalledModel
 }
 
 export async function getModelStorageBytes(): Promise<number> {

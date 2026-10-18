@@ -71,7 +71,6 @@ export interface CombinedChatState {
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
-  setConversationProject: (id: string, projectId: string | null) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   moveConversationToProject: (id: string, projectId: string | null) => Promise<boolean>;
   makeConversationPermanent: (id: string) => void;
@@ -138,7 +137,6 @@ export interface CombinedChatState {
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   failOfflineMessage: (conversationId: string, queueId: string) => void;
-  clearQueuedPlaceholders: (conversationId: string) => void;
   appendVoiceTurn: (
     conversationId: string,
     turn: { id: string; role: 'user' | 'assistant'; content: string; model: string },
@@ -204,7 +202,6 @@ function buildCombinedState(
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,
     setConversationModel: msg.setConversationModel,
-    setConversationProject: msg.setConversationProject,
     pinConversation: msg.pinConversation,
     moveConversationToProject: msg.moveConversationToProject,
     makeConversationPermanent: msg.makeConversationPermanent,
@@ -226,7 +223,6 @@ function buildCombinedState(
     stopVideoGeneration: msg.stopVideoGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
     failOfflineMessage: msg.failOfflineMessage,
-    clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     appendVoiceTurn: msg.appendVoiceTurn,
     isStreaming: exec.isStreaming,
     streamingConversationIds: exec.streamingConversationIds,

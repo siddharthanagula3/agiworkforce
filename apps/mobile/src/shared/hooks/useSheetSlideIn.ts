@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 import {
@@ -18,9 +17,6 @@ export interface UseSheetSlideInOptions {
   durationMs?: number;
 }
 
-/**
- * @returns An animated style to spread onto the sheet container.
- */
 export function useSheetSlideIn({
   visible,
   durationMs = SHEET_DURATION_MS,

@@ -13,17 +13,6 @@ interface ThemeResult {
   statusBarStyle: StatusBarStyle;
 }
 
-/**
- * Resolves the current theme based on the user's stored preference and
- * the system color scheme. Returns a `colors` palette, a boolean `isDark`
- * flag, and the appropriate status-bar style.
- *
- * Reads from the mode-specific settings store (local or cloud) based on the
- * current appMode, mirroring the projects.tsx dual-subscribe pattern.
- *
- * @example
- *   const { colors: themeColors, isDark, statusBarStyle } = useTheme();
- */
 export function useTheme(): ThemeResult {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';

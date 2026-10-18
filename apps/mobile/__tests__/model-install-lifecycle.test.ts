@@ -155,13 +155,22 @@ describe('download consent reaches every local-model path', () => {
 describe('a download in progress can be cancelled', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    resetStore({ jobs: { 'model-a': { status: 'downloading', progress: 0.4 } } });
+    resetStore({
+      jobs: { 'model-a': { status: 'downloading', progress: 0.4, cancellable: true } },
+    });
   });
 
   it('asks the downloader to stop and clears the job', () => {
     useModelInstallStore.getState().cancelModelDownload('model-a');
     expect(cancelDownload).toHaveBeenCalledWith('model-a');
     expect(useModelInstallStore.getState().jobs['model-a']).toBeUndefined();
+  });
+
+  it('leaves a download the runtime cannot stop running', () => {
+    resetStore({ jobs: { 'model-a': { status: 'downloading', progress: 0.4 } } });
+    useModelInstallStore.getState().cancelModelDownload('model-a');
+    expect(cancelDownload).not.toHaveBeenCalled();
+    expect(useModelInstallStore.getState().jobs['model-a']?.status).toBe('downloading');
   });
 
   it('does nothing for a model that is not downloading', () => {

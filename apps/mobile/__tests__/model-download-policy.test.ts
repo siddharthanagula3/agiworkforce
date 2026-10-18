@@ -1,8 +1,10 @@
 import NetInfo from '@react-native-community/netinfo';
-import { getFreeDiskStorageAsync } from 'expo-file-system/legacy';
+import { createDownloadResumable, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
 import {
   assertDownloadAllowed,
   assertFreeSpaceFor,
+  cancelDownload,
+  downloadModel,
   ModelDownloadError,
 } from '@/services/modelDownload';
 import {
@@ -21,6 +23,11 @@ jest.mock('expo-file-system/legacy', () => ({
   createDownloadResumable: jest.fn(),
   getFreeDiskStorageAsync: jest.fn(),
   EncodingType: { Base64: 'base64', UTF8: 'utf8' },
+}));
+
+jest.mock('@/storage/installedModels', () => ({
+  ...jest.requireActual('@/storage/installedModels'),
+  getInstalledModel: jest.fn(async () => null),
 }));
 
 const mockFetch = NetInfo.fetch as jest.Mock;
@@ -112,5 +119,42 @@ describe('install failure messages', () => {
   it('keeps the generic wording for an untyped failure rather than inventing a cause', () => {
     expect(installFailureMessage(new Error('boom'))).toBe(GENERIC_INSTALL_FAILURE);
     expect(installFailureMessage('boom')).toBe(GENERIC_INSTALL_FAILURE);
+  });
+});
+
+describe('cancelling a download', () => {
+  it('reports a download the user cancelled as cancelled, not as a network failure', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    let settle: (result: undefined) => void = () => undefined;
+    const mockCreate = createDownloadResumable as jest.Mock;
+    mockCreate.mockReturnValue({
+      downloadAsync: () =>
+        new Promise<undefined>((resolve) => {
+          settle = resolve;
+        }),
+      pauseAsync: jest.fn(async () => {
+        settle(undefined);
+        return {};
+      }),
+      savable: jest.fn(async () => ({})),
+    });
+
+    const download = downloadModel({
+      modelId: 'model-a',
+      displayName: 'Model A',
+      downloadUrl: 'https://models.example/model-a.gguf',
+      checksum: 'a'.repeat(64),
+      fileSizeBytes: 1024,
+      runtime: 'local',
+      format: 'gguf',
+      wifiOnly: true,
+    });
+    for (let tick = 0; tick < 50 && mockCreate.mock.calls.length === 0; tick += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    cancelDownload('model-a');
+
+    await expect(download).rejects.toMatchObject({ kind: 'cancelled' });
   });
 });

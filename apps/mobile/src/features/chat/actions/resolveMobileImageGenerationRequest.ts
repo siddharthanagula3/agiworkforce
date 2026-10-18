@@ -141,9 +141,9 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
         'No eligible image model is available for this request. Choose another Cloud model or try again later.',
     },
     reference_image_invalid: {
-      title: 'Attach one image to edit',
+      title: 'Attach only images to edit',
       message:
-        'A reference image must be a single image file. Remove the other attachments and try again.',
+        'Every attachment for an image edit must be an image file. Remove the other files and try again.',
     },
     reference_image_too_large: {
       title: 'Reference image is too large',

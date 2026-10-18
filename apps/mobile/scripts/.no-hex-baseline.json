@@ -1350,24 +1350,6 @@
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
-      "line": 243,
-      "literal": "rgba(",
-      "rule": "rgba"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
-      "line": 257,
-      "literal": "#fff",
-      "rule": "hex"
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
-      "line": 281,
-      "literal": "#fff",
-      "rule": "hex"
-    },
-    {
       "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
       "line": 133,
       "literal": "rgba(",

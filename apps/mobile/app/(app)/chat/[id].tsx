@@ -84,7 +84,6 @@ import {
   useChatStore,
 } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useAgentStore } from '@/stores/agentStore';
 import { ProjectSourcesButton } from '@/src/features/projects/components/ProjectSourcesButton';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
@@ -292,8 +291,6 @@ export default function ChatScreen() {
   const refreshUsage = useCloudUsageStore((s) => s.refresh);
   const [dismissedUsageWarning, setDismissedUsageWarning] = useState<string | null>(null);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
-  const approveRequest = useAgentStore((s) => s.approveRequest);
-  const rejectRequest = useAgentStore((s) => s.rejectRequest);
 
   const conversation = conversations.find((c) => c.id === id);
   // Branches are resolved here rather than in the store so the abandoned turns
@@ -1837,8 +1834,6 @@ export default function ChatScreen() {
         ) : (
           <MessageList
             messages={conversationMessages}
-            onApprove={approveRequest}
-            onReject={rejectRequest}
             onDeleteMessage={handleDeleteMessage}
             onReaction={handleReaction}
             onRetryMessage={handleRetryMessage}

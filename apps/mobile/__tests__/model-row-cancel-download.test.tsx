@@ -33,7 +33,12 @@ const MODEL: ModelDef = {
   license: 'Apache-2.0',
 };
 
-function renderRow(installStatus: { status: string; progress: number; error?: string }) {
+function renderRow(installStatus: {
+  status: string;
+  progress: number;
+  error?: string;
+  cancellable?: boolean;
+}) {
   return render(
     <ModelRow
       model={MODEL}
@@ -57,17 +62,22 @@ describe('a download in progress is cancellable from the row', () => {
       readySystemModelIds: [],
       totalRAMMB: 8192,
       allowCellularDownloads: false,
-      jobs: { [MODEL.id]: { status: 'downloading', progress: 0.3 } },
+      jobs: { [MODEL.id]: { status: 'downloading', progress: 0.3, cancellable: true } },
     });
   });
 
   it('offers a cancel control while downloading', () => {
-    const { getByTestId } = renderRow({ status: 'downloading', progress: 0.3 });
+    const { getByTestId } = renderRow({ status: 'downloading', progress: 0.3, cancellable: true });
     expect(getByTestId(`model-cancel-${MODEL.id}`)).toBeTruthy();
   });
 
+  it('offers no cancel control for a download the runtime cannot stop', () => {
+    const { queryByTestId } = renderRow({ status: 'downloading', progress: 0.3 });
+    expect(queryByTestId(`model-cancel-${MODEL.id}`)).toBeNull();
+  });
+
   it('clears the job when the cancel control is pressed', () => {
-    const { getByTestId } = renderRow({ status: 'downloading', progress: 0.3 });
+    const { getByTestId } = renderRow({ status: 'downloading', progress: 0.3, cancellable: true });
     fireEvent.press(getByTestId(`model-cancel-${MODEL.id}`));
     expect(useModelInstallStore.getState().jobs[MODEL.id]).toBeUndefined();
   });

@@ -53,7 +53,6 @@ import {
   isTerminalToolStatus,
   summarizeToolTimeline,
 } from '@agiworkforce/types';
-import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
 import { ImageGenProgress } from './ImageGenProgress';
@@ -453,8 +452,6 @@ function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
 
 interface MessageBubbleProps {
   message: ChatMessage;
-  onApprove?: (approvalId: string) => void;
-  onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
@@ -505,8 +502,6 @@ function MessageActionButton({
 
 export const MessageBubble = memo(function MessageBubble({
   message,
-  onApprove,
-  onReject,
   onDeleteMessage,
   onRetryMessage,
   onEditImageArea,
@@ -740,13 +735,6 @@ export const MessageBubble = memo(function MessageBubble({
   const handleCloseArtifact = useCallback(() => {
     setExpandedArtifact(null);
   }, [setExpandedArtifact]);
-
-  const handleApprove = useCallback((id: string) => onApprove?.(id), [onApprove]);
-
-  const handleReject = useCallback(
-    (id: string, reason?: string) => onReject?.(id, reason),
-    [onReject],
-  );
 
   const handleResolveToolApproval = useCallback(
     (toolCallId: string, decision: 'approved' | 'rejected', guidance?: string) =>
@@ -1369,20 +1357,6 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ))}
 
-            {/* Approval requests */}
-            {isAssistant && message.approvalRequests && message.approvalRequests.length > 0 ? (
-              <View style={{ gap: 4 }}>
-                {message.approvalRequests.map((req) => (
-                  <ApprovalCard
-                    key={req.id}
-                    approval={req}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                  />
-                ))}
-              </View>
-            ) : null}
-
             {/* Main text content with inline markdown */}
             {contentElements.length > 0 ? (
               <View>
@@ -1406,7 +1380,6 @@ export const MessageBubble = memo(function MessageBubble({
                 prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
                 progress={message.imageGenProgress}
                 status={message.imageGenStatus ?? 'generating'}
-                estimatedTime={message.imageGenEstimatedTime}
                 errorMessage={message.imageGenError}
                 onRetry={onRetryMessage ? handleRetryGeneration : undefined}
                 onStop={message.isGeneratingImage ? handleStopImageGeneration : undefined}

@@ -26,8 +26,6 @@ const NEAR_BOTTOM_THRESHOLD = 150;
 
 interface MessageListProps {
   messages: ChatMessage[];
-  onApprove?: (approvalId: string) => void;
-  onReject?: (approvalId: string, reason?: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
@@ -68,8 +66,6 @@ function turnOutcomeAnnouncement(message: ChatMessage): string {
 
 export function MessageList({
   messages,
-  onApprove,
-  onReject,
   onDeleteMessage,
   onRetryMessage,
   onRetryWithModel,
@@ -138,8 +134,6 @@ export function MessageList({
         <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
           <MessageBubble
             message={item}
-            onApprove={onApprove}
-            onReject={onReject}
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={onRetryMessage}
             onRetryWithModel={onRetryWithModel}
@@ -164,8 +158,6 @@ export function MessageList({
     [
       colors,
       handleQuoteSelection,
-      onApprove,
-      onReject,
       onDeleteMessage,
       onRetryMessage,
       onRetryWithModel,

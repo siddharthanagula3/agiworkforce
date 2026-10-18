@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Modal, FlatList, useWindowDimensions } from 'react-native';
+import { Alert, View, Modal, FlatList, useWindowDimensions } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -93,7 +93,7 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
 
   const appModeIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const isCloud = conversation ? conversation.executionMode === 'cloud' : appModeIsCloud;
-  const setConversationProject = useChatStore((s) => s.setConversationProject);
+  const moveConversationToProject = useChatStore((s) => s.moveConversationToProject);
   const localProjects = useProjectStore((s) => s.projects);
   const localActiveId = useProjectStore((s) => s.activeProjectId);
   const setLocalActive = useProjectStore((s) => s.setActiveProject);
@@ -124,9 +124,16 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
   const setActiveProject = useCallback(
     (id: string | null) => {
       setGlobalActiveProject(id);
-      if (conversationId) void setConversationProject(conversationId, id);
+      if (!conversationId) return;
+      void moveConversationToProject(conversationId, id).then((moved) => {
+        if (moved) return;
+        Alert.alert(
+          id ? 'Could not move chat to project' : 'Could not remove chat from project',
+          'The change has been undone. Check your connection and try again.',
+        );
+      });
     },
-    [conversationId, setConversationProject, setGlobalActiveProject],
+    [conversationId, moveConversationToProject, setGlobalActiveProject],
   );
 
   const [dropdownVisible, setDropdownVisible] = useState(false);

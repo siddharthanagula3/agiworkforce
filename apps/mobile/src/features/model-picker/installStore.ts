@@ -48,6 +48,7 @@ export interface ModelInstallJob {
   status: ModelInstallStatus;
   progress: number;
   error?: string;
+  cancellable?: boolean;
 }
 
 interface ModelInstallState {
@@ -324,8 +325,12 @@ export const useModelInstallStore = create<ModelInstallState>()(
           throw new Error(error);
         }
 
+        const cancellable = !preset;
         set((state) => ({
-          jobs: { ...state.jobs, [model.id]: { status: 'downloading', progress: 0.01 } },
+          jobs: {
+            ...state.jobs,
+            [model.id]: { status: 'downloading', progress: 0.01, cancellable },
+          },
         }));
 
         const reportProgress = (progress: number): void => {
@@ -336,6 +341,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
               [model.id]: {
                 status: 'downloading',
                 progress: Math.max(0.01, clampProgress(progress)),
+                cancellable,
               },
             },
           }));
@@ -388,7 +394,8 @@ export const useModelInstallStore = create<ModelInstallState>()(
       },
 
       cancelModelDownload: (modelId) => {
-        if (get().jobs[modelId]?.status !== 'downloading') return;
+        const job = get().jobs[modelId];
+        if (job?.status !== 'downloading' || !job.cancellable) return;
         cancelDownload(modelId);
         set((state) => {
           const { [modelId]: _removed, ...rest } = state.jobs;
