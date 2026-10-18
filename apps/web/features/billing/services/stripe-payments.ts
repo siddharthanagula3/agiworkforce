@@ -188,44 +188,28 @@ export async function openBillingPortal(
   return goToHostedBilling(result.url, 'portal');
 }
 
-export async function upgradeToProPlan(data: {
-  userId: string;
-  userEmail: string;
-}): Promise<BrowserHandoffOutcome> {
-  return upgradeToPlan({ ...data, plan: 'pro' });
+export async function upgradeToProPlan(): Promise<BrowserHandoffOutcome> {
+  return upgradeToPlan({ plan: 'pro' });
 }
 
-export async function upgradeToMaxPlan(data: {
-  userId: string;
-  userEmail: string;
-}): Promise<BrowserHandoffOutcome> {
-  return upgradeToPlan({ ...data, plan: 'max' });
+export async function upgradeToMaxPlan(): Promise<BrowserHandoffOutcome> {
+  return upgradeToPlan({ plan: 'max' });
 }
 
-export async function upgradeToMax15xPlan(data: {
-  userId: string;
-  userEmail: string;
-}): Promise<BrowserHandoffOutcome> {
-  return upgradeToPlan({ ...data, plan: 'max_15x' });
+export async function upgradeToMax15xPlan(): Promise<BrowserHandoffOutcome> {
+  return upgradeToPlan({ plan: 'max_15x' });
 }
 
-export async function upgradeToBasicPlan(data: {
-  userId: string;
-  userEmail: string;
-}): Promise<BrowserHandoffOutcome> {
-  return upgradeToPlan({ ...data, plan: 'basic' });
+export async function upgradeToBasicPlan(): Promise<BrowserHandoffOutcome> {
+  return upgradeToPlan({ plan: 'basic' });
 }
 
 async function upgradeToPlan(data: {
-  userId: string;
-  userEmail: string;
   plan: SelfServePaidPlanTier;
   billingPeriod?: 'monthly' | 'yearly';
   seats?: number;
   premiumSeats?: number;
 }): Promise<BrowserHandoffOutcome> {
-  void data.userId;
-  void data.userEmail;
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to upgrade.');
@@ -274,8 +258,6 @@ export async function startPlanCheckout(data: {
   seats?: number;
 }): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({
-    userId: '',
-    userEmail: '',
     plan: data.plan,
     billingPeriod: data.billingInterval,
     ...(data.seats === undefined ? {} : { seats: data.seats }),
@@ -314,8 +296,6 @@ export async function upgradeToTeamPlan(data: {
   billingPeriod?: 'monthly' | 'yearly';
 }): Promise<BrowserHandoffOutcome> {
   return upgradeToPlan({
-    userId: '',
-    userEmail: '',
     plan: 'team',
     seats: data.seats,
     ...(data.premiumSeats ? { premiumSeats: data.premiumSeats } : {}),

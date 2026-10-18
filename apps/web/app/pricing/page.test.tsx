@@ -683,12 +683,7 @@ describe('PricingPage', () => {
     await waitFor(() => expect(basicCta).toBeEnabled());
     fireEvent.click(basicCta);
 
-    await waitFor(() =>
-      expect(stripeMocks.upgradeToBasicPlan).toHaveBeenCalledWith({
-        userId: 'user-1',
-        userEmail: 'user@example.com',
-      }),
-    );
+    await waitFor(() => expect(stripeMocks.upgradeToBasicPlan).toHaveBeenCalledWith());
     expect(screen.queryByText('Waitlist for basic')).toBeNull();
   });
 

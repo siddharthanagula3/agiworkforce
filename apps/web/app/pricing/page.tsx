@@ -694,16 +694,14 @@ export default function PricingPage() {
     setPendingPlan(request.plan);
     const toastId = toast.loading(t('redirectingToCheckout'));
     try {
-      const userId = user.id;
-      const userEmail = user.email || '';
       if (isBasicPlanTier(request.plan)) {
-        await upgradeToBasicPlan({ userId, userEmail });
+        await upgradeToBasicPlan();
       } else if (isProPlanTier(request.plan)) {
-        await upgradeToProPlan({ userId, userEmail });
+        await upgradeToProPlan();
       } else if (isMaxPlanTier(request.plan)) {
-        await upgradeToMaxPlan({ userId, userEmail });
+        await upgradeToMaxPlan();
       } else if (isMax15xPlanTier(request.plan)) {
-        await upgradeToMax15xPlan({ userId, userEmail });
+        await upgradeToMax15xPlan();
       } else if (isPerSeatBillingPlan(request.plan)) {
         await upgradeToTeamPlan({
           seats: request.seats ?? MIN_PURCHASABLE_SEATS,

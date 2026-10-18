@@ -118,12 +118,7 @@ describe('useUpgradePlanFlow', () => {
   it('sends an account that redeemed an access code straight to checkout', async () => {
     pickBasic('Upgrade to Basic');
 
-    await waitFor(() =>
-      expect(checkoutMocks.upgradeToBasicPlan).toHaveBeenCalledWith({
-        userId: 'user-1',
-        userEmail: 'ada@example.com',
-      }),
-    );
+    await waitFor(() => expect(checkoutMocks.upgradeToBasicPlan).toHaveBeenCalledWith());
     expect(screen.queryByText(/Waitlist for basic/)).toBeNull();
   });
 

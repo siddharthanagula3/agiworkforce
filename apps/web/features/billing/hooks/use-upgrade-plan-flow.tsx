@@ -70,13 +70,13 @@ export function useUpgradePlanFlow({
       const toastId = toast.loading('Redirecting to checkout...');
       try {
         if (isBasicPlanTier(request.plan)) {
-          await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
+          await upgradeToBasicPlan();
         } else if (isProPlanTier(request.plan)) {
-          await upgradeToProPlan({ userId: user.id, userEmail: user.email || '' });
+          await upgradeToProPlan();
         } else if (isMaxPlanTier(request.plan)) {
-          await upgradeToMaxPlan({ userId: user.id, userEmail: user.email || '' });
+          await upgradeToMaxPlan();
         } else if (isMax15xPlanTier(request.plan)) {
-          await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
+          await upgradeToMax15xPlan();
         }
         toast.dismiss(toastId);
       } catch (error) {

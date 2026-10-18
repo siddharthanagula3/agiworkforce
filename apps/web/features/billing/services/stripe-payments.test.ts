@@ -68,7 +68,7 @@ describe('stripe payments', () => {
       json: async () => ({ url: 'https://checkout.example/max-15x' }),
     } as Response);
 
-    await upgradeToMax15xPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    await upgradeToMax15xPlan();
 
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       plan: 'max_15x',
@@ -89,7 +89,7 @@ describe('stripe payments', () => {
       }),
     } as Response);
 
-    const refusal = upgradeToBasicPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    const refusal = upgradeToBasicPlan();
 
     await expect(refusal).rejects.toBeInstanceOf(UpgradeAccessRequiredError);
     await expect(refusal).rejects.toThrow('Paid upgrades are opening in stages.');
@@ -102,7 +102,7 @@ describe('stripe payments', () => {
       json: async () => ({ error: { code: 'forbidden', message: 'Checkout is not allowed.' } }),
     } as Response);
 
-    const refusal = upgradeToBasicPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    const refusal = upgradeToBasicPlan();
 
     await expect(refusal).rejects.toThrow('Checkout is not allowed.');
     await expect(refusal).rejects.not.toBeInstanceOf(UpgradeAccessRequiredError);
@@ -114,8 +114,8 @@ describe('stripe payments', () => {
       json: async () => ({ url: 'https://checkout.example/max-15x' }),
     } as Response);
 
-    await upgradeToMax15xPlan({ userId: 'user_1', userEmail: 'user@example.com' });
-    await upgradeToMax15xPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    await upgradeToMax15xPlan();
+    await upgradeToMax15xPlan();
 
     const keys = fetchMock.mock.calls.map(
       (call) => (call[1]?.headers as Record<string, string>)['Idempotency-Key'],
@@ -132,7 +132,7 @@ describe('stripe payments', () => {
       json: async () => ({ url: 'https://checkout.example/basic' }),
     } as Response);
 
-    await upgradeToBasicPlan({ userId: 'user_1', userEmail: 'user@example.com' });
+    await upgradeToBasicPlan();
 
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
       plan: 'basic',
