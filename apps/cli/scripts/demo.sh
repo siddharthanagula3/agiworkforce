@@ -2,7 +2,8 @@
 # 90-second demo flow for AGI Workforce CLI.
 #
 # Pre-reqs:
-#   * `agi` on PATH (`cargo install --path apps/cli --bin agi`)
+#   * a debug build, which is the only kind that accepts --demo:
+#     `cargo build -p agiworkforce-cli --bin agi`, then CLI=target/debug/agi
 #   * Optional: ANTHROPIC_API_KEY / OPENAI_API_KEY for the live happy-path
 #     turn. Without them the --demo synth shows the fallback fire and
 #     surfaces a clean classified error.

@@ -176,9 +176,10 @@ pub struct AgentSession {
     pub turn_count: u32,
     pub cost_ledger: crate::cost_ledger::CostLedger,
     pub fallback_chain: Option<crate::routing::fallback::FallbackChain>,
+    #[cfg(debug_assertions)]
     pub demo_force_rate_limit: bool,
+    #[cfg(debug_assertions)]
     pub demo_mode: bool,
-    #[allow(dead_code)]
     pub output_style: String,
     #[allow(clippy::type_complexity)]
     pub on_fallback: Option<FallbackSink>,
@@ -715,7 +716,9 @@ impl AgentSession {
             turn_count: 0,
             cost_ledger: crate::cost_ledger::CostLedger::default(),
             fallback_chain: None,
+            #[cfg(debug_assertions)]
             demo_force_rate_limit: false,
+            #[cfg(debug_assertions)]
             demo_mode: false,
             on_fallback: None,
             output_style: "default".to_string(),

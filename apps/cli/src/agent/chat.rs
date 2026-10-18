@@ -1822,26 +1822,79 @@ impl TurnHostAdapter<'_> {
             .unwrap_or(false)
     }
 
-    /// First completion: primary stream (or the `--demo` synthesized rate-limit)
-    /// with the retry-then-fallback recovery ladder. Byte-for-byte the historical
-    /// first-call block, including the privacy-boundary re-validation after each
-    /// provider mutation and the demo-mode synthesis.
+    /// The rate limit `--demo` stands in for the primary model's first call.
+    /// Debug builds only: a release binary never answers with a made-up error.
+    #[cfg(debug_assertions)]
+    fn take_demo_rate_limit(&mut self) -> Option<anyhow::Error> {
+        if !std::mem::take(&mut self.session.demo_force_rate_limit) {
+            return None;
+        }
+        narrate!(
+            "  {}",
+            "DEMO: synthesizing rate-limit on primary model".dimmed()
+        );
+        Some(anyhow::Error::new(CliError::RateLimited {
+            provider: format!("{:?}", self.session.provider).to_lowercase(),
+            retry_after: Some(0),
+        }))
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn take_demo_rate_limit(&mut self) -> Option<anyhow::Error> {
+        None
+    }
+
+    /// The answer `--demo` gives in place of a fallback model's call, so the
+    /// chain can be exercised without contacting a provider. Debug builds only.
+    #[cfg(debug_assertions)]
+    fn demo_fallback_response(&self, fallback_model: &str) -> Option<models::CompletionResult> {
+        if !self.session.demo_mode {
+            return None;
+        }
+        let demo_text = format!(
+            "[DEMO MODE] Synthesized response from `{fallback_model}`, no real API call was \
+             made. The fallback chain is exercised but the upstream provider was not contacted."
+        );
+        if self.session.json_events {
+            crate::agent_events::AgentEvent::MessageDelta {
+                session_id: self.session.json_session_id.clone(),
+                text: demo_text.clone(),
+            }
+            .emit_stdout();
+        } else {
+            crate::output::print_assistant_chunk(&demo_text);
+        }
+        Some(models::CompletionResult {
+            text: demo_text,
+            tool_calls: vec![],
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            via_subscription: true,
+            stop_reason: Some("end_turn".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
+            reasoning_output_tokens: 0,
+            managed_request_id: None,
+            resolved_model: None,
+        })
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn demo_fallback_response(&self, _fallback_model: &str) -> Option<models::CompletionResult> {
+        None
+    }
+
+    /// First completion: primary stream with the retry-then-fallback recovery
+    /// ladder, re-validating the privacy boundary after each provider mutation.
     async fn complete_first(&mut self) -> Result<Completion> {
         let on_chunk = self
             .first_on_chunk
             .take()
             .expect("complete_first is called exactly once per turn");
 
-        let first_call_result = if self.session.demo_force_rate_limit {
-            self.session.demo_force_rate_limit = false;
-            narrate!(
-                "  {}",
-                "DEMO: synthesizing rate-limit on primary model".dimmed()
-            );
-            Err(anyhow::Error::new(CliError::RateLimited {
-                provider: format!("{:?}", self.session.provider).to_lowercase(),
-                retry_after: Some(0),
-            }))
+        let first_call_result = if let Some(demo_error) = self.take_demo_rate_limit() {
+            Err(demo_error)
         } else {
             models::stream_completion(
                 self.config,
@@ -1946,36 +1999,10 @@ impl TurnHostAdapter<'_> {
                                 if let Some(sink) = self.session.on_fallback.as_ref() {
                                     (sink.0)(&prev_model, fallback_model, reason);
                                 }
-                                let fallback_call = if self.session.demo_mode {
-                                    let demo_text = format!(
-                                        "[DEMO MODE] Synthesized response from `{}`, no real \
-                                         API call was made. The fallback chain is exercised but \
-                                         the upstream provider was not contacted.",
-                                        fallback_model
-                                    );
-                                    if self.session.json_events {
-                                        crate::agent_events::AgentEvent::MessageDelta {
-                                            session_id: self.session.json_session_id.clone(),
-                                            text: demo_text.clone(),
-                                        }
-                                        .emit_stdout();
-                                    } else {
-                                        crate::output::print_assistant_chunk(&demo_text);
-                                    }
-                                    Ok(crate::models::CompletionResult {
-                                        text: demo_text,
-                                        tool_calls: vec![],
-                                        input_tokens: 0,
-                                        output_tokens: 0,
-                                        cache_read_input_tokens: 0,
-                                        cache_creation_input_tokens: 0,
-                                        via_subscription: true,
-                                        stop_reason: Some("end_turn".to_string()),
-                                        stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
-                                        reasoning_output_tokens: 0,
-                                        managed_request_id: None,
-                                        resolved_model: None,
-                                    })
+                                let fallback_call = if let Some(demo) =
+                                    self.demo_fallback_response(fallback_model)
+                                {
+                                    Ok(demo)
                                 } else {
                                     models::stream_completion(
                                         self.config,

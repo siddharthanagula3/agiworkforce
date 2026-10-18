@@ -210,13 +210,6 @@ auto-switched, banner flashed, JSON event emitted.
 agi -m "<primary-model>,<fallback-model>,<local-model>" "refactor main.rs"
 ```
 
-Pair with `--demo` to see the rotation fire deterministically:
-
-```bash
-agi --demo --json-events exec -m "<primary-model>,<fallback-model>" "hi"
-# → {"event":"fallback_triggered","from":"<primary-model>","to":"<fallback-model>","reason":"api_rate_limit"}
-```
-
 ### 4. Session replay / fork
 
 Every session is persisted under `~/.agiworkforce/managed_sessions/`.
@@ -302,22 +295,6 @@ tools: [read_file, run_command]
 The loader refuses activation while a declared environment variable or tool is
 missing. Skill content is treated as untrusted reference guidance and cannot
 override system, privacy, approval, or tool-safety policy.
-
-## Demo flow (90 seconds)
-
-```
-agi --demo --json-events exec \
-  -m "<primary-model>,<fallback-model>" "refactor main.rs"
-# 1. spawning + ready_for_prompt events
-# 2. demo synthesizes 429
-# 3. ↘ Falling back: <primary-model> → <fallback-model> (api_rate_limit)
-# 4. fallback_triggered JSON event
-# 5. fresh model answers
-# 6. turn_usage + finished events
-
-agi session list
-agi session fork <id> --at-turn 0 --as refactor-alt
-```
 
 ## Subcommands
 

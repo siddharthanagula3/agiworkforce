@@ -653,7 +653,11 @@ impl SubagentManager {
     /// bounded by [`SUBAGENT_WAIT_LIMIT`]: a child still running then is
     /// cancelled, reported as timed out and not waited for again.
     pub async fn wait_all(&self) -> Vec<(String, SubagentStatus)> {
-        let deadline = std::time::Instant::now() + SUBAGENT_WAIT_LIMIT;
+        self.wait_all_within(SUBAGENT_WAIT_LIMIT).await
+    }
+
+    async fn wait_all_within(&self, limit: std::time::Duration) -> Vec<(String, SubagentStatus)> {
+        let deadline = std::time::Instant::now() + limit;
         loop {
             let finished: Vec<(String, thread::JoinHandle<()>)> = {
                 let mut entries = self.entries.write().await;
@@ -695,7 +699,7 @@ impl SubagentManager {
                 break;
             }
             if std::time::Instant::now() >= deadline {
-                self.abandon_unfinished().await;
+                self.abandon_unfinished(limit).await;
                 break;
             }
             tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL).await;
@@ -712,10 +716,10 @@ impl SubagentManager {
         results
     }
 
-    /// Cancel every child whose thread is still running past
-    /// [`SUBAGENT_WAIT_LIMIT`] and report it to the parent as timed out. Its
-    /// handle stays in `entries`; the thread exits once it sees the flag.
-    async fn abandon_unfinished(&self) {
+    /// Cancel every child whose thread is still running past `limit` and
+    /// report it to the parent as timed out. Its handle stays in `entries`;
+    /// the thread exits once it sees the flag.
+    async fn abandon_unfinished(&self, limit: std::time::Duration) {
         let mut entries = self.entries.write().await;
         for entry in entries.values_mut() {
             if entry.handle.is_none() || entry.abandoned {
@@ -727,7 +731,7 @@ impl SubagentManager {
                 .store(true, std::sync::atomic::Ordering::Release);
             *entry.status.write().await = SubagentStatus::Failed(format!(
                 "Timed out after {}s and was cancelled while still running",
-                SUBAGENT_WAIT_LIMIT.as_secs()
+                limit.as_secs()
             ));
             if !crate::tui::tui_active() {
                 eprintln!(
@@ -1305,5 +1309,54 @@ mod tests {
             .expect("tracked subagent")
             .handle
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn a_child_still_running_at_the_limit_is_cancelled_and_reported_as_timed_out() {
+        let manager = root_manager();
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let release = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stuck = release.clone();
+        let handle = thread::spawn(move || {
+            while !stuck.load(std::sync::atomic::Ordering::Acquire) {
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        manager.entries.write().await.insert(
+            "subagent-stuck".to_string(),
+            SubagentEntry {
+                id: "subagent-stuck".to_string(),
+                role: GENERAL_PURPOSE_ROLE.to_string(),
+                description: "never finishes".to_string(),
+                status: Arc::new(RwLock::new(SubagentStatus::Running)),
+                result: Arc::new(RwLock::new(None)),
+                handle: Some(handle),
+                cancelled: cancelled.clone(),
+                abandoned: false,
+            },
+        );
+
+        let outcomes = manager
+            .wait_all_within(std::time::Duration::from_millis(50))
+            .await;
+        assert!(cancelled.load(std::sync::atomic::Ordering::Acquire));
+        match outcomes.as_slice() {
+            [(id, SubagentStatus::Failed(message))] => {
+                assert_eq!(id, "subagent-stuck");
+                assert!(message.contains("Timed out"), "{message}");
+            }
+            other => panic!("the stuck child must be reported as timed out: {other:?}"),
+        }
+
+        let started = std::time::Instant::now();
+        manager
+            .wait_all_within(std::time::Duration::from_secs(30))
+            .await;
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "a later wait must not hold a turn for a child already given up on"
+        );
+
+        release.store(true, std::sync::atomic::Ordering::Release);
     }
 }

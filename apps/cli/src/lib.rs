@@ -447,9 +447,10 @@ pub struct Cli {
     #[arg(long = "json-events")]
     json_events: bool,
 
-    /// Demo mode: synthesizes a rate-limit error on the first model call so
-    /// the multi-model fallback chain visibly fires. For live demos and
-    /// integration tests where you don't want to wait for a real 429.
+    /// Synthesizes a rate-limit error on the first model call so the fallback
+    /// chain fires without a real 429. Debug builds only, for the integration
+    /// tests and scripts/demo.sh; a release binary does not accept it.
+    #[cfg(debug_assertions)]
     #[arg(long, hide = true)]
     demo: bool,
 
@@ -5753,8 +5754,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 if chain.primaries.len() > 1 {
                     session.fallback_chain = Some(chain);
                 }
-                session.demo_force_rate_limit = cli.demo;
-                session.demo_mode = cli.demo;
+                #[cfg(debug_assertions)]
+                {
+                    session.demo_force_rate_limit = cli.demo;
+                    session.demo_mode = cli.demo;
+                }
                 let exec_permissions =
                     held_to_managed_policy(normalized_cli_options.effective_permissions(
                         cli.mode,
