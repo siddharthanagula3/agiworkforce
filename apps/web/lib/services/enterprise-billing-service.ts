@@ -4,7 +4,6 @@ import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { MAX_PURCHASABLE_SEATS } from '@agiworkforce/types';
 
-import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getEnterpriseProductId, isEnterpriseProductId } from '@/lib/price-tier-mapping';
@@ -12,9 +11,6 @@ import { getSubscriptionPeriod } from '@/lib/stripe-types';
 import { normalizeStripeSubscription } from '@/lib/server/payments/stripe-provider';
 import { recordSubscriptionStateTransition } from '@/lib/server/payments/subscription-history';
 import {
-  allowedPaymentMethodTypes,
-  assertEnterpriseBillingActivated,
-  assertInvoiceIssuable,
   auditActivationState,
   invoiceRefusalsFor,
   isExecutedAgreement,
@@ -59,9 +55,6 @@ const UNMAPPED_ENTERPRISE_PRICE_AUDIT_REASON = 'unmapped_stripe_price';
 const COLLECTION_STAGE_CHANGED_AUDIT_REASON = 'collection_stage_changed';
 const RESTORED_COLLECTION_STAGE = 'current';
 const INVOICE_NOT_ISSUABLE_AUDIT_REASON = 'enterprise_invoice_not_issuable_under_agreement';
-const ENTERPRISE_INVOICE_PO_FIELD_NAME = 'Purchase Order';
-const ENTERPRISE_INVOICE_RECIPIENTS_METADATA_KEY = 'invoice_recipient_emails';
-const ENTERPRISE_INVOICE_AGREEMENT_VERSION_METADATA_KEY = 'commercial_agreement_version';
 
 function extractProductId(
   product: string | Stripe.Product | Stripe.DeletedProduct | null | undefined,
@@ -698,157 +691,6 @@ async function auditInvoiceAgainstAgreement(
       changedKeys: refusals,
     },
   });
-}
-
-export interface EnterpriseInvoiceLineInput {
-  description: string;
-  /** The whole charge this line carries, in whole cents. */
-  amountCents: number;
-  quantity: number;
-  periodStart: number;
-  periodEnd: number;
-}
-
-export type EnterpriseCollectionMethod = 'send_invoice' | 'charge_automatically';
-
-export interface EnterpriseInvoiceDraft {
-  invoice: Stripe.InvoiceCreateParams;
-  items: Stripe.InvoiceItemCreateParams[];
-}
-
-/**
- * The Stripe invoice a signed agreement permits, or nothing. Every field the
- * document carries is decided by the contract: the currency, the NET term the
- * due date comes from, the purchase order the customer's accounts payable will
- * look for, and the rails it may be settled on.
- */
-export function buildEnterpriseInvoiceDraft(
-  agreement: ExecutedCommercialAgreement,
-  stripeCustomerId: string,
-  request: {
-    collectionMethod: EnterpriseCollectionMethod;
-    lines: readonly EnterpriseInvoiceLineInput[];
-  },
-  asOfDate: string,
-): EnterpriseInvoiceDraft {
-  const { terms } = agreement;
-  const paymentMethodTypes = allowedPaymentMethodTypes(terms.paymentMethodPolicy);
-  assertInvoiceIssuable(
-    agreement,
-    {
-      currency: terms.billingCurrency,
-      collectionMethod: request.collectionMethod,
-      paymentMethodTypes,
-    },
-    asOfDate,
-  );
-  if (request.lines.length === 0) {
-    throw createError.validation('An enterprise invoice cannot be issued with no lines.');
-  }
-  for (const line of request.lines) {
-    if (!Number.isInteger(line.amountCents) || !Number.isInteger(line.quantity)) {
-      throw createError.validation('An enterprise invoice line has to be whole minor units.');
-    }
-  }
-
-  const currency = terms.billingCurrency.trim().toLowerCase();
-  const procurementReference = terms.procurementReference?.trim() ?? '';
-  return {
-    invoice: {
-      customer: stripeCustomerId,
-      currency,
-      collection_method: request.collectionMethod,
-      auto_advance: false,
-      pending_invoice_items_behavior: 'exclude',
-      ...(request.collectionMethod === 'send_invoice'
-        ? { days_until_due: terms.paymentTermsDays }
-        : {}),
-      ...(procurementReference
-        ? {
-            custom_fields: [
-              { name: ENTERPRISE_INVOICE_PO_FIELD_NAME, value: procurementReference },
-            ],
-          }
-        : {}),
-      payment_settings: {
-        payment_method_types: [
-          ...paymentMethodTypes,
-        ] as Stripe.InvoiceCreateParams.PaymentSettings.PaymentMethodType[],
-      },
-      metadata: {
-        [PROCUREMENT_METADATA_KEY]: procurementReference,
-        [ENTERPRISE_INVOICE_AGREEMENT_VERSION_METADATA_KEY]: String(agreement.version),
-        [ENTERPRISE_INVOICE_RECIPIENTS_METADATA_KEY]: terms.invoiceRecipientEmails.join(','),
-      },
-    },
-    items: request.lines.map((line) => ({
-      customer: stripeCustomerId,
-      currency,
-      description: line.quantity > 1 ? `${line.description} (x${line.quantity})` : line.description,
-      amount: line.amountCents,
-      period: { start: line.periodStart, end: line.periodEnd },
-    })),
-  };
-}
-
-/**
- * Issues one enterprise invoice from lines the ledger produced. The agreement
- * has to be in force and has to permit the document before Stripe is touched,
- * so a contract that ended, or one whose Order Form names no recipient, issues
- * nothing at all rather than a blank invoice nobody can pay.
- */
-export async function issueEnterpriseInvoice(
-  db: DatabaseAdapter,
-  stripe: Stripe,
-  input: {
-    organizationId: string;
-    lines: readonly EnterpriseInvoiceLineInput[];
-    collectionMethod?: EnterpriseCollectionMethod;
-    asOfDate?: string;
-  },
-): Promise<Stripe.Invoice> {
-  const asOfDate = input.asOfDate ?? today();
-  const agreement = await assertEnterpriseBillingActivated(db, input.organizationId, asOfDate);
-
-  const [contract] = await db.query<Pick<OrganizationBillingContractRow, 'stripe_customer_id'>>(
-    `select stripe_customer_id
-       from public.organization_billing_contracts
-      where organization_id = $1::uuid
-      limit 1`,
-    [input.organizationId],
-  );
-  const stripeCustomerId = contract?.stripe_customer_id;
-  if (!stripeCustomerId) {
-    throw createError.validation('This workspace has no billing customer to invoice.');
-  }
-
-  const draft = buildEnterpriseInvoiceDraft(
-    agreement,
-    stripeCustomerId,
-    { collectionMethod: input.collectionMethod ?? 'send_invoice', lines: input.lines },
-    asOfDate,
-  );
-
-  const created = await stripe.invoices.create(draft.invoice);
-  if (!created.id) {
-    throw createError.internal('Stripe returned an invoice with no identifier.');
-  }
-  for (const item of draft.items) {
-    await stripe.invoiceItems.create({ ...item, invoice: created.id });
-  }
-  const finalized = await stripe.invoices.finalizeInvoice(created.id);
-
-  logger.info(
-    {
-      organizationId: input.organizationId,
-      invoiceId: finalized.id,
-      agreementVersion: agreement.version,
-      lines: draft.items.length,
-    },
-    'Enterprise invoice issued under the signed commercial agreement',
-  );
-  await recordEnterpriseInvoiceEvent(db, finalized);
-  return finalized;
 }
 
 export async function recordEnterpriseInvoiceEvent(

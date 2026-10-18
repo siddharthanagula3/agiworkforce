@@ -24,7 +24,6 @@ import {
   installMarketplaceEntry,
   listMarketplaceInstallations,
   setMarketplaceInstallationEnabled,
-  uninstallMarketplaceEntry,
   updateMarketplaceInstallationSettings,
 } from './plugin-marketplace-installation-service';
 
@@ -166,18 +165,6 @@ describe('setMarketplaceInstallationEnabled', () => {
     );
     expect(installation?.enabled).toBe(false);
     expect(db.execute.mock.calls[0]?.[1]).toEqual(['installation-1', 'user-1', false]);
-  });
-});
-
-describe('uninstallMarketplaceEntry', () => {
-  it('deletes the installation and reports success', async () => {
-    const db = database([{ id: 'installation-1' }]);
-    await expect(uninstallMarketplaceEntry(db, 'user-1', 'installation-1')).resolves.toBe(true);
-  });
-
-  it('reports failure when nothing was installed to remove', async () => {
-    const db = database([]);
-    await expect(uninstallMarketplaceEntry(db, 'user-1', 'installation-1')).resolves.toBe(false);
   });
 });
 

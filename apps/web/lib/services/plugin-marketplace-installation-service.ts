@@ -159,20 +159,6 @@ export async function setMarketplaceInstallationEnabled(
   return rows[0] ? mapInstallation(rows[0]) : null;
 }
 
-export async function uninstallMarketplaceEntry(
-  db: DatabaseAdapter,
-  userId: string,
-  installationId: string,
-): Promise<boolean> {
-  const rows = await db.query<{ id: string }>(
-    `delete from public.plugin_marketplace_installations
-      where id = $1 and user_id = $2
-      returning id`,
-    [installationId, userId],
-  );
-  return rows.length > 0;
-}
-
 async function connectorRequirementStates(
   db: DatabaseAdapter,
   userId: string,
