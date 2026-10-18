@@ -22,32 +22,86 @@ pub(crate) const INTERNAL_HOST_NAMES: &[&str] = &[
 pub(crate) fn is_internal_host(host: &str) -> bool {
     let host = host
         .trim_matches(|c| c == '[' || c == ']')
+        .trim_end_matches('.')
         .to_ascii_lowercase();
     if host == "localhost"
         || host.ends_with(".localhost")
         || host == "metadata.google.internal"
         || host == "metadata.goog"
-        // Alibaba Cloud's metadata endpoint.
-        || host == "100.100.100.200"
     {
         return true;
     }
-    // `fd00:ec2::254` is the IPv6 spelling of the EC2 metadata service.
-    if host == "::1" || host == "::" || host.starts_with("fd00:ec2:") {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_internal_ip(ip);
+    }
+    if host.starts_with("127.") || host.starts_with("169.254.") {
         return true;
     }
-    if host.starts_with("127.") || host == "0.0.0.0" || host.starts_with("169.254.") {
-        return true;
+    // The resolver also accepts the inet_aton spellings: `0x7f000001`,
+    // `0177.0.0.1` and `127.1` all reach 127.0.0.1. A dotless word is only
+    // read as an address when it lands on loopback or link-local, so a bare
+    // `0` in `curl --retry 0` is not taken for one.
+    match inet_aton(&host) {
+        Some(v4) if host.contains('.') => is_internal_ip(std::net::IpAddr::V4(v4)),
+        Some(v4) => v4.is_loopback() || v4.is_link_local(),
+        None => false,
     }
-    // A bare integer is still a routable spelling of an address:
-    // `curl http://2130706433/` reaches 127.0.0.1.
-    if let Ok(packed) = host.parse::<u32>() {
-        let octets = packed.to_be_bytes();
-        if octets[0] == 127 || (octets[0] == 169 && octets[1] == 254) {
-            return true;
+}
+
+fn is_internal_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_link_local()
+                // Alibaba Cloud's metadata endpoint.
+                || v4.octets() == [100, 100, 100, 200]
+        }
+        std::net::IpAddr::V6(v6) => {
+            let segments = v6.segments();
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (segments[0] & 0xffc0) == 0xfe80
+                // `fd00:ec2::254` is the IPv6 spelling of the EC2 metadata service.
+                || (segments[0] == 0xfd00 && segments[1] == 0x0ec2)
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| is_internal_ip(std::net::IpAddr::V4(v4)))
         }
     }
-    false
+}
+
+/// An IPv4 address in any spelling inet_aton accepts: one to four parts, each
+/// decimal, `0x` hex or leading-zero octal, the last filling the bytes left.
+fn inet_aton(host: &str) -> Option<std::net::Ipv4Addr> {
+    let parts: Vec<&str> = host.split('.').collect();
+    if parts.is_empty() || parts.len() > 4 {
+        return None;
+    }
+    let mut values = Vec::with_capacity(parts.len());
+    for part in &parts {
+        let value = if let Some(hex) = part.strip_prefix("0x") {
+            u32::from_str_radix(hex, 16).ok()?
+        } else if part.len() > 1 && part.starts_with('0') {
+            u32::from_str_radix(&part[1..], 8).ok()?
+        } else {
+            part.parse::<u32>().ok()?
+        };
+        values.push(value);
+    }
+    let (last, leading) = values.split_last()?;
+    if leading.iter().any(|value| *value > 0xff) {
+        return None;
+    }
+    let remaining_bits = 8 * (4 - leading.len() as u32);
+    if remaining_bits < 32 && u64::from(*last) >= 1u64 << remaining_bits {
+        return None;
+    }
+    let mut packed = 0u32;
+    for (index, value) in leading.iter().enumerate() {
+        packed |= value << (24 - 8 * index as u32);
+    }
+    Some(std::net::Ipv4Addr::from(packed | last))
 }
 
 /// The host part of a word that names a destination, if it names one.
@@ -105,6 +159,13 @@ mod tests {
             "fd00:ec2::254",
             // 127.0.0.1 written as one integer.
             "2130706433",
+            "0x7f000001",
+            "0177.0.0.1",
+            "127.1",
+            "localhost.",
+            "::ffff:127.0.0.1",
+            "[::ffff:169.254.169.254]",
+            "fe80::1",
         ] {
             assert!(is_internal_host(host), "should be internal: {host}");
         }
@@ -119,6 +180,10 @@ mod tests {
             "registry.npmjs.org",
             "169.255.0.1",
             "1270.0.0.1",
+            "0",
+            "10",
+            "08.0.0.1",
+            "::ffff:8.8.8.8",
         ] {
             assert!(!is_internal_host(host), "should be external: {host}");
         }
