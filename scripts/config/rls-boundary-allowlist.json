@@ -134,10 +134,6 @@
       "reason": "the whole GDPR export already runs under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
     {
-      "path": "apps/web/app/api/waitlist/cloud-managed/route.ts",
-      "reason": "waitlist rows are captured before any account exists, there is no owner to constrain by"
-    },
-    {
       "path": "apps/web/app/api/waitlist/public/route.ts",
       "reason": "waitlist rows are captured before any account exists, there is no owner to constrain by"
     },

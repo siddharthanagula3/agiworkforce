@@ -2,10 +2,6 @@ import type { DecisionOutcome, DecisionQuestion, DecisionRequest } from '@agiwor
 
 import { boundedState, DATA_NOT_INSTRUCTION } from './state';
 
-// Version 1. An answer is only comparable with another answer to the same
-// words, so this moves with DECISION_KINDS.connector_tool_shortlist.
-export const TOOL_SHORTLIST_VERSION = 1;
-
 export interface ShortlistCandidate {
   qualifiedName: string;
   serverId: string;

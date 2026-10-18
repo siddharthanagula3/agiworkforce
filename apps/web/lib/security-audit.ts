@@ -162,40 +162,6 @@ export async function logRateLimitExceeded(
   });
 }
 
-export async function logAuthorizationFailure(
-  request: Request,
-  resource: string,
-  action: string,
-  userId?: string,
-): Promise<void> {
-  await logSecurityEvent({
-    userId,
-    eventType: 'authorization_failed',
-    severity: 'high',
-    ipAddress: getClientIp(request),
-    userAgent: request.headers.get('user-agent') || undefined,
-    endpoint: new URL(request.url).pathname,
-    details: { resource, action },
-  });
-}
-
-export async function logSuspiciousActivity(
-  request: Request,
-  description: string,
-  severity: SecurityEventSeverity = 'high',
-  userId?: string,
-): Promise<void> {
-  await logSecurityEvent({
-    userId,
-    eventType: 'suspicious_activity',
-    severity,
-    ipAddress: getClientIp(request),
-    userAgent: request.headers.get('user-agent') || undefined,
-    endpoint: new URL(request.url).pathname,
-    details: { description },
-  });
-}
-
 export async function logCsrfFailure(request: Request, userId?: string): Promise<void> {
   await logSecurityEvent({
     userId,

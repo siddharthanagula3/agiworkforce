@@ -248,7 +248,7 @@ describe('tier-aware ceilings', () => {
   it('does not widen security or pre-auth limits for paid tiers', async () => {
     const { resolveTierRateLimit, rateLimitConfigs } = await import('../rate-limit');
 
-    for (const key of ['auth-login', 'llm-completion-ip', 'api-key-create'] as const) {
+    for (const key of ['2fa-verify', 'llm-completion-ip', 'api-key-create'] as const) {
       expect(resolveTierRateLimit(key, 'max_15x')).toBe(rateLimitConfigs[key].limit);
     }
   });

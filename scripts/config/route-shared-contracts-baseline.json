@@ -157,7 +157,6 @@
     "voice/live/sessions/[sessionId]/settings",
     "voice/transcribe",
     "waitlist/access",
-    "waitlist/cloud-managed",
     "web-push"
   ]
 }

@@ -209,11 +209,6 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 beta download requests per minute per IP
     failClosed: false,
   },
-  'release-check': {
-    limit: 60,
-    window: '1 m', // 60 update checks per minute per IP
-    failClosed: false,
-  },
   'release-latest': {
     limit: 60,
     window: '1 m', // 60 manifest fetches per minute per IP
@@ -228,16 +223,6 @@ export const rateLimitConfigs = {
     limit: 10,
     window: '1 h', // 10 setup attempts per hour (re-enroll scenarios)
     failClosed: true, // Security-sensitive: block if Redis fails
-  },
-  'auth-login': {
-    limit: 5,
-    window: '15 m', // 5 login attempts per 15 minutes per IP
-    failClosed: true, // Security-sensitive: block if Redis fails
-  },
-  'auth-signup': {
-    limit: 3,
-    window: '1 h', // 3 signup attempts per hour per IP (prevent mass account creation)
-    failClosed: true,
   },
   'auth-password-reset': {
     limit: 3,
@@ -372,11 +357,6 @@ export const rateLimitConfigs = {
     limit: 30,
     window: '1 m', // 30 status poll requests per minute (allow frequent polling)
     failClosed: false, // Not sensitive: just querying status
-  },
-  'prompt-completion': {
-    limit: 60,
-    window: '1 m', // 60 ghost-text completions per minute (debounced on client side)
-    failClosed: false, // Non-critical: missing completions is acceptable
   },
   'audio-transcription': {
     limit: 20,
@@ -553,11 +533,6 @@ export const rateLimitConfigs = {
     window: '1 h',
     failClosed: true,
   },
-  'settings-org-seats': {
-    limit: 60,
-    window: '1 m',
-    failClosed: false,
-  },
   'settings-activity': {
     limit: 60,
     window: '1 m',
@@ -680,17 +655,7 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
-  'usage-providers': {
-    limit: 60,
-    window: '1 m',
-    failClosed: false,
-  },
   'usage-analytics': {
-    limit: 60,
-    window: '1 m',
-    failClosed: false,
-  },
-  'usage-history': {
     limit: 60,
     window: '1 m',
     failClosed: false,
@@ -702,11 +667,6 @@ export const rateLimitConfigs = {
   },
   'billing-payment-methods': {
     limit: 30,
-    window: '1 m',
-    failClosed: false,
-  },
-  'billing-analytics': {
-    limit: 60,
     window: '1 m',
     failClosed: false,
   },
@@ -924,7 +884,6 @@ const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
   'chat-conversation',
   'chat-conversation-read',
   'chat-conversation-list',
-  'prompt-completion',
   'image-generation',
   'video-generation',
   'audio-transcription',

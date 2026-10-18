@@ -2,10 +2,6 @@ import type { DecisionOutcome, DecisionQuestion, DecisionRequest } from '@agiwor
 
 import { boundedState, DATA_NOT_INSTRUCTION } from './state';
 
-// Version 1. An answer is only comparable with another answer to the same
-// words, so this moves with DECISION_KINDS.memory_relevance.
-export const MEMORY_RELEVANCE_VERSION = 1;
-
 export interface MemoryCandidate {
   content: string;
   category: string | null;

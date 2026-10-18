@@ -1,14 +1,9 @@
 import type { DecisionQuestion, DecisionRequest } from '@agiworkforce/agent-core';
 import { TASK_FAMILIES, type TaskFamily } from '@agiworkforce/routing';
 
-import { DECISION_KINDS } from '../kinds';
-
 import { boundedState, DATA_NOT_INSTRUCTION } from './state';
 
-// Versioned, because an answer is only comparable with another answer to the
-// same words. Options state conditions, not topics; see audit.md for why.
-export const TURN_SIGNALS_VERSION = DECISION_KINDS.turn_signals.questionVersion;
-
+// Options state conditions, not topics; see docs/specs/semantic-decisions/audit.md for why.
 export const TURN_SIGNALS_QUESTION_KEYS = [
   'task_family',
   'needs_current_information',

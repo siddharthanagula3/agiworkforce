@@ -60,11 +60,4 @@ describe('no dead form endpoints, guard', () => {
     expect(src).toContain('/login');
     expect(src).not.toContain('/api/auth/update-password');
   });
-
-  it('/api/waitlist/cloud-managed route is untouched (exports POST, has CSRF + rate-limit)', () => {
-    const waitlistRoute = readPage('app/api/waitlist/cloud-managed/route.ts');
-    expect(waitlistRoute).toContain('export const POST');
-    expect(waitlistRoute).toContain('requireCsrfToken');
-    expect(waitlistRoute).toContain('withRateLimit');
-  });
 });

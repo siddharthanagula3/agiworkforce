@@ -119,7 +119,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'usage/discrepancy/route.ts', reason: 'dedicated_record' },
   { route: 'voice/transcribe/route.ts', reason: 'dedicated_record' },
   { route: 'voice/live/sessions/[sessionId]/settings/route.ts', reason: 'own_content' },
-  { route: 'waitlist/cloud-managed/route.ts', reason: 'pre_account' },
   { route: 'waitlist/public/route.ts', reason: 'pre_account' },
   { route: 'waitlist/route.ts', reason: 'pre_account' },
   { route: 'web-push/route.ts', reason: 'no_governed_state' },

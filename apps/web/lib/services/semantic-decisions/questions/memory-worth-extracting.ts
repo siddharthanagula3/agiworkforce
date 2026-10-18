@@ -2,10 +2,6 @@ import type { DecisionOutcome, DecisionQuestion, DecisionRequest } from '@agiwor
 
 import { boundedState, DATA_NOT_INSTRUCTION } from './state';
 
-// Version 1. An answer is only comparable with another answer to the same
-// words, so this moves with DECISION_KINDS.memory_worth_extracting.
-export const MEMORY_WORTH_EXTRACTING_VERSION = 1;
-
 export const WORTH_EXTRACTING_KEY = 'durable_fact';
 
 // "Durable" is the downstream extraction prompt's own definition, restated as

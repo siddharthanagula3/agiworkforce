@@ -239,12 +239,10 @@ describe('waitlist source list has one owner', () => {
   it('has joinPublicWaitlist validate its source with isWaitlistSource', () => {
     const client = readWebFile('lib/services/waitlistServiceClient.ts');
     const start = client.indexOf('export async function joinPublicWaitlist');
-    const end = client.indexOf('export async function joinWaitlist');
 
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
 
-    const joinPublicWaitlist = client.slice(start, end);
+    const joinPublicWaitlist = client.slice(start);
 
     expect(namesImportedFromConsentPurposes(client)).toContain('isWaitlistSource');
     expect(joinPublicWaitlist).toMatch(/\bisWaitlistSource\(/);
