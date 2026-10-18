@@ -7,12 +7,39 @@ import { classifyTaskLocally } from '@agiworkforce/routing';
 import type { ComputerUseCommandResponse } from '../src/types';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import {
+  applyBrowserActivityEvent,
   pageContextStillDescribes,
   resolveComposerPrompt,
   requestsCurrentPageContext,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
+import {
+  BrowserRunActivityTranslator,
+  browserActivityEnvelope,
+} from '../src/features/computer-use/browserTurnActivity';
+import { buildBrowserApprovalCard } from '../src/features/side-panel/computerUsePanel';
+import { buildBrowserTurnControls } from '../src/features/side-panel/bubbles';
+import { parseBrowserUploadBinding } from '../src/features/computer-use/userFileUpload';
+
+const catalog = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../_locales/en/messages.json'),
+    'utf8',
+  ),
+) as Record<string, { message: string; placeholders?: Record<string, { content: string }> }>;
+
+function getMessage(key: string, substitutions: string[] = []): string {
+  const entry = catalog[key];
+  if (!entry) return '';
+  return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+    (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+      /\$(\d)/g,
+      (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+    ),
+  );
+}
 
 const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
@@ -38,6 +65,8 @@ const sendSource = program.statements
         'continueTurnWithMemory',
         'continueTurn',
         'postTurn',
+        'sendChatTurn',
+        'selectedModelSupportsChatTools',
       ].includes(node.name?.text ?? ''),
   )
   .map((node) => node.getText(program))
@@ -57,6 +86,7 @@ interface RunSnapshot {
   runId: string;
   startSent: boolean;
   cancelling: boolean;
+  controls: { element: HTMLElement; cards: HTMLElement };
 }
 
 interface HarnessAPI {
@@ -114,9 +144,16 @@ function harness() {
   const dependencies = {
     _ctx: context,
     chrome: { tabs: { query }, runtime: { sendMessage: send } },
-    composerComputerUsePanel: panel,
     cuPanel: panel,
-    showComposerComputerUseTab: vi.fn(),
+    BrowserRunActivityTranslator,
+    browserActivityEnvelope,
+    applyBrowserActivityEvent,
+    buildBrowserTurnControls,
+    buildBrowserApprovalCard,
+    parseBrowserUploadBinding,
+    isAutoModeModelId,
+    getModelMetadataById,
+    activeBrowserToolTier: vi.fn(async () => 'read'),
     activePageSource: { tabId: 7, url: 'https://example.com/form' },
     sameManagedCloudOwner,
     pageContextStillDescribes,
@@ -142,7 +179,7 @@ function harness() {
     runChatMemoryCommand: vi.fn(async () => undefined),
     setThinkingLabel: vi.fn(),
     showThinking: vi.fn(),
-    t: (key: string) => key,
+    t: getMessage,
     capabilityAllowed: () => true,
     capabilityDocument: {},
     selectedModelImageLimitNotice: () => null,
@@ -228,10 +265,14 @@ async function settle() {
 }
 
 describe('browser tasks from the real composer functions', () => {
-  beforeEach(() => vi.useFakeTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('chrome', { i18n: { getMessage, getUILanguage: () => 'en' } });
+  });
   afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('accepts background lifecycle events and rejects content-script or foreign sender claims', () => {
@@ -277,6 +318,7 @@ describe('browser tasks from the real composer functions', () => {
       goal: 'Click the Update preview button',
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]).toMatchObject({
       role: 'user',
@@ -314,6 +356,7 @@ describe('browser tasks from the real composer functions', () => {
       goal,
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]?.content).toBe(goal);
   });
@@ -354,6 +397,7 @@ describe('browser tasks from the real composer functions', () => {
     const attached = harness();
     attached.pendingAttachments.push({ dataUrl: IMAGE_DATA_URL, mimeType: 'image/png' });
     attached.api.sendMessage('Click the Update preview button');
+    await settle();
     expect(attached.api.getRun()).toBeNull();
     expect(attached.send).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'CHAT_MESSAGE', attachments: [IMAGE_DATA_URL] }),
@@ -483,10 +527,8 @@ describe('browser tasks from the real composer functions', () => {
       error: true,
       content: 'Browser control is not allowed for this site.',
     });
-    expect(h.panel.showHandoffBanner).toHaveBeenCalledWith(
-      'Browser control is not allowed for this site.',
-      'browser_error',
-    );
+    expect(h.context.messages[1]?.browserActivity?.status).toBe('failed');
+    expect(h.panel.showHandoffBanner).not.toHaveBeenCalled();
     expect(h.api.canAdmitComposerMessage('Try again')).toBe(true);
   });
 
@@ -503,10 +545,7 @@ describe('browser tasks from the real composer functions', () => {
     await settle();
     expect(h.context.isStreaming).toBe(true);
     expect(h.api.getRun()?.cancelling).toBe(false);
-    expect(h.panel.showHandoffBanner).toHaveBeenCalledWith(
-      'Ownership no longer matches',
-      'browser_error',
-    );
+    expect(h.api.getRun()?.controls.element.textContent).toContain('Ownership no longer matches');
   });
 
   it('refuses a changed active page before any browser request', async () => {
@@ -596,5 +635,174 @@ describe('browser tasks from the real composer functions', () => {
     await vi.advanceTimersByTimeAsync(90_000);
     expect(h.api.getRun()?.runId).toBe(runId);
     expect(h.context.isStreaming).toBe(true);
+  });
+  it('renders steps inside the assistant turn without opening the Computer Use view', async () => {
+    const h = harness();
+    h.api.sendMessage('Fill the name field');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STATE',
+      status: 'running',
+      runId,
+      runGeneration: 2,
+    });
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STEP',
+      runId,
+      step: {
+        kind: 'tool_call',
+        stepNumber: 1,
+        toolName: 'type',
+        toolArgs: { index: 3, text: 'hunter2-secret' },
+      },
+    });
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STEP',
+      runId,
+      step: {
+        kind: 'tool_result',
+        stepNumber: 1,
+        toolName: 'type',
+        toolResult: 'Typed into field [3]',
+        actionOutcome: { status: 'succeeded' },
+      },
+    });
+    const assistant = h.context.messages[1]!;
+    expect(assistant.browserActivity?.status).toBe('running');
+    expect(assistant.browserActivity?.entries).toEqual([
+      expect.objectContaining({ kind: 'tool', summary: 'Typing', status: 'completed' }),
+    ]);
+    expect(JSON.stringify(assistant.browserEvents)).not.toContain('hunter2-secret');
+    expect(h.panel.setRunState).not.toHaveBeenCalled();
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STEP',
+      runId,
+      step: { kind: 'final', stepNumber: 2, finalMessage: 'Filled the name field.' },
+    });
+    h.api.applyComposerBrowserMessage({ type: 'AGI_CU_STATE', status: 'completed', runId });
+    expect(assistant).toMatchObject({ content: 'Filled the name field.', streaming: false });
+    expect(assistant.browserActivity?.status).toBe('completed');
+  });
+
+  it('asks for approval inline and answers with the run, generation and tab it was asked for', async () => {
+    const h = harness();
+    h.api.sendMessage('Fill the name field');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_APPROVE_REQUEST',
+      runId,
+      runGeneration: 2,
+      tabId: 7,
+      requestId: 'cu_approve_1',
+      toolName: 'click',
+      description: 'Click element [4] on this page.',
+      canAllowForTask: true,
+    });
+    const card = h.api.getRun()!.controls.cards.querySelector('.sp-cu-approval');
+    expect(card?.textContent).toContain('Click element [4] on this page.');
+    (card?.querySelector('.sp-cu-approval-allow') as HTMLButtonElement).click();
+    await settle();
+    expect(h.send).toHaveBeenLastCalledWith({
+      type: 'AGI_CU_APPROVE_RESPONSE',
+      requestId: 'cu_approve_1',
+      runId,
+      runGeneration: 2,
+      tabId: 7,
+      allowed: true,
+      forTask: false,
+    });
+    expect(h.api.getRun()!.controls.cards.childElementCount).toBe(0);
+  });
+
+  it('denies a pending inline approval when Stop ends the run', async () => {
+    const h = harness();
+    h.api.sendMessage('Fill the name field');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_APPROVE_REQUEST',
+      runId,
+      runGeneration: 2,
+      tabId: 7,
+      requestId: 'cu_approve_2',
+      toolName: 'click',
+      description: 'Click.',
+    });
+    h.api.cancelComposerBrowserTask();
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'AGI_CU_APPROVE_RESPONSE',
+        requestId: 'cu_approve_2',
+        allowed: false,
+      }),
+    );
+    expect(h.api.getRun()).toBeNull();
+    expect(h.context.messages[1]?.browserActivity?.status).toBe('cancelled');
+  });
+
+  it('refuses an approval for a run that no longer owns this conversation', async () => {
+    const h = harness();
+    h.api.sendMessage('Fill the name field');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    h.context.conversationGeneration = 2;
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_APPROVE_REQUEST',
+      runId,
+      runGeneration: 2,
+      tabId: 7,
+      requestId: 'cu_approve_3',
+      toolName: 'click',
+      description: 'Click.',
+    });
+    await settle();
+    expect(h.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestId: 'cu_approve_3', allowed: false }),
+    );
+  });
+
+  it('offers Take over while running and Hand back while the user holds the page', async () => {
+    const h = harness();
+    h.api.sendMessage('Fill the name field');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    const toggle = h.api
+      .getRun()!
+      .controls.element.querySelector('.sp-cu-takeover-btn') as HTMLButtonElement;
+    expect(toggle.textContent).toBe('Take over');
+    toggle.click();
+    await settle();
+    expect(h.send).toHaveBeenLastCalledWith({ type: 'PAUSE_COMPUTER_USE', runId });
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STATE',
+      status: 'paused',
+      runId,
+      reason: 'Sign in first.',
+    });
+    expect(toggle.textContent).toBe('Hand back');
+    expect(h.context.messages[1]?.browserActivity?.status).toBe('paused');
+    toggle.click();
+    await settle();
+    expect(h.send).toHaveBeenLastCalledWith({ type: 'RESUME_COMPUTER_USE', runId });
+  });
+
+  it('lets a tool-capable model decide, so a page action stays an ordinary chat turn', async () => {
+    const h = harness();
+    h.context.selectedModel = 'auto';
+    h.api.sendMessage('Click the Update preview button');
+    await settle();
+    expect(h.api.getRun()).toBeNull();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'CHAT_MESSAGE',
+        text: 'Click the Update preview button',
+        browserToolTier: 'read',
+      }),
+      expect.any(Function),
+    );
+    expect(h.dependencies.capturePageContext).not.toHaveBeenCalled();
   });
 });

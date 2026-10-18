@@ -56,6 +56,8 @@ import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOri
 import { platformRequestHeaders } from '../../platformHeaders';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
+import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
+import { readToolHandoff, type ToolCall } from '../computer-use/toolHandoff';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 import {
   ThinkingTagSplitter,
@@ -498,8 +500,10 @@ export const MANAGED_CHAT_FILE_ASSET_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface FreeTrialMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string | FreeTrialContentPart[];
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
 
 const SUPPORTED_IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+={0,2}$/i;
@@ -555,14 +559,49 @@ function selectBoundedMessageWindow(messages: readonly FreeTrialMessage[]): Free
   if (messages.length <= MANAGED_CHAT_MAX_MESSAGES) return [...messages];
   const firstSystem = messages.find((message) => message.role === 'system');
   const recent = messages.slice(-(MANAGED_CHAT_MAX_MESSAGES - (firstSystem ? 1 : 0)));
-  return firstSystem && !recent.includes(firstSystem) ? [firstSystem, ...recent] : recent;
+  const firstAnswerable = recent.findIndex((message) => message.role !== 'tool');
+  const bounded = firstAnswerable > 0 ? recent.slice(firstAnswerable) : recent;
+  return firstSystem && !bounded.includes(firstSystem) ? [firstSystem, ...bounded] : bounded;
 }
 
 function assertMessageShape(message: FreeTrialMessage): void {
   if (!message || typeof message !== 'object') throw new Error('Invalid managed chat message');
-  if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'system') {
+  if (
+    message.role !== 'user' &&
+    message.role !== 'assistant' &&
+    message.role !== 'system' &&
+    message.role !== 'tool'
+  ) {
     throw new Error('Invalid managed chat message role');
   }
+  if (message.role === 'tool') {
+    if (
+      typeof message.content !== 'string' ||
+      typeof message.tool_call_id !== 'string' ||
+      !message.tool_call_id
+    )
+      throw new Error('Invalid managed chat tool result');
+    return;
+  }
+  if (message.tool_calls !== undefined) {
+    if (
+      message.role !== 'assistant' ||
+      typeof message.content !== 'string' ||
+      !Array.isArray(message.tool_calls) ||
+      message.tool_calls.length === 0 ||
+      message.tool_calls.some(
+        (call) =>
+          !call ||
+          call.type !== 'function' ||
+          typeof call.id !== 'string' ||
+          !call.id ||
+          typeof call.function?.name !== 'string' ||
+          typeof call.function?.arguments !== 'string',
+      )
+    )
+      throw new Error('Invalid managed chat tool call');
+  }
+  if (message.tool_call_id !== undefined) throw new Error('Invalid managed chat message');
   if (typeof message.content === 'string') return;
   if (!Array.isArray(message.content)) throw new Error('Invalid managed chat message content');
   for (const part of message.content) {
@@ -610,7 +649,7 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
     if (typeof message.content === 'string') {
       const content = message.content.slice(0, remaining);
       remaining -= content.length;
-      if (content.length > 0 || index === window.length - 1) {
+      if (content.length > 0 || index === window.length - 1 || message.tool_calls) {
         reversed.push({ ...message, content });
       }
       continue;
@@ -702,6 +741,7 @@ export type FreeTrialChunk =
   | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'quota-warning'; warning: ManagedQuotaWarningSignal }
   | { type: 'answered-model'; model: string }
+  | { type: 'tool-handoff'; calls: ToolCall[] }
   | { type: 'done' }
   | {
       type: 'error';
@@ -751,6 +791,7 @@ export interface ManagedChatStreamOptions {
   idempotencyKey?: string;
   conversationId?: string;
   assistantMessageId?: string;
+  tools?: readonly ToolDefinition[];
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -779,6 +820,7 @@ interface ParsedSseFrame {
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
   sources?: ManagedChatSourcesDelta;
+  toolHandoff?: ToolCall[];
   terminal?: boolean;
   recognized?: boolean;
   error?: Extract<FreeTrialChunk, { type: 'error' }>;
@@ -986,7 +1028,7 @@ class ManagedChatProtocolError extends Error {
   }
 }
 
-function parseSseData(dataPayload: string): ParsedSseFrame {
+function parseSseData(dataPayload: string, tools: readonly ToolDefinition[] = []): ParsedSseFrame {
   const data = dataPayload.trim();
   if (!data) return { recognized: true };
   if (data === '[DONE]') return { terminal: true };
@@ -1015,6 +1057,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
   let citations: ManagedChatSourceWire[] = [];
   let searchResults: ManagedChatSourceWire[] = [];
   let finishReason: unknown;
+  let toolHandoff: ToolCall[] | null = null;
   const choices = event['choices'];
   if (choices !== undefined) {
     if (!Array.isArray(choices)) return protocolError();
@@ -1040,6 +1083,16 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         interactiveCard = parseInteractiveCardDelta(deltaRecord['x_interactive_card']);
         citations = parseCitationDelta(deltaRecord[WEB_SEARCH_CITATION_DELTA_KEY]);
         searchResults = parseSearchResultsDelta(deltaRecord['x_search_results']);
+
+        if (deltaRecord['x_tool_handoff'] !== undefined) {
+          toolHandoff = readToolHandoff(
+            deltaRecord['x_tool_handoff'],
+            deltaRecord['tool_calls'],
+            finishReason,
+            tools,
+          );
+          if (!toolHandoff) return protocolError();
+        }
 
         const streamError = deltaRecord['x_stream_error'];
         if (streamError !== undefined && streamError !== null) {
@@ -1116,6 +1169,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
     ...(citations.length > 0 || searchResults.length > 0
       ? { sources: { citations, results: searchResults } }
       : {}),
+    ...(toolHandoff ? { toolHandoff } : {}),
     terminal:
       done === true ||
       (typeof finishReason === 'string' &&
@@ -1373,6 +1427,7 @@ export async function* streamFreeChat(
             ...(options.assistantMessageId
               ? { assistant_message_id: options.assistantMessageId }
               : {}),
+            ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
           },
         ),
         signal: controller.signal,
@@ -1474,6 +1529,7 @@ export async function* streamFreeChat(
     let sawVisibleText = false;
     let sawAgentActivity = false;
     let sawRichOutput = false;
+    let handedOff = false;
     let streamedTextCharacters = 0;
     let unacknowledgedPublicText = '';
     const contentSplitter = new ThinkingTagSplitter();
@@ -1507,7 +1563,7 @@ export async function* streamFreeChat(
       for (const data of dataEvents.flatMap((event) =>
         splitJoinedServerSentEventData(event.data),
       )) {
-        const frame = parseSseData(data);
+        const frame = parseSseData(data, options.tools);
         if (frame.error) {
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           contentSplitter.closeThinking();
@@ -1551,10 +1607,23 @@ export async function* streamFreeChat(
           chunks.push({ type: 'interactive-card', card: frame.interactiveCard });
         }
         if (frame.sources) chunks.push({ type: 'sources', ...frame.sources });
+        if (frame.toolHandoff) {
+          if (handedOff) {
+            chunks.push({
+              type: 'error',
+              message: 'AGI Cloud handed back browser actions twice in one response.',
+              code: 'protocol_error',
+            });
+            return { chunks, terminal: true };
+          }
+          handedOff = true;
+          chunks.push(...publicTextChunks(contentSplitter.flush(true)));
+          chunks.push({ type: 'tool-handoff', calls: frame.toolHandoff });
+        }
         if (frame.terminal) {
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           contentSplitter.closeThinking();
-          if (!sawVisibleText && !sawAgentActivity && !sawRichOutput) {
+          if (!sawVisibleText && !sawAgentActivity && !sawRichOutput && !handedOff) {
             chunks.push({
               type: 'error',
               message: 'AGI Cloud completed without a result this surface can render.',

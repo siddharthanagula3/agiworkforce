@@ -16,6 +16,8 @@ import type {
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
 import type { SiteToolEffect } from './features/tools/siteToolRegistry';
+import type { ChatBrowserToolTier } from './features/computer-use/chatBrowserTools';
+import type { ToolCall } from './features/computer-use/toolHandoff';
 import type {
   BrowserUploadBinding,
   BrowserUploadedFileMetadata,
@@ -56,6 +58,9 @@ export type NativeMessageType =
   | 'ADOPT_CHAT_TURN'
   | 'RESOLVE_CHAT_APPROVAL'
   | 'RESOLVE_CHAT_INPUT'
+  | 'RESOLVE_CHAT_TOOLS'
+  | 'GRANT_SITE_ONCE'
+  | 'REVOKE_SITE_ONCE'
   | 'CANCEL_COMPUTER_USE'
   | 'GET_COMPUTER_USE_STATE'
   | 'AGI_CU_APPROVE_REQUEST'
@@ -535,6 +540,39 @@ export interface ChatMessageMessage extends BaseMessage {
   historyConversationId?: string;
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
+  browserToolTier?: ChatBrowserToolTier;
+}
+
+export interface ChatToolHandoffMessage {
+  type: 'CHAT_TOOL_HANDOFF';
+  owner: ManagedCloudOwner;
+  clientInstanceId: string;
+  id: string;
+  handoffId: string;
+  calls: ToolCall[];
+}
+
+export interface ResolveChatToolsMessage extends BaseMessage {
+  type: 'RESOLVE_CHAT_TOOLS';
+  owner: ManagedCloudOwner;
+  clientInstanceId: string;
+  id: string;
+  handoffId: string;
+  cancelled?: boolean;
+  results?: Array<{ toolCallId: string; content: string }>;
+  browserToolTier?: ChatBrowserToolTier;
+}
+
+export interface GrantSiteOnceMessage extends BaseMessage {
+  type: 'GRANT_SITE_ONCE';
+  grantId: string;
+  origin: string;
+  hostPermissionAdded: boolean;
+}
+
+export interface RevokeSiteOnceMessage extends BaseMessage {
+  type: 'REVOKE_SITE_ONCE';
+  grantId: string;
 }
 
 export interface CancelStreamMessage extends BaseMessage {
@@ -1001,6 +1039,7 @@ export interface StartComputerUseMessage {
   modelSelection?: string;
   selectedTabs?: readonly BrowserContextTabReference[];
   pageContext?: string;
+  historyConversationId?: string;
 }
 
 export interface CancelComputerUseMessage extends BaseMessage {
@@ -1178,6 +1217,9 @@ export type ExtensionMessage =
   | AdoptChatTurnMessage
   | ResolveChatApprovalMessage
   | ResolveChatInputMessage
+  | ResolveChatToolsMessage
+  | GrantSiteOnceMessage
+  | RevokeSiteOnceMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
   | GetSidePanelOpenMessage

@@ -3783,5 +3783,225 @@
         "example": "1.2.0"
       }
     }
+  },
+  "spBrowserStepReading": {
+    "message": "Reading the page",
+    "description": "Activity step while AGI reads the page in a browser task"
+  },
+  "spBrowserStepScreenshot": {
+    "message": "Looking at the page",
+    "description": "Activity step while AGI takes a screenshot"
+  },
+  "spBrowserStepClicking": {
+    "message": "Clicking",
+    "description": "Activity step while AGI clicks on the page"
+  },
+  "spBrowserStepTyping": {
+    "message": "Typing",
+    "description": "Activity step while AGI types into a field; the text is never shown"
+  },
+  "spBrowserStepChoosing": {
+    "message": "Choosing an option",
+    "description": "Activity step while AGI picks a dropdown option"
+  },
+  "spBrowserStepPressing": {
+    "message": "Pressing $KEY$",
+    "description": "Activity step while AGI presses a key",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "Enter"
+      }
+    }
+  },
+  "spBrowserStepScrolling": {
+    "message": "Scrolling",
+    "description": "Activity step while AGI scrolls the page"
+  },
+  "spBrowserStepPointing": {
+    "message": "Moving the pointer",
+    "description": "Activity step for hover, drag or swipe"
+  },
+  "spBrowserStepOpening": {
+    "message": "Opening $HOST$",
+    "description": "Activity step while AGI opens an address",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserStepAPage": {
+    "message": "a page",
+    "description": "Stands in for a host name the step could not read"
+  },
+  "spBrowserStepTabs": {
+    "message": "Working with tabs",
+    "description": "Activity step for listing, switching or closing task tabs"
+  },
+  "spBrowserStepHistory": {
+    "message": "Moving through the tab history",
+    "description": "Activity step for back, forward or reload"
+  },
+  "spBrowserStepDownloading": {
+    "message": "Downloading a file",
+    "description": "Activity step for a download"
+  },
+  "spBrowserStepUploading": {
+    "message": "Choosing files to upload",
+    "description": "Activity step for a file upload"
+  },
+  "spBrowserStepHandingOver": {
+    "message": "Handing you the page",
+    "description": "Activity step when AGI asks the user to take over"
+  },
+  "spBrowserStepWorking": {
+    "message": "Working on the page",
+    "description": "Activity step for an action without a better label"
+  },
+  "spBrowserStepInjectionBlocked": {
+    "message": "Stopped: the page contained instructions aimed at AGI",
+    "description": "Activity result when prompt injection was detected"
+  },
+  "spBrowserStepDone": {
+    "message": "Done",
+    "description": "Activity result for a step that only read the page"
+  },
+  "spBrowserAccessTitle": {
+    "message": "AGI needs access to $HOST$",
+    "description": "Title of the inline card that asks for site access",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserAccessReadBody": {
+    "message": "AGI wants to read this page to answer you. Its text is sent to AGI Cloud for this answer.",
+    "description": "Body of the site access card when AGI only reads"
+  },
+  "spBrowserAccessActBody": {
+    "message": "AGI wants to act on this page for you. It controls the tab through Chrome's debugger, Chrome shows a banner while it works, and AGI asks before each action unless you chose Full access.",
+    "description": "Body of the site access card when AGI acts on the page"
+  },
+  "spBrowserAccessOnce": {
+    "message": "Allow this time",
+    "description": "Button that grants site access for this one request"
+  },
+  "spBrowserAccessAlways": {
+    "message": "Always allow on this site",
+    "description": "Button that adds the site to approved sites"
+  },
+  "spBrowserAccessDecline": {
+    "message": "Decline",
+    "description": "Button that refuses site access"
+  },
+  "spBrowserAccessWaiting": {
+    "message": "Waiting for access to $HOST$",
+    "description": "Activity step while the site access card is open",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserAccessAllowedOnce": {
+    "message": "Allowed $HOST$ this time",
+    "description": "Activity step after the user allows access once",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserAccessAllowedAlways": {
+    "message": "Always allowed $HOST$",
+    "description": "Activity step after the user approves the site",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserAccessDeclined": {
+    "message": "Skipped: you declined access to $HOST$",
+    "description": "Activity step after the user declines access",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserAccessRefused": {
+    "message": "Chrome did not grant access to $HOST$",
+    "description": "Activity step when Chrome refuses the permission",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserReadingHost": {
+    "message": "Reading $HOST$",
+    "description": "Activity step while AGI reads the current page",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
+  },
+  "spBrowserTakeOver": {
+    "message": "Take over",
+    "description": "Button that pauses AGI so the user can use the page"
+  },
+  "spBrowserTakeOverTitle": {
+    "message": "Pause AGI and use the page yourself. It continues when you hand it back.",
+    "description": "Tooltip of the Take over button"
+  },
+  "spBrowserHandBack": {
+    "message": "Hand back",
+    "description": "Button that lets AGI continue after the user took over"
+  },
+  "spBrowserHandBackTitle": {
+    "message": "Let AGI continue the task on this page",
+    "description": "Tooltip of the Hand back button"
+  },
+  "spBrowserTakeOverFailed": {
+    "message": "AGI could not hand you the page. Use Stop to end the task.",
+    "description": "Error when take over fails"
+  },
+  "spBrowserHandBackFailed": {
+    "message": "AGI could not take the page back. Try Hand back again, or use Stop.",
+    "description": "Error when hand back fails"
+  },
+  "spBrowserPausedNotice": {
+    "message": "$REASON$ Choose Hand back when you are done.",
+    "description": "Notice while the user holds the page",
+    "placeholders": {
+      "reason": {
+        "content": "$1",
+        "example": "Sign in to continue."
+      }
+    }
+  },
+  "spBrowserScreenshotAlt": {
+    "message": "The page AGI is working on",
+    "description": "Alt text of the latest browser task screenshot"
+  },
+  "spReadAloud": {
+    "message": "Read aloud",
+    "description": "Answer action that speaks the answer with the browser voice"
+  },
+  "spReadAloudStop": {
+    "message": "Stop reading aloud",
+    "description": "Answer action that stops speaking"
   }
 }

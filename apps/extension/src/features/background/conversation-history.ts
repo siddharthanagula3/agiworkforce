@@ -85,6 +85,7 @@ export interface HistoryMessage {
   streaming?: boolean;
   backgroundDeliveryId?: string;
   agentEvents?: AgentEventEnvelope[];
+  browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -297,6 +298,33 @@ function boundedStructuredChars(value: unknown, maximum: number): number | null 
   return estimatedChars;
 }
 
+function normalizeStoredAgentEvents(
+  value: unknown,
+  budget: HistoryNormalizationBudget,
+): AgentEventEnvelope[] | undefined {
+  if (!Array.isArray(value) || budget.remainingAgentEvents <= 0) return undefined;
+  if (budget.remainingAgentEventChars <= 0) return undefined;
+  const rawEvents = value.slice(
+    -Math.min(MAX_STORED_AGENT_EVENTS_PER_MESSAGE, budget.remainingAgentEvents),
+  );
+  const parsedEvents: AgentEventEnvelope[] = [];
+  let consumedEventChars = 0;
+  for (const rawEvent of rawEvents) {
+    const eventChars = boundedStructuredChars(rawEvent, MAX_AGENT_EVENT_SERIALIZED_CHARS);
+    if (eventChars === null || consumedEventChars + eventChars > budget.remainingAgentEventChars) {
+      continue;
+    }
+    const parsed = AgentEventEnvelopeSchema.safeParse(rawEvent);
+    if (!parsed.success) continue;
+    parsedEvents.push(parsed.data);
+    consumedEventChars += eventChars;
+  }
+  if (parsedEvents.length === 0) return undefined;
+  budget.remainingAgentEvents -= parsedEvents.length;
+  budget.remainingAgentEventChars -= consumedEventChars;
+  return parsedEvents;
+}
+
 function normalizeHistoryMessage(
   value: unknown,
   budget: HistoryNormalizationBudget,
@@ -326,35 +354,11 @@ function normalizeHistoryMessage(
   ) {
     normalized.backgroundDeliveryId = message['backgroundDeliveryId'];
   }
-  if (
-    message['role'] === 'assistant' &&
-    Array.isArray(message['agentEvents']) &&
-    budget.remainingAgentEvents > 0 &&
-    budget.remainingAgentEventChars > 0
-  ) {
-    const rawEvents = message['agentEvents'].slice(
-      -Math.min(MAX_STORED_AGENT_EVENTS_PER_MESSAGE, budget.remainingAgentEvents),
-    );
-    const parsedEvents: AgentEventEnvelope[] = [];
-    let consumedEventChars = 0;
-    for (const rawEvent of rawEvents) {
-      const eventChars = boundedStructuredChars(rawEvent, MAX_AGENT_EVENT_SERIALIZED_CHARS);
-      if (
-        eventChars === null ||
-        consumedEventChars + eventChars > budget.remainingAgentEventChars
-      ) {
-        continue;
-      }
-      const parsed = AgentEventEnvelopeSchema.safeParse(rawEvent);
-      if (!parsed.success) continue;
-      parsedEvents.push(parsed.data);
-      consumedEventChars += eventChars;
-    }
-    if (parsedEvents.length > 0) {
-      normalized.agentEvents = parsedEvents;
-      budget.remainingAgentEvents -= parsedEvents.length;
-      budget.remainingAgentEventChars -= consumedEventChars;
-    }
+  if (message['role'] === 'assistant') {
+    const agentEvents = normalizeStoredAgentEvents(message['agentEvents'], budget);
+    if (agentEvents) normalized.agentEvents = agentEvents;
+    const browserEvents = normalizeStoredAgentEvents(message['browserEvents'], budget);
+    if (browserEvents) normalized.browserEvents = browserEvents;
   }
   if (message['role'] === 'assistant') {
     const run = ManagedCloudAgentRunReferenceSchema.safeParse(message['cloudAgentRun']);

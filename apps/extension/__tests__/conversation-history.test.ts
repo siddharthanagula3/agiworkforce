@@ -352,6 +352,20 @@ describe('conversation-history', () => {
     expect((await getActiveConversation())?.messages).toHaveLength(4);
   });
 
+  it('keeps an in-chat browser task activity with its assistant turn', async () => {
+    const saved = await saveActiveConversation([
+      { role: 'user', content: 'Fill the form', timestamp: 1 },
+      {
+        role: 'assistant',
+        content: 'Filled it.',
+        timestamp: 2,
+        browserEvents: [agentEvent(), { ...agentEvent(), sequence: -1 }],
+      },
+    ]);
+    expect(saved?.messages[1]?.browserEvents).toEqual([expect.objectContaining({ sequence: 0 })]);
+    expect(saved?.messages[0]?.browserEvents).toBeUndefined();
+  });
+
   it('persists validated canonical activity and the durable run cursor with an assistant turn', async () => {
     const messages: HistoryMessage[] = [
       { role: 'user', content: 'Research this', timestamp: 1 },

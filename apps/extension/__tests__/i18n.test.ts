@@ -34,6 +34,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/agiWorkPlanReview.ts',
   'src/features/side-panel/freePlanNotices.ts',
   'src/features/side-panel/markdown.ts',
+  'src/features/computer-use/browserTurnActivity.ts',
   'src/features/options/destinations.ts',
   'src/features/options/desktop-pairing-rows.ts',
   'src/features/options/keyboard-shortcut-rows.ts',

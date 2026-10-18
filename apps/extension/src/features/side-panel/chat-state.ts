@@ -50,6 +50,8 @@ export interface SidePanelChatMessage {
   error?: boolean;
   agentActivity?: AgentActivityState;
   agentEvents?: AgentEventEnvelope[];
+  browserActivity?: AgentActivityState;
+  browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -89,6 +91,7 @@ export interface StoredSidePanelChatMessage {
   /** Still mid-reply as of the last save; see `SidePanelChatMessage.interrupted`. */
   streaming?: boolean;
   agentEvents?: AgentEventEnvelope[];
+  browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
@@ -161,6 +164,37 @@ export function projectCanonicalAgentActivity(
   return activity;
 }
 
+function settledBrowserActivity(
+  activity: AgentActivityState | undefined,
+  fallbackCompletedAtMs: number,
+): AgentActivityState | undefined {
+  if (
+    !activity ||
+    activity.status === 'completed' ||
+    activity.status === 'failed' ||
+    activity.status === 'cancelled' ||
+    activity.status === 'partial'
+  )
+    return activity;
+  return finishAgentActivityLocally(activity, {
+    status: 'cancelled',
+    completedAtMs: Math.max(activity.updatedAtMs, fallbackCompletedAtMs),
+  });
+}
+
+export function applyBrowserActivityEvent(
+  message: SidePanelChatMessage,
+  envelope: AgentEventEnvelope,
+): void {
+  const previous = message.browserActivity;
+  const next = applyAgentActivityEvent(previous, envelope);
+  if (next === previous) return;
+  message.browserActivity = next;
+  message.browserEvents = [...(message.browserEvents ?? []), envelope].slice(
+    -MAX_PERSISTED_ACTIVITY_EVENTS,
+  );
+}
+
 export function reconcileManagedRunActivity(
   message: SidePanelChatMessage,
   completedAtMs = Date.now(),
@@ -195,6 +229,18 @@ export function hydrateStoredChatMessage(
       ? {
           agentEvents,
           agentActivity: projectCanonicalAgentActivity(agentEvents),
+        }
+      : {}),
+    ...(message.browserEvents?.length
+      ? {
+          browserEvents: message.browserEvents.map((event) => ({
+            ...event,
+            event: { ...event.event },
+          })) as AgentEventEnvelope[],
+          browserActivity: settledBrowserActivity(
+            projectCanonicalAgentActivity(message.browserEvents),
+            message.timestamp,
+          ),
         }
       : {}),
     ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),

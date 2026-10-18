@@ -45,7 +45,14 @@ import {
   Loader2,
   Monitor,
   RotateCcw,
+  Volume2,
 } from '../../assets/icons';
+import {
+  isReadAloudSupported,
+  loadReadAloudSettings,
+  speakAloud,
+  stopSpeaking,
+} from '../read-aloud';
 import { t, tPlural } from '../../i18n';
 import { renderMarkdownInto } from './markdown';
 import { el, formatTime } from './dom';
@@ -100,6 +107,7 @@ export interface BubbleInteractionOptions {
   fileAccess?: AnswerFileAccess;
   onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
   artifacts?: MessageArtifactsBinding;
+  browserControls?: HTMLElement | null;
 }
 
 export interface MessageArtifactsBinding {
@@ -488,6 +496,46 @@ function buildCopyButton(label: string, text: () => string): HTMLElement {
   return el('span', { class: 'sp-copy-control' }, copyBtn, status);
 }
 
+let speakingButton: HTMLButtonElement | null = null;
+
+function setReadAloudState(button: HTMLButtonElement, speaking: boolean): void {
+  const label = speaking ? t('spReadAloudStop') : t('spReadAloud');
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-pressed', String(speaking));
+  button.classList.toggle('speaking', speaking);
+}
+
+function buildReadAloudButton(text: () => string): HTMLButtonElement {
+  const button = el('button', { class: 'sp-copy-btn sp-read-aloud-btn', type: 'button' });
+  button.appendChild(renderIcon(Volume2, 11));
+  setReadAloudState(button, false);
+  button.addEventListener('click', () => {
+    if (speakingButton === button) {
+      stopSpeaking();
+      setReadAloudState(button, false);
+      speakingButton = null;
+      return;
+    }
+    if (speakingButton) setReadAloudState(speakingButton, false);
+    speakingButton = button;
+    setReadAloudState(button, true);
+    void loadReadAloudSettings().then((settings) => {
+      if (speakingButton !== button) return;
+      const started = speakAloud(text(), settings, globalThis.speechSynthesis, () => {
+        if (speakingButton !== button) return;
+        speakingButton = null;
+        setReadAloudState(button, false);
+      });
+      if (!started) {
+        speakingButton = null;
+        setReadAloudState(button, false);
+      }
+    });
+  });
+  return button;
+}
+
 function buildRegenerateControl(
   msg: ChatMessage,
   onRegenerate: (messageId: string, modelSelection?: string) => void,
@@ -548,6 +596,9 @@ function buildActionRow(
     actionRow.appendChild(
       buildCopyButton(msg.role === 'user' ? t('spCopyMessage') : t('spCopyResponse'), copyText),
     );
+    if (msg.role === 'assistant' && !msg.error && isReadAloudSupported()) {
+      actionRow.appendChild(buildReadAloudButton(copyText));
+    }
   }
   if (options.onRegenerate && !msg.error && !msg.interrupted) {
     if (msg.role === 'user') {
@@ -1215,7 +1266,9 @@ export function buildBubbleWithTools(
   };
   const segments = parseToolCalls(msg.content);
   const hasTools = segments.some((s) => typeof s !== 'string');
-  const hasAgentActivity = msg.role === 'assistant' && Boolean(msg.agentActivity);
+  const hasAgentActivity =
+    msg.role === 'assistant' &&
+    Boolean(msg.agentActivity || msg.browserActivity || options.browserControls);
   if (!hasTools && !hasAgentActivity) return buildBubble(msg, options);
 
   const wrapper = document.createElement('div');
@@ -1234,6 +1287,15 @@ export function buildBubbleWithTools(
     }
   }
 
+  if (msg.browserActivity)
+    wrapper.appendChild(
+      buildAgentActivityEl(msg.browserActivity, {
+        ...activityOptions,
+        onResolveApproval: undefined,
+      }),
+    );
+  if (msg.role === 'assistant' && options.browserControls)
+    wrapper.appendChild(options.browserControls);
   if (msg.agentActivity)
     wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, activityOptions));
   const leadingCards = buildInteractiveCardStack(msg, options, true);
@@ -1289,4 +1351,131 @@ export function buildBubbleWithTools(
   if (toolsReceipt) wrapper.appendChild(toolsReceipt);
   wrapper.appendChild(buildActionRow(msg, options, () => textParts.join('').trim() || msg.content));
   return wrapper;
+}
+
+export type SiteGrantScope = 'read' | 'act';
+export type SiteGrantChoice = 'once' | 'always' | 'decline';
+
+export function buildSiteGrantCard(options: {
+  host: string;
+  scope: SiteGrantScope;
+  onDecide: (choice: SiteGrantChoice) => void;
+}): HTMLElement {
+  const titleId = `sp-browser-grant-${crypto.randomUUID()}`;
+  const card = document.createElement('div');
+  card.className = 'sp-agent-approval sp-browser-grant';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-labelledby', titleId);
+  const title = document.createElement('div');
+  title.className = 'sp-agent-approval__summary';
+  title.id = titleId;
+  title.textContent = t('spBrowserAccessTitle', [options.host]);
+  const body = document.createElement('div');
+  body.className = 'sp-browser-grant__body';
+  body.textContent =
+    options.scope === 'act' ? t('spBrowserAccessActBody') : t('spBrowserAccessReadBody');
+  const actions = document.createElement('div');
+  actions.className = 'sp-agent-approval__actions';
+  const choices: Array<[SiteGrantChoice, string, boolean]> = [
+    ['once', t('spBrowserAccessOnce'), true],
+    ['always', t('spBrowserAccessAlways'), false],
+    ['decline', t('spBrowserAccessDecline'), false],
+  ];
+  for (const [choice, label, primary] of choices) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sp-agent-approval__button${primary ? ' sp-agent-approval__button--approve' : ''}`;
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      for (const peer of actions.querySelectorAll('button')) peer.disabled = true;
+      options.onDecide(choice);
+    });
+    actions.appendChild(button);
+  }
+  card.append(title, body, actions);
+  return card;
+}
+
+export interface BrowserTurnControls {
+  element: HTMLElement;
+  cards: HTMLElement;
+  setRunning(running: boolean): void;
+  setPaused(reason: string | null): void;
+  setScreenshot(dataUrl: string): void;
+  setError(message: string): void;
+  focusPrimary(): void;
+}
+
+export function buildBrowserTurnControls(handlers: {
+  onTakeOver: () => Promise<boolean>;
+  onHandBack: () => Promise<boolean>;
+}): BrowserTurnControls {
+  const element = document.createElement('div');
+  element.className = 'sp-browser-turn';
+  const cards = document.createElement('div');
+  cards.className = 'sp-browser-turn';
+  const bar = document.createElement('div');
+  bar.className = 'sp-browser-turn__bar';
+  bar.hidden = true;
+  const notice = document.createElement('div');
+  notice.className = 'sp-browser-turn__notice';
+  notice.setAttribute('role', 'status');
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'sp-cu-takeover-btn';
+  const error = document.createElement('div');
+  error.className = 'sp-browser-turn__error';
+  error.setAttribute('role', 'alert');
+  const shot = document.createElement('div');
+  bar.append(notice, toggle);
+  element.append(bar, error, cards, shot);
+  let paused = false;
+  const render = (): void => {
+    toggle.textContent = paused ? t('spBrowserHandBack') : t('spBrowserTakeOver');
+    toggle.title = paused ? t('spBrowserHandBackTitle') : t('spBrowserTakeOverTitle');
+  };
+  toggle.addEventListener('click', () => {
+    toggle.disabled = true;
+    error.textContent = '';
+    const wasPaused = paused;
+    void (wasPaused ? handlers.onHandBack() : handlers.onTakeOver()).then((ok) => {
+      toggle.disabled = false;
+      if (!ok)
+        error.textContent = wasPaused ? t('spBrowserHandBackFailed') : t('spBrowserTakeOverFailed');
+    });
+  });
+  render();
+  return {
+    element,
+    cards,
+    setRunning(running) {
+      bar.hidden = !running;
+      if (!running) {
+        paused = false;
+        notice.textContent = '';
+        shot.replaceChildren();
+        render();
+      }
+    },
+    setPaused(reason) {
+      paused = reason !== null;
+      notice.textContent = reason === null ? '' : t('spBrowserPausedNotice', [reason]);
+      render();
+      if (paused) toggle.focus();
+    },
+    setScreenshot(dataUrl) {
+      if (!/^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) return;
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.alt = t('spBrowserScreenshotAlt');
+      img.loading = 'lazy';
+      shot.replaceChildren(buildImageViewerButton(img, 'sp-cu-screenshot'));
+    },
+    setError(message) {
+      error.textContent = message;
+    },
+    focusPrimary() {
+      toggle.focus();
+    },
+  };
 }
