@@ -1110,7 +1110,7 @@ async fn sign_in(
     let mut client = McpClient::connect(
         name,
         to_transport_config(config),
-        McpTimeouts::default(),
+        configured_timeouts(),
         hooks,
     )
     .await
@@ -1305,6 +1305,22 @@ fn respawn_check(
 // MCP connection (thin adapter over agiworkforce_mcp::McpClient)
 // ---------------------------------------------------------------------------
 
+/// The engine's timeouts with the user's `default.mcp_initialize_timeout` and
+/// `default.mcp_call_tool_timeout` (seconds) applied. A repository's config is
+/// not read for them, and zero leaves the default in place.
+fn configured_timeouts() -> McpTimeouts {
+    let mut timeouts = McpTimeouts::default();
+    if let Ok(config) = crate::config::CliConfig::load_without_project() {
+        if let Some(seconds) = config.default.mcp_initialize_timeout.filter(|s| *s > 0) {
+            timeouts.initialize = std::time::Duration::from_secs(seconds);
+        }
+        if let Some(seconds) = config.default.mcp_call_tool_timeout.filter(|s| *s > 0) {
+            timeouts.call_tool = std::time::Duration::from_secs(seconds);
+        }
+    }
+    timeouts
+}
+
 /// A running MCP server connection. Wraps the shared engine client and layers
 /// the CLI's result-shaping (strict tool validation + namespacing, prompt slash
 /// commands, tool-result text extraction) on top.
@@ -1366,7 +1382,7 @@ impl McpConnection {
             started_in,
         } = sandboxed_transport_config(config, project)
             .with_context(|| format!("MCP server '{name}' could not be prepared to start"))?;
-        let timeouts = McpTimeouts::default();
+        let timeouts = configured_timeouts();
         let hooks = ClientHooks {
             before_respawn: respawn_check(name, config, project),
             ..build_client_hooks(elicitation)
@@ -2180,7 +2196,15 @@ impl McpManager {
                 capability: crate::runtime::tool_catalog::capability_label(
                     agiworkforce_protocol::agent_events::AgentEventToolCategory::Mcp,
                 ),
-                timeout_ms: Some(McpTimeouts::default().call_tool.as_millis() as u64),
+                timeout_ms: Some(
+                    self.connections
+                        .get(&t.server_name)
+                        .map_or_else(
+                            || McpTimeouts::default().call_tool,
+                            |c| c.timeouts.call_tool,
+                        )
+                        .as_millis() as u64,
+                ),
                 result_schema: Some(
                     agiworkforce_protocol::tool_primitive::tool_result_json_schema(),
                 ),

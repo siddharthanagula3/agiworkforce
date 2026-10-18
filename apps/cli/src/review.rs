@@ -55,7 +55,11 @@ pub async fn run_review(
             suggestions: vec![],
         });
     }
-    let model = options.model.as_deref().unwrap_or(&config.default.model);
+    let model = options
+        .model
+        .as_deref()
+        .or(config.default.review_model.as_deref())
+        .unwrap_or(&config.default.model);
     let mut session = AgentSession::new_checked(
         model,
         sys_context,

@@ -909,9 +909,8 @@ impl PluginsManager {
                         );
                     }
                     Some(other) => {
-                        // B3 will add "oauth" here. Anything else is unknown.
                         eprintln!(
-                            "[plugins] MCP server '{}' uses unsupported transport '{}', skipping (B3 wiring pending)",
+                            "[plugins] MCP server '{}' uses unsupported transport '{}', skipping",
                             name, other
                         );
                     }

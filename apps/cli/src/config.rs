@@ -727,6 +727,12 @@ impl CliConfig {
         if other.default.cloud_model.is_some() {
             self.default.cloud_model = other.default.cloud_model.clone();
         }
+        if other.default.mcp_initialize_timeout.is_some() {
+            self.default.mcp_initialize_timeout = other.default.mcp_initialize_timeout;
+        }
+        if other.default.mcp_call_tool_timeout.is_some() {
+            self.default.mcp_call_tool_timeout = other.default.mcp_call_tool_timeout;
+        }
         if other.ui.output_style.is_some() {
             self.ui.output_style = other.ui.output_style.clone();
         }
