@@ -85,9 +85,11 @@ function readJson(file) {
 }
 
 export function workspacePackages(repoRoot = REPO_ROOT) {
-  const listed = execFileSync('git', ['-C', repoRoot, 'ls-files', 'packages/**/package.json'], {
-    encoding: 'utf8',
-  })
+  const listed = execFileSync(
+    'git',
+    ['-C', repoRoot, 'ls-files', '-co', '--exclude-standard', 'packages/**/package.json'],
+    { encoding: 'utf8' },
+  )
     .trim()
     .split('\n')
     .filter((file) => file && !file.includes('node_modules'));

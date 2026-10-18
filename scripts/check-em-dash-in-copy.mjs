@@ -43,8 +43,11 @@ function isExcluded(rel) {
   return false;
 }
 
-function listTrackedFiles() {
-  const out = execFileSync('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 1024 * 1024 * 64 });
+function listWorkingTreeFiles() {
+  const out = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+    cwd: root,
+    maxBuffer: 1024 * 1024 * 64,
+  });
   return out.toString('utf8').split('\0').filter(Boolean);
 }
 
@@ -62,7 +65,7 @@ const argFiles = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
 const relFiles =
   argFiles.length > 0
     ? argFiles.map((file) => path.relative(root, path.resolve(file)))
-    : listTrackedFiles();
+    : listWorkingTreeFiles();
 
 const found = relFiles
   .filter((rel) => !isExcluded(rel))

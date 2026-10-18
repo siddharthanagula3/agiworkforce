@@ -146,7 +146,7 @@ function enforceMonotonic(records, ref) {
     encoding: 'utf8',
   });
   if (result.status !== 0) {
-    console.log(`UI gap baseline established: ${ref} has no audit/ui-gaps.csv.`);
+    console.log(`UI gap baseline established: ${ref} has no audit/registers/ui-gaps.csv.`);
     return;
   }
 
