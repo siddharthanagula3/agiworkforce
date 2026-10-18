@@ -6415,6 +6415,21 @@ export async function* runToolLoop(
             () => auditToolCall(tc.qualifiedName, 'handed_off'),
           );
         }
+        // A durable run replays only canonical events, so the handoff is also
+        // journaled as tool-use events or a reader that reattaches loses it.
+        for (const tc of pendingToolCalls) {
+          yield encoder.encode(
+            eventStream.emit({ type: 'tool-use-start', toolUseId: tc.id, name: tc.qualifiedName }),
+          );
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'tool-use-delta',
+              toolUseId: tc.id,
+              deltaJson: JSON.stringify(tc.args),
+            }),
+          );
+          yield encoder.encode(eventStream.emit({ type: 'tool-use-end', toolUseId: tc.id }));
+        }
         yield encoder.encode(toolHandoffEvent(pendingToolCalls, responseModel));
         yield* flushTerminal('tool-use');
         return;

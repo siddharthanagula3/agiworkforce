@@ -263,7 +263,7 @@ async function upgradeToPlan(data: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error: unknown = await response.json().catch(() => ({}));
     const message = extractErrorMessage(
       error,
       `Failed to create ${getBillingPlanPricing(data.plan).label} subscription`,

@@ -171,6 +171,20 @@ describe('tool loop · tools the caller declared', () => {
     expect(output).toContain(
       '"usage":{"prompt_tokens":598,"completion_tokens":23,"total_tokens":621}',
     );
+    const journaledToolUse = output
+      .split('\n')
+      .filter((line) => line.startsWith('data: ') && line.includes('x_agent_event'))
+      .map((line) => JSON.parse(line.slice('data: '.length)).choices[0].delta.x_agent_event.event)
+      .filter((event: { type: string }) => event.type.startsWith('tool-use-'));
+    expect(journaledToolUse, 'a durable replay can rebuild the handoff').toEqual([
+      { type: 'tool-use-start', toolUseId: 'call-caller-1', name: 'write_file' },
+      {
+        type: 'tool-use-delta',
+        toolUseId: 'call-caller-1',
+        deltaJson: JSON.stringify({ path: 'hello.txt', content: 'hello' }),
+      },
+      { type: 'tool-use-end', toolUseId: 'call-caller-1' },
+    ]);
     expect(provider.stream).toHaveBeenCalledTimes(1);
     expect(e2b.getE2BExecutor).not.toHaveBeenCalled();
   });

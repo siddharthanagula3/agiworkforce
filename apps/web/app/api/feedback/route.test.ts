@@ -232,6 +232,19 @@ describe('POST /api/feedback', () => {
     expect(vi.mocked(withRateLimit)).toHaveBeenCalledWith(expect.anything(), 'mobile-feedback');
   });
 
+  it('accepts feedback from the Chrome extension under its own source', async () => {
+    const response = await POST(
+      request({
+        subject: 'Something is broken · Chrome',
+        message: 'The side panel did not answer.',
+        metadata: { source: 'chrome', platform: 'chrome', version: '1.0.0', user_agent: 'test' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(String(feedbackRouteMocks.query.mock.calls[0]?.[1]?.[3])).toContain('"source":"chrome"');
+  });
+
   it('keeps existing desktop payloads backward compatible', async () => {
     const response = await POST(
       request({
