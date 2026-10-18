@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MAX_PURCHASABLE_SEATS,
   isEntitledSubscriptionStatus,
+  isEnterprisePlanTier,
   isEntitledSubscriptionStatusForTier,
   isPerSeatBillingPlan,
   totalTeamSeats,
@@ -14,7 +15,6 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
 
-const ENTERPRISE_PLAN_TIER = 'enterprise';
 const SEAT_EXPANSION_BLOCKED_AUDIT_REASON = 'seat_expansion_blocked';
 
 interface SeatedSubscription {
@@ -49,15 +49,11 @@ export interface PurchasedSeatRecord {
   perSeat: boolean;
 }
 
-function isEnterprisePlanTier(planTier: string): boolean {
-  return planTier.toLowerCase() === ENTERPRISE_PLAN_TIER;
-}
-
 export function buildPurchasedSeatRecord(
   planTier: string,
   subscription: Stripe.Subscription | SeatedSubscription,
 ): PurchasedSeatRecord {
-  const perSeat = isPerSeatBillingPlan(planTier) || isEnterprisePlanTier(planTier);
+  const perSeat = isPerSeatBillingPlan(planTier) || isEnterprisePlanTier(planTier.toLowerCase());
   const seats = perSeat ? resolveSubscriptionSeats(subscription) : 1;
   return {
     planTier,
@@ -186,7 +182,7 @@ export async function persistPurchasedSeatsOnOrganization(
     stripeCustomerId: string | null;
   },
 ): Promise<SeatPersistenceOutcome> {
-  if (isEnterprisePlanTier(input.planTier)) {
+  if (isEnterprisePlanTier(input.planTier.toLowerCase())) {
     const guard = await guardEnterpriseSeatExpansion(db, input.ownerUserId, input.seats);
     if (guard.blocked) return 'seat_expansion_blocked';
   }
@@ -309,7 +305,7 @@ export async function resolvePurchasedSeatsForOwner(
   if (!row?.stripe_subscription_id) return null;
   const planTier = row.plan_tier ?? '';
 
-  if (isEnterprisePlanTier(planTier)) {
+  if (isEnterprisePlanTier(planTier.toLowerCase())) {
     const [organization] = await db.query<{ id: string }>(
       `select id from public.organizations where owner_user_id = $1 limit 1`,
       [ownerUserId],

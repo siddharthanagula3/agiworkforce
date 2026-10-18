@@ -11,7 +11,6 @@ vi.mock('@/app/api/stripe-webhook/lib/db', () => ({
   handleCreditTopUp: vi.fn(),
   upsertSubscriptionFromSession: vi.fn(),
   updateSubscriptionFromStripeSubscription: updateSubscription,
-  CreditService: {},
 }));
 vi.mock('@/lib/services/enterprise-billing-service', () => ({
   syncEnterpriseContractFromSubscription: vi.fn(async () => undefined),

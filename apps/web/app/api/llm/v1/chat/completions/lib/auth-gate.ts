@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isEnterprisePlanTier } from '@agiworkforce/types';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -38,8 +39,6 @@ import {
   type TermsStanding,
 } from '@/lib/server/terms';
 import { recordFailure } from '@/lib/observability/metrics';
-
-const ENTERPRISE_PLAN_TIER = 'enterprise';
 
 async function resolveEnterpriseCollectionAccessState(
   userId: string,
@@ -344,10 +343,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     });
   }
 
-  const enterpriseCollection =
-    subscription.plan_tier?.toLowerCase() === ENTERPRISE_PLAN_TIER
-      ? await resolveEnterpriseCollectionAccessState(userId)
-      : undefined;
+  const enterpriseCollection = isEnterprisePlanTier(subscription.plan_tier?.toLowerCase())
+    ? await resolveEnterpriseCollectionAccessState(userId)
+    : undefined;
 
   const access = resolveSubscriptionAccess(
     subscription.status,

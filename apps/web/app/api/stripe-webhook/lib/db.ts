@@ -7,7 +7,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { CreditService } from '@/lib/services/credit-service';
 import {
   resolvePlanTier,
   isValidPlanTier,
@@ -1628,43 +1627,5 @@ export async function updateSubscriptionFromStripeSubscription(
         throw new Error(`Cannot create subscription ${stripeSubId}: no user_id found`);
       }
     }
-  } else if (stripeCustomerId) {
-    logger.warn(
-      { stripeCustomerId },
-      'No stripe_subscription_id provided, attempting update by customer_id',
-    );
-    await db
-      .execute(
-        `update subscriptions set
-          status = $1,
-          stripe_price_id = $2,
-          current_period_start = $3,
-          current_period_end = $4,
-          cancel_at_period_end = $5,
-          canceled_at = $6,
-          stripe_coupon_id = $7,
-          plan_tier = $8
-        where stripe_customer_id = $9`,
-        [
-          updateData.status,
-          updateData.stripe_price_id,
-          updateData.current_period_start,
-          updateData.current_period_end,
-          updateData.cancel_at_period_end,
-          updateData.canceled_at,
-          updateData.stripe_coupon_id,
-          updateData.plan_tier,
-          stripeCustomerId,
-        ],
-      )
-      .catch((error: unknown) => {
-        logger.error({ error, stripeCustomerId }, 'Failed to update subscription by customer_id');
-        throw error;
-      });
-  } else {
-    logger.error('CRITICAL: No stripe_subscription_id or stripe_customer_id provided');
-    throw new Error('Cannot update subscription: missing identifiers');
   }
 }
-
-export { CreditService };
