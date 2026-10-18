@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
@@ -57,10 +58,6 @@ interface ProbeSummary {
   escalationLevel?: number;
 }
 
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
-}
-
 function failingChecks(result: HealthCheckResult): string[] {
   return Object.entries(result.checks)
     .filter(([, check]) => check.status !== 'healthy')
@@ -84,7 +81,7 @@ function buildAlert(
   result: HealthCheckResult,
   failed: string[],
 ): { subject: string; text: string } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const subject = `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} health ${result.status} · ${failed.join(', ')}`;
 
   const lines = [

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -69,10 +70,6 @@ interface ReconcileSummary {
   };
 }
 
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -87,7 +84,7 @@ function buildDriftAlert(summary: {
   pending: number;
   terminal: number;
 }): { subject: string; text: string; html: string } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const text = [
     `Environment: ${environment}`,
     `Observed at: ${new Date().toISOString()}`,
@@ -115,7 +112,7 @@ function buildStripeDivergenceAlert(summary: StripeReconciliationSummary): {
   text: string;
   html: string;
 } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const percent = (summary.divergenceRatio * 100).toFixed(1);
   const threshold = (STRIPE_RECONCILIATION_ALERT_RATIO * 100).toFixed(1);
   const text = [

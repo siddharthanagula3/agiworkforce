@@ -9,11 +9,8 @@ import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { invalidateAccountStatusCache } from '@/lib/server/request-context-cache';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import {
-  accountErasureProgress,
   resolveDeletionStatus,
   scheduledDeletionProgress,
   type DeletionOutcome,
@@ -24,7 +21,6 @@ import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
 import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
-import { getIdentityProvider } from '@/lib/server/identity';
 import { handleError } from '@/lib/error-handler';
 import { isStepUpRequiredError, requireStepUp } from '@/lib/server/step-up-auth';
 
@@ -52,13 +48,6 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'",
   'X-Content-Type-Options': 'nosniff',
 };
-
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isMissingDeletionColumns(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
-}
 
 function isPaidSubscription(
   subscription: SubscriptionInfo | null,
@@ -93,13 +82,12 @@ interface SoleOwnedWorkspace {
  * already done the thing this guard would ask them to do, and both schedules
  * run down to their own purge.
  */
-function soleOwnedWorkspacesSql(excludeScheduled: boolean): string {
-  return `select o.id::text as id, o.name
+const SOLE_OWNED_WORKSPACES_SQL = `select o.id::text as id, o.name
        from public.organization_members mine
        join public.organizations o on o.id = mine.organization_id
       where mine.user_id = $1
         and mine.role = 'owner'
-        ${excludeScheduled ? 'and o.deletion_scheduled_for is null' : ''}
+        and o.deletion_scheduled_for is null
         and not exists (
           select 1
             from public.organization_members others
@@ -107,20 +95,9 @@ function soleOwnedWorkspacesSql(excludeScheduled: boolean): string {
              and others.role = 'owner'
              and others.user_id <> $1
         )`;
-}
 
 async function listSoleOwnedWorkspaces(userId: string): Promise<SoleOwnedWorkspace[]> {
-  const db = getNeonDb();
-  try {
-    return await db.query<SoleOwnedWorkspace>(soleOwnedWorkspacesSql(true), [userId]);
-  } catch (error) {
-    // The workspace-deletion schedule is a later migration than this guard. Where
-    // it has not been applied, every workspace is still owned, so the guard asks
-    // the question it can answer rather than refusing every deletion on a column
-    // that is not there yet.
-    if (!isMissingDeletionColumns(error)) throw error;
-    return db.query<SoleOwnedWorkspace>(soleOwnedWorkspacesSql(false), [userId]);
-  }
+  return getNeonDb().query<SoleOwnedWorkspace>(SOLE_OWNED_WORKSPACES_SQL, [userId]);
 }
 
 function soleOwnerMessage(workspaces: SoleOwnedWorkspace[]): string {
@@ -175,16 +152,14 @@ async function handleGet(request: NextRequest) {
     );
     row = rows[0];
   } catch (error) {
-    if (!isMissingDeletionColumns(error)) {
-      logger.error(
-        { userId, error: error instanceof Error ? error.message : String(error) },
-        'Could not read account deletion status',
-      );
-      return NextResponse.json(
-        { error: 'Could not read account deletion status.' },
-        { status: 500, headers: SECURITY_HEADERS },
-      );
-    }
+    logger.error(
+      { userId, error: error instanceof Error ? error.message : String(error) },
+      'Could not read account deletion status',
+    );
+    return NextResponse.json(
+      { error: 'Could not read account deletion status.' },
+      { status: 500, headers: SECURITY_HEADERS },
+    );
   }
 
   const scheduledFor = row?.deletion_scheduled_for ?? null;
@@ -311,91 +286,34 @@ async function handleDelete(request: NextRequest) {
   const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   try {
+    let scheduledRows: number;
     try {
-      const scheduledRows = await db.execute(
+      scheduledRows = await db.execute(
         `update profiles
          set deletion_requested_at = $1,
              deletion_scheduled_for = $2
          where id = $3`,
         [new Date().toISOString(), scheduledFor, userId],
       );
-
-      if (scheduledRows === 0) {
-        logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
-        return NextResponse.json(
-          {
-            error: `Account deletion could not be scheduled because your profile record was not found. Nothing was deleted. Please contact ${CONTACT_EMAIL}.`,
-          },
-          { status: 500, headers: SECURITY_HEADERS },
-        );
-      }
     } catch (updateErr: unknown) {
-      const updateErrMsg = updateErr instanceof Error ? updateErr.message : String(updateErr);
-
-      if (!isMissingDeletionColumns(updateErr)) {
-        logger.error({ userId, error: updateErrMsg }, 'Account deletion scheduling failed');
-        return NextResponse.json(
-          {
-            error: `Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
-          },
-          { status: 500, headers: SECURITY_HEADERS },
-        );
-      }
-
-      logger.warn(
-        { userId, error: updateErrMsg },
-        'Deletion columns are not provisioned; attempting immediate delete',
+      logger.error(
+        { userId, error: updateErr instanceof Error ? updateErr.message : String(updateErr) },
+        'Account deletion scheduling failed',
       );
-
-      let outcome = resolveDeletionStatus(scheduledDeletionProgress(null));
-      try {
-        const erasure = await eraseUserAccountData(userId);
-        outcome = resolveDeletionStatus(accountErasureProgress(erasure));
-        if (!erasure.complete) {
-          logger.error(
-            { userId, status: outcome.status, reason: outcome.reason },
-            'Immediate account erasure was incomplete',
-          );
-          return NextResponse.json(
-            {
-              error: `Account deletion did not finish. Some of your data has already been removed and the rest is still stored; your sign-in still works. Please contact ${CONTACT_EMAIL} so the erasure can be completed.`,
-            },
-            { status: 500, headers: SECURITY_HEADERS },
-          );
-        }
-        await getIdentityProvider().deleteUser(userId);
-        await invalidateAccountStatusCache(userId);
-      } catch (clerkErr: unknown) {
-        const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
-        logger.error({ userId, error: errMsg }, 'Account deletion failed');
-        return NextResponse.json(
-          { error: `Account deletion failed. Please contact ${CONTACT_EMAIL}.` },
-          { status: 500, headers: SECURITY_HEADERS },
-        );
-      }
-
-      logger.info({ userId }, 'Account deleted immediately (soft delete unavailable)');
-
-      await recordAuditEvent({
-        userId: null,
-        eventType: 'account_deletion_requested',
-        severity: 'warning',
-        request,
-        detail: {
-          resourceType: 'account',
-          subjectRef,
-          status: outcome.status,
-          reason: outcome.reason,
-        },
-      });
-
       return NextResponse.json(
         {
-          message: 'Account deleted successfully.',
-          status: outcome.status,
-          statusReason: deletionReceiptReason(outcome),
+          error: `Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
         },
-        { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+        { status: 500, headers: SECURITY_HEADERS },
+      );
+    }
+    if (scheduledRows === 0) {
+      logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
+      return NextResponse.json(
+        {
+          error: `Account deletion could not be scheduled because your profile record was not found. Nothing was deleted. Please contact ${CONTACT_EMAIL}.`,
+        },
+        { status: 500, headers: SECURITY_HEADERS },
       );
     }
 

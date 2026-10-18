@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getKeyValueStore } from '@/lib/server/key-value';
@@ -33,10 +34,6 @@ function escapeHtml(value: string): string {
     .replace(/</gu, '&lt;')
     .replace(/>/gu, '&gt;')
     .replace(/"/gu, '&quot;');
-}
-
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
 }
 
 function describeAlert(alert: RolloutAlert): string {
@@ -111,7 +108,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const subject = `[AGI WARNING] ${environment} model rollout regression · ${[...new Set(fresh.map((alert) => alert.kind))].join(', ')}`;
   const text = [
     `Environment: ${environment}`,

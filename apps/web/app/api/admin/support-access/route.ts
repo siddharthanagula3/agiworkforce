@@ -121,11 +121,16 @@ export async function GET(request: NextRequest) {
         createError.badRequest(`Invalid status. Must be one of: ${GRANT_STATUSES.join(', ')}`),
       );
     }
+    const rawLimit = searchParams.get('limit');
+    const limit = rawLimit === null ? 50 : Number(rawLimit);
+    if (!Number.isInteger(limit)) {
+      return errorResponse(createError.badRequest('limit must be a whole number'));
+    }
     const grants = await listSupportAccessGrants({
       db,
       organizationId,
       status: (rawStatus as SupportAccessStatus | null) ?? null,
-      limit: Number.parseInt(searchParams.get('limit') ?? '50', 10),
+      limit,
     });
     return NextResponse.json({ grants: grants.map(present), count: grants.length });
   } catch (error) {

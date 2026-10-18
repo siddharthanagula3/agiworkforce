@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
@@ -18,10 +19,6 @@ const BURN_RATE_DECIMALS = 1;
 const ATTAINMENT_PERCENT = 100;
 const ATTAINMENT_DECIMALS = 3;
 
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
-}
-
 function worstSeverity(alerts: readonly BurnRateAlert[]): AlertSeverity {
   return alerts.some((alert) => alert.severity === 'critical') ? 'critical' : 'warning';
 }
@@ -36,7 +33,7 @@ function buildPage(
   severity: AlertSeverity,
   alerts: readonly BurnRateAlert[],
 ): { subject: string; text: string } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const domains = [...new Set(alerts.map((alert) => alert.domain))].join(', ');
   return {
     subject: `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} error budget burning · ${domains}`,
@@ -56,7 +53,7 @@ function buildAnomalyPage(
   severity: AlertSeverity,
   anomalies: readonly AnomalyAlert[],
 ): { subject: string; text: string } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const series = anomalies.map((anomaly) => anomaly.id).join(', ');
   return {
     subject: `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} cost or latency left its baseline · ${series}`,

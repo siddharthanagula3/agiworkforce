@@ -39,7 +39,7 @@ import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 
 export const maxDuration = 800;
 
-const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
+const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN']?.trim() || 'agi-workforce[bot]';
 
 /**
  * GitHub's own statement of the commenter's standing on the repository. OWNER,

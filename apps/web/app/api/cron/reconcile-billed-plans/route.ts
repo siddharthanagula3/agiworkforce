@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -14,10 +15,6 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const REPORTED_DRIFTS = 25;
-
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
-}
 
 function escapeHtml(value: string): string {
   return value
@@ -32,7 +29,7 @@ function buildReport(report: Awaited<ReturnType<typeof reconcileBilledPlans>>): 
   text: string;
   html: string;
 } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const percent = (report.divergenceRatio * 100).toFixed(1);
   const text = [
     `Environment: ${environment}`,

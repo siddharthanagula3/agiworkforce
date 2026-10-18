@@ -213,27 +213,6 @@ describe('DELETE /api/user/delete-account', () => {
     expect(ownershipSql).toContain('deletion_scheduled_for is null');
   });
 
-  it('still guards ownership where the deletion-schedule column is not there yet', async () => {
-    // Refusing every account deletion because a later migration has not run is a
-    // worse answer than asking the question the schema can answer.
-    mockExecute.mockResolvedValue(1);
-    const seen: string[] = [];
-    mockQuery.mockImplementation(async (sql: unknown) => {
-      const text = String(sql);
-      if (!text.includes('organization_members')) return [];
-      seen.push(text);
-      if (text.includes('deletion_scheduled_for')) throw pgError('42703');
-      return [{ id: 'org-1', name: 'Acme' }];
-    });
-
-    const response = await DELETE(deleteRequest());
-
-    expect(response.status).toBe(409);
-    expect(seen).toHaveLength(2);
-    expect(seen[1]).not.toContain('deletion_scheduled_for');
-    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
-  });
-
   it('proceeds when the account owns nothing alone', async () => {
     mockExecute.mockResolvedValue(1);
 
@@ -270,41 +249,16 @@ describe('DELETE /api/user/delete-account', () => {
     });
   });
 
-  it('erases immediately only when the deletion columns are missing (42703)', async () => {
+  it('schedules nothing and erases nothing when the deletion columns are missing (42703)', async () => {
     mockExecute.mockRejectedValue(pgError('42703'));
 
     const response = await DELETE(deleteRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.scheduledFor).toBeUndefined();
-    expect(mockEraseUserAccountData).toHaveBeenCalledWith('user_deleting');
-    expect(mockDeleteUser).toHaveBeenCalledWith('user_deleting');
-    expect(auditDetail()).toMatchObject({ status: 'complete' });
-    // The holder reads a plain sentence; store and hold counts stay in the audit row.
-    expect(body.status).toBe('complete');
-    expect(body.statusReason).toBe('Everything in your account has been deleted.');
-    expect(String(auditDetail()['reason'])).toMatch(/stores cleared/);
-    expect(body.statusReason).not.toMatch(/store|hold/i);
-  });
-
-  it('records a legal hold as blocked rather than as a deletion that happened', async () => {
-    mockExecute.mockRejectedValue(pgError('42703'));
-    mockEraseUserAccountData.mockResolvedValue({
-      ...completeErasure,
-      tables: {
-        legal_holds: {
-          deleted: false,
-          retainedForRetry: true,
-          error: 'Subject is under an active legal hold; data preserved.',
-        },
-      },
-      complete: false,
-    });
-
-    const response = await DELETE(deleteRequest());
-
     expect(response.status).toBe(500);
+    expect(body.scheduledFor).toBeUndefined();
+    expect(body.error).toMatch(/Nothing was deleted/i);
+    expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
@@ -400,22 +354,6 @@ describe('DELETE /api/user/delete-account', () => {
     expect(body.error).toMatch(/nothing was deleted/i);
     expect(mockExecute).not.toHaveBeenCalled();
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
-    expect(mockDeleteUser).not.toHaveBeenCalled();
-  });
-
-  it('does not claim data was untouched when an immediate erasure is partial', async () => {
-    mockExecute.mockRejectedValue(pgError('42703'));
-    mockEraseUserAccountData.mockResolvedValue({
-      ...completeErasure,
-      tables: { web_conversations: { deleted: true }, profiles: { deleted: false, error: 'boom' } },
-      complete: false,
-    });
-
-    const response = await DELETE(deleteRequest());
-    const body = await response.json();
-
-    expect(response.status).toBe(500);
-    expect(body.error).not.toMatch(/no data was partially removed/i);
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 

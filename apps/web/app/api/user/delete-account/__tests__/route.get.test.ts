@@ -143,14 +143,12 @@ describe('GET /api/user/delete-account', () => {
     expect(body.canCancel).toBe(false);
   });
 
-  it('treats missing deletion columns as nothing pending instead of failing', async () => {
+  it('fails instead of reporting nothing pending when the deletion columns are missing', async () => {
     mockQuery.mockRejectedValue(pgError('42703'));
 
     const response = await GET(statusRequest());
-    const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.pending).toBe(false);
+    expect(response.status).toBe(500);
   });
 
   it('returns 401 when the caller is not authenticated', async () => {

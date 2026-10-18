@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { consumePendingSecurityAnomalyCheck } from '@/lib/security-audit';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
@@ -13,10 +14,6 @@ import { pageOnCall, type AlertSeverity } from '@/lib/server/incident/pager';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-function environmentLabel(): string {
-  return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
-}
-
 function worstSeverity(triggered: AlertStatus[]): AlertSeverity {
   return triggered.some((alert) => alert.severity === 'critical') ? 'critical' : 'warning';
 }
@@ -25,7 +22,7 @@ function buildPage(
   severity: AlertSeverity,
   triggered: AlertStatus[],
 ): { subject: string; text: string } {
-  const environment = environmentLabel();
+  const environment = deploymentEnvironment();
   const names = triggered.map((alert) => alert.alert_name).join(', ');
   const subject = `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} security anomaly · ${names}`;
   const text = [

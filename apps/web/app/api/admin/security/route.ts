@@ -166,10 +166,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse | Response>
           .asUserSafe();
       }
       const eventType = searchParams.get('eventType') as string | null;
-      const limit = parseInt(searchParams.get('limit') || '100', 10);
+      const limit = readBoundedInteger(searchParams.get('limit'), 'limit', 100, 500);
 
       const events = await SecurityMonitoringService.getRecentEvents(
-        Math.min(limit, 500), // Cap at 500
+        limit,
         severity || undefined,
         eventType as Parameters<typeof SecurityMonitoringService.getRecentEvents>[2],
       );
@@ -186,12 +186,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse | Response>
     }
 
     case 'ips': {
-      const hours = parseInt(searchParams.get('hours') || '24', 10);
-      const limit = parseInt(searchParams.get('limit') || '10', 10);
-      const topIps = await SecurityMonitoringService.getTopIpAddresses(
-        Math.min(hours, 168), // Cap at 7 days
-        Math.min(limit, 50), // Cap at 50
-      );
+      const hours = readBoundedInteger(searchParams.get('hours'), 'hours', 24, 168);
+      const limit = readBoundedInteger(searchParams.get('limit'), 'limit', 10, 50);
+      const topIps = await SecurityMonitoringService.getTopIpAddresses(hours, limit);
       return NextResponse.json({ top_ips: topIps });
     }
 
@@ -207,6 +204,111 @@ async function handleGet(request: NextRequest): Promise<NextResponse | Response>
         )
         .asUserSafe();
   }
+}
+
+const ACCOUNT_STATUS_CHANGES = {
+  'suspend-user': {
+    status: 'suspended',
+    update: "update profiles set account_status = 'suspended' where id = $1",
+    severity: 'high',
+    outcome: 'suspended',
+    providerSuspended: null,
+    providerFailure: null,
+  },
+  'ban-user': {
+    status: 'banned',
+    update: "update profiles set account_status = 'banned' where id = $1",
+    severity: 'critical',
+    outcome: 'banned',
+    providerSuspended: true,
+    providerFailure: 'Failed to set Clerk ban, relying on middleware check',
+  },
+  'reactivate-user': {
+    status: 'active',
+    update: "update profiles set account_status = 'active' where id = $1",
+    severity: 'high',
+    outcome: 'reactivated',
+    providerSuspended: false,
+    providerFailure: 'Failed to remove Clerk ban',
+  },
+} as const;
+
+async function changeAccountStatus(
+  request: NextRequest,
+  adminUserId: string,
+  action: keyof typeof ACCOUNT_STATUS_CHANGES,
+): Promise<NextResponse> {
+  const change = ACCOUNT_STATUS_CHANGES[action];
+  const body = await readJsonBody(request);
+  const { userId: targetUserId, reason } = body as {
+    userId?: string;
+    reason?: string;
+  };
+
+  if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
+    throw createError.badRequest('userId is required and must be a string').asUserSafe();
+  }
+
+  if (typeof reason !== 'string' || !reason.trim()) {
+    throw createError.badRequest('reason is required and must be a string').asUserSafe();
+  }
+
+  if (reason.length > 1000) {
+    throw createError.badRequest('reason exceeds the 1000 character limit').asUserSafe();
+  }
+
+  if (targetUserId === adminUserId) {
+    throw createError.badRequest('Cannot modify your own account').asUserSafe();
+  }
+
+  const db = getNeonDb();
+  let updated: number;
+  try {
+    updated = await db.execute(change.update, [targetUserId]);
+    if (updated !== 0) await setCachedAccountStatus(targetUserId, change.status);
+  } catch (updateError) {
+    logger.error({ error: updateError, targetUserId, action }, 'Failed to update account status');
+    throw createError.internal('Failed to update account status').asUserSafe();
+  }
+  if (updated === 0) throw createError.notFound('No account has that user id').asUserSafe();
+
+  if (change.providerSuspended !== null) {
+    try {
+      await getIdentityProvider().setUserSuspended(targetUserId, change.providerSuspended);
+    } catch (providerError) {
+      logger.warn({ error: providerError, targetUserId }, change.providerFailure);
+    }
+  }
+
+  await logSecurityEvent({
+    userId: adminUserId,
+    eventType: 'admin_action',
+    severity: change.severity,
+    endpoint: `/api/admin/security?action=${action}`,
+    details: { action, targetUserId, reason },
+  });
+
+  logger.info({ adminUserId, targetUserId, reason }, `User account ${change.outcome} by admin`);
+
+  return NextResponse.json({
+    success: true,
+    message: `User ${targetUserId} has been ${change.outcome}`,
+    account_status: change.status,
+  });
+}
+
+function readBoundedInteger(
+  raw: string | null,
+  name: string,
+  fallback: number,
+  max: number,
+): number {
+  if (raw === null || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw createError.badRequest(`${name} must be a positive whole number`).asUserSafe();
+  }
+  return Math.min(value, max);
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse | Response> {
@@ -239,173 +341,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       });
     }
 
-    case 'suspend-user': {
-      const body = await readJsonBody(request);
-      const { userId: targetUserId, reason } = body as {
-        userId?: string;
-        reason?: string;
-      };
-
-      if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
-        throw createError.badRequest('userId is required and must be a string').asUserSafe();
-      }
-
-      if (typeof reason !== 'string' || !reason.trim()) {
-        throw createError.badRequest('reason is required and must be a string').asUserSafe();
-      }
-
-      if (reason.length > 1000) {
-        throw createError.badRequest('reason exceeds the 1000 character limit').asUserSafe();
-      }
-
-      if (targetUserId === adminUserId) {
-        throw createError.badRequest('Cannot modify your own account').asUserSafe();
-      }
-
-      const db = getNeonDb();
-      try {
-        await db.execute("update profiles set account_status = 'suspended' where id = $1", [
-          targetUserId,
-        ]);
-        await setCachedAccountStatus(targetUserId, 'suspended');
-      } catch (updateError) {
-        logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
-        throw createError.internal('Failed to update account status').asUserSafe();
-      }
-
-      await logSecurityEvent({
-        userId: adminUserId,
-        eventType: 'admin_action',
-        severity: 'high',
-        endpoint: '/api/admin/security?action=suspend-user',
-        details: { action: 'suspend-user', targetUserId, reason },
-      });
-
-      logger.info({ adminUserId, targetUserId, reason }, 'User account suspended by admin');
-
-      return NextResponse.json({
-        success: true,
-        message: `User ${targetUserId} has been suspended`,
-        account_status: 'suspended',
-      });
-    }
-
-    case 'ban-user': {
-      const body = await readJsonBody(request);
-      const { userId: targetUserId, reason } = body as {
-        userId?: string;
-        reason?: string;
-      };
-
-      if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
-        throw createError.badRequest('userId is required and must be a string').asUserSafe();
-      }
-
-      if (typeof reason !== 'string' || !reason.trim()) {
-        throw createError.badRequest('reason is required and must be a string').asUserSafe();
-      }
-
-      if (reason.length > 1000) {
-        throw createError.badRequest('reason exceeds the 1000 character limit').asUserSafe();
-      }
-
-      if (targetUserId === adminUserId) {
-        throw createError.badRequest('Cannot modify your own account').asUserSafe();
-      }
-
-      const db = getNeonDb();
-      try {
-        await db.execute("update profiles set account_status = 'banned' where id = $1", [
-          targetUserId,
-        ]);
-        await setCachedAccountStatus(targetUserId, 'banned');
-      } catch (updateError) {
-        logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
-        throw createError.internal('Failed to update account status').asUserSafe();
-      }
-
-      try {
-        await getIdentityProvider().setUserSuspended(targetUserId, true);
-      } catch (banError) {
-        logger.warn(
-          { error: banError, targetUserId },
-          'Failed to set Clerk ban, relying on middleware check',
-        );
-      }
-
-      await logSecurityEvent({
-        userId: adminUserId,
-        eventType: 'admin_action',
-        severity: 'critical',
-        endpoint: '/api/admin/security?action=ban-user',
-        details: { action: 'ban-user', targetUserId, reason },
-      });
-
-      logger.info({ adminUserId, targetUserId, reason }, 'User account banned by admin');
-
-      return NextResponse.json({
-        success: true,
-        message: `User ${targetUserId} has been banned`,
-        account_status: 'banned',
-      });
-    }
-
-    case 'reactivate-user': {
-      const body = await readJsonBody(request);
-      const { userId: targetUserId, reason } = body as {
-        userId?: string;
-        reason?: string;
-      };
-
-      if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
-        throw createError.badRequest('userId is required and must be a string').asUserSafe();
-      }
-
-      if (typeof reason !== 'string' || !reason.trim()) {
-        throw createError.badRequest('reason is required and must be a string').asUserSafe();
-      }
-
-      if (reason.length > 1000) {
-        throw createError.badRequest('reason exceeds the 1000 character limit').asUserSafe();
-      }
-
-      if (targetUserId === adminUserId) {
-        throw createError.badRequest('Cannot modify your own account').asUserSafe();
-      }
-
-      const db = getNeonDb();
-      try {
-        await db.execute("update profiles set account_status = 'active' where id = $1", [
-          targetUserId,
-        ]);
-        await setCachedAccountStatus(targetUserId, 'active');
-      } catch (updateError) {
-        logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
-        throw createError.internal('Failed to update account status').asUserSafe();
-      }
-
-      try {
-        await getIdentityProvider().setUserSuspended(targetUserId, false);
-      } catch (unbanError) {
-        logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Clerk ban');
-      }
-
-      await logSecurityEvent({
-        userId: adminUserId,
-        eventType: 'admin_action',
-        severity: 'high',
-        endpoint: '/api/admin/security?action=reactivate-user',
-        details: { action: 'reactivate-user', targetUserId, reason },
-      });
-
-      logger.info({ adminUserId, targetUserId, reason }, 'User account reactivated by admin');
-
-      return NextResponse.json({
-        success: true,
-        message: `User ${targetUserId} has been reactivated`,
-        account_status: 'active',
-      });
-    }
+    case 'suspend-user':
+    case 'ban-user':
+    case 'reactivate-user':
+      return changeAccountStatus(request, adminUserId, action);
 
     case 'lockdown-tenant':
     case 'lift-tenant-lockdown': {

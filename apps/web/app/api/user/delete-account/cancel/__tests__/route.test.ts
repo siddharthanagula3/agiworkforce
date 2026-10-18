@@ -144,14 +144,14 @@ describe('POST /api/user/delete-account/cancel', () => {
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('treats missing deletion columns as nothing pending instead of failing', async () => {
+  it('fails instead of reporting nothing pending when the deletion columns are missing', async () => {
     mockQuery.mockRejectedValueOnce(pgError('42703'));
 
     const response = await POST(cancelRequest());
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.cancelled).toBe(false);
+    expect(response.status).toBe(500);
+    expect(body.cancelled).toBeUndefined();
   });
 
   it('returns 401 when the caller is not authenticated, and never touches the database', async () => {

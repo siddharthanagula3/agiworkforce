@@ -11,17 +11,7 @@ import { proposeSupportAction } from '@/lib/support/actions/service';
 import { SupportActionRefusal } from '@/lib/support/actions/types';
 import { SupportActionProposeRequestSchema } from '@agiworkforce/cloud-contracts/support';
 
-function refusalResponse(error: SupportActionRefusal): NextResponse {
-  return NextResponse.json(
-    {
-      code: error.code,
-      message: error.message,
-      ...(error.explain ? { explain: error.explain } : {}),
-      ...(error.control ? { control: error.control } : {}),
-    },
-    { status: error.status },
-  );
-}
+import { refusalResponse } from '../refusal-response';
 
 async function handlePost(request: NextRequest) {
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });

@@ -19,13 +19,6 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isMissingDeletionColumns(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
-}
-
 export async function POST(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'account-deletion-cancel');
   if (rateLimitResponse) return rateLimitResponse;
@@ -49,25 +42,16 @@ export async function POST(request: NextRequest) {
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 
   try {
-    let cancelled: Array<{ id: string }> = [];
-    try {
-      cancelled = await db.query<{ id: string }>(
-        `update profiles
-            set deletion_requested_at = null,
-                deletion_scheduled_for = null
-          where id = $1
-            and deletion_scheduled_for is not null
-            and deletion_scheduled_for > now()
-          returning id`,
-        [userId],
-      );
-    } catch (updateErr: unknown) {
-      if (!isMissingDeletionColumns(updateErr)) throw updateErr;
-      return NextResponse.json(
-        { message: 'No account deletion is pending.', cancelled: false },
-        { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-      );
-    }
+    const cancelled = await db.query<{ id: string }>(
+      `update profiles
+          set deletion_requested_at = null,
+              deletion_scheduled_for = null
+        where id = $1
+          and deletion_scheduled_for is not null
+          and deletion_scheduled_for > now()
+        returning id`,
+      [userId],
+    );
 
     if (cancelled.length > 0) {
       logger.info({ userId }, 'Account deletion cancelled inside the grace window');
