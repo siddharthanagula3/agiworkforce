@@ -131,21 +131,10 @@ fn append_rule_line(policy_path: &Path, rule: &str) -> Result<(), AmendError> {
         .ok_or_else(|| AmendError::MissingParent {
             path: policy_path.to_path_buf(),
         })?;
-    // Use create_dir_all so the full parent chain is created (matching the
-    // proxy/cert directory handling); plain create_dir fails with NotFound when
-    // more than one path component is missing, blocking the user-approval
-    // persistence path under a not-yet-created nested policy directory tree.
-    // create_dir_all returns Ok(()) when the directory already exists.
-    match std::fs::create_dir_all(dir) {
-        Ok(()) => {}
-        Err(ref source) if source.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(source) => {
-            return Err(AmendError::CreatePolicyDir {
-                dir: dir.to_path_buf(),
-                source,
-            });
-        }
-    }
+    std::fs::create_dir_all(dir).map_err(|source| AmendError::CreatePolicyDir {
+        dir: dir.to_path_buf(),
+        source,
+    })?;
 
     append_locked_line(policy_path, rule)
 }
