@@ -1,4 +1,3 @@
-
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import {
   captureCloudAccountEpoch,
@@ -100,12 +99,35 @@ class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
   private _isProcessing: boolean = false;
   private listeners = new Set<() => void>();
+  private failureListeners = new Set<(entry: QueuedMessage, error: Error) => void>();
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  onEntryFailed(listener: (entry: QueuedMessage, error: Error) => void): () => void {
+    this.failureListeners.add(listener);
+    return () => {
+      this.failureListeners.delete(listener);
+    };
+  }
+
+  private reportFailure(entry: QueuedMessage, error: Error): void {
+    try {
+      entry.onFailure?.(error);
+    } catch (cbErr) {
+      console.warn('[OfflineQueue] onFailure callback error:', cbErr);
+    }
+    for (const listener of this.failureListeners) {
+      try {
+        listener(entry, error);
+      } catch (cbErr) {
+        console.warn('[OfflineQueue] failure listener error:', cbErr);
+      }
+    }
   }
 
   private notify(): void {
@@ -184,13 +206,7 @@ class OfflineMessageQueue {
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       const oldest = this.queue.shift();
-      if (oldest) {
-        try {
-          oldest.onFailure?.(new Error('Queue full: oldest message dropped'));
-        } catch {
-          // Ignore callback errors
-        }
-      }
+      if (oldest) this.reportFailure(oldest, new Error('Queue full: oldest message dropped'));
     }
 
     const entry: QueuedMessage = {
@@ -271,11 +287,7 @@ class OfflineMessageQueue {
         if (entry.retryCount >= MAX_RETRY_COUNT) {
           this.queue = this.queue.filter((q) => q.id !== entry.id);
           this.persistToStorage();
-          try {
-            entry.onFailure?.(error);
-          } catch (cbErr) {
-            console.warn('[OfflineQueue] onFailure callback error:', cbErr);
-          }
+          this.reportFailure(entry, error);
           continue;
         }
 
@@ -290,14 +302,9 @@ class OfflineMessageQueue {
   }
 
   clear(): void {
-    for (const entry of this.queue) {
-      try {
-        entry.onFailure?.(new Error('Queue cleared'));
-      } catch {
-        // Ignore callback errors during forced clear
-      }
-    }
+    const cleared = this.queue;
     this.queue = [];
+    for (const entry of cleared) this.reportFailure(entry, new Error('Queue cleared'));
     this._isProcessing = false;
     this.persistToStorage();
   }
@@ -313,24 +320,15 @@ class OfflineMessageQueue {
       }
     }
     this.queue = retained;
-    for (const entry of removed) {
-      try {
-        entry.onFailure?.(new Error('Cloud account queue cleared'));
-      } catch {
-        // Ignore callback failures while crossing an account boundary.
-      }
-    }
+    for (const entry of removed)
+      this.reportFailure(entry, new Error('Cloud account queue cleared'));
     this.persistToStorage();
   }
 
   private dropEntry(entry: QueuedMessage, error: Error): void {
     this.queue = this.queue.filter((queued) => queued.id !== entry.id);
     this.persistToStorage();
-    try {
-      entry.onFailure?.(error);
-    } catch {
-      // A callback error must never keep an unsafe queue entry alive.
-    }
+    this.reportFailure(entry, error);
   }
 }
 

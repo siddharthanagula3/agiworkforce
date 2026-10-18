@@ -225,6 +225,28 @@ describe('max retry count', () => {
     expect(onFailure).toHaveBeenCalledWith(error);
   });
 
+  it('tells failure listeners about a drop even when the entry has no callback', async () => {
+    const listener = jest.fn();
+    const unsubscribe = offlineQueue.onEntryFailed(listener);
+    const entry = offlineQueue.enqueue(makeMsg({ conversationId: 'conv-restored' }));
+    const error = new Error('Refused');
+    const sendFn = jest.fn().mockRejectedValue(error);
+
+    for (let i = 0; i < 3; i++) {
+      const p = offlineQueue.processQueue(sendFn);
+      await flushMicrotasks();
+      jest.advanceTimersByTime(10_000);
+      await p;
+    }
+    unsubscribe();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ id: entry.id, conversationId: 'conv-restored' }),
+      error,
+    );
+  });
+
   it('continues processing subsequent items after dropping an exhausted item', async () => {
     const onFailure = jest.fn();
 

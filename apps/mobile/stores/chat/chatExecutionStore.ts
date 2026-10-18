@@ -3820,45 +3820,69 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (isCloudRetry) {
-        try {
-          await deleteCloudMessagesRemote(
-            conversationId,
-            rows.slice(userIndex).map((message) => message.id),
-            retryAccountEpoch,
-          );
-        } catch {
-          if (isRetryCurrent()) {
-            set({
-              error: 'Could not replace the Cloud response. Check your connection and retry.',
-            });
-          }
-          return;
-        }
-      }
-
-      if (!isRetryCurrent()) return;
+      const replacedRows = rows.slice(userIndex);
+      const replacedIds = new Set(replacedRows.map((message) => message.id));
+      const adjustMessageCount =
+        (delta: number) =>
+        <T extends { id: string; messageCount?: number }>(candidate: T): T =>
+          candidate.id === conversationId
+            ? { ...candidate, messageCount: Math.max(0, (candidate.messageCount ?? 0) + delta) }
+            : candidate;
 
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
-        conversations: s.conversations.map((candidate) =>
-          candidate.id === conversationId
-            ? {
-                ...candidate,
-                messageCount: Math.max(0, (candidate.messageCount ?? 0) - countedRemoved),
-              }
-            : candidate,
-        ),
+        conversations: s.conversations.map(adjustMessageCount(-countedRemoved)),
       }));
-      await get().sendMessage(conversationId, userContent, userModel, userAttachments);
+
+      let accepted = false;
+      try {
+        await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
+          onAccepted: () => {
+            accepted = true;
+            if (!isCloudRetry) return;
+            void deleteCloudMessagesRemote(
+              conversationId,
+              replacedRows.map((message) => message.id),
+              retryAccountEpoch,
+            ).catch(() => {
+              if (isRetryCurrent()) {
+                set({
+                  error:
+                    'The earlier Cloud response could not be removed. It may reappear after the next sync.',
+                });
+              }
+            });
+          },
+        });
+      } finally {
+        if (!accepted && isRetryCurrent()) {
+          msgStore.setState((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: [
+                ...(s.messages[conversationId] ?? []).filter(
+                  (message) => !replacedIds.has(message.id),
+                ),
+                ...replacedRows,
+              ],
+            },
+            conversations: s.conversations.map(adjustMessageCount(countedRemoved)),
+          }));
+        }
+      }
+    };
+
+    const runRetry = () => {
+      replaceAndRetry().catch((err: unknown) => {
+        console.warn('[chatExecutionStore] Retry failed:', err);
+        if (isRetryCurrent()) set({ error: 'Retry failed. Please try again.' });
+      });
     };
 
     if (backoffMs > 0) {
-      setTimeout(() => {
-        void replaceAndRetry();
-      }, backoffMs);
+      setTimeout(runRetry, backoffMs);
     } else {
-      void replaceAndRetry();
+      runRetry();
     }
   },
 

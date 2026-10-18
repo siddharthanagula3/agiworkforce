@@ -257,6 +257,7 @@ export default function ChatScreen() {
   const clearError = useChatStore((s) => s.clearError);
   const setSendError = useChatStore((s) => s.setSendError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
+  const resolveOfflineMessage = useChatStore((s) => s.resolveOfflineMessage);
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
@@ -1330,6 +1331,18 @@ export default function ChatScreen() {
       stopSpeaking();
       const messageIndex = conversationMessages.findIndex((message) => message.id === messageId);
       const target = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
+      const failedQueueId = target?.queueFailed ? target.offlineQueueId : undefined;
+      if (target && failedQueueId) {
+        void Promise.resolve(handleSend(target.content))
+          .then((accepted) => {
+            if (accepted) resolveOfflineMessage(id, failedQueueId);
+          })
+          .catch((err: unknown) => {
+            console.warn('[ChatScreen] Resending a failed queued message failed:', err);
+            setSendError('Message could not be sent. Please try again.');
+          });
+        return;
+      }
       if (
         target?.role === 'assistant' &&
         (target.type === 'video' ||
@@ -1359,7 +1372,15 @@ export default function ChatScreen() {
       trackProductEvent('response_regenerated');
       retryMessage(id, messageId);
     },
-    [conversationMessages, handleSend, id, retryMessage, stopSpeaking],
+    [
+      conversationMessages,
+      handleSend,
+      id,
+      resolveOfflineMessage,
+      retryMessage,
+      setSendError,
+      stopSpeaking,
+    ],
   );
 
   const handleProviderConsentEnabled = useCallback(() => {

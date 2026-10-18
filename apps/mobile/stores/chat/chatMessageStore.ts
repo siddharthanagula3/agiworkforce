@@ -202,6 +202,7 @@ interface MessageState {
   isVideoGenerationCancelRequested: (conversationId: string, assistantMessageId: string) => boolean;
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
+  failOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
   appendVoiceTurn: (
     conversationId: string,
@@ -441,6 +442,7 @@ export const useChatMessageStore = create<MessageState>()(
             isStreaming: _isStreaming,
             isQueued: _isQueued,
             offlineQueueId: _offlineQueueId,
+            queueFailed: _queueFailed,
             ...safeMessage
           } = message;
 
@@ -1445,6 +1447,22 @@ export const useChatMessageStore = create<MessageState>()(
         });
       },
 
+      failOfflineMessage: (conversationId, queueId) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs?.some((m) => m.offlineQueueId === queueId && m.isQueued)) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.map((m) =>
+                m.offlineQueueId === queueId ? { ...m, isQueued: false, queueFailed: true } : m,
+              ),
+            },
+          };
+        });
+      },
+
       clearQueuedPlaceholders: (conversationId) => {
         const ownerStore = getConversationMessageStore(conversationId);
         ownerStore.setState((state) => {
@@ -1453,7 +1471,7 @@ export const useChatMessageStore = create<MessageState>()(
           return {
             messages: {
               ...state.messages,
-              [conversationId]: msgs.filter((m) => !m.isStreaming && !m.isQueued),
+              [conversationId]: msgs.filter((m) => !m.isStreaming && !m.isQueued && !m.queueFailed),
             },
           };
         });

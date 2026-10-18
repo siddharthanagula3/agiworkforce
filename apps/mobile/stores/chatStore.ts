@@ -137,6 +137,7 @@ export interface CombinedChatState {
   isVideoGenerationCancelRequested: (conversationId: string, assistantMessageId: string) => boolean;
   stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
+  failOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
   appendVoiceTurn: (
     conversationId: string,
@@ -224,6 +225,7 @@ function buildCombinedState(
     isVideoGenerationCancelRequested: msg.isVideoGenerationCancelRequested,
     stopVideoGeneration: msg.stopVideoGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
+    failOfflineMessage: msg.failOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     appendVoiceTurn: msg.appendVoiceTurn,
     isStreaming: exec.isStreaming,

@@ -61,7 +61,7 @@ export async function syncLocalConversationsToCloud(): Promise<LocalCloudSyncRes
       assertCloudAccountEpochCurrent(account);
 
       const localMessages = (messages[conv.id] ?? [])
-        .filter((m) => !m.isStreaming && !m.isQueued)
+        .filter((m) => !m.isStreaming && !m.isQueued && !m.queueFailed)
         .slice(-MAX_MESSAGES_PER_CONVERSATION)
         .map(sanitiseMessageForCloud)
         .filter((m) => m.content.trim().length > 0);

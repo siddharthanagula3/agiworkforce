@@ -133,6 +133,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   interactiveCards?: InteractiveCard[];
   isQueued?: boolean;
   offlineQueueId?: string;
+  queueFailed?: boolean;
   tokensPerSecond?: number;
   firstTokenLatencyMs?: number;
   runtimeTier?: import('@/src/features/chat/components/PerformanceChip').RuntimeTier;

@@ -14,6 +14,8 @@ export interface NetworkStatus {
   queueSize: number;
 }
 
+let launchReplayStarted = false;
+
 export function isReachableNetworkState(state: ReachabilityState): boolean {
   return state.isConnected === true && state.isInternetReachable === true;
 }
@@ -28,6 +30,7 @@ export function useNetworkStatus(): NetworkStatus {
 
   const sendMessage = useChatStore((s) => s.sendMessage);
   const resolveOfflineMessage = useChatStore((s) => s.resolveOfflineMessage);
+  const failOfflineMessage = useChatStore((s) => s.failOfflineMessage);
 
   const refreshQueueSize = useCallback(() => {
     setQueueSize(offlineQueue.getQueueSize());
@@ -67,6 +70,12 @@ export function useNetworkStatus(): NetworkStatus {
         const online = isReachableNetworkState(state);
         setIsOnline(online);
         wasOnlineRef.current = online;
+        if (online && !launchReplayStarted && offlineQueue.getQueueSize() > 0) {
+          launchReplayStarted = true;
+          void handleReconnect().catch((error) => {
+            console.warn('[useNetworkStatus] Launch queue replay failed:', error);
+          });
+        }
       })
       .catch((err) => {
         console.warn('[useNetworkStatus] Initial network fetch failed:', err);
@@ -94,6 +103,14 @@ export function useNetworkStatus(): NetworkStatus {
       setQueueSize(offlineQueue.getQueueSize());
     });
   }, []);
+
+  useEffect(
+    () =>
+      offlineQueue.onEntryFailed((entry) => {
+        failOfflineMessage(entry.conversationId, entry.id);
+      }),
+    [failOfflineMessage],
+  );
 
   return { isOnline, isReconnecting, queueSize };
 }

@@ -1155,6 +1155,47 @@ export const MessageBubble = memo(function MessageBubble({
             </View>
           )}
 
+          {isUser && message.queueFailed && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 3,
+                  backgroundColor: themeColors.dangerSurface,
+                  paddingHorizontal: 5,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                }}
+                accessibilityLabel="Message failed to send"
+              >
+                <TriangleAlert size={10} color={themeColors.agentError} />
+                <Text style={{ fontSize: typeScale.caption, color: themeColors.agentError }}>
+                  failed to send
+                </Text>
+              </View>
+              {onRetryMessage ? (
+                <PressableBox
+                  onPress={() => onRetryMessage(message.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry sending this message"
+                  hitSlop={10}
+                  style={{ minHeight: 24, justifyContent: 'center', paddingHorizontal: 4 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                      color: themeColors.textPrimary,
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </PressableBox>
+              ) : null}
+            </View>
+          )}
+
           {quotedReply ? <SentContextChip icon={Quote} label={quotedReply.quote} /> : null}
           {skillUsed ? <SentContextChip icon={Sparkles} label={`Skill: ${skillUsed}`} /> : null}
 
