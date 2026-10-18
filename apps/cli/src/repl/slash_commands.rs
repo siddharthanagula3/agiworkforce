@@ -12,7 +12,7 @@ use super::registry;
 pub(super) enum SlashResult {
     Handled,
     Exit,
-    Login,
+    Login(String),
     Logout,
     Btw(String),
     Advisor(String),
@@ -115,7 +115,7 @@ pub(super) async fn handle_slash_command(
             } else {
                 match session.switch_model(arg) {
                     Ok(()) => {
-                        let provider = format!("{:?}", session.provider).to_lowercase();
+                        let provider = crate::models::provider_name(&session.provider);
                         output::print_info(&format!("Switched to {} ({})", arg, provider));
                     }
                     Err(err) => output::print_warn(&err.to_string()),
@@ -568,7 +568,7 @@ pub(super) async fn handle_slash_command(
             }
         }
         "/login" => {
-            return SlashResult::Login;
+            return SlashResult::Login(arg.to_string());
         }
         "/logout" => {
             return SlashResult::Logout;

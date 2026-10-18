@@ -64,6 +64,8 @@ pub struct UsageCredits {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct AccountUsage {
     pub plan_tier: String,
+    #[serde(default)]
+    pub effective_plan_tier: Option<String>,
     pub usage_percentage: f64,
     pub has_usage_remaining: bool,
     #[serde(default)]
@@ -347,7 +349,12 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
     let body = fetch_account_body(jwt, USAGE_PATH).await?;
     let usage =
         parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
-    tier_cache::adopt_server_plan(&usage.plan_tier);
+    tier_cache::adopt_server_plan(
+        usage
+            .effective_plan_tier
+            .as_deref()
+            .unwrap_or(usage.plan_tier.as_str()),
+    );
     Ok(usage)
 }
 
@@ -996,6 +1003,7 @@ mod tests {
     fn an_exhausted_plan_says_so() {
         let usage = AccountUsage {
             plan_tier: "free".to_string(),
+            effective_plan_tier: None,
             usage_percentage: 100.0,
             has_usage_remaining: false,
             usage_reset_at: None,

@@ -4308,7 +4308,7 @@ enum SlashResult {
     SendMcpPrompt(String),
     RunAdvisor(String),
     RunCompact(String),
-    RunLogin,
+    RunLogin(String),
     RunLogout,
     StatusReport(String),
     /// Leave the TUI, run the interactive voice loop, then re-enter.
@@ -4404,7 +4404,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match app.session.switch_model(arg) {
                     Ok(()) => {
                         app.sync_stats();
-                        let provider = format!("{:?}", app.session.provider).to_lowercase();
+                        let provider = crate::models::provider_name(&app.session.provider);
                         SlashResult::SystemMessage(format!("Switched to {} ({})", arg, provider))
                     }
                     Err(err) => SlashResult::SystemMessage(format!("Model switch failed: {err}")),
@@ -4789,7 +4789,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(crate::claude_parity::links_command(reply, arg))
         }
 
-        "/login" => SlashResult::RunLogin,
+        "/login" => SlashResult::RunLogin(arg.to_string()),
 
         "/logout" => SlashResult::RunLogout,
 
@@ -6196,11 +6196,13 @@ async fn run_event_loop(
                                     });
                                 }
                             }
-                            SlashResult::RunLogin => {
+                            SlashResult::RunLogin(provider) => {
                                 // Leave TUI, run interactive login, re-enter TUI
                                 restore_terminal(terminal)?;
-                                let result =
-                                    crate::auth::interactive_login_for_provider(None).await;
+                                let result = crate::auth::interactive_login_for_provider(
+                                    Some(provider.as_str()).filter(|name| !name.is_empty()),
+                                )
+                                .await;
                                 *terminal = setup_terminal()?;
                                 crate::claude_parity::connectors::forget_local_tool_policy();
                                 match result {

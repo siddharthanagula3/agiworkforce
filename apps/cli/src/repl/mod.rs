@@ -260,9 +260,11 @@ pub async fn run_repl(
                     let result = handle_slash_command(input, &mut session, config).await;
                     match result {
                         SlashResult::Exit => break,
-                        SlashResult::Login => {
-                            let login_result =
-                                crate::auth::interactive_login_for_provider(None).await;
+                        SlashResult::Login(provider) => {
+                            let login_result = crate::auth::interactive_login_for_provider(
+                                Some(provider.as_str()).filter(|name| !name.is_empty()),
+                            )
+                            .await;
                             crate::claude_parity::connectors::forget_local_tool_policy();
                             if let Err(e) = login_result {
                                 output::print_error(&format!("Login failed: {:#}", e));

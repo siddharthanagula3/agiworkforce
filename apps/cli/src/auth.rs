@@ -1027,7 +1027,8 @@ pub(crate) fn is_agiworkforce_login_provider(provider: Option<&str>) -> bool {
 pub async fn login_agiworkforce() -> Result<()> {
     let base = crate::app_server::account::device_auth_base();
     let entry = crate::oauth::device_code_login(&base).await?;
-    save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)?;
+    crate::app_server::account::save_device_grant(entry)?;
+    record_credential_use(AGIWORKFORCE_AUTH_KEY, "signed in and saved a credential");
     crate::device_registry::send_heartbeat().await;
     Ok(())
 }

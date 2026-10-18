@@ -423,6 +423,8 @@ pub(crate) struct MePlan {
     /// e.g. `"free"`, `"basic"`, `"pro"`, `"max"`, `"max_15x"`,
     /// `"team"`, `"enterprise"`.
     pub(crate) tier: Option<String>,
+    #[serde(default)]
+    pub(crate) effective_tier: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -629,7 +631,11 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
 
     match result {
         Ok(Ok(resp)) => {
-            let tier_str = match resp.plan.as_ref().and_then(|p| p.tier.as_deref()) {
+            let tier_str = match resp
+                .plan
+                .as_ref()
+                .and_then(|p| p.effective_tier.as_deref().or(p.tier.as_deref()))
+            {
                 Some(s) => s.to_string(),
                 None => {
                     tracing::debug!("[tier_cache] /api/me returned no plan.tier");

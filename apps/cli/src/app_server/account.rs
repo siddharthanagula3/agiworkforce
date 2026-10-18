@@ -50,6 +50,8 @@ struct MeResponse {
 struct MePlan {
     #[serde(default)]
     tier: Option<String>,
+    #[serde(default)]
+    effective_tier: Option<String>,
 }
 
 fn account_cache_path() -> Option<PathBuf> {
@@ -214,7 +216,11 @@ async fn fetch_email(jwt: &str) -> Option<String> {
         return None;
     }
     let body: MeResponse = response.json().await.ok()?;
-    if let Some(plan_tier) = body.plan.as_ref().and_then(|plan| plan.tier.as_deref()) {
+    if let Some(plan_tier) = body
+        .plan
+        .as_ref()
+        .and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref()))
+    {
         tier_cache::adopt_server_plan(plan_tier);
     }
     body.email.filter(|email| !email.is_empty())
