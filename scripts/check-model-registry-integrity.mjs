@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const REGISTRY_PATH = 'packages/ai/model-registry/generated/registry.json';
 const SCHEMA_PATH = 'packages/ai/model-registry/schema/registry.schema.json';
@@ -306,6 +307,6 @@ function main() {
   );
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

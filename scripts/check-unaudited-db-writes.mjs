@@ -39,6 +39,10 @@ export const REHEARSAL_DB_WRITERS = new Map([
     'restores a dump into a throwaway local database it creates and drops in the same run',
   ],
   [
+    'public-runtime/database.mjs',
+    'seeds and clones the public-runtime proof database on its local socket, created and dropped per run',
+  ],
+  [
     'key-rotation-drill.mjs',
     'rehearses a rotation on a Neon branch it creates and deletes; production rows are never touched',
   ],
@@ -48,12 +52,18 @@ export const REHEARSAL_DB_WRITERS = new Map([
   ],
 ]);
 
-function scriptFilenames(root) {
+function scriptFilenames(root, directory = '') {
   return fs
-    .readdirSync(path.join(root, SCRIPTS_DIR), { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.mjs'))
-    .map((entry) => entry.name)
-    .filter((name) => !name.endsWith('.test.mjs') && !name.startsWith('check-'))
+    .readdirSync(path.join(root, SCRIPTS_DIR, directory), { withFileTypes: true })
+    .flatMap((entry) => {
+      const name = directory ? `${directory}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        return entry.name === 'node_modules' ? [] : scriptFilenames(root, name);
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.mjs')) return [];
+      if (entry.name.endsWith('.test.mjs') || entry.name.startsWith('check-')) return [];
+      return [name];
+    })
     .sort();
 }
 
