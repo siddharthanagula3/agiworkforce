@@ -223,6 +223,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/compliance"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/design-tokens"
       },
       {
