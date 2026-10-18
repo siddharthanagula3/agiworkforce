@@ -14,6 +14,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  getDefaultModelFor,
+  getModelMetadataById,
+  getProviderDisplayLabel,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 
 const _store: Record<string, unknown> = {};
 
@@ -190,6 +196,20 @@ describe('options data-handling disclosure', () => {
     expect(text).toContain('reads only your AGI sign-in');
     expect(text).toContain('never sets a cookie');
     expect(text).toContain('copied to your AGI account');
+  });
+
+  it('names the Free plan model the catalog serves, not a free-model router', () => {
+    const training = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'training')!;
+    const freeModel = getModelMetadataById(
+      getDefaultModelFor(normalizeBillingPlanTier(null), 'chat'),
+    )!;
+
+    expect(training.body).toContain(freeModel.name);
+    expect(training.body).toContain(getProviderDisplayLabel(freeModel.provider));
+    expect(training.body).toContain('a provider AGI chooses');
+    expect(training.body).toContain('free model promotion');
+    expect(training.body).toContain('Each reply shows the model that answered.');
+    expect(training.body).not.toContain('providers’ free models');
   });
 
   it('describes the page attach the extension actually performs', () => {
