@@ -10,7 +10,6 @@ import {
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogTitle,
-  CommandDialog,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -66,11 +65,6 @@ const OPEN: Record<string, () => ReactElement> = {
         <div data-testid="inside">Body</div>
       </DrawerContent>
     </Drawer>
-  ),
-  Command: () => (
-    <CommandDialog open>
-      <div data-testid="inside">Body</div>
-    </CommandDialog>
   ),
 };
 

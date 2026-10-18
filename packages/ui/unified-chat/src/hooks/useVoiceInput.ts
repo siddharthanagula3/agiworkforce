@@ -57,7 +57,6 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
     const recognition = new Ctor();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = 'en-US';
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = Array.from(event.results)

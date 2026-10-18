@@ -538,10 +538,7 @@ export type {
   ChartSeriesSpec,
   ChartSpec,
 } from './components/artifact-components/chart-spec';
-export {
-  ReactPreview,
-  buildReactPreviewDocument,
-} from './components/artifact-components/ReactPreview';
+export { ReactPreview } from './components/artifact-components/ReactPreview';
 export type { ReactPreviewProps } from './components/artifact-components/ReactPreview';
 export { ArtifactSandboxFrame } from './components/artifact-components/ArtifactSandboxFrame';
 export type { ArtifactSandboxFrameProps } from './components/artifact-components/ArtifactSandboxFrame';

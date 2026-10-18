@@ -15,7 +15,6 @@
     "./button": "./src/primitives/Button.tsx",
     "./cn": "./src/cn.ts",
     "./dialog": "./src/primitives/Dialog.tsx",
-    "./dom": "./src/dom/index.ts",
     "./i18n": "./src/i18n.ts",
     "./label": "./src/primitives/Label.tsx",
     "./search-shortcut": "./src/sidebar/searchShortcut.ts",

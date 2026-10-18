@@ -15,7 +15,6 @@ import type { Artifact, ChatMessage, MessageArtifactProjection } from '../../lib
 
 vi.mock('../artifact-components/ReactPreview', () => ({
   ReactPreview: () => <div data-testid="stub-react-preview" />,
-  buildReactPreviewDocument: vi.fn(),
 }));
 
 interface CapturedDownload {

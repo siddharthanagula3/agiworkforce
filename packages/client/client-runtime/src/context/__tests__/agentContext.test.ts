@@ -11,7 +11,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
     requestId: 'req-001',
     origin: { kind: 'tauri-command', commandName: 'chat_send_message', invokedAt: Date.now() },
-    planTier: 'hobby',
+    planTier: 'pro',
     conversationId: 'conv-abc',
     activeModelId: null,
     invokingRequestId: null,

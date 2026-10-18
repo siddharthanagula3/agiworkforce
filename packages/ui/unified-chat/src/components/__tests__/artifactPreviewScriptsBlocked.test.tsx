@@ -12,7 +12,11 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { ReactPreview } from '../artifact-components/ReactPreview';
+import {
+  ReactPreview,
+  REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE,
+} from '../artifact-components/ReactPreview';
+import { SCRIPTS_BLOCKED_NOTICE } from '../../lib/artifact-preview-capability';
 import { ArtifactPanel } from '../ArtifactPanel';
 import type { Artifact } from '../../lib/types';
 
@@ -27,7 +31,8 @@ describe('ReactPreview under a blocking embedder CSP', () => {
   it('explains why the component cannot run instead of spinning forever', () => {
     render(<ReactPreview code={REACT_CODE} scriptSupport="blocked" />);
 
-    expect(screen.getByTestId('react-preview-scripts-blocked')).toBeTruthy();
+    expect(screen.getByTestId('react-preview-unavailable')).toBeTruthy();
+    expect(screen.getByText(SCRIPTS_BLOCKED_NOTICE)).toBeTruthy();
     expect(screen.queryByText('Loading...')).toBeNull();
     expect(screen.queryByTitle('React Component Preview')).toBeNull();
   });
@@ -45,19 +50,17 @@ describe('ReactPreview under a blocking embedder CSP', () => {
     expect(screen.queryByText('View source')).toBeNull();
   });
 
-  it('mounts the real preview when scripts are allowed', () => {
-    render(<ReactPreview code={REACT_CODE} scriptSupport="allowed" />);
+  it.each(['allowed', 'unknown'] as const)(
+    'with scripts %s but no artifact origin, shows the source rather than a same-document runtime',
+    (scriptSupport) => {
+      render(<ReactPreview code={REACT_CODE} scriptSupport={scriptSupport} />);
 
-    expect(screen.queryByTestId('react-preview-scripts-blocked')).toBeNull();
-    expect(screen.getByTitle('React Component Preview')).toBeTruthy();
-  });
-
-  it('says nothing while the capability is still unknown', () => {
-    render(<ReactPreview code={REACT_CODE} />);
-
-    expect(screen.queryByTestId('react-preview-scripts-blocked')).toBeNull();
-    expect(screen.getByTitle('React Component Preview')).toBeTruthy();
-  });
+      expect(screen.getByText(REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE)).toBeTruthy();
+      expect(screen.queryByText(SCRIPTS_BLOCKED_NOTICE)).toBeNull();
+      expect(screen.getByTestId('react-preview-source').textContent).toBe(REACT_CODE);
+      expect(screen.queryByTitle('React Component Preview')).toBeNull();
+    },
+  );
 });
 
 const htmlArtifact: Artifact = {

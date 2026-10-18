@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ArtifactRenderer } from '../ArtifactRenderer';
-import { ReactPreview, buildReactPreviewDocument } from '../artifact-components/ReactPreview';
+import {
+  ReactPreview,
+  REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE,
+} from '../artifact-components/ReactPreview';
+import { configureArtifactSandboxOrigin } from '../../lib/artifact-sandbox';
 import { PresentationArtifact } from '../artifact-components/PresentationArtifact';
 import { SpreadsheetArtifact } from '../artifact-components/SpreadsheetArtifact';
 import type { Artifact } from '../../lib/types';
@@ -184,17 +188,25 @@ describe('ReactPreview', () => {
     expect(screen.getByTestId('react-preview-frame')).toBeDefined();
   });
 
-  it('iframe has sandbox="allow-scripts" only', () => {
-    render(<ReactPreview code="export default () => <div>Hello</div>" />);
-    const iframe = document.querySelector('iframe');
-    expect(iframe).not.toBeNull();
-    expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts');
+  it('without an artifact origin, shows the source and a notice and runs nothing', () => {
+    const code = 'export default () => <div>Hello</div>';
+    render(<ReactPreview code={code} />);
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(screen.getByText(REACT_PREVIEW_SANDBOX_UNAVAILABLE_NOTICE)).toBeDefined();
+    expect(screen.getByTestId('react-preview-source').textContent).toBe(code);
   });
 
-  it('iframe has referrerPolicy="no-referrer"', () => {
-    render(<ReactPreview code="export default () => <div>Hello</div>" />);
-    const iframe = document.querySelector('iframe');
-    expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
+  it('on an artifact origin, frames that origin with no referrer and no srcdoc', () => {
+    configureArtifactSandboxOrigin('https://sandbox.agiworkforce.test');
+    try {
+      render(<ReactPreview code="export default () => <div>Hello</div>" />);
+      const iframe = document.querySelector('iframe');
+      expect(iframe?.getAttribute('src')).toBe('https://sandbox.agiworkforce.test/');
+      expect(iframe?.getAttribute('srcdoc')).toBeNull();
+      expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
+    } finally {
+      configureArtifactSandboxOrigin(undefined);
+    }
   });
 
   it('reload button does not throw and button remains visible after click', () => {
@@ -202,26 +214,6 @@ describe('ReactPreview', () => {
     const reloadBtn = screen.getByLabelText('Reload preview');
     fireEvent.click(reloadBtn);
     expect(reloadBtn).toBeDefined();
-  });
-
-  it('buildReactPreviewDocument includes channelId in script', () => {
-    const doc = buildReactPreviewDocument('export default () => null', 'test-channel-id', 'null');
-    expect(doc).toContain('test-channel-id');
-    expect(doc).toContain('babel.min.js');
-    expect(doc).toContain('esm.sh/react@18');
-  });
-
-  it('buildReactPreviewDocument avoids wildcard postMessage targets and dynamic Function execution', () => {
-    const doc = buildReactPreviewDocument(
-      'export default function App() { return <div>Hello</div>; }',
-      'channel-1',
-      'null',
-    );
-
-    expect(doc).not.toContain('new Function');
-    expect(doc).not.toContain("postMessage({ channelId, type, ...payload }, '*')");
-    expect(doc).toContain('postMessage({ channelId, type, ...payload }, parentOrigin)');
-    expect(doc).toContain('import(moduleUrl)');
   });
 });
 

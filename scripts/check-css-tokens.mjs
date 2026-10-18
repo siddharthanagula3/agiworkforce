@@ -158,7 +158,6 @@ const PORTAL_OVERLAYS = [
   'packages/ui/ui/src/primitives/Dialog.tsx',
   'packages/ui/ui/src/primitives/DropdownMenu.tsx',
   'packages/ui/ui/src/primitives/HoverCard.tsx',
-  'packages/ui/ui/src/primitives/Menubar.tsx',
   'packages/ui/ui/src/primitives/Popover.tsx',
   'packages/ui/ui/src/primitives/Select.tsx',
   'packages/ui/ui/src/primitives/Tooltip.tsx',

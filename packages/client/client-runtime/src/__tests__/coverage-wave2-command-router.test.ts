@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 type ScanModule0 = typeof import('../detect');
 
 vi.mock('../detect', async (importOriginal) => ({
@@ -7,20 +7,11 @@ vi.mock('../detect', async (importOriginal) => ({
   isTest: false,
 }));
 
-vi.mock('../http', () => ({
-  routeToCloud: vi.fn().mockResolvedValue('CLOUD_OK'),
-}));
+const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
 import { resolveCommandCapability } from '../registry';
-import { command, commandWithWarning } from '../command';
+import { command } from '../command';
 import { DesktopRequiredError } from '../errors';
-import { routeToCloud } from '../http';
-
-const mockedRouteToCloud = vi.mocked(routeToCloud);
-
-beforeEach(() => {
-  mockedRouteToCloud.mockClear();
-});
 
 describe('resolveCommandCapability (tier classification)', () => {
   it('maps a Local file command to desktop-only', () => {
@@ -73,48 +64,14 @@ describe('resolveCommandCapability (tier classification)', () => {
   });
 });
 
-describe('command() dispatch (web/cloud mode)', () => {
-  it('LOCK ENFORCEMENT: rejects a desktop-only command with DesktopRequiredError AND never routes it to cloud', async () => {
-    await expect(command('file_read')).rejects.toBeInstanceOf(DesktopRequiredError);
-    expect(mockedRouteToCloud).not.toHaveBeenCalled();
-  });
-
-  it('routes a cloud command through routeToCloud', async () => {
-    const result = await command('chat_send', { text: 'hi' });
-    expect(result).toBe('CLOUD_OK');
-    expect(mockedRouteToCloud).toHaveBeenCalledTimes(1);
-    const [name, args, cap] = mockedRouteToCloud.mock.calls[0]!;
-    expect(name).toBe('chat_send');
-    expect(args).toEqual({ text: 'hi' });
-    expect(cap.tier).toBe('cloud');
-  });
-
-  it('routes a desktop-preferred command through routeToCloud (cloud fallback)', async () => {
-    const result = await command('mcp_call');
-    expect(result).toBe('CLOUD_OK');
-    expect(mockedRouteToCloud).toHaveBeenCalledTimes(1);
-    expect(mockedRouteToCloud.mock.calls[0]![2].tier).toBe('desktop-preferred');
-  });
-});
-
-describe('commandWithWarning() warning behavior', () => {
-  it('attaches NO warning for a clean cloud command', async () => {
-    const res = await commandWithWarning('chat_send');
-    expect(res.data).toBe('CLOUD_OK');
-    expect(res.warning).toBeUndefined();
-  });
-
-  it('attaches a desktop-preferred warning when a desktop-preferred command falls back to cloud', async () => {
-    const res = await commandWithWarning('mcp_call');
-    expect(res.data).toBe('CLOUD_OK');
-    expect(res.warning).toBeDefined();
-    expect(res.warning!.type).toBe('desktop-preferred');
-    expect(res.warning!.commandName).toBe('mcp_call');
-    expect(res.warning!.featureGroup).toBe('MCP Tools');
-  });
-
-  it('LOCK ENFORCEMENT: throws DesktopRequiredError for a desktop-only command without routing to cloud', async () => {
-    await expect(commandWithWarning('terminal_exec')).rejects.toBeInstanceOf(DesktopRequiredError);
-    expect(mockedRouteToCloud).not.toHaveBeenCalled();
-  });
+describe('command() dispatch without a desktop host', () => {
+  it.each(['file_read', 'chat_send', 'mcp_call'])(
+    'rejects %s with DesktopRequiredError and sends nothing over the network',
+    async (name) => {
+      const failure = await command(name).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(DesktopRequiredError);
+      expect((failure as DesktopRequiredError).capability).toEqual(resolveCommandCapability(name));
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -11,11 +11,9 @@ export { RuntimeEnv, isTauri, isCloudWeb, isTest, getRuntimeEnv } from './detect
 
 export { resolveClientChatExecutionMode } from './mode';
 
-export { command, commandWithWarning } from './command';
-export type { CommandResult } from './command';
+export { command } from './command';
 
-export { DesktopRequiredError, createDesktopPreferredWarning } from './errors';
-export type { DesktopPreferredWarning } from './errors';
+export { DesktopRequiredError } from './errors';
 
 export { resolveCommandCapability } from './registry';
 
@@ -23,8 +21,6 @@ export { desktopRuntimeHandles, invokeDesktopRuntime, isElectronDesktop } from '
 
 export { listen, once, emit } from './events';
 export type { EventCallback, UnlistenFn } from './events';
-
-export { routeToCloud } from './http';
 
 export {
   applyAgentActivityEvent,
@@ -51,41 +47,8 @@ export type {
   FinishAgentActivityLocallyOptions,
 } from './agentActivity';
 
-export {
-  createStore,
-  appStateStore,
-  onChangeAppState,
-  onFanOutError,
-  registerApiCacheInvalidator,
-  registerTelemetryHandler,
-  registerPersistenceHandler,
-  registerModelSwitchListener,
-  MAX_FANOUT_DEPTH,
-  initialAppState,
-  initialAuthState,
-  initialChatState,
-  initialSettingsState,
-  initialSubscriptionsState,
-  initialMcpState,
-  initialMemoryState,
-} from './state';
-export type {
-  Store,
-  Listener,
-  OnChange,
-  FanOutError,
-  CircularFanOutError,
-  AppStateTelemetryEvent,
-  ModelSwitchEvent,
-  AppState,
-  AuthState,
-  ChatState,
-  SettingsState,
-  SubscriptionsState,
-  McpState,
-  MemoryState,
-  PlanTier,
-} from './state';
+export { createStore } from './state';
+export type { Store, Listener, OnChange } from './state';
 
 export {
   createMessageQueue,

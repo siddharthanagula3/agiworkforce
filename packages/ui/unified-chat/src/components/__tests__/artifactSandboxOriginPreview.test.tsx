@@ -139,7 +139,7 @@ describe('ReactPreview on a dedicated artifact origin', () => {
 
     render(<ReactPreview code={REACT_CODE} scriptSupport="blocked" />);
 
-    expect(screen.queryByTestId('react-preview-scripts-blocked')).toBeNull();
+    expect(screen.queryByTestId('react-preview-unavailable')).toBeNull();
     const frame = screen.getByTitle('React Component Preview');
     expect(frame.getAttribute('src')).toBe(`${SANDBOX_ORIGIN}/`);
   });
@@ -154,16 +154,15 @@ describe('ReactPreview on a dedicated artifact origin', () => {
       await vi.advanceTimersByTimeAsync(3_100);
     });
 
-    expect(screen.getByTestId('react-preview-scripts-blocked')).toBeTruthy();
+    expect(screen.getByTestId('react-preview-unavailable')).toBeTruthy();
     expect(screen.queryByTitle('React Component Preview')).toBeNull();
   });
 
-  it('keeps the same-document fallback when there is no artifact origin', () => {
+  it('never builds a same-document runtime when there is no artifact origin', () => {
     render(<ReactPreview code={REACT_CODE} scriptSupport="allowed" />);
 
-    const frame = screen.getByTitle('React Component Preview');
-    expect(frame.getAttribute('src')).toBeNull();
-    expect(frame.getAttribute('srcdoc')).toContain('@babel/standalone');
-    expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
+    expect(screen.queryByTitle('React Component Preview')).toBeNull();
+    expect(document.querySelector('iframe[srcdoc]')).toBeNull();
+    expect(screen.getByTestId('react-preview-source').textContent).toBe(REACT_CODE);
   });
 });

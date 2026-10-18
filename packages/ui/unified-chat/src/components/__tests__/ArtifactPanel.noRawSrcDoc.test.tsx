@@ -7,7 +7,6 @@ import type { Artifact } from '../../lib/types';
 
 vi.mock('../artifact-components/ReactPreview', () => ({
   ReactPreview: () => <div data-testid="stub-react-preview" />,
-  buildReactPreviewDocument: vi.fn(),
 }));
 
 const panelSource = readFileSync(

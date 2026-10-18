@@ -1,4 +1,3 @@
-
 import type { CommandCapability } from '@agiworkforce/types';
 
 export class DesktopRequiredError extends Error {
@@ -13,23 +12,4 @@ export class DesktopRequiredError extends Error {
     this.commandName = commandName;
     this.capability = capability;
   }
-}
-
-export interface DesktopPreferredWarning {
-  type: 'desktop-preferred';
-  commandName: string;
-  featureGroup: string;
-  message: string;
-}
-
-export function createDesktopPreferredWarning(
-  commandName: string,
-  featureGroup: string,
-): DesktopPreferredWarning {
-  return {
-    type: 'desktop-preferred',
-    commandName,
-    featureGroup,
-    message: `"${commandName}" works better on the desktop app (${featureGroup}).`,
-  };
 }

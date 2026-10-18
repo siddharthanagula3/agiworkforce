@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ArtifactPanel } from '../ArtifactPanel';
@@ -9,7 +8,6 @@ vi.mock('../artifact-components/ReactPreview', () => ({
   ReactPreview: ({ code }: { code: string }) => (
     <div data-testid="stub-react-preview" data-code-length={code.length} />
   ),
-  buildReactPreviewDocument: vi.fn(),
 }));
 
 function makeArtifact(overrides: Partial<Artifact> & { type: Artifact['type'] }): Artifact {

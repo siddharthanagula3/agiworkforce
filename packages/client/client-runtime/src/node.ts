@@ -6,7 +6,7 @@
  * import from this entry, it transitively imports `node:async_hooks`.
  *
  * The universal `@agiworkforce/client-runtime` entry exposes everything that's
- * surface-agnostic (detect, command, events, errors, registry, http, queue, state).
+ * surface-agnostic (detect, command, events, errors, registry, queue, state).
  *
  * @packageDocumentation
  */

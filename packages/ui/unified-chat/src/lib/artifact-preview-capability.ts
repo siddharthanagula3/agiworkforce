@@ -1,8 +1,8 @@
 /**
  * artifact-preview-capability, can a same-document artifact preview run scripts?
  *
- * DES-C15. Artifact previews render as `<iframe srcDoc=…>` (`ArtifactPanel`'s
- * HTML preview, `ReactPreview`). An `about:srcdoc` document INHERITS the
+ * DES-C15. Same-document artifact previews render as `<iframe srcDoc=…>`
+ * (`ArtifactPanel`'s HTML preview). An `about:srcdoc` document INHERITS the
  * embedder's Content-Security-Policy, and the artifact's own permissive `<meta>`
  * policy (`artifact-sandbox.ts`) can only intersect with that inherited policy,
  * never widen it.
@@ -10,10 +10,9 @@
  * Inside the packaged Tauri app the embedder policy is
  * `script-src 'self' 'wasm-unsafe-eval'` (`apps/desktop/src-tauri/tauri.conf.json`):
  * no `'unsafe-inline'`, no `'unsafe-eval'`, no CDN hosts. So an interactive HTML
- * artifact's inline `<script>` never runs, and `ReactPreview`'s CDN Babel/React
- * never loads, the frame stays blank and the toolbar spins "Loading..." forever
- * with nothing telling the user why. That is the "preview shows nothing" report,
- * and it affects Local as much as Cloud.
+ * artifact's inline `<script>` never runs, with nothing telling the user why.
+ * That is the "preview shows nothing" report, and it affects Local as much as
+ * Cloud. `ReactPreview` never renders same-document; it needs the artifact origin.
  *
  * Web does not have the problem because it renders artifacts on a SEPARATE
  * ORIGIN (`NEXT_PUBLIC_SANDBOX_ORIGIN` + `infrastructure/sandbox/index.html`,

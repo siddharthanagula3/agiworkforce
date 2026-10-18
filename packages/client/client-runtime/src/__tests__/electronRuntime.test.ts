@@ -125,15 +125,6 @@ describe('command routing', () => {
     expect(invokeRuntime).toHaveBeenCalledWith('file_list', { rootId: 'r' });
   });
 
-  it('routes the same command through commandWithWarning', async () => {
-    const invokeRuntime = vi.fn().mockResolvedValue({ ok: true, value: ['a.ts'] });
-    const { command } = await loadWith({ invokeRuntime });
-
-    await expect(command.commandWithWarning('file_list', { rootId: 'r' })).resolves.toEqual({
-      data: ['a.ts'],
-    });
-  });
-
   it('does not divert a cloud command to the local runtime', async () => {
     const invokeRuntime = vi.fn();
     const { command } = await loadWith({ invokeRuntime });

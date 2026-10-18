@@ -1,6 +1,5 @@
-
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { AppState } from '../state/AppStateStore';
+import type { BillingPlanTier } from '@agiworkforce/types';
 
 export type AgentOrigin =
   | { kind: 'tauri-command'; commandName: string; invokedAt: number }
@@ -10,7 +9,7 @@ export type AgentOrigin =
 export interface AgentContext {
   readonly requestId: string;
   readonly origin: AgentOrigin;
-  readonly planTier: AppState['auth']['planTier'];
+  readonly planTier: BillingPlanTier;
   readonly conversationId: string | null;
   readonly activeModelId: string | null;
   readonly invokingRequestId: string | null;

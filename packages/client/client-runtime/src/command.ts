@@ -1,21 +1,14 @@
 import { isTauri, isTest } from './detect';
 import { desktopRuntimeHandles, invokeDesktopRuntime } from './electronRuntime';
-import { DesktopRequiredError, createDesktopPreferredWarning } from './errors';
-import type { DesktopPreferredWarning } from './errors';
+import { DesktopRequiredError } from './errors';
 import { resolveCommandCapability } from './registry';
-import { routeToCloud } from './http';
-
-export interface CommandResult<T> {
-  data: T;
-  warning?: DesktopPreferredWarning;
-}
 
 /**
- * Execute a Tauri command with capability-aware routing.
+ * Execute a desktop host command.
  *
- * In desktop mode: calls Tauri invoke() directly.
- * In cloud/web mode: routes to cloud API or throws DesktopRequiredError.
- * In test mode: throws (test code should mock this function).
+ * In Tauri: calls invoke() directly. In the Electron shell: commands the local
+ * runtime owns go over its bridge. Everywhere else the command has no host, so
+ * it fails with DesktopRequiredError. In test mode it throws so the caller mocks it.
  *
  * @param name - The snake_case command name (e.g., 'chat_send_message')
  * @param args - Optional camelCase parameters (auto-converted by Tauri IPC)
@@ -38,49 +31,5 @@ export async function command<T>(name: string, args?: Record<string, unknown>): 
     );
   }
 
-  const cap = resolveCommandCapability(name);
-
-  if (cap.tier === 'cloud') {
-    return routeToCloud<T>(name, args, cap);
-  }
-
-  if (cap.tier === 'desktop-preferred') {
-    return routeToCloud<T>(name, args, cap);
-  }
-
-  throw new DesktopRequiredError(name, cap);
-}
-
-export async function commandWithWarning<T>(
-  name: string,
-  args?: Record<string, unknown>,
-): Promise<CommandResult<T>> {
-  if (isTauri) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const data = await invoke<T>(name, args);
-    return { data };
-  }
-
-  if (desktopRuntimeHandles(name)) {
-    return { data: await invokeDesktopRuntime<T>(name, args) };
-  }
-
-  if (isTest) {
-    throw new Error(`commandWithWarning("${name}") called in test environment without mock.`);
-  }
-
-  const cap = resolveCommandCapability(name);
-
-  if (cap.tier === 'cloud') {
-    const data = await routeToCloud<T>(name, args, cap);
-    return { data };
-  }
-
-  if (cap.tier === 'desktop-preferred') {
-    const data = await routeToCloud<T>(name, args, cap);
-    const warning = createDesktopPreferredWarning(name, cap.featureGroup);
-    return { data, warning };
-  }
-
-  throw new DesktopRequiredError(name, cap);
+  throw new DesktopRequiredError(name, resolveCommandCapability(name));
 }
