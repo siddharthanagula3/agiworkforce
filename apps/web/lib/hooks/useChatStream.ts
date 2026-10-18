@@ -181,6 +181,7 @@ import {
   rendersResearchPlan,
   researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
+import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -3142,6 +3143,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                       : 'Research run failed'
                     : undefined,
                 steps: currentResearch?.steps,
+                gaps: currentResearch?.gaps,
                 sourcesForRetry: currentResearch?.sourcesForRetry,
                 runConfig: currentResearch?.runConfig,
               };
@@ -3172,6 +3174,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }
+          }
+
+          const researchGaps = parseResearchGapsEvent(parsed.choices?.[0]?.delta?.x_research_gaps);
+          if (researchGaps && currentResearch) {
+            currentResearch = { ...currentResearch, gaps: researchGaps };
+            setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
           }
 
           const agiWorkPlan = parsed.choices?.[0]?.delta?.x_agiwork_plan;

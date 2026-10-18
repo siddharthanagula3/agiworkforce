@@ -34,6 +34,7 @@ import type {
 import type {
   InteractiveCard,
   ProjectFileCitation,
+  ResearchGap,
   ResearchRunConfig,
   ResearchStep,
 } from '@agiworkforce/types';
@@ -180,6 +181,7 @@ export interface MessageResearchState {
    * Absent for a run that predates the event or whose plan could not be parsed.
    */
   steps?: ResearchStep[];
+  gaps?: ResearchGap[];
   /**
    * Sources this run gathered, carried forward when the user retries an
    * errored/interrupted run so the retry does not re-search what already
