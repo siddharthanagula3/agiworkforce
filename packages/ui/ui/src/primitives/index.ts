@@ -1,24 +1,5 @@
 export { Alert, AlertTitle, AlertDescription, type AlertProps } from './Alert';
-export { AccessibleDialog, type AccessibleDialogProps } from './AccessibleDialog';
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './Card';
-export {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuCheckboxItem,
-  ContextMenuRadioItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuGroup,
-  ContextMenuPortal,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuRadioGroup,
-} from './ContextMenu';
-export { HoverCard, HoverCardTrigger, HoverCardContent } from './HoverCard';
 export { Button, buttonVariants, type ButtonProps } from './Button';
 export { ResizeHandle } from './ResizeHandle';
 export {
@@ -78,16 +59,6 @@ export {
   SkeletonTableRow,
   SkeletonFormField,
 } from './Skeleton';
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from './Table';
 export { Checkbox } from './Checkbox';
 export { Separator } from './Separator';
 export { Switch } from './Switch';
@@ -118,7 +89,6 @@ export {
 } from './AlertDialog';
 export { Popover, PopoverTrigger, PopoverContent } from './Popover';
 export { Label } from './Label';
-export { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './Accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './Tooltip';
 export { Slider } from './Slider';
@@ -126,17 +96,7 @@ export { ConfirmDialog, useConfirm, type ConfirmDialogProps } from './ConfirmDia
 export { PromptDialog, usePrompt, type PromptDialogProps } from './PromptDialog';
 export { SectionErrorBoundary, type SectionErrorBoundaryProps } from './SectionErrorBoundary';
 export { Avatar, AvatarImage, AvatarFallback } from './Avatar';
-export { Toggle, toggleVariants } from './Toggle';
 export { RadioGroup, RadioGroupItem } from './RadioGroup';
-export {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  BreadcrumbEllipsis,
-} from './Breadcrumb';
 export {
   Pagination,
   PaginationContent,

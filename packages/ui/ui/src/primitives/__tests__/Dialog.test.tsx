@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Dialog, DialogContent, DialogTitle } from '../Dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogTitle } from '../AlertDialog';
-import { AccessibleDialog } from '../AccessibleDialog';
 import { PromptDialog } from '../PromptDialog';
 
 function captureDialogDiagnostics(renderDialog: () => void): string {
@@ -84,23 +83,6 @@ describe('Dialog', () => {
     );
 
     expect(screen.getByRole('alertdialog').className).toContain('max-h-[calc(100dvh-2rem)]');
-  });
-
-  it('keeps AccessibleDialog title and description registered with Radix', () => {
-    const diagnostics = captureDialogDiagnostics(() => {
-      render(
-        <AccessibleDialog
-          open
-          onOpenChange={vi.fn()}
-          title="Account settings"
-          description="Manage your account"
-        >
-          Content
-        </AccessibleDialog>,
-      );
-    });
-
-    expect(diagnostics).not.toMatch(/requires a `DialogTitle`|Missing `Description`/);
   });
 
   it('keeps PromptDialog description registered with Radix', () => {

@@ -685,7 +685,7 @@ export function dialogPanelAnswersTheKeyboard(source) {
  * A `role="dialog"` panel that answers no key at all cannot be closed, entered
  * or escaped from a keyboard: Escape does nothing, focus never moves in, and
  * Tab walks onto the page behind it. This is the floor, not the whole contract.
- * `useDialogKeyboard` is the contract; Radix and `AccessibleDialog` bring their
+ * `useDialogKeyboard` is the contract; the Radix-based Dialog primitive brings its
  * own. A bare Escape handler passes here and is still short of it.
  */
 export function checkDialogsAnswerTheKeyboard() {
@@ -699,7 +699,7 @@ export function checkDialogsAnswerTheKeyboard() {
         id: file,
         detail:
           `${file} renders a role="dialog" panel that answers no key at all, so Escape does ` +
-          'nothing and focus never enters it. Call useDialogKeyboard, or use AccessibleDialog.',
+          'nothing and focus never enters it. Call useDialogKeyboard, or use the Dialog primitive.',
       });
     }
   }
