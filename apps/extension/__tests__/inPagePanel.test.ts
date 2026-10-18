@@ -207,6 +207,16 @@ describe('launcher position persist', () => {
 });
 
 describe('createLauncher', () => {
+  it('pins its host geometry with important so page stylesheets cannot move it', () => {
+    const { host } = createLauncher(vi.fn(), vi.fn());
+    const unpinned = ['display', 'bottom', 'right'].filter(
+      (property) => host.style.getPropertyPriority(property) !== 'important',
+    );
+    expect(unpinned).toEqual([]);
+    applyPosition(host, { bottom: 32, right: 40 });
+    expect(host.style.getPropertyPriority('bottom')).toBe('important');
+  });
+
   it('closes the panel when Escape is pressed with focus on the launcher', () => {
     const onOpen = vi.fn();
     const onEscape = vi.fn();
