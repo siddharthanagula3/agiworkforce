@@ -76,12 +76,6 @@ struct NotionListResponse<T> {
     next_cursor: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct NotionDatabaseQuery {
-    filter: Option<serde_json::Value>,
-    sorts: Option<Vec<serde_json::Value>>,
-}
-
 impl NotionClient {
     pub fn new(token: String) -> Result<Self> {
         let mut headers = header::HeaderMap::new();
@@ -186,42 +180,6 @@ impl NotionClient {
         }
 
         Ok(all_pages)
-    }
-
-    pub async fn query_database(
-        &self,
-        database_id: &str,
-        filter: Option<serde_json::Value>,
-        sorts: Option<Vec<serde_json::Value>>,
-    ) -> Result<Vec<serde_json::Value>> {
-        let _permit = self.rate_limiter.acquire().await?;
-
-        let query = NotionDatabaseQuery { filter, sorts };
-
-        let response = self
-            .client
-            .post(format!(
-                "{}/databases/{}/query",
-                NOTION_BASE_URL, database_id
-            ))
-            .bearer_auth(&self.token)
-            .json(&query)
-            .send()
-            .await
-            .map_err(Error::from)?;
-
-        self.rate_limiter.wait_for_rate_limit().await;
-
-        if response.status().is_success() {
-            let data: NotionListResponse<serde_json::Value> =
-                response.json().await.map_err(Error::from)?;
-            Ok(data.results)
-        } else {
-            Err(Error::Provider(format!(
-                "Failed to query Notion database: {}",
-                response.status()
-            )))
-        }
     }
 
     pub async fn create_database_row(

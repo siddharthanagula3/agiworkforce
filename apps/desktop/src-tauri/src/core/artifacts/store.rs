@@ -233,11 +233,6 @@ impl ArtifactStore {
         self.artifacts.read().get(id).cloned()
     }
 
-    /// Get an artifact's summary by ID
-    pub fn get_summary(&self, id: &str) -> Option<ArtifactSummary> {
-        self.artifacts.read().get(id).map(ArtifactSummary::from)
-    }
-
     /// Update an artifact's content (creates a new version)
     pub fn update(&self, request: UpdateArtifactRequest) -> Result<Artifact, String> {
         let mut artifacts = self.artifacts.write();

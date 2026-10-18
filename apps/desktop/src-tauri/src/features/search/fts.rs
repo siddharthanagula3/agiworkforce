@@ -201,54 +201,6 @@ impl FullTextSearch {
         Ok(search_results)
     }
 
-    pub fn search_knowledge(
-        &self,
-        query: &str,
-        project_id: &str,
-        options: SearchOptions,
-    ) -> Result<Vec<SearchResult>> {
-        let conn = Connection::open(&self.db_path)?;
-
-        let sql = "SELECT chunk_id, project_id, content, source_file, chunk_index, timestamp,
-                          snippet(knowledge_fts, 2, '<mark>', '</mark>', '...', ?1) as snippet,
-                          rank
-                   FROM knowledge_fts
-                   WHERE knowledge_fts MATCH ?2 AND project_id = ?3
-                   ORDER BY rank
-                   LIMIT ?4 OFFSET ?5";
-
-        let mut stmt = conn.prepare(sql)?;
-
-        let results = stmt.query_map(
-            params![
-                options.snippet_length as i64,
-                query,
-                project_id,
-                options.limit as i64,
-                options.offset as i64
-            ],
-            |row| {
-                Ok(SearchResult {
-                    id: row.get(0)?,
-                    conversation_id: None,
-                    content: row.get(2)?,
-                    snippet: row.get(6)?,
-                    rank: row.get(7)?,
-                    timestamp: row.get(5)?,
-                    message_type: "knowledge".to_string(),
-                    sender: row.get(3)?,
-                })
-            },
-        )?;
-
-        let mut search_results = Vec::new();
-        for result in results {
-            search_results.push(result?);
-        }
-
-        Ok(search_results)
-    }
-
     pub fn delete_message(&self, message_id: &str) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
         conn.execute(

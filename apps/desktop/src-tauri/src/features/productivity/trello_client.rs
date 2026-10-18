@@ -361,41 +361,6 @@ impl TrelloClient {
         }
     }
 
-    pub async fn add_comment(&self, card_id: &str, text: &str) -> Result<String> {
-        self.rate_limiter.acquire().await;
-        let url = self.build_url_with_id("/cards/{id}/actions/comments", card_id);
-
-        // Use JSON body instead of URL params for security
-        let body = serde_json::json!({
-            "text": text
-        });
-
-        let response = self
-            .client
-            .post(&url)
-            .header("Authorization", self.auth_header())
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(Error::from)?;
-
-        if response.status().is_success() {
-            let comment: serde_json::Value = response.json().await.map_err(Error::from)?;
-            let comment_id = comment
-                .get("id")
-                .and_then(|id| id.as_str())
-                .unwrap_or("")
-                .to_string();
-            Ok(comment_id)
-        } else {
-            Err(Error::Provider(format!(
-                "Failed to add comment to Trello card: {}",
-                response.status()
-            )))
-        }
-    }
-
     async fn get_list_name(&self, list_id: &str) -> Result<String> {
         self.rate_limiter.acquire().await;
         let url = self.build_url_with_id("/lists/{id}", list_id);

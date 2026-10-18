@@ -281,13 +281,6 @@ impl McpClient {
         self.sessions.read().keys().cloned().collect()
     }
 
-    pub fn health_check(&self) -> HashMap<String, bool> {
-        let sessions = self.sessions.read();
-        sessions
-            .iter()
-            .map(|(name, session_arc)| (name.clone(), session_arc.is_alive()))
-            .collect()
-    }
 }
 
 impl Default for McpClient {

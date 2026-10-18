@@ -1,10 +1,5 @@
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
-static HTML_TAG_RE: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"<[^>]*>").expect("valid regex: HTML tag pattern"));
 
 use super::knowledge::{KnowledgeChunk, KnowledgeDocument};
 
@@ -38,15 +33,11 @@ pub struct RAGResult {
 
 pub struct RAGEngine {
     chunking_config: ChunkingConfig,
-    embedding_generator: Option<Arc<crate::core::embeddings::EmbeddingGenerator>>,
 }
 
 impl RAGEngine {
     pub fn new(chunking_config: ChunkingConfig) -> Self {
-        Self {
-            chunking_config,
-            embedding_generator: None,
-        }
+        Self { chunking_config }
     }
 
     pub fn chunk_document(&self, document: &KnowledgeDocument) -> Result<Vec<KnowledgeChunk>> {
@@ -174,51 +165,6 @@ impl RAGEngine {
         })
     }
 
-    /// Generate a semantic embedding for the given text.
-    ///
-    /// When an `EmbeddingGenerator` is available (via `with_embeddings`), this
-    /// produces real semantic embeddings through a configured local model.
-    /// Falls back to a hash-based bag-of-words vector when no generator is
-    /// configured or when the generator fails.
-    pub async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>> {
-        if let Some(gen) = &self.embedding_generator {
-            match gen.generate(text).await {
-                Ok(vector) => return Ok(vector),
-                Err(e) => {
-                    tracing::warn!(
-                        "Real embedding generation failed, using hash fallback: {}",
-                        e
-                    );
-                }
-            }
-        }
-
-        tracing::warn!("RAG using hash-based embeddings, semantic quality degraded");
-        self.generate_hash_embedding(text)
-    }
-
-    fn generate_hash_embedding(&self, text: &str) -> Result<Vec<f32>> {
-        let words: Vec<&str> = text.split_whitespace().collect();
-        let mut embedding = vec![0.0f32; 384];
-
-        for (i, word) in words.iter().enumerate() {
-            let hash = word
-                .bytes()
-                .fold(0u64, |acc, b| acc.wrapping_add(b as u64).wrapping_mul(31));
-            let idx = (hash % 384) as usize;
-            embedding[idx] += 1.0 / (1.0 + i as f32);
-        }
-
-        let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for x in embedding.iter_mut() {
-                *x /= norm;
-            }
-        }
-
-        Ok(embedding)
-    }
-
     pub fn cosine_similarity(&self, a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() {
             return 0.0;
@@ -319,44 +265,6 @@ impl RAGEngine {
         final_results
     }
 
-    pub fn extract_text_from_file(&self, file_path: &str, file_type: &str) -> Result<String> {
-        match file_type.to_lowercase().as_str() {
-            "txt" | "md" | "markdown" | "rs" | "ts" | "tsx" | "js" | "json" | "toml" | "yaml"
-            | "yml" => {
-                let content = std::fs::read_to_string(file_path)?;
-                Ok(content)
-            }
-            "pdf" => pdf_extract::extract_text(file_path)
-                .map_err(|e| anyhow::anyhow!("Failed to extract PDF text: {}", e)),
-            "docx" => {
-                let file = std::fs::File::open(file_path)?;
-                let mut archive = zip::ZipArchive::new(file)?;
-
-                let mut document_xml = archive
-                    .by_name("word/document.xml")
-                    .map_err(|_| anyhow::anyhow!("Invalid DOCX: missing word/document.xml"))?;
-
-                let mut xml_content = String::new();
-                std::io::Read::read_to_string(&mut document_xml, &mut xml_content)?;
-
-                let text = HTML_TAG_RE.replace_all(&xml_content, "").to_string();
-
-                Ok(text)
-            }
-            "html" | "htm" => {
-                let content = std::fs::read_to_string(file_path)?;
-                Ok(self.strip_html_tags(&content))
-            }
-            _ => match std::fs::read_to_string(file_path) {
-                Ok(content) => Ok(content),
-                Err(_) => Ok(format!("Unsupported file type: {}", file_type)),
-            },
-        }
-    }
-
-    fn strip_html_tags(&self, html: &str) -> String {
-        HTML_TAG_RE.replace_all(html, " ").to_string()
-    }
 }
 
 #[cfg(test)]

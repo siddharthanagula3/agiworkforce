@@ -323,69 +323,6 @@ impl NaturalLanguageParser {
     }
 }
 
-pub struct AccessibilityAnalyzer;
-
-impl AccessibilityAnalyzer {
-    pub fn get_accessibility_tree_script() -> &'static str {
-        r#"
-        (function() {
-            function buildA11yTree(element, depth = 0) {
-                if (depth > 10) return null;
-
-                const role = element.getAttribute('role') || element.tagName.toLowerCase();
-                const ariaLabel = element.getAttribute('aria-label');
-                const ariaDescribedBy = element.getAttribute('aria-describedby');
-                const name = ariaLabel || element.textContent?.trim().substring(0, 50) || '';
-                const value = element.value || element.getAttribute('aria-valuenow');
-
-                let description = null;
-                if (ariaDescribedBy) {
-                    const descElement = document.getElementById(ariaDescribedBy);
-                    description = descElement?.textContent?.trim();
-                }
-
-
-                let selector = '';
-                if (element.id) {
-                    selector = `#${element.id}`;
-                } else if (element.className) {
-                    selector = `.${element.className.split(' ')[0]}`;
-                } else {
-                    selector = element.tagName.toLowerCase();
-                }
-
-                const node = {
-                    role,
-                    name,
-                    description,
-                    value,
-                    selector,
-                    children: []
-                };
-
-
-                const interactiveRoles = ['button', 'link', 'textbox', 'checkbox', 'radio',
-                                          'combobox', 'listbox', 'menu', 'menuitem', 'tab'];
-                const semanticTags = ['a', 'button', 'input', 'select', 'textarea', 'form'];
-
-                if (interactiveRoles.includes(role) || semanticTags.includes(element.tagName.toLowerCase())) {
-                    for (let child of element.children) {
-                        const childNode = buildA11yTree(child, depth + 1);
-                        if (childNode) node.children.push(childNode);
-                    }
-                }
-
-                return node;
-            }
-
-            return {
-                root: buildA11yTree(document.body)
-            };
-        })()
-        "#
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemanticElement {
     pub id: String,

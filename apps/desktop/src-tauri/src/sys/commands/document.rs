@@ -5,8 +5,8 @@ use tauri::State;
 use crate::features::document::{
     build_generated_document_manifest, DocumentContent, DocumentManager, ExcelDocumentCreator,
     ExcelEdit, ExcelEditor, GeneratedDocumentArtifactManifest, GeneratedDocumentComputeSession,
-    GeneratedDocumentFile, GeneratedDocumentKind, PdfDocumentCreator, PresentationCreator,
-    SearchResult, WordDocumentCreator,
+    GeneratedDocumentFile, GeneratedDocumentKind, PdfDocumentCreator, SearchResult,
+    WordDocumentCreator,
 };
 use crate::sys::commands::file_ops::FileOperation;
 use crate::sys::error::{Error, Result};
@@ -141,18 +141,6 @@ pub async fn document_create_excel_simple(
     Ok(resolved_path)
 }
 
-pub async fn document_create_excel_numbers(
-    output_path: String,
-    sheet_name: String,
-    headers: Vec<String>,
-    rows: Vec<Vec<f64>>,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = ExcelDocumentCreator::new();
-    creator.create_with_numbers(&resolved_path, &sheet_name, headers, rows)?;
-    Ok(resolved_path)
-}
-
 pub async fn document_create_pdf_simple(
     output_path: String,
     title: Option<String>,
@@ -176,18 +164,6 @@ pub async fn document_create_pdf_simple_manifest(
     let output_path = granted_output_path(&app, &output_path).await?;
     let path = document_create_pdf_simple(output_path, title, author, paragraphs).await?;
     document_creation_result(path, "pdf", GeneratedDocumentKind::Pdf)
-}
-
-pub async fn document_create_powerpoint_simple(
-    output_path: String,
-    title: String,
-    author: String,
-    slides: Vec<(String, Vec<String>)>,
-) -> Result<String> {
-    let resolved_path = resolve_output_path(&output_path)?;
-    let creator = PresentationCreator::new();
-    creator.create_simple(&title, &author, slides, &resolved_path)?;
-    Ok(resolved_path)
 }
 
 fn document_creation_result(
