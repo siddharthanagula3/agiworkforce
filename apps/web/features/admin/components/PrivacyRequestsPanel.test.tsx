@@ -51,7 +51,7 @@ const COMPLETE_REPORT = {
   tables: {
     cloud_managed_waitlist: { deleted: 2, accountBound: 0 },
     consent_records: { deleted: 2, accountBound: 1 },
-    data_rights_requests: { deleted: 0, accountBound: 0, skipped: true },
+    data_rights_requests: { deleted: 0, accountBound: 0 },
   },
 };
 
@@ -126,9 +126,7 @@ describe('PrivacyRequestsPanel', () => {
     );
     render(<PrivacyRequestsPanel />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not load data rights requests.',
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is no longer available.');
   });
 
   it('requires an email and a reason before it will erase', async () => {
@@ -158,7 +156,6 @@ describe('PrivacyRequestsPanel', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('Erased 4 row(s)');
     expect(screen.getByText('consent_records')).toBeInTheDocument();
-    expect(screen.getByText('not present in this schema')).toBeInTheDocument();
     await waitFor(() => {
       const post = mocks.fetch.mock.calls.find(
         (call: unknown[]) => (call[1] as RequestInit)?.method === 'POST',

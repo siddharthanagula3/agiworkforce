@@ -167,6 +167,7 @@ describe('POST /api/admin/security, an active admin is unaffected', () => {
     expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("'banned'"), [TARGET_ID]);
     expect(mockLogSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ userId: ADMIN_ID, eventType: 'admin_action' }),
+      { required: true },
     );
   });
 });

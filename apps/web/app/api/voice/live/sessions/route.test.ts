@@ -716,7 +716,7 @@ describe('POST /api/voice/live/sessions', () => {
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('live_voice_not_configured');
-    expect(body.error.message).toContain('OPENAI_API_KEY');
+    expect(body.error.message).toBe('Live voice is not configured on this server.');
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(mocks.fetch).not.toHaveBeenCalled();
   });

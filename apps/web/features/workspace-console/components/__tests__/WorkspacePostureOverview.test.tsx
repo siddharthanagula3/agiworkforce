@@ -174,6 +174,8 @@ describe('WorkspacePostureOverview', () => {
     });
     const { container } = render(<WorkspacePostureOverview />);
 
-    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('[class~="motion-safe:animate-pulse"]').length,
+    ).toBeGreaterThan(0);
   });
 });

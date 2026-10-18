@@ -267,6 +267,6 @@ describe('RouteEconomicsPanel', () => {
     );
     render(<RouteEconomicsPanel />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not read route economics.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is no longer available.');
   });
 });

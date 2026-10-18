@@ -181,6 +181,6 @@ describe('RoutingHealthPanel', () => {
     );
     render(<RoutingHealthPanel />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not read routing health.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is no longer available.');
   });
 });

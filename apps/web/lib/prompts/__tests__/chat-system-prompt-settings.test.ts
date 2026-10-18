@@ -26,7 +26,15 @@ const MOBILE_SETTINGS_FILE = path.join(
   'settings',
   'index.tsx',
 );
-const EXTENSION_OPTIONS_FILE = path.join(APPS_DIR, 'extension', 'src', 'options.ts');
+const EXTENSION_OPTIONS_FILE = path.join(
+  APPS_DIR,
+  'extension',
+  'src',
+  'features',
+  'options',
+  'destinations.ts',
+);
+const EXTENSION_MESSAGES_FILE = path.join(APPS_DIR, 'extension', '_locales', 'en', 'messages.json');
 
 type SettingsMenu = 'web' | 'desktop' | 'mobile' | 'chrome';
 
@@ -77,11 +85,22 @@ function sourceItems(file: string, pattern: RegExp): MenuItem[] {
   }));
 }
 
+function extensionItems(file: string, messagesFile: string): MenuItem[] {
+  const messages = JSON.parse(readFileSync(messagesFile, 'utf8')) as Record<
+    string,
+    { message: string }
+  >;
+  return sourceItems(file, /\{\s*label:\s*t\('([^']+)'\),\s*target:\s*'opt-/gu).map((item) => ({
+    group: undefined,
+    label: messages[item.label]?.message ?? item.label,
+  }));
+}
+
 const MENU_ITEMS: Readonly<Record<SettingsMenu, readonly MenuItem[]>> = {
   web: navItems(WEB_SETTINGS_NAV_GROUPS),
   desktop: navItems(HOSTED_SETTINGS_NAV_GROUPS),
   mobile: sourceItems(MOBILE_SETTINGS_FILE, /\blabel:\s*'([^']+)'/gu),
-  chrome: sourceItems(EXTENSION_OPTIONS_FILE, /\{\s*label:\s*'([^']+)',\s*target:\s*'opt-/gu),
+  chrome: extensionItems(EXTENSION_OPTIONS_FILE, EXTENSION_MESSAGES_FILE),
 };
 
 const MENU_LABELS: Readonly<Record<SettingsMenu, readonly string[]>> = {
@@ -95,7 +114,7 @@ const KNOWN_LABEL: Readonly<Record<SettingsMenu, string>> = {
   web: 'Memory',
   desktop: 'Memory',
   mobile: 'Memory',
-  chrome: 'Appearance',
+  chrome: 'Permissions',
 };
 
 const SERVABLE_VERSIONS = [

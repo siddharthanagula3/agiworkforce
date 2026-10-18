@@ -169,6 +169,7 @@ describe('POST /api/admin/takedown', () => {
           reason: 'DMCA notice #12',
         }),
       }),
+      { required: true },
     );
   });
 

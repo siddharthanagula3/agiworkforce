@@ -14,9 +14,15 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
-}));
+vi.mock('@/lib/server/neon-db', () => {
+  const db = { query: (...args: unknown[]) => mocks.query(...args) };
+  return {
+    getNeonDb: () => ({
+      ...db,
+      transaction: async (work: (tx: typeof db) => Promise<unknown>) => work(db),
+    }),
+  };
+});
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
@@ -93,6 +99,7 @@ function harness(hold: Record<string, unknown>, rows: (sql: string) => Record<st
       custodyInserts.push(params);
       return [{ id: 'export-1' }];
     }
+    if (/pg_advisory_xact_lock/.test(sql)) return [];
     if (/select entry_hash from public\.ediscovery_exports/.test(sql)) return [];
     if (/from public\.legal_holds/.test(sql)) return [hold];
     seen.push({ sql, params });

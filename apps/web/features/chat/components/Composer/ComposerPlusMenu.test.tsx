@@ -275,7 +275,9 @@ describe('ComposerPlusMenu, chat mode', () => {
   it('makes the Plugins settings bookmarkable from the Manage plugins row', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) })),
+      vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ installations: [] }) }),
+      ),
     );
     window.location.hash = '';
     const { props } = renderMenu();

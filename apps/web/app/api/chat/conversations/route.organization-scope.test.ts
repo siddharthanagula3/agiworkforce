@@ -173,7 +173,9 @@ describe('conversation active-organization isolation', () => {
 
     expect(response.status).toBe(201);
     const [sql, params] = mocks.query.mock.calls.at(-1) as [string, unknown[]];
-    expect(sql).toContain('(id, user_id, organization_id, title, model, project_id, is_temporary)');
+    expect(sql).toContain(
+      '(id, user_id, organization_id, title, model, project_id, is_temporary, selected_route_id)',
+    );
     expect(sql).toContain('web_conversations.organization_id is not distinct from $7');
     expect(sql).toContain('returning id, organization_id');
     expect(sql).not.toMatch(/set[\s\S]*organization_id\s*=/u);

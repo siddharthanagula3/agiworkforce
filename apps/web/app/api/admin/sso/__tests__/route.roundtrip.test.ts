@@ -348,7 +348,7 @@ describe('SSO configuration round trip', () => {
       name: 'Okta',
       domains: ['example.com'],
       active: true,
-      syncUserAttributes: true,
+      provider: 'saml_custom',
       saml: {
         allowIdpInitiated: false,
         allowSubdomains: false,
