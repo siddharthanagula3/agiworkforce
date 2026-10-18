@@ -1619,10 +1619,12 @@ function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): n
   const inputTokens = request.estimatedInputTokens ?? 0;
   const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
   const pricing = effectiveModelPricing(modelKey, inputTokens);
-  const usd = pricing
-    ? (inputTokens * pricing.inputCost + outputTokens * pricing.outputCost) / 1_000_000
-    : 0;
-  return usd * 100;
+  if (!pricing) return Number.POSITIVE_INFINITY;
+  return (
+    ((inputTokens * pricing.inputCost + outputTokens * pricing.outputCost) /
+      TOKENS_PER_PRICED_MILLION) *
+    CENTS_PER_USD
+  );
 }
 
 /**
