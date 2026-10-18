@@ -81,20 +81,20 @@ async function readIdentityNamespace(
   }
 }
 
+/**
+ * A failed read throws rather than answering "no profile": `/api/me` backfills
+ * a missing profile, so a read failure read as absence would overwrite it.
+ */
 async function readProfileRow(db: DatabaseAdapter, userId: string): Promise<ProfileRow | null> {
-  try {
-    const rows = await db.query<ProfileRow>(
-      `select id, email, display_name, avatar_url, routing_preferences
-         from profiles
-        where id = $1
-        limit 1`,
-      [userId],
-    );
-    return rows[0] ?? null;
-  } catch (error) {
-    logger.warn({ userId, error }, 'Failed to fetch profile');
-    return null;
-  }
+  const rows = await db.query<ProfileRow>(
+    `select id, email, display_name, avatar_url, stripe_customer_id, routing_preferences,
+            created_at, updated_at
+       from profiles
+      where id = $1
+      limit 1`,
+    [userId],
+  );
+  return rows[0] ?? null;
 }
 
 export async function readUserIdentity(db: DatabaseAdapter, userId: string): Promise<UserIdentity> {
