@@ -182,6 +182,14 @@ pub fn credential_paths(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// [`credential_paths`] under this user's home folder, which every sandbox
+/// profile keeps unreadable; empty without a home folder.
+pub(crate) fn home_credential_paths() -> Vec<PathBuf> {
+    dirs::home_dir()
+        .map(|home| credential_paths(&home))
+        .unwrap_or_default()
+}
+
 /// Credential files under `home` whose names are not fixed, found as they
 /// are now: the copies a tool keeps beside `~/.claude.json` under that name
 /// with a further extension, and the databases at the top of `~/.codex`,
@@ -214,7 +222,10 @@ fn credential_copies(home: &Path) -> Vec<PathBuf> {
 /// one of them, such as a workspace in the host's own data directory, is
 /// readable again, and so is the metadata of each folder between the two:
 /// without it a program cannot change into the root or resolve a path there.
-fn seatbelt_read_denials(unreadable: &[PathBuf], readable: &[PathBuf]) -> Result<String, String> {
+pub(crate) fn seatbelt_read_denials(
+    unreadable: &[PathBuf],
+    readable: &[PathBuf],
+) -> Result<String, String> {
     let mut rules = String::new();
     let mut denied = Vec::new();
     for path in unreadable {
@@ -479,9 +490,7 @@ fn protected_args(
             let mut rules = seatbelt_protection_rules(protected_paths)?;
             // The credentials bubblewrap always hides are denied here too, so
             // a program that reads anywhere is given no key on either system.
-            let hidden: Vec<PathBuf> = dirs::home_dir()
-                .map(|home| credential_paths(&home))
-                .unwrap_or_default()
+            let hidden: Vec<PathBuf> = home_credential_paths()
                 .into_iter()
                 .chain(unreadable.iter().cloned())
                 .collect();

@@ -1594,6 +1594,21 @@ pub fn seatbelt_profile(
         SandboxPolicy::DangerFullAccess => {}
     }
 
+    // Reads stop at what this profile names, and a named root may hold a
+    // credential, so the credentials every profile hides are denied last.
+    let mut readable: Vec<PathBuf> = writable_roots(spec)?
+        .into_iter()
+        .map(|root| root.resolved)
+        .collect();
+    readable.push(resolve_existing_prefix(spec.workspace_dir));
+    if let Some(scratch_dir) = scratch_dir {
+        readable.push(verify_scratch_root(scratch_dir)?);
+    }
+    let credential_denials = crate::full_read::seatbelt_read_denials(
+        &crate::full_read::home_credential_paths(),
+        &readable,
+    )?;
+
     Ok(format!(
         r#"(version 1)
 (deny default)
@@ -1614,7 +1629,7 @@ pub fn seatbelt_profile(
                    (literal "/") (subpath "/opt"))
 (allow file-read* (subpath "{ws}"))
 {developer_tool_reads}{git_read_rules}{git_config_read_rules}{metadata_rule}{scratch_read_rules}
-{write_rules}"#,
+{write_rules}{credential_denials}"#,
         mach_rules = mach_lookup_rule(spec.network_policy),
         network_rules = network_rules,
         ws = ws,
@@ -1624,6 +1639,7 @@ pub fn seatbelt_profile(
         metadata_rule = metadata_rule,
         scratch_read_rules = scratch_read_rules,
         write_rules = write_rules,
+        credential_denials = credential_denials,
     ))
 }
 
@@ -1747,9 +1763,7 @@ fn bubblewrap_prefix_with_scope(
         "--proc".to_string(),
         "/proc".to_string(),
     ]);
-    let hidden: Vec<PathBuf> = dirs::home_dir()
-        .map(|home| crate::full_read::credential_paths(&home))
-        .unwrap_or_default()
+    let hidden: Vec<PathBuf> = crate::full_read::home_credential_paths()
         .into_iter()
         .chain(unreadable.iter().cloned())
         .collect();
@@ -1811,6 +1825,19 @@ fn bubblewrap_prefix_with_scope(
             args.extend(["--bind".to_string(), parent.clone(), parent]);
         }
     }
+    // A credential inside a writable root, such as a home folder's `.config`
+    // given to a command, shows again under that root's later bind, so it is
+    // masked once more after the binds.
+    let bound: Vec<PathBuf> = verified.iter().map(|root| root.resolved.clone()).collect();
+    let inside_a_root: Vec<PathBuf> = hidden
+        .iter()
+        .map(|path| resolve_existing_prefix(path))
+        .filter(|path| {
+            bound.iter().any(|root| path.starts_with(root) && path != root)
+                && !bound.iter().any(|root| root.starts_with(path))
+        })
+        .collect();
+    args.extend(bubblewrap_read_masks(&inside_a_root)?);
     // Later mounts win, so the git metadata goes back to read-only over the
     // writable binds. A bind needs its target to exist, so a `.git` that does
     // not exist yet stays creatable here. Host git must therefore never
@@ -2037,6 +2064,43 @@ mod tests {
                 "/usr/local/bin/node",
                 "server.js"
             ]
+        );
+    }
+
+    #[test]
+    fn a_command_profile_denies_the_home_credentials_even_inside_a_named_root() {
+        let home = dirs::home_dir().expect("home dir");
+        let config = home.join(".config");
+        let policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![config.clone()],
+        };
+        let spec = SandboxSpec {
+            policy: &policy,
+            workspace_dir: Path::new("/Users/someone/project"),
+            network_policy: NetworkPolicy::Allow,
+            protected_paths: &[],
+        };
+        let profile =
+            seatbelt_profile(&spec, Some(Path::new("/private/tmp/agi-scratch"))).expect("profile");
+        let denied = |path: &Path| {
+            let rule = format!(
+                "(deny file-read* (subpath \"{}\"))",
+                resolve_existing_prefix(path).display()
+            );
+            profile
+                .find(&rule)
+                .unwrap_or_else(|| panic!("{rule} is missing from:\n{profile}"))
+        };
+        denied(&home.join(".ssh"));
+        let config_read = profile
+            .find(&format!(
+                "(allow file-read* (subpath \"{}\"))",
+                resolve_existing_prefix(&config).display()
+            ))
+            .expect("the named root is readable");
+        assert!(
+            denied(&config.join("gh")) > config_read,
+            "a credential inside a named root is denied after the root's read allow"
         );
     }
 
