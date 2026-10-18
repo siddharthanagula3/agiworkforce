@@ -4,7 +4,7 @@ const {
   withAndroidManifest,
   withDangerousMod,
   withInfoPlist,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 const fs = require('node:fs');
 const path = require('node:path');
 

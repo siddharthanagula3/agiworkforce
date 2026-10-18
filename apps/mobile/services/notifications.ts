@@ -2,7 +2,6 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
-import type { MobileAuthSession } from './authSession';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import {
   nativeRouteForProductLink,
@@ -28,9 +27,6 @@ import {
 let _isSignedIn = false;
 export function setSignedIn(value: boolean): void {
   _isSignedIn = value;
-}
-export function setCurrentSession(session: MobileAuthSession | null): void {
-  _isSignedIn = session != null;
 }
 
 export type { NotificationEventType };

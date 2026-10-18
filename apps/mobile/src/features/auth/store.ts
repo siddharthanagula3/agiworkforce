@@ -7,7 +7,6 @@ import {
   type MobileAuthSession,
   type MobileAuthUser,
 } from '@/services/authSession';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { unregisterPushTokenForSignOut } from '@/src/features/auth/services/signOutPushTokenCleanup';
@@ -26,16 +25,8 @@ interface AuthState {
   setClerkLoaded: (value: boolean) => void;
 
   initialize: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
-  signInWithApple: (idToken: string, nonce: string) => Promise<void>;
-  signInWithGoogle: (accessToken: string) => Promise<void>;
   signOut: () => Promise<void>;
-  refreshSession: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
 }
-
-let authSubscription: { unsubscribe: () => void } | null = null;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -70,39 +61,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       initialize: async () => {
-        if (authSubscription) {
-          authSubscription.unsubscribe();
-          authSubscription = null;
-        }
         set({
           session: null,
           user: null,
           isLoading: false,
           isInitialized: true,
         });
-      },
-
-      signInWithEmail: async (email, password) => {
-        void email;
-        void password;
-        throw new Error('auth: Clerk mobile auth is not enabled in v1');
-      },
-
-      signUpWithEmail: async (email, password) => {
-        void email;
-        void password;
-        throw new Error('auth: Clerk mobile auth is not enabled in v1');
-      },
-
-      signInWithApple: async (idToken, nonce) => {
-        void idToken;
-        void nonce;
-        throw new Error('auth: Clerk mobile auth is not enabled in v1');
-      },
-
-      signInWithGoogle: async (accessToken) => {
-        void accessToken;
-        throw new Error('auth: Clerk mobile auth is not enabled in v1');
       },
 
       signOut: async () => {
@@ -137,21 +101,7 @@ export const useAuthStore = create<AuthState>()(
           await clearAuthSession();
         } catch {
           // External sign-out may fail; local state already failed closed above.
-        } finally {
-          if (authSubscription) {
-            authSubscription.unsubscribe();
-            authSubscription = null;
-          }
         }
-      },
-
-      refreshSession: async () => {
-        set({ session: null, user: null, isLoading: false, isInitialized: true });
-      },
-
-      resetPassword: async (email) => {
-        void email;
-        throw new Error('auth: Clerk mobile auth is not enabled in v1');
       },
     }),
     {

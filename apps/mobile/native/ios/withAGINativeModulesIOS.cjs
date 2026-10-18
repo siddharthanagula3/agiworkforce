@@ -1,5 +1,4 @@
-
-const { withXcodeProject, withDangerousMod, createRunOncePlugin } = require('@expo/config-plugins');
+const { withXcodeProject, withDangerousMod, createRunOncePlugin } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 

@@ -1,4 +1,4 @@
-const { withEntitlementsPlist, createRunOncePlugin } = require('@expo/config-plugins');
+const { withEntitlementsPlist, createRunOncePlugin } = require('expo/config-plugins');
 
 const PLUGIN_NAME = 'agi-dev-entitlements-ios-plugin';
 const PLUGIN_VERSION = '1.0.0';

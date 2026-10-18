@@ -606,6 +606,7 @@ export const api = {
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            ...platformRequestHeaders(),
             ...authHeaders,
           },
           body: JSON.stringify({

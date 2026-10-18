@@ -118,7 +118,6 @@
         "paths": [
           "apps/mobile/components/ui/avatar.tsx",
           "apps/mobile/lib/markdown.ts",
-          "apps/mobile/lib/providerStreamClient.ts",
           "apps/mobile/services/languageQA.ts",
           "apps/mobile/src/features/auth/index.ts",
           "apps/mobile/src/features/billing/index.ts",

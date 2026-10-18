@@ -1,7 +1,6 @@
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { getModelsForTierAndSurface, getProviderOfferings } from '@agiworkforce/types';
 
-const streamFromProviderMock = jest.fn();
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
 
@@ -11,7 +10,6 @@ async function loadStreamingService() {
   jest.resetModules();
   process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM = '1';
 
-  streamFromProviderMock.mockReset();
   guardedFetchMock.mockReset().mockResolvedValue({
     ok: true,
     status: 200,
@@ -23,9 +21,6 @@ async function loadStreamingService() {
   jest.doMock('@/lib/constants', () => ({
     API_URL: 'https://api.agi.test',
     TIMEOUTS: { STREAMING: 60_000, STREAM_STALL: 45_000 },
-  }));
-  jest.doMock('@/lib/providerStreamClient', () => ({
-    streamFromProvider: streamFromProviderMock,
   }));
   jest.doMock('@/lib/egressGuard', () => ({
     guardedFetch: guardedFetchMock,
@@ -51,7 +46,6 @@ describe('managed mobile stream routing', () => {
   afterEach(() => {
     delete process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM;
     jest.dontMock('@/lib/constants');
-    jest.dontMock('@/lib/providerStreamClient');
     jest.dontMock('@/lib/egressGuard');
     jest.dontMock('../services/authSession');
     jest.dontMock('../services/llmGate');
@@ -78,7 +72,6 @@ describe('managed mobile stream routing', () => {
       callbacks,
     );
 
-    expect(streamFromProviderMock).not.toHaveBeenCalled();
     expect(guardedFetchMock).toHaveBeenCalledWith(
       'https://api.agi.test/api/llm/v1/chat/completions',
       expect.objectContaining({
@@ -138,7 +131,6 @@ describe('managed mobile stream routing', () => {
       expect(callbacks.onError).not.toHaveBeenCalled();
     }
     expect(guardedFetchMock).toHaveBeenCalledTimes(qwenModels.length);
-    expect(streamFromProviderMock).not.toHaveBeenCalled();
   });
 
   it('reports a Qwen server failure without bypassing the managed route', async () => {
@@ -166,7 +158,6 @@ describe('managed mobile stream routing', () => {
 
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
     expect(callbacks.onDone).not.toHaveBeenCalled();
-    expect(streamFromProviderMock).not.toHaveBeenCalled();
     expect(guardedFetchMock).toHaveBeenCalledTimes(1);
   });
 

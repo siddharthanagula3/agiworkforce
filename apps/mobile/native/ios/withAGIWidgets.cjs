@@ -1,4 +1,4 @@
-const { withDangerousMod, withXcodeProject, createRunOncePlugin } = require('@expo/config-plugins');
+const { withDangerousMod, withXcodeProject, createRunOncePlugin } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 const { ensureTargetDependency } = require('./withAGIShareExtension.cjs');

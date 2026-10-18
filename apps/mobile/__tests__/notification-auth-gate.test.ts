@@ -78,8 +78,8 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import {
-  setCurrentSession,
   setNavigatorReady,
+  setSignedIn,
   setupNotificationListeners,
 } from '../services/notifications';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from '../services/notificationCategories';
@@ -108,7 +108,7 @@ function fireNotification(
 
 describe('handleNotificationResponse, auth gate', () => {
   it('opens Local Mode, not the sign-in wall, when no session is set', () => {
-    setCurrentSession(null);
+    setSignedIn(false);
     fireNotification({ type: 'task_completed', route: '/(app)/companion' });
     jest.useFakeTimers();
     jest.advanceTimersByTime(200);
@@ -119,48 +119,21 @@ describe('handleNotificationResponse, auth gate', () => {
   });
 
   it('opens Local Mode when the session is explicitly cleared after sign-out', () => {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    setCurrentSession(null);
+    setSignedIn(true);
+    setSignedIn(false);
     fireNotification({ type: 'agent_failed', agentId: 'agent-1' });
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)' });
     expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(auth)/login' });
   });
 
   it('routes to /(app)/* when a session is present', () => {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
     fireNotification({ type: 'companion_connected' });
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });
 
   it('opens the authenticated approval review surface from the category action', () => {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
 
     fireNotification(
       { type: 'agent_approval_needed', approvalId: 'approval-1' },
@@ -171,16 +144,7 @@ describe('handleNotificationResponse, auth gate', () => {
   });
 
   it('opens the screen that holds a linked research report', () => {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
 
     fireNotification({
       type: 'task_completed',
@@ -194,16 +158,7 @@ describe('handleNotificationResponse, auth gate', () => {
   });
 
   it('ignores a product link naming a target this build does not know', () => {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
 
     fireNotification({ type: 'companion_connected', target: 'invoice', targetId: 'inv-1' });
 
@@ -212,16 +167,7 @@ describe('handleNotificationResponse, auth gate', () => {
 
   it('ignores unknown notification actions', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
 
     fireNotification({ type: 'agent_approval_needed' }, 'unexpected_action');
 
@@ -234,7 +180,7 @@ describe('handleNotificationResponse, auth gate', () => {
   });
 
   it('does NOT navigate when notification has no data', () => {
-    setCurrentSession(null);
+    setSignedIn(false);
     if (!capturedResponseListener) throw new Error('listener missing');
     capturedResponseListener({
       actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
@@ -247,16 +193,7 @@ describe('handleNotificationResponse, auth gate', () => {
 
 describe('handleNotificationResponse, no dead-end deep links', () => {
   function signIn(): void {
-    setCurrentSession({
-      access_token: 't',
-      refresh_token: 'r',
-      expires_in: 3600,
-      expires_at: Date.now() / 1000 + 3600,
-      token_type: 'bearer',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+    setSignedIn(true);
   }
 
   for (const type of ['agent_failed', 'emergency_stop_triggered', 'agent_paused']) {

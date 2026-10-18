@@ -449,23 +449,6 @@ describe('authStore, secure storage persistence', () => {
     });
   });
 
-  it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
-    await expect(
-      act(async () => {
-        await getState().signInWithEmail('test@example.com', 'password123');
-      }),
-    ).rejects.toThrow('auth: Clerk mobile auth is not enabled in v1');
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(getState().session).toBeNull();
-    const accessTokenWrite = mockSetItemAsync.mock.calls.find(
-      ([_key, value]: [string, string]) =>
-        typeof value === 'string' && value.includes('access_token'),
-    );
-    expect(accessTokenWrite).toBeUndefined();
-  });
-
   it('removes session from secure store after sign-out', async () => {
     const session = makeSession();
     useAuthStore.setState({ session: session as never, user: session['user'] as never });
@@ -655,28 +638,6 @@ describe('authStore, secure storage persistence', () => {
         'persist API unavailable: Zustand .persist.getOptions() returned no callback',
       );
     }
-  });
-
-  it('refreshSession clears state when no cloud session is available', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
-
-    await act(async () => {
-      await getState().refreshSession();
-    });
-
-    expect(getState().session).toBeNull();
-    expect(getState().user).toBeNull();
-  });
-
-  it('refreshSession clears state on network timeout', async () => {
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
-
-    await act(async () => {
-      await getState().refreshSession();
-    });
-
-    expect(getState().session).toBeNull();
-    expect(getState().user).toBeNull();
   });
 });
 

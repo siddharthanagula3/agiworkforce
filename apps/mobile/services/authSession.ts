@@ -1,4 +1,3 @@
-
 import { getClerkInstance } from '@clerk/expo';
 import {
   getClerkToken,
@@ -46,24 +45,6 @@ export async function clearAuthSession(): Promise<void> {
     await getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).signOut();
   } catch {
     // Best-effort sign-out; Clerk clears its own SecureStore cache.
-  }
-}
-
-export async function getCurrentUser(): Promise<MobileAuthUser | null> {
-  try {
-    const user = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).user;
-    if (!user) return null;
-    return {
-      id: user.id,
-      email: user.primaryEmailAddress?.emailAddress ?? null,
-      created_at: user.createdAt ? new Date(user.createdAt).toISOString() : null,
-      user_metadata: {
-        full_name: user.fullName ?? null,
-        name: user.firstName ?? null,
-      },
-    };
-  } catch {
-    return null;
   }
 }
 

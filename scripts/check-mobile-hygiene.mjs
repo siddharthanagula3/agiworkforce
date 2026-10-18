@@ -35,7 +35,6 @@ const allowedRootLibModules = new Set([
   'mmkv',
   'models',
   'pinning',
-  'providerStreamClient',
   'safeOpenURL',
   'secureStorage',
   'sendQueue',
@@ -57,7 +56,6 @@ const forbiddenMovedImports = [
 const uiDirectIoBaseline = new Set([
   'apps/mobile/app/_layout.tsx',
   'apps/mobile/app/(auth)/reset-password.tsx',
-  'apps/mobile/app/(app)/billing/index.tsx',
   'apps/mobile/app/(app)/usage.tsx',
   'apps/mobile/app/(app)/profile/index.tsx',
   'apps/mobile/app/(app)/companion/index.tsx',

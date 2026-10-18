@@ -49,7 +49,7 @@ function hostOfConfig(urlString: string): string {
  * it is not one of the shared apex domains.
  *
  *   - API_URL  → our HTTP API + api-gateway base (services/api.ts,
- *     services/streaming.ts, lib/providerStreamClient.ts all hit `${API_URL}/...`)
+ *     services/streaming.ts all hit `${API_URL}/...`)
  *     Default: agiworkforce.com. The gateway lives at api.agiworkforce.com.
  *   - WS_URL   → signaling relay (lib/constants.ts) → signaling.agiworkforce.com
  *
