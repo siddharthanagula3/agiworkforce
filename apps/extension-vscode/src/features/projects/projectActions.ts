@@ -7,10 +7,10 @@ import {
   type ManagedCloudProjectUpdateRequest,
 } from '@agiworkforce/cloud-contracts';
 import { Config } from '../../platform/config';
+import { formatTimestamp } from '../../utils/format';
 import { modelDisplayLabel, normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import {
   describeProjectFailure,
-  formatTimestamp,
   isRecoverableProjectFailure,
   knowledgeFileDetail,
   knowledgeFileLabel,

@@ -1,8 +1,9 @@
+import { MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import type { AppServerCapabilities } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 
-export const CLI_CAPABILITY_REQUIREMENT = 'Needs AGI CLI 1.8';
+export const CLI_CAPABILITY_REQUIREMENT = `Needs AGI CLI ${MINIMUM_SUPPORTED_RUNTIME_VERSION}`;
 
 export const CLI_CAPABILITY_METHODS = {
   skills: 'listSkills',

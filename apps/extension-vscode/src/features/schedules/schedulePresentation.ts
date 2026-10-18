@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { tPlural } from '../../l10n';
 import { accountRefusalMessage } from '../../utils/accountRefusal';
+import { formatDuration, formatTimestamp } from '../../utils/format';
 
 export type ScheduleStatus = ManagedCloudScheduleTask['status'];
 export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
@@ -60,22 +61,6 @@ export function scheduleCadence(task: ManagedCloudScheduleTask): string {
     return task.intervalMs === null ? 'On an interval' : `Every ${formatDuration(task.intervalMs)}`;
   }
   return task.executeAt === null ? 'Once' : `Once at ${formatTimestamp(task.executeAt)}`;
-}
-
-export function formatDuration(milliseconds: number): string {
-  const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-export function formatTimestamp(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (Number.isNaN(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
 }
 
 /**

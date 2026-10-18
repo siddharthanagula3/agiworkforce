@@ -111,7 +111,13 @@ function pickOnce(surface: ManagedSurface, noun: string): Promise<ManagedFollowU
       }
       if (item?.run === undefined) return;
       pick.busy = true;
-      reportFailure(await item.run());
+      try {
+        reportFailure(await item.run());
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       await render();
     });
     pick.onDidTriggerItemButton((event) => {
@@ -131,7 +137,13 @@ async function showManagedSurface(surface: ManagedSurface, noun: string): Promis
   for (;;) {
     const followUp = await pickOnce(surface, noun);
     if (followUp === undefined) return;
-    reportFailure(await followUp.run());
+    try {
+      reportFailure(await followUp.run());
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     if (!followUp.reopen) return;
   }
 }

@@ -4,6 +4,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { t, tPlural } from '../../l10n';
 import { accountRefusalMessage } from '../../utils/accountRefusal';
+import { formatTimestamp } from '../../utils/format';
 
 const PROJECT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -20,12 +21,6 @@ export function byteLabel(byteCount: number): string {
   const kilobytes = byteCount / 1_024;
   if (kilobytes < 1_024) return `${Math.round(kilobytes)} KB`;
   return `${(kilobytes / 1_024).toFixed(1)} MB`;
-}
-
-export function formatTimestamp(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (Number.isNaN(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
 }
 
 export function projectDescription(project: ManagedCloudProject): string {

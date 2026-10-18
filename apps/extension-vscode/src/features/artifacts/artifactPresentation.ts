@@ -4,6 +4,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { ResourceVisibility } from '@agiworkforce/types';
 import { accountRefusalMessage } from '../../utils/accountRefusal';
+import { formatTimestamp } from '../../utils/format';
 
 const ARTIFACT_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -80,12 +81,6 @@ export function artifactTitle(artifact: ManagedCloudArtifactIndexEntry): string 
 
 export function artifactIcon(artifact: ManagedCloudArtifactIndexEntry): string {
   return ARTIFACT_TYPE_ICONS[artifact.type] ?? 'file-code';
-}
-
-export function formatTimestamp(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (Number.isNaN(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
 }
 
 export function artifactEditorLanguage(artifact: ManagedCloudArtifactIndexEntry): string {

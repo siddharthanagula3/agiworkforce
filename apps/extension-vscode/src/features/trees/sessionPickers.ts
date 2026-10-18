@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import type { ThreadSummary } from '@agiworkforce/types';
 import { t } from '../../l10n';
 import {
-  formatRelativeTime,
   type ConversationTreeProvider,
   type SessionListingFailure,
   type SessionSearchHit,
 } from './conversationTreeProvider';
+import { formatSessionAge } from '../surfaces/sessionRows';
 import { isCloudThread } from './cloudSessions';
 
 export const SHOW_ARCHIVED_SESSIONS_COMMAND = 'agi-workforce.showArchivedSessions';
@@ -33,7 +33,7 @@ function reportFailures(failures: readonly SessionListingFailure[]): void {
 
 function sessionItem(thread: ThreadSummary): SessionPickItem {
   const cloud = isCloudThread(thread);
-  const updated = formatRelativeTime(Date.parse(thread.updatedAt));
+  const updated = formatSessionAge(Date.parse(thread.updatedAt), Date.now());
   return {
     label: `$(${cloud ? 'cloud' : 'comment'}) ${thread.title}`,
     description: cloud ? `${t('conversationTree.cloudLabel')} · ${updated}` : updated,
@@ -46,7 +46,7 @@ function searchItem(hit: SessionSearchHit): SessionPickItem {
   const [first] = hit.matches;
   return {
     label: `$(search) ${hit.thread.title}`,
-    description: formatRelativeTime(Date.parse(hit.thread.updatedAt)),
+    description: formatSessionAge(Date.parse(hit.thread.updatedAt), Date.now()),
     ...(first === undefined ? {} : { detail: first.snippet }),
     alwaysShow: true,
     threadId: hit.thread.id,
@@ -148,7 +148,7 @@ export async function showArchivedSessions(provider: ConversationTreeProvider): 
   pick.matchOnDetail = true;
   pick.items = threads.map((thread) => ({
     label: thread.title,
-    description: formatRelativeTime(Date.parse(thread.updatedAt)),
+    description: formatSessionAge(Date.parse(thread.updatedAt), Date.now()),
     ...(thread.cwd === undefined ? {} : { detail: thread.cwd }),
     buttons: [restoreButton, deleteButton],
     thread,

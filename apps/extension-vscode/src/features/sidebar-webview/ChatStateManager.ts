@@ -10,10 +10,8 @@ import {
   type MessageQueue,
 } from '@agiworkforce/client-runtime';
 import * as vscode from 'vscode';
-import {
-  formatRelativeTime,
-  type ConversationTreeProvider,
-} from '../trees/conversationTreeProvider';
+import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
+import { formatSessionAge } from '../surfaces/sessionRows';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
 import {
   normalizeConfiguredModelId,
@@ -1984,7 +1982,7 @@ export class ChatStateManager {
         conversations: threads.slice(0, RECENT_CONVERSATION_LIMIT).map((thread) => ({
           id: thread.id,
           title: thread.title,
-          age: formatRelativeTime(Date.parse(thread.updatedAt)),
+          age: formatSessionAge(Date.parse(thread.updatedAt), Date.now()),
         })),
       },
     });

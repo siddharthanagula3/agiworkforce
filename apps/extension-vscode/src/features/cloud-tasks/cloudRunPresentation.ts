@@ -5,6 +5,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { AGENT_TASK_STATE_LABELS, messageKindForAgentEvent } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { formatDuration } from '../../utils/format';
 
 export type CloudRunState = CloudAgentRun['state'];
 
@@ -83,21 +84,11 @@ export function cloudRunOriginLabel(surface: CloudAgentOriginSurface): string {
   return CLOUD_RUN_ORIGIN_LABELS[surface];
 }
 
-export function formatCloudRunDuration(milliseconds: number): string {
-  const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
 export function cloudRunAgeLabel(run: CloudAgentRun, now = Date.now()): string {
   const touchedAt = Date.parse(run.completedAt ?? run.updatedAt);
   if (Number.isNaN(touchedAt)) return '';
   const verb = run.completedAt === null ? 'updated' : 'finished';
-  return `${verb} ${formatCloudRunDuration(now - touchedAt)} ago`;
+  return `${verb} ${formatDuration(now - touchedAt)} ago`;
 }
 
 /**
@@ -108,7 +99,7 @@ export function cloudRunAgeLabel(run: CloudAgentRun, now = Date.now()): string {
 export function cloudRunQuietLabel(run: CloudAgentRun): string | undefined {
   if (isCloudRunSettled(run.state)) return undefined;
   if (typeof run.staleForMs !== 'number') return undefined;
-  return `quiet ${formatCloudRunDuration(run.staleForMs)}`;
+  return `quiet ${formatDuration(run.staleForMs)}`;
 }
 
 export function cloudRunDescription(run: CloudAgentRun, now = Date.now()): string {

@@ -10,13 +10,14 @@ import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 import { getAllWorkspaceFolders } from '../../platform/workspaceFolders';
 import { t } from '../../l10n';
+import { formatSessionAge } from '../surfaces/sessionRows';
 import { isCloudThread } from './cloudSessions';
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly thread: ThreadSummary) {
     super(thread.title, vscode.TreeItemCollapsibleState.None);
     const cloud = isCloudThread(thread);
-    const updated = formatRelativeTime(Date.parse(thread.updatedAt));
+    const updated = formatSessionAge(Date.parse(thread.updatedAt), Date.now());
     this.description = cloud ? `${t('conversationTree.cloudLabel')} · ${updated}` : updated;
     const branch = thread.gitBranch === undefined ? '' : ` · ${thread.gitBranch}`;
     this.tooltip = cloud
@@ -320,16 +321,4 @@ function describeListingFailure(error: unknown): string {
   return message.length <= LISTING_FAILURE_REASON_MAX_LENGTH
     ? message
     : `${message.slice(0, LISTING_FAILURE_REASON_MAX_LENGTH - 1)}…`;
-}
-
-export function formatRelativeTime(timestamp: number): string {
-  const diff = Math.max(0, Date.now() - timestamp);
-  const minutes = Math.floor(diff / 60_000);
-  const hours = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return new Date(timestamp).toLocaleDateString();
 }

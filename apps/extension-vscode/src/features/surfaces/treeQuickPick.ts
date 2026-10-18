@@ -139,6 +139,14 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
         ),
       );
       pick.items = buildSurfaceRows(expanded.flat(), rowActions);
+    } catch (error) {
+      pick.items = [
+        {
+          label: error instanceof Error ? error.message : String(error),
+          alwaysShow: true,
+          item: new vscode.TreeItem(options.title),
+        },
+      ];
     } finally {
       pick.busy = false;
     }

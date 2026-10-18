@@ -4,6 +4,7 @@ import type {
   ConnectorSource,
 } from '@agiworkforce/cloud-contracts';
 import { accountRefusalMessage } from '../../utils/accountRefusal';
+import { formatTimestamp } from '../../utils/format';
 
 const CONNECTOR_FAILURE_REASON_MAX_LENGTH = 240;
 
@@ -34,13 +35,6 @@ export function connectorHealth(connector: ConnectorConnection): ConnectorHealth
 
 export function connectorIcon(connector: ConnectorConnection): string {
   return HEALTH_FACES[connectorHealth(connector)].icon;
-}
-
-export function formatTimestamp(iso: string): string {
-  if (iso.trim() === '') return '';
-  const parsed = Date.parse(iso);
-  if (Number.isNaN(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
 }
 
 export function connectorDescription(connector: ConnectorConnection): string {
