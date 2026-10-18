@@ -478,7 +478,7 @@ pub struct Cli {
     /// Demo mode: synthesizes a rate-limit error on the first model call so
     /// the multi-model fallback chain visibly fires. For live demos and
     /// integration tests where you don't want to wait for a real 429.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     demo: bool,
 
     /// Use automatic model routing (mutually exclusive with --model).

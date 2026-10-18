@@ -813,6 +813,18 @@ fn resolve_environment_policy(scrub: bool, filter_credentials: bool) -> Environm
     }
 }
 
+/// Windows matches environment names without regard to case, so its `Path`
+/// is the allowlist's `PATH`.
+fn inherited_by_name(name: &str) -> bool {
+    agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.iter().any(|allowed| {
+        if cfg!(windows) {
+            allowed.eq_ignore_ascii_case(name)
+        } else {
+            *allowed == name
+        }
+    })
+}
+
 /// What `policy` gives a command of `variables`, with `passed` the names a
 /// credential filter lets through.
 fn environment_for_a_command(
@@ -827,9 +839,7 @@ fn environment_for_a_command(
             };
             match policy {
                 EnvironmentPolicy::Inherited => true,
-                EnvironmentPolicy::Scrubbed => {
-                    agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.contains(&name)
-                }
+                EnvironmentPolicy::Scrubbed => inherited_by_name(name),
                 EnvironmentPolicy::WithoutCredentials => {
                     let credential = match value.to_str() {
                         Some(value) => agiworkforce_sandbox_policy::holds_a_credential(name, value),
@@ -1965,10 +1975,7 @@ mod environment_and_policy_tests {
         apply_environment_policy(&mut command, true);
         for (name, _) in command.as_std().get_envs() {
             let name = name.to_string_lossy();
-            assert!(
-                agiworkforce_mcp::INHERITED_ENV_ALLOWLIST.contains(&name.as_ref()),
-                "{name} survived the scrub"
-            );
+            assert!(inherited_by_name(&name), "{name} survived the scrub");
         }
     }
 
