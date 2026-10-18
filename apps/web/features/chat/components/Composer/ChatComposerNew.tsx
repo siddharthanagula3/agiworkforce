@@ -255,11 +255,8 @@ const IMAGE_EDIT_OPERATIONS = [
 type ImageEditOperation = (typeof IMAGE_EDIT_OPERATIONS)[number]['id'];
 
 /**
- * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
- * no budget warning, so an over-long message was only rejected server-side
- * after the user had written it. This is the SAME ceiling the managed-cloud
- * message contract enforces (`ManagedCloudCreateMessageRequestSchema`), not a
- * second hand-picked number.
+ * The same ceiling the managed-cloud message contract enforces
+ * (`ManagedCloudCreateMessageRequestSchema`), not a second hand-picked number.
  */
 const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
 /** Show the counter only once the message is long enough for it to matter. */
@@ -308,14 +305,8 @@ const WORK_MODE_GLYPHS: Record<ComposerWorkMode, typeof MessageSquare> = {
 };
 
 /**
- * Placeholder copy per work mode.
- *
- * AUDIT-FIX shell-nav-ia-gap-03: the Chat | AGI Work toggle was fully wired
- * (mode → send meta → conversation creation) but the textarea placeholder
- * branched only on isTurnActive/imageMode/videoMode, so flipping to AGI Work
- * changed nothing the user could read inside the input. claude.ai's equivalent
- * Chat/Cowork axis re-writes its prompt on toggle; this is that missing signal.
- * `chat` is null so the caller-supplied `placeholder` prop still wins there.
+ * Placeholder copy per work mode, so switching to AGI Work changes what the
+ * input says. `chat` is null so the caller-supplied `placeholder` still wins.
  */
 const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
   chat: null,
@@ -418,11 +409,10 @@ interface ChatComposerProps {
    * Conversation this composer is currently editing for (`null` on the
    * new-chat surface).
    *
-   * AUDIT-FIX STR-8/BUG-15: the follow-up queue captures this at queue time, so
-   * a message composed for chat A can never be flushed into chat B by the
-   * `isTurnActive` true->false edge that navigating away produces.
-   * AUDIT-FIX STR-23: the half-typed input is parked under this id and restored
-   * per conversation, instead of following the user into the next chat.
+   * The follow-up queue captures this at queue time, so a message composed for
+   * chat A can never be flushed into chat B by the `isTurnActive` true->false
+   * edge that navigating away produces. The half-typed input is parked under
+   * this id and restored per conversation.
    */
   conversationId?: string | null;
   projectId?: string | null;
@@ -842,7 +832,7 @@ const ChatComposerNewComponent = ({
   const { t: tAgiWork } = useTranslation('v3');
   const { t: tChat } = useTranslation('chat');
   /**
-   * AUDIT-FIX STR-23: mirror of `message` readable from effects without adding
+   * Mirror of `message` readable from effects without adding
    * it to their dependency arrays -- used to park the outgoing conversation's
    * half-typed text on a conversation switch.
    */
@@ -924,8 +914,6 @@ const ChatComposerNewComponent = ({
     loading: connectorsLoading,
     error: connectorsError,
   } = useConnectors();
-  // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
-  // actually applied (it was previously never read by any composer code).
   const customCommands = useSettingsStore((s) => s.customCommands);
   const { plural } = useUiTranslation('chat');
   const [showMentions, setShowMentions] = useState(false);
@@ -1140,7 +1128,7 @@ const ChatComposerNewComponent = ({
   // project-page handoff → ?projectId= → host store) lands eligible accounts in
   // AGI Work. Free/basic accounts keep ordinary project-scoped chat; AGI Work
   // needs the canUseAgiWork capability, which carries the `agi_work` plan
-  // capability and the Work switch the server enforces (AUDIT-FIX CMP-14).
+  // capability and the Work switch the server enforces.
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
   useEffect(() => {
     if (!billingPolicyReady) return;
@@ -1441,11 +1429,7 @@ const ChatComposerNewComponent = ({
     promotionalVisionChat ||
     handsOverToAuto;
   /**
-   * AUDIT-FIX CMP-27: the conflict check used to be `type.startsWith('image/')`
-   * only, while the file input accepts the FULL chat-attachment allowlist. A
-   * PDF therefore got no capability gate at all and failed at the provider.
-   *
-   * Two honest classes: binary attachments (images and PDFs) travel as
+   * Two classes: binary attachments (images and PDFs) travel as
    * provider media/document blocks and need a multimodal model; text and code
    * files are inlined as text and every model can read them.
    */
@@ -1622,7 +1606,7 @@ const ChatComposerNewComponent = ({
       setComposerToggles({ officeCreationEnabled: false, officeOutputFormat: null });
   }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
-  // AUDIT-FIX CMP-11: a downgrade (or a stale per-conversation flag) must not
+  // A downgrade (or a stale per-conversation flag) must not
   // leave the composer in image mode once the account has neither the plan
   // capability nor a ready limited free offering, because that send is always
   // refused. It waits for the offer read so a limited account keeps its mode.
@@ -1710,7 +1694,7 @@ const ChatComposerNewComponent = ({
     if (!onSetTemporaryChat) return;
     setIsSavingIncognito(true);
     try {
-      // AUDIT-FIX CMP-3: the host performs the PATCH and writes the SERVER's
+      // The host performs the PATCH and writes the server's
       // value back into the store, so the checkmark can only appear once the
       // database actually holds the flag.
       const saved = await onSetTemporaryChat(!isIncognito);
@@ -1980,7 +1964,7 @@ const ChatComposerNewComponent = ({
     setComposerExpanded(false);
     holdUploadCancelNotice(false);
     composerEditorRef.current?.clear();
-    // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
+    // A sent or cleared composer must not leave a stale parked
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     clearPersistedDraft(conversationId ?? null);
@@ -3084,7 +3068,7 @@ const ChatComposerNewComponent = ({
       }
       const outcome = resolveSlashCommand(commandId, stripSlashCommandToken(messageRef.current));
       if (outcome.status === 'unavailable') {
-        // AUDIT-FIX CMP-8: a command that will not run must not clear the input.
+        // A command that will not run must not clear the input.
         setLocalNotice(outcome.notice);
         return;
       }
@@ -3116,8 +3100,7 @@ const ChatComposerNewComponent = ({
       if (!skill) return;
       setSelectedSkillName(skill.name);
       enableSkillRequirements(skill);
-      // AUDIT-FIX CMP-8: keep whatever the user already typed after the
-      // command token instead of wiping the input (see handleSlashSelect).
+      // Keep whatever the user already typed after the command token.
       writeComposerMessage(stripSlashCommandToken(messageRef.current));
       setShowSlashMenu(false);
       setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
@@ -3132,7 +3115,7 @@ const ChatComposerNewComponent = ({
   );
 
   /**
-   * AUDIT-FIX CMP-16: what the NEXT send (immediate or queued) will actually
+   * What the next send (immediate or queued) will actually
    * carry. One list drives the queued-follow-up chip and the send-preview
    * summary, so they can never describe different tool sets.
    */
@@ -3261,13 +3244,9 @@ const ChatComposerNewComponent = ({
       }
 
       /**
-       * AUDIT-FIX CMP-9: apply a typed command at SEND time.
-       *
-       * `/search latest AI news` is the form the registry itself documents in
-       * every `example`, but the slash menu closed on the first space and nothing
-       * else parsed the line, so the whole string was sent as literal text and
-       * the command never ran. Resolving here means the typed form and the menu
-       * form go through exactly the same capability checks.
+       * A typed command such as `/search latest AI news` is applied at send
+       * time, so the typed form and the menu form go through the same
+       * capability checks.
        */
       let outgoingContent = message;
       let sendSearchRequested = false;
@@ -3463,7 +3442,7 @@ const ChatComposerNewComponent = ({
       // of the streaming turn and is not queued.
       if (videoMode && !freeQuotaMediaSelected) {
         if (isTurnActive) return;
-        // AUDIT-FIX MEDIA-VIDEO-01: same contract as image above. The video
+        // Same contract as image above. The video
         // request schema has no reference-image field at all, so an attachment
         // here has nowhere to go and must not be swallowed by the send.
         if (attachments.length > 0) {
@@ -3545,11 +3524,6 @@ const ChatComposerNewComponent = ({
           officeCreationEnabled,
           ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
           researchEnabled,
-          // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
-          // `styleMode` hint was always dropped in favour of `styleInstruction`
-          // (see useChatStream), so sending it was pure noise; the instruction is
-          // now composed from the single style store plus the new length axis and
-          // is never empty, so out-of-the-box turns finally carry real guidance.
           styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
           artifactInstruction,
           skillName: selectedSkillName ?? undefined,
@@ -3576,7 +3550,7 @@ const ChatComposerNewComponent = ({
       ];
 
       if (isTurnActive) {
-        // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
+        // Capture the target conversation alongside the
         // arguments so the flush can prove it is still delivering to the chat the
         // message was written for.
         const editingId = editingQueuedIdRef.current;
@@ -3586,7 +3560,7 @@ const ChatComposerNewComponent = ({
           conversationId: conversationId ?? null,
           args: sendArgs,
           preview: outgoingContent.trim() || 'Attachment',
-          // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
+          // Publish the queued turn's tools immediately; the sync
           // effect above only fires on a subsequent toggle change.
           toolsLabel: activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null,
           invertFollowUp,
@@ -3751,7 +3725,7 @@ const ChatComposerNewComponent = ({
   }, [conversationId, isIncognito, message]);
 
   /**
-   * AUDIT-FIX STR-23: the composer input is per-conversation. Park the outgoing
+   * The composer input is per-conversation. Park the outgoing
    * conversation's half-typed text under its own id and restore the incoming
    * one's, so a private draft can never follow the user into another chat.
    *
@@ -3953,11 +3927,10 @@ const ChatComposerNewComponent = ({
       }
       for (const pending of stranded) {
         {
-          // AUDIT-FIX STR-8/BUG-15: this edge was produced by navigating away,
-          // not by the queued turn finishing. Sending now would deliver a
-          // message composed for another chat into the one on screen. Park the
-          // text back on ITS conversation's draft (AUDIT-FIX STR-23) and say so
-          // out loud -- silently dropping it would be its own data loss.
+          // This edge was produced by navigating away, not by the queued turn
+          // finishing. Sending now would deliver a message composed for another
+          // chat into the one on screen, so the text goes back on its own
+          // conversation's draft and the user is told.
           const [queuedContent, queuedAttachments] = pending.args;
           const savedAsDraft = typeof queuedContent === 'string' && queuedContent.trim().length > 0;
           if (savedAsDraft) {
@@ -4091,15 +4064,10 @@ const ChatComposerNewComponent = ({
   );
 
   /**
-   * AUDIT-FIX CMP-16: a queued follow-up is now a first-class message.
-   *
-   * The "+" menu and mic used to be disabled during streaming while the
-   * textarea deliberately stayed enabled for type-ahead, so a queued message
-   * could be written but could not have its tools set or be dictated, and
-   * nothing on screen said which toggles it would carry. The controls are
-   * enabled above; this keeps the queued snapshot in step with them (the
-   * snapshot still exists so a queue flush can never pick up options from a
-   * different conversation) and publishes the resulting tool list.
+   * A queued follow-up keeps its tools editable while it waits. This keeps the
+   * queued snapshot in step with the controls (the snapshot exists so a queue
+   * flush can never pick up options from a different conversation) and
+   * publishes the resulting tool list.
    */
   useEffect(() => {
     // Only the most recently queued message follows the visible toggles: those
@@ -4288,7 +4256,6 @@ const ChatComposerNewComponent = ({
       !selectedVideoIsPromotional &&
       mediaAdmissionFor(videoModelId)?.state !== 'enabled');
 
-  // AUDIT-FIX CMP-32: length feedback against the real contract ceiling.
   const messageLength = message.length;
   const showCharCounter = messageLength >= COMPOSER_COUNTER_THRESHOLD;
   const charCounterExceeded = messageLength >= COMPOSER_MAX_CHARS;
@@ -4403,7 +4370,7 @@ const ChatComposerNewComponent = ({
   const primaryOverflowActive = overflowActiveOptions[0];
   const PrimaryOverflowIcon = primaryOverflowActive?.Icon;
 
-  // AUDIT-FIX GOV-39: safe-area-bottom-additive keeps the send button clear of
+  // safe-area-bottom-additive keeps the send button clear of
   // the iOS home indicator. layout.tsx sets viewportFit:'cover', which makes a
   // missing inset worse rather than neutral. The inset below is the soft
   // keyboard on a browser that does not resize the layout viewport for it.
@@ -4547,9 +4514,6 @@ const ChatComposerNewComponent = ({
                     ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
                     : `${QUEUED_ROW_LEAD}: `}
                 {queued.preview}
-                {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry.
-                    they are editable while it waits (the "+" menu stays open during
-                    streaming), so the user can see and change them. */}
                 {queued.toolsLabel && (
                   <span className="ms-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
                 )}
@@ -4692,10 +4656,9 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* AUDIT-FIX MEDIA-VIDEO-01: files that were staged BEFORE the user
-          entered image/video mode (the + menu switches mode without touching
-          the attachment list). The send is blocked rather than silently
-          dropping them; both ways out are one click. */}
+      {/* Files staged before the user entered image or video mode (the + menu
+          switches mode without touching the attachment list) block the send
+          rather than being dropped. */}
       {mediaAttachmentConflict && (
         <div
           role="alert"
@@ -4947,9 +4910,6 @@ const ChatComposerNewComponent = ({
           </div>
           {showCompatibleModels && !promotionalAttachmentConflict && (
             <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-popover p-1">
-              {/* AUDIT-FIX CMP-28: an empty bordered box with no message was
-                  rendered when the user's tier has no multimodal model. Say
-                  what happened and offer the only action that helps. */}
               {compatibleModels.length === 0 && (
                 <div className="px-2 py-2 text-xs text-muted-foreground">
                   <p>No model on your plan can read this attachment.</p>
@@ -5327,8 +5287,7 @@ const ChatComposerNewComponent = ({
                         : 'Describe the image you want'
                       : videoMode
                         ? 'Describe the video you want'
-                        : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now
-                          ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
+                        : ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
                 }
                 // Type-ahead: the textarea stays enabled while a turn streams so the
                 // user can compose a follow-up (queued + auto-sent on completion).
@@ -5356,8 +5315,6 @@ const ChatComposerNewComponent = ({
                   )}
                 </button>
               )}
-              {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
-                  explicit once the message approaches the contract ceiling. */}
               {showCharCounter && (
                 <p
                   id="composer-char-counter"
@@ -5421,9 +5378,8 @@ const ChatComposerNewComponent = ({
                     aria-expanded={showOverflowMenu}
                   >
                     <Plus className="h-5 w-5" />
-                    {/* AUDIT-FIX CMP-13: the active state used to be a colour tint
-                  only (WCAG 1.4.1). The count badge repeats it as shape and
-                  text; the label above repeats it for screen readers. */}
+                    {/* WCAG 1.4.1: the count badge carries the active state as
+                  shape and text, not colour alone. */}
                     {hasOverflowActive && (
                       <span
                         aria-hidden="true"
@@ -6135,10 +6091,6 @@ const ChatComposerNewComponent = ({
                     className="flex h-8 max-w-full items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
                     aria-label="Select image model"
                   >
-                    {/* AUDIT-FIX CMP-26: no hardcoded model name. The catalog is
-                      the only source for image models (this file's own header
-                      says so); when it yields none there is nothing to pick and
-                      the honest label says exactly that. */}
                     <span className="max-w-[120px] truncate">
                       {availableImageModels.find((m) => m.id === imageModelId)?.label ??
                         (!mediaModelsSettled
@@ -6314,9 +6266,8 @@ const ChatComposerNewComponent = ({
 
               {/* Voice input is part of free chat and remains capability-neutral. */}
               <div className={cn('relative shrink-0', mediaControlsWrap && 'max-sm:ms-auto')}>
-                {/* AUDIT-FIX CMP-16: dictation follows the textarea, which stays
-                  enabled during streaming for type-ahead. Disabling the mic
-                  meant a queued follow-up could be typed but never dictated. */}
+                {/* Dictation follows the textarea, which stays enabled during
+                  streaming so a queued follow-up can be dictated. */}
                 <VoiceInputButton
                   onStart={startDictation}
                   active={dictation.isActive}
@@ -6359,8 +6310,6 @@ const ChatComposerNewComponent = ({
             </div>
           </div>
 
-          {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
-              before the user presses Enter. */}
           {pendingChatCommand && (
             <p className="px-2 text-caption text-muted-foreground" role="status">
               <span className="font-medium text-foreground">
@@ -6696,8 +6645,8 @@ const ChatComposerNewComponent = ({
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
   return (
     prev.onSend === next.onSend &&
-    // AUDIT-FIX STR-8/STR-23: a conversation switch MUST re-render -- it swaps
-    // the draft and decides where a queued follow-up may be delivered.
+    // A conversation switch must re-render: it swaps the draft and decides
+    // where a queued follow-up may be delivered.
     prev.conversationId === next.conversationId &&
     prev.isLoading === next.isLoading &&
     prev.isGenerating === next.isGenerating &&
@@ -6705,6 +6654,11 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.disabled === next.disabled &&
     prev.prefillText === next.prefillText &&
     prev.onPrefillConsumed === next.onPrefillConsumed &&
+    prev.draftReplacement === next.draftReplacement &&
+    prev.onDraftReplacementApplied === next.onDraftReplacementApplied &&
+    prev.onSteerQueuedMessage === next.onSteerQueuedMessage &&
+    prev.onEditLastMessage === next.onEditLastMessage &&
+    prev.suppressAutoFocus === next.suppressAutoFocus &&
     prev.droppedFiles === next.droppedFiles &&
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
     prev.attachmentUploadAttempt === next.attachmentUploadAttempt &&
@@ -6729,10 +6683,8 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
     prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject &&
     prev.projectId === next.projectId &&
-    // AUDIT-FIX CMP-3: without an active conversation the handler is unused
-    // (the toggle is local-only), but once one exists its presence decides
-    // whether the "Temporary chat" control can save, so it must defeat
-    // memoisation.
+    // Once a conversation exists, this handler's presence decides whether the
+    // "Temporary chat" control can save.
     prev.onSetTemporaryChat === next.onSetTemporaryChat &&
     prev.chatSlashActions === next.chatSlashActions
   );

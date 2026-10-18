@@ -57,15 +57,7 @@ async function keepTemporaryChatMedia(assetId: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Re-export the shared media option type for existing card consumers.
-// ---------------------------------------------------------------------------
-
 export type { ImageAspectRatio, ImageRevisionRequest } from '../lib/imageGenerationOptions';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface ImageGenerationCardProps {
   /** undefined = currently generating (state A); string = image ready (state B+) */
@@ -89,10 +81,6 @@ interface ImageGenerationCardProps {
    */
   onRegenerate?: (opts: ImageRevisionRequest) => Promise<string>;
 }
-
-// ---------------------------------------------------------------------------
-// Download helper (works for both remote URLs and data: URIs)
-// ---------------------------------------------------------------------------
 
 const IMAGE_EXTENSION_BY_MIME: Readonly<Record<string, string>> = {
   'image/avif': 'avif',
@@ -158,10 +146,6 @@ async function copyImage(url: string): Promise<void> {
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob(url) })]);
 }
 
-// ---------------------------------------------------------------------------
-// State A: Generating card
-// ---------------------------------------------------------------------------
-
 function formatElapsed(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
@@ -172,8 +156,7 @@ function formatElapsed(seconds: number): string {
  * scanner only sees literal class strings in source, so `aspect-[${ratio}]`
  * would silently produce no rule at runtime. Every ratio the picker offers
  * (see IMAGE_ASPECT_OPTIONS in ../lib/imageGenerationOptions) is enumerated
- * here; 'auto' and any unrecognized value fall back to 3:2, matching this
- * card's pre-existing fixed 420x280 shape so old behavior is the default.
+ * here; 'auto' and any unrecognized value fall back to 3:2.
  */
 const IMAGE_ASPECT_CLASSES: Readonly<Record<string, string>> = {
   '1:1': 'aspect-square',
@@ -238,7 +221,7 @@ function GeneratingCard({
       aria-label="Generating image"
       aria-live="polite"
     >
-      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
+      <div className="absolute inset-0 animate-pulse motion-reduce:animate-none bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
 
       <div className="relative z-[var(--z-control)] flex flex-col items-center gap-2.5">
         <Spinner aria-hidden="true" className="h-10 w-10 text-muted-foreground" />
@@ -254,10 +237,6 @@ function GeneratingCard({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// State D: Share modal
-// ---------------------------------------------------------------------------
 
 interface ShareModalProps {
   imageUrl: string;
@@ -320,7 +299,6 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
       aria-label={`Share ${mediaKind}`}
     >
       <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-e4 backdrop-blur-xl">
-        {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-2">
           <h2 className="text-h5 text-foreground">{title}</h2>
           <button
@@ -333,7 +311,6 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
           </button>
         </div>
 
-        {/* Thumbnail */}
         <div className="mb-5 overflow-hidden rounded-xl border border-border/30 bg-muted/30">
           {mediaKind === 'video' ? (
             <video
@@ -389,10 +366,6 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// State C: revision panel, re-generates, never edits the source pixels
-// ---------------------------------------------------------------------------
 
 interface EditPanelProps {
   imageUrl: string;
@@ -616,14 +589,12 @@ function EditPanel({
 
   return (
     <>
-      {/* Mobile backdrop */}
       <div
         className="fixed inset-0 z-[var(--z-overlay)] bg-black/50 backdrop-blur-sm sm:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Panel - mirrors ArtifactsPanel layout exactly */}
       <div
         ref={panelRef}
         role="dialog"
@@ -637,7 +608,6 @@ function EditPanel({
           'animate-in slide-in-from-right duration-moved',
         )}
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -651,9 +621,7 @@ function EditPanel({
             <h2 className="truncate text-h5 text-foreground">{titleText} image</h2>
           </div>
 
-          {/* Right-side controls */}
           <div className="flex items-center gap-1 shrink-0">
-            {/* Aspect ratio dropdown */}
             <div className="relative">
               <button
                 ref={aspectTriggerRef}
@@ -705,7 +673,6 @@ function EditPanel({
               )}
             </div>
 
-            {/* Share */}
             <button
               type="button"
               onClick={onShare}
@@ -715,7 +682,6 @@ function EditPanel({
               <span>Share</span>
             </button>
 
-            {/* Download */}
             <button
               type="button"
               onClick={handleDownload}
@@ -727,7 +693,6 @@ function EditPanel({
           </div>
         </div>
 
-        {/* Image area */}
         <div className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-muted/40 p-4">
           {/* The image itself carries the new prompt as its alt text, which a
               screen reader only reaches by navigating to it. This says, at the
@@ -878,7 +843,6 @@ function EditPanel({
             </p>
           ) : null}
 
-          {/* Describe-a-change composer */}
           <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-[var(--chat-bg-elevated)] px-3 py-2">
             <input
               ref={editInputRef}
@@ -923,10 +887,6 @@ function EditPanel({
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// State B: Result card (inline image + overlay controls)
-// ---------------------------------------------------------------------------
 
 const MEDIA_MAX_RETRIES = 2;
 
@@ -979,7 +939,6 @@ function ResultCard({
     [imageUrl],
   );
 
-  // Close more menu on outside click
   useEffect(() => {
     if (!showMore) return;
     const handler = (e: MouseEvent) => {
@@ -991,9 +950,6 @@ function ResultCard({
     return () => document.removeEventListener('mousedown', handler);
   }, [showMore]);
 
-  // role="menu" promises Escape-to-close, arrow navigation and focus return
-  // to the trigger; outside-click alone left a keyboard user with no way to
-  // dismiss the panel short of tabbing through it or blurring the page.
   useMenuKeyboard({
     open: showMore,
     onClose: closeMore,
@@ -1003,7 +959,6 @@ function ResultCard({
 
   return (
     <div className="mt-3 w-full max-w-[420px]">
-      {/* Image with overlay controls */}
       <div className="group relative overflow-hidden rounded-2xl border border-border/30 bg-muted/20">
         {imgError ? (
           <div
@@ -1036,15 +991,11 @@ function ResultCard({
           />
         )}
 
-        {/* Overlay controls - always visible on mobile, hover on desktop */}
         {!imgError && (
           <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-quick">
-            {/* Gradient scrim */}
             <div className="absolute bottom-0 start-0 end-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
-            {/* Overlay button row */}
             <div className="relative flex items-center justify-between px-3 pb-3">
-              {/* Bottom-left: new-version pill */}
               {onEdit ? (
                 <button
                   type="button"
@@ -1057,7 +1008,6 @@ function ResultCard({
                 </button>
               ) : null}
 
-              {/* Bottom-right: Share circular button */}
               <button
                 type="button"
                 onClick={onShare}
@@ -1071,9 +1021,7 @@ function ResultCard({
         )}
       </div>
 
-      {/* Action bar below the image */}
       <div className="mt-1.5 flex items-center gap-1">
-        {/* Copy */}
         <button
           type="button"
           onClick={() => void handleCopy()}
@@ -1091,7 +1039,6 @@ function ResultCard({
           </span>
         </button>
 
-        {/* More (download lives here too) */}
         <div className="relative" ref={moreRef}>
           <button
             ref={moreTriggerRef}
@@ -1189,10 +1136,6 @@ function ResultCard({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main export: ImageGenerationCard
-// ---------------------------------------------------------------------------
-
 export function ImageGenerationCard({
   imageUrl,
   isGenerating = !imageUrl,
@@ -1236,16 +1179,12 @@ export function ImageGenerationCard({
       : `Try again in ${retrySecondsRemaining}s`
     : undefined;
 
-  // Track the live imageUrl and prompt locally so edits update the display
-  // without a full message re-render (the parent will update its metadata
-  // separately via onImageUpdated → handleRegenerateImageInPlace).
   const [liveUrl, setLiveUrl] = useState(imageUrl);
   const [livePrompt, setLivePrompt] = useState(prompt);
   const [liveAspect, setLiveAspect] = useState<ImageAspectRatio>(() =>
     normalizeImageAspectRatioForModel(modelId, aspectRatio),
   );
 
-  // Keep local state in sync when the parent message updates.
   useEffect(() => {
     if (imageUrl) setLiveUrl(imageUrl);
   }, [imageUrl]);
@@ -1270,14 +1209,10 @@ export function ImageGenerationCard({
     setViewedVersion(null);
   }, [liveUrl]);
 
-  // State A: generating. The copy deliberately reflects observable state and
-  // elapsed time; rotating pseudo-stages such as "Painting details" and
-  // "Almost there" implied provider telemetry we do not receive.
   if (!imageUrl && isGenerating) {
     return <GeneratingCard aspectRatio={aspectRatio} capHeight modelId={modelId} />;
   }
 
-  // A failed/disconnected request must never leave an infinite loading card.
   if (!imageUrl) {
     return (
       <div
@@ -1330,10 +1265,8 @@ export function ImageGenerationCard({
   const selectedKeepableAssetId =
     inTemporaryChat && selectedAssetId && selectedAssetId !== keptAssetId ? selectedAssetId : null;
 
-  // State B/C/D: image ready
   return (
     <>
-      {/* State B: Result card */}
       <ResultCard
         imageUrl={selectedUrl}
         prompt={selectedPrompt}
@@ -1376,7 +1309,6 @@ export function ImageGenerationCard({
           : {})}
       />
 
-      {/* State C: revision panel (portals into the layout) */}
       {showEdit && (
         <EditPanel
           imageUrl={selectedUrl}
@@ -1395,7 +1327,6 @@ export function ImageGenerationCard({
         />
       )}
 
-      {/* State D: Share modal */}
       {showShare && (
         <ShareModal
           imageUrl={selectedUrl}

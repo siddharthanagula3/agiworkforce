@@ -282,14 +282,8 @@ function defaultStoreEffort(r: ModelReasoning): Effort {
 }
 
 /**
- * True for models that burn plan usage fastest · drives the usage-rate tooltip.
- *
- * AUDIT-FIX CMP-25: this used to be `model.name.toLowerCase().includes('opus')`
- *, a substring match on a DISPLAY NAME. It silently missed every other premium
- * model (and would have fired on any unrelated model whose name happened to
- * contain the word). `getPickerModelTier` is the catalog's own answer to
- * "which bucket is this model in", and is already what the picker's Pro badge
- * uses, so the tooltip and the badge can no longer disagree.
+ * True for models that burn plan usage fastest; drives the usage-rate tooltip.
+ * Uses the catalog tier the picker's Pro badge uses, so the two cannot disagree.
  */
 function isHighUsageRateModel(model: AIModel): boolean {
   return getPickerModelTier(model.id) === 'premium';

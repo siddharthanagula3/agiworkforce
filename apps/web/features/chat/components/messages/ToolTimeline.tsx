@@ -474,9 +474,7 @@ function TimelineStepRow({
 
   return (
     <div className="flex flex-col gap-0.5">
-      {/* Row: icon + label */}
       <div className="flex items-start gap-2.5">
-        {/* Icon column */}
         <div className="mt-0.5 shrink-0">
           {hasFile ? (
             <FileTypeIcon filename={filename} className="h-4 w-4 text-muted-foreground" />
@@ -484,10 +482,9 @@ function TimelineStepRow({
             <StepIcon className="h-4 w-4 text-muted-foreground" />
           ) : null}
         </div>
-        {/* Tool call card (label + expand). Web-search steps have no request/
-            response payload and surface their result count below, so we render
-            a plain label instead of the ToolCallCard's (empty) expand box to
-            avoid a hollow container under "Web search". */}
+        {/* A web-search step has no request or response payload and shows its
+            result count below, so it gets a plain label rather than an empty
+            expandable card. */}
         <div className="flex-1 min-w-0">
           {approvalRequest ??
             (isWebSearch ? (
@@ -504,7 +501,6 @@ function TimelineStepRow({
             ))}
         </div>
       </div>
-      {/* Filename chip: BELOW the label row, indented to align with the label text */}
       {hasFile && (
         <div className="ps-7">
           <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
@@ -514,8 +510,6 @@ function TimelineStepRow({
           </span>
         </div>
       )}
-      {/* Lazy authentication: inline Connect card for a connector tool call the
-          server answered with a verified "connect required" envelope. */}
       {connectRequest && (
         <div className="ps-7 mt-1.5">
           <ConnectorConnectCard
@@ -684,20 +678,10 @@ function ToolTimeline({
 
   return (
     <div className={cn('', className)} aria-busy={hasRunning}>
-      {/* AUDIT-FIX GOV-29: the timeline's only live region, off-screen,
-          atomic, one phrase per state change. */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </span>
 
-      {/* Compact collapse button · shown when user has expanded from compact mode */}
-      {isCompact && compactExpanded && (
-        <div className="mb-1">
-          {/* Header row handled below, the collapse affordance is just clicking the header */}
-        </div>
-      )}
-
-      {/* Header · always visible */}
       <button
         type="button"
         onClick={isCompact ? () => setCompactExpanded(false) : handleToggle}
@@ -718,7 +702,6 @@ function ToolTimeline({
             </>
           )}
         </span>
-        {/* Chevron at the right end of the header line */}
         <motion.span
           animate={{ rotate: isOpen || (isCompact && compactExpanded) ? 90 : 0 }}
           transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
@@ -728,7 +711,6 @@ function ToolTimeline({
         </motion.span>
       </button>
 
-      {/* Expandable tool list with framer-motion height + opacity animation */}
       <AnimatePresence initial={false}>
         {(isOpen || (isCompact && compactExpanded)) && (
           <motion.div
@@ -745,9 +727,7 @@ function ToolTimeline({
             }
             className="overflow-hidden"
           >
-            {/* Vertical timeline: thin connector line runs along the left edge of icons */}
             <div className="relative mt-2 ps-2">
-              {/* Vertical connector line */}
               <div
                 className="absolute start-4 top-2 bottom-6 w-px bg-border/40"
                 aria-hidden="true"
@@ -908,7 +888,10 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.parameters !== n.parameters ||
       p.approved !== n.approved ||
       p.toolCallId !== n.toolCallId ||
-      p.inputRequests !== n.inputRequests
+      p.inputRequests !== n.inputRequests ||
+      p.statusPhrase !== n.statusPhrase ||
+      p.summary !== n.summary ||
+      p.deviceName !== n.deviceName
     ) {
       return false;
     }

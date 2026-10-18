@@ -255,12 +255,12 @@ export interface ResearchLoopOptions {
   /** Durable cancellation check evaluated before provider and fetch side effects. */
   isCancellationRequested?: () => Promise<boolean>;
   /**
-   * AUDIT-FIX BUG-1: the client's AbortSignal. The research loop never received
-   * one, so a client cancel billed a full multi-round research run nobody saw.
+   * The client's AbortSignal, so a client cancel stops the run instead of
+   * billing a multi-round research run nobody sees.
    */
   signal?: AbortSignal;
   /**
-   * AUDIT-FIX SYS-21: the caller's managed-failover rotation state (built by
+   * The caller's managed-failover rotation state (built by
    * `createFailoverPlan`). Passed in rather than constructed here for the same
    * import-graph reason as the tool loop. Absent means no rotation.
    */
@@ -1649,9 +1649,9 @@ export async function* runResearchLoop(
     ? Math.max(1, maxIterations - 2) // plan + gathering rounds + synthesis
     : maxIterations - 1; // the last iteration is always synthesis
 
-  // Managed failover state for this run (AUDIT-FIX SYS-21). The caller's plan
-  // returns null for anything that is not an availability-class failure, so
-  // credential/safety/context errors still fail fast exactly as before.
+  // Managed failover state for this run. The caller's plan returns null for
+  // anything that is not an availability-class failure, so credential, safety
+  // and context errors still fail fast.
   let servingProcessed: ProcessedRequest = processed;
 
   function researchScopedDb() {
@@ -1872,8 +1872,8 @@ export async function* runResearchLoop(
   }
 
   /**
-   * AUDIT-FIX BUG-1: a plain client abort now stops the run at the next
-   * boundary, in addition to the durable cancellation poll.
+   * A plain client abort stops the run at the next boundary, in addition to
+   * the durable cancellation poll.
    */
   async function isCancelled(): Promise<boolean> {
     if (options.signal?.aborted) return true;
@@ -2162,8 +2162,7 @@ export async function* runResearchLoop(
       text: '',
       usage: turnUsage,
     };
-    // AUDIT-FIX SYS-21 + BUG-1: rotate to the resolver's next managed-failover
-    // candidate when the provider fails on an availability-class error, and
+    // Rotate to the resolver's next managed-failover candidate when the provider fails on an availability-class error, and
     // thread the client's AbortSignal into every attempt. The rotation point is
     // `startProviderStream`'s first-chunk peek inside `buildToolLoopStream`,
     // which throws before any byte of this turn reaches the client, so a failed

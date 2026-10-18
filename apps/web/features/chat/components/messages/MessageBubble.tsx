@@ -390,17 +390,13 @@ function generatedFileArtifactType(file: GeneratedFileMetadataEntry): ArtifactDa
 }
 
 /**
- * AUDIT-FIX BUG-31: close a trailing unterminated code fence.
+ * Close a trailing unterminated code fence. The artifact path strips a growing
+ * unclosed block only for renderable artifact languages; for any other
+ * language an open fence renders unstyled and the whole tail is re-lexed on
+ * every token.
  *
- * The artifact path already strips a growing unclosed block from the chat body
- * (see `cleanedContent`), but that only covers RENDERABLE artifact languages.
- * For every other language: python, sql, a bare fence with no info string.
- * the partial buffer reached the markdown renderer with an open fence. micromark
- * tolerates it, but the block renders unstyled (no `language-*` class, so no
- * highlighting) and the whole tail is re-lexed on every token.
- *
- * Appending the closing fence is a pure display repair: it never mutates the
- * stored message, and it is a no-op when the fence is already closed.
+ * A display repair only: it never mutates the stored message, and it is a
+ * no-op when the fence is already closed.
  */
 function closeUnterminatedFence(markdown: string): string {
   if (!extractTrailingUnclosedBlock(markdown)) return markdown;
@@ -797,7 +793,7 @@ const MessageBubbleComponent = function MessageBubble({
     () => new Set<string>(),
   );
   /**
-   * AUDIT-FIX GOV-33: framer-motion drives the staggered message entry through
+   * Framer-motion drives the staggered message entry through
    * INLINE opacity/transform styles, which the global prefers-reduced-motion
    * reset in globals.css (`transition-duration: 0.01ms !important`) cannot
    * reach, it only caps CSS transitions and animations. The preference has to
@@ -1830,8 +1826,6 @@ const MessageBubbleComponent = function MessageBubble({
     const withoutCitationTail = isUser
       ? withoutDuplicateSources
       : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
-    // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
-    // renderer a half-open fence" treatment the artifact path already gets.
     const closed = closeUnterminatedFence(withoutCitationTail);
     const slotAt = closed.indexOf(ARTIFACT_PROSE_SLOT);
     if (slotAt === -1) {
@@ -3693,13 +3687,8 @@ const MessageBubbleComponent = function MessageBubble({
 };
 
 /**
- * AUDIT-FIX BUG-28: attachment descriptors, compared field by field.
- *
- * `attachments` was absent from the comparator entirely while the parent
- * (ChatMessageList) hands this component a freshly built array. When an upload
- * finished and nothing else on the message changed, the comparator answered
- * "equal" and the card kept rendering the pre-upload state forever. A custom
- * comparator that omits a real prop is worse than no comparator at all.
+ * Attachment descriptors, compared field by field: the parent hands this
+ * component a freshly built array, and a finished upload must still re-render.
  */
 function attachmentsEqual(prev?: Attachment[], next?: Attachment[]): boolean {
   if (prev === next) return true;
@@ -3725,10 +3714,8 @@ function attachmentsEqual(prev?: Attachment[], next?: Attachment[]): boolean {
 }
 
 /**
- * AUDIT-FIX STR-17: every tool entry, not a sample of the ends.
- * With three or more parallel tools the middle cards never left 'running', and
- * Approve/Reject: which flips one entry, usually an interior one, produced no
- * visible feedback until the whole batch resolved.
+ * Every tool entry, not a sample of the ends: Approve or Reject flips one
+ * entry, usually an interior one, and must re-render at once.
  */
 function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
   if (prev === next) return true;
@@ -3761,16 +3748,8 @@ function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
 }
 
 /**
- * AUDIT-FIX BUG-29 / STR-17: metadata equality without serializing the bag.
- *
- * The previous implementation ran `JSON.stringify` over BOTH metadata objects
- * on every comparison, once per streamed token per visible message, on the
- * render-critical path, in a list with no virtualization, over a bag that
- * carries the full tool timeline, search results, thinking segments and file
- * descriptors. It was also key-order sensitive, so a re-serialized bag with
- * reordered keys reported "changed" even when nothing had.
- *
- * Field comparison replaces it. Reference identity is the right test for the
+ * Metadata equality without serializing the bag, which runs once per streamed
+ * token per visible message. Reference identity is the right test for the
  * object-valued spines because the store patches metadata immutably
  * (`{ ...m.metadata, ...patch }` in web-chat-store) and the activity reducer
  * returns a new object for every event it applies, so `!==` means "changed"
@@ -3866,10 +3845,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
     return false;
   }
 
-  // AUDIT-FIX BUG-28: attachments participate.
   if (!attachmentsEqual(prev.message.attachments, next.message.attachments)) return false;
 
-  // AUDIT-FIX BUG-29: targeted comparison, no per-token JSON.stringify.
   if (!metadataEqual(prev.message.metadata, next.message.metadata)) return false;
 
   // Check callback references (they should be memoized by parent)

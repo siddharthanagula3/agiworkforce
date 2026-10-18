@@ -64,24 +64,6 @@ import {
   subtreeIds,
 } from '@/features/chat/lib/messageThread';
 
-/**
- * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options, isolated PER
- * CONVERSATION.
- *
- * These eight values used to live in `useState` inside `ChatComposerNew`, and
- * `WebChatPage` renders that composer in the two opposite branches of an
- * `isEmptyChat ? ... : ...` ternary. Sending the first message therefore
- * UNMOUNTED the empty-state instance and MOUNTED the in-conversation one, so
- * every toggle silently reset to its default from message 2 onward -- a
- * conversation started in AGI Work continued as plain chat with nothing said.
- * `clearComposerState()` deliberately does not reset them ("PERSISTENT toggles
- * (claude.ai parity)"); the host layout was defeating that intent.
- *
- * Hoisting them here (next to `draftsByConversation`, the other piece of
- * per-conversation composer state) makes them survive the branch swap AND scopes
- * them to one conversation, so turning Deep Research on in chat A no longer
- * leaks into chat B.
- */
 export interface ImageVersion {
   imageUrl: string;
   prompt?: string;
@@ -89,6 +71,12 @@ export interface ImageVersion {
   model?: string;
 }
 
+/**
+ * The composer's send options, isolated per conversation. They live here, not
+ * in the composer, because `WebChatPage` renders the composer in the two
+ * branches of an `isEmptyChat` ternary: the first send swaps instances, and
+ * component state would reset every toggle from message 2 onward.
+ */
 export interface ComposerToggleState {
   /** Chat | AGI Work. Stamped into send meta and enforced server-side. */
   workMode: CloudWorkMode;
@@ -641,14 +629,9 @@ interface ChatState {
 
   // Messages
   /**
-   * AUDIT-FIX ROOT-CAUSE (per-conversation transcripts): the canonical store of
-   * record. Previously the ONE flat `messages` array below WAS the source of
-   * truth, implicitly scoped to `activeConversationId`, so every stream writer
-   * (`addMessage`, `appendToMessage`, `appendToThinking`, `setToolTimeline`, ...)
-   * was a `.map()` over that single array matched by message id -- meaning any
-   * stream whose conversation was not currently displayed wrote into the wrong
-   * buffer or silently no-opped. Mirrors the proven shape in
-   * packages/ui/unified-chat/src/stores/chatStore.ts.
+   * Per-conversation transcripts, the canonical store of record, so a stream
+   * whose conversation is not displayed still writes into its own buffer.
+   * Mirrors packages/ui/unified-chat/src/stores/chatStore.ts.
    */
   messagesByConversation: Record<string, Message[]>;
   /**
@@ -688,13 +671,9 @@ interface ChatState {
    */
   streamingConversationIds: string[];
   /**
-   * AUDIT-FIX STR-7/BUG-12: conversation ids with a TURN in flight. `isLoading`
-   * below is derived from this (plus `streamingConversationIds`) for the ACTIVE
-   * conversation only. Previously `isLoading` was one global boolean written
-   * UNSCOPED on `true` but scoped on `false`, and the reducer DISCARDED a
-   * `false` whose id was not the active one -- so a background stream left it
-   * stuck `true` forever and the composer (`isTurnActive`) stayed disabled in
-   * every other conversation.
+   * Conversation ids with a turn in flight. `isLoading` below is derived from
+   * this (plus `streamingConversationIds`) for the active conversation only,
+   * so a background stream can never leave it stuck true.
    */
   loadingConversationIds: string[];
   /** Derived: does the ACTIVE conversation have a turn in flight (see above). */
@@ -715,11 +694,9 @@ interface ChatState {
 
   // Draft content for input persistence
   /**
-   * AUDIT-FIX STR-23: unsent composer text, isolated PER CONVERSATION (plus the
-   * new-chat composer under `PENDING_CONVERSATION_KEY`). The composer used to
-   * hold its input in plain component state that was never keyed by
-   * conversation, so a half-typed private message followed the user into
-   * whatever chat they opened next. Mirrors `draftsByConversation` in
+   * Unsent composer text, isolated per conversation (plus the new-chat
+   * composer under `PENDING_CONVERSATION_KEY`), so a half-typed message never
+   * follows the user into another chat. Mirrors `draftsByConversation` in
    * packages/ui/unified-chat/src/stores/chatStore.ts.
    */
   draftsByConversation: Record<string, string>;
@@ -742,7 +719,7 @@ interface ChatState {
   parkedSendCreatedAtByFingerprint: Record<string, number>;
 
   /**
-   * AUDIT-FIX CMP-1/CMP-2/CMP-5: composer send options per conversation. See
+   * Composer send options per conversation. See
    * `ComposerToggleState`. Not persisted -- these describe one live
    * conversation's next turn, not a user preference.
    */
@@ -833,7 +810,7 @@ interface ChatState {
 
   // Actions - Messages
   /**
-   * AUDIT-FIX ROOT-CAUSE: every message writer now takes an OPTIONAL trailing
+   * Every message writer takes an optional trailing
    * `conversationId` naming the transcript it targets. A stream writer MUST
    * pass the conversation its stream belongs to -- otherwise a turn that
    * outlives the user's navigation writes into whatever chat happens to be on
@@ -915,7 +892,7 @@ interface ChatState {
    */
   stopStreaming: (conversationId?: string) => void;
   /**
-   * AUDIT-FIX STR-7/BUG-12: records/clears "a turn is in flight" for ONE
+   * Records or clears "a turn is in flight" for one
    * conversation. `conversationId` defaults to the active conversation; a
    * caller driving a turn that can outlive the user's navigation MUST pass its
    * own conversation id for BOTH the `true` and the `false` write. A write
@@ -939,7 +916,7 @@ interface ChatState {
 
   // Actions - Draft
   /**
-   * AUDIT-FIX STR-23: write one conversation's draft. `conversationId`
+   * Write one conversation's draft. `conversationId`
    * defaults to the active conversation; pass it explicitly to park the text
    * of a conversation the user is leaving.
    */
@@ -965,7 +942,7 @@ interface ChatState {
    */
   clearParkedSend: (fingerprint: string) => void;
 
-  // Actions - Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
+  // Actions - Composer toggles
   /**
    * Read one conversation's composer send options, seeded from the durable
    * defaults when that conversation has none yet. Never returns undefined, so
@@ -1034,7 +1011,7 @@ const initialState = {
 };
 
 /**
- * AUDIT-FIX ROOT-CAUSE: bucket key for a transcript composed before its
+ * Bucket key for a transcript composed before its
  * conversation row exists (the empty /chat surface). Mirrors
  * `NEW_CONVERSATION_DRAFT_KEY` in packages/ui/unified-chat's chatStore. Using a
  * real key instead of "whatever `messages` happens to hold" means a pre-create
@@ -1213,7 +1190,7 @@ function patchMessageMetadata(
 }
 
 /**
- * AUDIT-FIX STR-7/BUG-12: `isLoading` is the ACTIVE conversation's busy flag,
+ * `isLoading` is the active conversation's busy flag,
  * derived from the two per-conversation ledgers so it can never be left stuck
  * true by a background conversation's turn.
  */
@@ -1298,14 +1275,10 @@ export const useChatStore = create<ChatState>()(
         deleteConversation: (id) =>
           set(
             (state) => {
-              // AUDIT-FIX ROOT-CAUSE: drop the deleted conversation's transcript
-              // bucket too, otherwise it leaks for the lifetime of the tab and a
-              // recreated id would resurrect a dead transcript.
+              // A deleted conversation's transcript, parked draft and composer
+              // send options go with it, so a recreated id resurrects none.
               const { [id]: _removed, ...messagesByConversation } = state.messagesByConversation;
-              // AUDIT-FIX STR-23: a deleted conversation's parked draft dies with it.
               const { [id]: _removedDraft, ...draftsByConversation } = state.draftsByConversation;
-              // AUDIT-FIX CMP-5: and so do its composer send options -- a
-              // recreated id must never resurrect a dead conversation's tools.
               const { [id]: _removedToggles, ...composerTogglesByConversation } =
                 state.composerTogglesByConversation;
               // A recreated id must not resurrect a dead conversation's connector opt-outs.
@@ -1352,12 +1325,11 @@ export const useChatStore = create<ChatState>()(
         setActiveConversation: (id) =>
           set(
             (state) => {
-              // AUDIT-FIX ROOT-CAUSE: switching conversations no longer DESTROYS
-              // the transcript (the old `messages: []`); it re-points the derived
-              // mirror at the target conversation's own bucket. That is what lets
-              // an in-flight background turn keep writing into its own
-              // conversation, and what lets `loadConversation` short-circuit on a
-              // cached transcript instead of refetching and clobbering it.
+              // Switching conversations re-points the derived mirror at the
+              // target conversation's own bucket rather than clearing it, so an
+              // in-flight background turn keeps writing into its own
+              // conversation and `loadConversation` can short-circuit on a
+              // cached transcript.
               const messagesByConversation =
                 id === null
                   ? (({ [PENDING_CONVERSATION_KEY]: _pending, ...rest }) => rest)(
@@ -1378,7 +1350,6 @@ export const useChatStore = create<ChatState>()(
                         readConversationMessages(state, conversationKey(id)),
                         state.activeLeafByConversation[conversationKey(id)] ?? null,
                       ),
-                // AUDIT-FIX STR-23: the visible draft follows the conversation.
                 draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
                 error: null,
                 isLoading: deriveIsLoading({ ...state, activeConversationId }),
@@ -1404,7 +1375,6 @@ export const useChatStore = create<ChatState>()(
                 messagesByConversation: { ...state.messagesByConversation, [id]: messages },
                 activeLeafByConversation: { ...state.activeLeafByConversation, [id]: leafId },
                 messages: resolveVisibleThread(messages, leafId),
-                // AUDIT-FIX STR-23: the visible draft follows the conversation.
                 draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
                 error: null,
                 isLoading: deriveIsLoading({ ...state, activeConversationId: id }),
@@ -1746,8 +1716,7 @@ export const useChatStore = create<ChatState>()(
               return {
                 streamingConversationIds,
                 isStreaming: true,
-                // AUDIT-FIX ROOT-CAUSE: flip the flag inside the OWNING
-                // conversation's transcript, not "whatever is on screen".
+                // Flip the flag inside the owning conversation's transcript.
                 ...updateConversationMessages(state, conversationId, (messages) =>
                   patchOneMessage(messages, messageId, (message) => ({
                     ...message,
@@ -1768,10 +1737,9 @@ export const useChatStore = create<ChatState>()(
               const streamingConversationIds = targetId
                 ? state.streamingConversationIds.filter((id) => id !== targetId)
                 : state.streamingConversationIds;
-              // AUDIT-FIX ROOT-CAUSE: sweep the isStreaming flag on the ENDING
-              // conversation's own transcript. Previously this could only touch
-              // the visible array, so a background stream's teardown left its
-              // bubbles stuck "streaming" forever once the user navigated away.
+              // Sweep the isStreaming flag on the ending conversation's own
+              // transcript, so a background stream's bubbles do not stay
+              // "streaming" after the user navigates away.
               return {
                 streamingConversationIds,
                 isStreaming: streamingConversationIds.length > 0,
@@ -1790,11 +1758,7 @@ export const useChatStore = create<ChatState>()(
         setLoading: (loading, conversationId) =>
           set(
             (state) => {
-              // AUDIT-FIX STR-7/BUG-12: record the turn against ITS conversation
-              // instead of flipping one global boolean. The old reducer accepted
-              // every unscoped `true` and DISCARDED a scoped `false` whose id was
-              // not active, which is exactly how a background stream left the
-              // composer disabled in every other chat.
+              // Record the turn against its own conversation, not a global flag.
               const targetId = conversationId ?? state.activeConversationId;
               if (!targetId) return state;
               const alreadyLoading = state.loadingConversationIds.includes(targetId);
@@ -1939,7 +1903,7 @@ export const useChatStore = create<ChatState>()(
             'chat/clearParkedSend',
           ),
 
-        // Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
+        // Composer toggles
         getComposerToggles: (conversationId) => {
           const state = get();
           const targetId =
@@ -2236,7 +2200,7 @@ export const selectActiveConversationId = (state: ChatState) => state.activeConv
 export const selectIsStreaming = (state: ChatState) => state.isStreaming;
 export const selectIsLoading = (state: ChatState) => state.isLoading;
 /**
- * AUDIT-FIX STR-7/BUG-12: whether ONE named conversation has a turn in flight.
+ * Whether one named conversation has a turn in flight.
  * Use this (not the derived active-only `isLoading`) anywhere a component must
  * reason about a conversation other than the one currently displayed.
  */
@@ -2260,8 +2224,7 @@ export const selectIsConversationStreaming =
 const EMPTY_MESSAGES: Message[] = [];
 
 /**
- * AUDIT-FIX ROOT-CAUSE: one named conversation's transcript, resolved to its
- * ACTIVE PATH. This is the set an abandoned variant must never appear in, LLM
+ * One named conversation's transcript, resolved to its active path. This is the set an abandoned variant must never appear in, LLM
  * context, share, export, snapshots and the retry-banner scan all read it.
  * Anything that has to reason about the tree wants `selectConversationAllRows`.
  *

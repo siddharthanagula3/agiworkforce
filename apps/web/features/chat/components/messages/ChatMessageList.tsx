@@ -2025,11 +2025,9 @@ const ChatMessageListComponent = ({
           height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
         }}
       >
-        {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
-          atomic, and carrying one short phrase per generation state change.
-          so a screen reader hears "Generating response" and then "Response
-          complete"; the answer itself is read once, by the streaming announcer
-          in the bubble, instead of the transcript being re-read. */}
+        {/* The only live region on this surface: one short phrase per
+          generation state change. The answer itself is read once, by the
+          streaming announcer in the bubble. */}
         <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {streamAnnouncement}
         </p>

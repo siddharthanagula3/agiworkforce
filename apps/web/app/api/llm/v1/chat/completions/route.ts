@@ -693,8 +693,8 @@ async function dispatchChatCompletions(
             fileSources: researchFileSources,
             connectorPermissions: researchConnectorPermissions,
             toolApprovalPolicy: researchToolApprovalPolicy,
-            // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
-            // request instead of billing a full research run nobody sees.
+            // A client cancel aborts the in-flight upstream request instead of
+            // billing a full research run nobody sees.
             signal: request.signal,
             failover: {
               next: (error) => {
@@ -1029,13 +1029,13 @@ async function dispatchChatCompletions(
         userId,
         connectorExecutor,
         usage: toolLoopUsage,
-        // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts,
+        // Server-side enforcement of the user's saved verdicts,
         // layered with this turn's per-conversation connector opt-out.
         connectorPermissions: turnConnectorPermissions,
         sessionGrantRefusal: (name, risk) => permissionGate.refusalFor(name, risk),
         toolApprovalPolicy,
-        // AUDIT-FIX BUG-1: a client cancel aborts the in-flight provider call
-        // instead of billing a full agentic turn nobody sees.
+        // A client cancel aborts the in-flight provider call instead of
+        // billing a full agentic turn nobody sees.
         signal: request.signal,
         failover: {
           next: (error, context) => {

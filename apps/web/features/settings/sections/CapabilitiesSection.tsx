@@ -36,8 +36,8 @@ export function CapabilitiesSection() {
         <p className="mt-1 text-sm text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>
-        {/* AUDIT-FIX PAR-32: report a failed load instead of falling through
-          to 'Synced to your account' while the toggles show local defaults. */}
+        {/* A failed load must not read 'Synced to your account' while the
+          toggles show local defaults. */}
         <SaveStatusLine
           failed={saveError !== null || loadError !== null}
           className={`mt-2 text-xs ${loadError ? 'text-danger' : 'text-muted-foreground'}`}

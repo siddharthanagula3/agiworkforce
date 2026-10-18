@@ -247,8 +247,6 @@ export function StyleSelector() {
           {/* Divider */}
           <div className="my-2 border-t border-border/40" />
 
-          {/* Response length · AUDIT-FIX CMP-6/CMP-7. Orthogonal to style: this
-              is the verbosity axis the surface previously had no control for. */}
           <div className="mb-1.5 px-2 py-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
             Response Length
           </div>

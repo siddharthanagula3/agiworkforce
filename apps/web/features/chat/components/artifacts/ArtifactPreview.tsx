@@ -96,12 +96,9 @@ import { WORK_ENTRY_POINT_LABELS, startWork } from '@/features/work';
 import { toUserMessage } from '@/lib/user-error-message';
 
 /**
- * AUDIT-FIX ART-24: single guarded clipboard write.
- *
  * `navigator.clipboard` does not exist in an insecure context and `writeText`
- * rejects on denied permission / unfocused document. Returns whether the copy
- * actually happened so callers can tell the user the truth instead of showing
- * a "Copied" tick for a copy that never occurred.
+ * rejects on denied permission or an unfocused document, so this reports
+ * whether the copy happened rather than showing a tick for one that did not.
  */
 async function writeToClipboard(text: string): Promise<boolean> {
   try {
@@ -113,13 +110,8 @@ async function writeToClipboard(text: string): Promise<boolean> {
   }
 }
 
-/** AUDIT-FIX ART-6: banner copy per mitigation that genuinely ran. */
-const SECURITY_NOTICE_TEXT: Record<'sanitized' | 'escaped', string> = {
-  sanitized:
-    'This artifact contained potentially unsafe patterns. They were removed before rendering.',
-  escaped:
-    'This artifact contained potentially unsafe patterns. They were rendered as text and never executed.',
-};
+const SECURITY_NOTICE_TEXT =
+  'This artifact contained potentially unsafe patterns. They were removed before rendering.';
 
 export interface ArtifactData {
   id: string;
@@ -394,19 +386,6 @@ function resolveArtifactImageSource(raw: string): string | null {
 }
 
 /**
- * ArtifactPreview Component - Claude Artifacts-like Live Preview
- *
- * Features:
- * - Live rendering of HTML/React/SVG code
- * - Preview/Code toggle (split view)
- * - Version navigation + restore, panel variant only, and only when the caller
- *   passes `versionHistory` (the shared store's real edit history). The card
- *   variant has no version UI at all.
- * - Publish to a public URL when the caller injects `publishArtifact`
- * - Multiple export formats
- * - Responsive iframe sandbox
- */
-/**
  * Stepping forward from one artifact into the next in its lineage has to land
  * on that artifact's first version, but the step changes the selected
  * artifact, which resets this component's view state. The step leaves the
@@ -434,19 +413,13 @@ export function ArtifactPreview({
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Preview render failure surfaced by the cross-origin sandbox (production
-  // path only). Reset on refresh / version change. Drives the error state.
   const [renderError, setRenderError] = useState<string | null>(null);
-  // CAP-015 slice 3: publish-in-flight flag and the last public URL minted for
-  // THIS artifact. Both are cleared on an artifact swap (see the reset effect)
-  // so one artifact's link can never be shown under another's title.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
   const [isChangingAudience, setIsChangingAudience] = useState(false);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
-  // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
   const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
   const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
@@ -458,7 +431,6 @@ export function ArtifactPreview({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
-  // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [editRequestMode, setEditRequestMode] = useState(false);
@@ -486,15 +458,11 @@ export function ArtifactPreview({
   );
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
 
-  // PDF / DOCX viewer state (Fix 39 / Fix 40)
   const { isPdf, isDocx, isMarkdownDoc } = classifyArtifactDocument(artifact);
   const [docxHtml, setDocxHtml] = useState<string | null>(null);
   const [docxError, setDocxError] = useState<string | null>(null);
   const isImage = artifact.type === 'image';
   const [imageError, setImageError] = useState(false);
-  // PDF viewer load-failure (iframe onError). Distinct from "no valid source":
-  // this is set when a real source is handed to the iframe but the browser
-  // fails to render it. Reset on refresh / artifact change.
   const [pdfError, setPdfError] = useState(false);
 
   useEffect(() => {
@@ -506,7 +474,6 @@ export function ArtifactPreview({
     async function convertDocx() {
       try {
         const mammoth = (await import('mammoth')).default;
-        // content may be a base64 data-URI or raw binary string
         let arrayBuffer: ArrayBuffer;
         if (artifact.content.startsWith('/api/files/')) {
           const response = await fetch(artifact.content, { credentials: 'same-origin' });
@@ -517,7 +484,6 @@ export function ArtifactPreview({
           const binary = atob(base64);
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
         } else {
-          // treat as raw binary string
           const binary = artifact.content;
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
         }
@@ -533,14 +499,12 @@ export function ArtifactPreview({
       cancelled = true;
     };
   }, [isDocx, artifact.id, artifact.content]);
-  // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Keep the in-page expanded layout in sync when the user leaves NATIVE fullscreen via
-  // Escape or browser UI (which fires fullscreenchange without going through our button).
-  // Without this the panel would stay visually "fullscreen" after Escape.
+  // Leaving native fullscreen through Escape or browser UI fires
+  // fullscreenchange without going through the button.
   useEffect(() => {
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) setIsFullscreen(false);
@@ -699,17 +663,16 @@ export function ArtifactPreview({
     // across an artifact swap or a new version would overwrite other content.
     setSourceDraft(null);
     setEditorFocusRequest(0);
-    // CAP-015: a published URL belongs to one artifact id. Leaving it up after
-    // a swap would offer the previous artifact's public link under this title.
+    // A published URL belongs to one artifact id; keeping it after a swap
+    // would offer the previous artifact's public link under this title.
     setPublishedUrl(null);
     setMermaidSvg(null);
   }, [artifact.id, versionCount]);
 
   /**
-   * Manual source editing (panel variant). Web artifacts could only ever be
-   * revised by another model turn, while two marketing surfaces call them
-   * editable. A save goes through the SAME content-keyed store path Restore
-   * uses, so the edit becomes a real new version rather than a silent overwrite.
+   * Manual source editing (panel variant). A save goes through the same
+   * content-keyed store path Restore uses, so the edit becomes a new version
+   * rather than an overwrite.
    *
    * Offered only for artifacts whose source IS text and only on the latest
    * version: PDF/DOCX/image content is an opaque data URI, and an older
@@ -860,27 +823,21 @@ export function ArtifactPreview({
     return () => clearTimeout(timer);
   }, [draftOrigin, saveSourceEdit, sourceDraft]);
 
-  // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
-  // and it now states what actually happened per renderer:
-  //   - svg / mermaid → both render through sanitizeSvg-family stripping of
-  //                the SVG markup before it reaches the DOM → "removed".
-  //   - html/react → scripts are INTENTIONALLY executed inside the null-origin
-  //                sandbox; claiming a mitigation there would be a lie.
-  //   - code/document → rendered as React text nodes; no claim to make.
-  const securityNotice = useMemo<'sanitized' | 'escaped' | null>(() => {
-    if (artifact.type !== 'svg' && artifact.type !== 'mermaid') return null;
-    if (!hasXSSRisk(activeContent)) return null;
-    return 'sanitized';
-  }, [artifact.type, activeContent]);
+  // Only SVG and Mermaid markup is stripped before it reaches the DOM. HTML and
+  // React run their scripts on purpose inside the null-origin sandbox, and code
+  // and documents render as text, so neither has a mitigation to report.
+  const securityNotice = useMemo(
+    () => (artifact.type === 'svg' || artifact.type === 'mermaid') && hasXSSRisk(activeContent),
+    [artifact.type, activeContent],
+  );
 
   const getPreviewHTML = useCallback(
     (): string => buildArtifactPreviewDocument(artifact.type, activeContent),
     [activeContent, artifact.type],
   );
 
-  // WEB-13 / WEB-20: SandboxedIframe posts this payload to the cross-origin
-  // sandbox (if configured) or falls back to the null-origin srcDoc above.
-  // The inline message preview builds both from the same module.
+  // SandboxedIframe posts this payload to the cross-origin sandbox when one is
+  // configured, or falls back to the null-origin srcDoc above.
   //
   // DOMPurify has no sanitize() without a DOM, so the payload and its srcDoc
   // fallback are built only after mount. The server and the first client
@@ -891,10 +848,6 @@ export function ArtifactPreview({
     [mounted, activeContent, artifact.type],
   );
 
-  // AUDIT-FIX ART-24: `navigator.clipboard` is undefined in insecure contexts
-  // and `writeText` rejects when the permission is denied or the document is
-  // not focused. The unguarded call threw an unhandled rejection and left the
-  // button silently stuck on "Copy" with no explanation.
   const handleCopy = async () => {
     if (!(await writeToClipboard(activeContent))) {
       toast.error('Could not copy to clipboard');
@@ -1186,8 +1139,6 @@ export function ArtifactPreview({
   };
 
   const handleRefresh = () => {
-    // WEB-13: bump refreshKey to re-mount the SandboxedIframe; the new
-    // iframe load triggers a fresh sandbox-ready + payload post.
     setRenderError(null);
     setPdfError(false);
     setImageError(false);
@@ -1703,10 +1654,6 @@ export function ArtifactPreview({
         ref={containerRef}
         className={cn(
           'flex h-full min-h-0 flex-col',
-          // AUDIT-FIX ART-13: `z-modal` is not a utility in this Tailwind v4 setup
-          // (no --z-modal theme key), so it compiled to nothing and the fullscreen
-          // overlay sat at z-index:auto - header, composer and toasts painted over
-          // it. Use the repo's established form (see ui/src/primitives/Dialog.tsx).
           isFullscreen && 'fixed inset-0 z-[var(--z-modal)] bg-background',
           className,
         )}
@@ -1911,10 +1858,6 @@ export function ArtifactPreview({
               </Button>
             )}
 
-            {/* Publish, only rendered when a host injected a real publisher
-                (CAP-015 slice 3). No publisher, no button: offering a Publish
-                action that can only copy to the clipboard is the behaviour
-                AUDIT-FIX ART-27 called out. */}
             {publishArtifact && (
               <Button
                 variant="ghost"
@@ -1945,7 +1888,6 @@ export function ArtifactPreview({
 
             <ArtifactMoreMenu items={moreMenuItems} />
 
-            {/* Close, panel-only */}
             {onClose && (
               <Button
                 variant="ghost"
@@ -1979,9 +1921,6 @@ export function ArtifactPreview({
           </div>
         )}
 
-        {/* The project this artifact's conversation belongs to (WEBE-24). The
-            artifact carries no project of its own; the host derives it from the
-            conversation and passes the name here. */}
         {historyOpen && versionHistory && versionCount > 0 && (
           <ArtifactVersionHistory
             id={`artifact-version-history-${artifact.id}`}
@@ -2009,8 +1948,6 @@ export function ArtifactPreview({
           </div>
         )}
 
-        {/* CAP-015: the live link for this artifact. Shown only after a publish
-            actually returned a URL, never as an aspirational bar. */}
         {shownPublishedUrl && (
           <div
             className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2"
@@ -2064,18 +2001,15 @@ export function ArtifactPreview({
           </div>
         )}
 
-        {/* AUDIT-FIX ART-6: honest, per-renderer security notice (see
-            securityNotice above). */}
         {securityNotice && (
           <Alert className="m-4 shrink-0 border-warning-fill/40 bg-warning-fill/10">
             <Shield className="h-4 w-4 text-warning-text" />
             <AlertDescription className="text-warning-text">
-              <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
+              <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Generated file manifest block */}
         {hasGeneratedFileManifest && (
           <div className="shrink-0 border-b border-border bg-muted/10 px-4 py-3">
             <GeneratedFileCard
@@ -2256,16 +2190,11 @@ export function ArtifactPreview({
       data-testid="artifact-preview-card"
       className={cn(
         'mt-3 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-e3',
-        // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
-        // utility here), leaving the fullscreen card at z-index:auto under the
-        // chrome. Matches ui/src/primitives/Dialog.tsx.
         isFullscreen && 'fixed inset-0 z-[var(--z-modal)] rounded-none',
         className,
       )}
     >
-      {/* Header */}
-      {/* @container: this card can sit inside a narrow chat column, same
-          reasoning as the panel toolbar's @container below. min-w-0 +
+      {/* @container: this card can sit inside a narrow chat column. min-w-0 +
           truncate on the title is what lets the left group give way instead
           of pushing the action buttons past the right edge, where they would
           be clipped and unreachable rather than merely hidden. */}
@@ -2301,15 +2230,6 @@ export function ArtifactPreview({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          {/*
-            There is no second version control here. The card variant used to
-            render a `History` dropdown over an `artifact.versions[]` side-map,
-            but its only producers synthesised a one-entry list ("Initial
-            version", currentVersion 0) for every artifact, so the `length > 1`
-            guard could never pass and the label could only ever have said v1.
-            Real edit history is the shared store's content-keyed `versionsById`,
-            surfaced by the panel version chip above.
-          */}
           {!isImage && (
             <Button
               variant="ghost"
@@ -2333,7 +2253,6 @@ export function ArtifactPreview({
             </Button>
           )}
 
-          {/* Download Options */}
           {isImage ? (
             <Button
               variant="ghost"
@@ -2450,13 +2369,11 @@ export function ArtifactPreview({
         </div>
       </div>
 
-      {/* AUDIT-FIX ART-6: see securityNotice, the copy now matches the
-          mitigation the renderer actually performed. */}
       {securityNotice && (
         <Alert className="m-4 border-warning-fill/40 bg-warning-fill/10">
           <Shield className="h-4 w-4 text-warning-text" />
           <AlertDescription className="text-warning-text">
-            <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
+            <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT}
           </AlertDescription>
         </Alert>
       )}
@@ -2480,7 +2397,6 @@ export function ArtifactPreview({
         </div>
       )}
 
-      {/* Preview/Code Tabs */}
       <Tabs
         value={hasPreviewSurface ? activeTab : 'code'}
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
@@ -2563,7 +2479,7 @@ export function ArtifactPreview({
           </TabsContent>
         )}
 
-        {/* Preview Tab · PDF inline viewer (Fix 39) */}
+        {/* Preview Tab · PDF inline viewer */}
         {isPdf && (
           <TabsContent value="preview" className="m-0 p-0">
             {renderPdfPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
@@ -2577,7 +2493,7 @@ export function ArtifactPreview({
           </TabsContent>
         )}
 
-        {/* Preview Tab · DOCX viewer via mammoth (Fix 40) */}
+        {/* Preview Tab · DOCX viewer via mammoth */}
         {isDocx && (
           <TabsContent value="preview" className="m-0 p-0">
             {docxError ? (
@@ -2603,7 +2519,6 @@ export function ArtifactPreview({
           </TabsContent>
         )}
 
-        {/* Code Tab */}
         <TabsContent value="code" className="m-0 p-0">
           <ScrollArea
             tabIndex={0}

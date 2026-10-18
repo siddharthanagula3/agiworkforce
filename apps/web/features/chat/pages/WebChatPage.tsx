@@ -461,8 +461,7 @@ type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'sta
 };
 
 /**
- * AUDIT-FIX STR-6: reentrancy key for a send issued before its conversation
- * exists. All pre-create sends share it, which is exactly right -- two rapid
+ * Reentrancy key for a send issued before its conversation exists. All pre-create sends share it, which is exactly right -- two rapid
  * submits on the empty new-chat surface must not create two conversations --
  * while a send addressed to a real conversation is keyed by that id and can run
  * concurrently with any other chat's send.
@@ -1264,7 +1263,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const sendReplacingMessagesRef = useRef<
     | ((
         rollbackIds: string[],
-        // AUDIT-FIX STR-22: `send` receives an early-commit callback it must
+        // `send` receives an early-commit callback it must
         // invoke once the replacement turn is durable, so the replaced turn's
         // server rows are dropped then -- not at stream end.
         send: (onTurnCommitted: () => void) => Promise<boolean>,
@@ -1291,12 +1290,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // so a synchronous check at the very top closes the double-submit window with
   // zero render latency, without needing a second ref in the composer.
   //
-  // AUDIT-FIX STR-6: keyed PER CONVERSATION. The old single boolean was held for
-  // the ENTIRE stream (`await doSend()` -> `await sendMessage` -> `await
-  // consumeAssistantStream`), so a send in ANY other conversation hit
-  // `if (isSendingRef.current) return;` and vanished -- no error, no toast,
-  // nothing. Scoped, it does what its comment claims (close the reentrancy
-  // window for one conversation) instead of serialising the whole app.
+  // Keyed per conversation: the guard is held for the whole stream, so one
+  // shared flag would silently drop a send in any other conversation.
   const sendingConversationsRef = useRef<Set<string>>(new Set());
   // What each currently-claimed guard key is sending, so a collision can tell
   // a literal resubmit (swallow it, see the comment above) apart from a
@@ -1735,10 +1730,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // Conversation CRUD
   const {
     conversations,
-    // AUDIT-FIX STR-7/BUG-12: conversation-CRUD progress, now kept SEPARATE from
-    // the store's turn-scoped `isLoading` (which gates the composer and Stop
-    // button). It is still needed here so opening a conversation does not flash
-    // the empty-chat greeting before its transcript arrives.
+    // Conversation-CRUD progress, separate from the store's turn-scoped
+    // `isLoading` (which gates the composer and Stop button), so opening a
+    // conversation does not flash the empty-chat greeting before its
+    // transcript arrives.
     isLoading: isConversationLoading,
     listError: conversationListError,
     hasMoreConversations,
@@ -2171,7 +2166,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // otherwise fires two concurrent turns since ChatComposerNew's
       // isLoading-based guard alone has a render-latency gap).
       //
-      // AUDIT-FIX STR-6: the key is the conversation being sent to, so a send in
+      // The key is the conversation being sent to, so a send in
       // a DIFFERENT chat is never silently swallowed. A brand-new chat has no id
       // yet, so pre-create sends share one key -- which is exactly right: two
       // rapid submits on the empty surface must not create two conversations.
@@ -2246,7 +2241,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // createConversation, which is the first thing to mutate the store's
       // activeConversationId) so the stale-active reconciler can never null the
       // just-created conversation during the first-message → navigate window.
-      // Released exactly once in `finally` (AUDIT-FIX STR-26).
+      // Released exactly once in `finally`.
       const releaseSendWindow = claimSendWindow();
       let targetConversationId =
         options.conversationId || urlConversationId || bareChatSessionId || null;
@@ -2397,12 +2392,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
         }
 
-        // AUDIT-FIX STR-22: `onTurnCommitted` fires as soon as the replacement
-        // user turn is DURABLE (its row saved), not at stream end. The
-        // edit/regenerate flow uses it to drop the replaced turn's server rows
-        // at that moment instead of holding them for the whole stream -- the
-        // window in which a reload showed a duplicated user message plus the
-        // stale answer.
+        // `onTurnCommitted` fires as soon as the replacement user turn is
+        // durable (its row saved), not at stream end, so the edit/regenerate
+        // flow drops the replaced turn's server rows then; otherwise a reload
+        // mid-stream shows a duplicated user message plus the stale answer.
         const doSend = (replacementTurnCommitted?: () => void) =>
           sendMessage(content, {
             model: modelForTurn,
@@ -2682,7 +2675,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   // Shared paywall/error helper
   const applyImageError = useCallback(
-    // AUDIT-FIX ROOT-CAUSE: image generation is a long async turn the user can
+    // Image generation is a long async turn the user can
     // navigate away from, so the failure must land on the conversation it was
     // started in, not on whatever chat is displayed when it fails.
     (
@@ -2906,11 +2899,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // conversation has the identical createConversation → bareChatSessionId
       // gap that the stale-active reconciler would otherwise misread and clear.
       //
-      // AUDIT-FIX STR-6/STR-26: claim the window with a balanced, idempotent
-      // release (a bare `isSendingRef.current = false` here used to clear a
-      // window still owned by a concurrent sendContent) and take the
-      // reentrancy key for THIS conversation only, so an image generation in
-      // one chat no longer blocks sends in every other chat.
+      // Claim the window with a balanced, idempotent release and take the
+      // reentrancy key for this conversation only, so an image generation in
+      // one chat does not block sends in every other chat.
       const imageGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(imageGuardKey)) return;
       sendingConversationsRef.current.add(imageGuardKey);
@@ -2947,10 +2938,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             convId,
           );
 
-          // AUDIT-FIX ROOT-CAUSE: every write below names the conversation this
-          // generation belongs to, so switching chats mid-generation can no
-          // longer inject the prompt, the placeholder, or the finished image
-          // into a different transcript.
+          // Every write below names the conversation this generation belongs
+          // to, so switching chats mid-generation cannot inject the prompt, the
+          // placeholder, or the finished image into a different transcript.
           const userMessageId = crypto.randomUUID();
           const assistantMessageId = crypto.randomUUID();
           const mutationIds = [userMessageId, assistantMessageId];
@@ -3019,7 +3009,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       );
       const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
       const requestedModel = imageRequest.model;
-      // AUDIT-FIX ROOT-CAUSE: capture the owning conversation up front; the
+      // Capture the owning conversation up front; the
       // regeneration awaits a slow provider call the user can navigate away
       // from, and every write below must still land on THIS transcript.
       const ownerConversationId = displayedConversationId;
@@ -3843,10 +3833,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   /**
-   * AUDIT-FIX STR-3: Stop targets the conversation this composer is rendered
-   * for. `stopGeneration()` used to abort whatever request started most
-   * recently -- possibly another conversation's -- while its store teardown
-   * resolved against `activeConversationId`, so the two halves could disagree.
+   * Stop targets the conversation this composer is rendered for, not whatever
+   * request started most recently, so the abort and the store teardown agree.
    */
   const imageTurnActive = useMemo(
     () =>
@@ -4155,10 +4143,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // and only commits bareChatSessionId after an async saveSystemMessage, so the
     // stale-active reconciler must not clear the fork during that window.
     //
-    // AUDIT-FIX STR-26: balanced, idempotent release. The previous bare
-    // `isSendingRef.current = false` in the finally below released a window it
-    // did not necessarily own -- the dispatched sendContent had already claimed
-    // its own, and clearing the shared boolean re-opened the reconciler race.
+    // Balanced, idempotent release: the dispatched sendContent claims its own
+    // window, so this one must only release what it claimed.
     const releaseSendWindow = claimSendWindow();
 
     try {
@@ -4219,7 +4205,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             }),
           });
 
-      // AUDIT-FIX ROOT-CAUSE: the handoff system message belongs to the FORK.
+      // The handoff system message belongs to the fork.
       // `saveSystemMessage` above is awaited, so "whatever is active now" is not
       // a safe target.
       addMessage(systemMessage, fork.id);
@@ -4440,12 +4426,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // projects; the composer itself adds the local-folder action only on surfaces
   // with the working-directory capability (desktop), so this stays honest here.
   /**
-   * AUDIT-FIX CMP-3: persist the "Temporary chat" privacy flag.
+   * Persist the "Temporary chat" privacy flag.
    *
    * `updateConversation` here is the network-backed hook action (PUT
-   * /api/chat/conversations/:id), not the store's local map write the composer
-   * used to call. It returns false when the write fails so the composer can say
-   * so instead of showing a privacy mode the database does not have.
+   * /api/chat/conversations/:id). It returns false when the write fails so the
+   * composer can say so instead of showing a privacy mode the database does
+   * not have.
    */
   const { confirm: confirmKeepTemporaryChat, dialog: keepTemporaryChatDialog } = useConfirmAction();
   const handleSetTemporaryChat = useCallback(
@@ -4637,7 +4623,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             authToken,
             ...(options.missingIsDeleted ? { missingIsDeleted: true } : {}),
           });
-          // AUDIT-FIX ROOT-CAUSE: delete from the conversation the row belongs
+          // Delete from the conversation the row belongs
           // to; the loop awaits a network call per message and the user can
           // switch chats in between.
           deleteMessage(messageId, conversationId);
@@ -4699,10 +4685,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         toast.error('Wait for this image turn to finish saving before replacing it.');
         return false;
       }
-      // AUDIT-FIX STR-22: fire the durable delete at COMMIT, not at stream end.
-      // Deferring it until `send()` resolved meant the whole regeneration window
-      // had both the old rows and the new user row on the server, so a reload
-      // mid-regeneration showed a duplicated user message and the stale answer.
+      // Fire the durable delete at commit, not at stream end, so a reload
+      // mid-regeneration never shows the old rows next to the new user row.
       // Idempotent, because runReplacingSend also calls deleteServer on commit.
       let serverRowsDeleted = false;
       let serverDeletePromise: Promise<void> | undefined;
@@ -4714,9 +4698,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       try {
         const committed = await runReplacingSend(
           {
-            // AUDIT-FIX STR-22: snapshot/restore THIS conversation's transcript.
-            // Snapshotting the global array meant a restore-on-failure could write
-            // one conversation's messages over another's.
+            // Snapshot and restore this conversation's transcript only, so a
+            // restore-on-failure cannot write over another conversation.
             snapshot: () => selectConversationMessages(conversationId)(useChatStore.getState()),
             removeLocal: (id) => deleteMessage(id, conversationId),
             restore: (messages) => useChatStore.getState().setMessages(messages, conversationId),
@@ -5853,7 +5836,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           patch: { reaction },
           authToken,
         });
-        // AUDIT-FIX ROOT-CAUSE: read and write the conversation this reaction
+        // Read and write the conversation this reaction
         // belongs to (the PATCH above is awaited; the user may have moved on).
         const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
           (message) => message.id === id,
@@ -5886,7 +5869,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setChatError('Not authenticated', conversationId);
         return;
       }
-      // AUDIT-FIX ROOT-CAUSE: scoped to the owning conversation (see handleReactMessage).
+      // Scoped to the owning conversation (see handleReactMessage).
       const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
         (message) => message.id === id,
       );

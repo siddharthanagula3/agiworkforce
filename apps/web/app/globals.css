@@ -1340,18 +1340,10 @@ html[data-contrast='more'] *:focus-visible {
     color: CanvasText !important;
   }
 }
-/* AUDIT-FIX GOV-39: safe-area padding utilities.
-   `viewport.viewportFit = 'cover'` (app/layout.tsx) extends the page under the
-   iOS home indicator, so any element pinned to the bottom edge must add
-   `env(safe-area-inset-bottom)` or it renders underneath it. Repo-wide the only
-   existing use of this env var was on a marketing drawer; the chat composer.
-   a `position: sticky; bottom: 0` element on phones, had none, which put the
-   send button under the home indicator.
-
-   `.safe-area-bottom` pads an element's own bottom edge;
-
-/* Adds the inset ON TOP of an existing bottom padding (e.g. the composer's
-   `pb-4`), instead of replacing it. */
+/* `viewport.viewportFit = 'cover'` (app/layout.tsx) extends the page under the
+   iOS home indicator, so an element pinned to the bottom edge must add
+   `env(safe-area-inset-bottom)` or it renders underneath it. This adds the
+   inset on top of an existing bottom padding (e.g. the composer's `pb-4`). */
 .safe-area-bottom-additive {
   padding-bottom: calc(var(--safe-area-extra-bottom, 1rem) + env(safe-area-inset-bottom, 0px));
 } /* Desktop/pointer viewports have no home indicator and the composer is not
@@ -1517,10 +1509,9 @@ html[data-contrast='more'] *:focus-visible {
   --agi-illo-sky: #a9d4ff;
   --agi-illo-mint: #b6ecd0;
   --agi-illo-peach: #ffd2b0;
-} /* AUDIT-FIX: only the page root fills the viewport. Header/footer chrome
-   bands also carry data-design="agi" so the rule above must not cascade
-   min-height: 100vh to them, or every page gets a full-viewport blank band
-   above the hero. Scope the fill-viewport rule to non-chrome instances. */
+} /* Only the page root fills the viewport: header and footer chrome bands also
+   carry data-design="agi", and a full-viewport min-height on them would put a
+   blank band above every hero. */
 [data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope) {
   min-height: 100vh;
 }

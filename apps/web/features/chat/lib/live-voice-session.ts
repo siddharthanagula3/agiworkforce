@@ -15,14 +15,6 @@ import {
   type LiveVoiceToolDecision,
   type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
-
-export interface LiveVoiceToolOutcome {
-  callId: string;
-  label: string;
-  output: string;
-  isError: boolean;
-  files: readonly LiveVoiceToolFile[];
-}
 import { formatUsageResetIn } from '@agiworkforce/types';
 import {
   liveVoiceLanguageInstruction,
@@ -37,6 +29,14 @@ import {
   prepareVoiceAttachment,
   type ImageDownscaler,
 } from '@features/chat/lib/voice-attachments';
+
+export interface LiveVoiceToolOutcome {
+  callId: string;
+  label: string;
+  output: string;
+  isError: boolean;
+  files: readonly LiveVoiceToolFile[];
+}
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
 const EVENTS_CHANNEL = 'oai-events';

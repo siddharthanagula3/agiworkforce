@@ -68,18 +68,7 @@ type PersistedModelState = {
   routingProfile: RoutingProfileChoice;
 };
 
-/**
- * AUDIT-FIX CMP-24: extended-thinking state used to live HERE as well as in
- * `@shared/stores/thinking-store` -- two persisted sources of truth for one
- * concept. Worse, `applyModelSelection` unconditionally returned
- * `thinkingEnabled: metadata.capabilities.thinking`, so merely switching models
- * silently RE-ENABLED extended thinking a user had deliberately turned off (a
- * silent latency and spend increase). Nothing outside this file ever read
- * `thinkingEnabled` / `thinkingModeEnabled` / `thinkingBudget`, so the honest
- * reconciliation is to delete them: `useThinkingStore` (enabled + effort) is
- * the single source of truth, and both the composer and the ComposerFooter
- * already read it.
- */
+/** Extended thinking is owned by `useThinkingStore`, not this store. */
 interface ModelState extends PersistedModelState {
   selectedModel: string;
   availableModels: AIModel[];
@@ -314,7 +303,7 @@ export function describeModelSubstitution(
 }
 
 /**
- * AUDIT-FIX CMP-24: selecting a model now changes ONLY the model. Extended
+ * Selecting a model changes only the model. Extended
  * thinking is the user's choice and lives in `useThinkingStore`; the composer
  * already clears it when the newly selected model cannot reason
  * (`ChatComposerNew`'s capability effect), which is the one direction a model
@@ -391,8 +380,6 @@ export const useModelStore = create<ModelState>()(
     }),
     {
       name: 'agi-model-store',
-      // AUDIT-FIX CMP-24: v5 drops the duplicated thinking fields from the
-      // persisted payload; `useThinkingStore` owns that state.
       version: 6,
       storage: createJSONStorage(() => localStorage),
       partialize: (state): PersistedModelState => ({

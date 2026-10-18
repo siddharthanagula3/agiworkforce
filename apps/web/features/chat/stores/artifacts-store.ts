@@ -859,13 +859,10 @@ const actions = {
       if (conflict.current) {
         const server = wireToCloudArtifact(conflict.current);
         recordCloudCopy(server);
-        // The server takes the live slot, as before. What is new is that the
-        // edit it beat survives: kept as a version the panel can restore, and
-        // recorded as a conflict so the panel can say the push was refused
-        // instead of the change simply vanishing.
-        // Whatever the local copy was, the panel is now showing the server's
-        // content, so a marker describing the local one no longer applies to
-        // what is on screen.
+        // The server takes the live slot; the edit it beat is kept as a version
+        // the panel can restore and recorded as a conflict the panel can name.
+        // The panel now shows the server's content, so a marker describing the
+        // local copy no longer applies.
         setSideEntry(conflict.id, { interrupted: false });
         if (pushed && pushed.content !== server.content) {
           appendLosingVersion(conflict.id, pushed);

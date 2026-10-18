@@ -1,11 +1,3 @@
-/* AUDIT-FIX: only the page root fills the viewport. Header/footer chrome
-   bands also carry data-design="agi" so the rule above must not cascade
-   min-height: 100vh to them, or every page gets a full-viewport blank band
-   above the hero. Scope the fill-viewport rule to non-chrome instances. */
-[data-design='agi']:not(.agi-chrome-band):not(.agi-modal-scope) {
-  min-height: 100vh;
-}
-
 [data-design='agi'] *,
 [data-design='agi'] *::before,
 [data-design='agi'] *::after {
@@ -6191,15 +6183,6 @@
     align-items: center;
   }
 }
-
-/* AUDIT-FIX ART-9: the highlight.js theme imported by unified-chat's
-   MarkdownContent ships CONTAINER styling as well as token colours -
-   `.hljs { background: <the theme's dark ground> }` and `pre code.hljs { padding: 1em }` - which
-   paints a second, differently coloured box inside `.code-block-container` and
-   doubles the code padding on top of `.code-block-body pre`'s `p-4`. Keep the
-   theme's token colours, drop its container styling.
-   Deliberately UNLAYERED: the theme stylesheet is unlayered too, and anything
-   inside `@layer components` loses to unlayered rules regardless of specificity. */
 
 [data-design='agi'] .agi-surface .agi-fl-hero-visual.agi-fl-hero-frame--main {
   justify-content: center;

@@ -472,25 +472,10 @@ const TRUNCATED_TOOL_RESULT_MARKER =
   '[earlier tool result omitted to keep the conversation within the model context window]';
 
 /**
- * AUDIT-FIX SYS-25: read-only classification now comes from the declared tool
- * metadata model (tool-metadata.ts), not from a name-prefix list.
- *
- * The old list matched names NO REAL TOOL ON THIS ROUTE HAS. Platform tools are
- * `web_search` / `url_fetch` / `execute_code` / `write_file` / `create_folder` /
- * `create_office_file` / `skill`; every MCP and connector tool is qualified as
- * `mcp__<server>__<tool>`. Neither shape starts with `read_file`, `get`,
- * `list`, `search`, … so `isReadOnlyTool` returned false for EVERYTHING:
- * `MAX_PARALLEL_TOOL_CALLS` and `mapWithConcurrency` were dead code and every
- * tool call serialised behind the 120 s per-call cap.
- *
- * Driving it from metadata makes the parallel branch live for the tools that
- * are genuinely observation-only (search, page fetch, skill lookup, PR-diff
- * read) while keeping the "mutating tools serialize" guarantee intact: an
- * UNDECLARED tool is classified as an irreversible write and therefore runs
- * serially, strictly more conservative than the old prefix guess, which
- * happily parallelised any remote MCP tool named `get_and_archive`.
- *
- * Exported for unit tests (parallel-safety-critical).
+ * Read-only classification comes from the declared tool metadata model
+ * (tool-metadata.ts), not from tool names. Observation-only tools run in
+ * parallel; an undeclared tool is classified as an irreversible write and
+ * therefore runs serially.
  */
 export function isReadOnlyTool(toolName: string): boolean {
   return isParallelSafeTool(toolName);
