@@ -239,7 +239,8 @@ class NodeRedisKeyValueStore implements KeyValueStore {
         for (const apply of queued) apply(pipeline);
         const replies = await pipeline.exec();
         return (replies ?? []).map((reply) => {
-          if (reply[PIPELINE_ERROR_INDEX]) return null;
+          const error = reply[PIPELINE_ERROR_INDEX];
+          if (error) throw error;
           const value = reply[PIPELINE_RESULT_INDEX];
           return typeof value === 'string' ? decode(value) : value;
         });
