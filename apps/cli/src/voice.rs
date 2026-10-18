@@ -390,7 +390,7 @@ fn accept_recording_notice(backend: &TranscriptionBackend) -> Result<bool> {
         return Ok(true);
     }
     eprintln!(
-        "  {} The microphone records only after you press SPACE, until you let go or press ESC. \
+        "  {} The microphone records only after you press SPACE, until you let go of it or press ENTER. \
          Each recording is sent to {destination}, and the text is shown to you before \
          anything is sent to the assistant.",
         ts::accent_header("voice:")
@@ -744,7 +744,7 @@ fn record_audio() -> Result<Option<AudioRecording>> {
     eprint!(
         "  {} {} ",
         ts::danger_header("REC"),
-        "(release SPACE to stop)".dimmed()
+        "(release SPACE or press ENTER to stop)".dimmed()
     );
     std::io::stderr().flush().ok();
 
@@ -766,20 +766,16 @@ fn record_audio() -> Result<Option<AudioRecording>> {
 
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key_event) = event::read()? {
+                // Without keyboard enhancement a terminal reports no key
+                // releases, and a held SPACE repeats as presses, so a SPACE
+                // press cannot mean stop: ENTER is the stop every terminal sends.
                 match (key_event.code, key_event.kind) {
-                    // SPACE release → stop recording
-                    (KeyCode::Char(' '), KeyEventKind::Release) => {
+                    (KeyCode::Char(' '), KeyEventKind::Release)
+                    | (KeyCode::Enter, KeyEventKind::Press) => {
                         break false;
                     }
-                    // ESC → cancel
                     (KeyCode::Esc, KeyEventKind::Press) => {
                         break true;
-                    }
-                    // Any other SPACE press while recording → also treat as stop
-                    // This handles terminals that don't emit Release events
-                    (KeyCode::Char(' '), KeyEventKind::Press) => {
-                        // Second press = toggle off
-                        break false;
                     }
                     _ => {}
                 }
@@ -792,7 +788,7 @@ fn record_audio() -> Result<Option<AudioRecording>> {
             "\r  {} {} {} {}s ",
             ts::danger_header("REC"),
             level_meter(f32::from_bits(level.load(Ordering::Relaxed))),
-            "(release SPACE to stop)".dimmed(),
+            "(release SPACE or press ENTER to stop)".dimmed(),
             elapsed_secs,
         );
         std::io::stderr().flush().ok();
@@ -1119,7 +1115,7 @@ async fn transcribe_local(
         .arg(wav_path.to_string_lossy().as_ref())
         .arg("--language")
         .arg(language)
-        .arg("--output-format")
+        .arg("--output_format")
         .arg("txt")
         .arg("--output_dir")
         .arg(
