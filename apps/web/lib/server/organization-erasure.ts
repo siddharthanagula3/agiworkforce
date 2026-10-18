@@ -167,25 +167,13 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0295_bonus_credit_grants). A bonus grant belongs to the account that earned it, a referral reward or a promo, and is drawn in every workspace; decommissioning a workspace detaches the reference rather than taking unspent credits from the member. The member’s own rows are deleted outright by account erasure.',
 };
 
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isSchemaAbsent(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
-}
-
 export interface OrganizationErasureReport {
   organizationId: string;
   mediaObjectsDeleted: number;
   mediaObjectsFailed: number;
   mediaRowsDeleted: number;
-  tables: Record<
-    string,
-    { deleted: boolean; skipped?: boolean; retainedForRetry?: boolean; error?: string }
-  >;
-  anonymized: Record<string, { updated: boolean; skipped?: boolean; error?: string }>;
+  tables: Record<string, { deleted: boolean; retainedForRetry?: boolean; error?: string }>;
+  anonymized: Record<string, { updated: boolean; error?: string }>;
   complete: boolean;
   organizationRetained: boolean;
   blockedByLegalHold: boolean;
@@ -199,17 +187,10 @@ export async function eraseOrganizationMedia(
   organizationId: string,
 ): Promise<{ mediaObjectsDeleted: number; mediaObjectsFailed: number; mediaRowsDeleted: number }> {
   const db = getNeonDb();
-  let rows: Array<{ id: string; storage_pathname: string | null }> = [];
-  try {
-    rows = await db.query<{ id: string; storage_pathname: string | null }>(
-      `select id, storage_pathname from public.media_assets where organization_id = $1`,
-      [organizationId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error))
-      return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
-    throw error;
-  }
+  const rows = await db.query<{ id: string; storage_pathname: string | null }>(
+    `select id, storage_pathname from public.media_assets where organization_id = $1`,
+    [organizationId],
+  );
 
   if (rows.length === 0) {
     return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
@@ -246,7 +227,6 @@ export async function isOrganizationUnderActiveLegalHold(
     const count = await countActiveLegalHolds(getNeonDb(), organizationId);
     return { held: count > 0, count };
   } catch (error) {
-    if (isSchemaAbsent(error)) return { held: false, count: 0 };
     // Fail closed: an unreadable hold set may be concealing an active hold,
     // and erasing under one destroys evidence that cannot be recovered.
     return { held: true, count: 0, error: error instanceof Error ? error.message : String(error) };
@@ -290,16 +270,12 @@ async function eraseSharedConnectorResponseCache(
 ): Promise<number> {
   const contexts: string[] = [];
   for (const table of ['organization_shared_connectors', 'organization_mcp_servers']) {
-    try {
-      const rows = await db.query<{ id: string }>(
-        `select id from public.${table} where organization_id = $1`,
-        [organizationId],
-      );
-      for (const row of rows) {
-        contexts.push(mcpAuthorizationContext.organizationSharedServer(organizationId, row.id));
-      }
-    } catch (error) {
-      if (!isSchemaAbsent(error)) throw error;
+    const rows = await db.query<{ id: string }>(
+      `select id from public.${table} where organization_id = $1`,
+      [organizationId],
+    );
+    for (const row of rows) {
+      contexts.push(mcpAuthorizationContext.organizationSharedServer(organizationId, row.id));
     }
   }
   return purgeMcpResponseCachePartitions(contexts);
@@ -347,10 +323,6 @@ export async function eraseOrganizationData(
       await db.execute(`delete from public.${table} where ${column} = $1`, [organizationId]);
       tables[table] = { deleted: true };
     } catch (error) {
-      if (isSchemaAbsent(error)) {
-        tables[table] = { deleted: false, skipped: true };
-        continue;
-      }
       tables[table] = {
         deleted: false,
         error: error instanceof Error ? error.message : String(error),
@@ -366,10 +338,6 @@ export async function eraseOrganizationData(
       ]);
       anonymized[table] = { updated: true };
     } catch (error) {
-      if (isSchemaAbsent(error)) {
-        anonymized[table] = { updated: false, skipped: true };
-        continue;
-      }
       anonymized[table] = {
         updated: false,
         error: error instanceof Error ? error.message : String(error),
@@ -383,8 +351,8 @@ export async function eraseOrganizationData(
 
   const dataDisposed =
     media.mediaObjectsFailed === 0 &&
-    Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
-    Object.values(anonymized).every((result) => result.updated || result.skipped === true);
+    Object.values(tables).every((result) => result.deleted) &&
+    Object.values(anonymized).every((result) => result.updated);
 
   let complete = dataDisposed;
   let organizationRetained = true;

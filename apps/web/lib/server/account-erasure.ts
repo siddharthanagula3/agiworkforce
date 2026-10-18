@@ -23,7 +23,6 @@ import {
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
 import { eraseUserDataExportArchives } from '@/lib/server/data-export-archive';
-import { isWorkspaceScopedContentTable } from '@/lib/server/workspace-scope';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
@@ -245,33 +244,25 @@ async function eraseConnectorResponseCache(
 ): Promise<number> {
   const contexts: string[] = [];
 
-  try {
-    const custom = await db.query<{ id: string; url: string }>(
-      'select id, url from public.user_custom_connectors where user_id = $1',
-      [userId],
-    );
-    for (const row of custom) {
-      contexts.push(mcpAuthorizationContext.userCustomConnector(userId, row.id));
-      contexts.push(mcpAuthorizationContext.userCustomUrl(userId, row.url));
-    }
-  } catch (error) {
-    if (!isSchemaAbsent(error)) throw error;
+  const custom = await db.query<{ id: string; url: string }>(
+    'select id, url from public.user_custom_connectors where user_id = $1',
+    [userId],
+  );
+  for (const row of custom) {
+    contexts.push(mcpAuthorizationContext.userCustomConnector(userId, row.id));
+    contexts.push(mcpAuthorizationContext.userCustomUrl(userId, row.url));
   }
 
-  try {
-    const granted = await db.query<{ connector_id: string; account_key: string }>(
-      'select connector_id, account_key from public.connector_oauth_grants where user_id = $1',
-      [userId],
+  const granted = await db.query<{ connector_id: string; account_key: string }>(
+    'select connector_id, account_key from public.connector_oauth_grants where user_id = $1',
+    [userId],
+  );
+  for (const row of granted) {
+    contexts.push(mcpAuthorizationContext.userOauthConnector(userId, row.connector_id));
+    contexts.push(
+      mcpAuthorizationContext.userOauthConnector(userId, row.connector_id, row.account_key),
     );
-    for (const row of granted) {
-      contexts.push(mcpAuthorizationContext.userOauthConnector(userId, row.connector_id));
-      contexts.push(
-        mcpAuthorizationContext.userOauthConnector(userId, row.connector_id, row.account_key),
-      );
-      contexts.push(mcpAuthorizationContext.operatorConnector(row.connector_id));
-    }
-  } catch (error) {
-    if (!isSchemaAbsent(error)) throw error;
+    contexts.push(mcpAuthorizationContext.operatorConnector(row.connector_id));
   }
 
   return purgeMcpResponseCachePartitions(contexts);
@@ -430,11 +421,8 @@ export interface AccountErasureReport {
   feedbackObjectsFailed: number;
   cacheKeysDeleted: number;
   cacheKeysFailed: number;
-  tables: Record<
-    string,
-    { deleted: boolean; skipped?: boolean; retainedForRetry?: boolean; error?: string }
-  >;
-  anonymized: Record<string, { updated: boolean; skipped?: boolean; error?: string }>;
+  tables: Record<string, { deleted: boolean; retainedForRetry?: boolean; error?: string }>;
+  anonymized: Record<string, { updated: boolean; error?: string }>;
   complete: boolean;
   profileRetained: boolean;
 }
@@ -442,15 +430,6 @@ export interface AccountErasureReport {
 export interface EraseUserAccountOptions {
   retainProfile?: boolean;
   scope?: 'account' | 'data';
-}
-
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isSchemaAbsent(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
 async function releaseDataVideoErasureFence(userId: string, fenceToken: string): Promise<void> {
@@ -700,24 +679,10 @@ export async function eraseUserMedia(
   >
 > {
   const db = getNeonDb();
-  let rows: Array<{ id: string; storage_pathname: string | null }> = [];
-  try {
-    rows = await db.query<{ id: string; storage_pathname: string | null }>(
-      `select id, storage_pathname from public.media_assets where user_id = $1`,
-      [userId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error)) {
-      return {
-        mediaObjectsDeleted: 0,
-        mediaObjectsFailed: 0,
-        mediaRowsDeleted: 0,
-        backupObjectsDeleted: 0,
-        backupObjectsFailed: 0,
-      };
-    }
-    throw error;
-  }
+  const rows = await db.query<{ id: string; storage_pathname: string | null }>(
+    `select id, storage_pathname from public.media_assets where user_id = $1`,
+    [userId],
+  );
 
   if (rows.length === 0) {
     return {
@@ -799,21 +764,14 @@ async function deleteObjectKeys(
 async function eraseUserKnowledgeObjects(
   userId: string,
 ): Promise<{ deleted: number; failed: number }> {
-  const db = getNeonDb();
-  let rows: Array<{ storage_uri: string | null }> = [];
-  try {
-    rows = await db.query<{ storage_uri: string | null }>(
-      `select k.storage_uri
-         from public.project_knowledge_files k
-         join public.user_projects p on p.id = k.project_id
-        where p.user_id = $1
-          and k.storage_uri is not null`,
-      [userId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
-    throw error;
-  }
+  const rows = await getNeonDb().query<{ storage_uri: string | null }>(
+    `select k.storage_uri
+       from public.project_knowledge_files k
+       join public.user_projects p on p.id = k.project_id
+      where p.user_id = $1
+        and k.storage_uri is not null`,
+    [userId],
+  );
 
   const keys = rows
     .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
@@ -825,17 +783,10 @@ async function eraseUserKnowledgeObjects(
 }
 
 async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
-  const db = getNeonDb();
-  let rows: Array<{ avatar_url: string | null }> = [];
-  try {
-    rows = await db.query<{ avatar_url: string | null }>(
-      `select avatar_url from public.profiles where id = $1`,
-      [userId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
-    throw error;
-  }
+  const rows = await getNeonDb().query<{ avatar_url: string | null }>(
+    `select avatar_url from public.profiles where id = $1`,
+    [userId],
+  );
 
   const url = rows[0]?.avatar_url;
   const key = url ? objectKeyFromPublicUrl(url) : null;
@@ -845,20 +796,13 @@ async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number;
 async function eraseUserFeedbackScreenshots(
   userId: string,
 ): Promise<{ deleted: number; failed: number }> {
-  const db = getNeonDb();
-  let rows: Array<{ screenshot_key: string | null }> = [];
-  try {
-    rows = await db.query<{ screenshot_key: string | null }>(
-      `select metadata->>'screenshot_key' as screenshot_key
-         from public.${FEEDBACK_TABLE}
-        where user_id = $1
-          and metadata->>'screenshot_key' is not null`,
-      [userId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error)) return { deleted: 0, failed: 0 };
-    throw error;
-  }
+  const rows = await getNeonDb().query<{ screenshot_key: string | null }>(
+    `select metadata->>'screenshot_key' as screenshot_key
+       from public.${FEEDBACK_TABLE}
+      where user_id = $1
+        and metadata->>'screenshot_key' is not null`,
+    [userId],
+  );
 
   const keys = rows.map((row) => row.screenshot_key).filter((key): key is string => Boolean(key));
   return deleteObjectKeys(keys, 'feedback-screenshot', {
@@ -999,10 +943,6 @@ export async function eraseUserAccountData(
         await deleteByProfileEmail(db, table, column, userId);
         recordTableOutcome(tables, table, { deleted: true });
       } catch (error) {
-        if (isSchemaAbsent(error)) {
-          recordTableOutcome(tables, table, { deleted: false, skipped: true });
-          continue;
-        }
         recordTableOutcome(tables, table, {
           deleted: false,
           error: error instanceof Error ? error.message : String(error),
@@ -1031,10 +971,6 @@ export async function eraseUserAccountData(
         await anonymizeUserReference(db, table, column, userId);
         anonymized[table] = { updated: true };
       } catch (error) {
-        if (isSchemaAbsent(error)) {
-          anonymized[table] = { updated: false, skipped: true };
-          continue;
-        }
         anonymized[table] = {
           updated: false,
           error: error instanceof Error ? error.message : String(error),
@@ -1059,12 +995,6 @@ export async function eraseUserAccountData(
         await db.execute(`delete from public.${table} where ${subject}`, [userId]);
         recordTableOutcome(tables, table, { deleted: true });
       } catch (error) {
-        // A missing workspace content table is not a benign skip: it would
-        // report content erased that was never reached.
-        if (isSchemaAbsent(error) && !isWorkspaceScopedContentTable(table)) {
-          recordTableOutcome(tables, table, { deleted: false, skipped: true });
-          continue;
-        }
         recordTableOutcome(tables, table, {
           deleted: false,
           error: error instanceof Error ? error.message : String(error),
@@ -1081,8 +1011,8 @@ export async function eraseUserAccountData(
       avatar.failed === 0 &&
       feedbackScreenshots.failed === 0 &&
       cache.failed === 0 &&
-      Object.values(tables).every((result) => result.deleted || result.skipped === true) &&
-      Object.values(anonymized).every((result) => result.updated || result.skipped === true);
+      Object.values(tables).every((result) => result.deleted) &&
+      Object.values(anonymized).every((result) => result.updated);
 
     let complete = dataDisposed;
     let profileRetained = true;
@@ -1092,17 +1022,12 @@ export async function eraseUserAccountData(
         tables[PROFILE_TABLE] = { deleted: true };
         profileRetained = false;
       } catch (error) {
-        if (isSchemaAbsent(error)) {
-          tables[PROFILE_TABLE] = { deleted: false, skipped: true };
-          profileRetained = false;
-        } else {
-          complete = false;
-          tables[PROFILE_TABLE] = {
-            deleted: false,
-            error: error instanceof Error ? error.message : String(error),
-          };
-          logger.error({ userId, error }, 'Account erasure failed to delete the profile row');
-        }
+        complete = false;
+        tables[PROFILE_TABLE] = {
+          deleted: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        logger.error({ userId, error }, 'Account erasure failed to delete the profile row');
       }
     } else {
       tables[PROFILE_TABLE] = { deleted: false, retainedForRetry: true };
@@ -1142,7 +1067,6 @@ const TOMBSTONE_TABLE = 'erasure_tombstones';
 
 export interface ErasureTombstoneResult {
   recorded: boolean;
-  skipped?: boolean;
   error?: string;
 }
 
@@ -1158,7 +1082,6 @@ export async function openErasureTombstone(userId: string): Promise<ErasureTombs
     );
     return { recorded: true };
   } catch (error) {
-    if (isSchemaAbsent(error)) return { recorded: false, skipped: true };
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ userId, error: message }, 'Failed to record the erasure tombstone');
     return { recorded: false, error: message };
@@ -1177,7 +1100,6 @@ export async function closeErasureTombstone(userId: string): Promise<ErasureTomb
     );
     return { recorded: true };
   } catch (error) {
-    if (isSchemaAbsent(error)) return { recorded: false, skipped: true };
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ userId, error: message }, 'Failed to settle the erasure tombstone');
     return { recorded: false, error: message };

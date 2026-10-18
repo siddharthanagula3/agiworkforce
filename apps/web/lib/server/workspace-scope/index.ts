@@ -33,8 +33,6 @@ export const WORKSPACE_SCOPED_CONTENT_TABLES = [
   'search_history',
 ] as const;
 
-export type WorkspaceScopedContentTable = (typeof WORKSPACE_SCOPED_CONTENT_TABLES)[number];
-
 export interface WorkspaceScope {
   userId: string;
   /** null is the personal workspace, never "any workspace". */
@@ -125,10 +123,6 @@ export function workspaceAdminVisiblePredicate(
     params: [scope.userId, scope.organizationId],
     nextParamIndex: first + 2,
   };
-}
-
-export function isWorkspaceScopedContentTable(table: string): table is WorkspaceScopedContentTable {
-  return (WORKSPACE_SCOPED_CONTENT_TABLES as readonly string[]).includes(table);
 }
 
 /**

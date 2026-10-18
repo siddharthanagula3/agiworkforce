@@ -21,7 +21,6 @@ export const ANONYMOUS_SUBJECT_TABLES: ReadonlyArray<{
 export interface AnonymousTableErasure {
   deleted: number;
   accountBound: number;
-  skipped?: boolean;
   error?: string;
 }
 
@@ -31,15 +30,6 @@ export interface AnonymousErasureReport {
   deleted: number;
   accountBound: number;
   complete: boolean;
-}
-
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_COLUMN = '42703';
-
-function isSchemaAbsent(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
 export async function eraseAnonymousSubjectByEmail(email: string): Promise<AnonymousErasureReport> {
@@ -72,10 +62,6 @@ export async function eraseAnonymousSubjectByEmail(email: string): Promise<Anony
         accountBound: retained[0]?.retained ?? 0,
       };
     } catch (error) {
-      if (isSchemaAbsent(error)) {
-        tables[table] = { deleted: 0, accountBound: 0, skipped: true };
-        continue;
-      }
       const message = error instanceof Error ? error.message : String(error);
       tables[table] = { deleted: 0, accountBound: 0, error: message };
       logger.error(

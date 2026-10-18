@@ -125,7 +125,7 @@ describe('anonymous subject erasure', () => {
     expect(report.tables['consent_records']?.error).toContain('trigger refused the delete');
   });
 
-  it('skips a table the database has not migrated yet', async () => {
+  it('reports a missing table as an incomplete erasure, not a skip', async () => {
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('cloud_managed_waitlist')) {
         throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
@@ -136,12 +136,8 @@ describe('anonymous subject erasure', () => {
 
     const report = await eraseAnonymousSubjectByEmail(SUBJECT_EMAIL);
 
-    expect(report.tables['cloud_managed_waitlist']).toEqual({
-      deleted: 0,
-      accountBound: 0,
-      skipped: true,
-    });
-    expect(report.complete).toBe(true);
+    expect(report.tables['cloud_managed_waitlist']?.error).toContain('relation does not exist');
+    expect(report.complete).toBe(false);
   });
 });
 

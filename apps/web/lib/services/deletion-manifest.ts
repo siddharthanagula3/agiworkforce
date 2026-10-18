@@ -587,7 +587,6 @@ export function accountErasureProgress(
     const table = report.tables[entry.store];
     const anonymized = report.anonymized[entry.store];
     if (!table && !anonymized) continue;
-    if (table?.skipped === true || anonymized?.skipped === true) continue;
     storesAttempted += 1;
     if (table?.error !== undefined || anonymized?.error !== undefined) storesFailed += 1;
     else if (table?.deleted === true || anonymized?.updated === true) storesCleared += 1;

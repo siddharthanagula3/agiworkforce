@@ -32,11 +32,11 @@ export class ScheduledErasureError extends Error {
 
 function incompleteStores(report: AccountErasureReport): string {
   const failures = Object.entries(report.tables)
-    .filter(([table, outcome]) => table !== 'profiles' && !outcome.deleted && !outcome.skipped)
+    .filter(([table, outcome]) => table !== 'profiles' && !outcome.deleted)
     .map(([table, outcome]) => `${table}${outcome.error ? ` (${outcome.error})` : ''}`);
   failures.push(
     ...Object.entries(report.anonymized ?? {})
-      .filter(([, outcome]) => !outcome.updated && !outcome.skipped)
+      .filter(([, outcome]) => !outcome.updated)
       .map(([table, outcome]) => `${table}${outcome.error ? ` (${outcome.error})` : ''}`),
   );
   for (const [store, count] of [
@@ -93,7 +93,7 @@ async function erase(userId: string): Promise<void> {
   const tombstone = await openErasureTombstone(userId);
   // The gate caches the effective status for five minutes; an erased account must stop at once.
   await invalidateAccountStatusCache(userId);
-  if (!tombstone.recorded && !tombstone.skipped) {
+  if (!tombstone.recorded) {
     throw new ScheduledErasureError(
       'tombstone',
       tombstone.error ?? 'The erasure tombstone could not be written',
@@ -109,7 +109,7 @@ async function erase(userId: string): Promise<void> {
   }
 
   const settled = await closeErasureTombstone(userId);
-  if (!settled.recorded && !settled.skipped) {
+  if (!settled.recorded) {
     logger.warn(
       { userId, error: settled.error },
       'Erasure tombstone left open; the sweep will settle it',
@@ -149,7 +149,7 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
     } else {
       const tombstone = await openErasureTombstone(userId);
       await invalidateAccountStatusCache(userId);
-      if (!tombstone.recorded && !tombstone.skipped) {
+      if (!tombstone.recorded) {
         throw new ScheduledErasureError(
           'tombstone',
           tombstone.error ?? 'The erasure tombstone could not be advanced',

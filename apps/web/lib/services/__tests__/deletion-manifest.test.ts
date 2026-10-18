@@ -242,16 +242,6 @@ describe('accountErasureProgress', () => {
     expect(resolveDeletionStatus(progress).status).toBe('complete');
   });
 
-  it('does not count a store the erasure skipped because the schema has no such table', () => {
-    const progress = accountErasureProgress({
-      ...report,
-      tables: { [erasable()]: { deleted: false, skipped: true } },
-    } as never);
-
-    expect(progress.storesAttempted).toBe(0);
-    expect(resolveDeletionStatus(progress).status).toBe('pending');
-  });
-
   it('carries a failed store and an unfreed object through to partial', () => {
     const progress = accountErasureProgress({
       ...report,

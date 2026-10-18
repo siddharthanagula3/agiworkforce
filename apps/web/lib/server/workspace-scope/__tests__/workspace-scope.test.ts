@@ -6,7 +6,6 @@ import {
   WORKSPACE_SCOPED_CONTENT_TABLES,
   WorkspaceScopeError,
   assertWorkspaceScope,
-  isWorkspaceScopedContentTable,
   workspaceAdminVisiblePredicate,
   workspaceOwnedPredicate,
 } from '../index';
@@ -59,8 +58,8 @@ describe('workspace scope predicates', () => {
   });
 
   it('names the tables 0110 made mutually exclusive', () => {
-    expect(isWorkspaceScopedContentTable('user_memories')).toBe(true);
-    expect(isWorkspaceScopedContentTable('security_audit_logs')).toBe(false);
+    expect(WORKSPACE_SCOPED_CONTENT_TABLES).toContain('user_memories');
+    expect(WORKSPACE_SCOPED_CONTENT_TABLES).not.toContain('security_audit_logs');
     expect(WORKSPACE_SCOPED_CONTENT_TABLES).toContain('web_conversations');
   });
 });
