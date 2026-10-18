@@ -30,7 +30,7 @@ import {
 import { useCloudUsageStore } from './store';
 import { fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, isFreeBillingPlanTier } from '@agiworkforce/types';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -607,7 +607,9 @@ export default function CloudUsageScreen() {
     router.push(beginCloudPostAuthIntent('cloud-usage'));
   }, [router]);
 
-  const accountKey = isClerkSignedIn && isCloudModeActive && clerkUserId ? clerkUserId : null;
+  const isFreePlan = snapshot ? isFreeBillingPlanTier(snapshot.planTier) : false;
+  const accountKey =
+    isClerkSignedIn && isCloudModeActive && clerkUserId && !isFreePlan ? clerkUserId : null;
   const allowances = useUsageResource<AccountUsageAllowances>(
     accountKey,
     fetchUsageAllowances,
@@ -628,6 +630,60 @@ export default function CloudUsageScreen() {
     return (
       <SettingsScreenShell title="Usage">
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (isCloudModeActive && isFreePlan) {
+    return (
+      <SettingsScreenShell title="Usage">
+        <View
+          style={{
+            borderRadius: 14,
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: 16,
+            gap: 14,
+          }}
+        >
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
+          >
+            Upgrade for higher capacity
+          </Text>
+          <Pressable
+            onPress={() =>
+              router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
+            }
+            accessibilityLabel="Upgrade"
+            accessibilityRole="button"
+          >
+            {({ pressed }) => (
+              <View
+                style={{
+                  alignSelf: 'flex-start',
+                  minHeight: 44,
+                  justifyContent: 'center',
+                  paddingHorizontal: 18,
+                  borderRadius: 999,
+                  backgroundColor: colors.textPrimary,
+                  opacity: pressed ? 0.8 : 1,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.background,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
+                  Upgrade
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       </SettingsScreenShell>
     );
   }

@@ -206,7 +206,7 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     });
   });
 
-  it('renders the period bar for a free tier from its percentage and reset', async () => {
+  it('shows a free account only the upgrade prompt and no usage meters', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(
       snap({
         planTier: 'free',
@@ -218,14 +218,19 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
       }),
     );
 
-    const { getByText, queryByText } = render(<CloudUsageScreen />);
+    const { getByText, getByLabelText, queryByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText(managedUsageBucketLabel('period'))).toBeTruthy();
+      expect(getByText('Upgrade for higher capacity')).toBeTruthy();
     });
-    expect(getByText('10% used')).toBeTruthy();
-    expect(getByText('Free plan')).toBeTruthy();
+    expect(queryByText(managedUsageBucketLabel('period'))).toBeNull();
+    expect(queryByText('10% used')).toBeNull();
+    expect(queryByText('Free plan')).toBeNull();
+    expect(queryByText('Weekly limits')).toBeNull();
     expect(queryByText(/\$\d/)).toBeNull();
+
+    fireEvent.press(getByLabelText('Upgrade'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
 });
 
@@ -271,10 +276,10 @@ describe('Cloud Usage screen, session (rolling 5h) + weekly limits', () => {
     expect(getByText('29% used')).toBeTruthy();
   });
 
-  it('hides Current session and Weekly limits when their windows are inactive (free tier)', async () => {
+  it('hides Current session and Weekly limits when their windows are inactive', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(
       snap({
-        planTier: 'free',
+        planTier: 'pro',
         usagePercentage: 0,
         periodStart: null,
         periodEnd: null,
