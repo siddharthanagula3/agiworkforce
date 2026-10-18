@@ -105,7 +105,7 @@ describe('connectMcpServer, happy path lifecycle', () => {
     const { connectMcpServer } = await import('../connect');
     const handle = await connectMcpServer({
       serverName: 'fs',
-      config: { command: '/bin/echo' },
+      config: { url: 'https://mcp.example.test/mcp' },
     });
 
     expect(handle.serverName).toBe('fs');
@@ -139,7 +139,7 @@ describe('connectMcpServer, happy path lifecycle', () => {
     const { connectMcpServer } = await import('../connect');
     const handle = await connectMcpServer({
       serverName: 'My Server / v2',
-      config: { command: '/bin/echo' },
+      config: { url: 'https://mcp.example.test/mcp' },
     });
     expect(handle.safeServerName).toBe('my_server_v2');
   });
@@ -263,7 +263,7 @@ describe('connectMcpServer, listTools failure', () => {
     try {
       await connectMcpServer({
         serverName: 'broken',
-        config: { command: '/bin/echo' },
+        config: { url: 'https://mcp.example.test/mcp' },
       });
     } catch (err) {
       caught = err;
@@ -291,7 +291,10 @@ describe('connectMcpServer, listTools failure', () => {
     const { connectMcpServer } = await import('../connect');
     let caught: unknown;
     try {
-      await connectMcpServer({ serverName: 'hostile', config: { command: '/bin/echo' } });
+      await connectMcpServer({
+        serverName: 'hostile',
+        config: { url: 'https://mcp.example.test/mcp' },
+      });
     } catch (err) {
       caught = err;
     }
@@ -311,7 +314,10 @@ describe('connectMcpServer, listTools failure', () => {
     const { connectMcpServer } = await import('../connect');
     let caught: unknown;
     try {
-      await connectMcpServer({ serverName: 'hostile', config: { command: '/bin/echo' } });
+      await connectMcpServer({
+        serverName: 'hostile',
+        config: { url: 'https://mcp.example.test/mcp' },
+      });
     } catch (err) {
       caught = err;
     }
@@ -352,8 +358,8 @@ describe('buildMcpToolCatalog, per-server failure isolation', () => {
     const { buildMcpToolCatalog } = await import('../connect');
     const result = await buildMcpToolCatalog(
       {
-        good: { command: '/bin/echo' },
-        bad: { command: '/bin/false' },
+        good: { url: 'https://mcp.example.test/mcp' },
+        bad: { url: 'https://unreachable.example.test/mcp' },
       },
       {},
     );
@@ -395,8 +401,8 @@ describe('buildMcpToolCatalog, per-server failure isolation', () => {
     const { buildMcpToolCatalog } = await import('../connect');
     const result = await buildMcpToolCatalog(
       {
-        a: { command: '/bin/false' },
-        b: { command: '/bin/false' },
+        a: { url: 'https://unreachable.example.test/mcp' },
+        b: { url: 'https://unreachable.example.test/mcp' },
       },
       {},
     );
@@ -1126,7 +1132,11 @@ describe('connectMcpServer, interactive elicitation capability', () => {
       return { ...actual, Client: CapturingClient };
     });
     const { connectMcpServer } = await import('../connect');
-    await connectMcpServer({ serverName: 's', config: { command: '/bin/echo' }, ...params });
+    await connectMcpServer({
+      serverName: 's',
+      config: { url: 'https://mcp.example.test/mcp' },
+      ...params,
+    });
     return captured;
   }
 

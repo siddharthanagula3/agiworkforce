@@ -2805,7 +2805,7 @@
     "item": "stdio-transport",
     "surface": "packages/tools/mcp",
     "status": "built",
-    "evidence": "crates/agiworkforce-mcp/src/client.rs:205-282 (spawn_stdio_child with env allowlist/blocklist) and send_rpc Stdio arm (client.rs:508-594). Desktop parity: apps/desktop/src-tauri/src/core/mcp/transport.rs. Web/TS side: packages/tools/mcp/src/transport.ts:74-106 StdioClientTransport, gated behind config.signedManifest/developerMode consent."
+    "evidence": "crates/agiworkforce-mcp/src/client.rs:205-282 (spawn_stdio_child with env allowlist/blocklist) and send_rpc Stdio arm (client.rs:508-594). Desktop parity: apps/desktop/src-tauri/src/core/mcp/transport.rs. The TS package carries only the sse and streamable-http transports."
   },
   {
     "item": "streamable-http-transport",

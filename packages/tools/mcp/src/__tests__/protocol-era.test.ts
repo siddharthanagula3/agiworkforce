@@ -56,7 +56,7 @@ describe('MCP 2026-07-28 pivot, version negotiation', () => {
   it("constructs the SDK v2 client with mode 'auto', not the SDK's legacy default", async () => {
     installEraMock({ discoverResult: undefined });
     const { connectMcpServer } = await import('../connect');
-    await connectMcpServer({ serverName: 'fs', config: { command: '/bin/echo' } });
+    await connectMcpServer({ serverName: 'fs', config: { url: 'https://mcp.example.test/mcp' } });
 
     expect(constructorOptions).toHaveLength(1);
     expect(constructorOptions[0]?.versionNegotiation).toEqual({ mode: 'auto' });
@@ -69,7 +69,10 @@ describe('MCP 2026-07-28 pivot, protocol era on the handle', () => {
       discoverResult: { protocolVersions: ['2026-07-28'], serverInfo: { name: 'srv' } },
     });
     const { connectMcpServer } = await import('../connect');
-    const handle = await connectMcpServer({ serverName: 'fs', config: { command: '/bin/echo' } });
+    const handle = await connectMcpServer({
+      serverName: 'fs',
+      config: { url: 'https://mcp.example.test/mcp' },
+    });
 
     expect(handle.protocolEra).toBe('modern');
   });
@@ -77,7 +80,10 @@ describe('MCP 2026-07-28 pivot, protocol era on the handle', () => {
   it("reports 'legacy' when the probe yields no discover result", async () => {
     installEraMock({ discoverResult: undefined });
     const { connectMcpServer } = await import('../connect');
-    const handle = await connectMcpServer({ serverName: 'fs', config: { command: '/bin/echo' } });
+    const handle = await connectMcpServer({
+      serverName: 'fs',
+      config: { url: 'https://mcp.example.test/mcp' },
+    });
 
     expect(handle.protocolEra).toBe('legacy');
   });
@@ -91,7 +97,10 @@ describe('MCP 2026-07-28 pivot, input_required results', () => {
       callToolResult: { content: [] },
     });
     const { connectMcpServer } = await import('../connect');
-    const handle = await connectMcpServer({ serverName: 'fs', config: { command: '/bin/echo' } });
+    const handle = await connectMcpServer({
+      serverName: 'fs',
+      config: { url: 'https://mcp.example.test/mcp' },
+    });
 
     const result = await handle.callTool('read_file', { path: '/etc/hosts' });
 
@@ -110,7 +119,10 @@ describe('MCP 2026-07-28 pivot, input_required results', () => {
       callToolResult: { content: [{ type: 'text', text: 'ok' }] },
     });
     const { connectMcpServer } = await import('../connect');
-    const handle = await connectMcpServer({ serverName: 'fs', config: { command: '/bin/echo' } });
+    const handle = await connectMcpServer({
+      serverName: 'fs',
+      config: { url: 'https://mcp.example.test/mcp' },
+    });
 
     const result = await handle.callTool('read_file', {});
 

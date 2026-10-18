@@ -380,7 +380,6 @@ function fenceThrownMcpError(
 }
 
 function serverTransport(config: McpServerConfig): McpServerTransport {
-  if (config.command) return 'stdio';
   return config.transport === 'sse' ? 'sse' : 'streamable-http';
 }
 

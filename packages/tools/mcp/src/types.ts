@@ -12,22 +12,11 @@ import type {
 } from '@modelcontextprotocol/ext-tasks/core/v2';
 
 export interface McpServerConfig {
-  command?: string;
-  args?: string[];
-  env?: Record<string, string | number | boolean>;
-  cwd?: string;
   url?: string;
-  transport?: 'sse' | 'streamable-http';
+  transport?: McpServerTransport;
   headers?: Record<string, string | number | boolean>;
   authProvider?: OAuthClientProvider;
   connectionTimeoutMs?: number;
-  signedManifest?: boolean;
-  userConsent?: {
-    granted_at: string;
-    for_command: string;
-    for_args?: string[];
-  };
-  developerMode?: boolean;
 }
 
 export interface McpClientCacheConfig {
@@ -106,7 +95,7 @@ export interface McpCatalogDiscoveryError {
   message: string;
 }
 
-export type McpServerTransport = 'stdio' | 'sse' | 'streamable-http';
+export type McpServerTransport = 'sse' | 'streamable-http';
 
 export type McpToolRejectionReason = 'non-canonical-name' | 'invalid-input-schema';
 
