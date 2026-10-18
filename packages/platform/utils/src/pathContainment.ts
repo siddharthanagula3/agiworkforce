@@ -1,4 +1,3 @@
-
 import * as path from 'node:path';
 
 export type ContainmentResult =
@@ -23,10 +22,10 @@ export function resolveContained(
   if (rel === '') {
     return { ok: true, resolved };
   }
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    if (rel.startsWith('..')) {
-      return { ok: false, reason: 'traversal' };
-    }
+  if (rel === '..' || rel.startsWith(`..${path.sep}`)) {
+    return { ok: false, reason: 'traversal' };
+  }
+  if (path.isAbsolute(rel)) {
     return { ok: false, reason: 'not-in-root' };
   }
   return { ok: true, resolved };
