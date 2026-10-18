@@ -1,6 +1,6 @@
 {
   "commandOpenSidePanel": {
-    "message": "Open agiworkforce side panel",
+    "message": "Open AGI Workforce side panel",
     "description": "chrome://extensions/shortcuts label for the _execute_action command"
   },
   "commandCapturePage": {
@@ -8,7 +8,7 @@
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
   "menuAskAgi": {
-    "message": "Ask agiworkforce about \"%s\"",
+    "message": "Ask AGI Workforce about \"%s\"",
     "description": "Context menu on a text selection. %s is Chrome's own selection substitution and must survive translation."
   },
   "menuExplainSelection": {
