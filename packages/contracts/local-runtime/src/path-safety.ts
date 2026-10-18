@@ -129,8 +129,12 @@ export function relativeWithinRoot(
   if (!isPathInside(root, candidate, options)) return null;
 
   const sep = separator(platform);
-  const rootDepth = root.split(sep).filter((segment) => segment !== '').length;
-  const candidateParts = candidate.split(sep).filter((segment) => segment !== '');
+  const split = (value: string): string[] =>
+    (platform === 'win32' ? value.replace(/\//g, sep) : value)
+      .split(sep)
+      .filter((segment) => segment !== '');
+  const rootDepth = split(root).length;
+  const candidateParts = split(candidate);
 
   return candidateParts.slice(rootDepth).join('/');
 }
