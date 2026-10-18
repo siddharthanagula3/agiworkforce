@@ -535,6 +535,21 @@ fn plugin_checks() -> Vec<DoctorCheck> {
 
 fn model_access_checks(config: &CliConfig) -> Vec<DoctorCheck> {
     let model = &config.default.model;
+    if crate::models::AccountRoute::load().runs_managed(model) {
+        return vec![check(
+            "model.default_access",
+            "default model access",
+            DoctorStatus::Pass,
+            "uses your AGI Workforce plan",
+            vec![
+                format!("model: {model}"),
+                format!(
+                    "provider: {}",
+                    crate::models::provider_name(&crate::models::Provider::ManagedCloud)
+                ),
+            ],
+        )];
+    }
     let configured_provider = &config.default.provider;
     let catalog_model = crate::provider::find_model(model);
     let inferred_provider = catalog_model

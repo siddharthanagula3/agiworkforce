@@ -294,7 +294,7 @@ impl AccountRoute {
 
     /// True when the managed route can run this model. An unknown tier is not
     /// a refusal; the server decides.
-    fn runs_managed(&self, model: &str) -> bool {
+    pub(crate) fn runs_managed(&self, model: &str) -> bool {
         if !self.signed_in || self.cloud_models_denied() {
             return false;
         }
