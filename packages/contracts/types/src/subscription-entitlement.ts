@@ -1,3 +1,5 @@
+import { isEnterprisePlanTier } from './billing-catalog';
+
 export const ENTITLED_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const;
 
 export function isEntitledSubscriptionStatus(status: string | null | undefined): boolean {
@@ -14,7 +16,6 @@ export function effectivePlanTier(
   return isEntitledSubscriptionStatus(status) ? planTier || 'free' : 'free';
 }
 
-const ENTERPRISE_PLAN_TIER = 'enterprise';
 const ENTERPRISE_GRACE_SUBSCRIPTION_STATUSES = ['past_due', 'unpaid'] as const;
 
 export function isEntitledEnterpriseSubscriptionStatus(
@@ -35,7 +36,7 @@ export function isEntitledSubscriptionStatusForTier(
   collectionReadOnly: boolean,
 ): boolean {
   const normalizedTier = (planTier ?? '').trim().toLowerCase();
-  if (normalizedTier === ENTERPRISE_PLAN_TIER) {
+  if (isEnterprisePlanTier(normalizedTier)) {
     return isEntitledEnterpriseSubscriptionStatus(status, collectionReadOnly);
   }
   return isEntitledSubscriptionStatus(status);
