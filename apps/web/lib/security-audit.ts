@@ -375,10 +375,7 @@ export type AuditEventType =
   | 'risk_signal_detected'
   | 'account_compromise_reported'
   | 'account_compromise_contained'
-  | 'account_compromise_resolved'
-  | 'admin_delegation_granted'
-  | 'admin_delegation_revoked'
-  | 'admin_delegation_refused';
+  | 'account_compromise_resolved';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 

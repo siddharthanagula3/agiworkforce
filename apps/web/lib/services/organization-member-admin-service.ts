@@ -10,7 +10,7 @@ import {
 
 import { createError } from '@/lib/errors';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
-import { assertOwnerProtection } from '@/lib/services/organization-delegation';
+import { assertOwnerProtection } from '@/lib/services/organization-owner-protection';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { assertMembershipRoleWithinActor } from '@/app/api/settings/team/membership-role-ceiling';
