@@ -144,7 +144,7 @@ function scoreCandidate(candidate: FreeAutoCandidate, request: FreeAutoRequest):
   const eligibility = state.freeEligibility[candidate.routeId];
   const pool = eligibility ? state.quotaPools[eligibility.quotaPoolId] : undefined;
   const headroom = pool?.headroomFraction ?? 0;
-  const health = effectiveRouteHealth(state, candidate.routeId, candidate.provider);
+  const health = effectiveRouteHealth(state, candidate.routeId, candidate.provider, request.nowMs);
 
   const successRate = health.successRate ?? 1;
   // Normalise latency into [0,1] with a soft knee at 10s; unknown latency is
@@ -216,7 +216,12 @@ export function resolveFreeAutoRoute(request: FreeAutoRequest): FreeAutoDecision
     }
 
     // ---- Gate 4: health ----------------------------------------------------
-    const health = effectiveRouteHealth(state, candidate.routeId, candidate.provider);
+    const health = effectiveRouteHealth(
+      state,
+      candidate.routeId,
+      candidate.provider,
+      request.nowMs,
+    );
     if (!health.available) {
       const reason: RouteUnavailabilityReason | undefined = health.reason;
       const retryAt =

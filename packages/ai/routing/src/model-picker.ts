@@ -1,7 +1,6 @@
 import {
   COMPAT_CAPABILITY_SOURCES,
   MODEL_FAMILY_REGISTRY,
-  MODEL_PRICE_BAND_SCALE,
   PLAN_LABEL,
   getDefaultAutoRoutingProfile,
   getMinimumRequiredTier,
@@ -24,7 +23,6 @@ import {
   resolveTierMaximumProfile,
 } from './auto';
 
-export const MODEL_PICKER_PRICE_BAND_SCALE = MODEL_PRICE_BAND_SCALE;
 export const MODEL_PICKER_RECOMMENDED_LIMIT = 4;
 export const MODEL_PICKER_FAVOURITES_LIMIT = 3;
 

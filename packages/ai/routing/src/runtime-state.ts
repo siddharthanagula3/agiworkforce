@@ -271,10 +271,11 @@ export const MAX_ROUTE_HEALTH_SNAPSHOT_AGE_MS = 30_000;
 function freshRouteHealthSnapshot(
   state: RoutingRuntimeState,
   routeId: string,
+  nowMs: number,
 ): RouteHealthSnapshot | undefined {
   const snapshot = state.routeHealthSnapshots?.[routeId];
   if (!snapshot) return undefined;
-  const ageMs = Date.now() - state.capturedAtMs;
+  const ageMs = nowMs - state.capturedAtMs;
   return ageMs >= 0 && ageMs <= MAX_ROUTE_HEALTH_SNAPSHOT_AGE_MS ? snapshot : undefined;
 }
 
@@ -282,12 +283,13 @@ export function effectiveRouteHealth(
   state: RoutingRuntimeState,
   routeId: string,
   providerId: string,
+  nowMs: number = Date.now(),
 ): RouteHealth {
   const provider = state.providerHealth[providerId];
   if (provider && !provider.available) return provider;
   const route = state.routeHealth[routeId];
   if (route && !route.available) return route;
-  const snapshot = freshRouteHealthSnapshot(state, routeId);
+  const snapshot = freshRouteHealthSnapshot(state, routeId, nowMs);
   if (snapshot && !snapshot.available) {
     return {
       available: false,
