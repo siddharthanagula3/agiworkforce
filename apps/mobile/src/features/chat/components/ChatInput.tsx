@@ -72,7 +72,11 @@ import {
   type DraftProvenance,
 } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
-import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
+import {
+  cleanupVoiceDictation,
+  detectVoiceCommand,
+  meteringToAmplitude,
+} from '@agiworkforce/utils/voice';
 import { useCapability } from '@/src/lib/capabilities';
 import {
   LARGE_PASTE_THRESHOLD,
@@ -624,8 +628,7 @@ ${current}`
   }, [resetRecordingUi]);
 
   const handleMetering = useCallback((event: VoiceMeteringEvent) => {
-    const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
-    setAudioLevel(normalized);
+    setAudioLevel(meteringToAmplitude(event.metering));
   }, []);
 
   const handleDictationCancel = useCallback(() => {

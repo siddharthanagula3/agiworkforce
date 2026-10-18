@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { meteringToAmplitude } from '@agiworkforce/utils/voice';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import {
@@ -201,8 +202,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         const session = await VoiceInput.startCaptureSession(
           (event) => {
             if (!activeRef.current) return;
-            const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
-            setAudioLevel(normalized);
+            setAudioLevel(meteringToAmplitude(event.metering));
           },
           undefined,
           { lang: activeSpeechLanguage() },
