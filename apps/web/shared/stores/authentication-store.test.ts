@@ -43,7 +43,6 @@ vi.mock('./web-settings-store', () => ({}));
 vi.mock('./media-store', () => ({}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
-vi.mock('./tool-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
 vi.mock('@/features/chat/stores/style-store', () => ({}));
 vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));

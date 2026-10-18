@@ -84,6 +84,30 @@ export function useComputerUse(): ComputerUseControls {
   };
 }
 
+/** Whether the desktop app is driving the computer right now, paused included. */
+export function useComputerUseRunning(): boolean {
+  const host = useElectronHost();
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (!host) return undefined;
+    let cancelled = false;
+    const apply = (next: ComputerUseStatus) => {
+      if (!cancelled) setRunning(next.phase !== 'idle');
+    };
+    readComputerUse()
+      .then(apply)
+      .catch((cause: unknown) => console.warn('[computer-use] Status could not be read:', cause));
+    const unsubscribe = onComputerUseChanged(apply);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [host]);
+
+  return running;
+}
+
 export function useComputerUseRunEnd(host: HostBridge): void {
   const replying = useChatStore((state) => state.streamingConversationIds.length > 0);
 

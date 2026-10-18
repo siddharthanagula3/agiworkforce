@@ -2299,6 +2299,18 @@ export const selectActiveLeafId = (conversationId: string | null) => (state: Cha
 export const selectIsActiveConversationStreaming = (state: ChatState) =>
   state.activeConversationId !== null &&
   state.streamingConversationIds.includes(state.activeConversationId);
+/** Tool calls in any loaded conversation still waiting on the user's approve or deny. */
+export const selectPendingToolApprovalCount = (state: ChatState): number => {
+  let count = 0;
+  for (const rows of Object.values(state.messagesByConversation)) {
+    for (const message of rows) {
+      for (const tool of message.metadata?.tools ?? []) {
+        if (tool.status === 'awaiting_approval') count += 1;
+      }
+    }
+  }
+  return count;
+};
 export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectError = (state: ChatState) => state.error;
 export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';

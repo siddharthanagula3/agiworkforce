@@ -71,7 +71,6 @@ const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Prom
   { label: 'media-store', load: () => import('./media-store') },
   { label: 'model-store', load: () => import('./model-store') },
   { label: 'thinking-store', load: () => import('./thinking-store') },
-  { label: 'tool-store', load: () => import('./tool-store') },
   { label: 'artifacts-store', load: () => import('@/features/chat/stores/artifacts-store') },
   { label: 'voice-input-store', load: () => import('@/features/chat/stores/voice-input-store') },
   {

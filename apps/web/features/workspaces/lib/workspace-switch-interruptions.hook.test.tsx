@@ -1,12 +1,60 @@
-import { renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ComputerUseStatus } from '@agiworkforce/local-runtime-contract';
 import { VOICE_SESSION_EVENT } from '@agiworkforce/unified-chat';
-import { useChatStore } from '@shared/stores/web-chat-store';
-import { useToolStore } from '@shared/stores/tool-store';
+import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { useStreamingArtifactStore } from '@features/chat/stores/streaming-artifact-store';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import { useActiveUploadStore } from './active-uploads';
 import { useWorkspaceSwitchInterruptions } from './workspace-switch-interruptions';
+type HostModule = typeof import('@/features/desktop-host/lib/host');
+type RuntimeClientModule = typeof import('@/features/desktop-host/lib/runtime-client');
+
+const computerUse = vi.hoisted(() => ({
+  host: null as unknown,
+  status: null as ComputerUseStatus | null,
+  listeners: new Set<(status: ComputerUseStatus) => void>(),
+}));
+
+vi.mock('@/features/desktop-host/lib/host', async (importOriginal) => ({
+  ...(await importOriginal<HostModule>()),
+  useElectronHost: () => computerUse.host,
+}));
+
+vi.mock('@/features/desktop-host/lib/runtime-client', async (importOriginal) => ({
+  ...(await importOriginal<RuntimeClientModule>()),
+  readComputerUse: async () => {
+    if (!computerUse.status) throw new Error('no status');
+    return computerUse.status;
+  },
+  onComputerUseChanged: (listener: (status: ComputerUseStatus) => void) => {
+    computerUse.listeners.add(listener);
+    return () => computerUse.listeners.delete(listener);
+  },
+}));
+
+function computerUseStatus(phase: ComputerUseStatus['phase']): ComputerUseStatus {
+  return {
+    enabled: true,
+    available: true,
+    unavailableReason: null,
+    grant: 'granted',
+    phase,
+    pausedBy: null,
+    stopShortcut: 'Escape',
+    system: { accessibility: 'granted', screenRecording: 'granted' },
+  };
+}
+
+function assistantWithTool(status: 'awaiting_approval' | 'completed'): Message {
+  return {
+    id: `message-${status}`,
+    role: 'assistant',
+    content: '',
+    createdAt: new Date(0).toISOString(),
+    metadata: { tools: [{ id: 'tool-1', name: 'run_build', status }] },
+  };
+}
 
 function kinds() {
   return renderHook(() => useWorkspaceSwitchInterruptions()).result.current.map(
@@ -14,9 +62,19 @@ function kinds() {
   );
 }
 
+beforeEach(() => {
+  computerUse.host = null;
+  computerUse.status = null;
+  computerUse.listeners.clear();
+});
+
 afterEach(() => {
-  useChatStore.setState({ draftsByConversation: {}, draftContent: '', isStreaming: false });
-  useToolStore.setState({ pendingApprovals: [], actionLog: [] });
+  useChatStore.setState({
+    draftsByConversation: {},
+    draftContent: '',
+    isStreaming: false,
+    messagesByConversation: {},
+  });
   useStreamingArtifactStore.setState({ streaming: null });
   useActiveUploadStore.setState({ uploads: [] });
   useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
@@ -52,50 +110,30 @@ describe('useWorkspaceSwitchInterruptions', () => {
   });
 
   it('reads a tool waiting on the user, and not one already answered', () => {
-    useToolStore.setState({
-      pendingApprovals: [
-        {
-          id: 'approval-1',
-          type: 'terminal_command',
-          description: 'Run the build',
-          riskLevel: 'low',
-          details: {},
-          status: 'approved',
-          createdAt: new Date(0),
-        },
-      ],
+    useChatStore.setState({
+      messagesByConversation: { 'conv-1': [assistantWithTool('completed')] },
     });
     expect(kinds()).toEqual([]);
 
-    useToolStore.setState({
-      pendingApprovals: [
-        {
-          id: 'approval-2',
-          type: 'terminal_command',
-          description: 'Run the build',
-          riskLevel: 'low',
-          details: {},
-          status: 'pending',
-          createdAt: new Date(0),
-        },
-      ],
+    useChatStore.setState({
+      messagesByConversation: { 'conv-1': [assistantWithTool('awaiting_approval')] },
     });
     expect(kinds()).toContain('approval');
   });
 
-  it('reads a browser action that is still running, and not one that finished', () => {
-    const entry = {
-      id: 'action-1',
-      type: 'browser' as const,
-      title: 'Open the dashboard',
-      createdAt: new Date(0),
-      updatedAt: new Date(0),
-    };
-    useToolStore.setState({ actionLog: [{ ...entry, status: 'success' }] });
-    expect(kinds()).toEqual([]);
+  it('reads the desktop app driving the computer, and not an idle one', async () => {
+    computerUse.host = { shell: 'electron' };
+    computerUse.status = computerUseStatus('idle');
+    const { result } = renderHook(() => useWorkspaceSwitchInterruptions());
+    await waitFor(() => expect(computerUse.listeners.size).toBe(1));
+    expect(result.current.map((interruption) => interruption.kind)).not.toContain(
+      'computer-control',
+    );
 
-    useToolStore.setState({ actionLog: [{ ...entry, status: 'running' }] });
-    expect(kinds()).toContain('computer-control');
+    act(() => {
+      for (const listener of computerUse.listeners) listener(computerUseStatus('active'));
+    });
+    expect(result.current.map((interruption) => interruption.kind)).toContain('computer-control');
   });
 
   it('reads an artifact that is still being written', () => {

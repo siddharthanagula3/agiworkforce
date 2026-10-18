@@ -52,7 +52,6 @@ vi.mock('../model-store', () => ({
   },
 }));
 vi.mock('../thinking-store', () => ({}));
-vi.mock('../tool-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => storeModule({ cancelListening }));
 vi.mock('@/features/chat/stores/voice-session-store', () => ({

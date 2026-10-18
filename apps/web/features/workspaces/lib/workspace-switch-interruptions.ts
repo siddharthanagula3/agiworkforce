@@ -1,8 +1,8 @@
 'use client';
 
 import { translateUiPlural } from '@agiworkforce/ui';
-import { useChatStore } from '@shared/stores/web-chat-store';
-import { useToolStore } from '@shared/stores/tool-store';
+import { selectPendingToolApprovalCount, useChatStore } from '@shared/stores/web-chat-store';
+import { useComputerUseRunning } from '@/features/desktop-host/hooks/use-computer-use';
 import { isArtifactPersistenceDegraded } from '@features/chat/stores/artifacts-store';
 import { useStreamingArtifactStore } from '@features/chat/stores/streaming-artifact-store';
 import { useVoiceModeActive } from '@features/chat/stores/voice-session-store';
@@ -114,14 +114,8 @@ export function useWorkspaceWorkSnapshot(): WorkspaceWorkSnapshot {
   const unsentDraftCount = useChatStore((state) => countUnsentDrafts(state.draftsByConversation));
   const replyInFlight = useChatStore((state) => state.isStreaming);
   const activeUploadCount = useActiveUploadStore((state) => state.uploads.length);
-  const pendingApprovalCount = useToolStore(
-    (state) => state.pendingApprovals.filter((approval) => approval.status === 'pending').length,
-  );
-  const computerControlRunning = useToolStore((state) =>
-    state.actionLog.some(
-      (entry) => (entry.type === 'browser' || entry.type === 'ui') && entry.status === 'running',
-    ),
-  );
+  const pendingApprovalCount = useChatStore(selectPendingToolApprovalCount);
+  const computerControlRunning = useComputerUseRunning();
   const artifactStreaming = useStreamingArtifactStore((state) => state.streaming !== null);
   const voiceSessionLive = useVoiceModeActive();
 
