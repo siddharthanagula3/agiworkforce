@@ -37,7 +37,8 @@ vi.mock('@/lib/cost-tracker', () => ({
   toOtelAttributes: vi.fn(() => ({})),
 }));
 
-import { buildStreamResponse, buildAdapterStreamResponse } from '../lib/stream-transform';
+import { buildAdapterStreamResponse } from '../lib/stream-transform';
+import { buildStreamResponse } from './support/raw-provider-stream';
 import {
   translateOpenAIStream,
   type OpenAIChatCompletionChunk,
