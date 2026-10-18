@@ -20,32 +20,6 @@ function row2msg(r: Record<string, unknown>): Message {
   };
 }
 
-export async function insertMessage(msg: Message): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO messages
-       (id, conversation_id, role, content, mode, provider, model, runtime,
-        tokens_in, tokens_out, duration_ms, attachments, created_at, parent_message_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [
-      msg.id,
-      msg.conversation_id,
-      msg.role,
-      msg.content,
-      msg.mode,
-      msg.provider ?? null,
-      msg.model ?? null,
-      msg.runtime ?? null,
-      msg.tokens_in ?? null,
-      msg.tokens_out ?? null,
-      msg.duration_ms ?? null,
-      msg.attachments ?? null,
-      msg.created_at,
-      msg.parent_message_id ?? null,
-    ],
-  );
-}
-
 export async function getMessagesForConversation(
   conversationId: string,
   opts?: { limit?: number; before?: number },
@@ -66,34 +40,4 @@ export async function getMessagesForConversation(
     [conversationId, limit],
   );
   return rows.map(row2msg);
-}
-
-export async function updateMessageContent(
-  id: string,
-  content: string,
-  patch?: Partial<Pick<Message, 'tokens_in' | 'tokens_out' | 'duration_ms'>>,
-): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `UPDATE messages SET content = ?,
-      tokens_in = COALESCE(?, tokens_in),
-      tokens_out = COALESCE(?, tokens_out),
-      duration_ms = COALESCE(?, duration_ms)
-     WHERE id = ?;`,
-    [content, patch?.tokens_in ?? null, patch?.tokens_out ?? null, patch?.duration_ms ?? null, id],
-  );
-}
-
-export async function deleteMessage(id: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync('DELETE FROM messages WHERE id = ?;', [id]);
-}
-
-export async function countMessages(conversationId: string): Promise<number> {
-  const db = await getDb();
-  const r = await db.getFirstAsync<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?;',
-    [conversationId],
-  );
-  return r?.n ?? 0;
 }

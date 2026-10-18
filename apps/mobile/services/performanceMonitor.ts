@@ -80,10 +80,6 @@ export function recordPerfEvent(event: PerfEvent): void {
   saveEvents(events);
 }
 
-export function getPerfEvents(): PerfEvent[] {
-  return loadEvents().reverse();
-}
-
 export function getPerfEventsLastDays(days = 7): PerfEvent[] {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return loadEvents()

@@ -11,16 +11,6 @@ function row2ci(r: Record<string, unknown>): CustomInstruction {
   };
 }
 
-export async function upsertCustomInstruction(ci: CustomInstruction): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    `INSERT INTO custom_instructions (id, name, content, active, created_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, content = excluded.content, active = excluded.active;`,
-    [ci.id, ci.name, ci.content, ci.active ? 1 : 0, ci.created_at],
-  );
-}
-
 export async function listCustomInstructions(activeOnly = true): Promise<CustomInstruction[]> {
   const db = await getDb();
   if (activeOnly) {
@@ -33,17 +23,4 @@ export async function listCustomInstructions(activeOnly = true): Promise<CustomI
     'SELECT * FROM custom_instructions ORDER BY name ASC;',
   );
   return rows.map(row2ci);
-}
-
-export async function getActiveDefaultInstruction(): Promise<CustomInstruction | null> {
-  const db = await getDb();
-  const r = await db.getFirstAsync<Record<string, unknown>>(
-    "SELECT * FROM custom_instructions WHERE name = 'default' AND active = 1 LIMIT 1;",
-  );
-  return r ? row2ci(r) : null;
-}
-
-export async function deleteCustomInstruction(id: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync('DELETE FROM custom_instructions WHERE id = ?;', [id]);
 }

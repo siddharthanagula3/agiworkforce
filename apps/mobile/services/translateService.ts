@@ -46,13 +46,8 @@ interface AGITranslateNative {
 
 function getNativeTranslate(): AGITranslateNative | null {
   const mod = (NativeModules as Record<string, unknown>)['AGITranslate'] as
-    | AGITranslateNative
-    | undefined;
+    AGITranslateNative | undefined;
   return mod ?? null;
-}
-
-export function isNativeTranslateAvailable(): boolean {
-  return getNativeTranslate() !== null;
 }
 
 async function checkPairCached(source: string, target: string): Promise<boolean> {

@@ -121,10 +121,6 @@ export async function fetchConnectorDirectory(): Promise<ConnectorDirectory> {
   return runtime.loadDirectory();
 }
 
-export async function listConnectedConnectors(): Promise<ConnectedConnector[]> {
-  return runtime.listConnected();
-}
-
 export async function startConnectorOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
   return runtime.startOAuth(connectorId);
 }

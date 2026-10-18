@@ -328,15 +328,6 @@ function startMaxDurationTimer(maxDurationMs: number): void {
   }, maxDurationMs);
 }
 
-export async function startCapture(
-  onMetering?: MeteringCallback,
-  onPartial?: PartialCallback,
-  options?: VoiceCaptureOptions,
-): Promise<OnDeviceTranscriptResult> {
-  const session = await startCaptureSession(onMetering, onPartial, options);
-  return session.result;
-}
-
 export async function stopCapture(): Promise<void> {
   if (!_active) return;
   try {

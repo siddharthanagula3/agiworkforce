@@ -65,6 +65,13 @@ function clearLocalCloudAccountStateNow(): void {
     clearCloudImageGenerationState();
   });
 
+  runTeardownStep('active Cloud video generation', () => {
+    const {
+      clearCloudVideoGenerationState,
+    } = require('@/src/features/chat/actions/runVideoGenerationTurn');
+    clearCloudVideoGenerationState();
+  });
+
   runTeardownStep('Cloud conversation selection', () => {
     const { useChatCloudMessageStore } = require('@/stores/chat/chatCloudMessageStore');
     const { useChatMessageStore } = require('@/stores/chat/chatMessageStore');

@@ -42,11 +42,6 @@ export function listMediaModels(kind: MediaKind): string[] {
   return ids.sort((a, b) => (a === slot ? -1 : b === slot ? 1 : a.localeCompare(b)));
 }
 
-export function defaultMediaModelId(kind: MediaKind): string | null {
-  const modelId = getRoutingSlotModel(SLOT_FOR_MODE[kind]);
-  return modelId && isExecutableMediaModel(kind, modelId) ? modelId : null;
-}
-
 export function resolveMediaModelId(
   kind: MediaKind,
   selections: MediaModelSelections = useChatViewStore.getState().selectedMediaModel,
@@ -120,8 +115,4 @@ export function enterMediaMode(kind: MediaKind): boolean {
 export function exitMediaMode(): void {
   if (useChatViewStore.getState().mediaMode === 'text') return;
   useChatViewStore.getState().setMediaMode('text');
-}
-
-export function getMediaMode(): MediaMode {
-  return useChatViewStore.getState().mediaMode;
 }

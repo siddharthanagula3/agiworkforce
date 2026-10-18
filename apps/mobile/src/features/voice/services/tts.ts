@@ -104,26 +104,3 @@ export async function getVoicesForLanguage(languagePrefix: string): Promise<Voic
     return (qualityOrder[a.quality] ?? 2) - (qualityOrder[b.quality] ?? 2);
   });
 }
-
-export async function getAvailableLanguages(): Promise<
-  { code: string; label: string; locale: string }[]
-> {
-  const voices = await getAvailableVoices();
-  const seen = new Map<string, string>();
-  for (const v of voices) {
-    const code = v.language.split('-')[0].toLowerCase();
-    if (!seen.has(code)) seen.set(code, v.language);
-  }
-  const DisplayNamesConstructor = Intl.DisplayNames;
-  const displayNames =
-    typeof DisplayNamesConstructor === 'function'
-      ? new DisplayNamesConstructor(['en'], { type: 'language' })
-      : null;
-  return Array.from(seen.entries())
-    .map(([code, locale]) => ({
-      code,
-      locale,
-      label: displayNames?.of(code) ?? code.toUpperCase(),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}

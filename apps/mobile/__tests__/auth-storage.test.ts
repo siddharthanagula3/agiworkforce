@@ -106,6 +106,10 @@ jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
   clearCloudImageGenerationState: jest.fn(),
 }));
 
+jest.mock('../src/features/chat/actions/runVideoGenerationTurn', () => ({
+  clearCloudVideoGenerationState: jest.fn(),
+}));
+
 jest.mock('../stores/chat/chatMessageStore', () => ({
   clearCloudConversationPagination: jest.fn(),
   useChatMessageStore: {

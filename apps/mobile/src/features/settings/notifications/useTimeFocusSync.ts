@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   TIME_FOCUS_PREFERENCES_NAMESPACE,
-  defaultTimeFocusPreferences,
   normalizeTimeFocusPreferences,
   type TimeFocusPreferences,
 } from '@agiworkforce/types';
@@ -91,8 +90,4 @@ export function useTimeFocusSync(): TimeFocusSync {
   }, [isCloud]);
 
   return { status, error, push };
-}
-
-export function defaultsForTimezone(timezone: string): TimeFocusPreferences {
-  return defaultTimeFocusPreferences(timezone);
 }

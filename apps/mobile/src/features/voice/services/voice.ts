@@ -23,12 +23,6 @@ type MeteringCallback = (event: VoiceMeteringEvent) => void;
 let _lastResult: OnDeviceTranscriptResult | null = null;
 let _activeCapturePromise: Promise<OnDeviceTranscriptResult> | null = null;
 
-/** Re-exported for callers that wired permission UX into the chat input. */
-export async function checkPermission(): Promise<boolean> {
-  const { requestMicPermission } = await import('./voiceInput');
-  return requestMicPermission();
-}
-
 export async function startRecording(onMetering?: MeteringCallback): Promise<void> {
   if (_activeCapturePromise) {
     throw new Error('Recording already in progress');

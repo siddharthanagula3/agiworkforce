@@ -14,7 +14,3 @@ export function takeComposerAttachments(key: string): Attachment[] {
   staged.delete(key);
   return attachments;
 }
-
-export function clearComposerAttachments(): void {
-  staged.clear();
-}

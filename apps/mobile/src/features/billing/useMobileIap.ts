@@ -11,7 +11,6 @@ import {
 import {
   MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
   mobileIapPlanChangeDirection,
-  type MobileIapCatalogProduct,
   type MobileIapCatalogResponse,
   type MobileIapProductKey,
   type MobileIapVerifyResponse,
@@ -674,11 +673,4 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     restore,
     reload,
   };
-}
-
-export function mobileIapProductByKey(
-  catalog: MobileIapCatalogResponse | null,
-  key: MobileIapProductKey,
-): MobileIapCatalogProduct | null {
-  return catalog?.products.find((product) => product.key === key) ?? null;
 }

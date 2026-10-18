@@ -18,6 +18,10 @@ jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
   clearCloudImageGenerationState: jest.fn(),
 }));
 
+jest.mock('../src/features/chat/actions/runVideoGenerationTurn', () => ({
+  clearCloudVideoGenerationState: jest.fn(),
+}));
+
 jest.mock('../src/features/artifacts/store', () => ({
   clearAccountScopedArtifactState: jest.fn(),
 }));
@@ -127,6 +131,10 @@ const { clearCloudExecutionState } = require('../stores/chat/chatExecutionStore'
 const { clearCloudImageGenerationState } =
   require('../src/features/chat/actions/runImageGenerationTurn') as {
     clearCloudImageGenerationState: jest.Mock;
+  };
+const { clearCloudVideoGenerationState } =
+  require('../src/features/chat/actions/runVideoGenerationTurn') as {
+    clearCloudVideoGenerationState: jest.Mock;
   };
 const { clearAccountScopedArtifactState } = require('../src/features/artifacts/store') as {
   clearAccountScopedArtifactState: jest.Mock;
@@ -261,6 +269,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetCloudSync).toHaveBeenCalledTimes(1);
     expect(clearCloudExecutionState).toHaveBeenCalledTimes(1);
     expect(clearCloudImageGenerationState).toHaveBeenCalledTimes(1);
+    expect(clearCloudVideoGenerationState).toHaveBeenCalledTimes(1);
     expect(clearCloudChats).toHaveBeenCalledTimes(1);
     expect(clearCloudConversationSelection).toHaveBeenCalledWith(['cloud-conversation-a']);
     expect(clearAccountScopedArtifactState).toHaveBeenCalledTimes(1);
@@ -321,6 +330,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetCloudSync).toHaveBeenCalledTimes(2);
     expect(clearCloudExecutionState).toHaveBeenCalledTimes(2);
     expect(clearCloudImageGenerationState).toHaveBeenCalledTimes(2);
+    expect(clearCloudVideoGenerationState).toHaveBeenCalledTimes(2);
     expect(clearCloudChats).toHaveBeenCalledTimes(2);
     expect(clearAccountScopedArtifactState).toHaveBeenCalledTimes(2);
     expect(clearAccountScopedOfflineQueue).toHaveBeenCalledTimes(2);

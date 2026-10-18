@@ -99,7 +99,3 @@ export function storePrice(
     offerToken: null,
   };
 }
-
-export function isPriced(price: StorePrice): boolean {
-  return price.label !== null;
-}

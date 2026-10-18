@@ -175,7 +175,3 @@ export async function unregisterBackgroundFetch(): Promise<void> {
     await BackgroundTask.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
   }
 }
-
-export async function isBackgroundFetchRegistered(): Promise<boolean> {
-  return TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
-}

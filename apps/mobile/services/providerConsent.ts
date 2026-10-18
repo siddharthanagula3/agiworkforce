@@ -1,7 +1,6 @@
 import {
   CHINESE_HQ_PROVIDER_IDS,
   chineseHqProviderDisplayName,
-  isChineseHqProvider,
   type ChineseHqProviderId,
 } from '@agiworkforce/compliance';
 import {
@@ -20,10 +19,6 @@ export function readChineseHqConsent(): ChineseHqConsentMap {
     (id) => [id, mmkvRoutingConsentLedger.getNamedProviderConsent(id)?.accepted === true] as const,
   );
   return Object.fromEntries(entries) as ChineseHqConsentMap;
-}
-
-export function isChineseHqProviderAccepted(providerId: ChineseHqProviderId): boolean {
-  return mmkvRoutingConsentLedger.getNamedProviderConsent(providerId)?.accepted === true;
 }
 
 export function setChineseHqProviderConsent(
@@ -51,10 +46,6 @@ export function applyChineseHqProviderConsent(
   for (const id of CHINESE_HQ_PROVIDER_IDS) {
     setChineseHqProviderConsent(id, acceptedProviderIds.includes(id), now);
   }
-}
-
-export function toChineseHqProviderId(providerId: string): ChineseHqProviderId | null {
-  return isChineseHqProvider(providerId) ? providerId : null;
 }
 
 export { CHINESE_HQ_PROVIDER_IDS, chineseHqProviderDisplayName, type ChineseHqProviderId };
