@@ -151,9 +151,3 @@ fn assemble_truncated_output(prefix: &str, suffix: &str, marker: &str) -> String
     out.push_str(suffix);
     out
 }
-
-// Sprint 0 (FIX-006a): the upstream `tests` submodule was not ported with
-// the rest of this crate; declaration removed so the workspace test build
-// stays green. Restore once the truncation tests are recovered from upstream.
-// #[cfg(test)]
-// mod tests;

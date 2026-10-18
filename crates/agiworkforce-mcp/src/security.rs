@@ -1,7 +1,5 @@
 //! Network hardening helpers for remote MCP transports.
 //!
-//! Ported from the desktop transport's `validate_mcp_server_url` (Wave 5 stage
-//! d2) so the SSRF posture survives the transport swap onto this crate.
 //! Transport bringup enforcement is opt-in via
 //! [`crate::McpTimeouts::validate_urls`], the CLI keeps its original behavior
 //! (LAN MCP servers reachable) unless a host turns the knob on. The OAuth flow
