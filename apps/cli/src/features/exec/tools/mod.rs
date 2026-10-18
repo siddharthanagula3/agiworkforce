@@ -477,24 +477,6 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
     reg
 }
 
-#[allow(dead_code)]
-pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
-    let opts = ToolExecOptions {
-        additional_workspace_roots: Vec::new(),
-        mcp_tool_definitions: None,
-        require_confirmation,
-        auto_approve_safe: false,
-        auto_approve_edits: false,
-        quiet: false,
-        approval_callback: None,
-        user_input_callback: None,
-        // A sessionless invocation has no authority to leave the device.
-        privacy_mode: crate::agent::PrivacyMode::Local,
-        workspace_root: std::env::current_dir().ok(),
-    };
-    execute_tool_with_opts(call, &opts).await
-}
-
 async fn file_mutation_targets(
     tool: &str,
     args: &HashMap<String, String>,

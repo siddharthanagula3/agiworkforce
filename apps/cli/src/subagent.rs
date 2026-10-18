@@ -193,12 +193,6 @@ const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// tree so nested `task` calls cannot fan out into unbounded cost.
 const MAX_SUBAGENT_DEPTH: usize = 3;
 
-/// How many times `execute_task` runs one delegation before giving the failure
-/// back to the parent. A subagent that fails on a transient provider or tool
-/// error is worth one more attempt; a cancelled or timed-out one is not,
-/// because the stop was deliberate.
-const MAX_SUBAGENT_ATTEMPTS: usize = 2;
-
 /// Manages concurrent subagent tasks spawned via `task` or a named `agent`.
 ///
 /// Each subagent runs on a dedicated OS thread with its own tokio runtime,
@@ -862,140 +856,6 @@ fn extract_modified_files(output: &str) -> Vec<String> {
     files
 }
 
-// ---------------------------------------------------------------------------
-// Tool execution for the `Task` tool
-// ---------------------------------------------------------------------------
-
-/// Maximum time `execute_task` will wait for a single subagent to leave the
-/// `Running` state before surfacing a timeout. Guards against a subagent stuck
-/// on a non-returning provider call or hung tool blocking the parent forever.
-const SUBAGENT_EXECUTE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
-
-fn task_result(success: bool, output: String) -> crate::tools::ToolResult {
-    crate::tools::ToolResult {
-        tool_name: "task".to_string(),
-        success,
-        output,
-    }
-}
-
-/// One delegation attempt: either an answer for the parent, or a failure the
-/// next attempt may improve on. A cancellation or a timeout is an answer,
-/// because the stop was deliberate.
-enum SubagentAttempt {
-    Settled(crate::tools::ToolResult),
-    Retryable(String),
-}
-
-async fn await_subagent(manager: &SubagentManager, id: &str) -> SubagentAttempt {
-    let deadline = std::time::Instant::now() + SUBAGENT_EXECUTE_TIMEOUT;
-    loop {
-        match manager.get_status(id).await {
-            Some(SubagentStatus::Running) => {
-                if std::time::Instant::now() >= deadline {
-                    // Signal cancellation so the spawned thread stops updating
-                    // shared state, then surface a timeout.
-                    let _ = manager.cancel(id).await;
-                    return SubagentAttempt::Settled(task_result(
-                        false,
-                        format!(
-                            "Subagent {} timed out after {}s and was cancelled.",
-                            id,
-                            SUBAGENT_EXECUTE_TIMEOUT.as_secs()
-                        ),
-                    ));
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-            Some(SubagentStatus::Completed) => {
-                let Some(result) = manager.get_result(id).await else {
-                    return SubagentAttempt::Settled(task_result(
-                        true,
-                        format!("Subagent {} completed (no output captured).", id),
-                    ));
-                };
-                let mut output = result.output;
-                if !result.files_modified.is_empty() {
-                    output.push_str("\n\nFiles modified:\n");
-                    for f in &result.files_modified {
-                        output.push_str(&format!("  - {}\n", f));
-                    }
-                }
-                return SubagentAttempt::Settled(task_result(true, output));
-            }
-            Some(SubagentStatus::Failed(msg)) => return SubagentAttempt::Retryable(msg),
-            Some(SubagentStatus::Cancelled) => {
-                return SubagentAttempt::Settled(task_result(
-                    false,
-                    format!("Subagent {} was cancelled.", id),
-                ));
-            }
-            None => {
-                return SubagentAttempt::Settled(task_result(
-                    false,
-                    format!("Subagent {} not found (internal error).", id),
-                ));
-            }
-        }
-    }
-}
-
-/// Execute the `Task` tool: spawn a subagent, wait for it, return its output.
-///
-/// This is a blocking execution -- the subagent runs to completion before
-/// returning the result to the caller. For true parallelism, multiple Task
-/// tool calls in the same LLM turn will be executed concurrently by the
-/// agent loop.
-///
-/// Each wait is bounded by `SUBAGENT_EXECUTE_TIMEOUT` so the parent's Task tool
-/// cannot hang the session. A failed delegation is retried up to
-/// `MAX_SUBAGENT_ATTEMPTS` times; every attempt spawns through the same depth,
-/// concurrency and spend caps, so a retry can itself be refused.
-#[allow(dead_code)]
-pub async fn execute_task(
-    manager: &SubagentManager,
-    description: &str,
-    prompt: &str,
-) -> crate::tools::ToolResult {
-    let mut last_failure = String::new();
-    for attempt in 1..=MAX_SUBAGENT_ATTEMPTS {
-        let id = match manager.spawn(description, prompt).await {
-            Ok(id) => id,
-            Err(e) => {
-                let spawn_failure = format!("Failed to spawn subagent: {:#}", e);
-                return task_result(
-                    false,
-                    if last_failure.is_empty() {
-                        spawn_failure
-                    } else {
-                        format!("{last_failure}\n{spawn_failure}")
-                    },
-                );
-            }
-        };
-        match await_subagent(manager, &id).await {
-            SubagentAttempt::Settled(result) => return result,
-            SubagentAttempt::Retryable(message) => {
-                last_failure = format!("Subagent {} failed: {}", id, message);
-                if attempt < MAX_SUBAGENT_ATTEMPTS {
-                    eprintln!(
-                        "  {} Retrying {}, attempt {} of {}: {}",
-                        ts::warning_header("[task]"),
-                        description.dimmed(),
-                        attempt + 1,
-                        MAX_SUBAGENT_ATTEMPTS,
-                        message.dimmed()
-                    );
-                }
-            }
-        }
-    }
-    task_result(
-        false,
-        format!("{last_failure} (gave up after {MAX_SUBAGENT_ATTEMPTS} attempts)"),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1258,36 +1118,6 @@ mod tests {
             manager.max_concurrent,
             "the refused spawn left an entry behind"
         );
-    }
-
-    #[tokio::test]
-    async fn a_failed_delegation_is_retryable_and_a_deliberate_stop_is_not() {
-        assert_eq!(MAX_SUBAGENT_ATTEMPTS, 2);
-        let manager = root_manager();
-
-        seed_entry(
-            &manager,
-            "subagent_failed",
-            SubagentStatus::Failed("provider hung up".to_string()),
-        )
-        .await;
-        match await_subagent(&manager, "subagent_failed").await {
-            SubagentAttempt::Retryable(message) => assert_eq!(message, "provider hung up"),
-            SubagentAttempt::Settled(result) => {
-                panic!("a failure must be retryable: {}", result.output)
-            }
-        }
-
-        seed_entry(&manager, "subagent_cancelled", SubagentStatus::Cancelled).await;
-        match await_subagent(&manager, "subagent_cancelled").await {
-            SubagentAttempt::Settled(result) => {
-                assert!(!result.success);
-                assert!(result.output.contains("was cancelled"), "{}", result.output);
-            }
-            SubagentAttempt::Retryable(message) => {
-                panic!("a deliberate stop must not be retried: {message}")
-            }
-        }
     }
 
     #[tokio::test]
