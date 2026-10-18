@@ -37,6 +37,22 @@ const INLINE_IMAGE_TYPES: ReadonlySet<string> = new Set([
 ]);
 const MAX_CACHED_IMAGES = 24;
 const imageDataUrlCache = new Map<string, Promise<string>>();
+const INLINE_VIDEO_TYPES: ReadonlySet<string> = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+]);
+const MAX_CACHED_VIDEOS = 4;
+const videoObjectUrlCache = new Map<string, Promise<string>>();
+const SAVED_FILE_EXTENSION: Readonly<Record<string, string>> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
 
 export function answerFiles(
   generatedFiles: readonly GeneratedFileWire[] | undefined,
@@ -78,6 +94,10 @@ function isInlineImage(file: AnswerFile): boolean {
   );
 }
 
+function isInlineVideo(file: AnswerFile): boolean {
+  return INLINE_VIDEO_TYPES.has(file.mimeType.toLowerCase());
+}
+
 function fileTypeLabel(file: AnswerFile): string {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1];
   if (extension) return extension.toUpperCase();
@@ -87,7 +107,7 @@ function fileTypeLabel(file: AnswerFile): string {
 
 export function fileMetaLabel(file: AnswerFile): string {
   const type = fileTypeLabel(file);
-  return file.byteCount !== undefined ? `${type} · ${formatBytes(file.byteCount, 1)}` : type;
+  return file.byteCount ? `${type} · ${formatBytes(file.byteCount, 1)}` : type;
 }
 
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
@@ -134,12 +154,43 @@ export function saveBlob(name: string, blob: Blob): void {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
+export function savedFileName(name: string, blobType: string): string {
+  if (/\.[a-z0-9]{1,8}$/i.test(name)) return name;
+  const extension = SAVED_FILE_EXTENSION[blobType.toLowerCase()];
+  return extension ? `${name}.${extension}` : name;
+}
+
 export async function saveAnswerFile(
   url: string,
   name: string,
   access: AnswerFileAccess,
 ): Promise<void> {
-  saveBlob(name, await access.fetchFile(url));
+  const blob = await access.fetchFile(url);
+  saveBlob(savedFileName(name, blob.type), blob);
+}
+
+export function loadVideoObjectUrl(url: string, access: AnswerFileAccess): Promise<string> {
+  const cached = videoObjectUrlCache.get(url);
+  if (cached) return cached;
+  const pending = access
+    .fetchFile(url)
+    .then((blob) => {
+      if (!INLINE_VIDEO_TYPES.has(blob.type.toLowerCase())) throw new Error('not a video');
+      return URL.createObjectURL(blob);
+    })
+    .catch((error: unknown) => {
+      videoObjectUrlCache.delete(url);
+      throw error;
+    });
+  videoObjectUrlCache.set(url, pending);
+  while (videoObjectUrlCache.size > MAX_CACHED_VIDEOS) {
+    const oldest = videoObjectUrlCache.keys().next();
+    if (oldest.done) break;
+    const evicted = videoObjectUrlCache.get(oldest.value);
+    videoObjectUrlCache.delete(oldest.value);
+    void evicted?.then((objectUrl) => URL.revokeObjectURL(objectUrl)).catch(() => undefined);
+  }
+  return pending;
 }
 
 function buildFileActions(
@@ -209,6 +260,40 @@ function buildFileCard(file: AnswerFile, access: AnswerFileAccess): HTMLElement 
   return card;
 }
 
+function buildVideoResult(file: AnswerFile, url: string, access: AnswerFileAccess): HTMLElement {
+  const figure = el('figure', { class: 'sp-answer-image sp-answer-video', role: 'listitem' });
+  const frame = el('div', { class: 'sp-answer-image__frame', 'aria-busy': 'true' });
+  const loading = el('span', { class: 'sp-answer-image__status', role: 'status' });
+  loading.appendChild(renderIcon(Loader2, 16, 'sp-answer-image__spinner'));
+  loading.appendChild(document.createTextNode(t('spAnswerVideoLoading')));
+  frame.appendChild(loading);
+  figure.appendChild(frame);
+  const caption = el('figcaption', { class: 'sp-answer-image__caption' });
+  caption.appendChild(el('span', { class: 'sp-answer-file__name', title: file.name }, file.name));
+  const status = el('span', { class: 'sp-answer-file__status', role: 'status' });
+  caption.appendChild(status);
+  caption.appendChild(buildFileActions(file, url, access, status));
+  figure.appendChild(caption);
+  loadVideoObjectUrl(url, access)
+    .then((objectUrl) => {
+      frame.replaceChildren(
+        el('video', {
+          class: 'sp-answer-video__player',
+          src: objectUrl,
+          controls: '',
+          preload: 'metadata',
+          playsinline: '',
+          'aria-label': file.name,
+        }),
+      );
+    })
+    .catch(() => {
+      loading.replaceChildren(document.createTextNode(t('spAnswerVideoFailed', [file.name])));
+    })
+    .finally(() => frame.removeAttribute('aria-busy'));
+  return figure;
+}
+
 function buildImageResult(file: AnswerFile, url: string, access: AnswerFileAccess): HTMLElement {
   const figure = el('figure', { class: 'sp-answer-image', role: 'listitem' });
   const frame = el('div', { class: 'sp-answer-image__frame', 'aria-busy': 'true' });
@@ -250,8 +335,10 @@ export function buildAnswerFiles(
     'aria-label': t('spAnswerFilesLabel'),
   });
   for (const file of files) {
-    const url = isInlineImage(file) ? access.resolveUrl(file.uri) : null;
-    list.appendChild(url ? buildImageResult(file, url, access) : buildFileCard(file, access));
+    const url = isInlineImage(file) || isInlineVideo(file) ? access.resolveUrl(file.uri) : null;
+    if (!url) list.appendChild(buildFileCard(file, access));
+    else if (isInlineVideo(file)) list.appendChild(buildVideoResult(file, url, access));
+    else list.appendChild(buildImageResult(file, url, access));
   }
   return list;
 }

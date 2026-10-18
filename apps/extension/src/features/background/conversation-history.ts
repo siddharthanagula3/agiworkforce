@@ -29,6 +29,7 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
+import { isChromeVideoTaskId } from '../cloud-bridge/videoGenerationClient';
 import {
   CODE_EXECUTION_OUTPUT_MAX_CHARS,
   type ManagedCodeExecution,
@@ -96,6 +97,7 @@ export interface HistoryMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
+  videoTaskId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -418,6 +420,8 @@ function normalizeHistoryMessage(
     if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
     const codeExecution = readStoredCodeExecution(message['codeExecution']);
     if (codeExecution) normalized.codeExecution = codeExecution;
+    if (isChromeVideoTaskId(message['videoTaskId']))
+      normalized.videoTaskId = message['videoTaskId'];
     const sources = readStoredSources(message['sources']);
     if (sources.length > 0) normalized.sources = sources;
     const citations = readStoredSources(message['citations']);

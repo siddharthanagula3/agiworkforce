@@ -4409,5 +4409,83 @@
   "spArtifactRuntimeUnavailable": {
     "message": "AI and saved data are available once this app is published and opened by a signed-in viewer.",
     "description": "Answer to an artifact that asked for AI or saved data in the side panel preview"
+  },
+  "spImageCardFileName": {
+    "message": "Generated image $NUMBER$",
+    "description": "Name of an image the assistant created in a chat turn, used as its download name",
+    "placeholders": {
+      "number": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spAnswerVideoLoading": {
+    "message": "Loading video…",
+    "description": "Status while a produced video is fetched for playback"
+  },
+  "spAnswerVideoFailed": {
+    "message": "$FILE$ could not be played here. Download it instead.",
+    "description": "Status when a produced video could not be loaded for playback",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "Generated video"
+      }
+    }
+  },
+  "spVideoStarting": {
+    "message": "Starting your video…",
+    "description": "Thinking label while a video request is being started"
+  },
+  "spVideoCreating": {
+    "message": "Creating your video. This usually takes a minute or two.",
+    "description": "Status while a requested video is being made"
+  },
+  "spVideoCreatingProgress": {
+    "message": "Creating your video, $PERCENT$% done.",
+    "description": "Status while a requested video is being made, with progress",
+    "placeholders": {
+      "percent": {
+        "content": "$1",
+        "example": "40"
+      }
+    }
+  },
+  "spVideoStillRunning": {
+    "message": "Your video is still being made. Open this chat again later to see it.",
+    "description": "Status when a video took longer than the panel waits"
+  },
+  "spVideoFailed": {
+    "message": "The video could not be created. Try again.",
+    "description": "Error when video creation failed without a reason"
+  },
+  "spVideoFileName": {
+    "message": "Generated video",
+    "description": "Name of a video the assistant created, used as its download name"
+  },
+  "spVideoModeItem": {
+    "message": "Create a video",
+    "description": "Composer menu item that makes the next message create a video"
+  },
+  "spVideoModeUpgrade": {
+    "message": "Create a video · Upgrade",
+    "description": "Composer menu item on a plan without video creation; opens pricing"
+  },
+  "spVideoModeChip": {
+    "message": "Video",
+    "description": "Composer chip shown while the next message will create a video"
+  },
+  "spVideoModeChipHint": {
+    "message": "Describe the video to create",
+    "description": "Second line of the composer video chip"
+  },
+  "spVideoModeLeave": {
+    "message": "Stop creating a video",
+    "description": "Button that leaves video mode in the composer"
+  },
+  "spVideoModeNoAttachments": {
+    "message": "Videos are made from your words only. Remove the attachments or the page, or stop creating a video.",
+    "description": "Composer notice when video mode has attachments"
   }
 }

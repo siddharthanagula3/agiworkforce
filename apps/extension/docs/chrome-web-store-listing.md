@@ -98,6 +98,9 @@ under its own policy, and never inside the extension's origin. The side panel
 only posts the artifact's text to it and accepts render status back from it.
 The extension declares no sandbox page.
 
+`media-src` adds `blob:` only, so a video the user asked AGI to create plays in
+the side panel after the extension downloads it from the user's own account.
+
 ## Data use disclosures
 
 Tick these in the Dashboard's Privacy tab, and nothing else.

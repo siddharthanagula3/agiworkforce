@@ -147,6 +147,19 @@ describe('Chrome manifest trust contract', () => {
     );
   });
 
+  it('plays only media the extension downloaded itself', () => {
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+    const contentSecurityPolicy = manifest['content_security_policy'] as
+      { extension_pages?: unknown } | undefined;
+    const mediaSource = /media-src ([^;]+)/
+      .exec(String(contentSecurityPolicy?.extension_pages ?? ''))?.[1]
+      ?.trim()
+      .split(/\s+/);
+
+    expect(mediaSource).toEqual(["'self'", 'blob:']);
+    expect(listing).toContain('`media-src` adds `blob:` only');
+  });
+
   it('declares no Chrome Apps keys, which MV3 ignores and review flags', () => {
     expect(manifest['offline_enabled']).toBeUndefined();
   });
