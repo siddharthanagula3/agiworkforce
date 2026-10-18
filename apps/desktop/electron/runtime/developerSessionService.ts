@@ -1,3 +1,10 @@
+import {
+  hasSshEnvironment,
+  requireSshRoot,
+  listSshRoots,
+  sshLaunch,
+  verifySshWorkspace,
+} from './sshEnvironments';
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import os from 'node:os';
@@ -46,6 +53,7 @@ import type {
   CheckpointListResponse,
   CheckpointSectionsResponse,
   DeveloperMessage,
+  DeveloperChildTask,
   DeveloperSessionFileChange,
   MemoryAddResponse,
   MemoryScope,
@@ -67,6 +75,7 @@ import type {
 } from '@agiworkforce/types/protocol';
 import {
   DEVELOPER_COMMAND_NEEDS_UPDATE,
+  DEVELOPER_SESSION_MAX_FRAME_BYTES as MAX_FRAME_BYTES,
   DEVELOPER_UNNAMED_TURN_AGENT_MODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
@@ -121,7 +130,6 @@ const SNAPSHOT_TIMEOUT_MS = 300_000;
 const VERSION_TIMEOUT_MS = 5_000;
 const LOGOUT_TIMEOUT_MS = 15_000;
 const SHUTDOWN_GRACE_MS = 1_500;
-const MAX_FRAME_BYTES = 4 * 1024 * 1024;
 const STDERR_TAIL_BYTES = 8 * 1024;
 const RISK_LEVELS: readonly AgentEventApprovalRiskLevel[] = ['low', 'medium', 'high'];
 
@@ -172,6 +180,7 @@ interface PendingRequest {
 }
 
 interface RunningServer {
+  stopReason?: string;
   root: WorkspaceRoot;
   child: ChildProcessWithoutNullStreams;
   pending: Map<number, PendingRequest>;
@@ -204,6 +213,7 @@ export interface DeveloperSessionConfiguration {
    * starts, so it is never started where they have not.
    */
   mayRunIn: (root: WorkspaceRoot) => boolean;
+  workspaceConsentAtMs?: (root: WorkspaceRoot) => number | null;
   accountBridge?: DeveloperAccountBridge;
   spawn?: SpawnDeveloperRuntime;
   /** Whether a page is there to answer the agent's questions. */
@@ -214,6 +224,7 @@ let emit: DeveloperSessionEmitter = () => undefined;
 let resolveBinary: () => string = () => DEFAULT_BINARY;
 let mayRunIn: (root: WorkspaceRoot) => boolean = () => false;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
+let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
 let answersUserInput: () => boolean = () => true;
 let accountSyncError: string | null = null;
@@ -244,6 +255,7 @@ export function configureDeveloperSessions(configuration: DeveloperSessionConfig
   emit = configuration.emit;
   resolveBinary = configuration.resolveBinary;
   mayRunIn = configuration.mayRunIn;
+  workspaceConsentAtMs = configuration.workspaceConsentAtMs ?? (() => null);
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
   accountBridge = configuration.accountBridge ?? null;
   answersUserInput = configuration.answersUserInput ?? (() => true);
@@ -483,6 +495,11 @@ function readNumber(source: Record<string, unknown>, key: string): number | null
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function readCursor(source: Record<string, unknown>, key: string): number | undefined {
+  const value = readNumber(source, key);
+  return value !== null && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
 function isDeveloperFileChange(value: string | null): value is DeveloperFileChange {
   return value !== null && (DEVELOPER_FILE_CHANGES as readonly string[]).includes(value);
 }
@@ -572,6 +589,7 @@ function killProcess(server: RunningServer): void {
 function closeServer(server: RunningServer, error: Error): void {
   if (server.closed) return;
   server.closed = true;
+  server.stopReason = error.message;
   stopProcess(server);
   for (const pending of server.pending.values()) {
     clearTimeout(pending.timer);
@@ -662,10 +680,35 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const event = params['event'];
   if (!threadId || !turnId || !isRecord(event)) return;
   const kind = messageKindForAgentEvent(readString(event, 'type') ?? '');
+  const sequence = readCursor(params, 'sequence');
+  const publish = (event: DeveloperSessionEvent) =>
+    emit(server.root.id, { ...event, ...(sequence === undefined ? {} : { sequence }) });
+
+  if (event['type'] === 'approval-resolved') {
+    const requestId = readString(event, 'approvalId');
+    const decisions = {
+      approved: 'approve_once',
+      'approved-for-session': 'approve_for_session',
+      denied: 'deny',
+      cancelled: 'deny_and_stop',
+    } as const;
+    const decision = readString(event, 'decision');
+    if (!requestId || !decision || !Object.hasOwn(decisions, decision)) return;
+    const panelDecision = decisions[decision as keyof typeof decisions];
+    publish({
+      type: 'approval-answered',
+      threadId,
+      turnId,
+      requestId,
+      decision: panelDecision,
+      approved: decision === 'approved' || decision === 'approved-for-session',
+    });
+    return;
+  }
   if (kind !== 'tool_call' && kind !== 'tool_result') return;
 
   if (event['type'] === 'turn-diff') {
-    emit(server.root.id, {
+    publish({
       type: 'turn-diff',
       threadId,
       turnId,
@@ -683,7 +726,7 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   if (event['type'] === 'command-started') {
     const command = readString(event, 'command');
     if (!command) return;
-    emit(server.root.id, {
+    publish({
       type: 'command-started',
       threadId,
       turnId,
@@ -697,7 +740,7 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
     const path = readString(event, 'path');
     const change = readString(event, 'change');
     if (!path || !isDeveloperFileChange(change)) return;
-    emit(server.root.id, { type: 'file-changed', threadId, turnId, toolCallId, path, change });
+    publish({ type: 'file-changed', threadId, turnId, toolCallId, path, change });
     return;
   }
 
@@ -705,7 +748,7 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   if (!name) return;
 
   if (event['type'] === 'tool-execution-queued') {
-    emit(server.root.id, {
+    publish({
       type: 'tool-queued',
       threadId,
       turnId,
@@ -717,7 +760,7 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
     return;
   }
   if (event['type'] === 'tool-execution-start') {
-    emit(server.root.id, {
+    publish({
       type: 'tool-started',
       threadId,
       turnId,
@@ -729,7 +772,7 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   }
   if (event['type'] === 'tool-execution-end') {
     const output = event['output'];
-    emit(server.root.id, {
+    publish({
       type: 'tool-finished',
       threadId,
       turnId,
@@ -790,7 +833,14 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   if (method === 'turn/output_delta') {
     const delta = params['delta'];
     if (typeof delta === 'string') {
-      emit(server.root.id, { type: 'output-delta', threadId, turnId, delta });
+      const index = readCursor(params, 'index');
+      emit(server.root.id, {
+        type: 'output-delta',
+        threadId,
+        turnId,
+        delta,
+        ...(index === undefined ? {} : { index }),
+      });
     }
     return;
   }
@@ -871,7 +921,9 @@ function request(
 ): Promise<unknown> {
   if (server.closed) {
     return Promise.reject(
-      new DeveloperRuntimeUnavailableError('The AGI CLI is no longer running.'),
+      new DeveloperRuntimeUnavailableError(
+        server.stopReason ?? 'The AGI CLI is no longer running.',
+      ),
     );
   }
   const id = server.nextId++;
@@ -998,11 +1050,36 @@ async function signOutMachine(): Promise<void> {
   }
 }
 
+async function assertSshAccount(server: RunningServer): Promise<void> {
+  const identity = await accountBridge?.readShellIdentity();
+  if (!identity?.signedIn || !identity.email)
+    throw new Error('Sign in to Desktop before using an SSH coding environment.');
+  const status = await request(server, 'account/status', {});
+  const email = isRecord(status) ? readString(status, 'email') : null;
+  if (
+    !isRecord(status) ||
+    status['signedIn'] !== true ||
+    !email ||
+    email.trim().toLowerCase() !== identity.email.trim().toLowerCase()
+  )
+    throw new Error(
+      'The remote CLI must already be signed in to the same account. Local sign-in credentials are never forwarded over SSH.',
+    );
+}
+
 function queueAccountSync(server: RunningServer): Promise<void> {
   const bridge = accountBridge;
   if (!bridge) return accountSyncChain;
   accountSyncChain = accountSyncChain.then(async () => {
     if (server.closed) return;
+    if (hasSshEnvironment(server.root.id)) {
+      try {
+        await assertSshAccount(server);
+      } catch (error) {
+        closeServer(server, error instanceof Error ? error : new Error(String(error)));
+      }
+      return;
+    }
     try {
       const outcome = await reconcileDeveloperAccount(
         (method, params, timeoutMs) => request(server, method, params, timeoutMs),
@@ -1085,18 +1162,41 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
   lastAdvertised = server.advertised;
 }
 
-function ensureServer(root: WorkspaceRoot): RunningServer {
+const serverLaunches = new Map<string, { promise: Promise<RunningServer>; cancelled: boolean }>();
+async function ensureServer(root: WorkspaceRoot): Promise<RunningServer> {
+  const existing = servers.get(root.id);
+  if (existing && !existing.closed) return existing;
+  const pending = serverLaunches.get(root.id);
+  if (pending) return pending.promise;
+  let resolve!: (server: RunningServer) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<RunningServer>((accept, refuse) => {
+    resolve = accept;
+    reject = refuse;
+  });
+  const entry = {
+    promise: promise.finally(() => {
+      if (serverLaunches.get(root.id) === entry) serverLaunches.delete(root.id);
+    }),
+    cancelled: false,
+  };
+  serverLaunches.set(root.id, entry);
+  void launchServer(root, () => !entry.cancelled).then(resolve, reject);
+  return entry.promise;
+}
+async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promise<RunningServer> {
   const existing = servers.get(root.id);
   if (existing && !existing.closed) return existing;
 
-  if (!mayRunIn(root)) {
+  if (!hasSshEnvironment(root.id) && !mayRunIn(root)) {
     throw new DeveloperAgentNotAllowedError(
       `Coding sessions are not allowed in ${root.name} right now. Start a session in that folder to allow them.`,
     );
   }
 
   try {
-    if (!statSync(root.path).isDirectory()) throw new Error('not a directory');
+    if (!hasSshEnvironment(root.id) && !statSync(root.path).isDirectory())
+      throw new Error('not a directory');
   } catch {
     throw new DeveloperRuntimeUnavailableError(
       `${root.name} is no longer on this Mac, so no coding session can run in it.`,
@@ -1104,13 +1204,37 @@ function ensureServer(root: WorkspaceRoot): RunningServer {
     );
   }
 
-  const { binary } = selectRuntimeBinary();
-  const program = runtimeBinary();
+  const { binary, source } = selectRuntimeBinary();
+  const remote = hasSshEnvironment(root.id) ? await sshLaunch(root.id) : null;
+  if (!allowed() || (remote && !hasSshEnvironment(root.id)))
+    throw new Error('The runtime launch was cancelled.');
+  const program = remote?.program ?? runtimeBinary();
+  // The signed bundle pairs this host with a CLI that accepts process-scoped
+  // consent. External CLIs retain their existing trust setup and argument ABI.
+  const consentAt = !remote && source === 'bundled' ? workspaceConsentAtMs(root) : null;
+  if (
+    !remote &&
+    source === 'bundled' &&
+    (consentAt === null || !Number.isSafeInteger(consentAt) || consentAt < 0)
+  )
+    throw new DeveloperAgentNotAllowedError(
+      'Allow commands in this folder again to provide its current consent.',
+    );
+  const localArgs =
+    source === 'bundled'
+      ? [
+          'app-server',
+          '--workspace-consent',
+          root.path,
+          '--workspace-consent-at-ms',
+          String(consentAt),
+        ]
+      : ['app-server'];
   let child: ChildProcessWithoutNullStreams;
   try {
-    child = spawnRuntime(program, ['app-server'], {
-      cwd: root.path,
-      env: runtimeEnvironment(),
+    child = spawnRuntime(program, remote?.args ?? localArgs, {
+      cwd: remote ? os.homedir() : root.path,
+      env: remote?.env ?? runtimeEnvironment(),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       detached: process.platform !== 'win32',
@@ -1169,8 +1293,12 @@ function ensureServer(root: WorkspaceRoot): RunningServer {
 }
 
 async function readyServer(root: WorkspaceRoot): Promise<RunningServer> {
-  const server = ensureServer(root);
+  const server = await ensureServer(root);
   await server.ready;
+  if (hasSshEnvironment(root.id)) {
+    await assertSshAccount(server);
+    verifySshWorkspace(root.id, await request(server, 'workspace/identity', {}));
+  }
   return server;
 }
 
@@ -1206,7 +1334,7 @@ function requireAdvertised(
 }
 
 function requireRoot(rootId: string): WorkspaceRoot {
-  const root = getRoot(rootId);
+  const root = hasSshEnvironment(rootId) ? requireSshRoot(rootId) : getRoot(rootId);
   if (!root) throw new DeveloperRuntimeUnavailableError('That folder is no longer approved.');
   return root;
 }
@@ -1336,6 +1464,7 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
   return {
     id,
     rootId,
+    ...(hasSshEnvironment(rootId) ? { environment: 'ssh' as const } : {}),
     title: readString(raw, 'title') ?? 'Untitled session',
     cwd: readString(raw, 'cwd') ?? '',
     model: readString(raw, 'model'),
@@ -1359,7 +1488,14 @@ async function listForRoot(
   root: WorkspaceRoot,
   includeCloud: boolean,
 ): Promise<DeveloperSessionGroup[]> {
-  const { git, unavailableReason } = await readWorkspaceGit(root);
+  const remote = hasSshEnvironment(root.id);
+  const { git, unavailableReason } = remote
+    ? {
+        git: null,
+        unavailableReason:
+          'SSH file changes are reviewed through agent output and transcript diffs. The host file editor and PTY are unavailable.',
+      }
+    : await readWorkspaceGit(root);
   const group: DeveloperSessionGroup = {
     rootId: root.id,
     name: root.name,
@@ -1382,7 +1518,7 @@ async function listForRoot(
         .filter((session): session is LocalDeveloperSession => session !== null)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     }
-    const awaiting = await serversAwaitingApproval(server);
+    const awaiting = remote ? [] : await serversAwaitingApproval(server);
     if (awaiting.length > 0) group.mcpAwaitingApproval = awaiting;
   } catch (error) {
     group.unavailable =
@@ -1392,7 +1528,7 @@ async function listForRoot(
     return [group];
   }
 
-  return [group, ...(await worktreeGroups(root))];
+  return remote ? [group] : [group, ...(await worktreeGroups(root))];
 }
 
 const MCP_APPROVAL_SCOPES: readonly DeveloperMcpApprovalScope[] = ['project', 'plugin'];
@@ -1717,7 +1853,7 @@ export async function listDeveloperSessions(
   options: { includeCloud?: boolean } = {},
 ): Promise<DeveloperSessionList> {
   const groups = await Promise.all(
-    listRoots()
+    [...listRoots(), ...listSshRoots()]
       .filter(includeRoot)
       .map((root) => listForRoot(root, options.includeCloud === true)),
   );
@@ -1739,6 +1875,12 @@ function toPanelActiveTurn(raw: unknown): DeveloperActiveTurn | null {
   return {
     turnId,
     partialResponse: typeof active['partialResponse'] === 'string' ? active['partialResponse'] : '',
+    ...(readCursor(active, 'nextDeltaIndex') === undefined
+      ? {}
+      : { nextDeltaIndex: readCursor(active, 'nextDeltaIndex') }),
+    ...(readCursor(active, 'nextEventSequence') === undefined
+      ? {}
+      : { nextEventSequence: readCursor(active, 'nextEventSequence') }),
     approvals: approvals.flatMap((entry) => {
       const approval = isRecord(entry) ? toApprovalRequest(entry) : null;
       return approval ? [approval] : [];
@@ -1750,6 +1892,34 @@ function toPanelActiveTurn(raw: unknown): DeveloperActiveTurn | null {
       return requestId && question ? [{ requestId, question }] : [];
     }),
   };
+}
+
+function toChildTasks(raw: unknown): DeveloperChildTask[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(-50).flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = readString(item, 'id');
+    const title = readString(item, 'title');
+    const parentSessionId = readString(item, 'parentSessionId');
+    const state = readString(item, 'state');
+    if (
+      !id ||
+      !title ||
+      !parentSessionId ||
+      !state ||
+      ![
+        'queued',
+        'running',
+        'paused',
+        'awaiting_input',
+        'completed',
+        'cancelled',
+        'failed',
+      ].includes(state)
+    )
+      return [];
+    return [{ id, title, parentSessionId, state: state as DeveloperChildTask['state'] }];
+  });
 }
 
 export async function readDeveloperSession(
@@ -1768,6 +1938,7 @@ export async function readDeveloperSession(
     messages: Array.isArray(messages) ? (messages as DeveloperMessage[]) : [],
     truncated: isRecord(result) && result['transcriptTruncated'] === true,
     activeTurn: toPanelActiveTurn(reconnect),
+    childTasks: toChildTasks(isRecord(result) ? result['childTasks'] : null),
   };
 }
 
@@ -1835,6 +2006,7 @@ export async function readDeveloperSessionActivity(
       messages: Array.isArray(messages) ? (messages as DeveloperMessage[]) : [],
       truncated: isRecord(read) && read['transcriptTruncated'] === true,
       activeTurn: toPanelActiveTurn(reconnect),
+      childTasks: toChildTasks(isRecord(read) ? read['childTasks'] : null),
     },
     branch: isRecord(thread) ? readString(thread, 'gitBranch') : null,
     fileChanges: toFileChanges(isRecord(read) ? read['fileChanges'] : null),
@@ -1857,6 +2029,8 @@ export async function startDeveloperSession(
 ): Promise<StartedDeveloperSession> {
   const input = { rootId, model, ...placement };
   const title = placement.title;
+  if (input.environment === 'ssh' && !hasSshEnvironment(rootId))
+    throw new Error('Choose an allowed SSH environment before starting an SSH session.');
   if (input.environment !== 'worktree') {
     const root = await resolveRoot(rootId);
     const server = await readyServer(root);
@@ -2257,10 +2431,18 @@ export function startDeveloperTurn(input: DeveloperTurnRequest): Promise<{ turnI
 async function sendTurn(
   input: DeveloperTurnRequest,
   agentModeFor: (server: RunningServer) => DeveloperAgentMode | null,
+  stillAuthorized?: () => boolean,
 ): Promise<{ turnId: string }> {
   const root = await resolveRoot(input.rootId);
   const server = await readyServer(root);
+  await queueAccountSync(server);
+  if (!hasSshEnvironment(root.id) && !mayRunIn(root))
+    throw new DeveloperAgentNotAllowedError(
+      `Coding sessions are not allowed in ${root.name} right now. Start a session in that folder to allow them.`,
+    );
   const agentMode = agentModeFor(server);
+  if (stillAuthorized && !stillAuthorized())
+    throw new Error('The routine grant changed before its turn could start.');
   const result = await request(server, 'turn/start', {
     threadId: input.threadId,
     input: turnInput(input.text, input.images),
@@ -2293,6 +2475,13 @@ export function startRemoteDeveloperTurn(input: DeveloperTurnRequest): Promise<{
       remoteTurnAgentMode(input.agentMode) ??
       (server.advertised?.bypassPerTurn ? null : DEVELOPER_UNNAMED_TURN_AGENT_MODE),
   );
+}
+
+export function startUnattendedDeveloperTurn(
+  input: DeveloperTurnRequest,
+  stillAuthorized: () => boolean,
+): Promise<{ turnId: string }> {
+  return sendTurn(input, () => 'ask', stillAuthorized);
 }
 
 export async function steerDeveloperTurn(input: DeveloperTurnSteer): Promise<{ turnId: string }> {
@@ -2386,6 +2575,16 @@ export async function addDeveloperMemory(
   return { scope: savedScope as MemoryScope, path };
 }
 
+export async function interruptOwnedDeveloperTurn(
+  rootId: string,
+  threadId: string,
+  turnId: string,
+): Promise<void> {
+  const server = servers.get(rootId);
+  if (!server) return;
+  await request(server, 'turn/interrupt', { threadId, turnId });
+}
+
 export async function interruptDeveloperTurn(
   rootId: string,
   threadId: string,
@@ -2476,11 +2675,14 @@ function terminate(server: RunningServer): void {
 }
 
 export function stopDeveloperRuntime(rootId: string): void {
+  const pending = serverLaunches.get(rootId);
+  if (pending) pending.cancelled = true;
   const server = servers.get(rootId);
   if (server) terminate(server);
 }
 
 export function stopAllDeveloperRuntimes(): void {
+  for (const pending of serverLaunches.values()) pending.cancelled = true;
   for (const server of [...servers.values()]) terminate(server);
 }
 

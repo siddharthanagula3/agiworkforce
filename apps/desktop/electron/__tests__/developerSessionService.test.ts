@@ -27,7 +27,15 @@ const statSync = vi.fn(() => ({ isDirectory: () => true }));
 const accessSync = vi.fn();
 const constants = { X_OK: 1 };
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }));
+let packagedHost = false;
+vi.mock('electron', () => ({
+  app: {
+    getPath: () => '/tmp',
+    get isPackaged() {
+      return packagedHost;
+    },
+  },
+}));
 vi.mock('node:fs', () => ({
   statSync,
   accessSync,
@@ -110,6 +118,26 @@ class FakeChild extends EventEmitter {
     this.stdout.emit('data', `${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
   }
 }
+
+const ssh = vi.hoisted(() => ({
+  active: false,
+  launch: vi.fn(),
+  verify: vi.fn(),
+  root: {
+    id: 'ssh:' + 'a'.repeat(64),
+    path: '/srv/owned-project',
+    name: 'Owned SSH fixture',
+    grantedAtMs: 1,
+    lastOpenedAtMs: 1,
+  },
+}));
+vi.mock('../runtime/sshEnvironments', () => ({
+  hasSshEnvironment: (id: string) => ssh.active && id === ssh.root.id,
+  requireSshRoot: () => ssh.root,
+  listSshRoots: () => (ssh.active ? [ssh.root] : []),
+  sshLaunch: (...args: unknown[]) => ssh.launch(...args),
+  verifySshWorkspace: (...args: unknown[]) => ssh.verify(...args),
+}));
 
 const BASE_CAPABILITIES = { threads: true, turns: true, streaming: true, approvals: true };
 
@@ -198,6 +226,8 @@ async function loadService(
     approveDeviceCode: (userCode: string) => Promise<void>;
   },
   answersUserInput?: () => boolean,
+  preferredBinary = 'agi',
+  consentAtMs?: number,
 ) {
   vi.resetModules();
   const children: FakeChild[] = [];
@@ -218,8 +248,9 @@ async function loadService(
   loadedServices.push(service);
   service.configureDeveloperSessions({
     emit: (rootId, event) => events.push({ rootId, event }),
-    resolveBinary: () => 'agi',
+    resolveBinary: () => preferredBinary,
     mayRunIn: (candidate) => agentAllowed(candidate),
+    workspaceConsentAtMs: () => consentAtMs ?? null,
     spawn: spawn as never,
     ...(accountBridge ? { accountBridge } : {}),
     ...(answersUserInput ? { answersUserInput } : {}),
@@ -229,7 +260,16 @@ async function loadService(
 }
 
 beforeEach(() => {
+  packagedHost = false;
+  agentAllowed = () => true;
   vi.clearAllMocks();
+  ssh.active = false;
+  ssh.launch.mockReset().mockResolvedValue({
+    program: '/usr/bin/ssh',
+    args: ['-T', 'owned.example.invalid', 'exec agi app-server'],
+    env: { HOME: '/owned-home' },
+  });
+  ssh.verify.mockReset();
   listRoots.mockReturnValue([root]);
   getRoot.mockReturnValue(root);
   statSync.mockReturnValue({ isDirectory: () => true });
@@ -275,6 +315,41 @@ describe('developer session runtime', () => {
     );
   });
 
+  it('carries an approved folder into the paired CLI as process consent', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+    Object.defineProperty(process, 'resourcesPath', {
+      configurable: true,
+      value: '/owned/e10/resources',
+    });
+    packagedHost = true;
+    statSync.mockImplementation(() => ({ isDirectory: () => true, isFile: () => true }));
+    try {
+      const { service, spawn } = await loadService(
+        defaultResponder,
+        undefined,
+        undefined,
+        '',
+        1_700_000_000_123,
+      );
+      await service.listDeveloperSessions();
+      expect(spawn).toHaveBeenCalledWith(
+        '/owned/e10/resources/agi-cli/agi',
+        [
+          'app-server',
+          '--workspace-consent',
+          root.path,
+          '--workspace-consent-at-ms',
+          '1700000000123',
+        ],
+        expect.objectContaining({ cwd: root.path }),
+      );
+    } finally {
+      packagedHost = false;
+      if (descriptor) Object.defineProperty(process, 'resourcesPath', descriptor);
+      else Reflect.deleteProperty(process, 'resourcesPath');
+    }
+  });
+
   it('points the app-server at the origin the shell itself is signed in to', async () => {
     const { service, spawn } = await loadService();
 
@@ -318,6 +393,65 @@ describe('developer session runtime', () => {
       for (const name of lifted) delete process.env[name];
     }
   });
+
+  it.each([false, true])(
+    'waits for account reconciliation and rechecks command consent before the first turn (revoked: %s)',
+    async (revoke) => {
+      let release!: () => void;
+      const approval = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const approveDeviceCode = vi.fn(() => approval);
+      let signedIn = false;
+      const asked: string[] = [];
+      const { service } = await loadService(
+        (method) => {
+          asked.push(method);
+          if (method === 'account/status')
+            return { signedIn, email: signedIn ? 'qa@agiworkforce.com' : null };
+          if (method === 'account/login') return { loginId: 'login-1', userCode: 'QRST-9876' };
+          if (method === 'account/login/wait') {
+            signedIn = true;
+            return { outcome: 'completed', account: { signedIn: true } };
+          }
+          return defaultResponder(method);
+        },
+        {
+          readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+          approveDeviceCode,
+        },
+      );
+      await service.listDeveloperSessions();
+      await vi.waitFor(() => expect(approveDeviceCode).toHaveBeenCalledOnce());
+      const starting = service.startDeveloperTurn({
+        rootId: root.id,
+        threadId: thread.id,
+        text: 'Read the owned README.',
+        agentMode: 'ask',
+      });
+      const outcome = starting.then(
+        (value) => ({ value, error: null }),
+        (error: unknown) => ({ value: null, error }),
+      );
+      try {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(asked).not.toContain('turn/start');
+        if (revoke) agentAllowed = () => false;
+      } finally {
+        release();
+        await outcome;
+      }
+      const result = await outcome;
+      if (revoke) {
+        expect(result.error).toBeInstanceOf(Error);
+        expect(asked).not.toContain('turn/start');
+      } else {
+        expect(result.error).toBeNull();
+        expect(signedIn).toBe(true);
+        expect(asked.indexOf('account/login/wait')).toBeLessThan(asked.indexOf('turn/start'));
+      }
+    },
+  );
 
   it('signs a new app-server in as the shell account and refreshes its models', async () => {
     let signedIn = false;
@@ -1477,8 +1611,13 @@ describe('developer session runtime', () => {
     });
     const child = children[0];
     child?.notify('turn/started', { threadId: thread.id, turnId });
-    child?.notify('turn/output_delta', { threadId: thread.id, turnId, delta: 'desktop ' });
-    child?.notify('turn/output_delta', { threadId: thread.id, turnId, delta: 'leg ok' });
+    child?.notify('turn/output_delta', {
+      threadId: thread.id,
+      turnId,
+      delta: 'desktop ',
+      index: 0,
+    });
+    child?.notify('turn/output_delta', { threadId: thread.id, turnId, delta: 'leg ok', index: 1 });
     child?.notify('turn/completed', {
       threadId: thread.id,
       turnId,
@@ -1496,6 +1635,34 @@ describe('developer session runtime', () => {
     ]);
     expect(events.every((entry) => entry.rootId === root.id)).toBe(true);
     expect(events[3]?.event).toMatchObject({ outcome: 'completed', response: 'desktop leg ok' });
+    expect(events[1]?.event).toMatchObject({ index: 0 });
+    expect(events[2]?.event).toMatchObject({ index: 1 });
+  });
+
+  it('retires a cancelled host approval using the canonical sequenced event', async () => {
+    const { service, children, events } = await loadService();
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'read it' });
+    children[0]?.notify('turn/agent_event', {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: thread.id,
+      turnId: 'turn-1',
+      sequence: 4,
+      emittedAtMs: 1,
+      event: {
+        type: 'approval-resolved',
+        approvalId: 'cancelled-child-request',
+        decision: 'cancelled',
+      },
+    });
+    expect(events.at(-1)?.event).toEqual({
+      type: 'approval-answered',
+      threadId: thread.id,
+      turnId: 'turn-1',
+      sequence: 4,
+      requestId: 'cancelled-child-request',
+      decision: 'deny_and_stop',
+      approved: false,
+    });
   });
 
   it('carries a tool call through as a started and finished pair', async () => {
@@ -1535,6 +1702,12 @@ describe('developer session runtime', () => {
     expect(events.map((entry) => entry.event.type)).toEqual(['tool-started', 'tool-finished']);
     expect(events[0]?.event).toMatchObject({ summary: 'Read README.md', toolCallId: 'call-1' });
     expect(events[1]?.event).toMatchObject({ output: '# QA project', isError: false });
+
+    expect(
+      events
+        .filter(({ event }) => event.type === 'tool-started' || event.type === 'tool-finished')
+        .map(({ event }) => event.sequence),
+    ).toEqual([0, 1]);
   });
 
   it('carries the queue, the command line, each changed file and the turn diff through', async () => {
@@ -2066,6 +2239,8 @@ describe('developer session runtime', () => {
     expect(transcript.activeTurn).toEqual({
       turnId: 'turn-live',
       partialResponse: 'half',
+      nextDeltaIndex: 1,
+      nextEventSequence: 2,
       approvals: [
         {
           requestId: 'ask-1',
@@ -2079,6 +2254,24 @@ describe('developer session runtime', () => {
       ],
       questions: [{ requestId: 'q-1', question: 'Which branch?' }],
     });
+  });
+
+  it('projects retained child lifecycle records and tolerates legacy or malformed records', async () => {
+    const child = {
+      id: 'subagent_owned',
+      title: 'Owned child',
+      parentSessionId: thread.id,
+      state: 'paused',
+    };
+    const { service } = await loadService((method, params) =>
+      method === 'thread/read'
+        ? {
+            ...(defaultResponder(method, params) as object),
+            childTasks: [child, { ...child, state: 'invented' }, null],
+          }
+        : defaultResponder(method, params),
+    );
+    expect((await service.readDeveloperSession(root.id, thread.id)).childTasks).toEqual([child]);
   });
 
   it('reads no running turn when the CLI reports none', async () => {
@@ -2406,5 +2599,101 @@ describe('a sign-out with no app-server running', () => {
       'could not sign this computer out',
     );
     expect(rememberShellSignedCliIn).not.toHaveBeenCalled();
+  });
+});
+
+describe('SSH transport uses the existing session owner', () => {
+  const account = () => ({
+    readShellIdentity: vi.fn(async () => ({ signedIn: true, email: 'owner@example.invalid' })),
+    approveDeviceCode: vi.fn(async () => undefined),
+  });
+  const responder: Responder = (method, params) =>
+    method === 'account/status'
+      ? { signedIn: true, email: 'owner@example.invalid' }
+      : method === 'workspace/identity'
+        ? { cwd: ssh.root.path, rootKey: 'dev:ino' }
+        : defaultResponder(method, params);
+
+  it('routes SSH sessions over their owned transport and never synchronizes local sign-in credentials to it', async () => {
+    const bridge = account();
+    const { service, spawn, children } = await loadService(responder, bridge);
+    ssh.active = true;
+    const transcript = await service.readDeveloperSession(ssh.root.id, thread.id);
+    expect(transcript.session.environment).toBe('ssh');
+    expect(spawn.mock.calls[0]?.[0]).toBe('/usr/bin/ssh');
+    expect(ssh.verify).toHaveBeenCalledWith(ssh.root.id, {
+      cwd: ssh.root.path,
+      rootKey: 'dev:ino',
+    });
+    expect(
+      children[0]!.written.some((request) =>
+        ['account/login', 'account/login/wait', 'account/token', 'account/logout'].includes(
+          request.method,
+        ),
+      ),
+    ).toBe(false);
+    expect(bridge.approveDeviceCode).not.toHaveBeenCalled();
+    expect(statSync.mock.calls.some(([file]) => file === ssh.root.path)).toBe(false);
+  });
+
+  it('refuses a wrong remote account without transferring credentials or starting a turn', async () => {
+    const bridge = account();
+    const { service, children } = await loadService(
+      (method, params) =>
+        method === 'account/status'
+          ? { signedIn: true, email: 'different@example.invalid' }
+          : responder(method, params),
+      bridge,
+    );
+    ssh.active = true;
+    await expect(
+      service.startDeveloperTurn({
+        rootId: ssh.root.id,
+        threadId: thread.id,
+        text: 'owned fixture',
+      }),
+    ).rejects.toThrow(/same account/);
+    expect(
+      children[0]!.written.some(
+        (request) => request.method === 'turn/start' || request.method.startsWith('account/login'),
+      ),
+    ).toBe(false);
+    expect(bridge.approveDeviceCode).not.toHaveBeenCalled();
+  });
+
+  it('does not widen a caller scope filter to include SSH connections', async () => {
+    const { service, spawn } = await loadService(responder, account());
+    ssh.active = true;
+    expect((await service.listDeveloperSessions(() => false)).groups).toEqual([]);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates concurrent SSH runtime launches', async () => {
+    const { service, spawn } = await loadService(responder, account());
+    ssh.active = true;
+    await Promise.all([
+      service.readDeveloperSession(ssh.root.id, thread.id),
+      service.readDeveloperSession(ssh.root.id, thread.id),
+    ]);
+    expect(ssh.launch).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an SSH launch withdrawn while configuration inspection is pending', async () => {
+    const { service, spawn } = await loadService(responder, account());
+    ssh.active = true;
+    let finish!: (value: unknown) => void;
+    ssh.launch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const read = service.readDeveloperSession(ssh.root.id, thread.id);
+    await vi.waitFor(() => expect(ssh.launch).toHaveBeenCalledOnce());
+    service.stopDeveloperRuntime(ssh.root.id);
+    ssh.active = false;
+    finish({ program: '/usr/bin/ssh', args: [], env: {} });
+    await expect(read).rejects.toThrow(/cancelled/);
+    expect(spawn).not.toHaveBeenCalled();
   });
 });

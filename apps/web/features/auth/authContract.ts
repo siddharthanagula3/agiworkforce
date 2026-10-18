@@ -27,7 +27,8 @@ export type AuthPhase =
   | 'signing_in'
   | 'redirecting'
   | 'enterprise_redirecting'
-  | 'enterprise_browser';
+  | 'enterprise_browser'
+  | 'browser';
 
 export interface AuthSecondFactor {
   kind: AuthSecondFactorKind;
@@ -67,7 +68,7 @@ export type AuthResult =
   | { status: 'sent' }
   | {
       status: 'redirecting';
-      phase?: Extract<AuthPhase, 'enterprise_redirecting' | 'enterprise_browser'>;
+      phase?: Extract<AuthPhase, 'enterprise_redirecting' | 'enterprise_browser' | 'browser'>;
     }
   | { status: 'next'; step: AuthStep }
   | AuthFailure;

@@ -44,8 +44,11 @@ async function post(
   path: string,
   body: ArtifactRuntimeCompleteRequest | ArtifactRuntimeConnectorsRequest | ArtifactStorageRequest,
   extraHeaders: Record<string, string> = {},
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted();
   const response = await fetch(path, {
+    ...(signal ? { signal } : {}),
     method: 'POST',
     credentials: 'same-origin',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json', ...extraHeaders }),
@@ -69,9 +72,10 @@ async function post(
 export async function describeArtifactRuntimeConnectors(
   token: string,
   connectors: readonly string[],
+  signal?: AbortSignal,
 ): Promise<ArtifactRuntimeConnector[]> {
   const parsed = ArtifactRuntimeConnectorsResponseSchema.safeParse(
-    await post(artifactRuntimeConnectorsPath(token), { connectors: [...connectors] }),
+    await post(artifactRuntimeConnectorsPath(token), { connectors: [...connectors] }, {}, signal),
   );
   if (!parsed.success) throw new Error(REQUEST_FAILED);
   return parsed.data.connectors;
@@ -80,7 +84,7 @@ export async function describeArtifactRuntimeConnectors(
 export async function callArtifactRuntime(
   token: string,
   request: ArtifactRuntimeRequest,
-  options: { allowedTools?: readonly string[] } = {},
+  options: { allowedTools?: readonly string[]; signal?: AbortSignal } = {},
 ): Promise<unknown> {
   if (request.op === 'complete') {
     const payload = await post(
@@ -97,6 +101,7 @@ export async function callArtifactRuntime(
           operationId: crypto.randomUUID(),
         }),
       },
+      options.signal,
     );
     const parsed = ArtifactRuntimeCompleteResponseSchema.safeParse(payload);
     if (!parsed.success) throw new Error(REQUEST_FAILED);
@@ -105,7 +110,7 @@ export async function callArtifactRuntime(
   const body = storageBody(request);
   const parsed = parseArtifactStorageResponse(
     body.op,
-    await post(artifactRuntimeStoragePath(token), body),
+    await post(artifactRuntimeStoragePath(token), body, {}, options.signal),
   );
   if (parsed === undefined) throw new Error(REQUEST_FAILED);
   return parsed;

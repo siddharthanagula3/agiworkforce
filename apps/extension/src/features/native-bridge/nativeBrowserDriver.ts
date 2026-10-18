@@ -85,6 +85,23 @@ export class NativeBrowserDriver {
     if (!this.controller.signal.aborted) this.controller.abort(new Error(message));
   }
 
+  async openTab(
+    url: string,
+  ): Promise<{ tabId: number; url: string; destination: 'paired-browser'; sharedProfile: true }> {
+    const check = (): void => {
+      this.assertExternalOwnership();
+      throwIfCdpCancelled(this.signal);
+    };
+    check();
+    await authorizeBrowserToolUrl(url);
+    check();
+    const tab = await chrome.tabs.create({ url, active: true });
+    check();
+    if (!Number.isSafeInteger(tab.id))
+      throw new Error('The browser did not acknowledge the new tab.');
+    return { tabId: tab.id!, url, destination: 'paired-browser', sharedProfile: true };
+  }
+
   async resolveTabId(explicitTabId?: number): Promise<number | null> {
     this.assertExternalOwnership();
     throwIfCdpCancelled(this.signal);

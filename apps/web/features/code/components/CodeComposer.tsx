@@ -51,6 +51,10 @@ import {
   type CloudCodeTurnMode,
   type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
+import {
+  DEVELOPER_AGENT_MODE_LABELS,
+  type DeveloperAgentMode,
+} from '@agiworkforce/local-runtime-contract';
 import Link from 'next/link';
 import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
@@ -92,6 +96,7 @@ import {
 } from '../code-surface';
 import {
   LOCAL_CODE_COPY,
+  LOCAL_AGENT_MODE_HINTS,
   LOCAL_PLACEMENT_HEADING,
   LOCAL_PLACEMENT_HINTS,
   LOCAL_PLACEMENT_LABELS,
@@ -150,6 +155,7 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
 };
 
 export interface CodeLocalState {
+  agentMode: DeveloperAgentMode;
   supported: boolean;
   /** The shell can start a session in a new worktree, so the placement choice is offered. */
   worktrees: boolean;
@@ -1596,13 +1602,27 @@ export function CodeComposer({
               />
             ) : (
               <>
-                {turnControls && (
-                  <ApprovalModeControl
-                    turnSteps={cloudTurn ? turnSteps : null}
-                    onTurnStepsChange={onTurnStepsChange}
-                    turnMode={cloudTurn ? turnMode : null}
-                    onTurnModeChange={onTurnModeChange}
-                  />
+                {draft.environment === 'local' ? (
+                  <span
+                    className={
+                      local.agentMode === 'bypass'
+                        ? `${styles['localPermissionHint']} ${styles['controlButtonWarning']}`
+                        : styles['localPermissionHint']
+                    }
+                    title={LOCAL_AGENT_MODE_HINTS[local.agentMode]}
+                  >
+                    <Lock size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+                    {LOCAL_CODE_COPY.agentModeNow(DEVELOPER_AGENT_MODE_LABELS[local.agentMode])}
+                  </span>
+                ) : (
+                  turnControls && (
+                    <ApprovalModeControl
+                      turnSteps={cloudTurn ? turnSteps : null}
+                      onTurnStepsChange={onTurnStepsChange}
+                      turnMode={cloudTurn ? turnMode : null}
+                      onTurnModeChange={onTurnModeChange}
+                    />
+                  )
                 )}
                 <AttachMenu />
                 <button

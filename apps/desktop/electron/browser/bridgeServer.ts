@@ -731,7 +731,7 @@ async function handleLocalClientCommandRoute(
     });
     return;
   }
-  if (!pairingState().paired) {
+  if (!pairingState().paired && parsed.command !== 'browser_open_tab') {
     sendJson(response, 200, {
       version: LOCAL_CLIENT_PROTOCOL_VERSION,
       ok: false,

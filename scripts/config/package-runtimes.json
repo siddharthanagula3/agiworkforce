@@ -213,7 +213,11 @@
       "./signaling": "universal",
       "./source-url": "universal",
       "./uuidv7": "universal",
-      "./voice": "universal"
+      "./voice": "universal",
+      "./scheduling/dayparts": "universal",
+      "./scheduling/recurrence-rule": "universal",
+      "./scheduling/schedule-time": "universal",
+      "./scheduling/zoned-time": "universal"
     },
     "packages/tools/apply-patch": {
       ".": "server"

@@ -377,6 +377,18 @@ impl WorkspaceFileAuthority {
         self.root.path()
     }
 
+    pub(crate) fn identity(&self) -> Result<String> {
+        let held = Metadata::from_file(&self.root.file)?;
+        let named =
+            confined::open_ambient_dir(self.root.path(), cap_primitives::ambient_authority())?;
+        let current = Metadata::from_file(&named)?;
+        anyhow::ensure!(
+            same_identity(&held, &current),
+            "the granted workspace no longer owns its name"
+        );
+        Ok(format!("{}:{}", held.dev(), held.ino()))
+    }
+
     pub(crate) fn additional(&self) -> Vec<PathBuf> {
         self.additional
             .iter()

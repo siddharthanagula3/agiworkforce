@@ -4,7 +4,4 @@
  * One file of a turn, narrowed to some of its hunks or, with none named,
  * the whole file.
  */
-export type CheckpointSection = {
-  path: string;
-  hunks?: Array<number>;
-};
+export type CheckpointSection = { path: string; hunks?: Array<number> };

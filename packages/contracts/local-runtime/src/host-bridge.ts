@@ -391,6 +391,7 @@ export interface HostBridge {
    */
   readonly shell: HostShell;
   readonly appVersion: string;
+  readonly browserSignIn?: { readonly cancellation: true };
   invokeRuntime<T = unknown>(
     command: string,
     args?: Record<string, unknown>,

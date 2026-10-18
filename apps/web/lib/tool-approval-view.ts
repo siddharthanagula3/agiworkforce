@@ -367,6 +367,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Opens an address in the active tab of your paired Chrome. Only sites you approved in the extension can be opened.',
   },
+  browser_open_tab: {
+    label: 'Open a new browser tab',
+    description:
+      'Opens an address in a new tab in the controlled browser. AGI asks before connecting to the destination.',
+  },
   browser_click: {
     label: 'Click in Chrome',
     description:

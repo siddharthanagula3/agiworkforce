@@ -142,7 +142,7 @@ impl ExtensionPackage {
 
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i)?;
-            let name = entry.name().to_string();
+            let name = entry.name()?.into_owned();
             let size = entry.size();
             let is_dir = entry.is_dir();
 

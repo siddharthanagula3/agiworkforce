@@ -590,6 +590,14 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: true,
     declared: true,
   },
+
+  browser_open_tab: {
+    actionClass: 'external_send',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: true,
+    declared: true,
+  },
   browser_click: {
     actionClass: 'external_send',
     reversible: false,

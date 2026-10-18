@@ -49,8 +49,8 @@ function fixture(overrides = {}, files = {}, migration = MIGRATION) {
   roots.push(root);
   write(root, `${MIGRATIONS_DIR}/0001_tasks.sql`, migration);
   write(root, CONTRACT_PATH, JSON.stringify({ ...loadContract(REPO_ROOT), ...overrides }));
-  write(root, 'apps/web/lib/schedules/zoned-time.ts', ZONED);
-  write(root, 'apps/web/lib/schedules/schedule-time.ts', SCHEDULER);
+  write(root, 'packages/platform/utils/src/scheduling/zoned-time.ts', ZONED);
+  write(root, 'packages/platform/utils/src/scheduling/schedule-time.ts', SCHEDULER);
   for (const [relativePath, contents] of Object.entries(files)) write(root, relativePath, contents);
   return root;
 }
@@ -124,7 +124,7 @@ test('resolving a local time with a fixed offset fails', () => {
     fixture(
       {},
       {
-        'apps/web/lib/schedules/zoned-time.ts':
+        'packages/platform/utils/src/scheduling/zoned-time.ts':
           'export function zonedParts(at: Date) { return at.getTimezoneOffset(); }',
       },
     ),
@@ -139,7 +139,10 @@ test('a scheduler that resolves times without naming a zone fails', () => {
   const { errors } = checkTimeSemantics(
     fixture(
       {},
-      { 'apps/web/lib/schedules/schedule-time.ts': 'export const nextRunAt = () => new Date();' },
+      {
+        'packages/platform/utils/src/scheduling/schedule-time.ts':
+          'export const nextRunAt = () => new Date();',
+      },
     ),
   );
   assert.ok(
@@ -153,7 +156,7 @@ test('a presentation helper pinned to the server zone fails', () => {
     fixture(
       {},
       {
-        'apps/web/lib/schedules/schedule-time.ts':
+        'packages/platform/utils/src/scheduling/schedule-time.ts':
           "export const f = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC' });\nexport const validateTimeZone = (z: string) => z;",
       },
     ),

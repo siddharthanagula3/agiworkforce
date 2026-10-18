@@ -1,5 +1,6 @@
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
   type ManagedCloudScheduleShareSnapshot,
 } from '@agiworkforce/cloud-contracts';
@@ -57,6 +58,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   retryBackoffMinutes: '5',
   missedExecutionPolicy: 'run_once',
   conditionUrl: '',
+  notificationSettings: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS },
   sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES },
   connectors: null,
 };
@@ -72,6 +74,7 @@ export function createInitialScheduleDraft(): ScheduleDraft {
   return {
     ...INITIAL_SCHEDULE_DRAFT,
     daysOfWeek: [...INITIAL_SCHEDULE_DRAFT.daysOfWeek],
+    notificationSettings: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS },
     sources: { ...INITIAL_SCHEDULE_DRAFT.sources },
     timezone,
   };
@@ -248,6 +251,9 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     retryBackoffMinutes: String(Math.round((task.retryBackoffSeconds ?? 300) / 60)),
     missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
     conditionUrl: task.condition?.url ?? '',
+    notificationSettings: {
+      ...(task.notificationSettings ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS),
+    },
     sources: { ...(task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES) },
     connectors: task.connectors ? [...task.connectors] : null,
   };
@@ -538,6 +544,9 @@ export function validateAndBuildScheduleRequest(
       missedExecutionPolicy:
         draft.recurrence === 'event' ? 'run_once' : draft.missedExecutionPolicy,
       condition,
+      notificationSettings: {
+        ...(draft.notificationSettings ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS),
+      },
       sources: draft.sources,
       connectors: draft.connectors,
     },

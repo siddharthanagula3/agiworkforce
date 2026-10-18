@@ -482,6 +482,11 @@ impl CliError {
     /// exactly what to try next.
     pub fn hint(&self) -> String {
         match self {
+            CliError::Api { provider, status: 403, .. }
+                if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
+            {
+                "Review the plan or workspace policy named in the server's refusal before trying again.".to_string()
+            }
             CliError::Api {
                 provider, status, ..
             } if (500..600).contains(status)
@@ -868,6 +873,11 @@ impl CliError {
                 provider, status, ..
             } => (
                 match status {
+                    403 if provider
+                        == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
+                    {
+                        TurnFailureCode::InvalidRequest
+                    }
                     401 | 403 => TurnFailureCode::ProviderAuthInvalid,
                     429 => TurnFailureCode::ProviderRateLimited,
                     408 | 504 => TurnFailureCode::Timeout,

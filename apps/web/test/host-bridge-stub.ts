@@ -37,6 +37,7 @@ export function hostBridgeStub(overrides: Partial<HostBridge> = {}): HostBridge 
     platform: 'electron-darwin',
     shell: 'electron',
     appVersion: '1.2.0',
+    browserSignIn: { cancellation: true },
     invokeRuntime: async () => ({
       ok: false as const,
       error: { code: 'unsupported-platform' as const, message: 'no runtime in this test host' },

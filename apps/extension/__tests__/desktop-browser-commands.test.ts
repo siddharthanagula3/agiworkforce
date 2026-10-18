@@ -463,3 +463,52 @@ describe('desktop-issued browser commands', () => {
     });
   });
 });
+
+describe('session-owned fresh browser tabs', () => {
+  it('opens an approved URL without resolving or replacing the active tab', async () => {
+    approveSite();
+    const openTab = vi.fn(async () => ({ tabId: 88, destination: 'paired-browser' }));
+    const resolveTabId = vi.fn();
+    const result = await runDesktopBrowserCommand(
+      request('browser_open_tab', { url: `${SITE}/new` }),
+      { ...context(vi.fn()), resolveTabId, openTab },
+    );
+    expect(result).toMatchObject({ ok: true, value: { tabId: 88 } });
+    expect(resolveTabId).not.toHaveBeenCalled();
+    expect(openTab).toHaveBeenCalledExactlyOnceWith(`${SITE}/new`);
+  });
+  it('refuses an unapproved destination and workspace denial before tab creation', async () => {
+    const openTab = vi.fn();
+    let result = await runDesktopBrowserCommand(
+      request('browser_open_tab', { url: `${SITE}/new` }),
+      { ...context(vi.fn()), openTab },
+    );
+    expect(result.ok).toBe(false);
+    approveSite();
+    result = await runDesktopBrowserCommand(
+      {
+        ...request('browser_open_tab', { url: `${SITE}/new` }),
+        siteRules: { allow: [], deny: ['allowed.example'] },
+      },
+      { ...context(vi.fn()), openTab },
+    );
+    expect(result.ok).toBe(false);
+    expect(openTab).not.toHaveBeenCalled();
+  });
+  it.each(['file:///etc/passwd', 'https://u:p@allowed.example/'])(
+    'refuses %s before tab creation',
+    async (url) => {
+      approveSite();
+      const openTab = vi.fn();
+      expect(
+        (
+          await runDesktopBrowserCommand(request('browser_open_tab', { url }), {
+            ...context(vi.fn()),
+            openTab,
+          })
+        ).ok,
+      ).toBe(false);
+      expect(openTab).not.toHaveBeenCalled();
+    },
+  );
+});

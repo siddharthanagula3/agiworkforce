@@ -5,12 +5,12 @@
   "serverStampedColumnMatch": "^(created_at|occurred_at|recorded_at)$",
   "serverDefaultMatch": "default\\s+(now\\(\\)|current_timestamp|timezone\\s*\\(|clock_timestamp)",
   "zonedTime": {
-    "module": "apps/web/lib/schedules/zoned-time.ts",
+    "module": "packages/platform/utils/src/scheduling/zoned-time.ts",
     "evidence": ["Intl.DateTimeFormat", "timeZone"],
-    "consumers": ["apps/web/lib/schedules/schedule-time.ts"]
+    "consumers": ["packages/platform/utils/src/scheduling/schedule-time.ts"]
   },
   "readerZone": {
-    "module": "apps/web/lib/schedules/schedule-time.ts",
+    "module": "packages/platform/utils/src/scheduling/schedule-time.ts",
     "evidence": ["timeZone", "validateTimeZone"],
     "forbidden": ["timeZone: 'UTC'"]
   },

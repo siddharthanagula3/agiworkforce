@@ -6,6 +6,8 @@ import {
   APPLICATION_COMMANDS,
   BROWSER_PAIRING_COMMANDS,
   BROWSER_SIGN_IN_START,
+  BROWSER_SIGN_IN_CANCEL,
+  BROWSER_SIGN_IN_STATE,
   BROWSER_STEP_COMMAND,
   CLIPBOARD_COMMANDS,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
@@ -17,6 +19,8 @@ import {
   DISPATCH_TASK_RUNNER_READY,
   FILESYSTEM_COMMANDS,
   LOCAL_INFERENCE_COMMANDS,
+  LOCAL_ROUTINE_COMMANDS,
+  SSH_ENVIRONMENT_COMMANDS,
   PERMISSION_COMMANDS,
   REMOTE_CONTROL_COMMANDS,
   SHELL_COMMANDS,
@@ -67,18 +71,21 @@ const readClipboard = vi.fn();
 const writeTextFile = vi.fn();
 class WriteConflict extends Error {}
 const sendBrowserCommand = vi.fn();
+const browserConnection = { paired: true, connected: true };
+const openExternal = vi.fn(async () => undefined);
 const send = vi.fn();
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getVersion: () => '1.8.0' },
   dialog: { showOpenDialog: vi.fn(), showMessageBox: vi.fn() },
-  shell: { openPath: vi.fn() },
+  shell: { openPath: vi.fn(), openExternal },
 }));
 
 const REVIEW = { decisions: [], system: {} };
 const reviewPermissions = vi.fn(() => REVIEW);
 vi.mock('../runtime/permissionManager', () => ({
   authorizeRemoteCommand: vi.fn(),
+  permissionRevision: () => 1,
   describePermission: (capability: string, scope: PermissionScope) =>
     `${capability} in ${scope.target ?? 'this Mac'}`,
   describePermissionDecision: vi.fn(),
@@ -245,7 +252,7 @@ vi.mock('../runtime/deviceIdentity', () => ({
 }));
 vi.mock('../browser/bridgeServer', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  pairingState: () => ({ paired: true }),
+  pairingState: () => browserConnection,
   sendBrowserCommand,
 }));
 const startRemoteControl = vi.fn((args: Record<string, unknown>) => ({ status: 'waiting', args }));
@@ -295,6 +302,7 @@ const MCP_LAUNCH = {
 };
 const readDeveloperMcpApproval = vi.fn(async () => MCP_LAUNCH);
 const grantDeveloperMcpApproval = vi.fn(async () => []);
+const startDeveloperSession = vi.fn();
 const startDeveloperTurn = vi.fn(async () => ({ turnId: 'turn-1' }));
 const steerDeveloperTurn = vi.fn(async () => ({ turnId: 'turn-1' }));
 const answerDeveloperApproval = vi.fn(async () => true);
@@ -345,6 +353,7 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   readDeveloperMcpApproval,
   grantDeveloperMcpApproval,
   startDeveloperTurn,
+  startDeveloperSession,
   steerDeveloperTurn,
   answerDeveloperApproval,
   answerDeveloperUserInput,
@@ -405,6 +414,8 @@ beforeEach(() => {
   shellRunsIn.mockReturnValue([]);
   listPermissions.mockReturnValue([]);
   pageUrl = 'https://agiworkforce.com/code';
+  browserConnection.paired = true;
+  browserConnection.connected = true;
   readWorktreeSetupScript.mockResolvedValue({
     path: '/approved/project/.agiworkforce/worktree-setup',
     worktree: 'project · retry fix',
@@ -2971,6 +2982,8 @@ describe('dispatch, developer turns', () => {
 describe('the commands the contract lists', () => {
   const LISTED = new Set<string>([
     ...WORKSPACE_COMMANDS,
+    ...LOCAL_ROUTINE_COMMANDS,
+    ...SSH_ENVIRONMENT_COMMANDS,
     ...FILESYSTEM_COMMANDS,
     ...SHELL_COMMANDS,
     ...APPLICATION_COMMANDS,
@@ -2987,6 +3000,8 @@ describe('the commands the contract lists', () => {
   /** Answered here although no contract list names them. */
   const ANSWERED_UNLISTED = new Set<string>([
     BROWSER_SIGN_IN_START,
+    BROWSER_SIGN_IN_CANCEL,
+    BROWSER_SIGN_IN_STATE,
     DISPATCH_TASK_REPORT,
     DISPATCH_TASK_RUNNER_READY,
     'background_activity',
@@ -3016,6 +3031,8 @@ describe('the commands the contract lists', () => {
   ]);
   const CONSTANT_LABELS: Record<string, string> = {
     BROWSER_SIGN_IN_START,
+    BROWSER_SIGN_IN_CANCEL,
+    BROWSER_SIGN_IN_STATE,
     BROWSER_STEP_COMMAND,
     DEVICE_REGISTRY_PROFILE_COMMAND,
     DISPATCH_TASK_REPORT,
@@ -3179,4 +3196,81 @@ describe('browser command cancellation at the dispatcher', () => {
       target: caller.name,
     });
   });
+});
+
+describe('session browser destination ownership', () => {
+  beforeEach(() => {
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false });
+    sendBrowserCommand.mockReset();
+  });
+  const caller = {
+    name: 'agi session owned-1',
+    subject: 'Session owned-1',
+    folder: null,
+    path: null,
+  };
+  const url = 'https://example.test/owned';
+  it('opens a fresh paired tab without replacing the active user tab', async () => {
+    sendBrowserCommand.mockResolvedValueOnce({ tabId: 91, destination: 'paired-browser' });
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    const result = await runBrowserCommand(null, 'browser_open_tab', { url }, caller);
+    expect(result).toMatchObject({ ok: true, value: { tabId: 91 } });
+    expect(sendBrowserCommand).toHaveBeenCalledWith(
+      'browser_open_tab',
+      { url },
+      undefined,
+      undefined,
+    );
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+  it('asks once before a disconnected browser falls back to the default browser', async () => {
+    browserConnection.connected = false;
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    expect(await runBrowserCommand(null, 'browser_open_tab', { url }, caller)).toMatchObject({
+      ok: true,
+      value: { destination: 'default-browser', sharedProfile: true },
+    });
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(url);
+    expect(sendBrowserCommand).not.toHaveBeenCalled();
+  });
+  it('keeps a denied fallback terminal', async () => {
+    browserConnection.connected = false;
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    expect(await runBrowserCommand(null, 'browser_open_tab', { url }, caller)).toMatchObject({
+      ok: false,
+    });
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+  it('does not fall back after an uncertain paired dispatch', async () => {
+    sendBrowserCommand.mockRejectedValueOnce(new Error('paired timeout'));
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    await expect(runBrowserCommand(null, 'browser_open_tab', { url }, caller)).rejects.toThrow(
+      'paired timeout',
+    );
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+  it('cancels a fallback before its reviewed URL is dispatched', async () => {
+    browserConnection.connected = false;
+    const controller = new AbortController();
+    showMessageBox.mockImplementationOnce(async () => {
+      controller.abort();
+      return { response: 1, checkboxChecked: false };
+    });
+    const { runBrowserCommand } = await import('../runtime/dispatcher');
+    expect(
+      await runBrowserCommand(null, 'browser_open_tab', { url }, caller, controller.signal),
+    ).toMatchObject({ ok: false });
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+});
+
+it('does not turn an SSH start requested on a local root into a local session', async () => {
+  const result = await dispatch(window, 'developer_session_start', {
+    rootId: root.id,
+    environment: 'ssh',
+  });
+  expect(result).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+  expect(startDeveloperSession).not.toHaveBeenCalled();
 });

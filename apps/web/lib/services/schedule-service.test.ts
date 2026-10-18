@@ -174,6 +174,66 @@ function runRow(status: 'success' | 'failed' | 'timeout' | 'cancelled', error: s
 afterEach(() => vi.useRealTimers());
 
 describe('schedule service persistence', () => {
+  it('persists strict per-routine settings in existing metadata and exposes them on read', async () => {
+    const notificationSettings = {
+      onSuccess: false,
+      onFailure: true,
+      onApproval: true,
+      push: false,
+      email: true,
+    };
+    const query = vi.fn().mockResolvedValue([{ ...taskRow, metadata: { notificationSettings } }]);
+    const created = await createSchedule(
+      database(query),
+      'user-1',
+      {
+        name: 'Daily briefing',
+        prompt: 'Brief me',
+        recurrence: 'daily',
+        timeOfDay: '12:00',
+        timezone: 'UTC',
+        notificationSettings,
+      },
+      { now: new Date('2026-07-15T11:00:00.000Z') },
+    );
+    expect(created.notificationSettings).toEqual(notificationSettings);
+    const params = query.mock.calls[0]?.[1] as unknown[];
+    const metadata = params
+      .map((value) => {
+        if (typeof value !== 'string' || !value.startsWith('{')) return null;
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      })
+      .find((value) => value?.notificationSettings);
+    expect(metadata.notificationSettings).toEqual(notificationSettings);
+  });
+
+  it.each([{ push: 'yes' }, { slack: true }, { email: 1 }])(
+    'rejects malformed or unsupported routine notification channels before persistence: %j',
+    async (notificationSettings) => {
+      const query = vi.fn();
+      await expect(
+        createSchedule(
+          database(query),
+          'user-1',
+          {
+            name: 'Daily briefing',
+            prompt: 'Brief me',
+            recurrence: 'daily',
+            timeOfDay: '12:00',
+            timezone: 'UTC',
+            notificationSettings,
+          },
+          { now: new Date('2026-07-15T11:00:00.000Z') },
+        ),
+      ).rejects.toBeInstanceOf(ScheduleValidationError);
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
   it('counts an account quota across workspaces with an explicit owner predicate', async () => {
     const query = vi.fn().mockResolvedValue([{ count: '7' }]);
 
@@ -463,6 +523,30 @@ describe('schedule service persistence', () => {
       }),
     ).rejects.toBeInstanceOf(ScheduleConflictError);
     expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('keeps routine preferences when an older client edits an unrelated field', async () => {
+    const notificationSettings = {
+      onSuccess: false,
+      onFailure: true,
+      onApproval: true,
+      push: false,
+      email: true,
+    };
+    const stored = { ...taskRow, metadata: { notificationSettings } };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([stored])
+      .mockResolvedValueOnce([{ ...stored, name: 'Renamed' }]);
+    await updateSchedule(
+      database(query),
+      'user-1',
+      'task-1',
+      { name: 'Renamed' },
+      { now: new Date('2026-07-15T11:00:00.000Z') },
+    );
+    const params = query.mock.calls[1]?.[1] as unknown[];
+    expect(JSON.parse(params[16] as string).notificationSettings).toEqual(notificationSettings);
   });
 
   it('updates canonical fields under the owner predicate', async () => {

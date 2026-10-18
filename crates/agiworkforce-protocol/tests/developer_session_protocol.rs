@@ -149,6 +149,7 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
 #[test]
 fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
     let response = ThreadReadResponse {
+        child_tasks: None,
         thread: ThreadSummary {
             id: "session-large".to_string(),
             title: "Large session".to_string(),
@@ -181,6 +182,10 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
     };
 
     let value = serde_json::to_value(response).expect("serialize thread read response");
+    assert!(value.get("childTasks").is_none());
+    let legacy: ThreadReadResponse =
+        serde_json::from_value(value.clone()).expect("old peer without child projection");
+    assert!(legacy.child_tasks.is_none());
     assert_eq!(value["transcriptTruncated"], true);
     assert!(value.get("approvals").is_none());
     assert!(value.get("fileChanges").is_none());

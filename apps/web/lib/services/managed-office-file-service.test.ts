@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import type { E2BExecutor } from '@/lib/e2b/types';
+import { verifyManagedOfficePackage } from './managed-office-preservation';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -116,43 +119,48 @@ describe('managed Office file service', () => {
     expect(documentXml).toContain('Totals exclude tax.');
   });
 
-  it('creates an XLSX workbook with named sheets, real formulas and a chart part', async () => {
-    const result = await generateManagedOfficeFile({
-      format: 'xlsx',
-      filename: 'quarterly',
-      title: 'Quarterly numbers',
-      sheets: [
-        {
-          name: 'Sales',
-          rows: [
-            ['Month', 'Units', 'Price', 'Total'],
-            ['Jan', 120, 12.5, '=B2*C2'],
-            ['Feb', 140, 12.5, '=B3*C3'],
-            ['Grand total', '', '', '=SUM(D2:D3)'],
-          ],
-        },
-        {
-          name: 'Regions',
-          rows: [
-            ['Region', 'Revenue'],
-            ['North', 4100],
-            ['South', 5200],
-          ],
-          chart: {
-            type: 'bar',
-            title: 'Revenue by region',
-            category_column: 'A',
-            value_column: 'B',
-            first_row: 2,
-            last_row: 3,
+  it('creates an XLSX workbook with named sheets, evaluated formula receipts and a chart part', async () => {
+    const execution = recalculationFixture();
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'quarterly',
+        title: 'Quarterly numbers',
+        sheets: [
+          {
+            name: 'Sales',
+            rows: [
+              ['Month', 'Units', 'Price', 'Total'],
+              ['Jan', 120, 12.5, '=B2*C2'],
+              ['Feb', 140, 12.5, '=B3*C3'],
+              ['Grand total', '', '', '=SUM(D2:D3)'],
+            ],
           },
-        },
-      ],
-    });
+          {
+            name: 'Regions',
+            rows: [
+              ['Region', 'Revenue'],
+              ['North', 4100],
+              ['South', 5200],
+            ],
+            chart: {
+              type: 'bar',
+              title: 'Revenue by region',
+              category_column: 'A',
+              value_column: 'B',
+              first_row: 2,
+              last_row: 3,
+            },
+          },
+        ],
+      },
+      { executor: async () => execution.executor },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.filename).toBe('quarterly.xlsx');
+    expect(result.verification).toMatchObject({ recalculation: 'passed', render: 'not_run' });
     expect(result.mimeType).toBe(
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
@@ -163,7 +171,7 @@ describe('managed Office file service', () => {
     expect(workbook).toContain('name="Regions"');
 
     const sales = (await archive.file('xl/worksheets/sheet1.xml')?.async('string')) ?? '';
-    expect(sales).toContain('<f>B2*C2</f>');
+    expect(sales).toContain('<f>B2*C2</f><v>1500</v>');
     expect(sales).toContain('<f>SUM(D2:D3)</f>');
     expect(sales).toContain('<t xml:space="preserve">Month</t>');
 
@@ -276,5 +284,401 @@ describe('pptxgenjs never receives an image', () => {
     const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     expect(withoutComments).not.toMatch(/\.addImage\s*\(/);
     expect(withoutComments).not.toMatch(/\.addMedia\s*\(/);
+  });
+});
+
+function recalculationFixture(cached = true) {
+  let staged = Buffer.alloc(0);
+  let commands = 0;
+  const executor: E2BExecutor = {
+    createFolder: async () => ({ ok: true, output: '' }),
+    writeFile: async ({ content }) => {
+      staged = Buffer.from(content, 'base64');
+      return { ok: true, output: '' };
+    },
+    runCommand: async () => {
+      commands += 1;
+      return { ok: true, output: '', stdout: '', stderr: '', exitCode: 0 };
+    },
+    listFiles: async (directory) => [
+      {
+        path: `${directory}/input.xlsx`,
+        name: 'input.xlsx',
+        isDir: false,
+        byteSize: staged.length,
+      },
+    ],
+    readFileBytes: async () => {
+      const zip = await JSZip.loadAsync(staged);
+      const entry = zip.file('xl/worksheets/sheet1.xml')!;
+      let xml = await entry.async('string');
+      if (cached)
+        xml = xml
+          .replace('<f>B2*C2</f>', '<f>B2*C2</f><v>1500</v>')
+          .replace('<f>B3*C3</f>', '<f>B3*C3</f><v>1750</v>')
+          .replace('<f>SUM(D2:D3)</f>', '<f>SUM(D2:D3)</f><v>3250</v>');
+      zip.file(entry.name, xml);
+      return zip.generateAsync({ type: 'uint8array' });
+    },
+    runCode: async () => ({ ok: false, output: '', error: 'not used' }),
+    dispose: async () => undefined,
+  };
+  return { executor, commands: () => commands };
+}
+
+describe('attached Office source offers', () => {
+  it('offers the scoped input digest without exposing bytes or a filesystem location', () => {
+    const bytes = Buffer.from('owned synthetic document bytes');
+    const definition = createManagedOfficeFileToolDefinition('docx', [
+      {
+        filename: 'owned.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        base64: bytes.toString('base64'),
+      },
+    ]);
+    const description = definition.function.parameters.properties.source.description;
+    expect(description).toContain('owned.docx');
+    expect(description).toContain(createHash('sha256').update(bytes).digest('hex'));
+    expect(description).not.toContain(bytes.toString('base64'));
+  });
+});
+
+describe('bounded existing Word document editing', () => {
+  async function source(content = 'Replace this exact phrase.') {
+    const file = await generateManagedOfficeFile({
+      format: 'docx',
+      filename: 'original.docx',
+      title: 'Original',
+      content,
+    });
+    if (!file.ok) throw new Error(file.message);
+    const zip = await JSZip.loadAsync(file.data);
+    zip.file('customXml/preserved.xml', '<preserved>original bytes</preserved>');
+    const data = await zip.generateAsync({ type: 'nodebuffer' });
+    return {
+      data,
+      zip,
+      sha256: createHash('sha256').update(data).digest('hex'),
+      filename: 'original.docx',
+      mimeType: file.mimeType,
+      base64: data.toString('base64'),
+    };
+  }
+
+  it('preserves every unrelated package part and original input bytes', async () => {
+    const input = await source();
+    const before = Buffer.from(input.data);
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'docx',
+        filename: 'edited.docx',
+        title: 'Edited',
+        source: {
+          filename: input.filename,
+          sha256: input.sha256,
+          replacements: [
+            {
+              find: 'Replace this exact phrase.',
+              replace: 'Updated & safely escaped.',
+              expectedMatches: 1,
+            },
+          ],
+        },
+      },
+      { attachments: [input] },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = await JSZip.loadAsync(result.data);
+    expect(await after.file('word/document.xml')!.async('string')).toContain(
+      'Updated &amp; safely escaped.',
+    );
+    for (const entry of Object.values(input.zip.files).filter(
+      (entry) => !entry.dir && entry.name !== 'word/document.xml',
+    )) {
+      expect(await after.file(entry.name)!.async('uint8array')).toEqual(
+        await entry.async('uint8array'),
+      );
+    }
+    expect(input.data.equals(before)).toBe(true);
+    expect(result.verification).toMatchObject({
+      inputSha256: input.sha256,
+      preservation: { changedParts: ['word/document.xml'] },
+      render: 'not_run',
+    });
+  });
+
+  it.each(['digest', 'count', 'missing', 'ambiguous', 'xml'])(
+    'refuses an unsafe or unsupported edit: %s',
+    async (problem) => {
+      const input = await source();
+      const result = await generateManagedOfficeFile(
+        {
+          format: 'docx',
+          filename: 'edited.docx',
+          title: 'Edited',
+          source: {
+            filename: input.filename,
+            sha256: problem === 'digest' ? '0'.repeat(64) : input.sha256,
+            replacements: [
+              {
+                find: 'Replace this exact phrase.',
+                replace: problem === 'xml' ? '\u0000' : 'changed',
+                expectedMatches: problem === 'count' ? 2 : 1,
+              },
+            ],
+          },
+        },
+        {
+          attachments:
+            problem === 'missing' ? [] : problem === 'ambiguous' ? [input, input] : [input],
+        },
+      );
+      expect(result.ok).toBe(false);
+    },
+  );
+
+  it('refuses excessive edit expansion before constructing an oversized document', async () => {
+    const markers = [...'λμνξοπρστυφχψ'];
+    const input = await source(markers[0]!.repeat(1000));
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'docx',
+        filename: 'edited.docx',
+        title: 'Edited',
+        source: {
+          filename: input.filename,
+          sha256: input.sha256,
+          replacements: markers.slice(0, -1).map((find, index) => ({
+            find,
+            replace: markers[index + 1]! + 'Z'.repeat(1999),
+            expectedMatches: 1000,
+          })),
+        },
+      },
+      { attachments: [input] },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/package size limit/),
+    });
+  });
+
+  it('rejects existing-input operations on formats that do not support them', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'edited.xlsx',
+      title: 'Edited',
+      sheets: [{ name: 'Sheet1', rows: [[1]] }],
+      source: { filename: 'original.xlsx', sha256: '0'.repeat(64) },
+    });
+    expect(result).toMatchObject({ ok: false, code: 'invalid_office_file_request' });
+  });
+
+  it('refuses tracked-revision documents without silently accepting or discarding revisions', async () => {
+    const input = await source();
+    const zip = await JSZip.loadAsync(input.data);
+    const xml = await zip.file('word/document.xml')!.async('string');
+    zip.file(
+      'word/document.xml',
+      xml.replace(
+        '</w:body>',
+        '<w:ins w:id="1"><w:p><w:r><w:t>Tracked</w:t></w:r></w:p></w:ins></w:body>',
+      ),
+    );
+    const data = await zip.generateAsync({ type: 'nodebuffer' });
+    const sha256 = createHash('sha256').update(data).digest('hex');
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'docx',
+        filename: 'edited.docx',
+        title: 'Edited',
+        source: {
+          filename: input.filename,
+          sha256,
+          replacements: [
+            { find: 'Replace this exact phrase.', replace: 'New', expectedMatches: 1 },
+          ],
+        },
+      },
+      { attachments: [{ ...input, base64: data.toString('base64') }] },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/tracked revisions/),
+    });
+  });
+
+  it('refuses formulas without an evaluator instead of returning unevaluated success', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'formula.xlsx',
+      title: 'Formula',
+      sheets: [{ name: 'Sheet1', rows: [[1, '=A1+1']] }],
+    });
+    expect(result).toMatchObject({ ok: false, message: expect.stringMatching(/recalculation/i) });
+  });
+
+  it('rejects missing calculation caches in returned execution bytes', async () => {
+    const execution = recalculationFixture(false);
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'formula.xlsx',
+        title: 'Formula',
+        sheets: [{ name: 'Sheet1', rows: [[1, '=A1+1']] }],
+      },
+      { executor: async () => execution.executor },
+    );
+    expect(result.ok).toBe(false);
+    expect(execution.commands()).toBe(2);
+  });
+
+  it('refuses active workbook functions before staging or execution', async () => {
+    const execution = recalculationFixture();
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'formula.xlsx',
+        title: 'Formula',
+        sheets: [{ name: 'Sheet1', rows: [['=WEBSERVICE("https://example.test")']] }],
+      },
+      { executor: async () => execution.executor },
+    );
+    expect(result.ok).toBe(false);
+    expect(execution.commands()).toBe(0);
+  });
+
+  it('does not call successful formula errors a verified workbook', async () => {
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', '<Types/>');
+    zip.file('_rels/.rels', '<Relationships/>');
+    zip.file('xl/workbook.xml', '<workbook/>');
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      '<worksheet><sheetData><row><c r="A1" t="e"><f>1/0</f><v>#DIV/0!</v></c></row></sheetData></worksheet>',
+    );
+    await expect(
+      verifyManagedOfficePackage(await zip.generateAsync({ type: 'nodebuffer' }), 'xlsx'),
+    ).rejects.toThrow(/calculation error/i);
+  });
+});
+
+describe('existing workbook preservation', () => {
+  async function workbook() {
+    const generated = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'input.xlsx',
+      title: 'Owned',
+      sheets: [
+        {
+          name: 'Budget',
+          rows: [
+            ['Item', 'Amount'],
+            ['Tools', 25],
+          ],
+        },
+      ],
+    });
+    if (!generated.ok) throw new Error(generated.message);
+    const zip = await JSZip.loadAsync(generated.data);
+    zip.file('customXml/owned.xml', '<owned>keep exact bytes</owned>');
+    const data = await zip.generateAsync({ type: 'nodebuffer' });
+    return {
+      filename: 'input.xlsx',
+      mimeType: generated.mimeType,
+      sha256: createHash('sha256').update(data).digest('hex'),
+      base64: data.toString('base64'),
+      data,
+      zip,
+    };
+  }
+
+  it('edits a guarded existing cell and preserves every unaffected part', async () => {
+    const input = await workbook();
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'updated.xlsx',
+        title: 'Updated',
+        source: {
+          filename: input.filename,
+          sha256: input.sha256,
+          edits: [{ sheet: 'Budget', cell: 'B2', expected: 25, value: 30 }],
+        },
+      },
+      { attachments: [input] },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = await JSZip.loadAsync(result.data);
+    expect(await after.file('xl/worksheets/sheet1.xml')!.async('string')).toContain('<v>30</v>');
+    for (const part of Object.values(input.zip.files).filter(
+      (entry) => !entry.dir && entry.name !== 'xl/worksheets/sheet1.xml',
+    ))
+      expect(await after.file(part.name)!.async('uint8array')).toEqual(
+        await part.async('uint8array'),
+      );
+    expect(result.verification).toMatchObject({
+      inputSha256: input.sha256,
+      preservation: { changedParts: ['xl/worksheets/sheet1.xml'] },
+    });
+    expect(input.base64).toBe(input.data.toString('base64'));
+  });
+
+  it.each(['stale', 'missing-cell', 'duplicate', 'mixed'])(
+    'refuses unsafe workbook edits: %s',
+    async (failure) => {
+      const input = await workbook();
+      const edit = {
+        sheet: 'Budget',
+        cell: failure === 'missing-cell' ? 'Z9' : 'B2',
+        expected: failure === 'stale' ? 10 : 25,
+        value: 30,
+      };
+      const result = await generateManagedOfficeFile(
+        {
+          format: 'xlsx',
+          filename: 'updated.xlsx',
+          title: 'Updated',
+          ...(failure === 'mixed' ? { sheets: [{ name: 'Budget', rows: [[1]] }] } : {}),
+          source: {
+            filename: input.filename,
+            sha256: input.sha256,
+            edits: failure === 'duplicate' ? [edit, edit] : [edit],
+          },
+        },
+        { attachments: [input] },
+      );
+      expect(result.ok).toBe(false);
+    },
+  );
+
+  it.each(['xml', 'relationship'])('rejects damaged package structure: %s', async (failure) => {
+    const input = await workbook();
+    input.zip.file(
+      failure === 'xml' ? 'customXml/owned.xml' : 'xl/_rels/workbook.xml.rels',
+      failure === 'xml'
+        ? '<unclosed>'
+        : '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Target="../missing.xml" Type="owned"/></Relationships>',
+    );
+    const data = await input.zip.generateAsync({ type: 'nodebuffer' });
+    await expect(verifyManagedOfficePackage(data, 'xlsx')).rejects.toThrow(
+      /malformed XML|broken relationships/,
+    );
+  });
+
+  it('requires a real rendering executor when rendering was requested', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'docx',
+      filename: 'render.docx',
+      title: 'Render',
+      content: 'Owned fixture',
+      verify_render: true,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/Rendering verification requires/),
+    });
   });
 });

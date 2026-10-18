@@ -6,6 +6,7 @@ import {
   isDesktopSignInLink,
   readDesktopSignInChallenge,
   readDesktopSignInCode,
+  type PendingBrowserSignIn,
 } from '@agiworkforce/local-runtime-contract';
 import { CLOUD_APP_ORIGIN } from './config';
 
@@ -20,14 +21,39 @@ export type BrowserSignInLink =
   | { kind: 'expired' }
   | { kind: 'complete'; url: string };
 
-export async function startBrowserSignIn(): Promise<{ started: true }> {
-  const verifier = randomBytes(32).toString('base64url');
-  const challenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
-  pending = { verifier, challenge, startedAtMs: Date.now() };
+export function browserSignInState(): PendingBrowserSignIn {
+  if (pending === null) return { kind: 'idle' };
+  const expiresAtMs = pending.startedAtMs + PENDING_SIGN_IN_TTL_MS;
+  if (Date.now() >= expiresAtMs) {
+    pending = null;
+    return { kind: 'idle' };
+  }
+  return { kind: 'waiting', expiresAtMs };
+}
+
+export function cancelBrowserSignIn(): { cancelled: true } {
+  pending = null;
+  return { cancelled: true };
+}
+
+export async function startBrowserSignIn(): Promise<{ started: true; expiresAtMs: number }> {
+  browserSignInState();
+  if (pending === null) {
+    const verifier = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(verifier, 'utf8').digest('base64url');
+    pending = { verifier, challenge, startedAtMs: Date.now() };
+  }
+  const started = pending;
   const url = new URL(DESKTOP_SIGN_IN_PATH, CLOUD_APP_ORIGIN);
-  url.searchParams.set('challenge', challenge);
-  await shell.openExternal(url.toString());
-  return { started: true };
+  url.searchParams.set('challenge', started.challenge);
+  try {
+    await shell.openExternal(url.toString());
+  } catch (cause) {
+    if (pending === started) pending = null;
+    throw cause;
+  }
+  if (pending !== started) throw new Error('This browser sign-in was cancelled.');
+  return { started: true, expiresAtMs: started.startedAtMs + PENDING_SIGN_IN_TTL_MS };
 }
 
 function isLegacySignInLink(link: string): boolean {
@@ -43,11 +69,11 @@ export function readBrowserSignInLink(link: string): BrowserSignInLink {
   const legacy = isLegacySignInLink(link);
   if (!legacy && !isDesktopSignInLink(link)) return { kind: 'not-sign-in' };
   const started = pending;
-  if (started === null) return { kind: 'expired' };
+  if (started === null) return { kind: legacy ? 'expired' : 'ignored' };
   if (legacy || readDesktopSignInChallenge(link) !== started.challenge) return { kind: 'ignored' };
   pending = null;
   const code = readDesktopSignInCode(link);
-  if (!code || Date.now() - started.startedAtMs > PENDING_SIGN_IN_TTL_MS) {
+  if (!code || Date.now() - started.startedAtMs >= PENDING_SIGN_IN_TTL_MS) {
     return { kind: 'expired' };
   }
   const url = new URL(DESKTOP_SIGN_IN_COMPLETE_PATH, CLOUD_APP_ORIGIN);

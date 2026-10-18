@@ -448,6 +448,7 @@ export function ScheduleCard({
                     type="button"
                     role="menuitem"
                     className={menuItemCls}
+                    disabled={!canEdit}
                     onClick={() => {
                       closeMenu();
                       onOpenNotificationSettings(schedule);

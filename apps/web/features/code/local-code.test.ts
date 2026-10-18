@@ -212,6 +212,18 @@ describe('local code surface', () => {
     );
   });
 
+  it('preserves a managed access refusal without asking the user to sign out', () => {
+    const failure = {
+      code: 'invalid_request' as const,
+      message: 'Managed coding requires a plan upgrade.',
+      provider: 'managed_cloud',
+      action: 'open_settings' as const,
+      retryable: false,
+    };
+    expect(localTurnFailureSentence(failure)).toBe(failure.message);
+    expect(localOfferFor(failure.action, failure.provider, failure.retryable)).toBeNull();
+  });
+
   it('sends an ended account session back to the app sign-in, never to a terminal', () => {
     const failure = {
       code: 'provider_auth_missing' as const,

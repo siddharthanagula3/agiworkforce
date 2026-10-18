@@ -9,7 +9,4 @@
  * process stdio, or a WebSocket whose upgrade carried the app-server token;
  * any other connection is refused with -32006.
  */
-export type ThreadDeleteParams = {
-  threadId: string;
-  discardWorktreeArchives?: boolean;
-};
+export type ThreadDeleteParams = { threadId: string; discardWorktreeArchives?: boolean };

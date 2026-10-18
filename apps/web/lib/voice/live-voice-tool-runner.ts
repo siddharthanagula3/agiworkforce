@@ -140,13 +140,14 @@ async function runOfficeFile(
     origin: 'managed-office-tool',
     model: input.modelId,
     conversationId: input.conversationId,
-    extraMetadata: { format: args['format'] },
+    extraMetadata: { format: args['format'], verification: generated.verification },
   });
   if (!persisted.ok) return { content: 'The Office file could not be saved.', isError: true };
   return {
     files: [{ name: persisted.file.file_name, uri: persisted.file.uri }],
     content: JSON.stringify({
       ok: true,
+      verification: generated.verification,
       file: {
         name: persisted.file.file_name,
         uri: persisted.file.uri,

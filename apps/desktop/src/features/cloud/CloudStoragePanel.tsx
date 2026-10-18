@@ -326,7 +326,7 @@ export function CloudStoragePanel() {
           <Input
             value={redirectUri}
             onChange={(event) => setRedirectUri(event.target.value)}
-            placeholder="http://localhost:3000/oauth/callback"
+            placeholder="https://your-app.example/oauth/callback"
           />
         </div>
 

@@ -1,4 +1,9 @@
 import {
+  noteLocalRoutineEvent,
+  startLocalRoutines,
+  stopLocalRoutines,
+} from './runtime/localRoutineService';
+import {
   BrowserWindow,
   Notification,
   app,
@@ -86,7 +91,7 @@ import {
   stopRemoteControl,
 } from './remote/remoteControlService';
 import { getRoot } from './runtime/workspaceStore';
-import { agentAllowedIn } from './runtime/agentAccess';
+import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
@@ -725,6 +730,7 @@ function deliverDeepLink(url: string): void {
 
   const signIn = readBrowserSignInLink(url);
   if (signIn.kind !== 'not-sign-in') {
+    if (signIn.kind === 'ignored') return;
     showMainWindow();
     if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
     if (signIn.kind === 'expired') sendRuntimeEvent({ kind: 'browser-sign-in-expired' });
@@ -2007,6 +2013,7 @@ if (!hasSingleInstanceLock) {
           REMOTE_CODE_LIMITS.messageLength,
         ) || null,
       remoteControlActive,
+      mayReportRoot: (rootId) => agentAllowedIn(rootId),
       report: reportCodeSessionActivity,
     });
     configureDeveloperSessions({
@@ -2014,7 +2021,7 @@ if (!hasSingleInstanceLock) {
         noteBackgroundSessionEvent(rootId, event);
         sendRuntimeEvent({ kind: 'developer-session', rootId, event });
         relayDeveloperSessionEvent(rootId, event);
-        agentNotifier.handle(rootId, event);
+        agentNotifier.handle(rootId, event, noteLocalRoutineEvent(rootId, event).notify);
         noteDispatcherSessionEvent(rootId, event);
         codeSessionActivity(rootId, event).catch((error: unknown) =>
           console.warn('[code-session-activity] could not deliver activity:', error),
@@ -2022,10 +2029,15 @@ if (!hasSingleInstanceLock) {
       },
       resolveBinary: () => getPreferences().cliPath,
       mayRunIn: (root) => agentAllowedIn(root.id),
+      workspaceConsentAtMs: (root) => agentConsentAt(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,
     });
+
+    void startLocalRoutines().catch((error: unknown) =>
+      console.warn('[local-routines] unavailable:', error),
+    );
 
     configureQuickAskBridge({
       preload: path.join(__dirname, 'preload.cjs'),
@@ -2068,6 +2080,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    stopLocalRoutines();
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
     stopRemoteControl();

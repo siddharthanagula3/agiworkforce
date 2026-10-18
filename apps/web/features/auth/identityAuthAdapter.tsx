@@ -3,8 +3,12 @@
 import { AuthenticateWithRedirectCallback, useClerk, useSignIn, useSignUp } from '@clerk/nextjs';
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 
-import { getHostBridge } from '@agiworkforce/local-runtime-contract';
-import { beginBrowserSignIn } from '@/features/desktop-host/lib/browser-sign-in';
+import { getHostBridge, hostSupportsBrowserSignIn } from '@agiworkforce/local-runtime-contract';
+import {
+  beginBrowserSignIn,
+  BROWSER_SIGN_IN_NEEDS_UPDATE,
+  cancelBrowserSignIn,
+} from '@/features/desktop-host/lib/browser-sign-in';
 import { classifyAuthError, isAuthNoticeKind, type AuthErrorKind } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
 import type {
@@ -249,6 +253,9 @@ export function useIdentityAuthClient(
   const startEnterpriseSso = useCallback(
     async (email: string): Promise<AuthResult> => {
       if (getHostBridge()?.shell === 'electron') {
+        if (!hostSupportsBrowserSignIn(getHostBridge())) {
+          return { status: 'failed', kind: 'unexpected', message: BROWSER_SIGN_IN_NEEDS_UPDATE };
+        }
         return (await beginBrowserSignIn())
           ? { status: 'redirecting', phase: 'enterprise_browser' }
           : unexpected('unexpected');
@@ -616,6 +623,14 @@ export function useIdentityAuthClient(
 
   const startProvider = useCallback(
     async (provider: AuthProviderId): Promise<AuthResult> => {
+      if (getHostBridge()?.shell === 'electron') {
+        if (!hostSupportsBrowserSignIn(getHostBridge())) {
+          return { status: 'failed', kind: 'unexpected', message: BROWSER_SIGN_IN_NEEDS_UPDATE };
+        }
+        return (await beginBrowserSignIn())
+          ? { status: 'redirecting', phase: 'browser' }
+          : unexpected('unexpected');
+      }
       const strategy = PROVIDER_STRATEGIES[provider];
       const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
 
@@ -636,10 +651,11 @@ export function useIdentityAuthClient(
       });
       return error ? fail(error) : { status: 'redirecting' };
     },
-    [fail, mode],
+    [fail, mode, unexpected],
   );
 
   const restart = useCallback(async (): Promise<void> => {
+    if (hostSupportsBrowserSignIn(getHostBridge()) && !(await cancelBrowserSignIn())) return;
     await (mode === 'signup' ? signUpRef.current.reset() : signInRef.current.reset());
   }, [mode]);
 

@@ -55,7 +55,7 @@ type Field = 'selector' | 'text' | 'url';
 
 type DialogCommand = Exclude<
   BrowserCommand,
-  'browser_find' | 'browser_fill_form' | 'browser_history'
+  'browser_open_tab' | 'browser_find' | 'browser_fill_form' | 'browser_history'
 >;
 
 interface BrowserAction {

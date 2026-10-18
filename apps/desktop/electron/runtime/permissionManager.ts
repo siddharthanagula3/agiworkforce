@@ -34,6 +34,16 @@ type StoredDecision = PermissionDecision & { label?: string };
 const persisted = new Map<string, StoredDecision>();
 const session = new Map<string, StoredDecision>();
 let loaded = false;
+const revisions = new Map<string, number>();
+
+export function permissionRevision(capability: DesktopCapability, scope: PermissionScope): number {
+  return revisions.get(permissionKey(capability, scope)) ?? 0;
+}
+
+function advanceRevision(capability: DesktopCapability, scope: PermissionScope): void {
+  const key = permissionKey(capability, scope);
+  revisions.set(key, (revisions.get(key) ?? 0) + 1);
+}
 
 function storePath(): string {
   return path.join(app.getPath('userData'), 'desktop-permissions.json');
@@ -93,6 +103,18 @@ export function getPermissionState(
   return evaluatePermission({ persisted, session }, capability, scope);
 }
 
+/** A snapshot of the direct decision, including a still-unconsumed one-use grant. */
+export function getPermissionDecision(
+  capability: DesktopCapability,
+  scope: PermissionScope,
+): PermissionDecision | null {
+  load();
+  const key = permissionKey(capability, scope);
+  const decision = session.get(key) ?? persisted.get(key);
+  if (!decision) return null;
+  return { ...decision, scope: { ...decision.scope } };
+}
+
 export function recordDecision(
   capability: DesktopCapability,
   scope: PermissionScope,
@@ -103,6 +125,7 @@ export function recordDecision(
   load();
   // A refusal may stand for good. Only a grant of a high-risk capability is
   // held to the session.
+  advanceRevision(capability, scope);
   const effective = state === 'denied' ? duration : normalizeGrantDuration(capability, duration);
   const decision: StoredDecision = {
     ...buildDecision(capability, scope, state, effective, Date.now()),
@@ -122,7 +145,10 @@ export function recordDecision(
 export function consumeSingleUse(capability: DesktopCapability, scope: PermissionScope): void {
   const key = permissionKey(capability, scope);
   const decision = session.get(key);
-  if (decision && isSingleUse(decision)) session.delete(key);
+  if (decision && isSingleUse(decision)) {
+    advanceRevision(capability, scope);
+    session.delete(key);
+  }
 }
 
 /**
@@ -131,6 +157,7 @@ export function consumeSingleUse(capability: DesktopCapability, scope: Permissio
  * everything else withdraws through `withdrawGrant`.
  */
 export function revokePermission(capability: DesktopCapability, scope: PermissionScope): void {
+  advanceRevision(capability, scope);
   load();
   const key = permissionKey(capability, scope);
   session.delete(key);
@@ -144,6 +171,7 @@ export function revokePermission(capability: DesktopCapability, scope: Permissio
  * same prompt until it was allowed.
  */
 export function withdrawGrant(capability: DesktopCapability, scope: PermissionScope): void {
+  advanceRevision(capability, scope);
   load();
   const key = permissionKey(capability, scope);
   if (session.get(key)?.state === 'granted') session.delete(key);
@@ -159,6 +187,10 @@ export function withdrawGrant(capability: DesktopCapability, scope: PermissionSc
  * collected. A refusal recorded there stays, as it does for `withdrawGrant`.
  */
 export function revokeScope(scope: PermissionScope): number {
+  for (const decision of listPermissions()) {
+    if (permissionScopeKey(decision.scope) === permissionScopeKey(scope))
+      advanceRevision(decision.capability, decision.scope);
+  }
   load();
   const scopeKey = permissionScopeKey(scope);
   let removed = 0;

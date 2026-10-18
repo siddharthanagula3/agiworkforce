@@ -52,6 +52,8 @@ vi.mock('electron', () => {
     setDisplayMediaRequestHandler: vi.fn(),
   };
   return {
+    powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
+    powerSaveBlocker: { start: vi.fn(() => 1), stop: vi.fn(), isStarted: vi.fn(() => false) },
     BrowserWindow,
     Notification: Object.assign(
       vi.fn(function Notification() {

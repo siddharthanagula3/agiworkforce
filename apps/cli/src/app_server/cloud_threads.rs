@@ -119,6 +119,7 @@ pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessi
         })
         .collect();
     Ok(ThreadReadResponse {
+        child_tasks: None,
         thread: summary(&detail.session),
         messages,
         transcript_truncated: false,

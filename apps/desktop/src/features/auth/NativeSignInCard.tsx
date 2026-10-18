@@ -360,6 +360,24 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     }
   }, [applySignInState, beginAttempt, code, isBusy, secondFactor, signIn]);
 
+  const signInThroughBrowser = useCallback(async () => {
+    if (isBusy) return;
+    beginAttempt();
+    setBusy('browser');
+    try {
+      const result = await browserFallbackSignIn('', '');
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      finish();
+    } catch (fallbackError) {
+      setError(describeFailure(fallbackError));
+    } finally {
+      setBusy(null);
+    }
+  }, [beginAttempt, browserFallbackSignIn, finish, isBusy]);
+
   const startSocial = useCallback(
     async (provider: AuthProviderId, label: string) => {
       if (isBusy || ssoPending) return;
@@ -369,10 +387,18 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         setSsoPending({ providerLabel: label, signIn: handle.signIn });
         setNotice(`Finish signing in with ${label} in your browser, then return here.`);
       } catch (attemptError) {
+        if (
+          attemptError instanceof ClerkAuthError &&
+          attemptError.clerkCode === 'resource_missmatch'
+        ) {
+          resetClerkClient();
+          await signInThroughBrowser();
+          return;
+        }
         setError(describeFailure(attemptError));
       }
     },
-    [beginAttempt, isBusy, ssoPending],
+    [beginAttempt, isBusy, signInThroughBrowser, ssoPending],
   );
 
   const cancelSocial = useCallback(() => {
@@ -433,24 +459,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       window.removeEventListener('cloud-sso-error', onCallbackError);
     };
   }, [completeNativeSignIn, finish]);
-
-  const signInThroughBrowser = useCallback(async () => {
-    if (isBusy) return;
-    beginAttempt();
-    setBusy('browser');
-    try {
-      const result = await browserFallbackSignIn('', '');
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      finish();
-    } catch (fallbackError) {
-      setError(describeFailure(fallbackError));
-    } finally {
-      setBusy(null);
-    }
-  }, [beginAttempt, browserFallbackSignIn, finish, isBusy]);
 
   const restart = useCallback(() => {
     setStep('email');

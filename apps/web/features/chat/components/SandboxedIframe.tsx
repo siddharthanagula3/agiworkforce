@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  useSyncExternalStore,
+} from 'react';
 
 import {
   getSandboxOrigin,
@@ -17,7 +25,12 @@ import {
   type SandboxIncomingMessage,
 } from '@/lib/artifact-sandbox';
 
+const subscribeClient = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 const SANDBOX_CONNECT_TIMEOUT_MS = 3000;
+const SANDBOX_DOCUMENT_TIMEOUT_MS = 15_000;
 
 export const ARTIFACT_RENDER_FAILURE_MESSAGE =
   'The preview could not start. Review the source or try again.';
@@ -149,12 +162,39 @@ export function SandboxedIframe({
     [fallbackSrcDoc],
   );
   const [useFallback, setUseFallback] = useState(false);
+  const clientReady = useSyncExternalStore(subscribeClient, clientSnapshot, serverSnapshot);
+  const [frameOwner, setFrameOwner] = useState({
+    payload,
+    runtime,
+    refreshKey,
+    sandboxOrigin,
+    epoch: 0,
+  });
+  if (
+    frameOwner.payload !== payload ||
+    frameOwner.runtime !== runtime ||
+    frameOwner.refreshKey !== refreshKey ||
+    frameOwner.sandboxOrigin !== sandboxOrigin
+  ) {
+    setFrameOwner({ payload, runtime, refreshKey, sandboxOrigin, epoch: frameOwner.epoch + 1 });
+  }
+
+  const runtimeGenerationRef = useRef(0);
+  useLayoutEffect(() => {
+    runtimeGenerationRef.current += 1;
+    return () => {
+      runtimeGenerationRef.current += 1;
+    };
+  }, [frameOwner.epoch, useFallback]);
+
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sandboxConnectedRef = useRef(false);
+  const documentLoadedRef = useRef(false);
   const postedPayloadRef = useRef<ArtifactRenderPayload | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     sandboxConnectedRef.current = false;
+    documentLoadedRef.current = false;
     postedPayloadRef.current = null;
     setUseFallback(false);
     return () => {
@@ -163,7 +203,15 @@ export function SandboxedIframe({
         connectTimeoutRef.current = null;
       }
     };
-  }, [sandboxOrigin, refreshKey]);
+  }, [frameOwner.epoch]);
+
+  const markConnected = useCallback(() => {
+    sandboxConnectedRef.current = true;
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  }, []);
 
   const activateFallback = useCallback(() => {
     if (!sandboxConnectedRef.current) {
@@ -171,7 +219,15 @@ export function SandboxedIframe({
     }
   }, []);
 
-  useEffect(() => {
+  const armDeadline = useCallback(
+    (milliseconds: number) => {
+      if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = setTimeout(activateFallback, milliseconds);
+    },
+    [activateFallback],
+  );
+
+  useLayoutEffect(() => {
     if (!sandboxOrigin) return undefined;
     const onMessage = (event: MessageEvent) => {
       // Origin alone is not enough, which the sandbox document says in its own
@@ -184,11 +240,7 @@ export function SandboxedIframe({
       const data = event.data as SandboxIncomingMessage | undefined;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'sandbox-ready' && iframeRef.current) {
-        sandboxConnectedRef.current = true;
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-          connectTimeoutRef.current = null;
-        }
+        markConnected();
         try {
           postRenderToSandbox(iframeRef.current, renderPayload);
           postedPayloadRef.current = renderPayload;
@@ -196,6 +248,9 @@ export function SandboxedIframe({
           // ignore · payload re-posts on the onLoad path below
         }
       } else if (data.type === 'render-complete') {
+        // A fast frame can announce ready before this effect subscribes.
+        // Its response to onLoad's render is also an authenticated handshake.
+        markConnected();
         if (pickerRef.current?.active && iframeRef.current) {
           postPickerModeToSandbox(iframeRef.current, true);
         }
@@ -205,6 +260,7 @@ export function SandboxedIframe({
       } else if (data.type === 'picker-cancel') {
         if (pickerRef.current?.active) pickerRef.current.onCancel();
       } else if (data.type === 'render-error') {
+        markConnected();
         const message = data.error ?? 'unknown render error';
         setRenderError(message);
         console.error('[artifact-preview] render failed', message);
@@ -222,30 +278,40 @@ export function SandboxedIframe({
           });
           return;
         }
+        const generation = runtimeGenerationRef.current;
+        const stillOwned = () =>
+          runtimeGenerationRef.current === generation && iframeRef.current === frame;
         runtime.handle(request).then(
-          (value) => postRuntimeResponseToSandbox(frame, { id, ok: true, value: value ?? null }),
-          (error: unknown) =>
-            postRuntimeResponseToSandbox(frame, {
-              id,
-              ok: false,
-              error: error instanceof Error ? error.message : RUNTIME_REQUEST_FAILED_MESSAGE,
-            }),
+          (value) => {
+            if (stillOwned())
+              postRuntimeResponseToSandbox(frame, { id, ok: true, value: value ?? null });
+          },
+          (error: unknown) => {
+            if (stillOwned())
+              postRuntimeResponseToSandbox(frame, {
+                id,
+                ok: false,
+                error: error instanceof Error ? error.message : RUNTIME_REQUEST_FAILED_MESSAGE,
+              });
+          },
         );
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [sandboxOrigin, renderPayload, onRenderError, runtime]);
+  }, [sandboxOrigin, renderPayload, onRenderError, runtime, markConnected]);
 
   const onLoad = useCallback(() => {
     if (!sandboxOrigin || !iframeRef.current) return;
+    documentLoadedRef.current = true;
+    if (!sandboxConnectedRef.current) armDeadline(SANDBOX_CONNECT_TIMEOUT_MS);
     try {
       postRenderToSandbox(iframeRef.current, renderPayload);
       postedPayloadRef.current = renderPayload;
     } catch {
       // ignore
     }
-  }, [sandboxOrigin, renderPayload]);
+  }, [sandboxOrigin, renderPayload, armDeadline]);
 
   useEffect(() => {
     const frame = iframeRef.current;
@@ -294,21 +360,35 @@ export function SandboxedIframe({
   }, [usingFallback, onRenderError]);
 
   useEffect(() => {
-    if (!sandboxOrigin || useFallback || sandboxConnectedRef.current) return undefined;
-    connectTimeoutRef.current = setTimeout(activateFallback, SANDBOX_CONNECT_TIMEOUT_MS);
+    if (!clientReady || !sandboxOrigin || useFallback || sandboxConnectedRef.current)
+      return undefined;
+    // Network navigation and the post-load handshake have separate budgets.
+    // A cold protected/CDN document must not be aborted after only three seconds.
+    armDeadline(
+      documentLoadedRef.current ? SANDBOX_CONNECT_TIMEOUT_MS : SANDBOX_DOCUMENT_TIMEOUT_MS,
+    );
     return () => {
       if (connectTimeoutRef.current) {
         clearTimeout(connectTimeoutRef.current);
         connectTimeoutRef.current = null;
       }
     };
-  }, [sandboxOrigin, useFallback, activateFallback]);
+  }, [clientReady, sandboxOrigin, useFallback, armDeadline, frameOwner.epoch]);
+
+  // A server-rendered frame can finish before hydration attaches onLoad/message
+  // handlers. Start the untrusted document only after the client owns them.
+  if (!clientReady)
+    return (
+      <div role="status" className={className} style={style}>
+        Loading preview…
+      </div>
+    );
 
   if (sandboxOrigin && !useFallback) {
     return (
       <iframe
         ref={iframeRef}
-        key={refreshKey}
+        key={frameOwner.epoch}
         src={`${sandboxOrigin}/`}
         title={title}
         sandbox="allow-scripts allow-same-origin"

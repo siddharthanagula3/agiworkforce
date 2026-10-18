@@ -300,7 +300,7 @@ impl ExtensionInstaller {
 
         for i in 0..total_entries {
             let mut entry = archive.by_index(i)?;
-            let entry_path = entry.name().to_string();
+            let entry_path = entry.name()?.into_owned();
 
             // Guard against ZIP path traversal attacks: reject entries with absolute
             // paths or components that escape the install directory (e.g. "../").

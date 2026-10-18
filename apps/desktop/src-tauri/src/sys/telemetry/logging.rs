@@ -15,11 +15,8 @@ static ACTIVE_LOG_DIR: RwLock<Option<PathBuf>> = RwLock::new(None);
 /// The directory the file appender actually opened, or `None` if telemetry
 /// never initialized.
 ///
-/// Recomputing `LogConfig::default()` later does not answer this: telemetry
-/// initializes before Tauri `setup()` publishes the app data dir, so the
-/// default resolves through the fallback branch of `sys::utils::app_data_dir()`
-/// at startup and through the published directory afterwards. Readers that need
-/// the files on disk must use the path that was opened.
+/// Readers must use the directory the writer opened, including when telemetry
+/// was initialized with an explicit `LogConfig`.
 pub fn active_log_dir() -> Option<PathBuf> {
     ACTIVE_LOG_DIR
         .read()

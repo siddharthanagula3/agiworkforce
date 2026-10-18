@@ -28,6 +28,10 @@ pub mod registry;
 mod task_registry;
 mod web;
 
+pub(crate) async fn browser_site_refusal(url: &str) -> Option<String> {
+    web::workspace_site_refusal(url).await
+}
+
 use bash::{execute_command_output, execute_command_stop, execute_run_command};
 pub(crate) use common::format_size;
 pub(crate) use common::generate_simple_diff;

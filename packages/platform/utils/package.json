@@ -30,7 +30,23 @@
     "./signaling": "./src/signaling.ts",
     "./source-url": "./src/sourceUrl.ts",
     "./uuidv7": "./src/uuidv7.ts",
-    "./voice": "./src/voice.ts"
+    "./voice": "./src/voice.ts",
+    "./scheduling/dayparts": {
+      "types": "./src/scheduling/dayparts.ts",
+      "default": "./src/scheduling/dayparts.ts"
+    },
+    "./scheduling/recurrence-rule": {
+      "types": "./src/scheduling/recurrence-rule.ts",
+      "default": "./src/scheduling/recurrence-rule.ts"
+    },
+    "./scheduling/schedule-time": {
+      "types": "./src/scheduling/schedule-time.ts",
+      "default": "./src/scheduling/schedule-time.ts"
+    },
+    "./scheduling/zoned-time": {
+      "types": "./src/scheduling/zoned-time.ts",
+      "default": "./src/scheduling/zoned-time.ts"
+    }
   },
   "typesVersions": {
     "*": {
@@ -105,6 +121,9 @@
       ],
       "voice": [
         "./src/voice.ts"
+      ],
+      "scheduling/*": [
+        "./src/scheduling/*.ts"
       ],
       "secret-redaction": [
         "./src/secretRedaction.ts"

@@ -56,6 +56,7 @@ const hostBridge: HostBridge = {
   platform: `electron-${process.platform}`,
   shell: ELECTRON_HOST_SHELL,
   appVersion: argValue('--agi-app-version='),
+  browserSignIn: { cancellation: true },
 
   async invokeRuntime<T>(command: string, args?: Record<string, unknown>) {
     return (await ipcRenderer.invoke(

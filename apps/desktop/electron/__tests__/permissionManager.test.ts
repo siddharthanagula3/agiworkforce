@@ -76,6 +76,22 @@ describe('a command that arrived from another device', () => {
 });
 
 describe('listing and withdrawing decisions', () => {
+  it('keeps the original time of a one-use decision and removes it when consumed', async () => {
+    const runtime = await freshRuntime();
+    const original = runtime.recordDecision('shell.execute', LEDGER, 'granted', 'once');
+    expect(runtime.listPermissions()).toEqual([]);
+    const snapshot = runtime.getPermissionDecision('shell.execute', LEDGER);
+    expect(snapshot).toEqual(original);
+    Object.assign(snapshot!.scope, { target: '/somewhere-else' });
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)?.scope).toEqual(LEDGER);
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)?.decidedAtMs).toBe(
+      original.decidedAtMs,
+    );
+    runtime.consumeSingleUse('shell.execute', LEDGER);
+    expect(runtime.getPermissionDecision('shell.execute', LEDGER)).toBeNull();
+    expect(runtime.getPermissionState('shell.execute', LEDGER)).toBe('prompt');
+  });
+
   it('lists what is in force, a session decision standing in front of a stored one', async () => {
     const runtime = await freshRuntime();
     runtime.recordDecision('filesystem.write', LEDGER, 'granted', 'always');
@@ -341,5 +357,19 @@ describe('asking for a permission', () => {
       'denied',
     );
     expect(showMessageBox).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('grant revisions used by unattended local work', () => {
+  it('keeps a session grant revision stable on ordinary use and changes it across revocation and regrant', async () => {
+    const runtime = await freshRuntime();
+    runtime.recordDecision('shell.execute', LEDGER, 'granted', 'session');
+    const original = runtime.permissionRevision('shell.execute', LEDGER);
+    runtime.consumeSingleUse('shell.execute', LEDGER);
+    expect(runtime.permissionRevision('shell.execute', LEDGER)).toBe(original);
+    runtime.revokeScope(LEDGER);
+    runtime.recordDecision('shell.execute', LEDGER, 'granted', 'session');
+    expect(runtime.permissionRevision('shell.execute', LEDGER)).toBeGreaterThan(original);
+    expect(runtime.permissionRevision('shell.execute', ATLAS)).toBe(0);
   });
 });

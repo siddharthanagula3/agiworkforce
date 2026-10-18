@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LifecycleStatus } from '@agiworkforce/types';
 
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
+import {
+  browserSignInIsPending,
+  useBrowserSignInState,
+} from '@/features/desktop-host/lib/browser-sign-in';
 
 import {
   clearSignupAttemptMarkers,
@@ -84,9 +88,29 @@ export function AuthFlow({
   const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
   const lastAction = useRef<{ action: () => Promise<AuthResult>; phase: AuthPhase } | null>(null);
   const inFlight = useRef(false);
+  const attempt = useRef(0);
+  const browserWasPending = useRef(false);
   const admittedChoices = useRef(NO_OPTIONAL_CHOICES);
 
-  const busy = phase !== RESTING_PHASE;
+  const browserSignIn = useBrowserSignInState();
+  const browserPending = browserSignInIsPending(browserSignIn);
+  const visiblePhase = browserPending && phase === RESTING_PHASE ? 'browser' : phase;
+  const busy = visiblePhase !== RESTING_PHASE;
+
+  useEffect(() => {
+    if (browserPending) {
+      browserWasPending.current = true;
+      return;
+    }
+    if (!browserWasPending.current && phase !== 'browser' && phase !== 'enterprise_browser') return;
+    browserWasPending.current = false;
+    attempt.current += 1;
+    inFlight.current = false;
+    lastAction.current = null;
+    clearSignupAttemptMarkers();
+    setProviderPending(null);
+    setPhase(RESTING_PHASE);
+  }, [browserPending, phase]);
 
   useEffect(() => {
     if (error !== null || fieldError !== null || step.kind === 'notice') scene.setMood('error');
@@ -123,12 +147,14 @@ export function AuthFlow({
     async (action: () => Promise<AuthResult>, nextPhase: AuthPhase) => {
       if (inFlight.current || busy || !client.isReady) return;
       inFlight.current = true;
+      const running = ++attempt.current;
       clearMessages();
       lastAction.current = { action, phase: nextPhase };
       setPhase(nextPhase);
       let handingOff = false;
       try {
         const result = await action();
+        if (running !== attempt.current) return;
         if (result.status === 'redirecting') {
           handingOff = true;
           setPhase(result.phase ?? 'redirecting');
@@ -140,10 +166,11 @@ export function AuthFlow({
           apply(result);
         }
       } catch (error) {
+        if (running !== attempt.current) return;
         const kind = classifyAuthError(error).kind;
         apply({ status: 'failed', kind, message: copy.errorCopy(kind).message });
       } finally {
-        if (!handingOff) {
+        if (!handingOff && running === attempt.current) {
           inFlight.current = false;
           setPhase(RESTING_PHASE);
         }
@@ -169,6 +196,7 @@ export function AuthFlow({
     async (provider: AuthProviderId) => {
       if (inFlight.current || providerPending !== null || busy || !client.isReady) return;
       inFlight.current = true;
+      const running = ++attempt.current;
       clearMessages();
       setProviderPending(provider);
       setPhase('redirecting');
@@ -177,17 +205,21 @@ export function AuthFlow({
       let handingOff = false;
       try {
         const result = await client.startProvider(provider);
+        if (running !== attempt.current) return;
         if (result.status === 'redirecting') {
           handingOff = true;
           rememberAuthMethod({ kind: 'provider', provider });
+          setPhase(result.phase ?? 'redirecting');
+          if (result.phase === 'browser') setProviderPending(null);
           return;
         }
         apply(result);
       } catch (error) {
+        if (running !== attempt.current) return;
         const kind = classifyAuthError(error).kind;
         apply({ status: 'failed', kind, message: copy.errorCopy(kind).message });
       } finally {
-        if (!handingOff) {
+        if (!handingOff && running === attempt.current) {
           if (mode === 'signup') clearSignupAttemptMarkers();
           inFlight.current = false;
           setProviderPending(null);
@@ -269,7 +301,7 @@ export function AuthFlow({
     return (
       <AuthPasswordStep
         email={step.email}
-        phase={phase}
+        phase={visiblePhase}
         error={error}
         fieldError={fieldError}
         methods={step.methods.filter((method) => method !== 'password')}
@@ -291,7 +323,7 @@ export function AuthFlow({
       <AuthCodeStep
         email={step.email}
         purpose={step.passwordless ? 'passwordless' : step.purpose}
-        phase={phase}
+        phase={visiblePhase}
         error={error}
         fieldError={fieldError}
         resendBlockedSeconds={errorKind === 'rate_limited' ? retryAfterSeconds : null}
@@ -309,7 +341,7 @@ export function AuthFlow({
       <AuthSecondFactorStep
         factor={step.factor}
         alternatives={step.alternatives}
-        phase={phase}
+        phase={visiblePhase}
         error={error}
         fieldError={fieldError}
         onSubmit={(code) =>
@@ -327,7 +359,7 @@ export function AuthFlow({
         <AuthNewPasswordStep
           email={step.email}
           purpose={step.purpose}
-          phase={phase}
+          phase={visiblePhase}
           error={error}
           fieldError={fieldError}
           onEditEmail={step.purpose === 'sign_up' ? onEditEmail : undefined}
@@ -347,7 +379,7 @@ export function AuthFlow({
         providers={providers}
         switchUrl={redirects.switchUrl}
         ready={client.isReady}
-        phase={phase}
+        phase={visiblePhase}
         error={passwordRefused && !passwordFieldShown ? fieldError : error}
         fieldError={passwordRefused ? null : fieldError}
         passwordError={passwordRefused && passwordFieldShown ? fieldError : null}

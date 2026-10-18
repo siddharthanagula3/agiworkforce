@@ -2,11 +2,11 @@ use agiworkforce_app_server::{
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError, TurnClient,
 };
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventError,
-    AgentEventFileChangeKind, AgentEventFileChanged, AgentEventProgressStatus,
-    AgentEventProgressUpdate, AgentEventSource, AgentEventSourceList, AgentEventStop,
-    AgentEventStopReason, AgentEventToolExecutionEnd, AgentEventToolExecutionQueued,
-    AgentEventToolExecutionStart, AgentEventTurnDiff,
+    AgentEvent, AgentEventApprovalDecision, AgentEventApprovalResolved, AgentEventArtifactProduced,
+    AgentEventCommandStarted, AgentEventError, AgentEventFileChangeKind, AgentEventFileChanged,
+    AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventSource, AgentEventSourceList,
+    AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
+    AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
@@ -184,6 +184,9 @@ struct TurnSetupSnapshot {
     attachment_count: usize,
     fallback_chain: Option<crate::routing::fallback::FallbackChain>,
     auto_routing: Option<ManagedSessionAutoRouting>,
+    allowed_tools: Option<Vec<String>>,
+    disallowed_tools: Vec<String>,
+    host_subagent_withheld: Vec<String>,
 }
 
 impl TurnSetupSnapshot {
@@ -204,6 +207,9 @@ impl TurnSetupSnapshot {
             attachment_count: agent.attached_context_files.len(),
             fallback_chain: agent.fallback_chain.clone(),
             auto_routing: agent.managed_auto_routing().cloned(),
+            allowed_tools: agent.allowed_tools.clone(),
+            disallowed_tools: agent.disallowed_tools.clone(),
+            host_subagent_withheld: agent.host_subagent_withheld.clone(),
         }
     }
 
@@ -223,6 +229,9 @@ impl TurnSetupSnapshot {
         agent.attached_context_files.truncate(self.attachment_count);
         agent.fallback_chain = self.fallback_chain;
         agent.set_managed_auto_routing(self.auto_routing);
+        agent.allowed_tools = self.allowed_tools;
+        agent.disallowed_tools = self.disallowed_tools;
+        agent.host_subagent_withheld = self.host_subagent_withheld;
     }
 }
 
@@ -318,23 +327,26 @@ fn approval_from_plugin(scope: McpServerScope) -> Result<bool, DeveloperSessionH
     }
 }
 
-/// Withhold the subagent-spawning tools whenever a child session would run
-/// outside the host's authority: always when the workspace policy denies
-/// them, and otherwise unless this very send runs in bypass.
+/// Offer children only while their owner can persist lifecycle and route approvals.
 fn withhold_subagent_tools(workspace_root: &Path, agent: &mut AgentSession) {
-    let policy = PolicyEngine::load_workspace(workspace_root).ok();
-    let mut disallowed = agent
-        .disallowed_tools
-        .iter()
-        .filter(|spec| !SUBAGENT_SPAWN_TOOLS.contains(&spec.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
+    let policy = PolicyEngine::load_workspace(workspace_root);
+    let mut disallowed = agent.disallowed_tools.clone();
+    for injected in agent.host_subagent_withheld.drain(..) {
+        if let Some(index) = disallowed.iter().position(|spec| spec == &injected) {
+            disallowed.remove(index);
+        }
+    }
     for tool in SUBAGENT_SPAWN_TOOLS {
-        let denied_by_policy = policy
-            .as_ref()
-            .is_some_and(|policy| policy.evaluate(tool, "") == PolicyDecision::Deny);
-        if denied_by_policy || !agent.skip_permissions {
+        let denied_by_policy = policy.as_ref().map_or(true, |policy| {
+            policy.evaluate(tool, "") == PolicyDecision::Deny
+        });
+        let routable = agent.skips_approval()
+            || (agent.on_tool_approval.is_some()
+                && agent.can_own_child_tasks()
+                && agent.checkpoint_file_authority().is_some());
+        if (denied_by_policy || !routable) && !disallowed.iter().any(|spec| spec == tool) {
             disallowed.push(tool.to_string());
+            agent.host_subagent_withheld.push(tool.to_string());
         }
     }
     let allowed = agent.allowed_tools.clone().unwrap_or_default();
@@ -1928,6 +1940,23 @@ fn registry_task_type(
 
 #[async_trait]
 impl DeveloperSessionHost for CliDeveloperSessionHost {
+    async fn workspace_identity(
+        &self,
+    ) -> Result<
+        agiworkforce_protocol::developer_session::DeveloperWorkspaceIdentity,
+        DeveloperSessionHostError,
+    > {
+        Ok(
+            agiworkforce_protocol::developer_session::DeveloperWorkspaceIdentity {
+                cwd: self.workspace_file_authority.root().display().to_string(),
+                root_key: self
+                    .workspace_file_authority
+                    .identity()
+                    .map_err(invalid_request)?,
+            },
+        )
+    }
+
     fn server_version(&self) -> &'static str {
         env!("CARGO_PKG_VERSION")
     }
@@ -2230,6 +2259,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         messages_newest_first.reverse();
         transcript_truncated |= messages_newest_first.len() != eligible_count;
         Ok(ThreadReadResponse {
+            child_tasks: Some(
+                session
+                    .code_session()
+                    .tasks
+                    .iter()
+                    .filter(|task| task.id.as_str().starts_with("subagent_"))
+                    .rev()
+                    .take(50)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .map(agiworkforce_protocol::developer_session::DeveloperChildTask::from)
+                    .collect(),
+            ),
             thread: self.resolved_summary(resolved).await,
             messages: messages_newest_first,
             transcript_truncated,
@@ -3146,6 +3189,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         .unwrap_or_default();
                     let disallowed = validated_tool_filter(params.disallowed_tools.as_deref())?
                         .unwrap_or_else(|| agent.disallowed_tools.clone());
+                    if params.disallowed_tools.is_some() {
+                        agent.host_subagent_withheld.clear();
+                    }
                     agent.apply_tool_filters(&allowed, &disallowed);
                     self.apply_subagent_boundary_policy(&mut agent);
                 }
@@ -3342,7 +3388,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_turn_id.clone(),
                     task_pending.clone(),
                     task_notifications.clone(),
+                    task_event_sequence.clone(),
                 )));
+                withhold_subagent_tools(&task_workspace_root, &mut agent);
                 agent.on_user_input = task_answers_user_input.then(|| {
                     UserInputSink(user_input_callback(
                         task_thread_id.clone(),
@@ -5394,13 +5442,63 @@ async fn abort_and_join_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) {
     }
 }
 
+struct PendingApprovalGuard {
+    pending: Arc<Mutex<HashMap<String, PendingApproval>>>,
+    request_id: String,
+    thread_id: String,
+    turn_id: String,
+    notifications: broadcast::Sender<AppServerNotification>,
+    sequence: Arc<StdMutex<u64>>,
+    runtime: tokio::runtime::Handle,
+    armed: bool,
+}
+
+impl Drop for PendingApprovalGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let pending = self.pending.clone();
+        let request_id = self.request_id.clone();
+        let thread_id = self.thread_id.clone();
+        let turn_id = self.turn_id.clone();
+        let notifications = self.notifications.clone();
+        let sequence = self.sequence.clone();
+        self.runtime.spawn(async move {
+            let mut requests = pending.lock().await;
+            let owned = requests.get(&request_id).is_some_and(|request| {
+                request.thread_id == thread_id && request.turn_id == turn_id
+            });
+            if !owned {
+                return;
+            }
+            requests.remove(&request_id);
+            drop(requests);
+            emit_agent_event(
+                &thread_id,
+                &turn_id,
+                &sequence,
+                &notifications,
+                AgentEvent::ApprovalResolved(AgentEventApprovalResolved {
+                    approval_id: request_id,
+                    decision: AgentEventApprovalDecision::Cancelled,
+                }),
+            );
+        });
+    }
+}
+
 fn approval_callback(
     thread_id: String,
     turn_id: String,
     pending: Arc<Mutex<HashMap<String, PendingApproval>>>,
     notifications: broadcast::Sender<AppServerNotification>,
+    sequence: Arc<StdMutex<u64>>,
 ) -> crate::tools::ApprovalCallback {
+    let runtime = tokio::runtime::Handle::current();
     Arc::new(move |request: ApprovalRequest| {
+        let runtime = runtime.clone();
+        let sequence = sequence.clone();
         let thread_id = thread_id.clone();
         let turn_id = turn_id.clone();
         let pending = pending.clone();
@@ -5447,6 +5545,16 @@ fn approval_callback(
                     responder: sender,
                 },
             );
+            let mut guard = PendingApprovalGuard {
+                pending: pending.clone(),
+                request_id: request_id.clone(),
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                notifications: notifications.clone(),
+                sequence: sequence.clone(),
+                runtime,
+                armed: true,
+            };
             if let Ok(notification) = task_state_notification(
                 turn_id.clone(),
                 AgentTaskState::AwaitingInput,
@@ -5486,6 +5594,7 @@ fn approval_callback(
                 Err(_) => ApprovalReply::decided(ApprovalDecision::Timeout),
             };
             pending.lock().await.remove(&request_id);
+            guard.armed = false;
             if let Some(note) = reply.note.filter(|note| !note.trim().is_empty()) {
                 crate::tools::record_approval_note(note);
             }
@@ -5493,6 +5602,27 @@ fn approval_callback(
                 crate::tools::record_approved_edit(content);
             }
             let decision = reply.decision;
+            emit_agent_event(
+                &thread_id,
+                &turn_id,
+                &sequence,
+                &notifications,
+                AgentEvent::ApprovalResolved(AgentEventApprovalResolved {
+                    approval_id: request_id,
+                    decision: match decision {
+                        ApprovalDecision::AllowOnce | ApprovalDecision::AlwaysAllow => {
+                            AgentEventApprovalDecision::Approved
+                        }
+                        ApprovalDecision::AllowSession => {
+                            AgentEventApprovalDecision::ApprovedForSession
+                        }
+                        ApprovalDecision::Deny => AgentEventApprovalDecision::Denied,
+                        ApprovalDecision::Cancel | ApprovalDecision::Timeout => {
+                            AgentEventApprovalDecision::Cancelled
+                        }
+                    },
+                }),
+            );
             if let Ok(notification) = task_state_notification(
                 turn_id,
                 AgentTaskState::Running,
@@ -8491,6 +8621,7 @@ mod tests {
             "turn-1".to_string(),
             pending.clone(),
             notifications,
+            Arc::new(StdMutex::new(0)),
         );
         let request = ApprovalRequest::new(
             crate::tui::approval_broker::ApprovalRequestKind::Exec {
@@ -8538,6 +8669,193 @@ mod tests {
             waiter.await.expect("waiter task"),
             ApprovalDecision::AllowOnce
         );
+    }
+
+    #[tokio::test]
+    async fn concurrent_child_approvals_keep_independent_request_identity_and_outcomes() {
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (notifications, mut receiver) = broadcast::channel(32);
+        let callback = approval_callback(
+            "parent".into(),
+            "turn".into(),
+            pending.clone(),
+            notifications,
+            Arc::new(StdMutex::new(0)),
+        );
+        let first =
+            crate::teams::named_approval(ToolApprovalSink(callback.clone()), "subagent_first");
+        let second = crate::teams::named_approval(ToolApprovalSink(callback), "subagent_second");
+        let request = || {
+            ApprovalRequest::new(
+                ApprovalRequestKind::Exec {
+                    command: "cargo test".into(),
+                },
+                "Run tests",
+                vec![],
+            )
+        };
+        let first_request = request();
+        let second_request = request();
+        let first_id = first_request.id.to_string();
+        let second_id = second_request.id.to_string();
+        let first_waiter = tokio::spawn(async move { first.0(first_request).await });
+        let second_waiter = tokio::spawn(async move { second.0(second_request).await });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while pending.lock().await.len() != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("both children waiting");
+        {
+            let mut held = pending.lock().await;
+            assert!(held[&first_id].snapshot.summary.contains("subagent_first"));
+            assert!(held[&second_id]
+                .snapshot
+                .summary
+                .contains("subagent_second"));
+            held.remove(&second_id)
+                .unwrap()
+                .responder
+                .send(ApprovalReply::decided(ApprovalDecision::Deny))
+                .expect("deny second");
+            held.remove(&first_id)
+                .unwrap()
+                .responder
+                .send(ApprovalReply::decided(ApprovalDecision::AllowOnce))
+                .expect("allow first");
+        }
+        assert_eq!(first_waiter.await.unwrap(), ApprovalDecision::AllowOnce);
+        assert_eq!(second_waiter.await.unwrap(), ApprovalDecision::Deny);
+        let mut settled = std::collections::HashMap::new();
+        while let Ok(event) = receiver.try_recv() {
+            if event.params["event"]["type"] == "approval-resolved" {
+                settled.insert(
+                    event.params["event"]["approvalId"]
+                        .as_str()
+                        .unwrap()
+                        .to_string(),
+                    event.params["event"]["decision"].clone(),
+                );
+            }
+        }
+        assert_eq!(settled.get(&first_id), Some(&serde_json::json!("approved")));
+        assert_eq!(settled.get(&second_id), Some(&serde_json::json!("denied")));
+        assert!(pending.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dropped_child_approval_retires_its_request_without_touching_a_sibling() {
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (notifications, mut receiver) = broadcast::channel(16);
+        let callback = approval_callback(
+            "thread-1".into(),
+            "turn-1".into(),
+            pending.clone(),
+            notifications,
+            Arc::new(StdMutex::new(0)),
+        );
+        let first = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".into(),
+            },
+            "child-1",
+            vec![],
+        );
+        let first_id = first.id.to_string();
+        let second = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".into(),
+            },
+            "child-2",
+            vec![],
+        );
+        let second_id = second.id.to_string();
+        let first_callback = callback.clone();
+        let first_waiter = tokio::spawn(async move { first_callback(first).await });
+        let second_waiter = tokio::spawn(async move { callback(second).await });
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while pending.lock().await.len() != 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("both approvals pending");
+        first_waiter.abort();
+        assert!(first_waiter
+            .await
+            .expect_err("aborted waiter")
+            .is_cancelled());
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            while pending.lock().await.contains_key(&first_id) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("cancelled request retired");
+        let sibling = pending
+            .lock()
+            .await
+            .remove(&second_id)
+            .expect("sibling remains pending");
+        sibling
+            .responder
+            .send(ApprovalReply::decided(ApprovalDecision::Deny))
+            .expect("deny sibling");
+        assert_eq!(
+            second_waiter.await.expect("sibling settles"),
+            ApprovalDecision::Deny
+        );
+        let mut cancelled = false;
+        while let Ok(event) = receiver.try_recv() {
+            if event.method == "turn/agent_event" && event.params["event"]["approvalId"] == first_id
+            {
+                assert_eq!(event.params["turnId"], "turn-1");
+                assert_eq!(event.params["event"]["decision"], "cancelled");
+                cancelled = true;
+            }
+        }
+        assert!(
+            cancelled,
+            "the owning surface must retire the cancelled approval card"
+        );
+    }
+
+    #[tokio::test]
+    async fn approval_response_cannot_cross_turns_or_replay_after_settlement() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let (pending, reply) = pending_command_approval("cargo test", None);
+        host.pending_approvals
+            .lock()
+            .await
+            .insert("approval-1".into(), pending);
+        let answer = |turn: &str| ApprovalResponseParams {
+            thread_id: "thread-1".into(),
+            turn_id: turn.into(),
+            request_id: "approval-1".into(),
+            decision: ReviewDecision::Denied,
+            note: None,
+            edited_content: None,
+        };
+        assert!(host.respond_to_approval(answer("turn-2")).await.is_err());
+        assert!(host
+            .pending_approvals
+            .lock()
+            .await
+            .contains_key("approval-1"));
+        host.respond_to_approval(answer("turn-1"))
+            .await
+            .expect("owned denial");
+        assert_eq!(
+            reply
+                .await
+                .expect("denial reaches only the waiter")
+                .decision,
+            ApprovalDecision::Deny
+        );
+        assert!(host.respond_to_approval(answer("turn-1")).await.is_err());
     }
 
     fn pending_command_approval(
@@ -9505,6 +9823,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_identity_is_bound_to_the_held_directory_and_refuses_replacement() {
+        let parent = tempdir().expect("owned parent");
+        let selected = parent.path().join("selected");
+        std::fs::create_dir(&selected).expect("selected");
+        let store = tempdir().expect("store");
+        let host = boundary_host(&selected, store.path());
+        let first = host.workspace_identity().await.expect("identity");
+        assert_eq!(
+            first.cwd,
+            selected.canonicalize().unwrap().display().to_string()
+        );
+        assert_eq!(host.workspace_identity().await.unwrap(), first);
+        std::fs::rename(&selected, parent.path().join("moved")).expect("move original");
+        std::fs::create_dir(&selected).expect("replacement");
+        assert!(host.workspace_identity().await.is_err());
+    }
+
+    #[tokio::test]
     async fn subagent_tools_are_withheld_while_a_child_cannot_reach_the_approval_client() {
         let workspace = tempdir().expect("workspace");
         let store = tempdir().expect("store");
@@ -9527,11 +9863,23 @@ mod tests {
             }
         }
 
-        // Bypass answers its own approvals, so the child never needs the sink
-        // the crossing cannot carry, and `task` comes back. (`agent` stays out.
         agent.bypass_permissions_available = true;
         apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
             .expect("authorized controls");
+        host.apply_subagent_boundary_policy(&mut agent);
+        assert!(
+            !tool_names(&agent).iter().any(|name| name == "task"),
+            "Bypass does not replace a durable child owner"
+        );
+        let root = workspace.path().canonicalize().expect("root");
+        let mut managed = ManagedSession::new("bypass-parent", chrono::Utc::now());
+        managed.workspace_root = Some(root.clone());
+        agent.managed_session = Some(managed);
+        agent.managed_session_path = Some(store.path().join("bypass-parent.json"));
+        agent.set_session_persistence(true);
+        agent.install_workspace_file_authority(
+            crate::path_security::WorkspaceFileAuthority::new(&root).expect("authority"),
+        );
         host.apply_subagent_boundary_policy(&mut agent);
         let names = tool_names(&agent);
         assert!(
@@ -9542,6 +9890,43 @@ mod tests {
             names.iter().any(|name| name == "read_file"),
             "the boundary policy must not disturb the rest of the tool schema"
         );
+    }
+
+    #[tokio::test]
+    async fn normal_children_require_an_owned_store_and_live_approval_route_without_erasing_user_denies(
+    ) {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let mut agent = test_agent();
+        let root = workspace.path().canonicalize().expect("root");
+        let mut managed = ManagedSession::new("normal-parent", chrono::Utc::now());
+        managed.workspace_root = Some(root.clone());
+        agent.managed_session = Some(managed);
+        agent.managed_session_path = Some(store.path().join("normal-parent.json"));
+        agent.set_session_persistence(true);
+        agent.install_workspace_file_authority(
+            crate::path_security::WorkspaceFileAuthority::new(&root).expect("authority"),
+        );
+        host.apply_subagent_boundary_policy(&mut agent);
+        assert!(!tool_names(&agent).iter().any(|name| name == "task"));
+        let (notifications, _) = broadcast::channel(16);
+        agent.on_tool_approval = Some(ToolApprovalSink(approval_callback(
+            "normal-parent".into(),
+            "parent-turn".into(),
+            Arc::default(),
+            notifications,
+            Arc::new(StdMutex::new(0)),
+        )));
+        host.apply_subagent_boundary_policy(&mut agent);
+        assert!(tool_names(&agent).iter().any(|name| name == "task"));
+        assert!(!agent.skip_permissions);
+        agent.disallowed_tools.push("task".to_string());
+        host.apply_subagent_boundary_policy(&mut agent);
+        assert!(!tool_names(&agent).iter().any(|name| name == "task"));
+        agent.on_tool_approval = None;
+        host.apply_subagent_boundary_policy(&mut agent);
+        assert!(!tool_names(&agent).iter().any(|name| name == "task"));
     }
 
     #[tokio::test]

@@ -631,7 +631,11 @@ mod tests {
         // Verify it is a valid ZIP
         let file = std::fs::File::open(&output_path).expect("failed to open pptx");
         let archive = zip::ZipArchive::new(file).expect("not a valid zip");
-        let names: Vec<&str> = archive.file_names().collect();
+        let decoded_names = archive
+            .file_names()
+            .collect::<zip::result::ZipResult<Vec<_>>>()
+            .expect("valid ZIP entry names");
+        let names: Vec<&str> = decoded_names.iter().map(|name| name.as_ref()).collect();
         assert!(names.contains(&"[Content_Types].xml"));
         assert!(names.contains(&"ppt/presentation.xml"));
         assert!(names.contains(&"ppt/slides/slide1.xml"));
@@ -675,7 +679,11 @@ mod tests {
 
         let file = std::fs::File::open(&output_path).expect("failed to open pptx");
         let archive = zip::ZipArchive::new(file).expect("not a valid zip");
-        let names: Vec<&str> = archive.file_names().collect();
+        let decoded_names = archive
+            .file_names()
+            .collect::<zip::result::ZipResult<Vec<_>>>()
+            .expect("valid ZIP entry names");
+        let names: Vec<&str> = decoded_names.iter().map(|name| name.as_ref()).collect();
         assert!(names.contains(&"ppt/notesSlides/notesSlide1.xml"));
         // Slide 2 has no notes, so notesSlide2 should not exist
         assert!(!names.contains(&"ppt/notesSlides/notesSlide2.xml"));

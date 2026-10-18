@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ScheduleNotificationSettings } from '@agiworkforce/types';
 import { stripTrailingSlashes } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_SCHEDULES_PATH = '/api/schedules';
@@ -110,6 +111,19 @@ export const ManagedCloudScheduleConnectorsSchema = z
   .max(MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS)
   .nullable();
 
+export const ManagedCloudScheduleNotificationSettingsSchema = z
+  .object({
+    onSuccess: z.boolean().default(true),
+    onFailure: z.boolean().default(true),
+    onApproval: z.boolean().default(true),
+    push: z.boolean().default(true),
+    email: z.boolean().default(true),
+  })
+  .strict();
+export type ManagedCloudScheduleNotificationSettings = ScheduleNotificationSettings;
+export const MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS =
+  ManagedCloudScheduleNotificationSettingsSchema.parse({});
+
 export const ManagedCloudScheduleMutationSchema = z.object({
   name: z.string().trim().min(1).max(500),
   description: z.string().max(2_000).nullable(),
@@ -140,6 +154,7 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   retryBackoffSeconds: z.number().int().min(60).max(86_400).optional(),
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
   condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
+  notificationSettings: ManagedCloudScheduleNotificationSettingsSchema.optional(),
   sources: ManagedCloudScheduleSourcesSchema.optional(),
   connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });
@@ -182,6 +197,7 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   creditCap: z.number().positive().nullable().optional(),
   creditsUsed: z.number().nonnegative().optional(),
   pausedReason: z.enum(['credit_cap_reached', 'approval_required']).nullable().optional(),
+  notificationSettings: ManagedCloudScheduleNotificationSettingsSchema.optional(),
   sources: ManagedCloudScheduleSourcesSchema.optional(),
   connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });

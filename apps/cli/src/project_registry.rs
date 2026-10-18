@@ -167,15 +167,13 @@ impl ProjectRegistry {
             if !matches_identity && key != &path_key {
                 continue;
             }
-            if entry.trust_level == "untrusted" && entry.revoked_at.is_some() {
-                continue;
-            }
+            let already_revoked = entry.trust_level == "untrusted" && entry.revoked_at.is_some();
             entry.trust_level = "untrusted".to_string();
             entry.revoked_at = Some(now.clone());
             entry.trusted_by = None;
             entry.trusted_on = None;
             entry.trusted_at = None;
-            revoked += 1;
+            revoked += usize::from(!already_revoked);
         }
         revoked
     }
@@ -498,6 +496,24 @@ mod tests {
 
         let reloaded = ProjectRegistry::load(config.path()).unwrap();
         assert_eq!(reloaded.cloud_project_for(&project), Some("p-77"));
+    }
+
+    #[test]
+    fn repeated_revocation_refreshes_the_marker_for_a_later_process_consent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(&root, "git:example.invalid/owner/repo", "owner", "device")
+            .unwrap();
+        assert_eq!(registry.revoke(&root, "git:example.invalid/owner/repo"), 1);
+        let key = root.to_string_lossy().to_string();
+        registry.projects.get_mut(&key).unwrap().revoked_at = Some("2000-01-01T00:00:00Z".into());
+        assert_eq!(registry.revoke(&root, "git:example.invalid/owner/repo"), 0);
+        assert_ne!(
+            registry.projects.get(&key).unwrap().revoked_at.as_deref(),
+            Some("2000-01-01T00:00:00Z")
+        );
     }
 
     #[test]
