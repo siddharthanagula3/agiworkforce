@@ -4285,16 +4285,6 @@ Source: `scripts/check-concurrent-step-lease.mjs:17`. Exact fixture results (`au
 
 Resolution/acceptance: Require current lease comparison in the mutation WHERE clause or verify actual transaction-scoped locked ownership. Reject SET-only token writes, comments/literals and unrelated locks while accepting the real claim transaction.
 
-## CHROME-STREAM-TOTAL-CAP-TEST-INTERCEPTED-01
-
-Severity: Low. Status: source-supported instrument defect with decoder interception reproduced in isolated component probes on 2026-10-09; the original Vitest file was not newly executed.
-
-The cumulative-output cap case supplies one approximately 4 MiB event. The per-frame decoder rejects it against the smaller approximately 1 MiB frame cap before the cumulative-output condition can be reached. The asserted generic `protocol_error` can therefore remain green if the intended cumulative guard is removed.
-
-Full-file specialist evidence, exact test locations and decoder controls (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-002.json`, untracked). This concerns what the test establishes; it does not claim the cumulative guard is missing or broken in production.
-
-Resolution/acceptance: Construct multiple individually valid frames whose cumulative visible payload crosses the total cap; distinguish or instrument the cumulative rejection subject and verify removing that guard invalidates the test. Retain separate oversized-frame cases. No tests or implementation were changed.
-
 ## AUDIT-IMMUTABILITY-HISTORICAL-TRIGGER-01
 
 Severity: Medium. Status: open in current source reviewed 2026-10-09; no implementation change.
