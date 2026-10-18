@@ -190,7 +190,7 @@ pub(crate) async fn execute_git_tool(
         return Ok(denial);
     }
 
-    let result = run_operation(tool_name, args, operation, &git, &root).await?;
+    let result = run_operation(tool_name, operation, &git, &root).await?;
     Ok(match verdict {
         Some(OperationAvailability::Degraded(reason)) if result.success => ToolResult {
             output: format!("{}\n{reason}", result.output),
@@ -315,7 +315,6 @@ async fn consent_for_operation(
 
 async fn run_operation(
     tool_name: &str,
-    args: &HashMap<String, String>,
     operation: GitOperation,
     git: &GitApi,
     root: &Path,
@@ -451,7 +450,6 @@ async fn run_operation(
             other.label()
         )),
     };
-    let _ = args;
 
     Ok(match outcome {
         Ok(value) => succeeded(tool_name, value),

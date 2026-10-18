@@ -450,8 +450,9 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
         auth: Auth::Bearer(jwt.to_string()),
         // Managed Cloud refuses a request that does not name its client
         // surface, and refuses one with no idempotency key. The key is minted
-        // per spec, and a spec is built per request, so a retry of one request
-        // reuses its key while two turns never share one.
+        // per spec, so only a transport retry inside one call reuses it. A
+        // retried turn builds a new spec and a new key: the server answers a
+        // reused key whose request has ended with 409 rather than a replay.
         extra_headers: managed_cloud_client_headers()
             .into_iter()
             .chain([(
