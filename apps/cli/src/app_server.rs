@@ -204,6 +204,9 @@ async fn mcp_server_replies(frame: &str) -> Vec<Value> {
             server::initialize_result(requested, capabilities, &identity),
         )];
     }
+    if method == "ping" {
+        return vec![server::success(Some(id), json!({}))];
+    }
 
     let modern = match server::classify_request(params, None) {
         Ok(RequestEra::Modern { .. }) => true,

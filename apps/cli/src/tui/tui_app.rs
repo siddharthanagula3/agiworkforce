@@ -258,7 +258,6 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
         TranscriptCellState::Complete => ("✔".to_string(), ui_success()),
         TranscriptCellState::Failed => ("✗".to_string(), ui_danger()),
         TranscriptCellState::Cancelled => ("⊘".to_string(), ui_muted()),
-        TranscriptCellState::Pending => ("•".to_string(), ui_muted()),
     };
     let icon = tool_type_icon(&cell.name);
     let is_command = icon == "$";
@@ -6574,10 +6573,7 @@ async fn run_event_loop(
 fn settle_running_tool_cells(cells: &mut [ToolCell]) {
     use crate::tui::transcript_cell::TranscriptCellState;
     for cell in cells.iter_mut() {
-        if matches!(
-            cell.state,
-            TranscriptCellState::Running | TranscriptCellState::Pending
-        ) {
+        if matches!(cell.state, TranscriptCellState::Running) {
             cell.state = TranscriptCellState::Cancelled;
         }
     }
