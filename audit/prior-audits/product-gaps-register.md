@@ -1568,7 +1568,7 @@ verification lines pass, not when its code lands.
 
 **Phase 6, microinteractions and final polish.** 27. `PG-CHAT-08`, `PG-SHARED-10`, `PG-SHARED-12`, `PG-WEB-13`, `PG-WEB-17`, `PG-WEB-19`, `PG-WEB-20`, `PG-DESK-17`, `PG-DESK-DEAD`, `PG-CHROME-02`, `PG-CHROME-11`, `PG-MOB-13`, `PG-CLI-08`, `PG-CLI-13` to `PG-CLI-15`. 28. Register hygiene from section 11: flip the fixed `GAP-*` rows, re-status the 47 declined rows, delete or repoint the nine known-flaws rows.
 
-**Before public launch**, in addition to Phase 0 and Phase 1: the Chrome extension `CHROME-SURFACE-LOST-TURN-01` and `EXT-CRX-KEY-MISSING-BLOCKS-CLERK-SYNC-01`, the CLI npm publication (`PG-CLI-02`), `AGI-34` confirmed on a deployment, and the two live-validation notes in `audit/prior-audits/active-issues-register.md` that are user-visible.
+**Before public launch**, in addition to Phase 0 and Phase 1: the Chrome extension `EXT-CRX-KEY-MISSING-BLOCKS-CLERK-SYNC-01`, the CLI npm publication (`PG-CLI-02`), `AGI-34` confirmed on a deployment, and the two live-validation notes in `audit/prior-audits/active-issues-register.md` that are user-visible.
 
 ## 14. What still needs runtime verification
 
