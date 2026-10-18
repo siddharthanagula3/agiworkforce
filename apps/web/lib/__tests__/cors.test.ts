@@ -29,12 +29,10 @@ describe('isOriginAllowed', () => {
     expect(isOriginAllowed('tauri://localhost')).toBe(true);
   });
 
-  it('allows the Electron cloud shell origin agi://cloud, exactly', async () => {
+  it('rejects agi:// origins', async () => {
     const { isOriginAllowed } = await import('../cors');
-    expect(isOriginAllowed('agi://cloud')).toBe(true);
-    expect(isOriginAllowed('agi://cloud-evil')).toBe(false);
+    expect(isOriginAllowed('agi://cloud')).toBe(false);
     expect(isOriginAllowed('agi://other')).toBe(false);
-    expect(isOriginAllowed('agi://cloud.example.com')).toBe(false);
   });
 
   it('rejects the literal null origin even with requireOrigin off', async () => {

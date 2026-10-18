@@ -38,7 +38,6 @@ describe('browser identity provider routes', () => {
     '/login',
     '/signup/complete',
     '/auth/device',
-    '/verify?code=1',
     '/apps',
     '/connectors/mcp-directory',
     '/gallery',

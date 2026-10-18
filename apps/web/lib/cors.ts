@@ -64,10 +64,6 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
     return true;
   }
 
-  if (origin === 'agi://cloud') {
-    return true;
-  }
-
   if (process.env.NODE_ENV === 'development') {
     const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
     if (localhostPattern.test(origin)) {

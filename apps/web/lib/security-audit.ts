@@ -194,7 +194,6 @@ export type AuditEventType =
   | 'login'
   | 'logout'
   | 'session_revoked'
-  | 'device_authorization_initiated'
   | 'device_authorization_approved'
   | 'device_authorization_denied'
   | 'api_key_created'
@@ -741,7 +740,6 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'login':
     case 'logout':
     case 'session_revoked':
-    case 'device_authorization_initiated':
     case 'device_authorization_approved':
     case 'device_authorization_denied':
       return 'session';
