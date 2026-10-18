@@ -3,7 +3,7 @@ import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
-import { Copy, renderIcon } from '../../assets/icons';
+import { Copy, ImageIcon, ImageOff, renderIcon } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
 
@@ -78,8 +78,9 @@ export function sanitizeHtml(dirty: string): string {
       'start',
       'id',
       'data-math',
+      'data-md-image',
     ],
-    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start', 'data-math'],
+    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start', 'data-math', 'data-md-image'],
     FORBID_TAGS: [
       'script',
       'style',
@@ -162,7 +163,14 @@ md.renderer.rules['image'] = (tokens, index) => {
   const src = String(token.attrGet('src') ?? '');
   const label = escapeText(token.content || src);
   if (!SAFE_IMAGE_HREF.test(src)) return label;
-  return `<a href="${md.utils.escapeHtml(src)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  let linkDepth = 0;
+  for (const previous of tokens.slice(0, index)) {
+    if (previous.type === 'link_open') linkDepth += 1;
+    else if (previous.type === 'link_close') linkDepth -= 1;
+  }
+  if (linkDepth > 0) return label;
+  const title = String(token.attrGet('title') ?? '');
+  return `<a href="${md.utils.escapeHtml(src)}" target="_blank" rel="noopener noreferrer" data-md-image="${escapeText(token.content)}"${title ? ` title="${escapeText(title)}"` : ''}>${label}</a>`;
 };
 
 md.use(markdownItFootnote);
@@ -395,8 +403,148 @@ function addCodeCopyButtons(root: HTMLElement): void {
   }
 }
 
+const IMAGE_MAX_RETRIES = 2;
+const REMOTE_IMAGE = /^https?:$/;
+const approvedImageKeys = new Set<string>();
+
+interface RemoteImage {
+  src: string;
+  key: string;
+  host: string;
+  alt: string;
+  title: string;
+}
+
+function remoteImage(link: HTMLAnchorElement): RemoteImage | null {
+  let url: URL;
+  try {
+    url = new URL(link.getAttribute('href') ?? '');
+  } catch {
+    return null;
+  }
+  if (!REMOTE_IMAGE.test(url.protocol)) return null;
+  const key = new URL(url.href);
+  key.hash = '';
+  return {
+    src: url.href,
+    key: key.href,
+    host: url.host,
+    alt: link.dataset['mdImage'] ?? '',
+    title: link.title,
+  };
+}
+
+function imageNotice(): HTMLSpanElement {
+  return el('span', { class: 'sp-md-image-notice' });
+}
+
+function buildBlockedImage(link: HTMLAnchorElement, image: RemoteImage): HTMLElement {
+  const notice = imageNotice();
+  notice.append(
+    renderIcon(ImageIcon, 14),
+    link,
+    el('span', { class: 'sp-md-image-notice__host' }, t('spImageFrom', [image.host])),
+  );
+  const load = el(
+    'button',
+    {
+      class: 'sp-md-image-button',
+      type: 'button',
+      'aria-label': t('spImageLoadLabel', [image.host]),
+    },
+    t('spImageLoad'),
+  );
+  load.addEventListener('click', () => {
+    approvedImageKeys.add(image.key);
+    const view = buildImageView(image, 0);
+    notice.replaceWith(view);
+    view.focus();
+  });
+  notice.appendChild(load);
+  return notice;
+}
+
+function buildFailedImage(image: RemoteImage, attempt: number): HTMLElement {
+  const notice = imageNotice();
+  const failed = t('spImageFailed');
+  notice.append(
+    renderIcon(ImageOff, 14),
+    el(
+      'span',
+      {
+        class: 'sp-md-image-notice__label',
+        role: 'img',
+        'aria-label': image.alt ? t('spImageFailedLabel', [image.alt]) : failed,
+      },
+      image.alt || failed,
+    ),
+  );
+  if (attempt < IMAGE_MAX_RETRIES) {
+    const retry = el('button', { class: 'sp-md-image-button', type: 'button' }, t('spImageRetry'));
+    retry.addEventListener('click', () => {
+      const view = buildImageView(image, attempt + 1);
+      notice.replaceWith(view);
+      view.focus();
+    });
+    notice.appendChild(retry);
+  }
+  notice.appendChild(
+    el(
+      'a',
+      {
+        class: 'sp-md-image-download',
+        href: image.src,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        download: '',
+      },
+      t('spImageDownload'),
+    ),
+  );
+  return notice;
+}
+
+function buildImageView(image: RemoteImage, attempt: number): HTMLAnchorElement {
+  const open = t('spImageOpen');
+  const view = el('a', {
+    class: 'sp-md-image sp-md-image--loading',
+    href: image.src,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    title: image.title || image.alt || open,
+    'aria-label': image.alt ? t('spImageOpenLabel', [image.alt]) : open,
+  });
+  const img = el('img', {
+    src: image.src,
+    alt: image.alt,
+    loading: 'lazy',
+    referrerpolicy: 'no-referrer',
+  });
+  if (image.title) img.title = image.title;
+  img.addEventListener('load', () => view.classList.remove('sp-md-image--loading'));
+  img.addEventListener('error', () => view.replaceWith(buildFailedImage(image, attempt)));
+  view.appendChild(img);
+  return view;
+}
+
+function addRemoteImages(root: HTMLElement): void {
+  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[data-md-image]')) {
+    if (link.parentElement?.closest('a')) continue;
+    const image = remoteImage(link);
+    if (!image) continue;
+    if (approvedImageKeys.has(image.key)) {
+      link.replaceWith(buildImageView(image, 0));
+      continue;
+    }
+    const parent = link.parentNode;
+    const next = link.nextSibling;
+    parent?.insertBefore(buildBlockedImage(link, image), next);
+  }
+}
+
 export function renderMarkdownInto(target: HTMLElement, text: string): Promise<void> {
   target.innerHTML = sanitizeHtml(renderMarkdown(text));
   addCodeCopyButtons(target);
+  addRemoteImages(target);
   return renderMath(target);
 }
