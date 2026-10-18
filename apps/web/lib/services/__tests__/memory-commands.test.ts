@@ -97,6 +97,22 @@ describe('runMemoryCommand', () => {
     );
   });
 
+  it('says the fact was not saved when a pinned memory on the topic keeps priority', async () => {
+    mocks.writeConsolidatedMemory.mockResolvedValueOnce({
+      outcome: 'inserted',
+      id: 'm2',
+      content: 'I use TypeScript',
+      superseded_by: 'm1',
+    });
+
+    const result = await runMemoryCommand(db(), SCOPE, {
+      message: 'Remember that I use TypeScript',
+    });
+
+    expect(result?.outcome.status).toBe('overruled');
+    expect(result?.outcome.message).not.toContain('Saved to memory');
+  });
+
   it('stores a sensitive fact the user asked to remember while the opt-in is off', async () => {
     const result = await runMemoryCommand(db(), SCOPE, {
       message: 'Remember that I am a practicing Catholic',

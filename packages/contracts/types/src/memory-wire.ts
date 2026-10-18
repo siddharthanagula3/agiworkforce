@@ -95,6 +95,7 @@ export interface ManagedMemoryUpdateRequest {
 export const MANAGED_MEMORY_COMMAND_STATUSES = [
   'stored',
   'already_known',
+  'overruled',
   'refused',
   'forgotten',
   'nothing_to_forget',

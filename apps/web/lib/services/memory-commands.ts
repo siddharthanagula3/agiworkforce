@@ -147,10 +147,11 @@ export function createMemoryCommandPorts(
           projectId: scope.projectId ?? null,
           userRequested: scope.userRequested === true,
         });
-        if (!row) return { stored: false, alreadyKnown: false };
-        return { stored: row.outcome === 'inserted', alreadyKnown: row.outcome === 'merged' };
+        if (!row) return 'not_stored';
+        if (row.outcome === 'merged') return 'already_known';
+        return row.superseded_by ? 'overruled' : 'stored';
       } catch (error) {
-        if (error instanceof MemoryIneligibleError) return { stored: false, alreadyKnown: false };
+        if (error instanceof MemoryIneligibleError) return 'not_stored';
         throw error;
       }
     },
@@ -248,6 +249,7 @@ export async function runMemoryCommand(
 export const MEMORY_COMMAND_TURN_STATUSES = [
   'stored',
   'already_known',
+  'overruled',
   'refused',
   'confirmation_required',
   'nothing_to_forget',
@@ -260,6 +262,8 @@ export type MemoryCommandTurnStatus = (typeof MEMORY_COMMAND_TURN_STATUSES)[numb
 const MEMORY_COMMAND_TURN_OUTCOMES: Readonly<Record<MemoryCommandTurnStatus, string>> = {
   stored: 'It was saved to memory.',
   already_known: 'It was already in memory, so nothing changed.',
+  overruled:
+    'It was not saved, because a pinned memory on the same topic takes priority. Do not say you will remember it.',
   refused:
     'It was not saved: memory is off, or this is something memory does not keep. Do not say you will remember it.',
   confirmation_required:

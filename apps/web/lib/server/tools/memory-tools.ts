@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import { OVERRULED_MEMORY_MESSAGE } from '@agiworkforce/agent-core';
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import {
   loadManagedMemoryContext,
@@ -152,8 +153,9 @@ async function saveMemory(
   const stored = await ports.store({ fact: parsed.data.fact, category: 'fact' });
   return {
     content: JSON.stringify({
-      saved: stored.stored,
-      alreadyKnown: stored.alreadyKnown,
+      saved: stored === 'stored',
+      alreadyKnown: stored === 'already_known',
+      ...(stored === 'overruled' ? { reason: OVERRULED_MEMORY_MESSAGE } : {}),
     }),
     isError: false,
   };

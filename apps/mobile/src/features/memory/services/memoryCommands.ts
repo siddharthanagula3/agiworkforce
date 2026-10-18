@@ -23,11 +23,17 @@ const MEMORY_OFF_MESSAGE = 'Memory is turned off in your settings.';
 const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
 const NOTHING_FORGOTTEN_MESSAGE = 'Nothing was forgotten.';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CHANGED_STATUSES: ReadonlySet<MemoryCommandStatus> = new Set(['stored', 'forgotten']);
+const CHANGED_STATUSES: ReadonlySet<MemoryCommandStatus> = new Set([
+  'stored',
+  'overruled',
+  'forgotten',
+]);
+const UNSAVED_STATUSES: ReadonlySet<MemoryCommandStatus> = new Set(['refused', 'overruled']);
 
 export type MemoryCommandStatus =
   | 'stored'
   | 'already_known'
+  | 'overruled'
   | 'refused'
   | 'forgotten'
   | 'nothing_to_forget'
@@ -78,9 +84,16 @@ function localMemoryPorts(memoryEnabled: boolean): ExplicitMemoryPorts {
     },
     store: async ({ fact }) => {
       const result = await writeLocalMemoryFact({ fact, source: 'typed' });
-      return result.outcome === 'already_known'
-        ? { stored: false, alreadyKnown: true }
-        : { stored: true, alreadyKnown: false };
+      switch (result.outcome) {
+        case 'inserted':
+          return 'stored';
+        case 'already_known':
+          return 'already_known';
+        case 'kept_existing':
+          return 'overruled';
+        case 'refused':
+          return 'not_stored';
+      }
     },
     find: async (subject) => {
       const trimmed = subject.trim();
@@ -202,7 +215,7 @@ export async function answerMemoryCommand(
     return { kind: reply.kind, status: reply.status };
   }
 
-  report(memoryStep(reply.message, reply.status === 'refused'));
+  report(memoryStep(reply.message, UNSAVED_STATUSES.has(reply.status)));
   if (input.executionMode === 'cloud' && CHANGED_STATUSES.has(reply.status)) {
     void syncNow().catch(() => undefined);
   }

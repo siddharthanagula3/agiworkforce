@@ -215,8 +215,23 @@ export function extractPassiveMemoryFacts(message: string): string[] {
 export type MemoryCommandRefusalReason = 'ineligible' | 'excluded' | 'memory_disabled';
 
 export type ExplicitRememberOutcome =
-  | { status: 'stored' | 'already_known'; fact: string; category: MemoryCategory; message: string }
+  | {
+      status: 'stored' | 'already_known' | 'overruled';
+      fact: string;
+      category: MemoryCategory;
+      message: string;
+    }
   | { status: 'refused'; fact: string; reason: MemoryCommandRefusalReason; message: string };
+
+/**
+ * `overruled` means the fact was written but a memory that outranks it on the
+ * same topic (a pinned one) stays in force, so nothing the assistant reads
+ * changed. `not_stored` means the store declined after eligibility passed.
+ */
+export type ExplicitMemoryStoreOutcome = 'stored' | 'already_known' | 'overruled' | 'not_stored';
+
+export const OVERRULED_MEMORY_MESSAGE =
+  'A pinned memory on the same topic takes priority. Unpin or edit it to change what is remembered.';
 
 export type ExplicitForgetOutcome =
   | { status: 'forgotten'; removed: MemoryCommandMatch[]; message: string }
@@ -239,10 +254,7 @@ export type MemoryCommandEligibility =
  */
 export interface ExplicitMemoryPorts {
   checkEligibility: (fact: string) => Promise<MemoryCommandEligibility>;
-  store: (input: {
-    fact: string;
-    category: MemoryCategory;
-  }) => Promise<{ stored: boolean; alreadyKnown: boolean }>;
+  store: (input: { fact: string; category: MemoryCategory }) => Promise<ExplicitMemoryStoreOutcome>;
   find: (subject: string) => Promise<MemoryCommandMatch[]>;
   remove: (ids: readonly string[]) => Promise<MemoryCommandMatch[]>;
 }
@@ -267,11 +279,26 @@ export async function explicitRememberHandler(
   }
 
   const category = classifyMemoryCategory(fact);
-  const result = await ports.store({ fact, category });
-  if (result.alreadyKnown && !result.stored) {
-    return { status: 'already_known', fact, category, message: `I already remember: ${fact}` };
+  switch (await ports.store({ fact, category })) {
+    case 'already_known':
+      return { status: 'already_known', fact, category, message: `I already remember: ${fact}` };
+    case 'overruled':
+      return {
+        status: 'overruled',
+        fact,
+        category,
+        message: `I did not save that. ${OVERRULED_MEMORY_MESSAGE}`,
+      };
+    case 'not_stored':
+      return {
+        status: 'refused',
+        fact,
+        reason: 'ineligible',
+        message: 'I did not save that. Memory did not keep it.',
+      };
+    case 'stored':
+      return { status: 'stored', fact, category, message: `Saved to memory: ${fact}` };
   }
-  return { status: 'stored', fact, category, message: `Saved to memory: ${fact}` };
 }
 
 async function findForgetMatches(

@@ -24,6 +24,7 @@ const MEMORY_UNAVAILABLE_MESSAGE =
 const STATUS_RECEIPTS: Readonly<Record<ManagedMemoryCommandStatus, string>> = {
   stored: 'Saved to memory.',
   already_known: 'Already in memory, so nothing changed.',
+  overruled: 'Not saved: a pinned memory on the same topic takes priority.',
   refused: 'Not saved: memory is off, or this is something memory does not keep.',
   forgotten: 'Deleted the matching memories.',
   nothing_to_forget: 'No saved memory matched, so nothing was deleted.',

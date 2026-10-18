@@ -205,7 +205,7 @@ describe('explicitRememberHandler', () => {
   const command = parseExplicitMemoryCommand('Remember that I use TypeScript')!;
 
   it('stores the fact and confirms it in words the user sees', async () => {
-    const store = vi.fn(async () => ({ stored: true, alreadyKnown: false }));
+    const store = vi.fn(async () => 'stored' as const);
     const outcome = await explicitRememberHandler(command, {
       checkEligibility: async () => ({ eligible: true }),
       store,
@@ -217,7 +217,7 @@ describe('explicitRememberHandler', () => {
   });
 
   it('checks policy before storing, and says why when it refuses', async () => {
-    const store = vi.fn(async () => ({ stored: true, alreadyKnown: false }));
+    const store = vi.fn(async () => 'stored' as const);
     const outcome = await explicitRememberHandler(command, {
       checkEligibility: async () => ({
         eligible: false,
@@ -235,17 +235,37 @@ describe('explicitRememberHandler', () => {
   it('says it already knows rather than claiming a new save', async () => {
     const outcome = await explicitRememberHandler(command, {
       checkEligibility: async () => ({ eligible: true }),
-      store: async () => ({ stored: false, alreadyKnown: true }),
+      store: async () => 'already_known' as const,
     });
     expect(outcome.status).toBe('already_known');
     expect(outcome.message).toBe('I already remember: I use TypeScript');
+  });
+
+  it('says the fact was not saved when a pinned memory on the topic outranks it', async () => {
+    const outcome = await explicitRememberHandler(command, {
+      checkEligibility: async () => ({ eligible: true }),
+      store: async () => 'overruled' as const,
+    });
+    expect(outcome.status).toBe('overruled');
+    expect(outcome.message).toBe(
+      'I did not save that. A pinned memory on the same topic takes priority. Unpin or edit it to change what is remembered.',
+    );
+  });
+
+  it('never claims a save the store declined', async () => {
+    const outcome = await explicitRememberHandler(command, {
+      checkEligibility: async () => ({ eligible: true }),
+      store: async () => 'not_stored' as const,
+    });
+    expect(outcome.status).toBe('refused');
+    expect(outcome.message).not.toContain('Saved to memory');
   });
 
   it('classifies a preference as one', async () => {
     const preference = parseExplicitMemoryCommand('Remember that I prefer dark mode')!;
     const outcome = await explicitRememberHandler(preference, {
       checkEligibility: async () => ({ eligible: true }),
-      store: async () => ({ stored: true, alreadyKnown: false }),
+      store: async () => 'stored' as const,
     });
     expect(outcome.status === 'stored' && outcome.category).toBe('preference');
   });
