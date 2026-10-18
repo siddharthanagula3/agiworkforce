@@ -27,13 +27,7 @@ export {
   supportsMultipartUploads,
 } from './types';
 
-export {
-  assertObjectChecksum,
-  getVerifiedObject,
-  objectChecksum,
-  putVerifiedObject,
-  type PutVerifiedObjectInput,
-} from './checksum';
+export { objectChecksum } from './checksum';
 
 export {
   abortOrphanedMultipartUploads,
