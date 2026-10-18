@@ -31,15 +31,21 @@ pub use wrap::{
 
 /// A directory a sandbox may grant write access to. The filesystem root, the
 /// home directory and every directory above it are refused: writing there
-/// reaches shell profiles, launch agents and every other user's project.
+/// reaches shell profiles, launch agents and every other user's project. A
+/// path is judged where it resolves too, so a link or `..` that lands on the
+/// home directory is refused like the home directory itself.
 pub fn is_safe_write_root(path: &Path) -> bool {
     if !path.is_absolute() || path.parent().is_none() {
+        return false;
+    }
+    let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    if resolved.parent().is_none() {
         return false;
     }
     match dirs::home_dir() {
         Some(home) => {
             let home = home.canonicalize().unwrap_or(home);
-            !home.starts_with(path)
+            !home.starts_with(path) && !home.starts_with(&resolved)
         }
         None => true,
     }
@@ -122,6 +128,30 @@ mod tests {
         }
         assert!(is_safe_write_root(&home.join("projects").join("app")));
         assert!(!is_safe_write_root(Path::new("relative")));
+    }
+
+    #[test]
+    fn a_path_that_resolves_to_home_is_refused_like_home() {
+        let home = dirs::home_dir().expect("home dir");
+        let home = home.canonicalize().unwrap_or(home);
+        let Some(name) = home.file_name() else {
+            return;
+        };
+        let dotted = home.join("..").join(name);
+        assert!(!is_safe_write_root(&dotted), "{}", dotted.display());
+        #[cfg(unix)]
+        {
+            let dir = std::env::temp_dir().join(format!(
+                "agi-safe-root-{}-{}",
+                std::process::id(),
+                line!()
+            ));
+            std::fs::create_dir_all(&dir).expect("temp dir");
+            let link = dir.join("home-link");
+            std::os::unix::fs::symlink(&home, &link).expect("symlink");
+            assert!(!is_safe_write_root(&link), "{}", link.display());
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]
