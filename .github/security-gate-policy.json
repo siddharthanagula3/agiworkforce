@@ -79,15 +79,6 @@
   ],
   "exclusions": [
     {
-      "id": "lock-drift-advisory",
-      "kind": "continue-on-error",
-      "job": "repo-guards",
-      "step": "Lock-vs-build drift check (AP-09, advisory)",
-      "reason": "The lock files it compares live in ~/.claude on a developer machine, so in CI the step has nothing to read and its exit code carries no signal.",
-      "owner": "Platform lead",
-      "tracking": "AP-09"
-    },
-    {
       "id": "rust-advisory-maintenance-classes",
       "kind": "continue-on-error",
       "job": "rust-desktop-cli",
