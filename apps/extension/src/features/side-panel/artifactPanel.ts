@@ -10,6 +10,13 @@ import {
   type ArtifactInclusion,
 } from '@agiworkforce/artifacts';
 import type { SharedArtifactType } from '@agiworkforce/types';
+import {
+  buildSandboxedHtml,
+  configureArtifactSandboxOrigin,
+  isArtifactSandboxMessage,
+  postRenderToArtifactSandbox,
+  type ArtifactRenderPayload,
+} from '@agiworkforce/unified-chat/artifact-sandbox';
 import { spreadsheetSafeExport } from '@agiworkforce/unified-chat/tabular';
 import {
   renderIcon,
@@ -99,6 +106,23 @@ export const ARTIFACT_PANEL_CSS = `
     color: var(--agi-ext-text);
     white-space: pre;
   }
+  .sp-artifact-panel__body--frame { padding: 0; overflow: hidden; }
+  .sp-artifact-panel__frame { display: block; width: 100%; height: 100%; border: 0; background: var(--agi-ext-surface); }
+  .sp-artifact-panel__views { display: inline-flex; gap: 2px; padding: 6px 12px 0; }
+  .sp-artifact-panel__views[hidden] { display: none; }
+  .sp-artifact-view {
+    min-height: var(--control-sm);
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--corner-control);
+    background: transparent;
+    color: var(--agi-ext-text-muted);
+    font-size: var(--type-label-size);
+    cursor: pointer;
+  }
+  .sp-artifact-view[aria-pressed='true'] { border-color: var(--agi-ext-border-control); color: var(--agi-ext-text); }
+  .sp-artifact-view:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+  .sp-artifact-view:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
   .sp-artifact-panel__image { display: block; max-width: 100%; height: auto; margin: 0 auto; }
   .sp-artifact-panel__note { margin: 0; padding: 0 12px 8px; }
   .sp-artifact-panel__note[hidden] { display: none; }
@@ -239,6 +263,35 @@ const ARTIFACT_FORMAT_LABEL: Partial<Record<SharedArtifactType, string>> = {
 };
 
 const MAX_FILE_STEM_CHARS = 60;
+
+const SANDBOX_DOCUMENT_TIMEOUT_MS = 15_000;
+const SANDBOX_CONNECT_TIMEOUT_MS = 3_000;
+const RUNTIME_REQUEST_ID = /^runtime-\d{1,12}$/;
+const SANDBOX_RENDERED_TYPES: ReadonlySet<SharedArtifactType> = new Set([
+  'html',
+  'react',
+  'mermaid',
+]);
+
+export function artifactRenderPayload(
+  artifact: Pick<SidePanelArtifact, 'type' | 'content'>,
+): ArtifactRenderPayload | null {
+  switch (artifact.type) {
+    case 'html':
+      return {
+        type: 'render',
+        kind: 'html',
+        html: buildSandboxedHtml(artifact.content),
+        runScripts: true,
+      };
+    case 'react':
+      return { type: 'render', kind: 'react', code: artifact.content };
+    case 'mermaid':
+      return { type: 'render', kind: 'mermaid', code: artifact.content };
+    default:
+      return null;
+  }
+}
 
 export interface SidePanelArtifact {
   id: string;
@@ -383,6 +436,7 @@ export interface ArtifactOutputsDependencies {
   openUrl: (url: string) => void;
   writeClipboard: (text: string) => Promise<void>;
   saveFile: (name: string, blob: Blob) => void;
+  sandboxOrigin: string | null;
 }
 
 export interface ArtifactOutputsAPI {
@@ -414,8 +468,10 @@ export function createArtifactOutputs(
     },
     writeClipboard: (text) => navigator.clipboard.writeText(text),
     saveFile: saveBlob,
+    sandboxOrigin: null,
     ...dependencies,
   };
+  configureArtifactSandboxOrigin(deps.sandboxOrigin);
 
   const views = new Map<string, CachedView>();
   const index = new Map<string, SidePanelArtifact>();
@@ -452,9 +508,34 @@ export function createArtifactOutputs(
     role: 'status',
     'aria-live': 'polite',
   });
+  const panelViews = el('div', {
+    class: 'sp-artifact-panel__views',
+    role: 'group',
+    'aria-label': t('spArtifactViewLabel'),
+    hidden: '',
+  });
+  const previewViewBtn = el(
+    'button',
+    { class: 'sp-artifact-view', type: 'button', 'aria-pressed': 'true' },
+    t('spArtifactShowPreview'),
+  );
+  const sourceViewBtn = el(
+    'button',
+    { class: 'sp-artifact-view', type: 'button', 'aria-pressed': 'false' },
+    t('spArtifactShowSource'),
+  );
+  panelViews.append(previewViewBtn, sourceViewBtn);
   const panelBody = el('div', { class: 'sp-artifact-panel__body', tabindex: '0' });
   const panelNote = el('p', { class: 'sp-artifact-panel__note', hidden: '' });
-  panelEl.append(panelHeader, panelStatus, panelBody, panelNote);
+  panelEl.append(panelHeader, panelViews, panelStatus, panelBody, panelNote);
+
+  let showSource = false;
+  let sandboxUnavailable = false;
+  let frame: HTMLIFrameElement | null = null;
+  let framePayload: ArtifactRenderPayload | null = null;
+  let frameConnected = false;
+  let frameEpoch = 0;
+  let frameDeadline: ReturnType<typeof setTimeout> | null = null;
 
   const outputsEl = el('span', { class: 'sp-outputs', hidden: '' });
   const outputsTrigger = el('button', {
@@ -645,9 +726,22 @@ export function createArtifactOutputs(
     webBtn.hidden = webUrl === null;
     webBtn.setAttribute('aria-label', t('spArtifactOpenOnWebLabel', [artifact.title]));
     webBtn.title = t('spArtifactOpenOnWebLabel', [artifact.title]);
+    teardownFrame();
     const previewsAsImage = artifact.type === 'svg' && !artifact.streaming;
-    panelNote.hidden = previewsAsImage;
-    panelNote.textContent = webUrl ? t('spArtifactSourceNoteWeb') : t('spArtifactSourceNote');
+    const runsInSandbox = canRunInSandbox(artifact);
+    panelViews.hidden = !runsInSandbox;
+    previewViewBtn.setAttribute('aria-pressed', String(!showSource));
+    sourceViewBtn.setAttribute('aria-pressed', String(showSource));
+    panelNote.hidden = previewsAsImage || (runsInSandbox && !showSource) || artifact.streaming;
+    panelNote.textContent = sandboxUnavailable
+      ? t('spArtifactPreviewUnavailable')
+      : webUrl
+        ? t('spArtifactSourceNoteWeb')
+        : t('spArtifactSourceNote');
+    if (runsInSandbox && !showSource) {
+      mountFrame(artifact);
+      return;
+    }
     if (previewsAsImage) {
       panelBody.replaceChildren(
         el('img', {
@@ -662,6 +756,114 @@ export function createArtifactOutputs(
     code.textContent = artifact.content;
     panelBody.replaceChildren(el('pre', { class: 'sp-artifact-panel__source' }, code));
   }
+
+  function canRunInSandbox(artifact: SidePanelArtifact): boolean {
+    return (
+      deps.sandboxOrigin !== null &&
+      !sandboxUnavailable &&
+      !artifact.streaming &&
+      SANDBOX_RENDERED_TYPES.has(artifact.type)
+    );
+  }
+
+  function clearFrameDeadline(): void {
+    if (frameDeadline !== null) clearTimeout(frameDeadline);
+    frameDeadline = null;
+  }
+
+  function teardownFrame(): void {
+    clearFrameDeadline();
+    frameEpoch += 1;
+    frame = null;
+    framePayload = null;
+    frameConnected = false;
+    panelBody.classList.remove('sp-artifact-panel__body--frame');
+  }
+
+  function armFrameDeadline(epoch: number, milliseconds: number): void {
+    clearFrameDeadline();
+    frameDeadline = setTimeout(() => {
+      if (epoch !== frameEpoch || frameConnected) return;
+      sandboxUnavailable = true;
+      renderedKey = null;
+      renderPanel();
+    }, milliseconds);
+  }
+
+  function postFramePayload(): void {
+    if (!frame || !framePayload || !deps.sandboxOrigin) return;
+    postRenderToArtifactSandbox(frame, framePayload, deps.sandboxOrigin);
+  }
+
+  function mountFrame(artifact: SidePanelArtifact): void {
+    const payload = artifactRenderPayload(artifact);
+    if (!payload || !deps.sandboxOrigin) return;
+    const epoch = frameEpoch;
+    const iframe = el('iframe', {
+      class: 'sp-artifact-panel__frame',
+      src: `${deps.sandboxOrigin}/`,
+      title: artifact.title,
+      sandbox: 'allow-scripts allow-same-origin',
+      referrerpolicy: 'no-referrer',
+    });
+    iframe.addEventListener('load', () => {
+      if (epoch !== frameEpoch) return;
+      postFramePayload();
+      if (!frameConnected) armFrameDeadline(epoch, SANDBOX_CONNECT_TIMEOUT_MS);
+    });
+    frame = iframe;
+    framePayload = payload;
+    panelStatus.textContent = t('spArtifactPreviewStarting');
+    panelBody.classList.add('sp-artifact-panel__body--frame');
+    panelBody.replaceChildren(iframe);
+    armFrameDeadline(epoch, SANDBOX_DOCUMENT_TIMEOUT_MS);
+  }
+
+  function onSandboxMessage(event: MessageEvent): void {
+    const current = frame;
+    if (!current || !deps.sandboxOrigin || !isArtifactSandboxMessage(event, current)) return;
+    const data = event.data as { type?: unknown; id?: unknown } | null;
+    if (!data || typeof data !== 'object') return;
+    switch (data.type) {
+      case 'sandbox-ready':
+        frameConnected = true;
+        clearFrameDeadline();
+        postFramePayload();
+        return;
+      case 'render-complete':
+        frameConnected = true;
+        clearFrameDeadline();
+        panelStatus.textContent = '';
+        return;
+      case 'render-error':
+        frameConnected = true;
+        clearFrameDeadline();
+        panelStatus.textContent = t('spArtifactPreviewFailed');
+        return;
+      case 'runtime-request': {
+        const id = typeof data.id === 'string' && RUNTIME_REQUEST_ID.test(data.id) ? data.id : null;
+        if (!id) return;
+        current.contentWindow?.postMessage(
+          { type: 'runtime-response', id, ok: false, error: t('spArtifactRuntimeUnavailable') },
+          deps.sandboxOrigin,
+        );
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  window.addEventListener('message', onSandboxMessage);
+
+  function selectView(source: boolean): void {
+    if (showSource === source) return;
+    showSource = source;
+    renderedKey = null;
+    renderPanel();
+  }
+  previewViewBtn.addEventListener('click', () => selectView(false));
+  sourceViewBtn.addEventListener('click', () => selectView(true));
 
   function open(artifactId: string, trigger: HTMLElement | null = null): void {
     const artifact = index.get(artifactId);
@@ -681,6 +883,7 @@ export function createArtifactOutputs(
     const hadFocus = panelEl.contains(document.activeElement);
     selected = null;
     renderedKey = null;
+    teardownFrame();
     panelEl.hidden = true;
     panelBody.replaceChildren();
     refreshCardStates();

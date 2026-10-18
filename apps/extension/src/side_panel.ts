@@ -23,7 +23,7 @@ import {
 } from '@agiworkforce/utils/composer-paste';
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
-import { agiWebUrl } from './lib/webOrigin';
+import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { chooseBrowserContextTabs, TAB_CONTEXT_PICKER_CSS } from './features/side-panel/tabContext';
 import type { BrowserContextTabReference } from './types';
@@ -6926,6 +6926,7 @@ const answerFileAccess: AnswerFileAccess = {
 
 const artifactOutputs = createArtifactOutputs({
   fileAccess: answerFileAccess,
+  sandboxOrigin: ARTIFACT_SANDBOX_ORIGIN,
   conversationId: () => _ctx.conversationId,
   webConversationUrl: () => {
     if (_ctx.temporaryChat) return null;

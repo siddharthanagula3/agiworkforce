@@ -402,3 +402,98 @@ describe('Outputs popover', () => {
     expect(document.activeElement).toBe(trigger);
   });
 });
+
+describe('live preview through the artifact sandbox', () => {
+  const SANDBOX = 'https://sandbox.agiworkforce.com';
+  let live: ArtifactOutputsAPI;
+
+  beforeEach(() => {
+    live = createArtifactOutputs({
+      fileAccess: access,
+      conversationId: () => CONVERSATION_ID,
+      webConversationUrl: () => null,
+      openUrl,
+      writeClipboard,
+      saveFile,
+      sandboxOrigin: SANDBOX,
+    });
+    document.body.replaceChildren(live.panelEl);
+    const msg = finished();
+    live.sync([msg]);
+    live.open(live.viewFor(msg).artifacts[0]!.id);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function frame(): HTMLIFrameElement {
+    return live.panelEl.querySelector<HTMLIFrameElement>('iframe')!;
+  }
+
+  function fromSandbox(data: unknown, source: Window | null = frame().contentWindow): void {
+    window.dispatchEvent(new MessageEvent('message', { data, origin: SANDBOX, source }));
+  }
+
+  it('frames the shared renderer origin, never a document of its own', () => {
+    expect(frame().getAttribute('src')).toBe(`${SANDBOX}/`);
+    expect(frame().getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
+    expect(frame().hasAttribute('srcdoc')).toBe(false);
+    expect(live.panelEl.querySelector('[aria-pressed="true"]')?.textContent).toBe('Preview');
+  });
+
+  it('posts the artifact once the renderer says it is ready, to its origin only', () => {
+    const post = vi.spyOn(frame().contentWindow!, 'postMessage');
+    fromSandbox({ type: 'sandbox-ready' });
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'render', kind: 'html', runScripts: true }),
+      SANDBOX,
+    );
+    const payload = post.mock.calls[0]![0] as { html: string };
+    expect(payload.html).toContain('Content-Security-Policy');
+    expect(payload.html).toContain('Desk calculator');
+  });
+
+  it('ignores a message that did not come from the frame it opened', () => {
+    const post = vi.spyOn(frame().contentWindow!, 'postMessage');
+    fromSandbox({ type: 'sandbox-ready' }, window);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('refuses AI and saved-data requests, which the side panel cannot serve', () => {
+    const post = vi.spyOn(frame().contentWindow!, 'postMessage');
+    fromSandbox({ type: 'runtime-request', id: 'runtime-1', request: { op: 'complete' } });
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'runtime-response', id: 'runtime-1', ok: false }),
+      SANDBOX,
+    );
+    fromSandbox({ type: 'runtime-request', id: '../evil', request: {} });
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('says when the preview failed and lets the reader switch to the code', () => {
+    fromSandbox({ type: 'render-error', error: 'boom' });
+    expect(live.panelEl.querySelector('.sp-artifact-panel__status')?.textContent).toBe(
+      'The preview could not start. Review the source or try again.',
+    );
+    [...live.panelEl.querySelectorAll<HTMLButtonElement>('.sp-artifact-view')]
+      .find((button) => button.textContent === 'Code')!
+      .click();
+    expect(live.panelEl.querySelector('iframe')).toBeNull();
+    expect(live.panelEl.querySelector('code')?.textContent).toBe(HTML_ARTIFACT);
+  });
+
+  it('falls back to the source when the renderer never answers', () => {
+    vi.useFakeTimers();
+    const msg = finished();
+    live.close();
+    live.open(live.viewFor(msg).artifacts[0]!.id);
+    frame().dispatchEvent(new Event('load'));
+    vi.advanceTimersByTime(3_000);
+    expect(live.panelEl.querySelector('iframe')).toBeNull();
+    expect(live.panelEl.querySelector('code')?.textContent).toBe(HTML_ARTIFACT);
+    expect(live.panelEl.querySelector('.sp-artifact-panel__note')?.textContent).toBe(
+      'The live preview is not available right now, so the panel shows the source.',
+    );
+  });
+});

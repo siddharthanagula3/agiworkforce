@@ -10,6 +10,7 @@
     "./model-picker": "./src/lib/modelPicker.ts",
     "./network-error": "./src/lib/network-error.ts",
     "./tabular": "./src/lib/tabular.ts",
+    "./artifact-sandbox": "./src/lib/artifact-sandbox.ts",
     "./agi-work-progress": "./src/lib/agi-work-progress.ts",
     "./task-display": "./src/components/tasks/task-display.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",

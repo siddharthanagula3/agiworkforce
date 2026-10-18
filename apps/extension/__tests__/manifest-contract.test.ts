@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { SITE_POLICY_CAPABILITIES } from '@agiworkforce/types';
 
 import { GATEWAY_URL_ALLOWLIST_EXACT } from '../src/background/policy';
+import { ARTIFACT_SANDBOX_ORIGIN } from '../src/lib/webOrigin';
 import { ADMIN_SITE_POLICY_STORAGE_KEY } from '../src/features/site-policy/store';
 
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -129,6 +130,21 @@ describe('Chrome manifest trust contract', () => {
         origin,
       );
     }
+  });
+
+  it('frames only the artifact renderer origin, and says why in the listing', () => {
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+    const contentSecurityPolicy = manifest['content_security_policy'] as
+      { extension_pages?: unknown } | undefined;
+    const frameSource = /frame-src ([^;]+)/
+      .exec(String(contentSecurityPolicy?.extension_pages ?? ''))?.[1]
+      ?.trim()
+      .split(/\s+/);
+
+    expect(frameSource).toEqual(["'self'", ARTIFACT_SANDBOX_ORIGIN]);
+    expect(listing).toContain(
+      `\`frame-src\` adds exactly one remote origin, \`${ARTIFACT_SANDBOX_ORIGIN}\``,
+    );
   });
 
   it('declares no Chrome Apps keys, which MV3 ignores and review flags', () => {

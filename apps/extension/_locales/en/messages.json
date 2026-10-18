@@ -4381,5 +4381,33 @@
         "example": "3"
       }
     }
+  },
+  "spArtifactViewLabel": {
+    "message": "Artifact view",
+    "description": "Accessible name of the Preview and Code switch in the artifact panel"
+  },
+  "spArtifactShowPreview": {
+    "message": "Preview",
+    "description": "Artifact panel button that shows the running artifact"
+  },
+  "spArtifactShowSource": {
+    "message": "Code",
+    "description": "Artifact panel button that shows the artifact's source"
+  },
+  "spArtifactPreviewStarting": {
+    "message": "Starting the preview…",
+    "description": "Status while the artifact preview loads"
+  },
+  "spArtifactPreviewFailed": {
+    "message": "The preview could not start. Review the source or try again.",
+    "description": "Status when the artifact preview reported an error"
+  },
+  "spArtifactPreviewUnavailable": {
+    "message": "The live preview is not available right now, so the panel shows the source.",
+    "description": "Note when the artifact preview host did not answer"
+  },
+  "spArtifactRuntimeUnavailable": {
+    "message": "AI and saved data are available once this app is published and opened by a signed-in viewer.",
+    "description": "Answer to an artifact that asked for AI or saved data in the side panel preview"
   }
 }

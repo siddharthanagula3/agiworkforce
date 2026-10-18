@@ -91,6 +91,13 @@ The extension executes no remote code. All scripts are bundled in the package;
 the extension-pages CSP is `script-src 'self'` with no `unsafe-eval` and no
 `unsafe-inline` for scripts.
 
+`frame-src` adds exactly one remote origin, `https://sandbox.agiworkforce.com`.
+That is AGI's artifact renderer, the same one the web app frames: an artifact
+the user opens in the side panel runs inside that separate origin's iframe,
+under its own policy, and never inside the extension's origin. The side panel
+only posts the artifact's text to it and accepts render status back from it.
+The extension declares no sandbox page.
+
 ## Data use disclosures
 
 Tick these in the Dashboard's Privacy tab, and nothing else.
