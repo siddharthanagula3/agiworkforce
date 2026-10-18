@@ -28,8 +28,6 @@ import {
 
 const HASH_ALGORITHM = 'sha256';
 const SKILL_FILE_NAME = 'SKILL.md';
-const PG_UNDEFINED_TABLE = '42P01';
-const PG_UNDEFINED_FUNCTION = '42883';
 const STATUS_PUBLISHED = 'published';
 const STATUS_RETIRED = 'retired';
 const PREFERENCE_REQUIRED = 'required';
@@ -73,12 +71,6 @@ interface MemberPluginRow {
   installed: boolean | null;
   enabled: boolean | null;
   enabled_skills: unknown;
-}
-
-export function isMissingOrganizationPluginSchema(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const code = (error as Record<string, unknown>)['code'];
-  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_FUNCTION;
 }
 
 function iso(value: string | Date): string {

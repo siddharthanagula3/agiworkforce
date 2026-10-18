@@ -13,8 +13,6 @@ import {
   getMarketplaceInstallationSettings,
   updateMarketplaceInstallationSettings,
 } from '@/lib/services/plugin-marketplace-installation-service';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 import { PluginInstallationSettingsPatchSchema } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -37,13 +35,7 @@ async function handleGet(request: NextRequest, context: RouteContext): Promise<N
     );
   }
 
-  let settings;
-  try {
-    settings = await getMarketplaceInstallationSettings(db, userId, params.data.id);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
-  }
+  const settings = await getMarketplaceInstallationSettings(db, userId, params.data.id);
   if (!settings) {
     return NextResponse.json(
       { error: { code: 'PLUGIN_NOT_INSTALLED', message: 'Plugin installation not found.' } },
@@ -71,13 +63,12 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
-  let settings;
-  try {
-    settings = await updateMarketplaceInstallationSettings(db, userId, params.data.id, body.data);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
-  }
+  const settings = await updateMarketplaceInstallationSettings(
+    db,
+    userId,
+    params.data.id,
+    body.data,
+  );
   if (!settings) {
     return NextResponse.json(
       { error: { code: 'PLUGIN_NOT_INSTALLED', message: 'Plugin installation not found.' } },

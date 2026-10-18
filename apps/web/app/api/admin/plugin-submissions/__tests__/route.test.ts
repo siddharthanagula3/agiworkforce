@@ -54,7 +54,6 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/plugin-submission-service', () => ({
   createSubmission: vi.fn(),
   decideSubmission: vi.fn(),
-  isMissingPluginSubmissionSchema: vi.fn(),
   listCommunityPlugins: vi.fn(),
   listCommunitySkillCompanions: vi.fn(),
   listCommunitySkillFiles: vi.fn(),

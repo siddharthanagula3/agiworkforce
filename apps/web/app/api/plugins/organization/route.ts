@@ -8,10 +8,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { listWorkspaceMemberships } from '@/lib/services/active-workspace-service';
-import {
-  isMissingOrganizationPluginSchema,
-  listMemberOrganizationPlugins,
-} from '@/lib/services/organization-plugin-service';
+import { listMemberOrganizationPlugins } from '@/lib/services/organization-plugin-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,22 +24,17 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     plugins: [],
   };
   if (!organizationId) return NextResponse.json(empty);
-  try {
-    const [plugins, memberships] = await Promise.all([
-      listMemberOrganizationPlugins(db, userId, organizationId),
-      listWorkspaceMemberships(db, userId),
-    ]);
-    const body: MemberOrganizationPluginsResponse = {
-      organizationId,
-      organizationName:
-        memberships.find((membership) => membership.id === organizationId)?.name ?? null,
-      plugins,
-    };
-    return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch (error) {
-    if (isMissingOrganizationPluginSchema(error)) return NextResponse.json(empty);
-    throw error;
-  }
+  const [plugins, memberships] = await Promise.all([
+    listMemberOrganizationPlugins(db, userId, organizationId),
+    listWorkspaceMemberships(db, userId),
+  ]);
+  const body: MemberOrganizationPluginsResponse = {
+    organizationId,
+    organizationName:
+      memberships.find((membership) => membership.id === organizationId)?.name ?? null,
+    plugins,
+  };
+  return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

@@ -133,11 +133,9 @@ describe('listInstalledDirectorySkills', () => {
   });
 });
 
-describe('listInstalledDirectorySkills without the marketplace schema', () => {
-  it('answers with no skills instead of failing the caller', async () => {
+describe('listInstalledDirectorySkills on a failed read', () => {
+  it('surfaces the failure instead of answering with no skills', async () => {
     const db = database([]);
-    db.query.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: '42P01' }));
-    await expect(listInstalledDirectorySkills(db, 'user-1')).resolves.toEqual([]);
     db.query.mockRejectedValueOnce(new Error('connection refused'));
     await expect(listInstalledDirectorySkills(db, 'user-1')).rejects.toThrow('connection refused');
   });

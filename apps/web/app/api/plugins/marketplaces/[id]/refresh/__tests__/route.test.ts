@@ -14,13 +14,10 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
-  isMissingPluginMarketplaceSchema: (error: unknown) =>
-    (error as { code?: string } | null)?.code === '42P01',
   refreshMarketplaceSource: refreshMarketplaceSourceMock,
 }));
 
 import { NextRequest } from 'next/server';
-import { MARKETPLACE_UNAVAILABLE_MESSAGE } from '@/features/plugins/server/directory/constants';
 import { POST } from '../route';
 
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
@@ -37,10 +34,6 @@ const SOURCE = {
   createdAt: '2026-09-03T00:00:00.000Z',
   updatedAt: '2026-09-03T00:00:00.000Z',
 };
-
-function undefinedTableError(): Error & { code: string } {
-  return Object.assign(new Error('relation does not exist'), { code: '42P01' });
-}
 
 function post(id: string): NextRequest {
   return new NextRequest(`https://agiworkforce.com/api/plugins/marketplaces/${id}/refresh`, {
@@ -94,12 +87,5 @@ describe('POST /api/plugins/marketplaces/[id]/refresh', () => {
     const response = await POST(post(SOURCE_ID), params(SOURCE_ID));
     expect(response.status).toBe(403);
     expect(refreshMarketplaceSourceMock).not.toHaveBeenCalled();
-  });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    refreshMarketplaceSourceMock.mockRejectedValue(undefinedTableError());
-    const response = await POST(post(SOURCE_ID), params(SOURCE_ID));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(MARKETPLACE_UNAVAILABLE_MESSAGE);
   });
 });

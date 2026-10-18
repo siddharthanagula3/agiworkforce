@@ -72,7 +72,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => mocks.neonDb,
 }));
 vi.mock('@/lib/services/organization-plugin-service', () => ({
-  isMissingOrganizationPluginSchema: vi.fn(),
   listMemberOrganizationPlugins: vi.fn(),
   listOrganizationPluginSkillFiles: vi.fn(),
   listOrganizationSkillCompanions: vi.fn(),

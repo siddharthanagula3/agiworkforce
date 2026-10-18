@@ -24,8 +24,6 @@ vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   getMarketplaceEntryForUser: vi.fn(async () => null),
-  isMissingPluginMarketplaceSchema: (error: unknown) =>
-    (error as { code?: string } | null)?.code === '42P01',
   assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
   approveMarketplaceInstallationPermissions: vi.fn(async () => []),
 }));
@@ -41,10 +39,6 @@ const SETTINGS = {
   connectors: [{ connectorId: 'github', connected: true }],
   agents: ['triage-agent'],
 };
-
-function undefinedTableError(): Error & { code: string } {
-  return Object.assign(new Error('relation does not exist'), { code: '42P01' });
-}
 
 function get(id: string): NextRequest {
   return new NextRequest(
@@ -100,12 +94,6 @@ describe('GET /api/plugins/marketplace-installations/[id]/settings', () => {
     const response = await GET(get(INSTALLATION_ID), params(INSTALLATION_ID));
     expect(response.status).toBe(404);
   });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    getMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
-    const response = await GET(get(INSTALLATION_ID), params(INSTALLATION_ID));
-    expect(response.status).toBe(503);
-  });
 });
 
 describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
@@ -142,14 +130,5 @@ describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
     );
     expect(response.status).toBe(403);
     expect(updateMarketplaceInstallationSettingsMock).not.toHaveBeenCalled();
-  });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    updateMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
-    const response = await PATCH(
-      patch(INSTALLATION_ID, { enabledSkills: [] }),
-      params(INSTALLATION_ID),
-    );
-    expect(response.status).toBe(503);
   });
 });

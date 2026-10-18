@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   getUserScopedDb: vi.fn(),
   recordAuditEvent: vi.fn(),
-  isMissingPluginMarketplaceSchema: vi.fn(),
   customizePlugin: vi.fn(),
   refusePluginInstall: vi.fn(),
 }));
@@ -102,7 +101,6 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   trustedPluginPublisherKeys: vi.fn(),
   validateManifestAgainstCatalog: vi.fn(),
   verifyPluginPackage: vi.fn(),
-  isMissingPluginMarketplaceSchema: mocks.isMissingPluginMarketplaceSchema,
 }));
 vi.mock('@/features/plugins/server/directory/customize', () => ({
   customizePlugin: mocks.customizePlugin,
@@ -136,7 +134,6 @@ describe('POST /api/plugins/customize', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue(scope);
     mocks.refusePluginInstall.mockResolvedValue(null);
-    mocks.isMissingPluginMarketplaceSchema.mockReturnValue(false);
   });
 
   it('returns the csrf refusal before authenticating', async () => {
@@ -223,15 +220,11 @@ describe('POST /api/plugins/customize', () => {
     );
   });
 
-  it('answers installs disabled when the marketplace schema is missing', async () => {
-    const missing = new Error('relation does not exist');
-    mocks.customizePlugin.mockRejectedValue(missing);
-    mocks.isMissingPluginMarketplaceSchema.mockReturnValue(true);
+  it('reports a failed customization as a server error, not disabled installs', async () => {
+    mocks.customizePlugin.mockRejectedValue(new Error('connection terminated'));
 
     const response = await post({ pluginId: 'acme.tools' });
 
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.code).toBe('PLUGIN_INSTALLS_DISABLED');
-    expect(mocks.isMissingPluginMarketplaceSchema).toHaveBeenCalledWith(missing);
+    expect(response.status).toBe(500);
   });
 });

@@ -9,11 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
-import {
-  deleteMarketplaceSource,
-  isMissingPluginMarketplaceSchema,
-} from '@/lib/services/plugin-marketplace-service';
-import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
+import { deleteMarketplaceSource } from '@/lib/services/plugin-marketplace-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,15 +33,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
     );
   }
 
-  let removed: boolean;
-  try {
-    removed = await deleteMarketplaceSource(db, userId, params.data.id);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) {
-      throw marketplaceUnavailableError();
-    }
-    throw error;
-  }
+  const removed = await deleteMarketplaceSource(db, userId, params.data.id);
   if (!removed) {
     return NextResponse.json(
       { error: { code: 'MARKETPLACE_SOURCE_NOT_FOUND', message: 'Marketplace source not found.' } },

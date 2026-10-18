@@ -74,13 +74,6 @@ const REF_PATTERN = /^(?!.*\.\.)(?!\/)[A-Za-z0-9._/-]{1,200}$/;
 const GITHUB_API_USER_AGENT = 'agiworkforce-plugin-marketplace';
 const MARKETPLACE_FETCH_TIMEOUT_MS = 10_000;
 
-const PG_UNDEFINED_TABLE = '42P01';
-
-export function isMissingPluginMarketplaceSchema(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
-}
-
 export const PLUGIN_SIGNING_PUBLIC_KEYS_ENV = 'PLUGIN_SIGNING_PUBLIC_KEYS';
 
 /**

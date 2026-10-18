@@ -57,7 +57,6 @@ vi.mock('@/lib/workspace-audit', () => ({
 vi.mock('@/lib/services/plugin-submission-service', () => ({
   createSubmission: vi.fn(),
   decideSubmission: vi.fn(),
-  isMissingPluginSubmissionSchema: vi.fn(),
   listCommunitySkillCompanions: vi.fn(),
   listCommunitySkillFiles: vi.fn(),
   listInstalledCommunityPlugins: vi.fn(),

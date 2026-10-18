@@ -11,12 +11,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   PluginMarketplaceFetchError,
   PluginMarketplaceValidationError,
-  isMissingPluginMarketplaceSchema,
   listMarketplaceSources,
   registerMarketplaceSource,
 } from '@/lib/services/plugin-marketplace-service';
 import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
-import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceSourceListResponse } from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
 
@@ -36,15 +34,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
-  let sources;
-  try {
-    sources = await listMarketplaceSources(db, userId);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) {
-      throw marketplaceUnavailableError();
-    }
-    throw error;
-  }
+  const sources = await listMarketplaceSources(db, userId);
 
   const body: PluginMarketplaceSourceListResponse = {
     sources: sources.filter((source) => !isShadowSourceName(source.name)),
@@ -104,9 +94,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
         { error: { code: 'MARKETPLACE_UNREACHABLE', message: error.message } },
         { status: 502 },
       );
-    }
-    if (isMissingPluginMarketplaceSchema(error)) {
-      throw marketplaceUnavailableError();
     }
     throw error;
   }

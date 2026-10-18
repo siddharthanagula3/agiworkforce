@@ -11,10 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { listMarketplaceInstallations } from '@/lib/services/plugin-marketplace-installation-service';
-import {
-  getMarketplaceEntryForUser,
-  isMissingPluginMarketplaceSchema,
-} from '@/lib/services/plugin-marketplace-service';
+import { getMarketplaceEntryForUser } from '@/lib/services/plugin-marketplace-service';
 import {
   installDirectoryPlugin,
   installMarketplaceEntryPlugin,
@@ -25,10 +22,7 @@ import {
   pluginDependencyRefusal,
   refusePluginInstall,
 } from '@/features/plugins/server/directory/install-gate';
-import {
-  installRefusalResponse,
-  installsDisabledResponse,
-} from '@/features/plugins/server/directory/install-responses';
+import { installRefusalResponse } from '@/features/plugins/server/directory/install-responses';
 import { findPluginDirectoryRecord } from '@/features/plugins/server/directory/memory-cache';
 import { registerPluginConnectors } from '@/lib/connectors/plugin-connectors';
 import type {
@@ -49,13 +43,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
-  let installations;
-  try {
-    installations = await listMarketplaceInstallations(db, userId);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
-  }
+  const installations = await listMarketplaceInstallations(db, userId);
   const body: PluginMarketplaceInstallationsResponse = { installations };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
@@ -153,29 +141,24 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  try {
-    const pluginKey =
-      'pluginId' in parsed.data
-        ? parsed.data.pluginId
-        : (await getMarketplaceEntryForUser(db, userId, parsed.data.entryId))?.pluginKey;
-    const refused = await refusePluginInstall(request, scope, {
-      pluginKeys: pluginKey ? [pluginKey] : [],
-    });
-    if (refused) return refused;
+  const pluginKey =
+    'pluginId' in parsed.data
+      ? parsed.data.pluginId
+      : (await getMarketplaceEntryForUser(db, userId, parsed.data.entryId))?.pluginKey;
+  const refused = await refusePluginInstall(request, scope, {
+    pluginKeys: pluginKey ? [pluginKey] : [],
+  });
+  if (refused) return refused;
 
-    const deps: DirectoryInstallDependencies = {
-      admitDependencies: (dependencies) => pluginDependencyRefusal(request, scope, dependencies),
-    };
-    if ('pluginId' in parsed.data) {
-      const result = await installDirectoryPlugin(db, userId, parsed.data.pluginId, deps);
-      return await respondToInstall(request, scope, 'directory', result);
-    }
-    const result = await installMarketplaceEntryPlugin(db, userId, parsed.data.entryId, deps);
-    return await respondToInstall(request, scope, 'marketplace', result);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
+  const deps: DirectoryInstallDependencies = {
+    admitDependencies: (dependencies) => pluginDependencyRefusal(request, scope, dependencies),
+  };
+  if ('pluginId' in parsed.data) {
+    const result = await installDirectoryPlugin(db, userId, parsed.data.pluginId, deps);
+    return await respondToInstall(request, scope, 'directory', result);
   }
+  const result = await installMarketplaceEntryPlugin(db, userId, parsed.data.entryId, deps);
+  return await respondToInstall(request, scope, 'marketplace', result);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

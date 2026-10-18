@@ -74,8 +74,6 @@ vi.mock('@/features/plugins/server/directory/installed-dependents', async (impor
   listMarketplaceDependents: listMarketplaceDependentsMock,
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
-  isMissingPluginMarketplaceSchema: (error: unknown) =>
-    (error as { code?: string } | null)?.code === '42P01',
   getMarketplaceEntryForUser: marketplaceEntryMock,
   getMarketplaceSourceEntry: vi.fn(async () => null),
   assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
@@ -106,7 +104,6 @@ import { GET, POST } from '../route';
 
 const INSTALLATION_ID = '22222222-2222-4222-8222-222222222222';
 const ENTRY_ID = '33333333-3333-4333-8333-333333333333';
-const INSTALLS_DISABLED = 'Plugin installs are not enabled on this deployment yet';
 
 const INSTALLATION = {
   id: INSTALLATION_ID,
@@ -128,10 +125,6 @@ const SETTINGS = {
   connectors: [{ connectorId: 'github', connected: true }],
   agents: ['triage-agent'],
 };
-
-function undefinedTableError(): Error & { code: string } {
-  return Object.assign(new Error('relation does not exist'), { code: '42P01' });
-}
 
 function get(path = '/api/plugins/marketplace-installations'): NextRequest {
   return new NextRequest(`https://agiworkforce.com${path}`, {
@@ -194,13 +187,6 @@ describe('GET /api/plugins/marketplace-installations', () => {
     const response = await GET(get());
     expect(response.status).toBe(200);
     expect((await response.json()).installations).toEqual([INSTALLATION]);
-  });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    listMarketplaceInstallationsMock.mockRejectedValue(undefinedTableError());
-    const response = await GET(get());
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
   });
 });
 
@@ -362,13 +348,6 @@ describe('POST /api/plugins/marketplace-installations (install)', () => {
     );
     expect(response.status).toBe(409);
   });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    installDirectoryPluginMock.mockRejectedValue(undefinedTableError());
-    const response = await POST(post('/api/plugins/marketplace-installations', { pluginId: 'x' }));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
-  });
 });
 
 describe('PATCH /api/plugins/marketplace-installations/[id] connectors', () => {
@@ -463,16 +442,6 @@ describe('DELETE /api/plugins/marketplace-installations/[id]', () => {
     );
     expect(response.status).toBe(404);
   });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    uninstallDirectoryInstallationMock.mockRejectedValue(undefinedTableError());
-    const response = await DELETE(
-      del(`/api/plugins/marketplace-installations/${INSTALLATION_ID}`),
-      params(INSTALLATION_ID),
-    );
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
-  });
 });
 
 describe('GET /api/plugins/marketplace-installations/[id]/settings', () => {
@@ -493,16 +462,6 @@ describe('GET /api/plugins/marketplace-installations/[id]/settings', () => {
       params(INSTALLATION_ID),
     );
     expect(response.status).toBe(404);
-  });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    getMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
-    const response = await getSettings(
-      get(`/api/plugins/marketplace-installations/${INSTALLATION_ID}/settings`),
-      params(INSTALLATION_ID),
-    );
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
   });
 });
 
@@ -531,18 +490,6 @@ describe('PATCH /api/plugins/marketplace-installations/[id]/settings', () => {
     );
     expect(response.status).toBe(400);
     expect(updateMarketplaceInstallationSettingsMock).not.toHaveBeenCalled();
-  });
-
-  it('answers 503 with the plain sentence while the marketplace schema is absent', async () => {
-    updateMarketplaceInstallationSettingsMock.mockRejectedValue(undefinedTableError());
-    const response = await patchSettings(
-      patch(`/api/plugins/marketplace-installations/${INSTALLATION_ID}/settings`, {
-        enabledSkills: [],
-      }),
-      params(INSTALLATION_ID),
-    );
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(INSTALLS_DISABLED);
   });
 });
 

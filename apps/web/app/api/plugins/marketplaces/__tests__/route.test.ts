@@ -50,7 +50,6 @@ vi.mock('@/lib/services/plugin-marketplace-service', async () => {
 });
 
 import { NextRequest } from 'next/server';
-import { MARKETPLACE_UNAVAILABLE_MESSAGE } from '@/features/plugins/server/directory/constants';
 import { GET as getEntries } from '../entries/route';
 import { DELETE } from '../[id]/route';
 import { POST as refresh } from '../[id]/refresh/route';
@@ -71,12 +70,6 @@ const SOURCE = {
 };
 
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
-
-function undefinedTableError(): Error {
-  return Object.assign(new Error('relation "public.plugin_marketplace_sources" does not exist'), {
-    code: '42P01',
-  });
-}
 
 function get(path = '/api/plugins/marketplaces'): NextRequest {
   return new NextRequest(`https://agiworkforce.com${path}`, {
@@ -138,12 +131,6 @@ describe('GET /api/plugins/marketplaces', () => {
     expect(response.status).toBe(200);
     expect((await response.json()).sources).toEqual([SOURCE]);
   });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    listMarketplaceSourcesMock.mockRejectedValue(undefinedTableError());
-    const response = await GET(get());
-    expect(response.status).toBe(503);
-  });
 });
 
 describe('POST /api/plugins/marketplaces (register)', () => {
@@ -185,12 +172,6 @@ describe('POST /api/plugins/marketplaces (register)', () => {
     expect(response.status).toBe(403);
     expect(registerMarketplaceSourceMock).not.toHaveBeenCalled();
   });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    registerMarketplaceSourceMock.mockRejectedValue(undefinedTableError());
-    const response = await POST(post({ repositoryUrl: 'https://github.com/acme/tools' }));
-    expect(response.status).toBe(503);
-  });
 });
 
 describe('DELETE /api/plugins/marketplaces/[id]', () => {
@@ -213,12 +194,6 @@ describe('DELETE /api/plugins/marketplaces/[id]', () => {
     );
     expect(response.status).toBe(404);
     expect(deleteMarketplaceSourceMock).not.toHaveBeenCalled();
-  });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    deleteMarketplaceSourceMock.mockRejectedValue(undefinedTableError());
-    const response = await DELETE(del(`/api/plugins/marketplaces/${SOURCE_ID}`), params(SOURCE_ID));
-    expect(response.status).toBe(503);
   });
 });
 
@@ -250,41 +225,6 @@ describe('POST /api/plugins/marketplaces/[id]/refresh', () => {
     expect(response.status).toBe(404);
     expect(refreshMarketplaceSourceMock).not.toHaveBeenCalled();
   });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    refreshMarketplaceSourceMock.mockRejectedValue(undefinedTableError());
-    const response = await refresh(
-      postNoBody(`/api/plugins/marketplaces/${SOURCE_ID}/refresh`),
-      params(SOURCE_ID),
-    );
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(MARKETPLACE_UNAVAILABLE_MESSAGE);
-  });
-});
-
-describe('the marketplace-absent sentence reaches the reader', () => {
-  it.each([
-    [
-      'GET /api/plugins/marketplaces',
-      () => listMarketplaceSourcesMock.mockRejectedValue(undefinedTableError()),
-      async () => GET(get()),
-    ],
-    [
-      'DELETE /api/plugins/marketplaces/[id]',
-      () => deleteMarketplaceSourceMock.mockRejectedValue(undefinedTableError()),
-      async () => DELETE(del(`/api/plugins/marketplaces/${SOURCE_ID}`), params(SOURCE_ID)),
-    ],
-    [
-      'GET /api/plugins/marketplaces/entries',
-      () => listMarketplaceEntriesForUserMock.mockRejectedValue(undefinedTableError()),
-      async () => getEntries(get('/api/plugins/marketplaces/entries')),
-    ],
-  ])('%s says why rather than the generic 503 copy', async (_name, arrange, act) => {
-    arrange();
-    const response = await act();
-    expect(response.status).toBe(503);
-    expect((await response.json()).error.message).toBe(MARKETPLACE_UNAVAILABLE_MESSAGE);
-  });
 });
 
 describe('GET /api/plugins/marketplaces/entries', () => {
@@ -315,12 +255,6 @@ describe('GET /api/plugins/marketplaces/entries', () => {
     const response = await getEntries(get('/api/plugins/marketplaces/entries'));
     expect(response.status).toBe(200);
     expect((await response.json()).entries).toEqual([]);
-  });
-
-  it('answers 503 while the marketplace schema is absent', async () => {
-    listMarketplaceEntriesForUserMock.mockRejectedValue(undefinedTableError());
-    const response = await getEntries(get('/api/plugins/marketplaces/entries'));
-    expect(response.status).toBe(503);
   });
 });
 

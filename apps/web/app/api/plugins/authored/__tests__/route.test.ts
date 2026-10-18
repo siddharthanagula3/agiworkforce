@@ -225,11 +225,9 @@ describe('POST /api/plugins/authored', () => {
     });
   });
 
-  it('reports the marketplace schema as unavailable rather than a server error', async () => {
-    storeOwnedPluginSourceMock.mockRejectedValue(
-      Object.assign(new Error('missing'), { code: '42P01' }),
-    );
+  it('reports a failed store as a server error, not disabled installs', async () => {
+    storeOwnedPluginSourceMock.mockRejectedValue(new Error('connection terminated'));
     const response = await POST(authoredRequest(draft()));
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(500);
   });
 });

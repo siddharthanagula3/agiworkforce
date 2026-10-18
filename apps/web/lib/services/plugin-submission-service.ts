@@ -27,7 +27,6 @@ import type {
 
 const HASH_ALGORITHM = 'sha256';
 const SKILL_FILE_NAME = 'SKILL.md';
-const PG_UNDEFINED_TABLE = '42P01';
 const STATUS_PENDING = 'pending';
 const STATUS_APPROVED = 'approved';
 const STATUS_REJECTED = 'rejected';
@@ -70,14 +69,6 @@ interface CommunityRow extends SubmissionRow {
   installed: boolean;
   enabled: boolean | null;
   enabled_skills: unknown;
-}
-
-export function isMissingPluginSubmissionSchema(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE
-  );
 }
 
 function iso(value: string | Date): string {

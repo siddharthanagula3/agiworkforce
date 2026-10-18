@@ -13,16 +13,12 @@ import {
   getMarketplaceInstallation,
   setMarketplaceInstallationEnabled,
 } from '@/lib/services/plugin-marketplace-installation-service';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { uninstallDirectoryInstallation } from '@/features/plugins/server/directory/install';
 import {
   removePluginConnectors,
   setPluginConnectorsEnabled,
 } from '@/lib/connectors/plugin-connectors';
-import {
-  installsDisabledResponse,
-  pluginHasDependentsResponse,
-} from '@/features/plugins/server/directory/install-responses';
+import { pluginHasDependentsResponse } from '@/features/plugins/server/directory/install-responses';
 import {
   dependentsRefusalMessage,
   listMarketplaceDependents,
@@ -66,49 +62,44 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
-  try {
-    const dependents = body.data.enabled
-      ? []
-      : await listMarketplaceDependents(db, userId, params.data.id);
-    if (dependents.length > 0) {
-      if (!body.data.withDependents) {
-        const current = await getMarketplaceInstallation(db, userId, params.data.id);
-        if (!current) return notInstalled();
-        return pluginHasDependentsResponse(
-          dependentsRefusalMessage('turn off', current.pluginKey, dependents),
-          dependents,
-        );
-      }
-      for (const dependent of dependents) {
-        const turnedOff = await setMarketplaceInstallationEnabled(db, userId, dependent.id, false);
-        if (turnedOff) await setPluginConnectorsEnabled(request, turnedOff.pluginKey, false);
-      }
+  const dependents = body.data.enabled
+    ? []
+    : await listMarketplaceDependents(db, userId, params.data.id);
+  if (dependents.length > 0) {
+    if (!body.data.withDependents) {
+      const current = await getMarketplaceInstallation(db, userId, params.data.id);
+      if (!current) return notInstalled();
+      return pluginHasDependentsResponse(
+        dependentsRefusalMessage('turn off', current.pluginKey, dependents),
+        dependents,
+      );
     }
-    const installation = await setMarketplaceInstallationEnabled(
-      db,
-      userId,
-      params.data.id,
-      body.data.enabled,
-    );
-    if (!installation) return notInstalled();
-    await setPluginConnectorsEnabled(request, installation.pluginKey, installation.enabled);
-    await recordWorkspaceAuditEvent(db, request, {
-      userId: userId,
-      eventType: 'plugin_setting_changed',
-      detail: {
-        resourceType: 'plugin',
-        resourceId: installation.id,
-        resourceName: installation.pluginKey,
-        enabled: installation.enabled,
-        changedKeys: ['enabled'],
-        source: 'marketplace',
-      },
-    });
-    return NextResponse.json({ installation });
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
+    for (const dependent of dependents) {
+      const turnedOff = await setMarketplaceInstallationEnabled(db, userId, dependent.id, false);
+      if (turnedOff) await setPluginConnectorsEnabled(request, turnedOff.pluginKey, false);
+    }
   }
+  const installation = await setMarketplaceInstallationEnabled(
+    db,
+    userId,
+    params.data.id,
+    body.data.enabled,
+  );
+  if (!installation) return notInstalled();
+  await setPluginConnectorsEnabled(request, installation.pluginKey, installation.enabled);
+  await recordWorkspaceAuditEvent(db, request, {
+    userId: userId,
+    eventType: 'plugin_setting_changed',
+    detail: {
+      resourceType: 'plugin',
+      resourceId: installation.id,
+      resourceName: installation.pluginKey,
+      enabled: installation.enabled,
+      changedKeys: ['enabled'],
+      source: 'marketplace',
+    },
+  });
+  return NextResponse.json({ installation });
 }
 
 async function handleDelete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -117,41 +108,36 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   const params = ParamsSchema.safeParse(await context.params);
   if (!params.success) return notInstalled();
 
-  try {
-    const dependents = await listMarketplaceDependents(db, userId, params.data.id);
-    if (dependents.length > 0) {
-      if (request.nextUrl.searchParams.get(WITH_DEPENDENTS_QUERY) !== 'true') {
-        const current = await getMarketplaceInstallation(db, userId, params.data.id);
-        if (!current) return notInstalled();
-        return pluginHasDependentsResponse(
-          dependentsRefusalMessage('remove', current.pluginKey, dependents),
-          dependents,
-        );
-      }
-      for (const dependent of dependents) {
-        const removedDependent = await uninstallDirectoryInstallation(db, userId, dependent.id);
-        if (!removedDependent) continue;
-        await removePluginConnectors(request, removedDependent);
-        await recordWorkspaceAuditEvent(db, request, {
-          userId: userId,
-          eventType: 'plugin_removed',
-          detail: { resourceType: 'plugin', resourceId: dependent.id, source: 'marketplace' },
-        });
-      }
+  const dependents = await listMarketplaceDependents(db, userId, params.data.id);
+  if (dependents.length > 0) {
+    if (request.nextUrl.searchParams.get(WITH_DEPENDENTS_QUERY) !== 'true') {
+      const current = await getMarketplaceInstallation(db, userId, params.data.id);
+      if (!current) return notInstalled();
+      return pluginHasDependentsResponse(
+        dependentsRefusalMessage('remove', current.pluginKey, dependents),
+        dependents,
+      );
     }
-    const removed = await uninstallDirectoryInstallation(db, userId, params.data.id);
-    if (!removed) return notInstalled();
-    await removePluginConnectors(request, removed);
-    await recordWorkspaceAuditEvent(db, request, {
-      userId: userId,
-      eventType: 'plugin_removed',
-      detail: { resourceType: 'plugin', resourceId: params.data.id, source: 'marketplace' },
-    });
-    return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
+    for (const dependent of dependents) {
+      const removedDependent = await uninstallDirectoryInstallation(db, userId, dependent.id);
+      if (!removedDependent) continue;
+      await removePluginConnectors(request, removedDependent);
+      await recordWorkspaceAuditEvent(db, request, {
+        userId: userId,
+        eventType: 'plugin_removed',
+        detail: { resourceType: 'plugin', resourceId: dependent.id, source: 'marketplace' },
+      });
+    }
   }
+  const removed = await uninstallDirectoryInstallation(db, userId, params.data.id);
+  if (!removed) return notInstalled();
+  await removePluginConnectors(request, removed);
+  await recordWorkspaceAuditEvent(db, request, {
+    userId: userId,
+    eventType: 'plugin_removed',
+    detail: { resourceType: 'plugin', resourceId: params.data.id, source: 'marketplace' },
+  });
+  return new NextResponse(null, { status: 204 });
 }
 
 export const PATCH = withCorsRoute(withErrorHandler(handlePatch));

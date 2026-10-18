@@ -93,7 +93,6 @@ vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
 }));
 vi.mock('@/lib/services/plugin-submission-service', () => ({
   createSubmission: vi.fn(),
-  isMissingPluginSubmissionSchema: vi.fn(),
   listCommunityPlugins: vi.fn(),
   listCommunitySkillCompanions: vi.fn(),
   listCommunitySkillFiles: vi.fn(),

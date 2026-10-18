@@ -55,7 +55,6 @@ vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
 vi.mock('@/lib/services/organization-plugin-service', () => ({
-  isMissingOrganizationPluginSchema: vi.fn(),
   listOrganizationPluginGroups: vi.fn(),
   listOrganizationPluginSkillFiles: vi.fn(),
   listOrganizationPlugins: vi.fn(),

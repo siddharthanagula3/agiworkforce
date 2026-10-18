@@ -11,7 +11,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import {
   readAuthoredPlugin,
   replaceAuthoredPlugin,
@@ -24,7 +23,6 @@ import {
   authoredSkillPath,
 } from '@/features/plugins/server/directory/authored-plugin';
 import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,32 +88,27 @@ async function handlePut(request: NextRequest, context: RouteContext): Promise<N
   });
   if (refused) return refused;
 
-  try {
-    const stored = await replaceAuthoredPlugin(
-      db,
-      userId,
-      params.data.entryId,
-      parsed.data,
-      authoredSkillPath,
-    );
-    if (!stored) return notFound();
-    const body: PluginSourceInstallResponse = {
-      sourceName: stored.name,
-      kind: SOURCE_KIND_AUTHORED,
-      plugins: [stored],
-    };
-    await recordAuditEvent({
-      userId,
-      organizationId,
-      eventType: 'plugin_marketplace_changed',
-      request,
-      detail: { resourceId: stored.pluginKey, status: 'edited', count: stored.skills.length },
-    });
-    return NextResponse.json(body);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
-  }
+  const stored = await replaceAuthoredPlugin(
+    db,
+    userId,
+    params.data.entryId,
+    parsed.data,
+    authoredSkillPath,
+  );
+  if (!stored) return notFound();
+  const body: PluginSourceInstallResponse = {
+    sourceName: stored.name,
+    kind: SOURCE_KIND_AUTHORED,
+    plugins: [stored],
+  };
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'plugin_marketplace_changed',
+    request,
+    detail: { resourceId: stored.pluginKey, status: 'edited', count: stored.skills.length },
+  });
+  return NextResponse.json(body);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

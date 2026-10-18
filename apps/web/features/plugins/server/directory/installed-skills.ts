@@ -5,13 +5,10 @@ import { hashSkillContent, type Skill, type SkillWithFileAccess } from '@agiwork
 
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
-  isMissingOrganizationPluginSchema,
   listMemberOrganizationPlugins,
   listOrganizationPluginSkillFiles,
 } from '@/lib/services/organization-plugin-service';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import {
-  isMissingPluginSubmissionSchema,
   listCommunitySkillFiles,
   listInstalledCommunityPlugins,
 } from '@/lib/services/plugin-submission-service';
@@ -83,9 +80,8 @@ async function listInstalledEntries(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<InstalledEntryRow[]> {
-  try {
-    return await db.query<InstalledEntryRow>(
-      `select entries.id as entry_id, entries.plugin_key, installation.installed_version,
+  return db.query<InstalledEntryRow>(
+    `select entries.id as entry_id, entries.plugin_key, installation.installed_version,
               installation.enabled_skills, entries.declared_skills, entries.content_hash,
               sources.repository_url, sources.ref
          from public.plugin_marketplace_installations installation
@@ -95,12 +91,8 @@ async function listInstalledEntries(
           and installation.enabled = true
           and sources.user_id = $1
         order by installation.installed_at asc`,
-      [userId],
-    );
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return [];
-    throw error;
-  }
+    [userId],
+  );
 }
 
 interface OrganizationSkill {
@@ -115,36 +107,31 @@ async function listOrganizationSkills(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<OrganizationSkill[]> {
-  try {
-    const organizationId = await resolveActiveOrganizationId(db, userId);
-    if (!organizationId) return [];
-    const plugins = (await listMemberOrganizationPlugins(db, userId, organizationId)).filter(
-      (plugin) => plugin.enabled,
-    );
-    const files = await listOrganizationPluginSkillFiles(
-      db,
-      organizationId,
-      plugins.map((plugin) => plugin.id),
-    );
-    return files.flatMap((file) => {
-      const plugin = plugins.find((candidate) => candidate.id === file.pluginId);
-      const skill = plugin ? parseSkillFile(file.path, file.content) : null;
-      if (!plugin || !skill) return [];
-      if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
-      return [
-        {
-          organizationId,
-          pluginId: plugin.id,
-          pluginKey: plugin.pluginKey,
-          pluginName: plugin.name,
-          skill,
-        },
-      ];
-    });
-  } catch (error) {
-    if (isMissingOrganizationPluginSchema(error)) return [];
-    throw error;
-  }
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  if (!organizationId) return [];
+  const plugins = (await listMemberOrganizationPlugins(db, userId, organizationId)).filter(
+    (plugin) => plugin.enabled,
+  );
+  const files = await listOrganizationPluginSkillFiles(
+    db,
+    organizationId,
+    plugins.map((plugin) => plugin.id),
+  );
+  return files.flatMap((file) => {
+    const plugin = plugins.find((candidate) => candidate.id === file.pluginId);
+    const skill = plugin ? parseSkillFile(file.path, file.content) : null;
+    if (!plugin || !skill) return [];
+    if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
+    return [
+      {
+        organizationId,
+        pluginId: plugin.id,
+        pluginKey: plugin.pluginKey,
+        pluginName: plugin.name,
+        skill,
+      },
+    ];
+  });
 }
 
 interface CommunitySkill {
@@ -154,23 +141,18 @@ interface CommunitySkill {
 }
 
 async function listCommunitySkills(db: DatabaseAdapter, userId: string): Promise<CommunitySkill[]> {
-  try {
-    const plugins = await listInstalledCommunityPlugins(db, userId);
-    const files = await listCommunitySkillFiles(
-      db,
-      plugins.map((plugin) => plugin.id),
-    );
-    return files.flatMap((file) => {
-      const plugin = plugins.find((candidate) => candidate.id === file.submissionId);
-      const skill = plugin ? parseSkillFile(file.path, file.content) : null;
-      if (!plugin || !skill) return [];
-      if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
-      return [{ submissionId: plugin.id, pluginKey: plugin.pluginKey, skill }];
-    });
-  } catch (error) {
-    if (isMissingPluginSubmissionSchema(error)) return [];
-    throw error;
-  }
+  const plugins = await listInstalledCommunityPlugins(db, userId);
+  const files = await listCommunitySkillFiles(
+    db,
+    plugins.map((plugin) => plugin.id),
+  );
+  return files.flatMap((file) => {
+    const plugin = plugins.find((candidate) => candidate.id === file.submissionId);
+    const skill = plugin ? parseSkillFile(file.path, file.content) : null;
+    if (!plugin || !skill) return [];
+    if (plugin.enabledSkills && !plugin.enabledSkills.includes(skill.name)) return [];
+    return [{ submissionId: plugin.id, pluginKey: plugin.pluginKey, skill }];
+  });
 }
 
 function sameRepository(left: string | null | undefined, right: string): boolean {

@@ -14,10 +14,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { customizePlugin } from '@/features/plugins/server/directory/customize';
 import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
-import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,45 +42,40 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   });
   if (refused) return refused;
 
-  try {
-    const result = await customizePlugin(db, userId, parsed.data);
-    switch (result.status) {
-      case 'missing':
-        return NextResponse.json(
-          {
-            error: {
-              code: 'PLUGIN_NOT_CUSTOMIZABLE',
-              message: 'Install and turn on this plugin before you customize it.',
-            },
+  const result = await customizePlugin(db, userId, parsed.data);
+  switch (result.status) {
+    case 'missing':
+      return NextResponse.json(
+        {
+          error: {
+            code: 'PLUGIN_NOT_CUSTOMIZABLE',
+            message: 'Install and turn on this plugin before you customize it.',
           },
-          { status: 409 },
-        );
-      case 'invalid':
-        return NextResponse.json(
-          { error: { code: 'PLUGIN_NOT_CUSTOMIZABLE', message: result.message } },
-          { status: 422 },
-        );
-      case 'existing':
-        return NextResponse.json<PluginCustomizeResponse>({
-          entryId: result.entryId,
-          created: false,
-        });
-      case 'created':
-        await recordAuditEvent({
-          userId,
-          organizationId,
-          eventType: 'plugin_marketplace_changed',
-          request,
-          detail: { resourceId: result.entryId, resourceName: result.name, status: 'customized' },
-        });
-        return NextResponse.json<PluginCustomizeResponse>(
-          { entryId: result.entryId, created: true },
-          { status: 201 },
-        );
-    }
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();
-    throw error;
+        },
+        { status: 409 },
+      );
+    case 'invalid':
+      return NextResponse.json(
+        { error: { code: 'PLUGIN_NOT_CUSTOMIZABLE', message: result.message } },
+        { status: 422 },
+      );
+    case 'existing':
+      return NextResponse.json<PluginCustomizeResponse>({
+        entryId: result.entryId,
+        created: false,
+      });
+    case 'created':
+      await recordAuditEvent({
+        userId,
+        organizationId,
+        eventType: 'plugin_marketplace_changed',
+        request,
+        detail: { resourceId: result.entryId, resourceName: result.name, status: 'customized' },
+      });
+      return NextResponse.json<PluginCustomizeResponse>(
+        { entryId: result.entryId, created: true },
+        { status: 201 },
+      );
   }
 }
 

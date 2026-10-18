@@ -7,12 +7,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  isMissingPluginMarketplaceSchema,
   listMarketplaceEntriesForUser,
   listMarketplaceSources,
 } from '@/lib/services/plugin-marketplace-service';
 import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
-import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceEntryListResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -23,19 +21,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
-  let entries;
-  let sources;
-  try {
-    [entries, sources] = await Promise.all([
-      listMarketplaceEntriesForUser(db, userId),
-      listMarketplaceSources(db, userId),
-    ]);
-  } catch (error) {
-    if (isMissingPluginMarketplaceSchema(error)) {
-      throw marketplaceUnavailableError();
-    }
-    throw error;
-  }
+  const [entries, sources] = await Promise.all([
+    listMarketplaceEntriesForUser(db, userId),
+    listMarketplaceSources(db, userId),
+  ]);
 
   const hiddenSourceIds = new Set(
     sources.filter((source) => isShadowSourceName(source.name)).map((source) => source.id),

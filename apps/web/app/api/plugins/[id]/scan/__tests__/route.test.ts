@@ -55,7 +55,6 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   getMarketplaceSource: vi.fn(),
   getMarketplaceSourceEntry: vi.fn(),
   hasMarketplaceSourceNamed: vi.fn(),
-  isMissingPluginMarketplaceSchema: vi.fn(),
   listMarketplaceEntriesForUser: vi.fn(),
   listMarketplaceSources: vi.fn(),
   manifestPluginDependencies: vi.fn(),
