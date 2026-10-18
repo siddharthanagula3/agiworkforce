@@ -287,11 +287,6 @@ impl ResearchReportGenerator {
         self
     }
 
-    /// Adds a key finding.
-    pub fn add_key_finding(&mut self, finding: &str) {
-        self.key_findings.push(finding.to_string());
-    }
-
     /// Sets all key findings.
     pub fn with_key_findings(mut self, findings: Vec<String>) -> Self {
         self.key_findings = findings;
@@ -342,11 +337,6 @@ impl ResearchReportGenerator {
     /// Adds a citation and returns the citation marker.
     pub fn add_citation(&mut self, citation: Citation) -> String {
         self.citation_tracker.add_citation(citation)
-    }
-
-    /// Gets the citation tracker for direct manipulation.
-    pub fn citation_tracker_mut(&mut self) -> &mut CitationTracker {
-        &mut self.citation_tracker
     }
 
     /// Builds the final report.

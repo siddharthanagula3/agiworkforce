@@ -432,12 +432,6 @@ impl MemorySearchAgent {
     pub fn new() -> Self {
         Self { available: true }
     }
-
-    /// Sets availability.
-    pub fn set_available(mut self, available: bool) -> Self {
-        self.available = available;
-        self
-    }
 }
 
 impl Default for MemorySearchAgent {

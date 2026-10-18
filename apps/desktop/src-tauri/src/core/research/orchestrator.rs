@@ -174,11 +174,6 @@ impl ResearchOrchestrator {
         self
     }
 
-    /// Adds or replaces a search agent.
-    pub fn add_agent(&mut self, agent_type: AgentType, agent: Box<dyn SearchAgent>) {
-        self.agents.insert(agent_type, agent);
-    }
-
     /// Performs research on the given query.
     pub async fn research(
         &self,
@@ -815,13 +810,6 @@ Be objective and note any conflicting information or gaps in the research."#,
                 serde_json::json!(progress.estimated_remaining_secs.map(|s| format!("{}s", s)));
             let _ = app.emit("research:progress", payload);
         }
-    }
-
-    /// Cancels an ongoing research session by ID.
-    pub fn cancel_session(&self, _session_id: &str) -> bool {
-        // In a full implementation, we would track active sessions
-        // and signal cancellation
-        true
     }
 }
 

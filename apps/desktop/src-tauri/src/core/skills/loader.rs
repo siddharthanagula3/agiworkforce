@@ -331,18 +331,6 @@ impl SkillLoader {
 
         result
     }
-
-    /// Checks if a binary is available in PATH.
-    #[must_use]
-    pub fn is_binary_available(binary: &str) -> bool {
-        which(binary).is_ok()
-    }
-
-    /// Checks if an environment variable is set.
-    #[must_use]
-    pub fn is_env_var_set(env_var: &str) -> bool {
-        std::env::var(env_var).is_ok()
-    }
 }
 
 /// Indicates where a loaded skill originated.

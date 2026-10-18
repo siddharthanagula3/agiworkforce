@@ -233,14 +233,6 @@ impl Skill {
             .any(|os| os.eq_ignore_ascii_case(current_os))
     }
 
-    /// Returns true if this skill has no special requirements.
-    #[must_use]
-    pub fn has_no_requirements(&self) -> bool {
-        self.requires_bins.is_empty()
-            && self.requires_env.is_empty()
-            && self.supported_os.is_empty()
-    }
-
     /// Returns true if a tool is allowed for this skill.
     ///
     /// If `allowed_tools` is empty, all tools are allowed.
@@ -309,38 +301,6 @@ impl Skill {
 
         context.push_str("### Instructions\n\n");
         context.push_str(&self.instructions);
-        context
-    }
-
-    /// Returns a formatted context string with argument substitution.
-    #[must_use]
-    pub fn to_context_string_with_args(&self, arguments: &str) -> String {
-        let mut context = format!("## Skill: {}\n\n", self.name);
-        context.push_str(&format!("**Description:** {}\n\n", self.description));
-
-        if !self.requires_bins.is_empty() {
-            context.push_str(&format!(
-                "**Required binaries:** {}\n\n",
-                self.requires_bins.join(", ")
-            ));
-        }
-
-        if !self.requires_env.is_empty() {
-            context.push_str(&format!(
-                "**Required environment variables:** {}\n\n",
-                self.requires_env.join(", ")
-            ));
-        }
-
-        if !self.allowed_tools.is_empty() {
-            context.push_str(&format!(
-                "**Allowed tools:** {}\n\n",
-                self.allowed_tools.join(", ")
-            ));
-        }
-
-        context.push_str("### Instructions\n\n");
-        context.push_str(&self.substitute_arguments(arguments));
         context
     }
 }
@@ -457,13 +417,6 @@ impl SkillBuilder {
     #[must_use]
     pub fn fork_context(mut self) -> Self {
         self.context_mode = SkillContextMode::Fork;
-        self
-    }
-
-    /// Sets the context mode to main (primary context).
-    #[must_use]
-    pub fn main_context(mut self) -> Self {
-        self.context_mode = SkillContextMode::Main;
         self
     }
 

@@ -11,6 +11,15 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
+/// How a statement another dialect writes opens, for SQL that SQLite's own
+/// parser does not accept.
+static SQL_STATEMENT_OPENING: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(
+        r#"(?i)^\s*(drop\s+(table|database|schema|index|view)\b|truncate\s+(table\s+)?[\w."`\[\]]+\s*(;|$)|delete\s+from\s+[\w."`\[\]]+\s*(;|$|where\b|as\b|using\b|returning\b)|insert\s+into\s|alter\s+table\s|create\s+(table|index|view|database|schema|trigger)\s|attach\s+database\s|update\s+[\w."`\[\]]+\s+set\s|(grant|revoke)\s+(all|select|insert|update|delete|usage|execute|create|alter|drop|references|trigger|connect|temporary)\b)"#,
+    )
+    .expect("valid regex: SQL statement opening")
+});
+
 /// Statement keywords that must never follow a `;` in a single tool call,
 /// matched against the query with all whitespace removed.
 const STACKED_STATEMENT_PREFIXES: &[&str] = &[
@@ -1106,10 +1115,12 @@ enum PathUse {
 /// Whether a path must already sit in a granted folder. The chat executor
 /// asks for folder consent between two passes: the first holds a call to
 /// every rule except this one, so a call that will be refused anyway never
-/// prompts for a folder; the second, after consent, enforces it.
+/// prompts for a folder; the second, after consent, enforces it. `Enforced`
+/// carries the folders the caller grants on its own beyond this guard's live
+/// list, such as the run's project folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FolderGrants {
-    Enforced,
+enum FolderGrants<'a> {
+    Enforced(&'a [PathBuf]),
     DecidedByConsentNext,
 }
 
@@ -1674,36 +1685,6 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
-            "document_extract_text".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 20,
-                requires_approval: false,
-                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
-                risk_level: RiskLevel::Low,
-            },
-        );
-
-        allowed_tools.insert(
-            "document_get_metadata".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 20,
-                requires_approval: false,
-                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
-                risk_level: RiskLevel::Low,
-            },
-        );
-
-        allowed_tools.insert(
-            "document_detect_type".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 20,
-                requires_approval: false,
-                allowed_parameters: vec!["file_path".to_string(), "path".to_string()],
-                risk_level: RiskLevel::Low,
-            },
-        );
-
-        allowed_tools.insert(
             "document_search".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 20,
@@ -1785,16 +1766,6 @@ impl ToolExecutionGuard {
         );
 
         allowed_tools.insert(
-            "db_query".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 20,
-                requires_approval: true,
-                allowed_parameters: vec!["connection_id".to_string(), "query".to_string()],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        allowed_tools.insert(
             "api_call".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 30,
@@ -1818,16 +1789,6 @@ impl ToolExecutionGuard {
                 max_rate_per_minute: 10,
                 requires_approval: false,
                 allowed_parameters: vec!["image_path".to_string()],
-                risk_level: RiskLevel::Low,
-            },
-        );
-
-        allowed_tools.insert(
-            "llm_reason".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 60,
-                requires_approval: false,
-                allowed_parameters: vec!["prompt".to_string(), "context".to_string()],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -2013,75 +1974,6 @@ impl ToolExecutionGuard {
                     "remote_path".to_string(),
                 ],
                 risk_level: RiskLevel::High,
-            },
-        );
-
-        allowed_tools.insert(
-            "productivity_create_task".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: true,
-                allowed_parameters: vec![
-                    "provider".to_string(),
-                    "id".to_string(),
-                    "title".to_string(),
-                    "description".to_string(),
-                    "status".to_string(),
-                    "due_date".to_string(),
-                    "assignee".to_string(),
-                    "assignee_name".to_string(),
-                    "priority".to_string(),
-                    "tags".to_string(),
-                    "url".to_string(),
-                    "project_id".to_string(),
-                    "project_name".to_string(),
-                ],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        // Database operations (beyond existing db_query)
-        allowed_tools.insert(
-            "db_execute".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: true,
-                allowed_parameters: vec![
-                    "connection_id".to_string(),
-                    "sql".to_string(),
-                    "params".to_string(),
-                ],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        allowed_tools.insert(
-            "db_transaction_begin".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: true,
-                allowed_parameters: vec!["connection_id".to_string()],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        allowed_tools.insert(
-            "db_transaction_commit".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: true,
-                allowed_parameters: vec!["connection_id".to_string()],
-                risk_level: RiskLevel::High,
-            },
-        );
-
-        allowed_tools.insert(
-            "db_transaction_rollback".to_string(),
-            ToolPolicy {
-                max_rate_per_minute: 10,
-                requires_approval: false,
-                allowed_parameters: vec!["connection_id".to_string()],
-                risk_level: RiskLevel::Medium,
             },
         );
 
@@ -2607,7 +2499,7 @@ impl ToolExecutionGuard {
     fn validate_mcp_tool_params(
         &self,
         parameters: &Value,
-        grants: FolderGrants,
+        grants: FolderGrants<'_>,
     ) -> std::result::Result<(), SecurityError> {
         let obj = match parameters.as_object() {
             Some(o) => o,
@@ -2666,7 +2558,7 @@ impl ToolExecutionGuard {
                 self.validate_code(val_str)?;
             }
 
-            if key_lower == "query" || key_lower == "sql" {
+            if key_lower == "sql" || (key_lower == "query" && Self::reads_as_sql(val_str)) {
                 self.validate_sql(val_str)?;
             }
         }
@@ -2702,11 +2594,7 @@ impl ToolExecutionGuard {
             "file_read" | "file_read_binary" | "file_read_range" | "file_write" | "file_delete"
             | "file_list" | "apply_patch" | "edit_exact_replace" | "git_diff" | "git_log"
             | "git_list_branches" | "git_init" => &["path"],
-            "document_read"
-            | "document_extract_text"
-            | "document_get_metadata"
-            | "document_detect_type"
-            | "document_search" => &["file_path"],
+            "document_read" | "document_search" => &["file_path"],
             "document_edit_excel" => &["file_path", "output_path"],
             "document_create_pdf" | "document_create_word" | "document_create_excel" => {
                 &["output_path"]
@@ -2813,7 +2701,7 @@ impl ToolExecutionGuard {
         tool_name: &str,
         parameters: &Value,
     ) -> std::result::Result<(), SecurityError> {
-        self.validate_call(tool_name, parameters, FolderGrants::Enforced, true)
+        self.validate_call(tool_name, parameters, FolderGrants::Enforced(&[]), true)
             .await
     }
 
@@ -2835,12 +2723,14 @@ impl ToolExecutionGuard {
 
     /// The second pass after folder consent: the full rule set, granted
     /// folders included, without charging the rate limit a second time.
+    /// `granted` is what the caller grants beyond this guard's own list.
     pub async fn validate_after_folder_consent(
         &self,
         tool_name: &str,
         parameters: &Value,
+        granted: &[PathBuf],
     ) -> std::result::Result<(), SecurityError> {
-        self.validate_call(tool_name, parameters, FolderGrants::Enforced, false)
+        self.validate_call(tool_name, parameters, FolderGrants::Enforced(granted), false)
             .await
     }
 
@@ -2848,7 +2738,7 @@ impl ToolExecutionGuard {
         &self,
         tool_name: &str,
         parameters: &Value,
-        grants: FolderGrants,
+        grants: FolderGrants<'_>,
         charge_rate_limit: bool,
     ) -> std::result::Result<(), SecurityError> {
         debug!("Validating tool call: {}", tool_name);
@@ -2905,11 +2795,7 @@ impl ToolExecutionGuard {
                     self.validate_optional_sha256(parameters, "expected_sha256")?;
                 }
             }
-            "document_read"
-            | "document_extract_text"
-            | "document_get_metadata"
-            | "document_detect_type"
-            | "document_search" => {
+            "document_read" | "document_search" => {
                 if let Some(path) = parameters
                     .get("file_path")
                     .or_else(|| parameters.get("path"))
@@ -3252,30 +3138,12 @@ impl ToolExecutionGuard {
                     ));
                 }
             }
-            "db_query" => {
-                if let Some(query) = parameters.get("query").and_then(|q| q.as_str()) {
-                    self.validate_sql(query)?;
-                } else {
-                    return Err(SecurityError::InvalidParameter(
-                        "Missing or invalid 'query' parameter".to_string(),
-                    ));
-                }
-            }
             "browser_execute_async_js" => {
                 if let Some(script) = parameters.get("script").and_then(|s| s.as_str()) {
                     self.validate_browser_script(script)?;
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'script' parameter".to_string(),
-                    ));
-                }
-            }
-            "db_execute" => {
-                if let Some(sql) = parameters.get("sql").and_then(|q| q.as_str()) {
-                    self.validate_sql(sql)?;
-                } else {
-                    return Err(SecurityError::InvalidParameter(
-                        "Missing or invalid 'sql' parameter".to_string(),
                     ));
                 }
             }
@@ -3502,11 +3370,34 @@ impl ToolExecutionGuard {
         Ok(())
     }
 
+    /// The path as the filesystem resolves it, for comparing with granted
+    /// folders, which are stored resolved. A path that does not exist yet is
+    /// its nearest existing folder resolved, with the rest as given.
+    fn resolved_for_grants(path: &std::path::Path) -> PathBuf {
+        let mut missing = Vec::new();
+        let mut existing = path;
+        loop {
+            if let Ok(resolved) = existing.canonicalize() {
+                return missing
+                    .iter()
+                    .rev()
+                    .fold(resolved, |folder, name| folder.join(name));
+            }
+            match (existing.parent(), existing.file_name()) {
+                (Some(parent), Some(name)) => {
+                    missing.push(name.to_os_string());
+                    existing = parent;
+                }
+                _ => return path.to_path_buf(),
+            }
+        }
+    }
+
     fn validate_path(
         &self,
         path: &str,
         path_use: PathUse,
-        grants: FolderGrants,
+        grants: FolderGrants<'_>,
     ) -> std::result::Result<(), SecurityError> {
         debug!("Validating file path: {}", path);
 
@@ -3595,75 +3486,25 @@ impl ToolExecutionGuard {
             )));
         }
 
-        let within = |granted: &std::sync::RwLock<Vec<PathBuf>>| {
-            granted
-                .read()
-                .map(|guard| guard.iter().any(|allowed| path_buf.starts_with(allowed)))
-                .unwrap_or(false)
-        };
-        let is_allowed = within(&self.allowed_paths)
-            || (path_use == PathUse::Read && within(&self.readable_paths));
-
-        if !is_allowed {
-            if let Some(home_dir) = dirs::home_dir() {
-                if path_buf.starts_with(&home_dir) {
-                    return Ok(());
-                }
+        if let FolderGrants::Enforced(caller_grants) = grants {
+            let resolved = Self::resolved_for_grants(&path_buf);
+            let under = |root: &PathBuf| resolved.starts_with(Self::resolved_for_grants(root));
+            let within = |granted: &std::sync::RwLock<Vec<PathBuf>>| {
+                granted
+                    .read()
+                    .map(|guard| guard.iter().any(&under))
+                    .unwrap_or(false)
+            };
+            let is_granted = within(&self.allowed_paths)
+                || (path_use == PathUse::Read && within(&self.readable_paths))
+                || caller_grants.iter().any(&under);
+            if !is_granted {
+                warn!("Path not in allowed directories: {}", expanded_path);
+                return Err(SecurityError::InvalidParameter(format!(
+                    "Path '{}' is not in allowed directories",
+                    expanded_path
+                )));
             }
-
-            // Expanded list of allowed prefixes with more specific patterns
-            let allowed_prefixes = vec![
-                "/home/",        // Linux home directories
-                "/Users/",       // macOS home directories
-                "C:\\Users\\",   // Windows home directories
-                "D:\\Users\\",   // Windows secondary drive users
-                "/workspace/",   // CI/CD workspace
-                "/project/",     // Project directories
-                "/var/folders/", // macOS temp folders (sandboxed)
-            ];
-
-            for prefix in allowed_prefixes {
-                if expanded_path.starts_with(prefix) {
-                    return Ok(());
-                }
-            }
-
-            // On Windows, check for drive letters but block system drives
-            #[cfg(target_os = "windows")]
-            {
-                if let Some(first_char) = expanded_path.chars().next() {
-                    if first_char.is_ascii_alphabetic() && expanded_path.chars().nth(1) == Some(':')
-                    {
-                        let drive = first_char.to_ascii_uppercase();
-                        // Block Windows system drive except Users folder (already handled above)
-                        if drive == 'C' && !expanded_path.starts_with("C:\\Users\\") {
-                            // Allow specific safe Windows paths
-                            let safe_windows_paths = ["C:\\Temp\\", "C:\\temp\\"];
-                            if grants == FolderGrants::Enforced
-                                && !safe_windows_paths
-                                    .iter()
-                                    .any(|p| expanded_path.starts_with(p))
-                            {
-                                warn!("System drive path outside Users: {}", expanded_path);
-                                return Err(SecurityError::InvalidParameter(format!(
-                                    "Path '{}' on system drive is not allowed",
-                                    expanded_path
-                                )));
-                            }
-                        }
-                    }
-                }
-            }
-
-            if grants == FolderGrants::DecidedByConsentNext {
-                return Ok(());
-            }
-
-            warn!("Path not in allowed directories: {}", expanded_path);
-            return Err(SecurityError::InvalidParameter(format!(
-                "Path '{}' is not in allowed directories",
-                expanded_path
-            )));
         }
 
         // Canonicalize and re-validate to catch symlink attacks
@@ -3688,6 +3529,23 @@ impl ToolExecutionGuard {
                             return Err(SecurityError::PathTraversal(format!(
                                 "Path resolves to blocked location: {}",
                                 prefix
+                            )));
+                        }
+                    }
+
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        if canonical_str.starts_with("/dev/")
+                            || canonical_str.starts_with("/proc/")
+                            || canonical_str.starts_with("/sys/")
+                        {
+                            warn!(
+                                "Symlink resolves to blocked system path: {} -> {}",
+                                expanded_path, canonical_str
+                            );
+                            return Err(SecurityError::PathTraversal(format!(
+                                "Path resolves to blocked system location: {}",
+                                canonical_str
                             )));
                         }
                     }
@@ -3819,7 +3677,7 @@ impl ToolExecutionGuard {
     fn refuse_catastrophic_command(command: &str) -> std::result::Result<(), SecurityError> {
         let cmd_lower = command.to_lowercase();
         for pattern in CATASTROPHIC_COMMAND_PATTERNS.iter().copied() {
-            if cmd_lower.contains(pattern) {
+            if crate::sys::security::command_validator::contains_pattern(&cmd_lower, pattern) {
                 warn!("Dangerous terminal command pattern detected: {}", pattern);
                 return Err(SecurityError::CommandInjection(pattern.to_string()));
             }
@@ -3857,6 +3715,26 @@ impl ToolExecutionGuard {
         }
 
         Ok(())
+    }
+
+    /// Whether a connector's `query` value is SQL rather than search text:
+    /// SQLite parses it, stacked statements included, or it opens the way a
+    /// statement in another dialect does. Text that is neither is a search
+    /// and is not held to the SQL screen.
+    fn reads_as_sql(text: &str) -> bool {
+        let parses = match rusqlite::Connection::open_in_memory() {
+            Ok(conn) => match conn.prepare(text) {
+                Err(rusqlite::Error::SqliteFailure(_, Some(message))) => {
+                    !(message.contains("syntax error") || message.contains("incomplete input"))
+                }
+                Err(rusqlite::Error::SqlInputError { msg, .. }) => {
+                    !(msg.contains("syntax error") || msg.contains("incomplete input"))
+                }
+                _ => true,
+            },
+            Err(_) => true,
+        };
+        parses || SQL_STATEMENT_OPENING.is_match(text)
     }
 
     fn validate_sql(&self, query: &str) -> std::result::Result<(), SecurityError> {
@@ -4079,26 +3957,6 @@ impl ToolExecutionGuard {
         }
 
         Ok(())
-    }
-
-    /// True when a `DELETE`/`UPDATE` that cleared [`Self::validate_write_predicate`]
-    /// still bounds its rows only by an open-ended range (`WHERE id > 0`,
-    /// `WHERE created_at < NOW()`), which no static screen can tell from a
-    /// whole-table write. The prompt says so; the human decides.
-    pub fn write_is_open_ended(sql: &str) -> bool {
-        let Ok((sql, _)) = Self::strip_sql_comments(sql) else {
-            return false;
-        };
-        let tokens = Self::tokenize_sql(&sql);
-        if Self::write_keyword_position(&tokens) != Some(0) {
-            return false;
-        }
-        let Some(where_clause) = Self::where_clause_tokens(&tokens) else {
-            return false;
-        };
-        Self::split_top_level_or(where_clause)
-            .into_iter()
-            .any(|branch| !Self::branch_pins_rows_to_values(branch))
     }
 
     fn write_keyword_position(tokens: &[String]) -> Option<usize> {
@@ -4521,13 +4379,6 @@ impl ToolExecutionGuard {
 
     fn branch_narrows_rows(branch: &[String]) -> bool {
         Self::narrows_rows(branch, true)
-    }
-
-    /// The same test with ordering comparisons removed: what is left only
-    /// passes when the branch pins rows to values it names. Used to label the
-    /// open-ended residual above in the confirmation prompt.
-    fn branch_pins_rows_to_values(branch: &[String]) -> bool {
-        Self::narrows_rows(branch, false)
     }
 
     fn narrows_rows(branch: &[String], ordering_counts: bool) -> bool {
@@ -6337,7 +6188,7 @@ impl ToolExecutionGuard {
         let safety_tier = self.get_safety_tier(tool_name);
         let risk_level = self.get_risk_level(tool_name).unwrap_or(RiskLevel::Medium);
 
-        let mut reason = match safety_tier {
+        let reason = match safety_tier {
             ToolSafetyTier::Safe => "This tool is safe and doesn't require confirmation.".to_string(),
             ToolSafetyTier::RequiresNotification => "This tool will notify you when executing.".to_string(),
             ToolSafetyTier::RequiresConfirmation => format!(
@@ -6349,17 +6200,6 @@ impl ToolExecutionGuard {
                 tool_name
             ),
         };
-
-        if tool_name == "db_execute"
-            && parameters
-                .get("sql")
-                .and_then(|value| value.as_str())
-                .is_some_and(Self::write_is_open_ended)
-        {
-            reason.push_str(
-                " Its WHERE clause bounds rows only by an open-ended range, so it can match every row in the table, read the SQL below before approving.",
-            );
-        }
 
         let (reversible, undo_description) = match tool_name {
             "file_write" => (true, Some("Restore the previous file contents".to_string())),
@@ -6382,27 +6222,6 @@ impl ToolExecutionGuard {
                 false,
                 Some("Create a fresh checkpoint before rewind if you may need to restore the current state".to_string()),
             ),
-            "code_execute" => (false, None),
-            "db_execute" => (
-                false,
-                Some("Database changes may need manual rollback".to_string()),
-            ),
-            "db_query" => {
-                // Check if it's a read-only query
-                let query_lower = parameters
-                    .get("query")
-                    .and_then(|q| q.as_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if query_lower.starts_with("select") {
-                    (false, None) // SELECT queries are not reversible but also don't modify data
-                } else {
-                    (
-                        false,
-                        Some("Database changes may need manual rollback".to_string()),
-                    )
-                }
-            }
             _ => (false, None),
         };
 
@@ -6452,6 +6271,15 @@ mod tests {
         )
     }
 
+    /// A guard with the fixture home folder and the system temp folder
+    /// granted, as Allowed Directories would grant them, for the tests about
+    /// everything but grants.
+    fn granted_guard() -> ToolExecutionGuard {
+        let guard = ToolExecutionGuard::new();
+        guard.set_allowed_paths(vec![PathBuf::from(in_user_home("")), std::env::temp_dir()]);
+        guard
+    }
+
     fn outside_every_default_root(relative: &str) -> String {
         under(
             if cfg!(windows) {
@@ -6465,7 +6293,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_allowed_tool() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call("file_read", &json!({"path": in_user_home("test.txt")}))
             .await;
@@ -6474,7 +6302,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_write_expected_sha256_must_be_lowercase_hex() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let uppercase_hash = "A".repeat(64);
         let result = guard
             .validate_tool_call(
@@ -6491,7 +6319,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multi_edit_contract_validates_nested_expected_sha256() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "multi_edit",
@@ -6525,14 +6353,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_unauthorized_tool() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard.validate_tool_call("unknown_tool", &json!({})).await;
         assert!(matches!(result, Err(SecurityError::UnauthorizedTool(_))));
     }
 
     #[tokio::test]
     async fn test_path_traversal() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call("file_read", &json!({"path": "../../../etc/passwd"}))
             .await;
@@ -6541,7 +6369,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_document_read_allowed() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "document_read",
@@ -6553,7 +6381,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_document_read_path_traversal() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "document_read",
@@ -6565,7 +6393,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_blocked_domain() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call("browser_navigate", &json!({"url": "http://localhost:3000"}))
             .await;
@@ -6574,7 +6402,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_command_injection() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "code_execute",
@@ -6586,43 +6414,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_sql_injection() {
-        let guard = ToolExecutionGuard::new();
-        let result = guard
-            .validate_tool_call(
-                "db_query",
-                &json!({"query": "SELECT * FROM users WHERE id = '1' OR '1'='1'"}),
-            )
-            .await;
+        let guard = granted_guard();
+        let result = guard.validate_sql("SELECT * FROM users WHERE id = '1' OR '1'='1'");
         assert!(matches!(result, Err(SecurityError::CommandInjection(_))));
     }
 
     #[tokio::test]
     async fn test_sql_query_allows_hex_literals_and_comments() {
-        let guard = ToolExecutionGuard::new();
-        let result = guard
-            .validate_tool_call(
-                "db_query",
-                &json!({"query": "SELECT /* inline comment */ 0x10 AS mask"}),
-            )
-            .await;
+        let guard = granted_guard();
+        let result = guard.validate_sql("SELECT /* inline comment */ 0x10 AS mask");
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_sql_time_based_injection_remains_blocked() {
-        let guard = ToolExecutionGuard::new();
-        let result = guard
-            .validate_tool_call(
-                "db_query",
-                &json!({"query": "SELECT * FROM users WHERE id = '1' OR SLEEP(5)"}),
-            )
-            .await;
+        let guard = granted_guard();
+        let result = guard.validate_sql("SELECT * FROM users WHERE id = '1' OR SLEEP(5)");
         assert!(matches!(result, Err(SecurityError::CommandInjection(_))));
     }
 
     #[test]
     fn test_risk_levels() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         assert_eq!(guard.get_risk_level("file_read"), Some(RiskLevel::Low));
         assert_eq!(guard.get_risk_level("file_write"), Some(RiskLevel::Medium));
@@ -6638,7 +6451,7 @@ mod tests {
 
     #[test]
     fn test_approval_requirements() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         assert!(!guard.requires_approval("file_read"));
         assert!(guard.requires_approval("file_write"));
@@ -6647,7 +6460,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_low_risk_is_safe() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         // file_read is Low risk, requires_approval=false -> Safe
         assert_eq!(guard.get_safety_tier("file_read"), ToolSafetyTier::Safe);
         assert_eq!(guard.get_safety_tier("file_list"), ToolSafetyTier::Safe);
@@ -6656,7 +6469,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_medium_risk_with_approval_requires_confirmation() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         // file_write is Medium risk, requires_approval=true -> RequiresConfirmation
         assert_eq!(
             guard.get_safety_tier("file_write"),
@@ -6671,7 +6484,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_medium_risk_without_approval_requires_notification() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         // search_web is Medium risk, requires_approval=false -> RequiresNotification
         assert_eq!(
             guard.get_safety_tier("search_web"),
@@ -6686,7 +6499,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_high_risk_requires_confirmation() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         // file_delete is High risk -> RequiresConfirmation
         assert_eq!(
             guard.get_safety_tier("file_delete"),
@@ -6706,7 +6519,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_critical_risk_requires_explicit_approval() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         // code_execute is Critical risk -> RequiresExplicitApproval
         assert_eq!(
             guard.get_safety_tier("code_execute"),
@@ -6716,7 +6529,7 @@ mod tests {
 
     #[test]
     fn test_get_safety_tier_unknown_tool_defaults_to_confirmation() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         assert_eq!(
             guard.get_safety_tier("nonexistent_tool"),
             ToolSafetyTier::RequiresConfirmation
@@ -6725,7 +6538,7 @@ mod tests {
 
     #[test]
     fn test_create_confirmation_request_file_delete_says_what_cannot_be_recovered() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let params = json!({"path": "/tmp/test.bin"});
         let request =
             guard.create_confirmation_request("file_delete", &params, Some("Delete a file"));
@@ -6745,7 +6558,7 @@ mod tests {
 
     #[test]
     fn test_create_confirmation_request_file_write_is_reversible() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let params = json!({"path": "/tmp/file.txt", "content": "hello"});
         let request = guard.create_confirmation_request("file_write", &params, None);
 
@@ -6760,7 +6573,7 @@ mod tests {
 
     #[test]
     fn test_create_confirmation_request_code_execute_not_reversible() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let params = json!({"language": "python", "code": "print('hi')"});
         let request = guard.create_confirmation_request("code_execute", &params, Some("Run code"));
 
@@ -6775,7 +6588,7 @@ mod tests {
 
     #[test]
     fn test_create_confirmation_request_has_unique_request_id() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let params = json!({});
         let r1 = guard.create_confirmation_request("file_read", &params, None);
         let r2 = guard.create_confirmation_request("file_read", &params, None);
@@ -6786,35 +6599,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_create_confirmation_request_db_query_select_not_reversible() {
-        let guard = ToolExecutionGuard::new();
-        let params = json!({"query": "SELECT * FROM users"});
-        let request = guard.create_confirmation_request("db_query", &params, None);
-
-        // SELECT queries are not reversible and have no undo description
-        assert!(!request.reversible);
-        assert!(request.undo_description.is_none());
-    }
-
-    #[test]
-    fn test_create_confirmation_request_db_query_mutation_has_undo_hint() {
-        let guard = ToolExecutionGuard::new();
-        let params = json!({"query": "DELETE FROM users WHERE id = 1"});
-        let request = guard.create_confirmation_request("db_query", &params, None);
-
-        assert!(!request.reversible);
-        assert!(
-            request.undo_description.is_some(),
-            "mutation queries should have a rollback hint"
-        );
-        assert!(request
-            .undo_description
-            .as_ref()
-            .unwrap()
-            .contains("manual rollback"));
-    }
-
     #[tokio::test]
     async fn test_concurrent_rate_limit_enforcement() {
         use std::sync::Arc;
@@ -6822,7 +6606,7 @@ mod tests {
 
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("test.txt");
-        let guard = Arc::new(ToolExecutionGuard::new());
+        let guard = Arc::new(granted_guard());
         // file_delete has max_rate_per_minute = 5
         let num_tasks = 10;
         let barrier = Arc::new(Barrier::new(num_tasks));
@@ -6868,7 +6652,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_browser_execute_async_js_rejects_obsolete_parameters() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "browser_execute_async_js",
@@ -6885,7 +6669,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_strict_guard_matches_current_tool_contracts() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         guard
             .validate_tool_call(
@@ -6957,7 +6741,7 @@ mod tests {
     /// `UnauthorizedTool` in every agent mode, Safe included.
     #[tokio::test]
     async fn test_code_search_allowed_with_registry_parameters() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         guard
             .validate_tool_call(
@@ -6993,7 +6777,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_accessibility_verbs_carry_the_tier_their_effect_earns() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         for mutating in ["ui_toggle", "ui_focus_window"] {
             assert_eq!(
@@ -7012,7 +6796,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_accessibility_verbs_accept_only_a_target_in_a_named_app() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         for tool in ["ui_toggle", "ui_focus_window", "ui_scroll", "ui_read_value"] {
             guard
@@ -7049,7 +6833,7 @@ mod tests {
         // Every advertised tool the guard has no policy for dies at
         // `validate_tool_call` with `UnauthorizedTool`. code_search must not be
         // one of them.
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         assert_eq!(
             guard.get_safety_tier("code_search"),
             ToolSafetyTier::Safe,
@@ -7060,7 +6844,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_terminal_execute_rejects_shell_override_parameter() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let result = guard
             .validate_tool_call(
                 "terminal_execute",
@@ -7077,22 +6861,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_specialized_tool_contracts_match_current_registry_params() {
-        let guard = ToolExecutionGuard::new();
-
-        guard
-            .validate_tool_call(
-                "productivity_create_task",
-                &serde_json::json!({
-                    "provider": "notion",
-                    "title": "Ship beta",
-                    "description": "Finish tool parity pass",
-                    "status": "in_progress",
-                    "priority": 3,
-                    "tags": ["beta"]
-                }),
-            )
-            .await
-            .expect("productivity_create_task advertised params should be allowed");
+        let guard = granted_guard();
 
         guard
             .validate_tool_call(
@@ -7117,7 +6886,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_worktree_tool_contracts_require_approval_and_validate_slug() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let repo_dir = tempfile::tempdir().expect("tempdir");
         let repo_path = repo_dir.path().to_string_lossy();
 
@@ -7174,7 +6943,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_undo_and_checkpoint_tool_contracts_are_guarded() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         guard
             .validate_tool_call(
@@ -7242,7 +7011,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_diff_contract_is_read_only_and_validates_paths() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let repo_dir = tempfile::tempdir().expect("tempdir");
         let repo_path = repo_dir.path().to_string_lossy();
 
@@ -7282,7 +7051,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_log_contract_is_read_only_and_validates_limit() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let repo_dir = tempfile::tempdir().expect("tempdir");
         let repo_path = repo_dir.path().to_string_lossy();
 
@@ -7310,7 +7079,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_list_branches_contract_is_read_only() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let repo_dir = tempfile::tempdir().expect("tempdir");
         let repo_path = repo_dir.path().to_string_lossy();
 
@@ -7332,7 +7101,7 @@ mod tests {
 
     #[test]
     fn test_metered_media_generation_requires_confirmation() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         assert!(guard
             .get_safety_tier("image_generate")
@@ -7359,7 +7128,7 @@ mod tests {
 
     #[test]
     fn validate_url_rejects_every_internal_ipv4_range() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         for url in [
             "http://127.0.0.1/",
             "http://10.0.0.5/",
@@ -7386,7 +7155,7 @@ mod tests {
 
     #[test]
     fn validate_url_rejects_alternate_encodings_of_internal_addresses() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         for url in [
             "http://2130706433/",
             "http://0x7f000001/",
@@ -7411,7 +7180,7 @@ mod tests {
 
     #[test]
     fn validate_url_allows_public_hosts() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         for url in [
             "https://api.agiworkforce.com/v1/models",
             "https://8.8.8.8/",
@@ -7606,7 +7375,7 @@ mod tests {
     #[tokio::test]
     async fn browser_execute_async_js_refuses_the_session_exfiltration_corpus() {
         for script in SESSION_EXFILTRATION_SCRIPTS {
-            let guard = ToolExecutionGuard::new();
+            let guard = granted_guard();
             let result = guard
                 .validate_tool_call("browser_execute_async_js", &json!({ "script": script }))
                 .await;
@@ -7638,7 +7407,7 @@ mod tests {
 
     #[tokio::test]
     async fn browser_execute_async_js_allows_dom_reads() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         guard
             .validate_tool_call(
                 "browser_execute_async_js",
@@ -7695,8 +7464,8 @@ mod tests {
     ];
 
     /// Writes that name their rows through a column. Refusing these is a
-    /// product regression: the same rule set screens a goal run's `db_execute`
-    /// and MCP `sql`/`query` parameters, where retention deletes are routine.
+    /// product regression: the same rule set screens MCP `sql` and `query`
+    /// parameters, where retention deletes are routine.
     const NARROWED_WRITES: &[&str] = &[
         "DELETE FROM items WHERE id BETWEEN 1 AND 10",
         "DELETE FROM logs WHERE created_at < 1700000000",
@@ -7718,34 +7487,30 @@ mod tests {
     ];
 
     #[tokio::test]
-    async fn db_execute_blocks_writes_that_match_every_row() {
+    async fn the_sql_screen_blocks_writes_that_match_every_row() {
         for sql in UNNARROWED_WRITES {
-            let guard = ToolExecutionGuard::new();
-            let result = guard
-                .validate_tool_call("db_execute", &json!({ "connection_id": "db", "sql": sql }))
-                .await;
+            let guard = granted_guard();
+            let result = guard.validate_sql(sql);
             assert!(result.is_err(), "unnarrowed write must be refused: {sql}");
         }
     }
 
     #[tokio::test]
-    async fn db_execute_blocks_unlisted_stacked_statements() {
+    async fn the_sql_screen_blocks_unlisted_stacked_statements() {
         for sql in [
             "INSERT INTO notes (body) VALUES ('hi'); ALTER TABLE users ADD COLUMN backdoor TEXT",
             "INSERT INTO notes (body) VALUES ('hi');CREATE TABLE exfil (data TEXT)",
             "UPDATE notes SET body = 'hi' WHERE id = 1; ATTACH DATABASE '/tmp/e.db' AS e",
             "UPDATE notes SET body = 'hi' WHERE id = 1; PRAGMA key = 'x'",
         ] {
-            let guard = ToolExecutionGuard::new();
-            let result = guard
-                .validate_tool_call("db_execute", &json!({ "connection_id": "db", "sql": sql }))
-                .await;
+            let guard = granted_guard();
+            let result = guard.validate_sql(sql);
             assert!(result.is_err(), "stacked statement must be refused: {sql}");
         }
     }
 
     #[tokio::test]
-    async fn db_execute_still_allows_targeted_writes() {
+    async fn the_sql_screen_still_allows_targeted_writes() {
         for sql in [
             "UPDATE support_tickets SET status = 'closed' WHERE id = 42",
             "INSERT INTO support_tickets (subject) VALUES ('printer is on fire')",
@@ -7773,33 +7538,27 @@ mod tests {
             // temp table is still a table name.
             "UPDATE #temp SET status = 'closed' WHERE id = 42",
         ] {
-            let guard = ToolExecutionGuard::new();
+            let guard = granted_guard();
             guard
-                .validate_tool_call("db_execute", &json!({ "connection_id": "db", "sql": sql }))
-                .await
+                .validate_sql(sql)
                 .unwrap_or_else(|e| panic!("targeted write must still run: {sql} ({e})"));
         }
     }
 
     #[tokio::test]
-    async fn db_query_still_allows_the_where_1_1_builder_idiom() {
-        let guard = ToolExecutionGuard::new();
+    async fn the_sql_screen_still_allows_the_where_1_1_builder_idiom() {
+        let guard = granted_guard();
         guard
-            .validate_tool_call(
-                "db_query",
-                &json!({ "query": "SELECT id FROM users WHERE 1=1 AND status = 'active'" }),
-            )
-            .await
+            .validate_sql("SELECT id FROM users WHERE 1=1 AND status = 'active'")
             .expect("read-only queries keep the query-builder idiom");
     }
 
     #[tokio::test]
-    async fn db_execute_still_allows_writes_that_name_rows_by_column() {
+    async fn the_sql_screen_still_allows_writes_that_name_rows_by_column() {
         for sql in NARROWED_WRITES {
-            let guard = ToolExecutionGuard::new();
+            let guard = granted_guard();
             guard
-                .validate_tool_call("db_execute", &json!({ "connection_id": "db", "sql": sql }))
-                .await
+                .validate_sql(sql)
                 .unwrap_or_else(|e| panic!("a column-filtered write must still run: {sql} ({e})"));
         }
     }
@@ -8315,34 +8074,6 @@ mod tests {
         }
     }
 
-    /// What the predicate screen cannot decide, the prompt has to say out loud.
-    #[test]
-    fn an_open_ended_write_is_labelled_in_the_confirmation_prompt() {
-        let guard = ToolExecutionGuard::new();
-
-        let open = guard.create_confirmation_request(
-            "db_execute",
-            &json!({ "connection_id": "db", "sql": "DELETE FROM support_tickets WHERE id > 0" }),
-            None,
-        );
-        assert!(
-            open.reason.contains("open-ended range"),
-            "an unbounded range must be named in the prompt: {}",
-            open.reason
-        );
-
-        let pinned = guard.create_confirmation_request(
-            "db_execute",
-            &json!({ "connection_id": "db", "sql": "DELETE FROM support_tickets WHERE id = 42" }),
-            None,
-        );
-        assert!(
-            !pinned.reason.contains("open-ended range"),
-            "a write that names its rows must not be labelled: {}",
-            pinned.reason
-        );
-    }
-
     /// Autopilot turns `auto_approve_all` on for every tool, and
     /// `request_tool_confirmation` honoured it before it ever consulted
     /// `NEVER_REMEMBERABLE`. All three standing grants are now the same gate.
@@ -8362,10 +8093,10 @@ mod tests {
     }
 
     #[test]
-    fn a_session_grant_cannot_stand_in_for_the_script_and_sql_prompts() {
+    fn a_session_grant_cannot_stand_in_for_the_script_prompt() {
         let state = crate::sys::commands::tool_confirmation::ToolConfirmationState::new();
 
-        for tool in ["browser_execute_async_js", "db_execute"] {
+        for tool in ["browser_execute_async_js"] {
             state.approve_for_session(tool);
             assert!(
                 !state.is_session_approved(tool),
@@ -8376,7 +8107,7 @@ mod tests {
 
     #[tokio::test]
     async fn reading_tools_the_chat_advertises_are_safe_with_their_declared_parameters() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let file = std::env::temp_dir().join("notes.txt");
 
         for (tool, parameters) in [
@@ -8428,7 +8159,7 @@ mod tests {
 
     #[tokio::test]
     async fn tools_that_run_commands_or_write_ask_first() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let project = std::env::temp_dir().join("project");
 
         for tool in [
@@ -8506,7 +8237,7 @@ mod tests {
             );
         }
 
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         assert!(matches!(
             guard
                 .validate_tool_call("test_run", &json!({ "filter": "scope; rm -rf ~" }))
@@ -8538,7 +8269,7 @@ mod tests {
             );
         }
 
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         guard
             .validate_tool_call(
                 "github_create_repo",
@@ -8558,7 +8289,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_call_accepts_its_declared_options_and_bounds_them() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         let url = "https://8.8.8.8/items";
 
         guard
@@ -8597,7 +8328,7 @@ mod tests {
 
     #[tokio::test]
     async fn fetching_a_page_the_model_chose_asks_first() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         for tool in [
             "physical_scrape",
@@ -8699,6 +8430,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_home_path_nobody_granted_is_refused_by_the_enforced_pass() {
+        let guard = ToolExecutionGuard::new();
+        let file = in_user_home("notes.txt");
+
+        let refused = guard
+            .validate_tool_call("file_read", &json!({ "path": file }))
+            .await;
+        assert!(
+            matches!(&refused, Err(SecurityError::InvalidParameter(reason)) if reason.contains("not in allowed directories")),
+            "{refused:?}"
+        );
+
+        guard
+            .validate_after_folder_consent(
+                "file_read",
+                &json!({ "path": file }),
+                &[PathBuf::from(in_user_home(""))],
+            )
+            .await
+            .expect("a folder the caller grants is granted");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_link_in_a_granted_folder_to_a_device_is_refused() {
+        let folder = tempfile::tempdir().expect("temp folder");
+        let link = folder.path().join("innocent.txt");
+        std::os::unix::fs::symlink("/dev/null", &link).expect("link");
+        let guard = ToolExecutionGuard::new();
+        guard.set_allowed_paths(vec![folder.path().to_path_buf()]);
+
+        assert!(guard
+            .validate_tool_call("file_read", &json!({ "path": link }))
+            .await
+            .is_err());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_link_in_a_granted_folder_to_a_folder_nobody_granted_is_refused() {
+        let granted = tempfile::tempdir().expect("granted folder");
+        let elsewhere = tempfile::tempdir().expect("ungranted folder");
+        std::fs::write(elsewhere.path().join("secret.txt"), "x").expect("ungranted file");
+        std::fs::write(granted.path().join("notes.txt"), "x").expect("granted file");
+        let link = granted.path().join("shortcut");
+        std::os::unix::fs::symlink(elsewhere.path(), &link).expect("link");
+        let guard = ToolExecutionGuard::new();
+        guard.set_allowed_paths(vec![granted.path().to_path_buf()]);
+
+        assert!(guard
+            .validate_tool_call("file_read", &json!({ "path": link.join("secret.txt") }))
+            .await
+            .is_err());
+        guard
+            .validate_tool_call("file_read", &json!({ "path": granted.path().join("notes.txt") }))
+            .await
+            .expect("a file in the granted folder is granted");
+    }
+
+    #[tokio::test]
     async fn the_pass_before_folder_consent_defers_only_the_granted_folder_rule() {
         let guard = ToolExecutionGuard::new();
         let file = &outside_every_default_root("project/notes.txt");
@@ -8731,7 +8522,7 @@ mod tests {
 
         assert!(
             guard
-                .validate_after_folder_consent("file_read", &json!({ "path": file }))
+                .validate_after_folder_consent("file_read", &json!({ "path": file }), &[])
                 .await
                 .is_err(),
             "consent was not given, so the second pass refuses"
@@ -8739,7 +8530,7 @@ mod tests {
         guard.set_readable_paths(vec![PathBuf::from(outside_every_default_root("project"))]);
         for _ in 0..40 {
             guard
-                .validate_after_folder_consent("file_read", &json!({ "path": file }))
+                .validate_after_folder_consent("file_read", &json!({ "path": file }), &[])
                 .await
                 .expect("the second pass charges no rate limit");
         }
@@ -8747,7 +8538,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_relative_path_is_refused_rather_than_guessed() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
 
         for path in ["etc/hosts", "src/a.ts", "notes.txt"] {
             for result in [
@@ -8767,8 +8558,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_connector_query_is_held_to_the_sql_screen_only_when_it_is_sql() {
+        let guard = granted_guard();
+        guard.register_mcp_tool("mcp__search__web");
+
+        for text in [
+            "grant writing tips",
+            "update on the election",
+            "how to delete from git history",
+            "revoke the license from them now",
+            "quotes with %22encoded%22 marks",
+        ] {
+            guard
+                .validate_tool_call("mcp__search__web", &json!({ "query": text }))
+                .await
+                .unwrap_or_else(|error| panic!("search text is not SQL: {text} ({error:?})"));
+        }
+
+        for sql in [
+            "SELECT * FROM users WHERE id = '1' OR '1'='1'",
+            "DELETE FROM users",
+            "TRUNCATE TABLE users",
+            "GRANT ALL ON payroll TO intern",
+        ] {
+            assert!(
+                guard
+                    .validate_tool_call("mcp__search__web", &json!({ "query": sql }))
+                    .await
+                    .is_err(),
+                "{sql}"
+            );
+        }
+
+        assert!(guard
+            .validate_tool_call("mcp__search__web", &json!({ "sql": "grant writing tips" }))
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
     async fn a_connector_value_is_judged_as_a_path_only_when_it_names_a_place_on_disk() {
-        let guard = ToolExecutionGuard::new();
+        let guard = granted_guard();
         guard.register_mcp_tool("mcp__weather__forecast");
 
         guard

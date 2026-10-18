@@ -132,7 +132,6 @@ async fn ensure_capture_allowed(app: &tauri::AppHandle) -> Result<(), String> {
 pub async fn capture_screen_full(
     app_handle: tauri::AppHandle,
     db: State<'_, AppDatabase>,
-    conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing full screen");
@@ -165,7 +164,6 @@ pub async fn capture_screen_full(
             CaptureType::Fullscreen,
             &pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -203,7 +201,6 @@ pub async fn capture_screen_full(
             CaptureType::Fullscreen,
             &capture.pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -223,7 +220,6 @@ pub async fn capture_screen_region(
     y: i32,
     width: u32,
     height: u32,
-    conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing screen region: ({x}, {y}) {width}x{height}");
@@ -266,7 +262,6 @@ pub async fn capture_screen_region(
             CaptureType::Region,
             &capture.pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -312,7 +307,6 @@ pub async fn capture_screen_region(
             CaptureType::Region,
             &capture.pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -354,7 +348,6 @@ pub async fn capture_screen_window(
     app_handle: tauri::AppHandle,
     db: State<'_, AppDatabase>,
     hwnd: String,
-    conversation_id: Option<i64>,
 ) -> Result<CaptureResult, String> {
     ensure_capture_allowed(&app_handle).await?;
     tracing::info!("Capturing window: {}", hwnd);
@@ -402,7 +395,6 @@ pub async fn capture_screen_window(
             CaptureType::Window,
             &capture.pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -451,7 +443,6 @@ pub async fn capture_screen_window(
             CaptureType::Window,
             &capture.pixels,
             &metadata,
-            conversation_id,
             timestamp,
         )?;
 
@@ -463,7 +454,6 @@ pub async fn capture_screen_window(
     Err("Unsupported platform for capture_screen_window".to_string())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn persist_capture(
     app_handle: &tauri::AppHandle,
     db: &State<'_, AppDatabase>,
@@ -471,7 +461,6 @@ fn persist_capture(
     capture_type: CaptureType,
     image: &RgbaImage,
     metadata: &CaptureMetadata,
-    conversation_id: Option<i64>,
     timestamp: i64,
 ) -> Result<CaptureResult, String> {
     let captures_dir = private_captures_dir(app_handle)?;
@@ -493,11 +482,10 @@ fn persist_capture(
     db.conn.lock()
         .map_err(|e| format!("Failed to lock database: {e}"))?
         .execute(
-            "INSERT INTO captures (id, conversation_id, capture_type, file_path, thumbnail_path, metadata, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO captures (id, capture_type, file_path, thumbnail_path, metadata, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 capture_id,
-                conversation_id,
                 capture_type.as_str(),
                 file_path_str,
                 thumbnail_path_str,

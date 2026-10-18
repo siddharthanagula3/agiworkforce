@@ -676,12 +676,6 @@ Write tests for the specified code following these practices.
         }
     }
 
-    /// Returns all loaded skills.
-    #[must_use]
-    pub fn all_skills(&self) -> Vec<Skill> {
-        self.skills.read().values().cloned().collect()
-    }
-
     /// Returns only skills that meet all their requirements.
     #[must_use]
     pub fn available_skills(&self) -> Vec<Skill> {
@@ -815,12 +809,6 @@ Write tests for the specified code following these practices.
         self.skills.read().len()
     }
 
-    /// Returns the number of available skills (meeting requirements).
-    #[must_use]
-    pub fn available_skill_count(&self) -> usize {
-        self.available_skills().len()
-    }
-
     /// Gets the current workspace path.
     #[must_use]
     pub fn workspace_path(&self) -> Option<PathBuf> {
@@ -839,11 +827,6 @@ Write tests for the specified code following these practices.
     #[must_use]
     pub fn managed_skills_dir(&self) -> &Path {
         &self.config.managed_skills_dir
-    }
-
-    /// Ensures the managed skills directory exists.
-    pub fn ensure_managed_dir_exists(&self) -> std::io::Result<()> {
-        std::fs::create_dir_all(&self.config.managed_skills_dir)
     }
 
     /// Invokes a skill by name with the provided arguments.

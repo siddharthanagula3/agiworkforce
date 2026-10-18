@@ -2,7 +2,6 @@ use crate::sys::commands::chat::AppDatabase;
 use crate::sys::commands::security::SecretManagerState;
 use rand::{rngs::OsRng, RngCore};
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -25,75 +24,6 @@ const FTS_SHADOW_SUFFIXES: &[&str] = &[
     "_segdir",
     "_stat",
 ];
-
-/// Privacy preferences structure matching the frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PrivacyPreferences {
-    pub telemetry_enabled: bool,
-    pub crash_reporting_enabled: bool,
-    pub ai_model_sharing_enabled: bool,
-    pub analytics_enabled: bool,
-    pub usage_data_collection: bool,
-}
-
-const PRIVACY_PREFERENCES_KEY: &str = "privacy_preferences";
-
-fn store_privacy_preferences(
-    conn: &Connection,
-    preferences: &PrivacyPreferences,
-) -> Result<(), String> {
-    let value =
-        serde_json::to_value(preferences).map_err(|e| format!("Failed to serialize: {}", e))?;
-    crate::data::settings::upsert_setting(
-        conn,
-        PRIVACY_PREFERENCES_KEY.to_string(),
-        crate::data::settings::SettingValue::Json(value),
-        crate::data::settings::SettingCategory::System,
-        false,
-    )
-    .map_err(|e| format!("Failed to save privacy preferences: {}", e))
-}
-
-/// Whether the stored preferences grant telemetry. Anything unreadable is a
-/// refusal, so consent is only ever what the user positively recorded.
-pub(crate) fn stored_telemetry_consent(conn: &Connection) -> bool {
-    conn.query_row(
-        "SELECT value FROM settings_v2 WHERE key = ?1",
-        [PRIVACY_PREFERENCES_KEY],
-        |row| row.get::<_, String>(0),
-    )
-    .ok()
-    .and_then(|raw| serde_json::from_str::<PrivacyPreferences>(&raw).ok())
-    .is_some_and(|preferences| preferences.telemetry_enabled)
-}
-
-/// Update privacy preferences and store them
-#[tauri::command]
-pub async fn settings_update_privacy(
-    preferences: PrivacyPreferences,
-    state: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let conn = state
-        .conn
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-    store_privacy_preferences(&conn, &preferences)?;
-
-    crate::sys::telemetry::process_consent().set(preferences.telemetry_enabled);
-
-    tracing::info!(
-        "[Privacy] Updated privacy preferences: telemetry={}, crash_reporting={}, ai_sharing={}, analytics={}, usage_data={}",
-        preferences.telemetry_enabled,
-        preferences.crash_reporting_enabled,
-        preferences.ai_model_sharing_enabled,
-        preferences.analytics_enabled,
-        preferences.usage_data_collection
-    );
-
-    Ok(())
-}
 
 /// Exports the user's data to a file the user picks in the native save
 /// dialog and returns that file's name, or `None` when the dialog was
@@ -1671,34 +1601,6 @@ mod tests {
         let conn = Connection::open_in_memory().expect("open in-memory database");
         run_migrations(&conn).expect("run migrations");
         conn
-    }
-
-    fn preferences(telemetry_enabled: bool) -> PrivacyPreferences {
-        PrivacyPreferences {
-            telemetry_enabled,
-            crash_reporting_enabled: false,
-            ai_model_sharing_enabled: false,
-            analytics_enabled: telemetry_enabled,
-            usage_data_collection: false,
-        }
-    }
-
-    #[test]
-    fn telemetry_consent_is_refused_until_it_is_recorded() {
-        let conn = migrated_conn();
-
-        assert!(!stored_telemetry_consent(&conn));
-    }
-
-    #[test]
-    fn recorded_telemetry_consent_is_read_back_after_a_restart() {
-        let conn = migrated_conn();
-
-        store_privacy_preferences(&conn, &preferences(true)).expect("store consent");
-        assert!(stored_telemetry_consent(&conn));
-
-        store_privacy_preferences(&conn, &preferences(false)).expect("store withdrawal");
-        assert!(!stored_telemetry_consent(&conn));
     }
 
     fn count(conn: &Connection, table: &str) -> i64 {

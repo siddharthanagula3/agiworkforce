@@ -163,7 +163,6 @@ fn searchable_tools(
     mut tools: Vec<Tool>,
     switches: Option<&crate::sys::commands::capabilities::CapabilityState>,
 ) -> Vec<Tool> {
-    tools.retain(|tool| crate::sys::commands::chat::tools::not_offered_in_chat(&tool.id).is_none());
     if let Some(switches) = switches {
         tools.retain(|tool| switches.tool_refusal_now(&tool.id).is_none());
     }
@@ -242,7 +241,6 @@ mod tests {
             .iter()
             .all(|tool| tool_to_capability(&tool.id) != Some("fileOperations")));
         assert!(found.iter().any(|tool| tool.id == "terminal_execute"));
-        assert!(found.iter().all(|tool| tool.id != "db_query"));
 
         let all_on = searchable_tools(registry_tools(), None);
         assert!(all_on.iter().any(|tool| tool.id == "file_read"));

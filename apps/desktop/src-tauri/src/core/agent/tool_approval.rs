@@ -103,9 +103,6 @@ pub(crate) const UNATTENDED_READ_ONLY_TOOLS: &[&str] = &[
     "file_read_binary",
     "file_list",
     "document_read",
-    "document_extract_text",
-    "document_get_metadata",
-    "document_detect_type",
     "document_search",
     "grep_search",
     "glob_search",
@@ -258,7 +255,6 @@ mod tests {
         for tool_name in [
             "terminal_execute",
             "file_delete",
-            "db_execute",
             "email_send",
         ] {
             let error = require_tool_approval(app.handle(), tool_name, &json!({}), None)
@@ -315,7 +311,6 @@ mod tests {
             "schedule_reminder",
             "ui_scroll",
             "browser_hover",
-            "db_transaction_rollback",
             "a_tool_with_no_policy",
         ] {
             let refusal = unattended_tool_approval(app.handle(), tool_name)
@@ -518,13 +513,6 @@ mod tests {
             (
                 "browser_execute_async_js",
                 json!({ "script": "return document.title" }),
-            ),
-            (
-                "db_execute",
-                json!({
-                    "connection_id": "db",
-                    "sql": "DELETE FROM support_tickets WHERE id = 42"
-                }),
             ),
             ("terminal_execute", json!({ "command": "ls" })),
         ] {

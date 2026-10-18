@@ -1,13 +1,9 @@
-pub mod collector;
-pub mod consent;
 pub mod correlation;
 pub mod logging;
 pub mod metrics;
 pub mod redaction;
 pub mod tracing;
 
-pub use collector::{CollectorConfig, EventBatch, TelemetryCollector, TelemetryEvent};
-pub use consent::{process_consent, ConsentDecision, TelemetryConsent};
 pub use correlation::{
     current_correlation_id, generate_correlation_id, with_correlation_id, with_new_correlation_id,
     CorrelationGuard, RequestContext,

@@ -301,7 +301,7 @@ impl ToolExecutor {
                         }
                         Err(pdf_error) => {
                             let error = format!(
-                                "Failed to read PDF '{}': {}. Try document_extract_text for structured extraction.",
+                                "Failed to read PDF '{}': {}. Try document_read for structured extraction.",
                                 validated_path_string, pdf_error
                             );
                             if let Some(app_handle) = &self.app_handle {

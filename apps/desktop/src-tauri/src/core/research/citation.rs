@@ -354,31 +354,10 @@ impl CitationTracker {
         marker
     }
 
-    /// Retrieves a citation by ID.
-    pub fn get_citation(&self, id: &str) -> Option<&Citation> {
-        self.citations.get(id)
-    }
-
-    /// Retrieves a citation by number.
-    pub fn get_by_number(&self, number: usize) -> Option<&Citation> {
-        self.citations.values().find(|c| c.number == number)
-    }
-
     /// Returns all citations sorted by number.
     pub fn all_citations(&self) -> Vec<&Citation> {
         let mut citations: Vec<_> = self.citations.values().collect();
         citations.sort_by_key(|c| c.number);
-        citations
-    }
-
-    /// Returns citations sorted by relevance score.
-    pub fn by_relevance(&self) -> Vec<&Citation> {
-        let mut citations: Vec<_> = self.citations.values().collect();
-        citations.sort_by(|a, b| {
-            b.relevance_score
-                .partial_cmp(&a.relevance_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
         citations
     }
 
@@ -388,15 +367,6 @@ impl CitationTracker {
             .values()
             .filter(|c| c.source_type == source_type)
             .collect()
-    }
-
-    /// Marks that a citation was used in a specific section.
-    pub fn cite_in_section(&mut self, citation_id: &str, section: &str) {
-        if let Some(citation) = self.citations.get_mut(citation_id) {
-            if !citation.cited_in_sections.contains(&section.to_string()) {
-                citation.cited_in_sections.push(section.to_string());
-            }
-        }
     }
 
     /// Returns the total number of citations.

@@ -1,5 +1,4 @@
 //! Core types for Computer Use capability.
-//!.
 
 use super::control::DialogResponse;
 use serde::{Deserialize, Serialize};
@@ -691,7 +690,6 @@ impl TaskOutcome {
 }
 
 /// Success-rate aggregation over the outcomes of one session or one device.
-///.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskOutcomeMetrics {

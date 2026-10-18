@@ -1,5 +1,5 @@
 //! What the previous run left on disk. Absent or unreadable state is resolved
-//! to the versions this build ships, never to zero: a zero would be read as a.
+//! to the versions this build ships, never to zero.
 
 use std::path::{Path, PathBuf};
 

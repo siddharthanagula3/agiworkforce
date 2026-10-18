@@ -16,9 +16,6 @@ use std::sync::Arc;
 
 /// Registry tools withheld from chat schemas.
 const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &[
-    // Legacy aliases, hidden to avoid duplicate tool choices.
-    "media_generate_image",
-    "media_generate_video",
     // Tool results reach the model as text only, so a screen capture would
     // arrive as a file path the model cannot look at.
     "ui_screenshot",
@@ -28,34 +25,8 @@ const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &[
 /// implemented on macOS only, so elsewhere they are not offered at all.
 const TARGET_APP_TOOLS: &[&str] = &["ui_click", "ui_type"];
 
-const DATABASE_TOOLS_ARE_FOR_GOAL_RUNS: &str = "Database tools are not available in chat. Past conversations are reachable through conversation_search and recent_chats.";
-const REASONING_TOOL_IS_FOR_GOAL_RUNS: &str =
-    "llm_reason is not available in chat: reason in your own reply instead.";
-
-/// Registry tools a chat neither sees nor may call, with what the model is
-/// told when it names one anyway. Goal runs keep them: there the database
-/// tools reach a database the person connected, and `llm_reason` is how a plan
-/// asks a model. In chat the database tools ran the model's SQL on the app's
-/// own store, which holds every account's chats on every execution boundary.
-const NOT_OFFERED_IN_CHAT: &[(&str, &str)] = &[
-    ("db_query", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
-    ("db_execute", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
-    ("db_transaction_begin", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
-    ("db_transaction_commit", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
-    ("db_transaction_rollback", DATABASE_TOOLS_ARE_FOR_GOAL_RUNS),
-    ("llm_reason", REASONING_TOOL_IS_FOR_GOAL_RUNS),
-];
-
-pub(crate) fn not_offered_in_chat(tool_name: &str) -> Option<&'static str> {
-    NOT_OFFERED_IN_CHAT
-        .iter()
-        .find(|(tool, _)| *tool == tool_name)
-        .map(|(_, told)| *told)
-}
-
 fn withheld_from_chat(tool_name: &str) -> bool {
     CHAT_TOOL_SCHEMA_EXCLUSIONS.contains(&tool_name)
-        || not_offered_in_chat(tool_name).is_some()
         || (cfg!(not(target_os = "macos")) && TARGET_APP_TOOLS.contains(&tool_name))
         || crate::core::llm::tool_executor::platform_unavailable_reason(tool_name).is_some()
 }
@@ -1857,7 +1828,6 @@ mod tests {
 
         // Ensure cross-domain app tools are exposed to chat when available.
         assert!(names.contains("cloud_upload"));
-        assert!(names.contains("productivity_create_task"));
     }
 
     #[test]
@@ -1940,28 +1910,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn chat_neither_offers_nor_lists_the_goal_run_database_and_reasoning_tools() {
-        let advertised = advertised_chat_tools();
-
-        for tool in [
-            "db_query",
-            "db_execute",
-            "db_transaction_begin",
-            "db_transaction_commit",
-            "db_transaction_rollback",
-            "llm_reason",
-        ] {
-            assert!(
-                advertised.iter().all(|offered| offered.name != tool),
-                "{tool}"
-            );
-            assert!(not_offered_in_chat(tool).is_some(), "{tool}");
-        }
-        assert!(not_offered_in_chat("conversation_search").is_none());
-        assert!(not_offered_in_chat("file_read").is_none());
-    }
-
     const FIXTURE_SHA256: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     /// Parameters the executor fills in before it asks the guard, so a call
@@ -2029,13 +1977,13 @@ mod tests {
 
     #[tokio::test]
     async fn the_guard_accepts_every_advertised_tool_called_by_its_own_schema() {
+        let guard = ToolExecutionGuard::new();
+        guard.set_allowed_paths(vec![std::env::temp_dir()]);
         let mut refused = Vec::new();
         for tool in advertised_chat_tools() {
             for (form, required_only) in [("required", true), ("declared", false)] {
                 let arguments = schema_arguments(&tool, required_only);
-                if let Err(error) = ToolExecutionGuard::new()
-                    .validate_tool_call(&tool.name, &arguments)
-                    .await
+                if let Err(error) = guard.validate_tool_call(&tool.name, &arguments).await
                 {
                     refused.push(format!(
                         "{} with its {form} parameters {arguments}: {error}",

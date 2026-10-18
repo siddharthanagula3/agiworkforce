@@ -77,7 +77,6 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     "email_send",
     "git_push",
     "cloud_upload",
-    "db_execute",
     // The same rule for a destination the model picks: each call can carry
     // a body, a granted file or a query string to any public address, so
     // one remembered click would be a standing channel out, in unattended
@@ -130,7 +129,7 @@ pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
 /// of them and it is not opt-in per tool: selecting Autopilot turns it on for
 /// everything (`setAgentMode` in the desktop settings store), which is how a
 /// tool whose entire behaviour is the argument the planner wrote this
-/// time, `browser_execute_async_js`, `db_execute`, `terminal_execute`, used
+/// time, `browser_execute_async_js` or `terminal_execute`, used
 /// to reach its sink with no prompt at all. Autopilot still skips the dialog
 /// for every other tool.
 pub fn may_stand_on_a_prior_approval(tool_name: &str) -> bool {
@@ -703,7 +702,7 @@ impl ToolConfirmationState {
     ///
     /// A [`NEVER_REMEMBERABLE`] tool is never session-approved, whatever the
     /// set holds: a session grant is a standing approval with a shorter life,
-    /// so honouring one for `db_execute` or `browser_execute_async_js` would
+    /// so honouring one for `browser_execute_async_js` would
     /// give every later injected parameter the same free pass that
     /// [`Self::get_remembered_choice`] refuses to give it.
     pub fn is_session_approved(&self, tool_name: &str) -> bool {
@@ -2092,6 +2091,7 @@ pub async fn request_folder_access_confirmation(
         request_id
     );
 
+    let waiting_on_user = crate::sys::commands::chat::state::UserWaitGuard::start();
     let outcome = match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await
     {
         Ok(Ok(response)) => Ok(response.approved),
@@ -2114,6 +2114,7 @@ pub async fn request_folder_access_confirmation(
             ))
         }
     };
+    drop(waiting_on_user);
     approval.resolve(matches!(outcome, Ok(true))).await;
     outcome
 }
@@ -2691,9 +2692,6 @@ mod tests {
             "code_search",
             "coding_checkpoint_list",
             "conversation_search",
-            "document_detect_type",
-            "document_extract_text",
-            "document_get_metadata",
             "document_read",
             "document_search",
             "file_list",
@@ -2737,8 +2735,6 @@ mod tests {
                 "physical_scrape",
                 "api_call",
                 "browser_navigate",
-                "db_query",
-                "db_execute",
                 "skill",
                 "memory_forget",
                 "file_write",
@@ -3132,7 +3128,6 @@ mod fix_f6_never_rememberable_alignment_tests {
         "email_send",
         "git_push",
         "cloud_upload",
-        "db_execute",
         "api_call",
         "api_upload",
         "physical_scrape",

@@ -190,17 +190,6 @@ impl EmbeddingGenerator {
         ))
     }
 
-    pub async fn generate_batch(&self, texts: &[&str]) -> Result<Vec<Vector>> {
-        let mut embeddings = Vec::with_capacity(texts.len());
-
-        for text in texts {
-            let embedding = self.generate(text).await?;
-            embeddings.push(embedding);
-        }
-
-        Ok(embeddings)
-    }
-
     pub fn dimensions(&self) -> usize {
         self.observed_dimensions.load(Ordering::Relaxed)
     }

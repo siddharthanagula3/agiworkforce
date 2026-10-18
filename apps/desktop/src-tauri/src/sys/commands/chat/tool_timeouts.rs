@@ -29,9 +29,7 @@ pub(super) fn resolve_tool_execution_timeout_secs(tool_name: &str) -> u64 {
     if normalized == "terminal_execute"
         || normalized.starts_with("document_create_")
         || normalized == "video_generate"
-        || normalized == "media_generate_video"
         || normalized == "image_generate"
-        || normalized == "media_generate_image"
     {
         return LONG_RUNNING_TOOL_TIMEOUT_SECS;
     }
@@ -52,10 +50,7 @@ pub(super) fn is_fast_metadata_tool(tool_name: &str) -> bool {
 /// output is large and the followup model needs extra time to process it.
 pub(super) fn is_media_generation_tool(tool_name: &str) -> bool {
     let normalized = tool_name.to_lowercase();
-    normalized == "image_generate"
-        || normalized == "media_generate_image"
-        || normalized == "video_generate"
-        || normalized == "media_generate_video"
+    normalized == "image_generate" || normalized == "video_generate"
 }
 
 pub(super) fn is_fast_metadata_batch(tool_results: &[tools::ChatToolResult]) -> bool {

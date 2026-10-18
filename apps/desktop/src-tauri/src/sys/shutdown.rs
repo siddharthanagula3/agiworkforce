@@ -286,7 +286,6 @@ pub async fn stop_services(app: &AppHandle) {
     use crate::core::agent::triggers::TriggerRegistryState;
     use crate::core::agent::BackgroundAgentManagerState;
     use crate::features::terminal::SessionManager;
-    use crate::sys::commands::analytics::TelemetryState;
     use crate::sys::commands::{AppDatabase, BrowserStateWrapper, McpState, SchedulerState};
 
     tracing::info!("[shutdown] stopping services");
@@ -361,18 +360,6 @@ pub async fn stop_services(app: &AppHandle) {
     bounded_step("terminals", async move {
         if let Some(terminals) = terminals {
             terminals.kill_all_trees().await;
-        }
-    })
-    .await;
-
-    let telemetry = app
-        .try_state::<TelemetryState>()
-        .map(|s| s.collector.clone());
-    bounded_step("telemetry", async move {
-        if let Some(telemetry) = telemetry {
-            if let Err(error) = telemetry.read().await.flush().await {
-                tracing::warn!("[shutdown] telemetry flush failed: {error}");
-            }
         }
     })
     .await;

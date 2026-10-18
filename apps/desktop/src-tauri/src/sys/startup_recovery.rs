@@ -1,5 +1,10 @@
 //! Fail-closed Desktop startup recovery.
-//!.
+//!
+//! The normal React application depends on the encrypted main database. When
+//! that database cannot be opened safely, this module keeps the native window
+//! alive and exposes only a small, sanitized recovery surface. Raw database,
+//! Keychain, and filesystem errors stay in native logs and are never returned
+//! to the webview or included in exported diagnostics.
 
 use crate::data::db::encryption::DatabaseOpenError;
 use crate::data::db::key_management::DatabaseKeyError;
@@ -66,7 +71,10 @@ impl StartupRecoveryInfo {
     }
 
     /// The database key lives in OS secure storage because it is what decrypts
-    /// the database. A *denied* permission prompt is by far the most common way.
+    /// the database. A *denied* permission prompt is by far the most common way
+    /// to reach this screen and is fully recoverable, so the copy names that
+    /// case and the fix instead of stopping at "unavailable", which reads like
+    /// a broken install and gives the user nothing to do.
     fn secure_storage() -> Self {
         Self {
             code: "DB_SECURE_STORAGE".to_string(),
@@ -438,7 +446,8 @@ mod tests {
     #[test]
     fn denied_credential_prompt_tells_the_user_how_to_recover() {
         // Reaching this screen by dismissing a Keychain prompt is recoverable,
-        // and the previous copy ("Secure storage is unavailable") gave no way.
+        // and the copy says how: "Secure storage is unavailable" alone read
+        // like a broken install for a one-click fix.
         let info = StartupRecoveryInfo::from_database_error(&DatabaseKeyError::SecureStorage(
             "User denied access".to_string(),
         ));

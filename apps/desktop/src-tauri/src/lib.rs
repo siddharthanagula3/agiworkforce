@@ -31,8 +31,8 @@ use crate::sys::commands::{
     tool_confirmation::ToolConfirmationState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState, DocumentState,
-    FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState, ProductivityState,
-    SchedulerState, SettingsServiceState, SettingsState, ShortcutsState, VoiceState,
+    FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState, SchedulerState,
+    SettingsServiceState, SettingsState, ShortcutsState, VoiceState,
 };
 use crate::sys::security::SecretManager;
 use crate::sys::telemetry;
@@ -548,26 +548,6 @@ pub fn run() {
                 crate::sys::commands::ollama::restore_keep_alive(&conn);
             }
 
-            use crate::sys::commands::analytics::TelemetryState;
-            use crate::sys::telemetry::{CollectorConfig, TelemetryCollector};
-
-            let telemetry_config = CollectorConfig {
-                enabled: true,
-                batch_size: 50,
-                flush_interval_secs: 30,
-                privacy_mode: Some("local".to_string()),
-            };
-            let telemetry_collector = TelemetryCollector::new(telemetry_config);
-            app.manage(TelemetryState::new(telemetry_collector));
-
-            {
-                let granted = db_conn_arc
-                    .lock()
-                    .map(|conn| crate::sys::commands::privacy::stored_telemetry_consent(&conn))
-                    .unwrap_or(false);
-                crate::sys::telemetry::process_consent().set(granted);
-            }
-
             let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
             let llm_router_for_byok_rehydration = llm_state.router.clone();
             app.manage(llm_state);
@@ -672,8 +652,6 @@ pub fn run() {
                 Arc::new(session_manager),
             );
             app.manage(terminal_ai);
-
-            app.manage(ProductivityState::new());
 
             app.manage(DocumentState::new());
 
@@ -1376,11 +1354,9 @@ pub fn run() {
             // MCPB (MCP Bundles)
             crate::sys::commands::mcpb_fetch_registry,
             crate::sys::commands::mcpb_search_bundles,
-            crate::sys::commands::mcpb_get_bundle_details,
             crate::sys::commands::mcpb_install_bundle,
             crate::sys::commands::mcpb_uninstall_bundle,
             crate::sys::commands::mcpb_get_installed_bundles,
-            crate::sys::commands::mcpb_check_updates,
             crate::sys::commands::mcpb_update_bundle,
             crate::sys::commands::mcpb_get_categories,
             crate::sys::commands::mcpb_get_featured,
@@ -1476,13 +1452,6 @@ pub fn run() {
             // Project Context (active folder selection)
             crate::sys::commands::project_context_set_folder,
 
-            crate::sys::commands::analytics_track_event,
-            crate::sys::commands::analytics_set_privacy_mode,
-            crate::sys::commands::analytics_flush_events,
-            crate::sys::commands::analytics_get_session_id,
-            crate::sys::commands::analytics_set_user_property,
-            crate::sys::commands::analytics_delete_all_data,
-
             crate::sys::commands::error_report,
             crate::sys::commands::error_report_batch,
 
@@ -1515,13 +1484,6 @@ pub fn run() {
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_list,
             crate::sys::commands::background_agents::background_agent_resume,
-            crate::sys::commands::governance::get_audit_events,
-            crate::sys::commands::governance::verify_audit_integrity,
-            crate::sys::commands::governance::get_pending_approvals,
-            crate::sys::commands::governance::approve_request,
-            crate::sys::commands::governance::reject_request,
-            crate::sys::commands::governance::get_approval_statistics,
-            crate::sys::commands::governance::expire_timed_out_requests,
 
             // browser-extension pairing handshake
             crate::sys::commands::realtime::bridge_pending_pair_requests,
@@ -1530,7 +1492,6 @@ pub fn run() {
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
-            crate::sys::commands::privacy::settings_update_privacy,
 
             // Undo Manager (AGI action reversal)
             crate::sys::commands::undo_last,

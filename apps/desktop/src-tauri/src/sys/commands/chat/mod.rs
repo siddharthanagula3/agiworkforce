@@ -279,15 +279,7 @@ mod tests {
             LONG_RUNNING_TOOL_TIMEOUT_SECS
         );
         assert_eq!(
-            resolve_tool_execution_timeout_secs("media_generate_video"),
-            LONG_RUNNING_TOOL_TIMEOUT_SECS
-        );
-        assert_eq!(
             resolve_tool_execution_timeout_secs("image_generate"),
-            LONG_RUNNING_TOOL_TIMEOUT_SECS
-        );
-        assert_eq!(
-            resolve_tool_execution_timeout_secs("media_generate_image"),
             LONG_RUNNING_TOOL_TIMEOUT_SECS
         );
         assert_eq!(

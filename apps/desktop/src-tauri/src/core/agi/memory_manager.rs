@@ -84,26 +84,6 @@ pub struct DecayResult {
     pub total_decay: i32,
 }
 
-/// A memory that is a candidate for decay
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecayCandidate {
-    pub id: i64,
-    pub topic: String,
-    pub category: String,
-    pub importance: i32,
-    pub last_accessed: Option<String>,
-    pub days_since_access: i64,
-}
-
-/// Statistics about memory importance distribution
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryStats {
-    pub total_count: usize,
-    pub avg_importance: f64,
-    pub high_importance_count: usize,
-    pub low_importance_count: usize,
-}
-
 /// A single memory entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryEntry {
@@ -294,39 +274,6 @@ impl MemoryManager {
         }
     }
 
-    /// Create a MemoryManager with custom decay configuration
-    pub fn with_decay_config(db_path: &str, config: DecayConfig) -> Result<Self> {
-        let conn = Connection::open(db_path)
-            .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let has_last_accessed = Self::probe_schema(&conn);
-
-        Ok(Self {
-            conn: Mutex::new(conn),
-            decay_config: Mutex::new(config),
-            tfidf_index: RwLock::new(TfIdfIndex::new()),
-            semantic_config: RwLock::new(SemanticSearchConfig::default()),
-            has_last_accessed,
-        })
-    }
-
-    /// Create a MemoryManager with custom semantic search configuration
-    pub fn with_semantic_config(
-        db_path: &str,
-        semantic_config: SemanticSearchConfig,
-    ) -> Result<Self> {
-        let conn = Connection::open(db_path)
-            .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let has_last_accessed = Self::probe_schema(&conn);
-
-        Ok(Self {
-            conn: Mutex::new(conn),
-            decay_config: Mutex::new(DecayConfig::default()),
-            tfidf_index: RwLock::new(TfIdfIndex::new()),
-            semantic_config: RwLock::new(semantic_config),
-            has_last_accessed,
-        })
-    }
-
     /// Get the current decay configuration
     pub fn get_decay_config(&self) -> Result<DecayConfig> {
         let config = self
@@ -334,16 +281,6 @@ impl MemoryManager {
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
         Ok(config.clone())
-    }
-
-    /// Set the decay configuration
-    pub fn set_decay_config(&self, config: DecayConfig) -> Result<()> {
-        let mut current = self
-            .decay_config
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-        *current = config;
-        Ok(())
     }
 
     /// Store or update a memory entry
@@ -461,39 +398,6 @@ impl MemoryManager {
         let entries = stmt
             .query_map(params![search_pattern, limit], map_memory_row)
             .map_err(|e| Error::Database(format!("Failed to search memories: {}", e)))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
-
-        Ok(entries)
-    }
-
-    /// Get all memories in a category
-    pub fn get_by_category(
-        &self,
-        category: MemoryCategory,
-        limit: Option<usize>,
-    ) -> Result<Vec<MemoryEntry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-        let category_str = category.as_str();
-        let limit = limit.unwrap_or(100) as i32;
-
-        let mut stmt = conn
-            .prepare(
-                // BUG-08 fix: include last_accessed
-                "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
-                 FROM user_memory
-                 WHERE category = ?1 COLLATE NOCASE
-                 ORDER BY importance DESC, updated_at DESC
-                 LIMIT ?2",
-            )
-            .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
-
-        let entries = stmt
-            .query_map(params![category_str, limit], map_memory_row)
-            .map_err(|e| Error::Database(format!("Failed to get memories: {}", e)))?
             .collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Database(format!("Failed to collect memories: {}", e)))?;
 
@@ -642,98 +546,6 @@ impl MemoryManager {
     // Memory Importance Decay Methods
     // =========================================================================
 
-    /// Boost the importance of a memory by ID
-    /// Returns the new importance value
-    pub fn boost_on_access(&self, memory_id: i64) -> Result<i32> {
-        let config = self.get_decay_config()?;
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        // BUG-09 fix: use cached schema probe result instead of per-call pragma
-        let has_last_accessed = self.has_last_accessed;
-
-        // Get current importance
-        let current_importance: i32 = conn
-            .query_row(
-                "SELECT importance FROM user_memory WHERE id = ?1",
-                params![memory_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| Error::Database(format!("Memory not found: {}", e)))?;
-
-        // Calculate new importance (capped at 10)
-        let shared_config = agiworkforce_agent_core::memory::MemoryDecayConfig::from(&config);
-        let new_importance =
-            agiworkforce_agent_core::memory::boosted_importance(current_importance, &shared_config);
-
-        // Update importance and last_accessed
-        if has_last_accessed {
-            conn.execute(
-                "UPDATE user_memory SET importance = ?1, last_accessed = datetime('now') WHERE id = ?2",
-                params![new_importance, memory_id],
-            )
-            .map_err(|e| Error::Database(format!("Failed to boost memory: {}", e)))?;
-        } else {
-            conn.execute(
-                "UPDATE user_memory SET importance = ?1 WHERE id = ?2",
-                params![new_importance, memory_id],
-            )
-            .map_err(|e| Error::Database(format!("Failed to boost memory: {}", e)))?;
-        }
-
-        Ok(new_importance)
-    }
-
-    /// Get memories that are candidates for decay
-    /// Returns memories that haven't been accessed within the decay period
-    pub fn get_decay_candidates(&self) -> Result<Vec<DecayCandidate>> {
-        let config = self.get_decay_config()?;
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        // BUG-09 fix: use cached schema probe result instead of per-call pragma
-        let has_last_accessed = self.has_last_accessed;
-
-        if !has_last_accessed {
-            return Ok(vec![]);
-        }
-
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, topic, category, importance, last_accessed,
-                        CAST((julianday('now') - julianday(COALESCE(last_accessed, created_at))) AS INTEGER) as days_since
-                 FROM user_memory
-                 WHERE importance > ?1
-                   AND CAST((julianday('now') - julianday(COALESCE(last_accessed, created_at))) AS INTEGER) >= ?2
-                 ORDER BY days_since DESC",
-            )
-            .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
-
-        let candidates = stmt
-            .query_map(
-                params![config.min_importance, config.decay_period_days],
-                |row| {
-                    Ok(DecayCandidate {
-                        id: row.get(0)?,
-                        topic: row.get(1)?,
-                        category: row.get(2)?,
-                        importance: row.get(3)?,
-                        last_accessed: row.get(4)?,
-                        days_since_access: row.get(5)?,
-                    })
-                },
-            )
-            .map_err(|e| Error::Database(format!("Failed to get decay candidates: {}", e)))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| Error::Database(format!("Failed to collect candidates: {}", e)))?;
-
-        Ok(candidates)
-    }
-
     /// Apply decay to all memories based on their last_accessed time
     pub fn decay_memories(&self) -> Result<DecayResult> {
         let config = self.get_decay_config()?;
@@ -812,76 +624,6 @@ impl MemoryManager {
             memories_decayed,
             at_minimum,
             total_decay,
-        })
-    }
-
-    /// Manually decay a specific memory by a given amount
-    pub fn decay_memory(&self, memory_id: i64, decay_amount: i32) -> Result<i32> {
-        let config = self.get_decay_config()?;
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let current_importance: i32 = conn
-            .query_row(
-                "SELECT importance FROM user_memory WHERE id = ?1",
-                params![memory_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| Error::Database(format!("Memory not found: {}", e)))?;
-
-        let new_importance = (current_importance - decay_amount).max(config.min_importance);
-
-        conn.execute(
-            "UPDATE user_memory SET importance = ?1 WHERE id = ?2",
-            params![new_importance, memory_id],
-        )
-        .map_err(|e| Error::Database(format!("Failed to decay memory: {}", e)))?;
-
-        Ok(new_importance)
-    }
-
-    /// Get statistics about memory importance distribution
-    pub fn get_memory_stats(&self) -> Result<MemoryStats> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let total_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM user_memory", [], |row| row.get(0))
-            .unwrap_or(0);
-
-        let avg_importance: f64 = conn
-            .query_row(
-                "SELECT COALESCE(AVG(importance), 0) FROM user_memory",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0.0);
-
-        let high_importance_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM user_memory WHERE importance >= 7",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
-        let low_importance_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM user_memory WHERE importance <= 3",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
-        Ok(MemoryStats {
-            total_count: total_count as usize,
-            avg_importance,
-            high_importance_count: high_importance_count as usize,
-            low_importance_count: low_importance_count as usize,
         })
     }
 

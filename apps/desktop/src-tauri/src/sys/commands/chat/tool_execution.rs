@@ -1,6 +1,6 @@
 use crate::sys::commands::chat::state::{
     is_tool_cancelled, plan_mode_refusal, should_stop_for_conversation, take_tool_cancelled,
-    unattended_refusal,
+    unattended_refusal, user_wait_total,
 };
 use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
 use crate::sys::commands::chat::tool_timeouts::{
@@ -15,6 +15,30 @@ use tracing::{error, info};
 /// goes back to the model.
 const MAX_TOOL_OUTPUT_EVENT_CHARS: usize = 50_000;
 const SERVER_SIDE_RESULT: &str = "Tool executed server-side by provider; no local output.";
+
+/// A tool call's time limit. Time the call spends waiting on the person, for
+/// an approval, a confirmation or a folder grant, does not count against it,
+/// so a call the user is still deciding about is never killed for slowness.
+struct ToolClock {
+    started: tokio::time::Instant,
+    limit: std::time::Duration,
+    user_wait_at_start: std::time::Duration,
+}
+
+impl ToolClock {
+    fn start(limit: std::time::Duration) -> Self {
+        Self {
+            started: tokio::time::Instant::now(),
+            limit,
+            user_wait_at_start: user_wait_total(),
+        }
+    }
+
+    fn deadline(&self) -> tokio::time::Instant {
+        let waited = user_wait_total().saturating_sub(self.user_wait_at_start);
+        self.started + self.limit + waited
+    }
+}
 
 pub(super) async fn execute_tool_calls_batch(
     tool_calls: &[crate::core::llm::sse_parser::StreamingToolCall],
@@ -265,6 +289,7 @@ pub(super) async fn execute_chat_tool_with_timeout(
                 > + Send,
         >);
 
+    let tool_clock = ToolClock::start(timeout_duration);
     let timeout_future = tokio::time::sleep(timeout_duration);
     tokio::pin!(timeout_future);
 
@@ -361,7 +386,8 @@ pub(super) async fn execute_chat_tool_with_timeout(
                 );
                 return Err(message);
             }
-            _ = cancel_interval.tick(), if normalized_tool_call_id.is_some() => {
+            _ = cancel_interval.tick() => {
+                timeout_future.as_mut().reset(tool_clock.deadline());
                 if let Some(tool_id) = normalized_tool_call_id {
                     if is_tool_cancelled(tool_id) {
                         let _ = take_tool_cancelled(tool_id);
@@ -403,5 +429,28 @@ pub(super) async fn execute_chat_tool_with_timeout(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sys::commands::chat::state::UserWaitGuard;
+
+    #[tokio::test]
+    async fn time_spent_waiting_on_the_user_moves_the_tool_deadline_back() {
+        let limit = std::time::Duration::from_millis(50);
+        let clock = ToolClock::start(limit);
+        let before_waiting = clock.deadline();
+
+        {
+            let _waiting = UserWaitGuard::start();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+
+        assert!(
+            clock.deadline() >= before_waiting + std::time::Duration::from_millis(200),
+            "a call the user was deciding about must not run out of time while they decide"
+        );
     }
 }

@@ -5,8 +5,6 @@
 //! sessions with constant-time token comparison.
 
 pub mod aead_nonce;
-pub mod approval_workflow;
-pub mod audit_logger;
 pub mod blocked_paths;
 pub mod command_validator;
 pub mod dispatch_hmac;
@@ -29,14 +27,6 @@ pub mod storage;
 pub mod tool_guard;
 pub mod vault_credentials;
 
-pub use approval_workflow::{
-    ApprovalAction, ApprovalDecision, ApprovalRequest, ApprovalStatistics, ApprovalStatus,
-    ApprovalWorkflow, RiskLevel as ApprovalRiskLevel,
-};
-pub use audit_logger::{
-    create_tool_execution_event, create_workflow_execution_event, AuditEvent, AuditEventType,
-    AuditFilters, AuditIntegrityReport, AuditLogger, AuditStatus,
-};
 pub use command_validator::{
     requires_confirmation, validate_command, validate_interactive_input, CommandValidationError,
     ValidationConfig,

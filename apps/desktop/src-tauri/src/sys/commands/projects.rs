@@ -309,15 +309,21 @@ fn update_project(conn: &Connection, id: String, updates: &ProjectUpdate) -> Res
 #[tauri::command]
 pub async fn project_delete(id: String, db: State<'_, AppDatabase>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    delete_project(&conn, &id)
+}
 
-    conn.execute("DELETE FROM projects WHERE id = ?1", [&id])
+fn delete_project(conn: &Connection, id: &str) -> Result<(), String> {
+    let tx = conn
+        .unchecked_transaction()
         .map_err(|e| format!("Failed to delete project: {}", e))?;
-
-    // Also delete associated settings
-    conn.execute("DELETE FROM project_settings WHERE project_id = ?1", [&id])
-        .ok(); // Ignore if table doesn't exist
-
-    Ok(())
+    tx.execute("DELETE FROM project_settings WHERE project_id = ?1", [id])
+        .map_err(|e| format!("Failed to delete project settings: {}", e))?;
+    tx.execute("UPDATE conversations SET project_id = NULL WHERE project_id = ?1", [id])
+        .map_err(|e| format!("Failed to move the project's chats out of it: {}", e))?;
+    tx.execute("DELETE FROM projects WHERE id = ?1", [id])
+        .map_err(|e| format!("Failed to delete project: {}", e))?;
+    tx.commit()
+        .map_err(|e| format!("Failed to delete project: {}", e))
 }
 
 #[cfg(test)]
@@ -406,5 +412,24 @@ mod tests {
         };
         update_project(&conn, "p-2".to_string(), &rename).expect("rename project");
         assert!(starred(&conn, "p-2"));
+    }
+
+    #[test]
+    fn deleting_a_project_keeps_its_chats_outside_any_project() {
+        let conn = migrated_database();
+        create_project(&conn, &project_from_the_ui("p-3")).expect("create project");
+        conn.execute(
+            "INSERT INTO conversations (title, project_id) VALUES ('Plan', 'p-3')",
+            [],
+        )
+        .expect("chat in the project");
+
+        delete_project(&conn, "p-3").expect("delete project");
+
+        assert!(list_projects(&conn).expect("list projects").is_empty());
+        let project_id: Option<String> = conn
+            .query_row("SELECT project_id FROM conversations", [], |row| row.get(0))
+            .expect("the chat is still there");
+        assert_eq!(project_id, None);
     }
 }

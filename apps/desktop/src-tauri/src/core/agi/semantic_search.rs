@@ -388,11 +388,6 @@ impl TfIdfIndex {
         }
     }
 
-    /// Remove a dense embedding
-    pub fn remove_dense_embedding(&mut self, memory_id: i64) {
-        self.dense_embeddings.remove(&memory_id);
-    }
-
     /// Search using a query embedding (cosine similarity on dense vectors),
     /// blended with TF-IDF results when both are available.
     ///

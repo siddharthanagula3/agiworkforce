@@ -846,52 +846,6 @@ impl SandboxManager {
 
         Ok(())
     }
-
-    /// Clean up all sandboxes
-    pub async fn cleanup_all(&self) -> Result<()> {
-        let sandboxes = self.active_sandboxes.lock().await.clone();
-
-        for sandbox in sandboxes {
-            if let Err(e) = self.cleanup_sandbox(&sandbox).await {
-                tracing::error!("[SandboxManager] Failed to cleanup {}: {}", sandbox.id, e);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Get the number of active sandboxes
-    pub async fn get_active_count(&self) -> usize {
-        self.active_sandboxes.lock().await.len()
-    }
-
-    /// Prune old sandboxes that may have been left behind
-    pub async fn prune_stale_sandboxes(&self, max_age_secs: u64) -> Result<usize> {
-        let mut pruned = 0;
-
-        if let Ok(entries) = std::fs::read_dir(&self.base_path) {
-            for entry in entries.flatten() {
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        if let Ok(age) = modified.elapsed() {
-                            if age.as_secs() > max_age_secs {
-                                if let Err(e) = std::fs::remove_dir_all(entry.path()) {
-                                    tracing::warn!(
-                                        "[SandboxManager] Failed to prune stale sandbox: {}",
-                                        e
-                                    );
-                                } else {
-                                    pruned += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(pruned)
-    }
 }
 
 impl Drop for SandboxManager {

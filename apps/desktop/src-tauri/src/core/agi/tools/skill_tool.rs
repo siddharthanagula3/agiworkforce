@@ -4,9 +4,7 @@
 //! skill is loadable). Instruction bodies stay withheld until the model calls the
 //! read-only `skill` tool with `action=load` and an exact skill name. This is the
 //! Anthropic Agent Skills model already implemented for web in
-//! `packages/tools/skills/src/tool.ts` and for the CLI in `apps/cli/src/skills.rs`
-//! (`CLI-SKILLS-TOOL-01`); porting it here is the fix for
-//! `DESKTOP-SKILLS-EAGER-INJECTION-01`.
+//! `packages/tools/skills/src/tool.ts` and for the CLI in `apps/cli/src/skills.rs`.
 //!
 //! Loaded bodies are untrusted model input: they are wrapped in a `skill_result`
 //! fence with a guard note, and any container-breakout markers inside the body are
@@ -529,7 +527,7 @@ mod tests {
         SkillTool::new(skills)
     }
 
-    // ── DESKTOP-SKILLS-EAGER-INJECTION-01: metadata-only up front ─────────────
+    // ── metadata-only up front ─────────────────────────────────────────────────
     #[test]
     fn catalog_prompt_exposes_metadata_but_never_bodies() {
         let tool = tool_with(vec![skill("deploy-service")]);

@@ -68,14 +68,6 @@ pub struct ProjectMemory {
     pub last_accessed: Option<String>,
 }
 
-/// Search result from project memory
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectMemorySearchResult {
-    pub memory: ProjectMemory,
-    pub relevance_score: f32,
-    pub matched_fields: Vec<String>,
-}
-
 // =============================================================================
 // PROJECT MEMORY MANAGER
 // =============================================================================

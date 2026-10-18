@@ -307,11 +307,11 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // CRIT-004, the approval lifecycle the renderer depends on.
+    // The approval lifecycle the renderer depends on.
     //
     // Every test below drives `ApprovalController` exactly the way
-    // `core/agent/autonomous.rs` and `core/llm/tool_executor/mod.rs` drive it
-    // in production: request -> emit -> wait -> terminal state.
+    // `core/llm/tool_executor/mod.rs` drives it in production:
+    // request -> emit -> wait -> terminal state.
     // ------------------------------------------------------------------
 
     fn approval_payload(action_id: &str) -> ApprovalRequestPayload {
@@ -338,7 +338,7 @@ mod tests {
 
     /// The emitted envelope must tell the renderer when the card dies.
     /// Without `expiresAtMs` a surface can only show a card that never stops
-    /// being current, which is the "stale approval" half of CRIT-004.
+    /// being current.
     #[tokio::test]
     async fn test_permission_required_envelope_carries_a_deadline() {
         use tauri::Listener;

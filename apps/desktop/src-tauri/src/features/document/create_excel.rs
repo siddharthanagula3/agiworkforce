@@ -190,39 +190,6 @@ impl ExcelDocumentCreator {
 
         self.create(output_path, config, vec![sheet])
     }
-
-    pub fn create_with_numbers(
-        &self,
-        output_path: &str,
-        sheet_name: &str,
-        headers: Vec<String>,
-        rows: Vec<Vec<f64>>,
-    ) -> Result<()> {
-        let config = ExcelDocumentConfig {
-            title: Some(sheet_name.to_string()),
-            author: None,
-            subject: None,
-            company: None,
-        };
-
-        let excel_rows: Vec<Vec<ExcelCell>> = rows
-            .into_iter()
-            .map(|row| {
-                row.into_iter()
-                    .map(|cell| ExcelCell::Number { value: cell })
-                    .collect()
-            })
-            .collect();
-
-        let sheet = ExcelSheet {
-            name: sheet_name.to_string(),
-            headers,
-            rows: excel_rows,
-            freeze_panes: Some((1, 0)),
-        };
-
-        self.create(output_path, config, vec![sheet])
-    }
 }
 
 impl Default for ExcelDocumentCreator {
@@ -251,24 +218,6 @@ mod tests {
                 vec!["Alice".to_string(), "30".to_string()],
                 vec!["Bob".to_string(), "25".to_string()],
             ],
-        );
-
-        assert!(result.is_ok());
-        assert!(output_path.exists());
-    }
-
-    #[test]
-    fn test_create_spreadsheet_with_numbers() {
-        let temp_dir = TempDir::new().unwrap();
-        let output_path = temp_dir.path().join("numbers.xlsx");
-        let output_path_str = output_path.to_str().unwrap();
-
-        let creator = ExcelDocumentCreator::new();
-        let result = creator.create_with_numbers(
-            output_path_str,
-            "Sales",
-            vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()],
-            vec![vec![100.5, 200.75, 150.25], vec![300.0, 250.5, 400.0]],
         );
 
         assert!(result.is_ok());

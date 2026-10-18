@@ -4,7 +4,6 @@ pub mod artifacts;
 pub mod embeddings;
 pub mod llm;
 pub mod mcp;
-pub mod models;
 pub mod research;
 pub mod scheduler;
 pub mod skills;

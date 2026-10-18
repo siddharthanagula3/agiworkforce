@@ -1,7 +1,6 @@
 pub mod api_tools_impl;
 pub mod conversation_summarizer;
 pub mod executors;
-pub mod knowledge;
 pub mod memory_manager;
 pub mod project_memory;
 pub mod sandbox;
@@ -9,10 +8,9 @@ pub mod semantic_search;
 pub mod tools;
 
 pub use conversation_summarizer::{ConversationSummarizer, SummarizationOutcome};
-pub use knowledge::KnowledgeBase;
 pub use memory_manager::{
-    DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,
-    MemoryEntry, MemoryManager, MemoryStats,
+    DailyLogEntry, DecayConfig, DecayResult, LogEntryType, MemoryCategory, MemoryEntry,
+    MemoryManager,
 };
 pub use project_memory::{
     ArchitecturalDecision, ProjectMemory, ProjectMemoryManager, ProjectMemoryType,
@@ -179,7 +177,6 @@ mod char_boundary_tests {
 
     #[test]
     fn multibyte_file_ops_cap_500() {
-        // file_ops.rs:1394, &content[..500]
         let content = "👍".repeat(200); // 200 * 4 bytes = 800 bytes > 500
         assert_char_safe(&content, 500);
         let end = floor_char_boundary(&content, 500);
@@ -192,7 +189,6 @@ mod char_boundary_tests {
 
     #[test]
     fn multibyte_git_diff_cap_10000() {
-        // git_executor.rs:850, &diff_content[..10000]
         let diff = "日本語テスト\n".repeat(800); // > 10000 bytes
         assert_char_safe(&diff, 10000);
     }
@@ -208,7 +204,6 @@ mod char_boundary_tests {
 
     #[test]
     fn multibyte_hooks_event_cap_497() {
-        // hooks/event.rs:327, &prompt_str[..497]
         let prompt = "你好世界".repeat(100); // each char is 3 bytes, 400 chars = 1200 bytes
         assert_char_safe(&prompt, 497);
         let end = floor_char_boundary(&prompt, 497);
@@ -217,42 +212,36 @@ mod char_boundary_tests {
 
     #[test]
     fn multibyte_tool_confirmation_cap_47() {
-        // tool_confirmation.rs:540, &s[..47]
         let s = "こんにちは世界！".repeat(10); // 3 bytes/char
         assert_char_safe(&s, 47);
     }
 
     #[test]
     fn multibyte_db_tools_cap_200() {
-        // db_tools.rs:203, database.rs:233, &query[..200]
         let query = "SELECT * FROM テーブル WHERE カラム = ?".repeat(5);
         assert_char_safe(&query, 200);
     }
 
     #[test]
     fn multibyte_browser_cap_200() {
-        // browser.rs:43, &script[..200]
         let script = "document.title = '🌐'.repeat(100);".repeat(3);
         assert_char_safe(&script, 200);
     }
 
     #[test]
     fn multibyte_tool_executor_mod_cap_27() {
-        // tool_executor/mod.rs:2020, &s[..27]
         let s = "参数值🔑".repeat(10);
         assert_char_safe(&s, 27);
     }
 
     #[test]
     fn multibyte_computer_use_type_cap_50() {
-        // computer_use/types.rs:320, &text[..50]
         let text = "🖥️タイプ入力テスト".repeat(5);
         assert_char_safe(&text, 50);
     }
 
     #[test]
     fn multibyte_file_tools_cap_200000() {
-        // file_tools.rs:86,132, &content[..FILE_READ_MAX_CHARS]
         // use smaller proxy cap (200) to keep test fast
         let content = "🗃️".repeat(60); // 4 bytes each
         assert_char_safe(&content, 200);
@@ -260,7 +249,6 @@ mod char_boundary_tests {
 
     #[test]
     fn multibyte_test_runner_cap_65536() {
-        // test_runner.rs:856, &raw[..MAX_OUTPUT_BYTES] (64 KiB)
         // use smaller proxy (500) to keep test fast; logic is identical
         let raw = "✅".repeat(200); // 3 bytes each = 600 bytes > 500
         assert_char_safe(&raw, 500);

@@ -105,8 +105,12 @@ async fn execute_through_guard(
         .normalized_arguments(tool_call)
         .expect("tool arguments");
     let snapshot = serde_json::to_value(&args).expect("argument snapshot");
+    let mut granted = executor
+        .folders_granted_by_this_executor(&tool_call.name)
+        .await;
+    granted.extend(std::fs::canonicalize(std::env::temp_dir()));
     if let Err(error) = crate::sys::security::ToolExecutionGuard::new()
-        .validate_tool_call(&tool_call.name, &snapshot)
+        .validate_after_folder_consent(&tool_call.name, &snapshot, &granted)
         .await
     {
         panic!("the tool guard refuses {}: {error}", tool_call.name);
@@ -2597,38 +2601,6 @@ fn the_executor_default_is_in_the_arguments_the_gates_read() {
     assert!(executor
         .normalized_arguments(&call("file_list", json!("not an object")))
         .is_err());
-}
-
-#[tokio::test]
-async fn chat_refuses_the_goal_run_database_and_reasoning_tools_by_name() {
-    let executor = ToolExecutor::new(create_registry_with_all_tools());
-
-    for (name, arguments) in [
-        (
-            "db_query",
-            json!({ "connection_id": "c", "query": "SELECT content FROM messages" }),
-        ),
-        (
-            "db_execute",
-            json!({ "connection_id": "c", "sql": "DELETE FROM messages WHERE id = 1" }),
-        ),
-        ("db_transaction_begin", json!({ "connection_id": "c" })),
-        ("llm_reason", json!({ "prompt": "think" })),
-    ] {
-        let result = executor
-            .execute_tool_call(&call(name, arguments))
-            .await
-            .expect("a refusal is a result");
-        assert!(!result.success, "{name}");
-        assert!(
-            result
-                .error
-                .as_deref()
-                .is_some_and(|error| error.contains("not available in chat")),
-            "{name}: {:?}",
-            result.error
-        );
-    }
 }
 
 #[test]

@@ -39,17 +39,14 @@ test('the renderer cannot write, remove or read the app secrets in app data', ()
     (permission) => typeof permission === 'object' && permission.identifier.startsWith('fs:'),
   );
   const names = scoped.map((permission) => permission.identifier);
-  for (const removed of [
-    'fs:allow-remove',
-    'fs:allow-rename',
-    'fs:allow-copy-file',
-    'fs:allow-write-file',
-  ]) {
+  for (const removed of ['fs:allow-remove', 'fs:allow-rename', 'fs:allow-copy-file']) {
     assert.ok(!names.includes(removed), `${removed} must not be granted to the renderer`);
   }
 
   const write = scoped.find((permission) => permission.identifier === 'fs:allow-write-text-file');
   assert.deepEqual(write.allow, [{ path: '$APPDATA/artifacts/**' }]);
+  const writeBytes = scoped.find((permission) => permission.identifier === 'fs:allow-write-file');
+  assert.deepEqual(writeBytes.allow, [{ path: '$APPDATA/artifacts/**' }]);
 
   for (const permission of scoped) {
     if (!(permission.allow ?? []).some((entry) => entry.path?.startsWith('$APPDATA'))) continue;

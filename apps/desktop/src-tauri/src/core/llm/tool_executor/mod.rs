@@ -355,11 +355,7 @@ impl ToolExecutor {
             Self::promote_alias_arg(args, "new_text", &["new_string", "replace", "replacement"]);
         }
 
-        if normalized == "image_generate" || normalized == "media_generate_image" {
-            Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
-        }
-
-        if normalized == "video_generate" || normalized == "media_generate_video" {
+        if normalized == "image_generate" || normalized == "video_generate" {
             Self::promote_alias_arg(args, "prompt", &["text", "query", "description"]);
         }
 
@@ -1157,6 +1153,29 @@ impl ToolExecutor {
         }
     }
 
+    /// The folders this executor grants a tool on its own: the Allowed
+    /// Directories in settings, the run's project folder and, for a tool that
+    /// only reads, the agent artifacts folder. The guard's second pass is
+    /// given them, so it enforces the same grants this executor checks.
+    async fn folders_granted_by_this_executor(&self, tool_name: &str) -> Vec<PathBuf> {
+        let configured = match self
+            .app_handle
+            .as_ref()
+            .and_then(|app| app.try_state::<SettingsState>())
+        {
+            Some(settings) => settings.settings.lock().await.allowed_directories.clone(),
+            None => Vec::new(),
+        };
+        let mut roots = granted_roots(configured, self.project_folder.as_deref());
+        if Self::folder_capabilities_for_tool(tool_name) == ["read"] {
+            roots.extend(crate::core::agi::executors::agent_artifacts_dir().ok());
+        }
+        roots
+            .into_iter()
+            .map(|root| std::fs::canonicalize(&root).unwrap_or(root))
+            .collect()
+    }
+
     /// What the tool guard says to a call, if it refuses. MCP tools are
     /// registered on the first pass so they meet the rate limit and the
     /// parameter checks; the second pass charges no rate limit again.
@@ -1170,8 +1189,9 @@ impl ToolExecutor {
         let confirmation_state = app_handle.try_state::<ToolConfirmationState>()?;
         let guard = confirmation_state.tool_guard();
         let judged = if after_folder_consent {
+            let granted = self.folders_granted_by_this_executor(&tool_call.name).await;
             guard
-                .validate_after_folder_consent(&tool_call.name, arguments)
+                .validate_after_folder_consent(&tool_call.name, arguments, &granted)
                 .await
         } else {
             if tool_call.name.starts_with("mcp__") {
@@ -1341,16 +1361,6 @@ impl ToolExecutor {
                 });
             }
         };
-
-        if let Some(told) = crate::sys::commands::chat::tools::not_offered_in_chat(&tool_call.name)
-        {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": told, "success": false }),
-                error: Some(told.to_string()),
-                metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
-            });
-        }
 
         let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
 
@@ -2160,18 +2170,10 @@ impl ToolExecutor {
             "image_ocr" => self.execute_image_ocr_tool(&args).await,
             "code_analyze" => self.execute_code_analyze_tool(&args).await,
             "code_search" => self.execute_code_search_tool(&args).await,
-            "image_generate" | "media_generate_image" => {
-                self.execute_image_generate_tool(&args).await
-            }
-            "video_generate" | "media_generate_video" => {
-                self.execute_video_generate_tool(&args).await
-            }
+            "image_generate" => self.execute_image_generate_tool(&args).await,
+            "video_generate" => self.execute_video_generate_tool(&args).await,
             "cloud_upload" => self.execute_cloud_upload_tool(&args, &tool.id).await,
             "cloud_download" => self.execute_cloud_download_tool(&args, &tool.id).await,
-            "productivity_create_task" => {
-                self.execute_productivity_create_task_tool(&args, &tool.id)
-                    .await
-            }
             "document_read" => self.execute_document_read_tool(&args, &tool.id).await,
             "document_search" => self.execute_document_search_tool(&args, &tool.id).await,
             "document_create_word" => {
@@ -3088,14 +3090,13 @@ mod tool_mode_gate_tests {
 
     /// Tools registered at RiskLevel::Low or Medium-without-approval, so
     /// their safety tier returns Ok(()) before any confirmation is requested.
-    /// None of them is read-only: they delete memories, schedule work, write
-    /// downloaded bytes to disk, or discard an open transaction.
+    /// None of them is read-only: they delete memories, schedule work, or
+    /// write downloaded bytes to disk.
     const NON_READ_ONLY_QUIET_TOOLS: &[&str] = &[
         "memory_forget",
         "schedule_reminder",
         "api_download",
         "cloud_download",
-        "db_transaction_rollback",
         "create_artifact",
         "skill",
     ];

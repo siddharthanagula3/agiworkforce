@@ -1,12 +1,12 @@
 //! c2c OLD-vs-NEW request-body identity oracle (rust-engine-extraction plan,
-//! stage c2c; the request-side mirror of `c2a_decode_oracle`).
+//! stage c2c).
 //!
 //! Compares, per provider, the request body the desktop sent BEFORE the c2c
 //! serializer switch against the body the shared `agiworkforce-llm` crate
 //! serializers produce for the same logical request, and holds the two to
 //! BYTE-FOR-BYTE identity of their canonical JSON (recursively key-sorted.
 //! JSON object member order is not semantic on any provider wire) modulo the
-//! declared [`Delta`] set. Exactly like c2a: every declared delta is a
+//! declared [`Delta`] set. Every declared delta is a
 //! machine-verified structural transformation (never comparison loosening), a
 //! declared delta that does not fire FAILS the fixture (stale-exception
 //! detection), and any divergence residue not covered by a declared delta
@@ -265,8 +265,8 @@ enum Delta {
     /// (a zero-token cap); new omits it so Ollama's default applies.
     OllamaZeroNumPredict,
     /// Old passed valid-JSON-but-non-object tool-call arguments (e.g. `5`)
-    /// through verbatim; new hardens them to `{}` (mirrors the c2a decode-side
-    /// invalid-args policy, Ollama 400s non-object arguments).
+    /// through verbatim; new hardens them to `{}` (Ollama 400s non-object
+    /// arguments).
     OllamaNonObjectToolArgs,
     /// Old identified a tool result with OpenAI's `tool_call_id`; new sends
     /// Ollama's documented native field, `tool_name`. Ollama's `/api/chat`

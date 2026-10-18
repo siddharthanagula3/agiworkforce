@@ -1629,117 +1629,6 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
-            id: "productivity_create_task".to_string(),
-            name: "Create Task".to_string(),
-            description: "Create a task in productivity tool".to_string(),
-            capabilities: vec![
-                ToolCapability::SystemOperation,
-                ToolCapability::TextProcessing,
-            ],
-            parameters: vec![
-                ToolParameter {
-                    name: "provider".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Productivity provider (notion, trello, asana)".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "title".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Task title".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "description".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Task description".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "status".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Task status: todo, in_progress, completed, blocked, or cancelled"
-                        .to_string(),
-                    default: Some(serde_json::Value::String("todo".to_string())),
-                },
-                ToolParameter {
-                    name: "due_date".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional due date as RFC3339".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "priority".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Optional priority from 0 to 5".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "tags".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "Optional task tags".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional id for the new task".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "assignee".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional assignee id in the provider".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "assignee_name".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional assignee display name".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "project_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional project, board or database id in the provider"
-                        .to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "project_name".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional project display name".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "url".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Optional link to attach to the task".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 3.0,
-                memory_mb: 30,
-                network_mb: 0.5,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
             id: "document_read".to_string(),
             name: "Read Document".to_string(),
             description: "Read and extract content from document (Word, Excel, PDF)".to_string(),
@@ -2933,81 +2822,6 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
-            id: "media_generate_image".to_string(),
-            name: "Generate Image".to_string(),
-            description: "Generate images using a configured AI image provider".to_string(),
-            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
-            parameters: vec![
-                ToolParameter {
-                    name: "prompt".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Image generation prompt".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "size".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Size: 'square', 'wide', 'portrait'".to_string(),
-                    default: Some(serde_json::json!("wide")),
-                },
-                ToolParameter {
-                    name: "style".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Style: 'photorealistic', 'artistic', 'anime'".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 5.0,
-                memory_mb: 50,
-                network_mb: 5.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "media_generate_video".to_string(),
-            name: "Generate Video".to_string(),
-            description: "Generate video using a configured AI video provider".to_string(),
-            capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
-            parameters: vec![
-                ToolParameter {
-                    name: "prompt".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Video generation prompt".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "duration_secs".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Duration in seconds (default 4-8)".to_string(),
-                    default: Some(serde_json::json!(4)),
-                },
-                ToolParameter {
-                    name: "resolution".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Resolution: '1080p', '4k'".to_string(),
-                    default: Some(serde_json::json!("1080p")),
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 5.0,
-                memory_mb: 50,
-                network_mb: 20.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        // AUDIT-TOOLS-067: Register file_list tool in production registry
-        // Previously missing from production registry, causing "Tool not found" errors
-        // when the model calls file_list despite chat tool definitions including it.
-        self.register_tool(Tool {
             id: "file_list".to_string(),
             name: "List Files".to_string(),
             description: "List files and directories in a folder. Use this when the user asks what's in a folder or to list files.".to_string(),
@@ -3272,8 +3086,7 @@ impl ToolRegistry {
         })?;
 
         // Progressive disclosure for Agent Skills: the prompt advertises only skill
-        // name + description, and this tool is the ONLY path that discloses a body
-        // (DESKTOP-SKILLS-EAGER-INJECTION-01).
+        // name + description, and this tool is the ONLY path that discloses a body.
         self.register_tool(Tool {
             id: skill_tool::SKILL_TOOL_ID.to_string(),
             name: "Skill".to_string(),

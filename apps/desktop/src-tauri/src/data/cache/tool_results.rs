@@ -33,32 +33,16 @@ impl Default for ToolCacheTTLConfig {
         configs.insert("api_upload".to_string(), Duration::from_secs(0));
         configs.insert("api_download".to_string(), Duration::from_secs(120));
 
-        configs.insert("db_query".to_string(), Duration::from_secs(120));
-        configs.insert("db_execute".to_string(), Duration::from_secs(0));
-        configs.insert("db_transaction_begin".to_string(), Duration::from_secs(0));
-        configs.insert("db_transaction_commit".to_string(), Duration::from_secs(0));
-        configs.insert(
-            "db_transaction_rollback".to_string(),
-            Duration::from_secs(0),
-        );
-
         configs.insert("code_execute".to_string(), Duration::from_secs(0));
         configs.insert("code_analyze".to_string(), Duration::from_secs(300));
 
         configs.insert("image_ocr".to_string(), Duration::from_secs(300));
-
-        configs.insert("llm_reason".to_string(), Duration::from_secs(600));
 
         configs.insert("document_read".to_string(), Duration::from_secs(300));
         configs.insert("document_search".to_string(), Duration::from_secs(300));
 
         configs.insert("cloud_upload".to_string(), Duration::from_secs(0));
         configs.insert("cloud_download".to_string(), Duration::from_secs(300));
-
-        configs.insert(
-            "productivity_create_task".to_string(),
-            Duration::from_secs(0),
-        );
 
         Self {
             configs,

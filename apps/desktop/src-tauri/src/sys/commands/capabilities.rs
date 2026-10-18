@@ -24,7 +24,7 @@ pub const CAPABILITY_DEFAULT_ENABLED: bool = true;
 /// Every capability toggle, in the order Settings shows them. This is the one
 /// list: `tool_switch` may only name a capability that is here, the settings
 /// tab renders from `list_capabilities`, and a test holds both.
-pub static CAPABILITIES: [CapabilityDefinition; 10] = [
+pub static CAPABILITIES: [CapabilityDefinition; 9] = [
     CapabilityDefinition {
         name: "fileOperations",
         label: "Files",
@@ -78,12 +78,6 @@ pub static CAPABILITIES: [CapabilityDefinition; 10] = [
         label: "Screenshots and text recognition",
         description: "Capture the screen and read text out of images. Off: its screenshot and text recognition tools are withheld; Computer control still looks at the screen while it works.",
         acts: false,
-    },
-    CapabilityDefinition {
-        name: "dataAnalysis",
-        label: "Databases",
-        description: "Query and change the databases you connect. Off: its database tools are withheld.",
-        acts: true,
     },
 ];
 
@@ -356,22 +350,16 @@ pub fn tool_switch(tool_name: &str) -> Option<ToolSwitch> {
             Capability("gitIntegration")
         }
 
-        name if name.starts_with("db_") => Capability("dataAnalysis"),
-
         "todo_write" | "question" | "tool_search" | "create_artifact" | "code_analyze"
-        | "llm_reason" | "skill" => AlwaysOn(WORKS_INSIDE_THE_CONVERSATION),
+        | "skill" => AlwaysOn(WORKS_INSIDE_THE_CONVERSATION),
         "conversation_search" | "recent_chats" => AlwaysOn(READS_THIS_APPS_OWN_HISTORY),
         name if name.starts_with("memory_") => AlwaysOn(GOVERNED_BY_MEMORY_SETTINGS),
         "schedule_reminder"
         | "schedule_recurring_task"
         | "cancel_scheduled_task"
         | "list_scheduled_tasks" => AlwaysOn(GOVERNED_BY_THE_SCHEDULER),
-        "cloud_upload" | "cloud_download" | "productivity_create_task" => {
-            AlwaysOn(ACTS_THROUGH_A_CONNECTED_ACCOUNT)
-        }
-        "image_generate" | "video_generate" | "media_generate_image" | "media_generate_video" => {
-            AlwaysOn(METERED_AND_ASKS_FIRST)
-        }
+        "cloud_upload" | "cloud_download" => AlwaysOn(ACTS_THROUGH_A_CONNECTED_ACCOUNT),
+        "image_generate" | "video_generate" => AlwaysOn(METERED_AND_ASKS_FIRST),
         "image_analyze" => AlwaysOn(GOVERNED_BY_THE_MODELS_VISION),
         name if name.starts_with("background_agent_") => AlwaysOn(STARTS_AN_APPROVED_AGENT),
         "agi_chat" | "agi_execute_skill" | "agi_run_task" => AlwaysOn(RUNS_BEHIND_THE_SAME_GATES),
@@ -547,7 +535,6 @@ mod tests {
             "mcp__filesystem__read_text_file",
             "undo_last",
             "git_status",
-            "db_query",
         ] {
             let capability = tool_to_capability(name).expect("governed");
             assert!(known.contains(&capability), "{name} -> {capability}");

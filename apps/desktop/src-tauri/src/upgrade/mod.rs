@@ -5,7 +5,8 @@ pub mod installed;
 pub mod recovery;
 
 /// The bundled llama.cpp runtime. `llama-cpp-2` is a compile-time feature, so
-/// without a number of its own the runtime silently inherits the app version.
+/// without a number of its own the runtime silently inherits the app version
+/// and nothing can tell a runtime change from a UI change.
 pub const LOCAL_RUNTIME_VERSION: u32 = 1;
 
 /// The `llama-cpp-2` requirement `LOCAL_RUNTIME_VERSION` above was last
@@ -22,7 +23,8 @@ pub const MIN_COMPATIBLE_RUNTIME_VERSION: u32 = 1;
 pub const LOCAL_DATA_FORMAT_VERSION: u32 = 1;
 
 /// The bundled native-messaging host and browser bridge. The sidecar speaks to
-/// a browser extension that updates on its own schedule, so it is versioned.
+/// a browser extension that updates on its own schedule, so it is versioned
+/// separately from the app that happens to ship it.
 pub const SIDECAR_DAEMON_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +62,8 @@ pub fn decide_upgrade(installed: InstalledVersions) -> UpgradeDecision {
 }
 
 /// Whether the updater may offer a release at all. An update that would leave
-/// the installed data unreadable is not an update, it is data loss with a.
+/// the installed data unreadable is not an update, it is data loss with a
+/// progress bar.
 pub fn updater_compatible(installed: InstalledVersions, offered_data_format: u32) -> bool {
     offered_data_format >= installed.data_format
 }

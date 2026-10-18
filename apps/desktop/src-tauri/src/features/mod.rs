@@ -1,5 +1,4 @@
 pub mod document;
-pub mod productivity;
 pub mod projects;
 pub mod search;
 pub mod speech;
