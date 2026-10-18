@@ -84,12 +84,6 @@ export function logUnhandledRejection(error: unknown): void {
   logger.fatal({ error }, 'Unhandled promise rejection');
 }
 
-export function createChildLogger(correlationId: string) {
-  return logger.child({ correlationId });
-}
-
 export function generateCorrelationId(): string {
   return Math.random().toString(36).substring(2, 10);
 }
-
-export type Logger = typeof logger;

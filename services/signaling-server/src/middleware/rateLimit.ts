@@ -1,16 +1,36 @@
 import type { IncomingMessage } from 'http';
 import { resolveClientIp } from '../client-ip.js';
+import { envPositiveInteger } from '../env.js';
+import {
+  WS_BLACKLIST_DURATION_MS_DEFAULT,
+  WS_BLACKLIST_THRESHOLD_DEFAULT,
+  WS_CONNECTION_LIMIT_DEFAULT,
+  WS_MESSAGE_LIMIT_DEFAULT,
+  WS_RATE_LIMIT_WINDOW_MS_DEFAULT,
+} from '../constants.js';
 import { logger } from '../logger.js';
 
-export const WS_CONNECTION_LIMIT = Number(process.env['WS_CONNECTION_LIMIT'] ?? 10);
+export const WS_CONNECTION_LIMIT = envPositiveInteger(
+  'WS_CONNECTION_LIMIT',
+  WS_CONNECTION_LIMIT_DEFAULT,
+);
 
-export const WS_MESSAGE_LIMIT = Number(process.env['WS_MESSAGE_LIMIT'] ?? 100);
+export const WS_MESSAGE_LIMIT = envPositiveInteger('WS_MESSAGE_LIMIT', WS_MESSAGE_LIMIT_DEFAULT);
 
-export const WS_RATE_LIMIT_WINDOW_MS = Number(process.env['WS_RATE_LIMIT_WINDOW_MS'] ?? 60_000);
+export const WS_RATE_LIMIT_WINDOW_MS = envPositiveInteger(
+  'WS_RATE_LIMIT_WINDOW_MS',
+  WS_RATE_LIMIT_WINDOW_MS_DEFAULT,
+);
 
-export const WS_BLACKLIST_DURATION_MS = Number(process.env['WS_BLACKLIST_DURATION_MS'] ?? 300_000);
+export const WS_BLACKLIST_DURATION_MS = envPositiveInteger(
+  'WS_BLACKLIST_DURATION_MS',
+  WS_BLACKLIST_DURATION_MS_DEFAULT,
+);
 
-export const WS_BLACKLIST_THRESHOLD = Number(process.env['WS_BLACKLIST_THRESHOLD'] ?? 5);
+export const WS_BLACKLIST_THRESHOLD = envPositiveInteger(
+  'WS_BLACKLIST_THRESHOLD',
+  WS_BLACKLIST_THRESHOLD_DEFAULT,
+);
 
 const CLEANUP_INTERVAL_MS = 60_000;
 

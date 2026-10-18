@@ -1,7 +1,7 @@
-# Docker Compose configuration for WebSocket Signaling Server
-# Usage:
-#   Development: docker compose --profile dev up
-#   Production:  docker compose --profile prod up -d
+# Docker Compose configuration for the signaling server
+# Usage (from this directory):
+#   docker compose --profile prod up -d --build
+# The build context is the repository root: the Dockerfile installs from the root lockfile.
 
 services:
   # ===========================================================================
@@ -9,8 +9,8 @@ services:
   # ===========================================================================
   signaling-server:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: services/signaling-server/Dockerfile
     image: ghcr.io/agiworkforce/signaling-server:latest
     container_name: signaling-server
     profiles:
@@ -27,10 +27,11 @@ services:
       SIGNALING_WS_URL: '${SIGNALING_WS_URL:-}'
       SIGNALING_PAIRING_TTL: '${SIGNALING_PAIRING_TTL:-300}'
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-}'
-      # Required secret - must be set in environment or .env file
+      # Required secrets - must be set in environment or .env file
       NEON_DATABASE_URL: '${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}'
+      SIGNALING_INTERNAL_SECRET: '${SIGNALING_INTERNAL_SECRET:?SIGNALING_INTERNAL_SECRET is required}'
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:4000/health']
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:4000/ready']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -55,39 +56,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64M,mode=1777
-
-  # ===========================================================================
-  # Development Service
-  # ===========================================================================
-  signaling-server-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: deps
-    container_name: signaling-server-dev
-    profiles:
-      - dev
-    ports:
-      - '${PORT:-4000}:4000'
-    environment:
-      NODE_ENV: development
-      PORT: 4000
-      SIGNALING_HOST: '0.0.0.0'
-      SIGNALING_WS_PATH: '${SIGNALING_WS_PATH:-/ws}'
-      SIGNALING_PAIRING_TTL: '${SIGNALING_PAIRING_TTL:-300}'
-      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:5173}'
-      NEON_DATABASE_URL: '${NEON_DATABASE_URL:?NEON_DATABASE_URL is required}'
-    volumes:
-      # Mount source for hot-reload capability
-      - ./src:/app/src:ro
-      - ./tsconfig.json:/app/tsconfig.json:ro
-    command: ['npx', 'tsx', 'watch', 'src/index.ts']
-    healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:4000/health']
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 # ===========================================================================
 # Networks

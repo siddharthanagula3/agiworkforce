@@ -102,6 +102,7 @@ import {
   PENDING_APPROVAL_TTL_MS,
 } from './constants.js';
 import { controlPayloadSchema } from './control-payload.js';
+import { envPositiveInteger, envText } from './env.js';
 import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
 import { lookupSession } from './rehydration.js';
 
@@ -201,15 +202,16 @@ function verifyPairToken(
   });
 }
 
-const DEFAULT_TTL_SECONDS = Number(
-  process.env['SIGNALING_PAIRING_TTL'] ?? DEFAULT_PAIRING_TTL_SECONDS,
+const DEFAULT_TTL_SECONDS = envPositiveInteger(
+  'SIGNALING_PAIRING_TTL',
+  DEFAULT_PAIRING_TTL_SECONDS,
 );
-const host = process.env['SIGNALING_HOST'] ?? DEFAULT_HOST;
-const port = Number(process.env['PORT'] ?? process.env['SIGNALING_PORT'] ?? DEFAULT_PORT);
-const wsPath = process.env['SIGNALING_WS_PATH'] ?? DEFAULT_WS_PATH;
-const publicHttpUrl = process.env['SIGNALING_HTTP_URL'] ?? `http://${host}:${port}`;
+const host = envText('SIGNALING_HOST') ?? DEFAULT_HOST;
+const port = envPositiveInteger('PORT', envPositiveInteger('SIGNALING_PORT', DEFAULT_PORT));
+const wsPath = envText('SIGNALING_WS_PATH') ?? DEFAULT_WS_PATH;
+const publicHttpUrl = envText('SIGNALING_HTTP_URL') ?? `http://${host}:${port}`;
 const publicWsUrl =
-  process.env['SIGNALING_WS_URL'] ??
+  envText('SIGNALING_WS_URL') ??
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
 const release = releaseIdentity();
 const canonicalUrl = canonicalEndpoint();
@@ -561,28 +563,17 @@ registerProbeRoutes(app, {
   },
 });
 
-app.get(
-  '/metrics',
-  metricsLimiter,
-  (req, res, next) => {
-    if (isAdminEnabled()) {
-      adminAuthMiddleware(req, res, next);
-    } else {
-      next();
-    }
-  },
-  (_req, res) => {
-    res.set('Content-Type', 'text/plain; version=0.0.4');
-    res.send(
-      [
-        '# HELP signaling_build_info The deployment serving this process',
-        '# TYPE signaling_build_info gauge',
-        buildInfoMetric(release),
-        metrics.toPrometheusFormat(),
-      ].join('\n'),
-    );
-  },
-);
+app.get('/metrics', metricsLimiter, adminAuthMiddleware, (_req, res) => {
+  res.set('Content-Type', 'text/plain; version=0.0.4');
+  res.send(
+    [
+      '# HELP signaling_build_info The deployment serving this process',
+      '# TYPE signaling_build_info gauge',
+      buildInfoMetric(release),
+      metrics.toPrometheusFormat(),
+    ].join('\n'),
+  );
+});
 
 app.get('/admin/status', adminLimiter, adminAuthMiddleware, (_req, res) => {
   const wsStats = wsRateLimiter.getStats();
@@ -1662,10 +1653,9 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
   const peer = getPeer(session, client.role);
 
   if (!peer && message.kind === 'control' && client.role === 'desktop') {
-    const controlPayload = message.payload as
-      { action?: string; data?: Record<string, unknown> } | undefined;
-    if (controlPayload?.action === 'approval_request') {
-      queuePendingApproval(client.code, controlPayload);
+    const controlPayload = controlPayloadSchema.safeParse(message.payload);
+    if (controlPayload.success && controlPayload.data.action === 'approval_request') {
+      queuePendingApproval(client.code, controlPayload.data);
       socket.send(JSON.stringify({ type: 'approval_queued', code: client.code }));
       logger.info({ correlationId, code: client.code }, 'Approval queued for disconnected mobile');
       return;

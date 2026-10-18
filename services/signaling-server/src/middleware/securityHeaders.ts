@@ -1,9 +1,10 @@
-
 import type { Request, Response, NextFunction } from 'express';
+import { HSTS_MAX_AGE_DEFAULT_SECONDS } from '../constants.js';
+import { envPositiveInteger } from '../env.js';
 
 const ENABLE_HSTS = process.env['ENABLE_HSTS'] === 'true';
 
-const HSTS_MAX_AGE = Number(process.env['HSTS_MAX_AGE'] ?? 31536000);
+const HSTS_MAX_AGE = envPositiveInteger('HSTS_MAX_AGE', HSTS_MAX_AGE_DEFAULT_SECONDS);
 
 const HSTS_INCLUDE_SUBDOMAINS = process.env['HSTS_INCLUDE_SUBDOMAINS'] !== 'false';
 
@@ -59,27 +60,4 @@ export function securityHeadersMiddleware(_req: Request, res: Response, next: Ne
 
 export function disablePoweredBy(app: { disable: (setting: string) => void }): void {
   app.disable('x-powered-by');
-}
-
-export function getSecurityHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-
-  for (const [header, value] of Object.entries(securityHeaders)) {
-    if (value !== null) {
-      headers[header] = value;
-    }
-  }
-
-  if (ENABLE_HSTS) {
-    let hstsValue = `max-age=${HSTS_MAX_AGE}`;
-    if (HSTS_INCLUDE_SUBDOMAINS) {
-      hstsValue += '; includeSubDomains';
-    }
-    if (HSTS_PRELOAD) {
-      hstsValue += '; preload';
-    }
-    headers['Strict-Transport-Security'] = hstsValue;
-  }
-
-  return headers;
 }

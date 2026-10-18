@@ -140,7 +140,8 @@ retrying before it gives up, and exits:
 
 `/health` names the deployment serving the response (`deployment.id`,
 `.version`, `.region`, `.target`), so a check that passes says which build it
-passed against. `/metrics` carries the same identity as `signaling_build_info`.
+passed against. `/metrics` carries the same identity as `signaling_build_info`;
+it and the `/admin` routes answer `503` until `ADMIN_API_KEY` is set and `401` without it.
 Fields the host does not set are omitted rather than reported as `unknown`.
 
 ## Configuration backup

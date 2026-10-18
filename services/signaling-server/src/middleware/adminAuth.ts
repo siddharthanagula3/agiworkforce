@@ -1,15 +1,27 @@
 import type { Request, Response, NextFunction } from 'express';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { resolveClientIp } from '../client-ip.js';
+import {
+  AUTH_FAILURE_WINDOW_MS_DEFAULT,
+  AUTH_LOCKOUT_DURATION_MS_DEFAULT,
+  MAX_AUTH_FAILURES_DEFAULT,
+} from '../constants.js';
+import { envPositiveInteger } from '../env.js';
 import { logger } from '../logger.js';
 
 const ADMIN_API_KEY = process.env['ADMIN_API_KEY'];
 
-const MAX_AUTH_FAILURES = Number(process.env['MAX_AUTH_FAILURES'] ?? 10);
+const MAX_AUTH_FAILURES = envPositiveInteger('MAX_AUTH_FAILURES', MAX_AUTH_FAILURES_DEFAULT);
 
-const AUTH_LOCKOUT_DURATION_MS = Number(process.env['AUTH_LOCKOUT_DURATION_MS'] ?? 900_000);
+const AUTH_LOCKOUT_DURATION_MS = envPositiveInteger(
+  'AUTH_LOCKOUT_DURATION_MS',
+  AUTH_LOCKOUT_DURATION_MS_DEFAULT,
+);
 
-const AUTH_FAILURE_WINDOW_MS = Number(process.env['AUTH_FAILURE_WINDOW_MS'] ?? 3600_000);
+const AUTH_FAILURE_WINDOW_MS = envPositiveInteger(
+  'AUTH_FAILURE_WINDOW_MS',
+  AUTH_FAILURE_WINDOW_MS_DEFAULT,
+);
 
 interface AuthFailureEntry {
   failures: number;
@@ -135,25 +147,6 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
 
 export function isAdminEnabled(): boolean {
   return Boolean(ADMIN_API_KEY);
-}
-
-export function getAuthStats(): {
-  trackedIps: number;
-  lockedOutIps: number;
-} {
-  let lockedOutIps = 0;
-  const now = Date.now();
-
-  for (const entry of authFailures.values()) {
-    if (entry.lockedUntil && entry.lockedUntil > now) {
-      lockedOutIps++;
-    }
-  }
-
-  return {
-    trackedIps: authFailures.size,
-    lockedOutIps,
-  };
 }
 
 export function cleanupAuthFailures(): void {
