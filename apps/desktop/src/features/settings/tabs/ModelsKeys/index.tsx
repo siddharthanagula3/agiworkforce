@@ -417,7 +417,7 @@ export function ModelsKeysTab({
       return;
     }
 
-    const result = validateUrl(raw, { allowLocalhost: true });
+    const result = validateUrl(raw);
     if (!result.valid) {
       setOllamaUrlError(result.error ?? 'Enter a valid HTTP or HTTPS URL');
       return;

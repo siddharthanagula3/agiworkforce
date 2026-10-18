@@ -122,12 +122,7 @@ pub type PlatformDriver = mac::service::MacAutomationService;
 #[cfg(not(any(windows, target_os = "macos")))]
 pub type PlatformDriver = uia::UIAutomationService;
 
-// use once_cell::sync::Lazy; // Defined at line 30
 use std::sync::{Arc, Mutex as StdMutex};
-// use tokio::sync::Mutex; // Defined at line 189 but conflict with std::sync::Mutex if not qualified
-// use tokio::sync::Mutex as TokioMutex; // Unused
-
-// use self::input::{ClipboardManager, KeyboardSimulator, MouseSimulator}; // Defined at line 33
 
 pub struct AutomationService {
     pub native: PlatformDriver,

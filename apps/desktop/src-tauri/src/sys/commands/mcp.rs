@@ -478,7 +478,7 @@ impl McpState {
     }
 
     /// Update the filesystem MCP server root directory.
-    /// This couples folder selection with MCP filesystem server scope (AUDIT-MCP-050).
+    /// This couples folder selection with MCP filesystem server scope.
     /// Returns Ok(true) if the server was restarted, Ok(false) if no change needed.
     pub async fn update_filesystem_root(&self, new_root: &str) -> Result<bool, String> {
         self.update_filesystem_roots(&[new_root.to_string()]).await

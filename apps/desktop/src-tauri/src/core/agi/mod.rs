@@ -1,66 +1,30 @@
 pub mod api_tools_impl;
-pub mod audio_processing;
-pub mod comparator;
 pub mod conversation_summarizer;
-pub mod core;
-pub mod executor;
 pub mod executors;
 pub mod knowledge;
-pub mod learning;
-pub mod memory;
 pub mod memory_manager;
-pub mod orchestrator;
-/// Example orchestrator configurations for reference and testing
-// Used by: reference implementations and integration tests
-pub mod orchestrator_examples;
-pub mod planner;
-pub mod planner_memory_integration;
 pub mod project_memory;
-pub mod reflection;
-pub mod resources;
 pub mod sandbox;
 pub mod semantic_search;
 pub mod tools;
 
-#[cfg(test)]
-mod tests;
-
-pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
 pub use conversation_summarizer::{ConversationSummarizer, SummarizationOutcome};
-pub use core::AGICore;
-pub use executor::AGIExecutor;
 pub use knowledge::KnowledgeBase;
-pub use learning::LearningSystem;
-#[allow(deprecated)]
-pub use memory::AGIMemory;
 pub use memory_manager::{
     DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, LogEntryType, MemoryCategory,
     MemoryEntry, MemoryManager, MemoryStats,
 };
-pub use orchestrator::{
-    AgentOrchestrator, AgentResult, AgentState, AgentStatus, CoordinationPattern, FileGuard,
-    ResourceLock, UiGuard,
-};
-pub use planner::AGIPlanner;
 pub use project_memory::{
     ArchitecturalDecision, ProjectMemory, ProjectMemoryManager, ProjectMemoryType,
 };
-pub use reflection::{
-    Correction, CorrectionType, ExecutionAssessment, FailedStep, FailureCategory, FailurePattern,
-    PlanCritique, PlanRisk, ReflectionEngine, ReflectionInsight, SubGoal,
-};
-pub use resources::ResourceManager;
 pub use sandbox::{CodeExecutionResult, ExecutionConfig, Sandbox, SandboxManager};
 pub use semantic_search::{IndexStats, SemanticSearchConfig, SemanticSearchResult, TfIdfIndex};
 pub use tools::{
     SkillTool, SkillToolInput, Tool, ToolCapability, ToolRegistry, ToolResult, SKILL_TOOL_ID,
 };
 
-// Export the new modular executor architecture
 pub use executors::{
-    ApiExecutor, BrowserExecutor, CloudExecutor, CodeExecutor, DatabaseExecutor, ExecutorContext,
-    ExecutorRegistry, FileExecutor, GitExecutor, LlmExecutor, OcrExecutor, ProductivityExecutor,
-    SearchExecutor, TerminalExecutor, ToolExecutor, UiExecutor,
+    ApiExecutor, BrowserExecutor, ExecutorContext, SearchExecutor, ToolExecutor, UiExecutor,
 };
 
 use serde::{Deserialize, Serialize};
@@ -84,69 +48,6 @@ pub(crate) fn floor_char_boundary(s: &str, max: usize) -> usize {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct AGIConfig {
-    #[serde(alias = "max_concurrent_tools")]
-    pub max_concurrent_tools: usize,
-
-    #[serde(alias = "knowledge_memory_mb")]
-    pub knowledge_memory_mb: u64,
-
-    #[serde(alias = "enable_learning")]
-    pub enable_learning: bool,
-
-    #[serde(alias = "enable_self_improvement")]
-    pub enable_self_improvement: bool,
-
-    #[serde(alias = "resource_limits")]
-    pub resource_limits: ResourceLimits,
-
-    #[serde(alias = "max_planning_depth")]
-    pub max_planning_depth: usize,
-
-    #[serde(alias = "enable_multimodal")]
-    pub enable_multimodal: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct ResourceLimits {
-    #[serde(alias = "cpu_percent")]
-    pub cpu_percent: f64,
-    #[serde(alias = "memory_mb")]
-    pub memory_mb: u64,
-    #[serde(alias = "network_mbps")]
-    pub network_mbps: f64,
-    #[serde(alias = "storage_mb")]
-    pub storage_mb: u64,
-}
-
-impl Default for ResourceLimits {
-    fn default() -> Self {
-        Self {
-            cpu_percent: 80.0,
-            memory_mb: 2048,
-            network_mbps: 100.0,
-            storage_mb: 10240,
-        }
-    }
-}
-
-impl Default for AGIConfig {
-    fn default() -> Self {
-        Self {
-            max_concurrent_tools: 10,
-            knowledge_memory_mb: 1024,
-            enable_learning: true,
-            enable_self_improvement: true,
-            resource_limits: ResourceLimits::default(),
-            max_planning_depth: 20,
-            enable_multimodal: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Goal {
     pub id: String,
     pub description: String,
@@ -156,8 +57,7 @@ pub struct Goal {
     pub success_criteria: Vec<String>,
     /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
     /// execution boundary at goal-submission time. Threaded into every
-    /// `RouterPreferences` built while planning/executing this goal (see
-    /// `core/agi/planner.rs` and the `core/agi/executors/*` tool executors)
+    /// `RouterPreferences` the `core/agi/executors/*` tool executors build,
     /// so `LLMRouter::candidates`
     /// enforces Local/BYOK/ManagedCloud instead of falling through to its
     /// fail-closed Local default. `None` still fails closed to Local via
@@ -165,26 +65,6 @@ pub struct Goal {
     /// default to `Local`; the router does that.
     #[serde(default)]
     pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
-}
-
-impl Goal {
-    /// Returns the model/provider pair admitted by the privileged submission
-    /// boundary. Existing checkpoints and non-UI callers may omit it; callers
-    /// must never infer a provider from a dynamic model name.
-    pub fn execution_target(&self) -> Option<(&str, &str)> {
-        let mut model = None;
-        let mut provider = None;
-        for constraint in &self.constraints {
-            if let ConstraintValue::Custom { key, value } = &constraint.value {
-                match key.as_str() {
-                    "execution_model" => model = Some(value.as_str()),
-                    "execution_provider" => provider = Some(value.as_str()),
-                    _ => {}
-                }
-            }
-        }
-        model.zip(provider)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -251,43 +131,6 @@ pub struct ContextEntry {
     pub timestamp: u64,
     pub event: String,
     pub data: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AGICapabilities {
-    pub can_read_files: bool,
-    pub can_write_files: bool,
-    pub can_execute_code: bool,
-    pub can_automate_ui: bool,
-    pub can_use_browser: bool,
-    pub can_access_databases: bool,
-    pub can_make_api_calls: bool,
-    pub can_process_images: bool,
-    pub can_process_audio: bool,
-    pub can_understand_code: bool,
-    pub can_learn_from_experience: bool,
-    pub can_plan_complex_tasks: bool,
-    pub can_adapt_strategies: bool,
-}
-
-impl Default for AGICapabilities {
-    fn default() -> Self {
-        Self {
-            can_read_files: true,
-            can_write_files: true,
-            can_execute_code: true,
-            can_automate_ui: true,
-            can_use_browser: true,
-            can_access_databases: true,
-            can_make_api_calls: true,
-            can_process_images: true,
-            can_process_audio: true,
-            can_understand_code: true,
-            can_learn_from_experience: true,
-            can_plan_complex_tasks: true,
-            can_adapt_strategies: true,
-        }
-    }
 }
 
 #[cfg(test)]

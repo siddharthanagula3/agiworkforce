@@ -1,4 +1,4 @@
-import { safeGetJSON, safeSetJSON, safeRemoveItem } from './localStorage';
+import { safeGetJSON, safeSetJSON } from './localStorage';
 
 export interface CommandHistoryEntry {
   commandId: string;
@@ -41,21 +41,6 @@ export function recordCommandExecution(commandId: string): void {
 export function getRecentCommandIds(): string[] {
   const history = getCommandHistory();
   return history.map((entry) => entry.commandId);
-}
-
-export function getFrequentCommandIds(): string[] {
-  const history = getCommandHistory();
-  return history
-    .slice()
-    .sort((a, b) => b.executionCount - a.executionCount)
-    .map((entry) => entry.commandId);
-}
-
-export function clearCommandHistory(): void {
-  const success = safeRemoveItem(STORAGE_KEY);
-  if (!success) {
-    console.warn('[CommandHistory] Failed to clear command history');
-  }
 }
 
 export function getCommandStats(commandId: string): {

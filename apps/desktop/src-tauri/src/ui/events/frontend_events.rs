@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,18 +52,6 @@ pub struct TerminalCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolExecution {
-    pub id: String,
-    #[serde(rename = "toolName")]
-    pub tool_name: String,
-    pub input: serde_json::Value,
-    pub output: Option<serde_json::Value>,
-    pub error: Option<String>,
-    pub duration: u64,
-    pub success: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Screenshot {
     pub id: String,
     #[serde(rename = "imageBase64")]
@@ -106,17 +93,6 @@ pub fn emit_terminal_command(app_handle: &AppHandle, command: TerminalCommand) {
         tracing::error!("[Events] Failed to emit terminal command event: {}", e);
     } else {
         tracing::debug!("[Events] Emitted terminal command: {}", command.command);
-    }
-}
-
-pub fn emit_tool_execution(app_handle: &AppHandle, execution: ToolExecution) {
-    if let Err(e) = app_handle.emit(
-        "agi:tool_execution",
-        serde_json::json!({ "execution": execution }),
-    ) {
-        tracing::error!("[Events] Failed to emit tool execution event: {}", e);
-    } else {
-        tracing::debug!("[Events] Emitted tool execution: {}", execution.tool_name);
     }
 }
 
@@ -195,25 +171,6 @@ pub fn create_file_delete_event(
         session_id,
         agent_id: None,
         goal_id: None,
-    }
-}
-
-pub fn create_tool_execution_event(
-    tool_name: &str,
-    input: &HashMap<String, serde_json::Value>,
-    output: Option<serde_json::Value>,
-    error: Option<String>,
-    duration_ms: u64,
-    success: bool,
-) -> ToolExecution {
-    ToolExecution {
-        id: uuid::Uuid::new_v4().to_string(),
-        tool_name: tool_name.to_string(),
-        input: serde_json::to_value(input).unwrap_or(serde_json::json!({})),
-        output,
-        error,
-        duration: duration_ms,
-        success,
     }
 }
 

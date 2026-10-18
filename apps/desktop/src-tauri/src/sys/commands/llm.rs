@@ -84,26 +84,12 @@ impl RateLimitState {
     }
 }
 
-/// Resolves a provider string to the appropriate Provider enum for routing.
-///
-/// Preserves the actual provider so that BYOK (direct API key) providers
-/// can be matched when registered via `llm_configure_provider`. The router
-/// will fall back to ManagedCloud automatically when the specific provider
-/// is not registered.
 /// Prefix of the error a helper call returns when its trust boundary leaves
 /// no provider to send to. Callers use it to fall back without AI.
 const NO_CANDIDATES_ERROR_CODE: &str = "[ERR_NO_CANDIDATES]";
 
-fn resolve_provider_for_routing(s: &str) -> Option<Provider> {
-    Provider::from_string(s)
-}
-
-/// FIX-F19 (audit 2026-05-19): wire the previously-dormant
-/// `PromptInjectionDetector` into LLM ingress. **Detect-and-log only per plan;
-/// do NOT block**, false-positive rate on legitimate code prompts is too high
-/// to gate the user's request. Emits a `tracing::warn` with the risk score,
-/// confidence, detected patterns, and recommendation so audit_logger / Sentry
-/// pick up the signal for later analysis.
+/// Detect and log only: the false-positive rate on legitimate code prompts is
+/// too high to gate the user's request on it.
 fn scan_messages_for_prompt_injection(messages: &[ChatMessage]) {
     use std::sync::OnceLock;
     static DETECTOR: OnceLock<PromptInjectionDetector> = OnceLock::new();
@@ -127,6 +113,45 @@ fn scan_messages_for_prompt_injection(messages: &[ChatMessage]) {
     }
 }
 
+/// Wire representation of the active session's trust boundary. Deliberately
+/// narrower than `agiworkforce_model_registry::TrustMode`'s own serde repr
+/// (which also exposes `on_device`), callers only ever mean "this device's
+/// local models", "my own API key", or "AGI Workforce's managed cloud", so the
+/// wire contract is exactly `local` | `byok` | `managed`
+/// (desktop-trust-boundary-01).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TrustModeWire {
+    Local,
+    Byok,
+    Managed,
+}
+
+impl From<TrustModeWire> for agiworkforce_model_registry::TrustMode {
+    fn from(wire: TrustModeWire) -> Self {
+        match wire {
+            TrustModeWire::Local => Self::Local,
+            TrustModeWire::Byok => Self::Byok,
+            TrustModeWire::Managed => Self::ManagedCloud,
+        }
+    }
+}
+
+/// Deserializes the `trustMode` wire field (`"local" | "byok" | "managed"`,
+/// or absent) into `Option<TrustMode>`. Absent stays `None`, which
+/// `llm_router::effective_trust_mode` resolves to `TrustMode::Local`
+/// (fail-closed), this function does not itself apply that default so the
+/// two layers don't silently drift.
+fn deserialize_trust_mode<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<agiworkforce_model_registry::TrustMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let wire = Option::<TrustModeWire>::deserialize(deserializer)?;
+    Ok(wire.map(agiworkforce_model_registry::TrustMode::from))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMSendMessageRequest {
     pub messages: Vec<ChatMessage>,
@@ -138,10 +163,7 @@ pub struct LLMSendMessageRequest {
     pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
     /// Explicit execution boundary for lightweight helper calls. Absent stays
     /// fail-closed to Local in the router.
-    #[serde(
-        default,
-        deserialize_with = "crate::sys::commands::agi::deserialize_trust_mode"
-    )]
+    #[serde(default, deserialize_with = "deserialize_trust_mode")]
     pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
@@ -261,10 +283,6 @@ async fn route_plain_llm_request(
         }
     }
 
-    // FIX-F19 (audit 2026-05-19): scan inbound user messages for prompt
-    // injection signals. Detect-and-log only (no blocking), emit telemetry
-    // via `tracing::warn` on `agi.llm.prompt_injection` so audit_logger picks
-    // it up. Wire-up of the previously-dormant detector.
     scan_messages_for_prompt_injection(&request.messages);
 
     // Pre-flight authentication check for cloud credits.
@@ -294,7 +312,7 @@ async fn route_plain_llm_request(
     let provider = request
         .provider
         .as_deref()
-        .and_then(resolve_provider_for_routing);
+        .and_then(Provider::from_string);
 
     let model = request.model.clone().unwrap_or_else(default_model);
 
@@ -1209,7 +1227,7 @@ pub async fn llm_set_default_provider(
 
     let mut router = state.router.write().await;
 
-    let provider_enum = resolve_provider_for_routing(&provider)
+    let provider_enum = Provider::from_string(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
     router.set_default_provider(provider_enum);
@@ -1514,7 +1532,7 @@ pub async fn llm_check_provider_status(
         }
     }
 
-    let provider_enum = resolve_provider_for_routing(&provider)
+    let provider_enum = Provider::from_string(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
     let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
     let configured = if is_local_runtime {
@@ -2090,9 +2108,11 @@ fn map_openrouter_entry(entry: &OpenRouterModelEntry) -> Option<ModelInfo> {
 /// Shared implementation: fetch and map OpenRouter's live model catalog.
 async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
     let client = create_llm_command_client(10)?;
+    let base_url = default_base_url(Provider::OpenRouter)
+        .ok_or_else(|| "OpenRouter has no registered API endpoint".to_string())?;
 
     let response = client
-        .get("https://openrouter.ai/api/v1/models")
+        .get(format!("{base_url}/models"))
         .send()
         .await
         .map_err(|e| format!("Failed to connect to OpenRouter: {}", e))?;
@@ -2960,5 +2980,55 @@ mod saved_key_destination_tests {
         .unwrap();
 
         assert!(remembered_saved_key_destinations(&conn).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod trust_mode_wire_tests {
+    use super::*;
+    use agiworkforce_model_registry::TrustMode;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Wire {
+        #[serde(default, deserialize_with = "deserialize_trust_mode")]
+        trust_mode: Option<TrustMode>,
+    }
+
+    fn parse(json: &str) -> Result<Wire, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    #[test]
+    fn trust_mode_wire_maps_all_three_boundaries() {
+        for (wire, expected) in [
+            ("local", TrustMode::Local),
+            ("byok", TrustMode::Byok),
+            ("managed", TrustMode::ManagedCloud),
+        ] {
+            let request = parse(&format!(r#"{{"trustMode":"{wire}"}}"#))
+                .expect("valid wire value must deserialize");
+            assert_eq!(request.trust_mode, Some(expected), "wire value {wire:?}");
+        }
+    }
+
+    #[test]
+    fn trust_mode_absent_or_null_stays_none_for_fail_closed_default() {
+        let absent = parse("{}").expect("absent trustMode is valid");
+        assert_eq!(absent.trust_mode, None);
+
+        let null = parse(r#"{"trustMode":null}"#).expect("null trustMode is valid");
+        assert_eq!(null.trust_mode, None);
+    }
+
+    #[test]
+    fn trust_mode_rejects_unknown_and_registry_repr_values() {
+        // The wire contract is exactly `local` | `byok` | `managed`. The
+        // registry's own serde names (`managed_cloud`, `on_device`) and
+        // arbitrary strings must be rejected, not silently defaulted.
+        for invalid in ["managed_cloud", "on_device", "cloud", "Local", ""] {
+            let result = parse(&format!(r#"{{"trustMode":"{invalid}"}}"#));
+            assert!(result.is_err(), "wire value {invalid:?} must be rejected");
+        }
     }
 }

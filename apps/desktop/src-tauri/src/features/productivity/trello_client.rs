@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 const TRELLO_BASE_URL: &str = "https://api.trello.com/1";
 
-/// FIX-004: URL-encode a path segment to prevent issues with special characters
+/// URL-encode a path segment to prevent issues with special characters
 /// While Trello IDs are typically alphanumeric, user-provided values (like list names)
 /// could contain special characters that need encoding.
 /// Bug #227 fix: Iterate over bytes instead of using `c as u8` which is incorrect
@@ -172,7 +172,7 @@ impl TrelloClient {
         format!("{}{}", TRELLO_BASE_URL, endpoint)
     }
 
-    /// FIX-004: Build URL with properly encoded path segment
+    /// Build URL with properly encoded path segment
     fn build_url_with_id(&self, template: &str, id: &str) -> String {
         let encoded_id = encode_path_segment(id);
         format!(
@@ -280,29 +280,6 @@ impl TrelloClient {
         } else {
             Err(Error::Provider(format!(
                 "Failed to list Trello cards: {}",
-                response.status()
-            )))
-        }
-    }
-
-    pub async fn list_list_cards(&self, list_id: &str) -> Result<Vec<TrelloCard>> {
-        self.rate_limiter.acquire().await;
-        let url = self.build_url_with_id("/lists/{id}/cards", list_id);
-
-        let response = self
-            .client
-            .get(&url)
-            .header("Authorization", self.auth_header())
-            .send()
-            .await
-            .map_err(Error::from)?;
-
-        if response.status().is_success() {
-            let cards: Vec<TrelloCard> = response.json().await.map_err(Error::from)?;
-            Ok(cards)
-        } else {
-            Err(Error::Provider(format!(
-                "Failed to list Trello list cards: {}",
                 response.status()
             )))
         }
@@ -465,7 +442,7 @@ impl TrelloClient {
             },
             status,
             due_date,
-            // FIX-005: Trello doesn't populate assignees in basic card fetch
+            // Trello doesn't populate assignees in basic card fetch
             assignee: None,
             assignee_name: None,
             priority: None,

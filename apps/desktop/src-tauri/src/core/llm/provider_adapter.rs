@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
 
-/// FIX-007 (Sprint 3): hard upper bound on `max_tokens` for any single
+/// Hard upper bound on `max_tokens` for any single
 /// LLM request. Without this, an indirect prompt injection could request
 /// `max_tokens: 1_000_000` and bleed the user's BYOK budget, there is
 /// no per-request cap on the LLM provider side either. 16 384 covers
@@ -96,116 +96,6 @@ impl OpenAIServerTool {
     }
 }
 
-/// Configuration for OpenAI server-side tools
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenAIToolConfig {
-    /// Tool type
-    #[serde(rename = "type")]
-    pub tool_type: String,
-
-    /// Tool-specific configuration
-    #[serde(flatten)]
-    pub config: OpenAIToolParams,
-}
-
-/// Tool-specific parameters for OpenAI built-in tools
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum OpenAIToolParams {
-    /// Web search configuration
-    WebSearch {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_results: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        search_depth: Option<String>, // "basic" or "advanced"
-    },
-    /// Code interpreter configuration
-    CodeInterpreter {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        timeout_seconds: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        packages: Option<Vec<String>>, // Python packages to pre-install
-    },
-    /// File search configuration
-    FileSearch {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_num_results: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        vector_store_ids: Option<Vec<String>>,
-    },
-    /// MCP configuration
-    Mcp {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        server_url: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        credentials: Option<serde_json::Value>,
-    },
-    /// Image generation configuration
-    ImageGeneration {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        model: Option<String>, // Catalog-resolved image-generation model.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        quality: Option<String>, // "medium" or "high"
-        #[serde(skip_serializing_if = "Option::is_none")]
-        size: Option<String>, // "1024x1024", "1536x1024", etc.
-    },
-    /// Computer use configuration
-    ComputerUse {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        display_width: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        display_height: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        environment: Option<String>,
-        // Legacy aliases
-        #[serde(skip_serializing_if = "Option::is_none")]
-        display_width_px: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        display_height_px: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        display_number: Option<u32>,
-    },
-    /// Shell configuration
-    Shell {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        allowed_commands: Option<Vec<String>>,
-    },
-    /// Apply patch configuration
-    ApplyPatch {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        validate_before_apply: Option<bool>,
-    },
-    /// No configuration needed
-    Empty {},
-}
-
-/// Result from a server-side tool execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenAIToolResult {
-    /// Tool call ID
-    pub id: String,
-    /// Tool name
-    pub name: String,
-    /// Tool output
-    pub output: serde_json::Value,
-    /// Whether the tool execution resulted in an error
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_error: Option<bool>,
-}
-
-/// Error from a server-side tool execution
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenAIToolError {
-    /// Error type
-    #[serde(rename = "type")]
-    pub error_type: String,
-    /// Error message
-    pub message: String,
-    /// Additional error details
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<serde_json::Value>,
-}
-
 /// Trait for adapting between unified format and provider-specific formats.
 pub trait ProviderAdapter: Send + Sync {
     /// Convert a unified LLMRequest to provider-specific request format.
@@ -217,46 +107,6 @@ pub trait ProviderAdapter: Send + Sync {
 
     /// Get the provider name.
     fn provider_name(&self) -> &str;
-
-    /// Check if this provider supports prompt caching.
-    fn supports_prompt_caching(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports extended thinking/reasoning.
-    fn supports_extended_thinking(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports batch processing.
-    fn supports_batch_processing(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports structured outputs.
-    fn supports_structured_outputs(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports background mode.
-    fn supports_background_mode(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports audio input.
-    fn supports_audio_input(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports audio output (text-to-speech).
-    fn supports_audio_output(&self) -> bool {
-        false
-    }
-
-    /// Check if this provider supports streaming audio.
-    fn supports_streaming_audio(&self) -> bool {
-        false
-    }
 }
 
 /// Factory for creating provider adapters.
@@ -282,7 +132,7 @@ impl ProviderAdapterFactory {
             Provider::Fireworks => Box::new(OpenAIAdapter),
             Provider::Cerebras => Box::new(OpenAIAdapter),
             Provider::DeepInfra => Box::new(OpenAIAdapter),
-            Provider::Cohere => Box::new(OpenAIAdapter), // Cohere v2 uses OpenAI-compatible format
+            Provider::Cohere => Box::new(OpenAIAdapter), // Cohere Compatibility API (OpenAI format)
             Provider::AI21 => Box::new(OpenAIAdapter),
             Provider::Sambanova => Box::new(OpenAIAdapter),
             Provider::Azure => Box::new(OpenAIAdapter), // Azure OpenAI uses OpenAI format
@@ -349,44 +199,6 @@ impl ProviderAdapter for OpenAIAdapter {
 
     fn provider_name(&self) -> &str {
         "OpenAI"
-    }
-
-    fn supports_prompt_caching(&self) -> bool {
-        // OpenAI supports automatic prompt caching for 1024+ token prefixes
-        true
-    }
-
-    fn supports_extended_thinking(&self) -> bool {
-        // Cataloged OpenAI reasoning models support reasoning.effort.
-        true
-    }
-
-    fn supports_batch_processing(&self) -> bool {
-        true
-    }
-
-    fn supports_structured_outputs(&self) -> bool {
-        true
-    }
-
-    fn supports_background_mode(&self) -> bool {
-        // OpenAI supports background mode for Responses reasoning models.
-        true
-    }
-
-    fn supports_audio_input(&self) -> bool {
-        // OpenAI supports audio input in chat completions
-        true
-    }
-
-    fn supports_audio_output(&self) -> bool {
-        // OpenAI supports TTS via dedicated API and inline audio responses
-        true
-    }
-
-    fn supports_streaming_audio(&self) -> bool {
-        // OpenAI supports streaming audio output
-        true
     }
 }
 
@@ -493,7 +305,7 @@ impl OpenAIAdapter {
 
     /// c3 (2026-07-16): build the Chat Completions body through the shared
     /// `agiworkforce-llm` serializer. Desktop-side policy stays here: catalog
-    /// model-id mapping, the FIX-007 max-tokens clamp, and the catalog-based
+    /// model-id mapping, the max-tokens clamp, and the catalog-based
     /// `max_completion_tokens`-vs-`max_tokens` field choice (the crate's own
     /// URL-based `OpenAiOpts::for_url` heuristic is not consulted, the
     /// desktop knows the provider from its catalog).
@@ -506,7 +318,7 @@ impl OpenAIAdapter {
         let req = agiworkforce_llm::ChatRequest {
             model: &wire_model,
             messages: &messages,
-            // FIX-007 clamp; None → 0 → the crate omits the cap field.
+            // Clamp; None → 0 → the crate omits the cap field.
             max_tokens: clamp_max_tokens(request.max_tokens).0.unwrap_or(0),
             temperature: request.temperature,
             tools: tools.as_deref(),
@@ -661,7 +473,7 @@ impl OpenAIAdapter {
 
     /// c3 (2026-07-16): build the Responses body through the shared
     /// `agiworkforce-llm` serializer. Desktop-side policy stays here: model
-    /// canonicalization, the FIX-007 max-tokens clamp, and the catalog-driven
+    /// canonicalization, the max-tokens clamp, and the catalog-driven
     /// reasoning-effort resolution (thinking capability + codex suffix
     /// override). Intentional delta vs the legacy arm (oracle-pinned): a
     /// single text-only user turn is sent as one typed input item instead of
@@ -676,7 +488,7 @@ impl OpenAIAdapter {
         let req = agiworkforce_llm::ChatRequest {
             model: &canonical_model,
             messages: &messages,
-            // FIX-007 clamp; None → 0 → the crate omits max_output_tokens.
+            // Clamp; None → 0 → the crate omits max_output_tokens.
             max_tokens: clamp_max_tokens(request.max_tokens).0.unwrap_or(0),
             temperature: request.temperature,
             tools: tools.as_deref(),
@@ -1107,8 +919,8 @@ impl OpenAIAdapter {
             }
         }
 
-        // Responses API uses max_output_tokens (not max_tokens). FIX-007:
-        // clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+        // Responses API uses max_output_tokens (not max_tokens), clamped
+        // through PER_REQUEST_MAX_TOKENS_CEILING.
         let (max_tokens, clamped) = clamp_max_tokens(request.max_tokens);
         if let Some(max_tokens) = max_tokens {
             if clamped {
@@ -1218,7 +1030,6 @@ impl OpenAIAdapter {
             api_request["temperature"] = serde_json::json!(temp);
         }
 
-        // Add max_tokens (FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING)
         let (max_tokens, clamped) = clamp_max_tokens(request.max_tokens);
         if let Some(max_tokens) = max_tokens {
             if clamped {
@@ -1546,122 +1357,6 @@ impl OpenAIAdapter {
         }
 
         Ok(audio_config)
-    }
-
-    /// Process multimodal content and extract audio inputs
-    // Used by audio-capable OpenAI and Google models.
-    fn _process_audio_content(
-        &self,
-        content_parts: &[super::ContentPart],
-    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
-        use super::ContentPart;
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
-
-        let mut processed_parts = Vec::new();
-
-        for part in content_parts {
-            match part {
-                ContentPart::Text { text } => {
-                    processed_parts.push(serde_json::json!({
-                        "type": "text",
-                        "text": text
-                    }));
-                }
-                ContentPart::Audio { audio } => {
-                    // Convert audio to OpenAI format
-                    let audio_part = match &audio.data {
-                        super::AudioData::Base64(base64_str) => {
-                            serde_json::json!({
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "data": base64_str,
-                                    "format": audio.format.extension()
-                                }
-                            })
-                        }
-                        super::AudioData::Bytes(bytes) => {
-                            let base64_str = STANDARD.encode(bytes);
-                            serde_json::json!({
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "data": base64_str,
-                                    "format": audio.format.extension()
-                                }
-                            })
-                        }
-                        super::AudioData::Uri(uri) => {
-                            serde_json::json!({
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "url": uri,
-                                    "format": audio.format.extension()
-                                }
-                            })
-                        }
-                    };
-                    processed_parts.push(audio_part);
-                }
-                ContentPart::Image { image } => {
-                    use base64::{engine::general_purpose::STANDARD, Engine as _};
-                    let base64_str = STANDARD.encode(&image.data);
-                    let data_url =
-                        format!("data:{};base64,{}", image.format.mime_type(), base64_str);
-                    processed_parts.push(serde_json::json!({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": data_url,
-                            "detail": format!("{:?}", image.detail).to_lowercase()
-                        }
-                    }));
-                }
-                ContentPart::Video { video } => {
-                    use super::VideoData;
-                    use base64::{engine::general_purpose::STANDARD, Engine as _};
-
-                    let video_url = match &video.data {
-                        VideoData::Bytes(bytes) => {
-                            let base64_str = STANDARD.encode(bytes);
-                            format!("data:{};base64,{}", video.format.mime_type(), base64_str)
-                        }
-                        VideoData::Uri(uri) => uri.clone(),
-                    };
-
-                    processed_parts.push(serde_json::json!({
-                        "type": "video_url",
-                        "video_url": {
-                            "url": video_url
-                        }
-                    }));
-                }
-                ContentPart::Document { document } => {
-                    processed_parts.push(serde_json::json!({
-                        "type": "document",
-                        "document": document
-                    }));
-                }
-                ContentPart::ToolUse { tool_use } => {
-                    processed_parts.push(serde_json::json!({
-                        "type": "tool_use",
-                        "id": tool_use.id,
-                        "name": tool_use.name,
-                        "input": tool_use.input
-                    }));
-                }
-                ContentPart::ToolResult { tool_result } => {
-                    processed_parts.push(serde_json::json!({
-                        "type": "tool_result",
-                        "tool_use_id": tool_result.tool_use_id,
-                        "content": tool_result.content,
-                        "is_error": tool_result.is_error
-                    }));
-                }
-                ContentPart::ProviderBlock { .. } => {
-                    tracing::warn!("Skipping a provider-native content block in an OpenAI request");
-                }
-            }
-        }
-
-        Ok(processed_parts)
     }
 
     fn append_output_text(content: &mut String, text: &str) {
@@ -2312,7 +2007,7 @@ impl AnthropicAdapter {
 
     /// c3 (2026-07-16): build the Messages API body through the shared
     /// `agiworkforce-llm` serializer. Desktop-side policy stays here: catalog
-    /// model-id mapping, the FIX-007 max-tokens clamp, and tool-message
+    /// model-id mapping, the max-tokens clamp, and tool-message
     /// pairing validation. Byte-parity with the legacy arm is proven by
     /// `tests/c2c_request_oracle.rs` modulo the enumerated intentional deltas
     /// (prompt-cache breakpoints on system/tools/last-message, explicit
@@ -2331,7 +2026,7 @@ impl AnthropicAdapter {
         let req = agiworkforce_llm::ChatRequest {
             model: &wire_model,
             messages: &messages,
-            // FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+            // Clamp through PER_REQUEST_MAX_TOKENS_CEILING.
             max_tokens: clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096)))
                 .0
                 .unwrap_or(4096),
@@ -2566,7 +2261,7 @@ impl AnthropicAdapter {
         // Anthropic uses Messages API format with flat tool definitions
         let mut anthropic_request = serde_json::json!({
             "model": wire_model,
-            // FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+            // Clamp through PER_REQUEST_MAX_TOKENS_CEILING.
             "max_tokens": clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096))).0.unwrap_or(4096),
             "messages": messages,
         });
@@ -2967,22 +2662,6 @@ impl ProviderAdapter for AnthropicAdapter {
     fn provider_name(&self) -> &str {
         "Anthropic"
     }
-
-    fn supports_prompt_caching(&self) -> bool {
-        true
-    }
-
-    fn supports_extended_thinking(&self) -> bool {
-        true
-    }
-
-    fn supports_batch_processing(&self) -> bool {
-        true
-    }
-
-    fn supports_structured_outputs(&self) -> bool {
-        true
-    }
 }
 
 impl AnthropicAdapter {
@@ -3283,7 +2962,7 @@ impl GoogleAdapter {
     /// `agiworkforce-llm` serializer. Desktop-side policy stays here: the
     /// catalog-gated thinking-budget resolution. The model is URL-embedded by
     /// the HTTP layer, not body-carried, so no id mapping happens here
-    /// (mirrors the legacy arm). No FIX-007 clamp either, the legacy gemini
+    /// (mirrors the legacy arm). No clamp either, the legacy gemini
     /// arm never clamped (legacy-parity; the clamp gap is pre-existing).
     pub(crate) fn adapt_request_via_crate(
         request: &LLMRequest,
@@ -4031,10 +3710,6 @@ impl ProviderAdapter for DeepSeekAdapter {
     fn provider_name(&self) -> &str {
         "DeepSeek"
     }
-
-    fn supports_extended_thinking(&self) -> bool {
-        true
-    }
 }
 
 /// Moonshot adapter (handles reasoning_content)
@@ -4073,10 +3748,6 @@ impl ProviderAdapter for MoonshotAdapter {
 
     fn provider_name(&self) -> &str {
         "Moonshot"
-    }
-
-    fn supports_extended_thinking(&self) -> bool {
-        true
     }
 }
 
@@ -4165,10 +3836,6 @@ impl ProviderAdapter for ZhipuAdapter {
 
     fn provider_name(&self) -> &str {
         "Zhipu"
-    }
-
-    fn supports_extended_thinking(&self) -> bool {
-        true
     }
 }
 

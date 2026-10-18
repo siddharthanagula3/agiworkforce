@@ -7,18 +7,14 @@ pub mod migrations;
 pub mod models;
 pub mod repository;
 
-pub use models::{
-    AutomationHistory, Conversation, Message, MessageRole, OverlayEvent, OverlayEventType,
-    PaginatedOverlayEvents, Setting, TaskType,
-};
+pub use models::{AutomationHistory, Conversation, Message, MessageRole, Setting, TaskType};
 
 pub use repository::{
     archive_conversation, create_automation_history, create_conversation,
     create_conversation_with_execution_mode, create_conversation_with_mode, create_message,
-    create_overlay_event, delete_conversation, delete_message, delete_overlay_events_before,
-    delete_setting, get_automation_history, get_automation_stats, get_conversation, get_message,
-    get_overlay_event, get_setting, list_automation_history, list_conversations,
-    list_conversations_by_mode, list_messages, list_overlay_events, list_settings, set_setting,
+    delete_conversation, delete_message, delete_setting, get_automation_history,
+    get_automation_stats, get_conversation, get_message, get_setting, list_automation_history,
+    list_conversations, list_conversations_by_mode, list_messages, list_settings, set_setting,
     update_conversation_title, update_message_content,
 };
 
@@ -158,40 +154,6 @@ impl Database {
 
     pub fn get_automation_stats(&self) -> Result<(i64, i64, f64, f64)> {
         self.with_connection(repository::get_automation_stats)
-    }
-
-    pub fn create_overlay_event(&self, event: &OverlayEvent) -> Result<i64> {
-        self.with_connection(|conn| repository::create_overlay_event(conn, event))
-    }
-
-    pub fn get_overlay_event(&self, id: i64) -> Result<OverlayEvent> {
-        self.with_connection(|conn| repository::get_overlay_event(conn, id))
-    }
-
-    /// AUDIT-004-001 fix: List overlay events with required pagination.
-    ///
-    /// # Arguments
-    /// * `start_time` - Optional start time filter (inclusive)
-    /// * `end_time` - Optional end time filter (inclusive)
-    /// * `limit` - Required limit, clamped to MAX_OVERLAY_EVENTS_LIMIT (1000)
-    /// * `offset` - Optional offset for pagination (defaults to 0)
-    pub fn list_overlay_events(
-        &self,
-        start_time: Option<chrono::DateTime<chrono::Utc>>,
-        end_time: Option<chrono::DateTime<chrono::Utc>>,
-        limit: i64,
-        offset: Option<i64>,
-    ) -> Result<PaginatedOverlayEvents> {
-        self.with_connection(|conn| {
-            repository::list_overlay_events(conn, start_time, end_time, limit, offset)
-        })
-    }
-
-    pub fn delete_overlay_events_before(
-        &self,
-        before: chrono::DateTime<chrono::Utc>,
-    ) -> Result<usize> {
-        self.with_connection(|conn| repository::delete_overlay_events_before(conn, before))
     }
 }
 

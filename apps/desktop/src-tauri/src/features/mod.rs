@@ -5,4 +5,3 @@ pub mod search;
 pub mod speech;
 pub mod terminal;
 pub mod tests;
-pub mod webhooks;

@@ -26,7 +26,6 @@ mod undo_tools;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use file_tools::FILE_READ_MAX_BYTES;
 pub use platform::platform_unavailable_reason;
 
 use crate::core::agi::tools::{Tool, ToolRegistry, ToolResult};
@@ -556,16 +555,6 @@ impl ToolExecutor {
         }
     }
 
-    /// Set custom timeout configuration
-    pub fn set_timeout_config(&mut self, config: ToolTimeoutConfig) {
-        self.timeout_config = config;
-    }
-
-    /// Get the timeout for a specific tool
-    pub fn get_tool_timeout(&self, tool_id: &str) -> u64 {
-        self.timeout_config.get_timeout(tool_id)
-    }
-
     pub fn set_conversation_mode(&mut self, mode: Option<String>) {
         self.conversation_mode = mode;
     }
@@ -592,23 +581,6 @@ impl ToolExecutor {
     /// Set the project folder for this executor
     pub fn set_project_folder(&mut self, folder: Option<String>) {
         self.project_folder = folder;
-    }
-
-    /// Get the current project folder
-    pub fn get_project_folder(&self) -> Option<&String> {
-        self.project_folder.as_ref()
-    }
-
-    /// Refresh the project folder from state (useful if folder changed mid-session)
-    pub async fn refresh_project_folder(&mut self) {
-        if let Some(app_handle) = &self.app_handle {
-            use tauri::Manager;
-            if let Some(state) =
-                app_handle.try_state::<crate::sys::commands::project_context::ProjectContextState>()
-            {
-                self.project_folder = state.get_folder().await;
-            }
-        }
     }
 
     fn convert_tool_to_definition(&self, tool: &Tool) -> ToolDefinition {
@@ -989,6 +961,16 @@ impl ToolExecutor {
 
         if requested_paths.is_empty() {
             return Ok(());
+        }
+
+        if self
+            .conversation_id
+            .is_some_and(crate::sys::commands::chat::state::is_conversation_unattended)
+        {
+            return Err(anyhow!(
+                "{} '{tool_name}' needs folders outside the ones you allowed, and nobody was here to approve them. Allow the folder in Settings, or run it from chat.",
+                crate::core::agent::tool_approval::UNATTENDED_DENIAL_PREFIX
+            ));
         }
 
         let request = ToolConfirmationRequest {

@@ -49,16 +49,6 @@ impl RAGEngine {
         }
     }
 
-    pub fn with_embeddings(
-        chunking_config: ChunkingConfig,
-        generator: Arc<crate::core::embeddings::EmbeddingGenerator>,
-    ) -> Self {
-        Self {
-            chunking_config,
-            embedding_generator: Some(generator),
-        }
-    }
-
     pub fn chunk_document(&self, document: &KnowledgeDocument) -> Result<Vec<KnowledgeChunk>> {
         let content = &document.content;
 

@@ -28,14 +28,14 @@ describe('LLM provider/model commands in tauri-mock', () => {
   it('llm_get_usage_stats returns a stats object with numeric fields', async () => {
     const invoke = await getRealInvoke();
     const result = await invoke<{
-      totalTokens: number;
-      totalCost: number;
-      messageCount: number;
+      total_tokens: number;
+      total_cost: number;
+      message_count: number;
     }>('llm_get_usage_stats');
     expect(result).toBeDefined();
-    expect(typeof result.totalTokens).toBe('number');
-    expect(typeof result.totalCost).toBe('number');
-    expect(typeof result.messageCount).toBe('number');
+    expect(typeof result.total_tokens).toBe('number');
+    expect(typeof result.total_cost).toBe('number');
+    expect(typeof result.message_count).toBe('number');
   });
 
   it('llm_get_available_models returns an array', async () => {
@@ -163,59 +163,6 @@ describe('Unregistered command guard', () => {
     await expect(invoke('totally_unknown_command_xyz_999')).rejects.toThrow(
       'Command not registered in tauri-mock',
     );
-  });
-});
-
-describe('Native agent execution honesty', () => {
-  it('rejects native execution fallbacks in cloud and desktop UI preview runtimes', async () => {
-    const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
-
-    expect(
-      mod.shouldRejectNativeExecutionFallback('agi_submit_goal_parallel', {
-        test: false,
-        cloudWeb: true,
-        desktopUiDev: false,
-      }),
-    ).toBe(true);
-    expect(
-      mod.shouldRejectNativeExecutionFallback('agi_submit_goal_swarm', {
-        test: false,
-        cloudWeb: false,
-        desktopUiDev: true,
-      }),
-    ).toBe(true);
-    expect(
-      mod.shouldRejectNativeExecutionFallback('agi_submit_goal', {
-        test: true,
-        cloudWeb: false,
-        desktopUiDev: false,
-      }),
-    ).toBe(false);
-  });
-
-  /**
-   * The screen that offers Tasks must answer the same question the dispatch
-   * layer answers, and answer it before drawing a ready control.
-   *
-   * The Electron build is `cloudWeb` here, because `supportsLocalAppMode`
-   * excludes it, so it must come back false. It previously came back ready,
-   * and the user met the failure only after pressing Launch.
-   */
-  it('agrees with the dispatch guard about which runtimes can execute a task', async () => {
-    const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
-
-    const runtimes = [
-      { label: 'electron or cloud web', test: false, cloudWeb: true, desktopUiDev: false },
-      { label: 'desktop ui preview', test: false, cloudWeb: false, desktopUiDev: true },
-      { label: 'tauri', test: false, cloudWeb: false, desktopUiDev: false },
-      { label: 'unit test', test: true, cloudWeb: false, desktopUiDev: false },
-    ];
-
-    for (const { label, ...runtime } of runtimes) {
-      const rejected = mod.shouldRejectNativeExecutionFallback('agi_submit_goal', runtime);
-      const available = mod.canRunNativeAgentExecution(runtime);
-      expect(available, `${label} must not advertise what dispatch would refuse`).toBe(!rejected);
-    }
   });
 });
 

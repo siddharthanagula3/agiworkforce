@@ -161,23 +161,6 @@ impl CdpEndpoint {
         })
     }
 
-    pub async fn wait_for_browser_ws_endpoint(&self, timeout: Duration) -> Result<String> {
-        let deadline = tokio::time::Instant::now() + timeout;
-
-        loop {
-            match self.browser_ws_endpoint().await {
-                Ok(endpoint) => return Ok(endpoint),
-                Err(error) => {
-                    if tokio::time::Instant::now() >= deadline {
-                        return Err(error);
-                    }
-                }
-            }
-
-            tokio::time::sleep(Duration::from_millis(250)).await;
-        }
-    }
-
     /// Wait until nothing answers the DevTools version endpoint any more.
     ///
     /// Closing a browser kills the process, but the port is not guaranteed to
@@ -240,24 +223,6 @@ impl CdpEndpoint {
             .map_err(|e| Error::Other(format!("Failed to parse CDP target response: {}", e)))
     }
 
-    pub async fn close_target(&self, target_id: &str) -> Result<()> {
-        let close_url = format!(
-            "{}/json/close/{}",
-            self.http_base_url(),
-            urlencoding::encode(target_id)
-        );
-
-        self.http_client()?
-            .get(&close_url)
-            .send()
-            .await
-            .map_err(|e| Error::Other(format!("Failed to close browser target: {}", e)))?
-            .error_for_status()
-            .map_err(|e| Error::Other(format!("CDP target close failed: {}", e)))?;
-
-        Ok(())
-    }
-
     pub async fn resolve_page_ws_endpoint(&self, tab_id: &str) -> Result<String> {
         let fallback = self.direct_page_ws_url(tab_id);
 
@@ -295,7 +260,7 @@ pub struct PlaywrightConfig {
 
 impl Default for PlaywrightConfig {
     fn default() -> Self {
-        // BUG-10 fix: allow CDP port to be overridden via CDP_PORT env var
+        // Allow CDP port to be overridden via CDP_PORT env var
         let ws_port = std::env::var("CDP_PORT")
             .ok()
             .and_then(|v| v.parse::<u16>().ok())
@@ -749,10 +714,6 @@ impl PlaywrightBridge {
         Ok(handle)
     }
 
-    pub async fn close_browser(&self, handle: BrowserHandle) -> Result<()> {
-        self.close_browser_by_id(&handle.id).await
-    }
-
     pub async fn close_browser_by_id(&self, id: &str) -> Result<()> {
         tracing::info!("Closing browser: {}", id);
 
@@ -843,11 +804,6 @@ impl PlaywrightBridge {
         }
 
         launched.len()
-    }
-
-    pub async fn list_browsers(&self) -> Result<Vec<BrowserHandle>> {
-        let browsers = self.browsers.lock().await;
-        Ok(browsers.values().cloned().collect())
     }
 
     fn build_browser_args(&self, options: &BrowserOptions) -> Result<Vec<String>> {
@@ -942,40 +898,9 @@ impl PlaywrightBridge {
         Ok((exe, args))
     }
 
-    pub async fn connect_to_browser(&self, ws_endpoint: &str) -> Result<()> {
-        let url = Url::parse(ws_endpoint)
-            .map_err(|e| Error::Other(format!("Invalid WebSocket URL: {}", e)))?;
-
-        tracing::info!("Connecting to browser at {}", ws_endpoint);
-
-        match connect(url) {
-            Ok(_) => {
-                tracing::info!("Successfully connected to browser");
-                Ok(())
-            }
-            Err(e) => {
-                tracing::error!("Failed to connect to browser: {}", e);
-                Err(Error::Other(format!(
-                    "Failed to connect to browser at {}: {}",
-                    ws_endpoint, e
-                )))
-            }
-        }
-    }
-
     // ---------------------------------------------------------------
     // Chrome DevTools Protocol (CDP) commands
     // ---------------------------------------------------------------
-
-    /// Fetch the list of available CDP targets (pages/tabs) from the running Chrome instance.
-    ///
-    /// Sends an HTTP GET to `http://127.0.0.1:<port>/json` and deserializes the
-    /// response into a vector of `CdpTarget`.
-    // Used by: CDP browser automation API, navigate/click/type/screenshot/evaluate
-    #[allow(dead_code)]
-    pub async fn list_targets(&self) -> Result<Vec<CdpTarget>> {
-        self.endpoint().list_targets().await
-    }
 
     /// Open a WebSocket to the given CDP target URL, send a single JSON-RPC
     /// command, and return the response.
@@ -985,8 +910,6 @@ impl PlaywrightBridge {
     /// Because `tungstenite` is synchronous, this is wrapped in
     /// `tokio::task::spawn_blocking`. A 30-second timeout prevents hanging if
     /// Chrome stops responding.
-    // Used by: CDP browser automation API, internal transport for all CDP methods
-    #[allow(dead_code)]
     async fn send_cdp_command(
         &self,
         ws_url: &str,
@@ -1105,219 +1028,6 @@ impl PlaywrightBridge {
 
         Ok(result)
     }
-
-    /// Helper: find the first `"page"` target with a valid `webSocketDebuggerUrl`.
-    // Used by: CDP browser automation API, page targeting for navigate/click/type/etc.
-    #[allow(dead_code)]
-    async fn first_page_ws_url(&self) -> Result<String> {
-        let targets = self.list_targets().await?;
-        for target in &targets {
-            if target.target_type == "page" {
-                if let Some(ref ws_url) = target.ws_debugger_url {
-                    return Ok(ws_url.clone());
-                }
-            }
-        }
-        Err(Error::Other(
-            "No browser pages available. Launch a browser first.".to_string(),
-        ))
-    }
-
-    /// Navigate the first available browser page to the given URL.
-    ///
-    /// Uses the CDP `Page.navigate` method.
-    // Used by: CDP browser automation API
-    #[allow(dead_code)]
-    pub async fn navigate(&self, url: &str) -> Result<()> {
-        // Same policy as `CdpClient::navigate`: `core::agent::executor` drives
-        // this bridge directly and only validated the scheme, so the
-        // always-blocked financial-host list has to be checked here too.
-        crate::automation::computer_use::ensure_navigation_url_allowed(url)
-            .map_err(Error::Other)?;
-
-        let ws_url = self.first_page_ws_url().await?;
-        let params = serde_json::json!({ "url": url });
-
-        tracing::info!("CDP navigate to '{}'", url);
-        let response = self
-            .send_cdp_command(&ws_url, "Page.navigate", params)
-            .await?;
-
-        // Check if navigation returned an error message in the result.
-        if let Some(result) = response.get("result") {
-            if let Some(error_text) = result.get("errorText").and_then(|v| v.as_str()) {
-                if !error_text.is_empty() {
-                    return Err(Error::Other(format!(
-                        "Navigation to '{}' failed: {}",
-                        url, error_text
-                    )));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Click on the element matching the given CSS selector on the first available page.
-    ///
-    /// Uses `Runtime.evaluate` to execute `document.querySelector(selector).click()`.
-    // Used by: CDP browser automation API
-    #[allow(dead_code)]
-    pub async fn click_selector(&self, selector: &str) -> Result<()> {
-        let js = format!(
-            r#"(function() {{
-                var el = document.querySelector('{}');
-                if (!el) throw new Error('Element not found: {}');
-                el.click();
-                return true;
-            }})()"#,
-            escape_js_string(selector),
-            escape_js_string(selector),
-        );
-
-        tracing::info!("CDP click_selector '{}'", selector);
-        let ws_url = self.first_page_ws_url().await?;
-        let params = serde_json::json!({
-            "expression": js,
-            "returnByValue": true,
-        });
-        let response = self
-            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
-            .await?;
-
-        check_runtime_exception(&response, "click_selector")?;
-        Ok(())
-    }
-
-    /// Type text into the element matching the given CSS selector on the first available page.
-    ///
-    /// Focuses the element, sets its value, and dispatches `input` and `change` events.
-    // Used by: CDP browser automation API
-    #[allow(dead_code)]
-    pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
-        let js = format!(
-            r#"(function() {{
-                var el = document.querySelector('{}');
-                if (!el) throw new Error('Element not found: {}');
-                el.focus();
-                el.value = '{}';
-                el.dispatchEvent(new Event('input', {{bubbles: true}}));
-                el.dispatchEvent(new Event('change', {{bubbles: true}}));
-                return true;
-            }})()"#,
-            escape_js_string(selector),
-            escape_js_string(selector),
-            escape_js_string(text),
-        );
-
-        tracing::info!("CDP type_text into '{}'", selector);
-        let ws_url = self.first_page_ws_url().await?;
-        let params = serde_json::json!({
-            "expression": js,
-            "returnByValue": true,
-        });
-        let response = self
-            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
-            .await?;
-
-        check_runtime_exception(&response, "type_text")?;
-        Ok(())
-    }
-
-    /// Take a screenshot of the first available page and return it as a base64-encoded PNG string.
-    ///
-    /// Uses the CDP `Page.captureScreenshot` method.
-    // Used by: CDP browser automation API
-    #[allow(dead_code)]
-    pub async fn screenshot_base64(&self) -> Result<String> {
-        let ws_url = self.first_page_ws_url().await?;
-        let params = serde_json::json!({ "format": "png" });
-
-        tracing::info!("CDP screenshot_base64");
-        let response = self
-            .send_cdp_command(&ws_url, "Page.captureScreenshot", params)
-            .await?;
-
-        let data = response
-            .get("result")
-            .and_then(|r| r.get("data"))
-            .and_then(|d| d.as_str())
-            .ok_or_else(|| {
-                Error::Other(
-                    "Page.captureScreenshot did not return expected 'result.data' field"
-                        .to_string(),
-                )
-            })?;
-
-        Ok(data.to_string())
-    }
-
-    /// Execute a JavaScript expression in the first available page and return the result.
-    ///
-    /// Uses the CDP `Runtime.evaluate` method with `returnByValue: true`.
-    // Used by: CDP browser automation API
-    #[allow(dead_code)]
-    pub async fn evaluate_js(&self, expression: &str) -> Result<serde_json::Value> {
-        let ws_url = self.first_page_ws_url().await?;
-        let params = serde_json::json!({
-            "expression": expression,
-            "returnByValue": true,
-        });
-
-        tracing::info!("CDP evaluate_js");
-        let response = self
-            .send_cdp_command(&ws_url, "Runtime.evaluate", params)
-            .await?;
-
-        check_runtime_exception(&response, "evaluate_js")?;
-
-        // Extract the actual result value from the CDP response envelope.
-        let result_value = response
-            .get("result")
-            .and_then(|r| r.get("result"))
-            .and_then(|r| r.get("value"))
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-
-        Ok(result_value)
-    }
-}
-
-/// Escape special characters in a string intended for insertion into a
-/// JavaScript single-quoted string literal.
-// Used by: CDP browser automation API, click_selector and type_text
-#[allow(dead_code)]
-fn escape_js_string(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('\'', "\\'")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-        .replace('\0', "\\0")
-        .replace('\u{2028}', "\\u2028")
-        .replace('\u{2029}', "\\u2029")
-}
-
-/// Check the CDP `Runtime.evaluate` response for an exception description and
-/// return an error if one is present.
-// Used by: CDP browser automation API, click_selector, type_text, evaluate_js
-#[allow(dead_code)]
-fn check_runtime_exception(response: &serde_json::Value, context: &str) -> Result<()> {
-    if let Some(result) = response.get("result") {
-        if let Some(exception) = result.get("exceptionDetails") {
-            let desc = exception
-                .get("exception")
-                .and_then(|ex| ex.get("description"))
-                .and_then(|d| d.as_str())
-                .or_else(|| exception.get("text").and_then(|t| t.as_str()))
-                .unwrap_or("Unknown JavaScript exception");
-            return Err(Error::Other(format!(
-                "JavaScript exception in {}: {}",
-                context, desc
-            )));
-        }
-    }
-    Ok(())
 }
 
 impl Drop for PlaywrightBridge {

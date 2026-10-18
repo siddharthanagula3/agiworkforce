@@ -72,7 +72,7 @@ struct ConnectorMcpMapping {
 
 /// Canonical connector → MCP server mapping table.
 ///
-/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): this table
+/// This table
 /// is now the single source of truth for "does clicking Connect on this
 /// connector ever spawn a real MCP server". Previously the frontend catalog
 /// (`connectorDefinitions.ts`'s `CONNECTOR_DIRECTORY`) advertised several
@@ -272,9 +272,7 @@ pub(crate) fn connector_id_for_server_name(server_name: &str) -> Option<&'static
 }
 
 /// Every connector id that has a real, working MCP server mapping, i.e.
-/// every id `get_connector_mcp_mapping` resolves to `Some(..)`. This is the
-/// backend half of the DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01 fix:
-/// the frontend "Available to connect" grid derives its visible set from
+/// every id `get_connector_mcp_mapping` resolves to `Some(..)`. The frontend "Available to connect" grid derives its visible set from
 /// this list (via `mcp_get_supported_connector_ids`) instead of trusting its
 /// own static catalog, so a connector can never be advertised as connectable
 /// without real backend support behind it.
@@ -473,7 +471,7 @@ impl McpOAuthProvider {
 
     /// Build the RFC 8252 §7.3 loopback redirect URI for this provider at `port`.
     pub fn redirect_uri(&self, port: u16) -> String {
-        // AUDIT-FIX: H-3, loopback HTTP listener replaces hijackable custom scheme.
+        // A loopback HTTP listener, not a custom scheme another app could claim.
         format!("http://127.0.0.1:{}/oauth/callback", port)
     }
 }
@@ -545,7 +543,7 @@ struct PkceChallenge {
 
 impl PkceChallenge {
     fn generate() -> Self {
-        // AUDIT-FIX: H-2 to 32 bytes of OsRng entropy → base64url-no-pad (43 chars), no modulo bias.
+        // 32 bytes of OsRng entropy → base64url-no-pad (43 chars), no modulo bias.
         let mut verifier_bytes = [0u8; 32];
         OsRng.fill_bytes(&mut verifier_bytes);
         let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(verifier_bytes);
@@ -568,11 +566,11 @@ struct PendingOAuthFlow {
     provider: McpOAuthProvider,
     code_verifier: String,
     created_at: u64,
-    redirect_uri: String, // AUDIT-FIX: H-3, captured loopback URI
+    redirect_uri: String,
     /// The literal connector id the frontend started the flow for (e.g.
     /// "gmail", "google_drive", "google_calendar", several distinct
     /// connector ids can share one `McpOAuthProvider` bucket). Captured so
-    /// the loopback callback listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
+    /// the loopback callback listener
     /// can activate the right MCP server once tokens are stored.
     connector_id: String,
 }
@@ -591,33 +589,27 @@ pub struct McpOAuthState {
 
 impl Default for McpOAuthState {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|e| {
-            tracing::warn!(
-                "Failed to create configured HTTP client, using default: {}",
-                e
-            );
-            // Fallback to a default client with timeout configuration.
-            let http_client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
-            Self {
-                pending_flows: Arc::new(RwLock::new(HashMap::new())),
-                http_client,
-            }
-        })
+        Self::new()
     }
 }
 
+/// Token exchange and refresh POST `client_secret` and the refresh token in a
+/// form body, which a 307/308 would carry to whatever origin it names, so this
+/// client follows no redirect.
+fn oauth_token_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("the OAuth token client uses only static configuration")
+}
+
 impl McpOAuthState {
-    pub fn new() -> Result<Self, String> {
-        Ok(Self {
+    pub fn new() -> Self {
+        Self {
             pending_flows: Arc::new(RwLock::new(HashMap::new())),
-            http_client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .map_err(|e| format!("Failed to create HTTP client: {}", e))?,
-        })
+            http_client: oauth_token_client(),
+        }
     }
 
     /// Generate a random state parameter
@@ -740,10 +732,11 @@ fn store_tokens(provider: McpOAuthProvider, tokens: &StoredTokens) -> Result<(),
         )
         .map_err(|e| format!("Failed to store OAuth refresh token: {}", e))?;
     } else {
-        let _ = conn.execute(
+        conn.execute(
             "DELETE FROM settings_v2 WHERE key = ?1",
             rusqlite::params![refresh_token_key],
-        );
+        )
+        .map_err(|e| format!("Failed to remove the old OAuth refresh token: {}", e))?;
     }
 
     if let Some(expires_at) = tokens.expires_at {
@@ -756,10 +749,11 @@ fn store_tokens(provider: McpOAuthProvider, tokens: &StoredTokens) -> Result<(),
         )
         .map_err(|e| format!("Failed to store OAuth expiry: {}", e))?;
     } else {
-        let _ = conn.execute(
+        conn.execute(
             "DELETE FROM settings_v2 WHERE key = ?1",
             rusqlite::params![expires_at_key],
-        );
+        )
+        .map_err(|e| format!("Failed to remove the old OAuth expiry: {}", e))?;
     }
 
     tracing::info!("OAuth tokens stored for provider: {}", provider.as_str());
@@ -820,15 +814,17 @@ fn delete_tokens(provider: McpOAuthProvider) -> Result<(), String> {
         rusqlite::params![key],
     )
     .map_err(|e| format!("Failed to delete tokens: {}", e))?;
-    let _ = conn.execute(
+    conn.execute(
         "DELETE FROM settings_v2 WHERE key IN (?1, ?2, ?3)",
         rusqlite::params![access_token_key, refresh_token_key, expires_at_key],
-    );
+    )
+    .map_err(|e| format!("Failed to delete tokens: {}", e))?;
     if provider == McpOAuthProvider::Google {
-        let _ = conn.execute(
+        conn.execute(
             "DELETE FROM settings_v2 WHERE key = ?1",
             rusqlite::params!["mcp_oauth_tokens_google_drive"],
-        );
+        )
+        .map_err(|e| format!("Failed to delete tokens: {}", e))?;
     }
 
     tracing::info!("OAuth tokens deleted for provider: {}", provider.as_str());
@@ -919,7 +915,7 @@ pub async fn mcp_oauth_start(
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-    // AUDIT-FIX: CI-3, HITL gate before navigating the user to a third-party
+    // HITL gate before navigating the user to a third-party
     // OAuth consent page. Without this an agent following a prompt-injected
     // instruction could silently start an OAuth flow against an attacker-controlled
     // provider. Pattern mirrors file_ops.rs:501.
@@ -947,7 +943,7 @@ pub async fn mcp_oauth_start(
 
     // Build authorization URL
     let scopes = oauth_provider.default_scopes().join(" ");
-    // AUDIT-FIX: H-3, bind a loopback listener; use its assigned port in the redirect URI.
+    // Bind a loopback listener; use its assigned port in the redirect URI.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|e| format!("Failed to bind loopback OAuth listener: {}", e))?;
@@ -1004,24 +1000,20 @@ pub async fn mcp_oauth_start(
                 provider: oauth_provider,
                 code_verifier: pkce.code_verifier,
                 created_at: McpOAuthState::now(),
-                redirect_uri: redirect_uri.clone(), // AUDIT-FIX: H-3
+                redirect_uri: redirect_uri.clone(),
                 connector_id: connector_id.clone(),
             },
         );
     }
 
-    // AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01: the listener above used to be
-    // dropped right after reading its assigned port, with a comment claiming
-    // it would be "reopened on the callback handler invocation", nothing
-    // ever did that, so no process was listening on `redirect_uri` and the
-    // OAuth flow could never complete. Keep the listener alive and hand it to
-    // a background task that serves exactly one request (the provider's
-    // redirect), completes the token exchange, and activates the connector's
-    // MCP server, all inside this process. This intentionally does NOT
+    // Keep the listener alive and hand it to a background task that serves
+    // exactly one request (the provider's redirect), completes the token
+    // exchange, and activates the connector's MCP server, all inside this
+    // process. This intentionally does NOT
     // route back out through the OS via the `agiworkforce://` custom-scheme
     // deep link (see `useDeepLink.ts`): doing so would reintroduce the exact
     // custom-scheme hijack risk that moving `redirect_uri` to a loopback
-    // interface (AUDIT-FIX: H-3, above) was meant to close.
+    // interface was meant to close.
     let pending_flows_for_listener = state.pending_flows.clone();
     let http_client_for_listener = state.http_client.clone();
     let callback_state = oauth_state.clone();
@@ -1064,8 +1056,8 @@ pub async fn mcp_oauth_start(
 /// Shared by `mcp_oauth_callback` (the legacy custom-scheme deep-link path.
 /// still a valid Tauri command surface, kept for backward compatibility) and
 /// `run_oauth_loopback_listener` (the primary completion path since
-/// AUDIT-FIX H-3 moved `redirect_uri` off the custom scheme onto a loopback
-/// HTTP interface). `expected_provider`, when `Some`, must match the pending
+/// `redirect_uri` moved off the custom scheme onto a loopback HTTP
+/// interface). `expected_provider`, when `Some`, must match the pending
 /// flow's stored provider or the exchange is rejected without consuming the
 /// flow, preserves `mcp_oauth_callback`'s original cross-check against its
 /// `provider` argument (sourced from the deep-link URL) so a caller can
@@ -1107,7 +1099,7 @@ async fn complete_oauth_exchange(
     // Get client credentials
     let (client_id, client_secret) = get_client_credentials(oauth_provider)?;
 
-    // Exchange code for tokens (AUDIT-FIX: H-3, use the loopback URI captured at start)
+    // Exchange code for tokens with the loopback URI captured at start
     let redirect_uri = pending_flow.redirect_uri.clone();
 
     let mut params = HashMap::new();
@@ -1212,7 +1204,7 @@ async fn complete_oauth_exchange(
 /// Exchanges the authorization code for access tokens and stores them
 /// encrypted in the database. This is the legacy custom-scheme deep-link
 /// completion path (`useDeepLink.ts` parsing an `agiworkforce://oauth/mcp/…`
-/// URL); the primary path since AUDIT-FIX H-3 is the loopback HTTP listener
+/// URL); the primary path is the loopback HTTP listener
 /// spawned by `mcp_oauth_start` (`run_oauth_loopback_listener`), which calls
 /// [`complete_oauth_exchange`] directly.
 #[tauri::command]
@@ -1243,7 +1235,7 @@ pub async fn mcp_oauth_callback(
 }
 
 // ============================================================================
-// Loopback OAuth Callback Listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
+// Loopback OAuth Callback Listener
 // ============================================================================
 
 /// Serves exactly one HTTP request on `listener`, the OAuth provider's
@@ -1620,14 +1612,12 @@ pub async fn mcp_oauth_disconnect(
         delete_tokens(oauth_provider)?;
     }
 
-    // Also delete any stored API key.
-    if let Ok(conn) = open_mcp_settings_db() {
-        let api_key_key = format!("api_key_{}", provider);
-        let _ = conn.execute(
-            "DELETE FROM settings_v2 WHERE key = ?1",
-            rusqlite::params![api_key_key],
-        );
-    }
+    let conn = open_mcp_settings_db()?;
+    conn.execute(
+        "DELETE FROM settings_v2 WHERE key = ?1",
+        rusqlite::params![format!("api_key_{}", provider)],
+    )
+    .map_err(|e| format!("Failed to remove the saved key for '{}': {}", provider, e))?;
 
     let _ = app_handle.emit("connector:disconnected", &provider);
     tracing::info!("Disconnected connector: {}", provider);
@@ -1644,9 +1634,32 @@ pub async fn mcp_oauth_refresh(
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
-    // Retrieve existing tokens
+    let stored_tokens = refresh_stored_tokens(oauth_provider, &state.http_client).await?;
+
+    reconnect_connected_connectors_for_provider(oauth_provider.as_str(), &app_handle).await;
+
+    Ok(OAuthTokenResponse {
+        provider: oauth_provider.as_str().to_string(),
+        connected: true,
+        expires_at: stored_tokens.expires_at,
+    })
+}
+
+/// The refreshed access token for a connector's OAuth `provider`, stored the
+/// same way [`mcp_oauth_refresh`] stores it.
+pub(crate) async fn refreshed_access_token(provider: &str) -> Result<String, String> {
+    let oauth_provider = McpOAuthProvider::from_str(provider)
+        .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
+    let stored_tokens = refresh_stored_tokens(oauth_provider, &oauth_token_client()).await?;
+    Ok(stored_tokens.access_token)
+}
+
+async fn refresh_stored_tokens(
+    oauth_provider: McpOAuthProvider,
+    http_client: &reqwest::Client,
+) -> Result<StoredTokens, String> {
     let tokens = retrieve_tokens(oauth_provider)?
-        .ok_or_else(|| format!("No tokens found for provider: {}", provider))?;
+        .ok_or_else(|| format!("No tokens found for provider: {}", oauth_provider.as_str()))?;
 
     let refresh_token = tokens
         .refresh_token
@@ -1664,8 +1677,7 @@ pub async fn mcp_oauth_refresh(
         params.insert("client_secret", client_secret);
     }
 
-    let response = state
-        .http_client
+    let response = http_client
         .post(oauth_provider.token_url())
         .header("Accept", "application/json")
         .form(&params)
@@ -1703,7 +1715,7 @@ pub async fn mcp_oauth_refresh(
     let expires_at = expires_in.map(|secs| McpOAuthState::now() as i64 + secs as i64);
 
     // Fetch updated user info
-    let user_info = fetch_user_info(oauth_provider, &access_token, &state.http_client)
+    let user_info = fetch_user_info(oauth_provider, &access_token, http_client)
         .await
         .ok();
 
@@ -1723,13 +1735,7 @@ pub async fn mcp_oauth_refresh(
         oauth_provider.as_str()
     );
 
-    reconnect_connected_connectors_for_provider(oauth_provider.as_str(), &app_handle).await;
-
-    Ok(OAuthTokenResponse {
-        provider: oauth_provider.as_str().to_string(),
-        connected: true,
-        expires_at,
-    })
+    Ok(stored_tokens)
 }
 
 /// Running connector servers received the old token at spawn; restart them so
@@ -2015,7 +2021,7 @@ const KNOWN_CONNECTOR_PROVIDERS: &[&str] = &[
 /// `#[tauri::command]` wrapper so it can be unit tested without constructing
 /// a full `tauri::State<McpState>`.
 ///
-/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): a provider
+/// A provider
 /// used to be reported "connected" purely because a credential (OAuth token
 /// or API key) existed in `settings_v2`, regardless of whether any MCP
 /// server was ever actually provisioned for it. That let any gap in
@@ -2092,7 +2098,7 @@ fn resolve_connected_providers(
         }
     }
 
-    // AUDIT-FIX (custom-connectors-never-show-connected-01): a user-added
+    // A user-added
     // remote MCP connector (CustomRemoteMcpConnectorDialog.tsx) is written
     // straight into `config.mcp_servers` under a `custom-<slug>` key via
     // `mcp_update_config`, then connected only through the explicit approval
@@ -2188,8 +2194,7 @@ pub async fn mcp_connect_connector(
 }
 
 /// Core logic behind [`mcp_connect_connector`], split out so the OAuth
-/// loopback callback listener (`run_oauth_loopback_listener`, AUDIT-FIX
-/// OAUTH-LOOPBACK-COMPLETION-01) can activate a connector's MCP server
+/// loopback callback listener (`run_oauth_loopback_listener`) can activate a connector's MCP server
 /// immediately after storing its tokens, without depending on a separate
 /// frontend-initiated `mcp_connect_connector` call.
 async fn connect_connector_internal(
@@ -2432,7 +2437,7 @@ async fn stdio_connector_configs(
             }
         }
         ConnectorCredentialSource::ApiKey => {
-            // Retrieve API key from settings_v2 (FIX-001, master-password helper
+            // Retrieve API key from settings_v2 (master-password helper
             // is grabbed off the AppHandle so legacy rows still decrypt via
             // machine-key fallback when the vault isn't configured).
             let encryption_state =
@@ -2480,7 +2485,7 @@ pub async fn save_api_key(
 ) -> Result<(), String> {
     let conn = open_mcp_settings_db()?;
 
-    // Encrypt the API key before storing (FIX-001, uses master-password key when configured)
+    // Encrypt the API key before storing (uses master-password key when configured)
     let encrypted = vault_credentials::seal(Some(encryption.inner()), &key)?;
     let setting_key = format!("api_key_{}", provider);
 
@@ -2562,7 +2567,7 @@ fn retrieve_tokens_by_id(provider_id: &str) -> Result<Option<StoredTokens>, Stri
 /// Exposed as `pub(crate)` so that `llm.rs` can use it as a fallback when
 /// the caller does not pass an explicit API key to `llm_configure_provider`.
 ///
-/// FIX-001 (Sprint 1): callers thread the optional
+/// Callers thread the optional
 /// [`MasterPasswordEncryption`] helper through. When it's `Some` and the
 /// vault is unlocked, decrypt prefers master-password-derived keys; on any
 /// failure or when the helper is absent, falls back to machine-key
@@ -2759,7 +2764,7 @@ mod tests {
         result
     }
 
-    /// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): before
+    /// Before
     /// this fix, storing a Google OAuth token alone was sufficient for
     /// `mcp_list_connected_providers` to report gmail/google_calendar/
     /// google_drive as "connected", even if `mcp_connect_connector` had never
@@ -2835,8 +2840,7 @@ mod tests {
 
     /// A connector id with no entry in `get_connector_mcp_mapping` at all
     /// (e.g. a legacy/never-implemented catalog id) can never be reported as
-    /// connected, even if a stray credential row exists for it, this is the
-    /// core structural fix for DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01.
+    /// connected, even if a stray credential row exists for it.
     #[test]
     fn provider_with_no_mcp_mapping_is_never_reported_connected() {
         assert!(get_connector_mcp_mapping("hubspot").is_none());
@@ -2866,7 +2870,7 @@ mod tests {
         assert!(!providers.contains(&"hubspot".to_string()));
     }
 
-    /// AUDIT-FIX (custom-connectors-never-show-connected-01): a live
+    /// A live
     /// `custom-*` server (added via CustomRemoteMcpConnectorDialog.tsx and
     /// persisted through `mcp_update_config`) must be reported connected
     /// even though it has no `get_connector_mcp_mapping` entry and no

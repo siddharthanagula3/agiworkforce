@@ -1,10 +1,8 @@
-//! Per-user daily LLM-spend cap (FIX-007, Sprint 3).
+//! Per-user daily LLM-spend cap.
 //!
-//! Prior to FIX-007 the only spending guard was the per-session $50 cap in
-//! `core/agent/autonomous.rs`, which resets every run. An indirect prompt
-//! injection plus a poisoned doc could repeatedly trigger autonomous runs
-//! and bleed the user's BYOK keys for as much money as the model could be
-//! coaxed into requesting in a day.
+//! A per-run cap resets every run, so an indirect prompt injection plus a
+//! poisoned doc could repeatedly trigger runs and bleed the user's BYOK keys
+//! for as much money as the model could be coaxed into requesting in a day.
 //!
 //! `DailyBudgetGuard` tracks spend per `(user_id, day)` in a small SQLite
 //! table. The LLM router consults it before dispatching a request

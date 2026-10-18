@@ -258,24 +258,6 @@ impl SharedVad {
             .map_err(|_| Error::Config("VAD worker failed to respond".to_string()))?
     }
 
-    /// Check if audio contains speech (blocking, i16)
-    ///
-    /// This is a synchronous version for use in non-async contexts like
-    /// dedicated audio processing threads.
-    pub fn is_speech_blocking(&self, audio_chunk: &[i16]) -> Result<bool> {
-        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
-        self.command_tx
-            .send(VadCommand::IsSpeechI16(
-                audio_chunk.to_vec(),
-                ReplyChannel::Sync(reply_tx),
-            ))
-            .map_err(|_| Error::Config("VAD worker thread disconnected".to_string()))?;
-
-        reply_rx
-            .recv()
-            .map_err(|_| Error::Config("VAD worker failed to respond".to_string()))?
-    }
-
     /// Check if audio contains speech (blocking, f32)
     ///
     /// This is a synchronous version for use in non-async contexts like
@@ -338,11 +320,6 @@ impl VadModelManager {
         }
     }
 
-    /// Get the path to the VAD model directory (WebRTC VAD doesn't need models)
-    pub async fn ensure_model(&self) -> Result<std::path::PathBuf> {
-        Ok(self.models_dir.clone())
-    }
-
     /// Check if the model is available (always true for WebRTC VAD)
     pub fn is_model_available(&self) -> bool {
         true
@@ -366,14 +343,6 @@ impl AudioResampler {
         Self {
             source_rate,
             target_rate: VAD_SAMPLE_RATE,
-        }
-    }
-
-    /// Create a resampler with custom target rate
-    pub fn new_with_target(source_rate: u32, target_rate: u32) -> Self {
-        Self {
-            source_rate,
-            target_rate,
         }
     }
 

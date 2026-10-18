@@ -2,6 +2,7 @@ use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, LLMProvider, LLMRequest, LLMResponse,
+    ThinkingParameter,
 };
 use crate::sys::account::{get_access_token_for_active_managed_boundary, get_api_base_url};
 use async_trait::async_trait;
@@ -44,13 +45,9 @@ fn method_not_allowed_message() -> &'static str {
     }
 }
 
-// DESK-10 (audit 2026-05-03): the FIX-007 `impl Default` was an
-// `expect(...)` that panicked on TLS-builder failure (Alpine CI,
-// minimal Windows installs without the Visual C++ Redistributable,
-// sandboxed environments). `Default` is invoked in test harnesses and
-// `#[derive(Default)]` containers, giving the panic a wide blast
-// radius. Removed entirely, every caller now uses
-// `ManagedCloudProvider::new().map_err(...)` and propagates errors.
+/// The gateway rejects a thinking budget above this (`thinking.budget_tokens`
+/// in apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts).
+const MANAGED_THINKING_BUDGET_CEILING: u32 = 32_000;
 
 impl ManagedCloudProvider {
     fn canonicalize_cloud_model(model: &str) -> String {
@@ -113,13 +110,6 @@ impl ManagedCloudProvider {
         Some(trimmed.chars().take(500).collect::<String>())
     }
 
-    /// An uncatalogued id is sent in the OpenAI-compatible shape even when its
-    /// name resembles an Anthropic family.
-    fn is_anthropic_model(model: &str) -> bool {
-        crate::core::llm::models_config::get_provider_for_model(model)
-            == Some(crate::core::llm::Provider::Anthropic)
-    }
-
     /// Returns true for Perplexity search models, which do not support
     /// function calling.  Sending `tools` or `tool_choice` to Perplexity
     /// results in an HTTP 400 error.
@@ -163,9 +153,11 @@ impl ManagedCloudProvider {
     /// Transform tools from desktop's flat format to OpenAI's nested format
     /// Desktop format: { name, description, parameters }
     /// OpenAI format: { type: "function", function: { name, description, parameters } }
-    fn transform_tools_to_openai_format(tools: &[crate::core::llm::ToolDefinition]) -> Vec<Value> {
+    fn transform_tools_to_openai_format<'a>(
+        tools: impl IntoIterator<Item = &'a crate::core::llm::ToolDefinition>,
+    ) -> Vec<Value> {
         tools
-            .iter()
+            .into_iter()
             .map(|tool| {
                 let normalized_parameters = Self::normalize_array_items_in_schema(&tool.parameters);
                 serde_json::json!({
@@ -210,50 +202,39 @@ impl ManagedCloudProvider {
         }
     }
 
-    /// Transform LLMRequest to OpenAI-compatible format for the web API.
-    /// For Claude models, we preserve Anthropic-native features (server tools,
-    /// prompt caching, thinking) so the managed cloud can proxy them correctly.
+    /// The gateway (`/api/llm/v1/chat/completions`) validates every body as an
+    /// OpenAI chat-completions request and translates it to the serving
+    /// provider itself, so every model is sent in that one shape. A tool entry
+    /// without `type: "function"`, a flat tool call, or a thinking value that is
+    /// not `{type, budget_tokens}` fails that validation with a 400.
     fn transform_request(&self, request: &LLMRequest) -> Value {
+        use crate::core::llm::server_tools;
+
         let canonical_model = Self::canonicalize_cloud_model(&request.model);
-        let is_claude_model = Self::is_anthropic_model(&canonical_model);
 
         let mut transformed =
             serde_json::to_value(request).unwrap_or_else(|_| serde_json::json!({}));
         transformed["model"] = serde_json::json!(canonical_model);
+        transformed["messages"] = serde_json::json!(self.transform_messages(&request.messages));
+        if let Some(obj) = transformed.as_object_mut() {
+            obj.remove("tools");
+            obj.remove("thinking");
+        }
 
-        // Transform messages: OpenAI format for GPT models, Anthropic format for Claude
-        transformed["messages"] =
-            serde_json::json!(self.transform_messages(&request.messages, is_claude_model));
-
-        // Transform tools if present
         if let Some(tools) = &request.tools {
-            if is_claude_model {
-                // For Claude models routed through managed cloud, use Anthropic's
-                // native tool format (flat + server tools) rather than OpenAI wrapper.
-                // The managed cloud backend will detect the Claude model and forward
-                // appropriately.
-                use crate::core::llm::server_tools;
-                let anthropic_tools: Vec<Value> = tools
-                    .iter()
-                    .filter_map(|tool| {
-                        let tool_name = tool.name.as_str();
-                        if server_tools::is_anthropic_server_tool(tool_name) {
-                            server_tools::build_server_tool_definition(tool_name, &tool.parameters)
-                        } else {
-                            let normalized_input_schema =
-                                Self::normalize_array_items_in_schema(&tool.parameters);
-                            Some(serde_json::json!({
-                                "name": tool.name,
-                                "description": tool.description,
-                                "input_schema": normalized_input_schema
-                            }))
-                        }
-                    })
-                    .collect();
-                transformed["tools"] = serde_json::json!(anthropic_tools);
+            let (provider_tools, function_tools): (Vec<_>, Vec<_>) = tools
+                .iter()
+                .partition(|tool| server_tools::is_anthropic_server_tool(&tool.name));
+            if function_tools.is_empty() {
+                if let Some(obj) = transformed.as_object_mut() {
+                    obj.remove("tool_choice");
+                }
             } else {
                 transformed["tools"] =
-                    serde_json::json!(Self::transform_tools_to_openai_format(tools));
+                    serde_json::json!(Self::transform_tools_to_openai_format(function_tools));
+            }
+            if provider_tools.iter().any(|tool| tool.name == "web_search") {
+                transformed["web_search"] = serde_json::json!(true);
             }
         }
 
@@ -266,20 +247,29 @@ impl ManagedCloudProvider {
             }
         }
 
-        // For Claude models, preserve cache_control, thinking, and effort parameters.
-        // These are stripped by default serialization since they're Anthropic-specific.
-        if is_claude_model {
-            if let Some(ref cache_control) = request.cache_control {
-                transformed["cache_control"] =
-                    serde_json::to_value(cache_control).unwrap_or(serde_json::Value::Null);
+        match &request.thinking {
+            Some(ThinkingParameter::Enabled(enabled)) => {
+                transformed["thinking_mode"] = serde_json::json!(enabled);
+                if !enabled {
+                    transformed["thinking"] = serde_json::json!({ "type": "disabled" });
+                }
             }
-            if let Some(ref thinking) = request.thinking {
-                transformed["thinking"] =
-                    serde_json::to_value(thinking).unwrap_or(serde_json::Value::Null);
+            Some(ThinkingParameter::Level { .. }) => {
+                transformed["thinking_mode"] = serde_json::json!(true);
             }
-            if let Some(ref effort) = request.effort {
-                transformed["effort"] = serde_json::json!(effort);
+            Some(ThinkingParameter::Budget {
+                thinking_type,
+                budget_tokens,
+            }) => {
+                transformed["thinking"] = serde_json::json!({
+                    "type": thinking_type,
+                    "budget_tokens": (*budget_tokens).min(MANAGED_THINKING_BUDGET_CEILING),
+                });
             }
+            Some(ThinkingParameter::Adaptive { thinking_type }) => {
+                transformed["thinking"] = serde_json::json!({ "type": thinking_type });
+            }
+            None => {}
         }
 
         // Map local quality suffixes to OpenAI reasoning effort when callers
@@ -297,12 +287,7 @@ impl ManagedCloudProvider {
         transformed
     }
 
-    fn transform_messages(&self, messages: &[ChatMessage], is_claude_model: bool) -> Vec<Value> {
-        if is_claude_model {
-            return self.transform_messages_anthropic(messages);
-        }
-
-        // OpenAI-compatible format (unchanged)
+    fn transform_messages(&self, messages: &[ChatMessage]) -> Vec<Value> {
         messages
             .iter()
             .map(|message| {
@@ -312,7 +297,19 @@ impl ManagedCloudProvider {
                 });
 
                 if let Some(tool_calls) = &message.tool_calls {
-                    msg["tool_calls"] = serde_json::json!(tool_calls);
+                    msg["tool_calls"] = tool_calls
+                        .iter()
+                        .map(|call| {
+                            serde_json::json!({
+                                "id": call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": call.name,
+                                    "arguments": call.arguments,
+                                },
+                            })
+                        })
+                        .collect();
                 }
                 if let Some(tool_call_id) = &message.tool_call_id {
                     msg["tool_call_id"] = serde_json::json!(tool_call_id);
@@ -356,118 +353,6 @@ impl ManagedCloudProvider {
                 msg
             })
             .collect()
-    }
-
-    /// Transform messages to Anthropic format for Claude models.
-    /// Converts OpenAI-style tool messages to Anthropic's content block format:
-    /// - Assistant `tool_calls` → `tool_use` content blocks
-    /// - `role: "tool"` messages → `tool_result` content blocks in a `role: "user"` message
-    /// - Consecutive tool results are merged into a single user message
-    ///   (Anthropic disallows consecutive messages with the same role)
-    fn transform_messages_anthropic(&self, messages: &[ChatMessage]) -> Vec<Value> {
-        let mut result: Vec<Value> = Vec::new();
-        let mut i = 0;
-
-        while i < messages.len() {
-            let message = &messages[i];
-
-            // Merge consecutive tool result messages into one "user" message.
-            // Anthropic requires tool_result blocks inside a role:"user" message.
-            if message.role == "tool" {
-                let mut tool_results: Vec<Value> = Vec::new();
-                while i < messages.len() && messages[i].role == "tool" {
-                    let tool_msg = &messages[i];
-                    if let Some(ref tool_call_id) = tool_msg.tool_call_id {
-                        tool_results.push(serde_json::json!({
-                            "type": "tool_result",
-                            "tool_use_id": tool_call_id,
-                            "content": tool_msg.content,
-                        }));
-                    }
-                    i += 1;
-                }
-                if !tool_results.is_empty() {
-                    result.push(serde_json::json!({
-                        "role": "user",
-                        "content": tool_results,
-                    }));
-                }
-                continue;
-            }
-
-            // Assistant messages with tool_calls → Anthropic tool_use content blocks
-            if message.role == "assistant" {
-                if let Some(ref tool_calls) = message.tool_calls {
-                    let mut content_parts: Vec<Value> = Vec::new();
-                    if !message.content.is_empty() {
-                        content_parts.push(serde_json::json!({
-                            "type": "text",
-                            "text": message.content,
-                        }));
-                    }
-                    for tc in tool_calls {
-                        let input: Value = serde_json::from_str(&tc.arguments)
-                            .unwrap_or_else(|_| serde_json::json!({}));
-                        content_parts.push(serde_json::json!({
-                            "type": "tool_use",
-                            "id": tc.id,
-                            "name": tc.name,
-                            "input": input,
-                        }));
-                    }
-                    result.push(serde_json::json!({
-                        "role": "assistant",
-                        "content": content_parts,
-                    }));
-                    i += 1;
-                    continue;
-                }
-            }
-
-            // All other messages (user, system, regular assistant without tool_calls):
-            // standard format with multimodal support
-            let mut msg = serde_json::json!({
-                "role": message.role,
-                "content": message.content,
-            });
-
-            if let Some(parts) = &message.multimodal_content {
-                let mut content_parts: Vec<Value> = Vec::new();
-                if !message.content.is_empty() {
-                    content_parts.push(serde_json::json!({
-                        "type": "text",
-                        "text": message.content,
-                    }));
-                }
-                for part in parts {
-                    match part {
-                        ContentPart::Text { text } => content_parts.push(serde_json::json!({
-                            "type": "text",
-                            "text": text,
-                        })),
-                        ContentPart::Image { image } => {
-                            let mime = Self::image_format_to_mime(image.format);
-                            let encoded =
-                                base64::engine::general_purpose::STANDARD.encode(&image.data);
-                            content_parts.push(serde_json::json!({
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": format!("data:{};base64,{}", mime, encoded),
-                                    "detail": Self::image_detail_to_str(image.detail),
-                                }
-                            }));
-                        }
-                        _ => {}
-                    }
-                }
-                msg["content"] = serde_json::json!(content_parts);
-            }
-
-            result.push(msg);
-            i += 1;
-        }
-
-        result
     }
 
     fn image_format_to_mime(format: ImageFormat) -> &'static str {
@@ -807,11 +692,6 @@ impl LLMProvider for ManagedCloudProvider {
         "ManagedCloud"
     }
 
-    fn supports_vision(&self) -> bool {
-        // Managed cloud supports vision through the API
-        true
-    }
-
     fn supports_function_calling(&self) -> bool {
         // Managed cloud supports function calling through the API
         true
@@ -951,31 +831,126 @@ mod tests {
         );
     }
 
-    #[test]
-    fn an_uncatalogued_model_is_not_treated_as_anthropic_by_its_name() {
-        for lookalike in [
-            "claude-not-in-the-catalog",
-            "anthropic/fixture-model",
-            "fixture-sonnet",
-            "fixture-opus",
-            "fixture-haiku",
-        ] {
-            assert!(
-                !ManagedCloudProvider::is_anthropic_model(lookalike),
-                "'{lookalike}' is not a catalog model and must not select the Anthropic shape"
-            );
+    fn tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description: format!("{name} tool"),
+            parameters: serde_json::json!({ "type": "object", "properties": {} }),
+            strict: None,
         }
     }
 
+    fn message(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }
+    }
+
+    // The gateway's ChatCompletionRequestSchema takes `tools[]` only as
+    // `{type: "function", function}` and `tool_calls[]` only as
+    // `{id, type: "function", function: {name, arguments}}`; an Anthropic-native
+    // body for a Claude model was a 400 on every tool turn.
     #[test]
-    fn a_catalog_anthropic_model_selects_the_anthropic_shape() {
+    fn a_claude_tool_turn_is_sent_in_the_gateway_shape() {
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
         let model = crate::core::llm::models_config::get_default_model(
             &crate::core::llm::Provider::Anthropic,
         );
-        assert!(ManagedCloudProvider::is_anthropic_model(model));
-        let openai =
-            crate::core::llm::models_config::get_default_model(&crate::core::llm::Provider::OpenAI);
-        assert!(!ManagedCloudProvider::is_anthropic_model(openai));
+        let mut assistant = message("assistant", "");
+        assistant.tool_calls = Some(vec![crate::core::llm::ToolCall {
+            id: "toolu_1".to_string(),
+            name: "file_read".to_string(),
+            arguments: r#"{"path":"a.txt"}"#.to_string(),
+        }]);
+        let mut result = message("tool", "contents");
+        result.tool_call_id = Some("toolu_1".to_string());
+        let mut request = LLMRequest::new(
+            vec![message("user", "read a.txt"), assistant, result],
+            model.to_string(),
+        );
+        request.tools = Some(vec![tool("file_read"), tool("web_search")]);
+        request.tool_choice = Some(ToolChoice::Auto);
+
+        let body = provider.transform_request(&request);
+
+        assert_eq!(
+            body["tools"],
+            serde_json::json!([{
+                "type": "function",
+                "function": {
+                    "name": "file_read",
+                    "description": "file_read tool",
+                    "parameters": { "type": "object", "properties": {} },
+                },
+            }])
+        );
+        assert_eq!(body["web_search"], serde_json::json!(true));
+        assert_eq!(
+            body["messages"][1]["tool_calls"],
+            serde_json::json!([{
+                "id": "toolu_1",
+                "type": "function",
+                "function": { "name": "file_read", "arguments": r#"{"path":"a.txt"}"# },
+            }])
+        );
+        assert_eq!(body["messages"][2]["role"], "tool");
+        assert_eq!(body["messages"][2]["tool_call_id"], "toolu_1");
+    }
+
+    #[test]
+    fn a_provider_tool_alone_sends_no_tools_and_no_tool_choice() {
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
+        let mut request =
+            LLMRequest::new(vec![message("user", "news")], "fixture-managed-model".into());
+        request.tools = Some(vec![tool("web_search")]);
+        request.tool_choice = Some(ToolChoice::Auto);
+
+        let body = provider.transform_request(&request);
+
+        assert!(body.get("tools").is_none());
+        assert!(body.get("tool_choice").is_none());
+        assert_eq!(body["web_search"], serde_json::json!(true));
+    }
+
+    // The gateway accepts `thinking` only as `{type, budget_tokens <= 32000}`.
+    #[test]
+    fn thinking_is_sent_in_the_gateway_shape() {
+        let provider = ManagedCloudProvider::new().expect("ManagedCloudProvider::new");
+        let body_for = |thinking: ThinkingParameter| {
+            let mut request =
+                LLMRequest::new(vec![message("user", "hi")], "fixture-managed-model".into());
+            request.thinking = Some(thinking);
+            provider.transform_request(&request)
+        };
+
+        let off = body_for(ThinkingParameter::Enabled(false));
+        assert_eq!(off["thinking"], serde_json::json!({ "type": "disabled" }));
+        assert_eq!(off["thinking_mode"], serde_json::json!(false));
+
+        let on = body_for(ThinkingParameter::Enabled(true));
+        assert!(on.get("thinking").is_none());
+        assert_eq!(on["thinking_mode"], serde_json::json!(true));
+
+        let budget = body_for(ThinkingParameter::Budget {
+            thinking_type: "enabled".to_string(),
+            budget_tokens: 128_000,
+        });
+        assert_eq!(
+            budget["thinking"],
+            serde_json::json!({
+                "type": "enabled",
+                "budget_tokens": MANAGED_THINKING_BUDGET_CEILING,
+            })
+        );
+
+        let adaptive = body_for(ThinkingParameter::Adaptive {
+            thinking_type: "adaptive".to_string(),
+        });
+        assert_eq!(adaptive["thinking"], serde_json::json!({ "type": "adaptive" }));
     }
 
     #[test]

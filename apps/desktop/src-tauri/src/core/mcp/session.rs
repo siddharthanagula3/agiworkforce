@@ -1,9 +1,8 @@
 use super::elicitation::ElicitationBroker;
 use super::logs::append_server_log;
 use super::protocol::{
-    Implementation, InitializeResult, McpToolDefinition, ResourceDefinition, ResourceReadParams,
-    ResourceReadResult, ResourcesListParams, ResourcesListResult, ToolCallParams, ToolCallResult,
-    ToolsListResult,
+    Implementation, InitializeResult, McpToolDefinition, ResourceDefinition, ResourcesListParams,
+    ResourcesListResult, ToolCallParams, ToolCallResult, ToolsListResult,
 };
 use super::transport::{McpTransport, Transport};
 use crate::core::mcp::{ApprovedLaunch, McpError, McpResult, McpServerConfig};
@@ -254,36 +253,8 @@ impl McpSession {
         Ok(result.resources)
     }
 
-    pub async fn read_resource(&self, uri: &str) -> McpResult<ResourceReadResult> {
-        tracing::debug!(
-            "[MCP Session] Reading resource '{}' from server '{}'",
-            uri,
-            self.name
-        );
-
-        let params = ResourceReadParams {
-            uri: uri.to_string(),
-        };
-
-        let response = self
-            .transport
-            .send_request(
-                "resources/read".to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
-
-        let result: ResourceReadResult = serde_json::from_value(response.result)?;
-
-        Ok(result)
-    }
-
     pub fn get_server_info(&self) -> Implementation {
         self.negotiated.server_info.clone()
-    }
-
-    pub fn get_capabilities(&self) -> super::protocol::ServerCapabilities {
-        self.negotiated.capabilities.clone()
     }
 
     pub fn get_cached_tools(&self) -> Vec<McpToolDefinition> {

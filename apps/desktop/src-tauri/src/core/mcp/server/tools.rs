@@ -22,12 +22,11 @@ impl McpServerToolRegistry {
             }),
             json!({
                 "name": "agi_run_task",
-                "description": "Run an autonomous multi-step agent task (up to 25 steps). Requires user approval via the AGI Workforce desktop app. Returns the final result.",
+                "description": "Run an agent task with the desktop app's tools. Requires user approval via the AGI Workforce desktop app. Returns the final result.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "task": { "type": "string", "description": "The task description for the agent" },
-                        "max_steps": { "type": "integer", "description": "Maximum steps (1-25, default 10)" }
+                        "task": { "type": "string", "description": "The task description for the agent" }
                     },
                     "required": ["task"]
                 }

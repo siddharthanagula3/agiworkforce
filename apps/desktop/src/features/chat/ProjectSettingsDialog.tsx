@@ -436,11 +436,10 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   const processKbFile = useCallback(async (filePath: string, fileName: string) => {
     try {
-      const command = kbReadCommandFor(fileName);
-      const content = await invoke<string>(
-        command,
-        command === 'document_extract_text' ? { filePath } : { path: filePath },
-      );
+      const content =
+        kbReadCommandFor(fileName) === 'document_extract_text'
+          ? await invoke<string>('document_extract_text', { filePath })
+          : await invoke<string>('file_read', { path: filePath });
       const newFile: KnowledgeBaseFile = {
         id: crypto.randomUUID(),
         name: fileName,

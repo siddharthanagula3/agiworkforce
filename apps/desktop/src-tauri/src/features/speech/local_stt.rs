@@ -126,17 +126,6 @@ impl WhisperLocal {
         })
     }
 
-    /// Create instance without verifying model exists (for deferred loading)
-    pub fn new_deferred(model_path: PathBuf) -> Self {
-        Self {
-            model_path,
-            #[cfg(feature = "local-whisper")]
-            context: Arc::new(RwLock::new(None)),
-            #[cfg(not(feature = "local-whisper"))]
-            _context: std::marker::PhantomData,
-        }
-    }
-
     /// Check if the model file exists
     pub fn is_model_available(&self) -> bool {
         self.model_path.exists()
@@ -505,26 +494,6 @@ impl WhisperLocal {
         }
 
         Ok(models)
-    }
-
-    /// Resolve an installed model identifier to its discovered artifact.
-    pub fn resolve_model_path(models_dir: &Path, model_id: &WhisperModelSize) -> Result<PathBuf> {
-        Self::discover_models(models_dir)?
-            .into_iter()
-            .find(|model| &model.size == model_id && model.is_downloaded)
-            .and_then(|model| model.path)
-            .ok_or_else(|| anyhow!("Local speech model '{}' is not installed", model_id))
-    }
-
-    /// Delete a downloaded model selected by its runtime identifier.
-    pub async fn delete_model(models_dir: &Path, model_id: &WhisperModelSize) -> Result<()> {
-        if let Ok(path) = Self::resolve_model_path(models_dir, model_id) {
-            tokio::fs::remove_file(&path)
-                .await
-                .context("Failed to delete model file")?;
-            tracing::info!("Deleted local speech model {}", model_id);
-        }
-        Ok(())
     }
 }
 

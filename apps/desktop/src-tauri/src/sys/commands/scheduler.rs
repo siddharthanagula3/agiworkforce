@@ -16,7 +16,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::core::agi::{AgentOrchestrator, AgentState};
+use crate::core::agent::tool_approval::UNATTENDED_DENIAL_PREFIX;
+use crate::core::agent::unattended_turn::{
+    bounded_answer, configured_task_time_limit, run_unattended_turn, UnattendedTurn,
+    UnattendedTurnEnd,
+};
 use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::core::scheduler::{cron_schedule, TaskSchedule};
 use crate::sys::error::{Error, Result};
@@ -542,25 +546,6 @@ impl ProactiveScheduler {
             .map_err(|e| Error::Generic(format!("Failed to acquire read lock: {}", e)))?;
 
         Ok(jobs.get(job_id).cloned())
-    }
-
-    /// Get the next N scheduled runs across all active jobs
-    pub fn get_next_runs(&self, limit: usize) -> Result<Vec<(String, DateTime<Utc>)>> {
-        let jobs = self
-            .jobs
-            .read()
-            .map_err(|e| Error::Generic(format!("Failed to acquire read lock: {}", e)))?;
-
-        let mut runs: Vec<(String, DateTime<Utc>)> = jobs
-            .values()
-            .filter(|job| job.status == JobStatus::Active)
-            .filter_map(|job| job.next_run.map(|next| (job.id.clone(), next)))
-            .collect();
-
-        runs.sort_by(|a, b| a.1.cmp(&b.1));
-        runs.truncate(limit);
-
-        Ok(runs)
     }
 
     /// Moves a job past a run it missed by more than the catch-up window,
@@ -1355,7 +1340,7 @@ fn refused_tool_count(output: Option<&str>) -> usize {
     output
         .unwrap_or_default()
         .lines()
-        .filter(|line| line.starts_with(crate::core::agi::executor::UNATTENDED_DENIAL_PREFIX))
+        .filter(|line| line.starts_with(UNATTENDED_DENIAL_PREFIX))
         .count()
 }
 
@@ -1657,46 +1642,6 @@ fn emit_job_updated(
     }
 }
 
-/// Get a specific scheduled job by ID
-///
-/// # Returns
-/// The job if found, `None` otherwise
-#[tauri::command]
-pub async fn scheduler_get_job(
-    job_id: String,
-    state: State<'_, SchedulerState>,
-) -> Result<Option<ScheduledJob>> {
-    state.scheduler.get_job(&job_id)
-}
-
-/// Serializable next run entry for frontend consumption
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NextRunEntry {
-    pub job_id: String,
-    pub next_run: DateTime<Utc>,
-}
-
-/// Get the next scheduled runs across all active jobs
-///
-/// # Arguments
-/// * `limit` - Maximum number of upcoming runs to return
-///
-/// # Returns
-/// A vector of (job_id, next_run_timestamp) tuples, sorted by next run time
-#[tauri::command]
-pub async fn scheduler_get_next_runs(
-    limit: Option<usize>,
-    state: State<'_, SchedulerState>,
-) -> Result<Vec<NextRunEntry>> {
-    let limit = limit.unwrap_or(10);
-    let runs = state.scheduler.get_next_runs(limit)?;
-    Ok(runs
-        .into_iter()
-        .map(|(job_id, next_run)| NextRunEntry { job_id, next_run })
-        .collect())
-}
-
 /// Toggle a scheduled job on or off
 ///
 /// An active job is paused, and its run stopped if one is in progress. A
@@ -1789,13 +1734,6 @@ pub async fn scheduler_run_job_now(
     Ok(true)
 }
 
-/// How often a scheduled agent is checked for having finished.
-const AGENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
-
-/// How long past the task time limit an agent gets to stop on its own,
-/// which it does between steps, before the run cancels it.
-const AGENT_STOP_GRACE: Duration = Duration::from_secs(30);
-
 /// Adds the tools an unattended run was refused to what the run reports, so
 /// the reader sees which tool was not run and why.
 fn with_refusals(report: Option<String>, refusals: &[String]) -> Option<String> {
@@ -1807,79 +1745,9 @@ fn with_refusals(report: Option<String>, refusals: &[String]) -> Option<String> 
     Some(lines.join("\n"))
 }
 
-async fn unattended_refusals(orchestrator: &AgentOrchestrator, agent_id: &str) -> Vec<String> {
-    orchestrator
-        .tool_errors_starting_with(
-            agent_id,
-            crate::core::agi::executor::UNATTENDED_DENIAL_PREFIX,
-        )
-        .await
-}
-
-fn time_limit_reached(elapsed: Duration, time_limit: Option<Duration>) -> bool {
-    time_limit.is_some_and(|limit| elapsed >= limit + AGENT_STOP_GRACE)
-}
-
-/// Waits for a scheduled agent to finish and returns what it produced. An
-/// agent still working past the task time limit set in Settings is cancelled,
-/// and so is one whose run is asked to stop.
-async fn await_scheduled_agent(
-    orchestrator: &AgentOrchestrator,
-    agent_id: &str,
-    time_limit: Option<Duration>,
-    stop: &RunStop,
-) -> std::result::Result<Option<String>, String> {
-    let started = tokio::time::Instant::now();
-    loop {
-        let status = orchestrator
-            .get_agent_status(agent_id)
-            .await
-            .ok_or_else(|| "The scheduled agent is no longer tracked.".to_string())?;
-
-        match status.status {
-            AgentState::Completed => {
-                let output = orchestrator
-                    .get_agent_result(agent_id)
-                    .await
-                    .and_then(|result| result.result)
-                    .and_then(|value| crate::sys::commands::agi::bounded_result_output(&value));
-                let refusals = unattended_refusals(orchestrator, agent_id).await;
-                orchestrator.remove_finished_agent(agent_id).await;
-                return Ok(with_refusals(output, &refusals));
-            }
-            AgentState::Failed => {
-                let refusals = unattended_refusals(orchestrator, agent_id).await;
-                orchestrator.remove_finished_agent(agent_id).await;
-                let stopped = status
-                    .error
-                    .unwrap_or_else(|| "The agent stopped without finishing.".to_string());
-                return Err(with_refusals(Some(stopped), &refusals).unwrap_or_default());
-            }
-            AgentState::Idle | AgentState::Running | AgentState::Paused => {}
-        }
-
-        if time_limit_reached(started.elapsed(), time_limit) {
-            if let Err(error) = orchestrator.cancel_agent(agent_id).await {
-                tracing::warn!("[Scheduler] Failed to cancel agent {agent_id}: {error}");
-            }
-            orchestrator.remove_finished_agent(agent_id).await;
-            let minutes = time_limit.map(|limit| limit.as_secs() / 60).unwrap_or(0);
-            return Err(format!(
-                "Stopped after reaching the {minutes}-minute task time limit set in Settings."
-            ));
-        }
-
-        tokio::select! {
-            () = tokio::time::sleep(AGENT_POLL_INTERVAL) => {}
-            () = stop.asked() => {
-                if let Err(error) = orchestrator.cancel_agent(agent_id).await {
-                    tracing::warn!("[Scheduler] Failed to cancel agent {agent_id}: {error}");
-                }
-                orchestrator.remove_finished_agent(agent_id).await;
-                return Err(RUN_STOPPED.to_string());
-            }
-        }
-    }
+fn time_limit_message(time_limit: Option<Duration>) -> String {
+    let minutes = time_limit.map(|limit| limit.as_secs() / 60).unwrap_or(0);
+    format!("Stopped after reaching the {minutes}-minute task time limit set in Settings.")
 }
 
 /// Jobs that ran a shell command, a script, a webhook or a workflow could be
@@ -1913,8 +1781,6 @@ async fn dispatch_job_action(
             if prompt.is_empty() {
                 return Err("AGI task prompt is empty".to_string());
             }
-            crate::ui::hooks::gate_user_prompt("scheduled", prompt).await?;
-
             let trust_mode = scheduled_trust_mode(
                 run_mode,
                 crate::sys::account::app_mode::is_cloud_app_mode(),
@@ -1926,50 +1792,31 @@ async fn dispatch_job_action(
             // conversation content.
             tracing::info!(
                 prompt_chars = prompt.chars().count(),
-                "[Scheduler] Dispatching AGI task"
-            );
-
-            use tauri::Manager;
-
-            let router = app_handle
-                .try_state::<crate::sys::commands::llm::LLMState>()
-                .map(|llm_state| llm_state.router.clone())
-                .ok_or_else(|| {
-                    "The scheduled AI task could not start because models are not available yet."
-                        .to_string()
-                })?;
-            let orchestrator_arc =
-                crate::sys::commands::agi::ensure_orchestrator(app_handle, router)?;
-            let orchestrator = orchestrator_arc.lock().await.clone();
-
-            let time_limit =
-                crate::sys::commands::agi::configured_task_time_limit(app_handle).await;
-            let goal = crate::core::agi::Goal {
-                id: format!("scheduled_{}", uuid::Uuid::new_v4()),
-                description: prompt.to_string(),
-                priority: crate::core::agi::Priority::Medium,
-                deadline: None,
-                constraints: time_limit
-                    .map(crate::sys::commands::agi::time_limit_constraint)
-                    .into_iter()
-                    .chain([crate::core::agi::executor::unattended_constraint()])
-                    .collect(),
-                success_criteria: vec![],
-                trust_mode: Some(trust_mode),
-            };
-
-            let agent_id = orchestrator
-                .spawn_agent(goal)
-                .await
-                .map_err(|e| format!("Failed to spawn scheduled agent: {}", e))?;
-
-            tracing::info!(
-                "[Scheduler] Spawned agent {} for job '{}'",
-                agent_id,
+                "[Scheduler] Running AI task '{}'",
                 job_name
             );
 
-            await_scheduled_agent(&orchestrator, &agent_id, time_limit, stop).await
+            let limit = configured_task_time_limit(app_handle).await;
+            let turn = UnattendedTurn {
+                prompt,
+                trust_mode,
+                project_folder: None,
+                time_limit: limit,
+                conversation_id: None,
+                progress: None,
+            };
+            let ran = run_unattended_turn(app_handle, turn, stop.asked()).await;
+            let refusals = ran.refusals;
+            match ran.end {
+                UnattendedTurnEnd::Answered(answer) => {
+                    Ok(with_refusals(bounded_answer(&answer), &refusals))
+                }
+                UnattendedTurnEnd::Failed(reason) => {
+                    Err(with_refusals(Some(reason), &refusals).unwrap_or_default())
+                }
+                UnattendedTurnEnd::Stopped => Err(RUN_STOPPED.to_string()),
+                UnattendedTurnEnd::TimedOut => Err(time_limit_message(limit)),
+            }
         }
 
         SchedulerActionType::Notification => {
@@ -2545,38 +2392,6 @@ mod tests {
         assert_eq!(job.status, JobStatus::Active);
     }
 
-    #[test]
-    fn test_proactive_scheduler_get_next_runs() {
-        let scheduler = ProactiveScheduler::new();
-
-        // Add multiple jobs
-        scheduler
-            .add_job(
-                "Job 1".to_string(),
-                "0 0 * * * *".to_string(), // Every hour
-                SchedulerActionType::Notification,
-                json!({}),
-            )
-            .unwrap();
-
-        scheduler
-            .add_job(
-                "Job 2".to_string(),
-                "0 30 * * * *".to_string(), // Every hour at :30
-                SchedulerActionType::Workflow,
-                json!({"workflow_id": "wf-123"}),
-            )
-            .unwrap();
-
-        let next_runs = scheduler.get_next_runs(10).unwrap();
-        assert_eq!(next_runs.len(), 2);
-
-        // Should be sorted by time
-        if next_runs.len() == 2 {
-            assert!(next_runs[0].1 <= next_runs[1].1);
-        }
-    }
-
     fn hourly_job(scheduler: &ProactiveScheduler) -> String {
         scheduler
             .add_job(
@@ -2792,10 +2607,6 @@ mod tests {
         assert_eq!(done.status, JobStatus::Completed);
         assert_eq!(done.next_run, None);
         assert_eq!(done.run_count, 1);
-        assert!(
-            scheduler.get_next_runs(10).unwrap().is_empty(),
-            "nothing is due again"
-        );
         assert!(!scheduler.resume_job(&job_id).unwrap());
     }
 
@@ -3163,14 +2974,6 @@ mod tests {
             state.run_slots.available_permits(),
             MAX_CONCURRENT_SCHEDULED_RUNS
         );
-    }
-
-    #[test]
-    fn an_agent_is_cancelled_only_past_the_configured_limit_and_its_grace() {
-        let limit = Duration::from_secs(600);
-        assert!(!time_limit_reached(Duration::from_secs(600), Some(limit)));
-        assert!(time_limit_reached(limit + AGENT_STOP_GRACE, Some(limit)));
-        assert!(!time_limit_reached(Duration::from_secs(86_400), None));
     }
 
     #[test]

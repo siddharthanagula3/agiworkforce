@@ -53,21 +53,6 @@ pub struct ActionPlan {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProgressVerification {
-    pub task_complete: bool,
-    pub making_progress: bool,
-    pub reasoning: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComputerUseResult {
-    pub success: bool,
-    pub actions_taken: usize,
-    pub session_id: String,
-    pub message: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComputerUseSession {
     pub id: String,
     pub user_id: String,
@@ -96,17 +81,6 @@ impl fmt::Display for SessionStatus {
             SessionStatus::Stopped => write!(f, "stopped"),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ComputerUseActionLog {
-    pub id: String,
-    pub session_id: String,
-    pub action_type: String,
-    pub action_data: String,
-    pub screenshot_path: Option<String>,
-    pub timestamp: i64,
-    pub success: bool,
 }
 
 #[derive(Debug)]

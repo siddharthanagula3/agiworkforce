@@ -22,14 +22,12 @@ use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomat
 mod actions;
 mod element_tree;
 mod patterns;
-mod wait;
 
 #[cfg(test)]
 mod tests;
 
 pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInfo};
 pub use patterns::PatternCapabilities;
-pub use wait::WaitConfig;
 
 static COM_SECURITY_INITIALIZED: OnceLock<()> = OnceLock::new();
 
@@ -158,15 +156,6 @@ impl UIAutomationService {
         self.call(move |state| state.find_elements(parent_id, &query))
     }
 
-    fn is_element_enabled(&self, element_id: &str) -> Result<bool> {
-        let element_id = element_id.to_owned();
-        self.call(move |state| {
-            let element = state.get_element(&element_id)?;
-            unsafe { element.CurrentIsEnabled() }
-                .map(|value| value.as_bool())
-                .map_err(|error| anyhow!("CurrentIsEnabled failed: {error}"))
-        })
-    }
     pub fn check_patterns(&self, element_id: &str) -> Result<PatternCapabilities> {
         let element_id = element_id.to_owned();
         self.call(move |state| state.check_patterns(&element_id))

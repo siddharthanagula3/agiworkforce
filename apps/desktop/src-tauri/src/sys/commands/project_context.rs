@@ -248,7 +248,7 @@ pub async fn project_context_set_folder(
             );
         }
 
-        // AUDIT-CONFIG-051: Persist settings after adding allowed directory
+        // Persist settings after adding allowed directory
         // Previously the permission widening was memory-only and lost on restart
         if needs_persist {
             let settings_clone = settings.clone();
@@ -277,7 +277,7 @@ pub async fn project_context_set_folder(
             }
         }
 
-        // AUDIT-MCP-050: Update MCP filesystem server root to match project folder
+        // Update MCP filesystem server root to match project folder
         // This couples folder selection with MCP filesystem server scope
         if let Err(e) = mcp_state.update_filesystem_root(p).await {
             // Log warning but don't fail the operation - folder is still set

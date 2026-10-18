@@ -7,7 +7,6 @@ use tauri::{Emitter, Manager, State};
 
 use tracing::{debug, error, info, warn};
 
-pub mod agent_mode;
 pub mod attachments;
 pub mod branching;
 pub mod browser_context;
@@ -52,7 +51,6 @@ pub use search::*;
 pub use send_message::*;
 pub use types::*;
 
-use crate::sys::commands::chat::agent_mode::{detect_agent_mode, is_explicit_model_selection};
 use crate::sys::commands::chat::attachments::{
     process_document_attachments, process_multimodal_attachments,
 };

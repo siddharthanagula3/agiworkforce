@@ -70,24 +70,6 @@ pub fn validate_max_tokens(max_tokens: u32) -> Result<(), ValidationError> {
     Ok(())
 }
 
-pub fn validate_model_name(model_name: &str) -> Result<(), ValidationError> {
-    if model_name.is_empty() {
-        return Err(ValidationError::InvalidValue {
-            key: "model_name".to_string(),
-            message: "Model name cannot be empty".to_string(),
-        });
-    }
-
-    if model_name.len() > 100 {
-        return Err(ValidationError::InvalidValue {
-            key: "model_name".to_string(),
-            message: "Model name is too long (max 100 characters)".to_string(),
-        });
-    }
-
-    Ok(())
-}
-
 pub fn validate_theme(theme: &str) -> Result<(), ValidationError> {
     match theme {
         "light" | "dark" | "system" => Ok(()),
@@ -142,39 +124,6 @@ pub fn validate_url(url: &str) -> Result<(), ValidationError> {
         });
     }
 
-    Ok(())
-}
-
-pub fn validate_timeout(timeout_seconds: u64) -> Result<(), ValidationError> {
-    if !(1..=300).contains(&timeout_seconds) {
-        return Err(ValidationError::OutOfRange {
-            key: "timeout_seconds".to_string(),
-            expected: "1 to 300".to_string(),
-            actual: timeout_seconds.to_string(),
-        });
-    }
-    Ok(())
-}
-
-pub fn validate_max_retries(max_retries: u32) -> Result<(), ValidationError> {
-    if max_retries > 10 {
-        return Err(ValidationError::OutOfRange {
-            key: "max_retries".to_string(),
-            expected: "0 to 10".to_string(),
-            actual: max_retries.to_string(),
-        });
-    }
-    Ok(())
-}
-
-pub fn validate_session_timeout(timeout_minutes: u32) -> Result<(), ValidationError> {
-    if !(1..=1440).contains(&timeout_minutes) {
-        return Err(ValidationError::OutOfRange {
-            key: "session_timeout_minutes".to_string(),
-            expected: "1 to 1440 (24 hours)".to_string(),
-            actual: timeout_minutes.to_string(),
-        });
-    }
     Ok(())
 }
 

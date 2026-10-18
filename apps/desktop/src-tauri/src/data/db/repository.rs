@@ -4,8 +4,7 @@ use rusqlite::{params, Connection, Result, Row};
 use super::models::{
     AutomationHistory, Conversation, ConversationBranchGroup, ConversationCostBreakdown,
     ConversationListItem, CostTimeseriesPoint, Message, MessageRole, MessageWithDetail,
-    OverlayEvent, OverlayEventType, PaginatedOverlayEvents, ProviderCostBreakdown, Setting,
-    TaskType, TokenUsage, COMPACTION_SUMMARIZED, COMPACTION_SUMMARY,
+    ProviderCostBreakdown, Setting, TaskType, COMPACTION_SUMMARIZED, COMPACTION_SUMMARY,
 };
 
 /// Validates a provider or model name string (M12).
@@ -308,7 +307,7 @@ pub fn insert_message(conn: &Connection, message: &Message) -> Result<i64> {
 
 /// Fetches a single message by its primary key.
 ///
-/// # Security Note (H4, IDOR risk for multi-user deployments)
+/// # Security Note (IDOR risk for multi-user deployments)
 /// AGI Workforce is a single-user desktop application; there is no concept of
 /// separate user sessions in the current data model, so a `user_id` guard is not
 /// enforced here. If this codebase is ever adapted for a multi-tenant server
@@ -342,7 +341,7 @@ pub fn list_messages(conn: &Connection, conversation_id: i64) -> Result<Vec<Mess
 
 /// Deletes a message by its primary key.
 ///
-/// # Security Note (H4, IDOR risk for multi-user deployments)
+/// # Security Note (IDOR risk for multi-user deployments)
 /// Same caveat as `get_message`: no user_id ownership check is performed because
 /// the desktop app is single-user. A multi-tenant adaptation must add
 /// `AND user_id = ?2` with the authenticated caller's ID.
@@ -1065,165 +1064,7 @@ fn map_automation_history(row: &Row) -> Result<AutomationHistory> {
     })
 }
 
-pub fn create_overlay_event(conn: &Connection, event: &OverlayEvent) -> Result<i64> {
-    conn.execute(
-        "INSERT INTO overlay_events (event_type, x, y, data) VALUES (?1, ?2, ?3, ?4)",
-        params![event.event_type.as_str(), event.x, event.y, event.data],
-    )?;
-    Ok(conn.last_insert_rowid())
-}
-
-pub fn get_overlay_event(conn: &Connection, id: i64) -> Result<OverlayEvent> {
-    conn.query_row(
-        "SELECT id, event_type, x, y, data, timestamp FROM overlay_events WHERE id = ?1",
-        params![id],
-        map_overlay_event,
-    )
-}
-
-/// Maximum allowed limit for overlay events pagination.
-/// AUDIT-004-001: Prevents unbounded result sets that could cause memory issues.
-pub const MAX_OVERLAY_EVENTS_LIMIT: i64 = 1000;
-
-/// AUDIT-004-001 fix: List overlay events with required pagination.
-///
-/// # Arguments
-/// * `conn` - Database connection
-/// * `start_time` - Optional start time filter (inclusive)
-/// * `end_time` - Optional end time filter (inclusive)
-/// * `limit` - Required limit, clamped to MAX_OVERLAY_EVENTS_LIMIT (1000)
-/// * `offset` - Optional offset for pagination (defaults to 0)
-///
-/// # Returns
-/// Paginated result with events, total count, limit, and offset for UI pagination.
-pub fn list_overlay_events(
-    conn: &Connection,
-    start_time: Option<DateTime<Utc>>,
-    end_time: Option<DateTime<Utc>>,
-    limit: i64,
-    offset: Option<i64>,
-) -> Result<PaginatedOverlayEvents> {
-    // AUDIT-004-001: Enforce maximum limit to prevent unbounded queries
-    let effective_limit = limit.clamp(1, MAX_OVERLAY_EVENTS_LIMIT);
-    let effective_offset = offset.unwrap_or(0).max(0);
-
-    // First, get the total count for pagination UI
-    let total_count = match (start_time, end_time) {
-        (Some(start), Some(end)) => conn.query_row(
-            "SELECT COUNT(*) FROM overlay_events WHERE timestamp >= ?1 AND timestamp <= ?2",
-            params![start.to_rfc3339(), end.to_rfc3339()],
-            |row| row.get(0),
-        )?,
-        (Some(start), None) => conn.query_row(
-            "SELECT COUNT(*) FROM overlay_events WHERE timestamp >= ?1",
-            params![start.to_rfc3339()],
-            |row| row.get(0),
-        )?,
-        (None, Some(end)) => conn.query_row(
-            "SELECT COUNT(*) FROM overlay_events WHERE timestamp <= ?1",
-            params![end.to_rfc3339()],
-            |row| row.get(0),
-        )?,
-        (None, None) => {
-            conn.query_row("SELECT COUNT(*) FROM overlay_events", [], |row| row.get(0))?
-        }
-    };
-
-    // Build the paginated query - collect results before stmt is dropped
-    let events: Vec<OverlayEvent> = match (start_time, end_time) {
-        (Some(start), Some(end)) => {
-            let mut stmt = conn.prepare(
-                "SELECT id, event_type, x, y, data, timestamp
-                 FROM overlay_events
-                 WHERE timestamp >= ?1 AND timestamp <= ?2
-                 ORDER BY timestamp ASC
-                 LIMIT ?3 OFFSET ?4",
-            )?;
-            let rows = stmt.query_map(
-                params![
-                    start.to_rfc3339(),
-                    end.to_rfc3339(),
-                    effective_limit,
-                    effective_offset
-                ],
-                map_overlay_event,
-            )?;
-            rows.collect::<Result<Vec<_>>>()?
-        }
-        (Some(start), None) => {
-            let mut stmt = conn.prepare(
-                "SELECT id, event_type, x, y, data, timestamp
-                 FROM overlay_events
-                 WHERE timestamp >= ?1
-                 ORDER BY timestamp ASC
-                 LIMIT ?2 OFFSET ?3",
-            )?;
-            let rows = stmt.query_map(
-                params![start.to_rfc3339(), effective_limit, effective_offset],
-                map_overlay_event,
-            )?;
-            rows.collect::<Result<Vec<_>>>()?
-        }
-        (None, Some(end)) => {
-            let mut stmt = conn.prepare(
-                "SELECT id, event_type, x, y, data, timestamp
-                 FROM overlay_events
-                 WHERE timestamp <= ?1
-                 ORDER BY timestamp ASC
-                 LIMIT ?2 OFFSET ?3",
-            )?;
-            let rows = stmt.query_map(
-                params![end.to_rfc3339(), effective_limit, effective_offset],
-                map_overlay_event,
-            )?;
-            rows.collect::<Result<Vec<_>>>()?
-        }
-        (None, None) => {
-            let mut stmt = conn.prepare(
-                "SELECT id, event_type, x, y, data, timestamp
-                 FROM overlay_events
-                 ORDER BY timestamp ASC
-                 LIMIT ?1 OFFSET ?2",
-            )?;
-            let rows = stmt.query_map(
-                params![effective_limit, effective_offset],
-                map_overlay_event,
-            )?;
-            rows.collect::<Result<Vec<_>>>()?
-        }
-    };
-
-    Ok(PaginatedOverlayEvents {
-        events,
-        total_count,
-        limit: effective_limit,
-        offset: effective_offset,
-    })
-}
-
-pub fn delete_overlay_events_before(conn: &Connection, before: DateTime<Utc>) -> Result<usize> {
-    conn.execute(
-        "DELETE FROM overlay_events WHERE timestamp < ?1",
-        params![before.to_rfc3339()],
-    )
-}
-
-fn map_overlay_event(row: &Row) -> Result<OverlayEvent> {
-    let event_type_str: String = row.get(1)?;
-    let event_type =
-        OverlayEventType::from_str(&event_type_str).ok_or_else(|| rusqlite::Error::InvalidQuery)?;
-
-    Ok(OverlayEvent {
-        id: row.get(0)?,
-        event_type,
-        x: row.get(2)?,
-        y: row.get(3)?,
-        data: row.get(4)?,
-        timestamp: parse_datetime(&row.get::<_, String>(5)?),
-    })
-}
-
-/// HIGH-007 fix: Log warnings instead of silently corrupting timestamps.
+/// Log warnings instead of silently corrupting timestamps.
 /// Returns Utc::now() as fallback but logs the parsing failure for debugging.
 fn parse_datetime(s: &str) -> DateTime<Utc> {
     // Try RFC3339 format first (preferred)
@@ -1243,7 +1084,6 @@ fn parse_datetime(s: &str) -> DateTime<Utc> {
         }
     }
 
-    // HIGH-007 fix: Log warning instead of silent failure
     tracing::warn!(
         "Failed to parse datetime '{}', using current time as fallback. \
          Supported formats: RFC3339, 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DD'",
@@ -1262,22 +1102,6 @@ fn start_of_day(dt: DateTime<Utc>) -> DateTime<Utc> {
         .map(|naive| Utc.from_utc_datetime(&naive))
         // 00:00:00 is always a valid time, so default to beginning of UNIX epoch as fallback
         .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(dt))
-}
-
-pub fn create_token_usage(conn: &Connection, usage: &TokenUsage) -> Result<i64> {
-    conn.execute(
-        "INSERT INTO token_usage (user_id, input_tokens, output_tokens, total_cost, model, provider)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            usage.user_id,
-            usage.input_tokens,
-            usage.output_tokens,
-            usage.total_cost,
-            usage.model,
-            usage.provider,
-        ],
-    )?;
-    Ok(conn.last_insert_rowid())
 }
 
 #[cfg(test)]

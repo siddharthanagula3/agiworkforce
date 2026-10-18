@@ -189,7 +189,7 @@ pub(crate) fn take_tool_cancelled(tool_call_id: &str) -> bool {
 
 /// Check if a tool has been cancelled without removing it from the set.
 /// This allows the cancellation check to be non-destructive so it can be polled frequently.
-/// AUDIT-CANCEL-060 fix: Added non-consuming check for immediate cancellation detection.
+/// Added non-consuming check for immediate cancellation detection.
 pub(crate) fn is_tool_cancelled(tool_call_id: &str) -> bool {
     if let Ok(cancelled) = CANCELLED_TOOL_CALLS.lock() {
         return cancelled.contains(tool_call_id);
@@ -286,4 +286,84 @@ pub(crate) fn plan_mode_refusal(conversation_id: i64, tool_name: &str) -> Option
     Some(format!(
         "Tool '{tool_name}' is not permitted in plan mode. Plan mode can only read; present the plan and ask the user to switch to Ask mode to carry it out."
     ))
+}
+
+/// How far an unattended turn has got: how many tool calls it has made,
+/// counted from one, and the tool of the latest.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct UnattendedProgress {
+    pub(crate) tool_calls: usize,
+    pub(crate) tool_name: String,
+}
+
+struct UnattendedTurnState {
+    refusals: Vec<String>,
+    progress: tokio::sync::watch::Sender<UnattendedProgress>,
+}
+
+/// Conversations whose turn runs with nobody watching, each with the tool
+/// calls the unattended gate has refused so far and the turn's progress.
+static UNATTENDED_CONVERSATIONS: Lazy<Mutex<HashMap<i64, UnattendedTurnState>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Marks `conversation_id` as unattended. `progress` is updated before each
+/// tool call the turn makes.
+pub(crate) fn begin_unattended_turn(
+    conversation_id: i64,
+    progress: tokio::sync::watch::Sender<UnattendedProgress>,
+) {
+    UNATTENDED_CONVERSATIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(
+            conversation_id,
+            UnattendedTurnState {
+                refusals: Vec::new(),
+                progress,
+            },
+        );
+}
+
+/// Ends the unattended turn of `conversation_id` and returns what it was refused.
+pub(crate) fn end_unattended_turn(conversation_id: i64) -> Vec<String> {
+    UNATTENDED_CONVERSATIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&conversation_id)
+        .map(|turn| turn.refusals)
+        .unwrap_or_default()
+}
+
+pub(crate) fn is_conversation_unattended(conversation_id: i64) -> bool {
+    UNATTENDED_CONVERSATIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .contains_key(&conversation_id)
+}
+
+/// Counts a tool call of an unattended conversation and returns its refusal
+/// when nobody is there to approve the tool, or `None` when the tool may run.
+pub(crate) fn unattended_refusal(
+    app_handle: &tauri::AppHandle,
+    conversation_id: i64,
+    tool_name: &str,
+) -> Option<String> {
+    use crate::core::agent::tool_approval::unattended_tool_approval;
+
+    let mut conversations = UNATTENDED_CONVERSATIONS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let turn = conversations.get_mut(&conversation_id)?;
+    turn.progress.send_modify(|progress| {
+        progress.tool_calls += 1;
+        progress.tool_name = tool_name.to_string();
+    });
+    match unattended_tool_approval(app_handle, tool_name) {
+        Ok(()) => None,
+        Err(error) => {
+            let refusal = error.to_string();
+            turn.refusals.push(refusal.clone());
+            Some(refusal)
+        }
+    }
 }

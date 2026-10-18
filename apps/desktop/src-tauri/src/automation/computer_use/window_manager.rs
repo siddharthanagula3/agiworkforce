@@ -481,17 +481,6 @@ impl WindowEnumerator {
             .collect())
     }
 
-    /// Finds windows by process name.
-    pub fn find_by_process(process: &str) -> Result<Vec<AppWindow>> {
-        let windows = Self::list_windows()?;
-        let process_lower = process.to_lowercase();
-
-        Ok(windows
-            .into_iter()
-            .filter(|w| w.process_name.to_lowercase().contains(&process_lower))
-            .collect())
-    }
-
     /// Gets the currently focused window.
     pub fn get_focused() -> Result<Option<AppWindow>> {
         let windows = Self::list_windows()?;
@@ -522,8 +511,7 @@ impl WindowCoordinator {
     /// and AppleScript already handles the security boundary).
     /// Windows: GetForegroundWindow + GetWindowThreadProcessId +
     /// QueryFullProcessImageNameW for the executable name.
-    /// Linux: returns `None` for v1 (TODO: implement via X11/Wayland atom
-    /// queries, `_NET_ACTIVE_WINDOW` + `_NET_WM_PID`).
+    /// Linux: returns `None`; nothing reads `_NET_ACTIVE_WINDOW` yet.
     pub fn get_active_window() -> Option<ActiveWindow> {
         Self::get_active_window_impl()
     }
@@ -734,48 +722,6 @@ impl WindowCoordinator {
                 Ok(_) => {
                     return WindowActivation::failure(
                         format!("No window found matching: {}", title),
-                        attempts,
-                    );
-                }
-                Err(e) => {
-                    if attempts >= self.config.activation_retries {
-                        return WindowActivation::failure(e.to_string(), attempts);
-                    }
-                }
-            }
-
-            sleep(Duration::from_millis(200)).await;
-        }
-
-        WindowActivation::failure("Max activation retries exceeded", attempts)
-    }
-
-    /// Activates a window by process name.
-    pub async fn activate_by_process(&self, process: &str) -> WindowActivation {
-        let mut attempts = 0;
-
-        while attempts < self.config.activation_retries {
-            attempts += 1;
-
-            match WindowEnumerator::find_by_process(process) {
-                Ok(windows) if !windows.is_empty() => {
-                    let window = &windows[0];
-
-                    match self.activate_window_internal(window.handle).await {
-                        Ok(()) => {
-                            sleep(Duration::from_millis(100)).await;
-                            return WindowActivation::success(window.clone(), attempts);
-                        }
-                        Err(e) => {
-                            if attempts >= self.config.activation_retries {
-                                return WindowActivation::failure(e.to_string(), attempts);
-                            }
-                        }
-                    }
-                }
-                Ok(_) => {
-                    return WindowActivation::failure(
-                        format!("No window found for process: {}", process),
                         attempts,
                     );
                 }

@@ -135,42 +135,6 @@ const BUDGETS = [
   },
 
   {
-    file: 'apps/desktop/src-tauri/src/features/speech/tts.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-004, speech endpoints not yet moved into a shared provider contract.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs',
-    max: 3,
-    residue: true,
-    why: 'HARD-002, image endpoints not yet resolved through provider metadata.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-002, Perplexity host duplicated outside the provider metadata path.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/core/research/web_search_config.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-002, Perplexity search host duplicated in the research search config.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/integrations/api_integrations/veo3.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-002, Veo host duplicated outside the provider metadata path.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/sys/commands/llm.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-001, OpenRouter model-list fetch bypasses default_base_url().',
-  },
-  {
     file: 'apps/cli/src/config.rs',
     max: 1,
     residue: true,

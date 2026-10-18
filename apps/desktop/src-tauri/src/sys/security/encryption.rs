@@ -22,7 +22,7 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
-    // AUDIT-003-009 fix: derive the key from machine_key instead of generating a
+    // Derive the key from machine_key instead of generating a
     // random one, so secrets stay recoverable after an application restart.
     pub fn new() -> Result<Self, String> {
         let key = Self::derive_persistent_key()?;
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt() {
-        // AUDIT-003-009: Test uses derive_persistent_key instead of random generation
+        // Test uses derive_persistent_key instead of random generation
         let key = SecretStore::derive_persistent_key().unwrap();
         let plaintext = "my secret password 123";
 
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_key_consistency() {
-        // AUDIT-003-009: Verify that derived keys are consistent across calls
+        // Verify that derived keys are consistent across calls
         let key1 = SecretStore::derive_persistent_key().unwrap();
         let key2 = SecretStore::derive_persistent_key().unwrap();
         assert_eq!(key1, key2, "Derived keys should be consistent");

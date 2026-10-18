@@ -75,14 +75,6 @@ export interface DOMSnapshot {
   timestamp: number;
 }
 
-export interface RecordedStep {
-  id: string;
-  type: ActionType;
-  selector?: string;
-  value?: string;
-  timestamp: number;
-}
-
 export type { BrowserStatusResult };
 
 interface BrowserState {
@@ -94,9 +86,6 @@ interface BrowserState {
   actions: BrowserAction[];
   domSnapshots: DOMSnapshot[];
   highlightedElement: ElementBounds | null;
-
-  isRecording: boolean;
-  recordedSteps: RecordedStep[];
 
   isStreaming: boolean;
   streamIntervalId: number | null;
@@ -121,12 +110,6 @@ interface BrowserState {
   startStreaming: (tabId: string) => void;
   stopStreaming: () => void;
 
-  startRecording: () => void;
-  stopRecording: () => void;
-  addRecordedStep: (step: RecordedStep) => void;
-  clearRecording: () => void;
-  generatePlaywrightCode: () => string;
-
   addAction: (action: BrowserAction) => void;
   addScreenshot: (screenshot: Screenshot) => void;
   clearActions: () => void;
@@ -149,9 +132,6 @@ export const useBrowserStore = create<BrowserState>()(
         actions: [],
         domSnapshots: [],
         highlightedElement: null,
-
-        isRecording: false,
-        recordedSteps: [],
 
         isStreaming: false,
         streamIntervalId: null,
@@ -404,65 +384,6 @@ export const useBrowserStore = create<BrowserState>()(
           }
         },
 
-        startRecording: () => {
-          set({ isRecording: true, recordedSteps: [] }, undefined, 'browser/startRecording');
-        },
-
-        stopRecording: () => {
-          set({ isRecording: false }, undefined, 'browser/stopRecording');
-        },
-
-        addRecordedStep: (step: RecordedStep) => {
-          set(
-            (state) => {
-              state.recordedSteps.push(step);
-              if (state.recordedSteps.length > 1000) {
-                state.recordedSteps = state.recordedSteps.slice(-1000);
-              }
-            },
-            undefined,
-            'browser/addRecordedStep',
-          );
-        },
-
-        clearRecording: () => {
-          set({ recordedSteps: [] }, undefined, 'browser/clearRecording');
-        },
-
-        generatePlaywrightCode: () => {
-          const { recordedSteps } = get();
-          let code = `import { test, expect } from '@playwright/test';
-
-test('recorded automation', async ({ page }) => {
-`;
-
-          recordedSteps.forEach((step) => {
-            switch (step.type) {
-              case 'navigate':
-                code += `  await page.goto(${JSON.stringify(step.value)});\n`;
-                break;
-              case 'click':
-                code += `  await page.click(${JSON.stringify(step.selector)});\n`;
-                break;
-              case 'type':
-                code += `  await page.fill(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)});\n`;
-                break;
-              case 'wait':
-                code += `  await page.waitForSelector(${JSON.stringify(step.selector)});\n`;
-                break;
-              case 'screenshot':
-                code += `  await page.screenshot({ path: 'screenshot.png' });\n`;
-                break;
-              case 'execute':
-                code += `  // User script omitted for safety\n`;
-                break;
-            }
-          });
-
-          code += `});\n`;
-          return code;
-        },
-
         addAction: (action: BrowserAction) => {
           set(
             (state) => {
@@ -474,17 +395,6 @@ test('recorded automation', async ({ page }) => {
             undefined,
             'browser/addAction',
           );
-
-          if (get().isRecording && action.success) {
-            const step: RecordedStep = {
-              id: crypto.randomUUID(),
-              type: action.type,
-              selector: action.details.selector,
-              value: action.details.text || action.details.url,
-              timestamp: action.timestamp,
-            };
-            get().addRecordedStep(step);
-          }
         },
 
         addScreenshot: (screenshotItem: Screenshot) => {
@@ -532,8 +442,6 @@ test('recorded automation', async ({ page }) => {
               actions: [],
               domSnapshots: [],
               highlightedElement: null,
-              isRecording: false,
-              recordedSteps: [],
               isStreaming: false,
               streamIntervalId: null,
             },
@@ -560,9 +468,6 @@ export const selectBrowserActions = (state: BrowserState) => state.actions;
 export const selectDomSnapshots = (state: BrowserState) => state.domSnapshots;
 export const selectHighlightedElement = (state: BrowserState) => state.highlightedElement;
 
-export const selectBrowserIsRecording = (state: BrowserState) => state.isRecording;
-export const selectRecordedSteps = (state: BrowserState) => state.recordedSteps;
-
 export const selectIsStreaming = (state: BrowserState) => state.isStreaming;
 export const selectStreamIntervalId = (state: BrowserState) => state.streamIntervalId;
 
@@ -584,4 +489,3 @@ export const selectLatestScreenshot = (state: BrowserState) =>
   state.screenshots[state.screenshots.length - 1];
 export const selectScreenshotCount = (state: BrowserState) => state.screenshots.length;
 export const selectActionCount = (state: BrowserState) => state.actions.length;
-export const selectRecordedStepCount = (state: BrowserState) => state.recordedSteps.length;

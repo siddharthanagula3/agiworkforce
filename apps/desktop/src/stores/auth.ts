@@ -8,7 +8,7 @@ import {
   PLAN_DISPLAY_NAMES,
   type SubscriptionSource,
 } from '../lib/cloudAccountTypes';
-import { isFreePlan, normalizeUIPlanTier, PLAN_DESCRIPTION } from '@agiworkforce/types';
+import { isFreePlan, normalizeUIPlanTier } from '@agiworkforce/types';
 
 export function isPaidCloudPlan(plan: PlanTier | null): boolean {
   return plan !== null && !isFreePlan(normalizeUIPlanTier(plan));
@@ -1008,10 +1008,6 @@ export function waitForHydration(): Promise<void> {
 }
 
 export const waitForBillingHydration = waitForHydration;
-
-export function getPlanDescription(plan: PlanTier): string {
-  return PLAN_DESCRIPTION[normalizeUIPlanTier(plan)];
-}
 
 export function cleanupUnifiedAuthStore(): void {
   resetRetryCount();

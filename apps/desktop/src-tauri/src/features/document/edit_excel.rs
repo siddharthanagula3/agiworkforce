@@ -251,25 +251,6 @@ impl ExcelEditor {
         Ok(())
     }
 
-    pub fn update_cell(
-        &self,
-        file_path: &str,
-        sheet: &str,
-        row: u32,
-        col: u16,
-        value: &str,
-        output_path: &str,
-    ) -> Result<()> {
-        let edits = vec![ExcelEdit::UpdateCell {
-            sheet: sheet.to_string(),
-            row,
-            col,
-            value: value.to_string(),
-        }];
-
-        self.edit_spreadsheet(file_path, edits, output_path)
-    }
-
     pub fn add_row(
         &self,
         file_path: &str,
@@ -282,25 +263,6 @@ impl ExcelEditor {
             sheet: sheet.to_string(),
             row,
             values,
-        }];
-
-        self.edit_spreadsheet(file_path, edits, output_path)
-    }
-
-    pub fn set_formula(
-        &self,
-        file_path: &str,
-        sheet: &str,
-        row: u32,
-        col: u16,
-        formula: &str,
-        output_path: &str,
-    ) -> Result<()> {
-        let edits = vec![ExcelEdit::SetFormula {
-            sheet: sheet.to_string(),
-            row,
-            col,
-            formula: formula.to_string(),
         }];
 
         self.edit_spreadsheet(file_path, edits, output_path)

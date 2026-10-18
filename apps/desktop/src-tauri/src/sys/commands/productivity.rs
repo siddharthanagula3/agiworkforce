@@ -28,26 +28,9 @@ impl Default for ProductivityState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ConnectRequest {
-    pub provider: Provider,
-    pub credentials: serde_json::Value,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectResponse {
     pub account_id: String,
     pub success: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ListProductivityTasksRequest {
-    pub provider: Provider,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateTaskRequest {
-    pub provider: Provider,
-    pub task: Task,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

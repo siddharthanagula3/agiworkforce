@@ -1,26 +1,16 @@
 import { isTauri } from './runtimeEnvironment';
-import { isElectronBridgeCommand } from './tauri-electron/bridgeContract';
-
-/**
- * The command every inbound phone message is verified with.
- *
- * Remote Control is only real where this exists. Without it `verifyEnvelope`
- * throws on an unknown command, falls past every named reason, and drops the
- * message, so the desktop can sit there paired and reporting Connected while
- * nothing the phone sends ever arrives.
- */
-const DISPATCH_VERIFY_COMMAND = 'dispatch_hmac_verify';
 
 /**
  * Whether this host can actually carry Remote Control.
  *
- * Asked of the bridge rather than hardcoded to a shell, so the day the dispatch
- * commands are ported this answers yes on its own instead of needing someone to
- * remember this file.
+ * Every inbound phone message is verified with the native `dispatch_hmac_verify`
+ * command. Without it `verifyEnvelope` throws on an unknown command, falls past
+ * every named reason, and drops the message, so the desktop would sit there
+ * paired and reporting Connected while nothing the phone sends ever arrives.
+ * Only the Tauri core registers it.
  */
 export function remoteControlSupported(): boolean {
-  if (isTauri) return true;
-  return isElectronBridgeCommand(DISPATCH_VERIFY_COMMAND);
+  return isTauri;
 }
 
 export const REMOTE_CONTROL_UNAVAILABLE =

@@ -113,41 +113,16 @@ pub struct AuditLogger {
 }
 
 impl AuditLogger {
+    /// Every command builds its own logger, so the signing key has to be the
+    /// same in each one and across launches: it is derived from this install's
+    /// secret.
     pub fn new(db: Arc<Mutex<Connection>>) -> Result<Self> {
-        let hmac_key = Self::generate_hmac_key()?;
+        let hmac_key = crate::sys::security::machine_key::try_derive_key(
+            crate::sys::security::machine_key::KeyPurpose::AuditLog,
+        )
+        .map_err(|e| Error::Other(format!("The audit log signing key is unavailable: {e}")))?;
 
         Ok(Self { db, hmac_key })
-    }
-
-    pub fn with_key(db: Arc<Mutex<Connection>>, hmac_key: Vec<u8>) -> Self {
-        Self { db, hmac_key }
-    }
-
-    fn generate_hmac_key() -> Result<Vec<u8>> {
-        if let Ok(key) = std::env::var("AUDIT_HMAC_KEY") {
-            if !key.is_empty() {
-                return Ok(key.into_bytes());
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            use rand::Rng;
-            let ephemeral_key: [u8; 32] = rand::thread_rng().gen();
-            tracing::warn!(
-                "AUDIT HMAC KEY NOT SET: Generated ephemeral random HMAC key. \
-                 Audit log signatures CANNOT be verified across restarts. \
-                 Set the AUDIT_HMAC_KEY environment variable for persistent HMAC verification."
-            );
-            Ok(ephemeral_key.to_vec())
-        }
-
-        #[cfg(not(debug_assertions))]
-        {
-            Err(Error::Other(
-                "AUDIT_HMAC_KEY environment variable not set. Audit logging requires a secure HMAC key.".to_string()
-            ))
-        }
     }
 
     pub fn log(&self, event: AuditEvent) -> Result<()> {

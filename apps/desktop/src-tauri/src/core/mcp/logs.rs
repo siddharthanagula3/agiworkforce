@@ -21,12 +21,6 @@ pub fn append_server_log(server_name: &str, log_line: impl Into<String>) {
     }
 }
 
-/// Clear logs for a specific server
-pub fn clear_server_logs(server_name: &str) {
-    let mut logs = SERVER_LOG_BUFFER.write();
-    logs.remove(server_name);
-}
-
 /// Get logs for a specific server
 pub fn get_server_logs(server_name: &str, lines: Option<usize>) -> Vec<String> {
     let logs = SERVER_LOG_BUFFER.read();

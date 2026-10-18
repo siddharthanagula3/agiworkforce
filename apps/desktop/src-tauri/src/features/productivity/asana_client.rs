@@ -396,7 +396,7 @@ impl AsanaClient {
             .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
-        // FIX-005: Store both ID and name for proper update/display
+        // Store both ID and name for proper update/display
         let assignee_id = task.assignee.as_ref().map(|a| a.gid.clone());
         let assignee_name = task.assignee.as_ref().map(|a| a.name.clone());
 
@@ -427,9 +427,7 @@ impl AsanaClient {
             description: task.notes.clone(),
             status,
             due_date,
-            // FIX-005: Use gid for assignee (for API operations)
             assignee: assignee_id,
-            // FIX-005: Use name for display
             assignee_name,
             priority: None,
             tags,

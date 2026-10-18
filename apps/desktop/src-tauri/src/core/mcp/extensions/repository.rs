@@ -3,7 +3,7 @@
 //! Handles storage and retrieval of extension metadata in SQLite.
 //! Uses the same database as the rest of the application.
 
-use super::{ExtensionError, ExtensionManifest, ExtensionResult};
+use super::{ExtensionError, ExtensionResult};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -512,19 +512,6 @@ impl ExtensionRepository {
         )?;
 
         Ok(count > 0)
-    }
-
-    /// Get the parsed manifest for an extension
-    pub fn get_manifest(&self, id: &str) -> ExtensionResult<Option<ExtensionManifest>> {
-        let record = self.get(id)?;
-
-        match record {
-            Some(rec) => {
-                let manifest: ExtensionManifest = serde_json::from_str(&rec.manifest_json)?;
-                Ok(Some(manifest))
-            }
-            None => Ok(None),
-        }
     }
 
     /// Get configuration for an extension

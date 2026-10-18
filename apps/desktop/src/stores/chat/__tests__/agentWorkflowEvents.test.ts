@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableMapSet } from 'immer';
 
-vi.mock('@agiworkforce/desktop-command-client', () => ({
-  agent: {
-    agentSetWorkflowHash: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
 const mockInvoke = vi.fn();
 vi.mock('../../../lib/tauri-mock', async () => {
   const actual =
@@ -22,18 +16,11 @@ import {
   applyApprovalRequired,
   applyAgentActionUpdate,
   applyAgentPermissionRequired,
-  applyAgentPlanUpdate,
-  applyAgentStepStarted,
-  applyAgentTaskFailed,
   applyBackgroundAgentCompleted,
   applyBackgroundAgentFailed,
-  applyGoalAchieved,
-  applyGoalProgress,
-  applyGoalStepCompleted,
   applyToolConfirmationRequired,
   applyToolConfirmationTimeout,
 } from '../agentWorkflowEvents';
-import { sha256 } from '../../../lib/hash';
 
 enableMapSet();
 
@@ -78,60 +65,6 @@ describe('agentWorkflowEvents', () => {
     useChatStore.getState().resetOnLogout();
     useAgentStore.getState().resetOnLogout();
     useToolStore.getState().resetOnLogout();
-  });
-
-  it('applies plan updates to the canonical plan store and action log ownership', async () => {
-    const messageId = createAssistantMessage();
-    useToolStore.getState().setWorkflowContext({
-      hash: 'existing-hash',
-      entryPoint: 'Investigate repository',
-      description: 'Investigate repository',
-    });
-
-    await applyAgentPlanUpdate({
-      plan: {
-        id: 'plan-1',
-        description: 'Analyze runtime event ownership',
-        steps: [
-          {
-            id: 'step-1',
-            title: 'Inspect listeners',
-            status: 'in_progress',
-          },
-          {
-            id: 'step-2',
-            title: 'Centralize reducers',
-            status: 'pending',
-          },
-        ],
-      },
-    });
-
-    const expectedHash = await sha256('Investigate repository::Analyze runtime event ownership');
-    const toolState = useToolStore.getState();
-    const planLogEntry = toolState.actionLog.find((entry) => entry.id === 'plan-1');
-
-    expect(toolState.plan).toMatchObject({
-      id: 'plan-1',
-      description: 'Analyze runtime event ownership',
-      steps: [
-        { id: 'step-1', title: 'Inspect listeners', status: 'running' },
-        { id: 'step-2', title: 'Centralize reducers', status: 'pending' },
-      ],
-    });
-    expect(toolState.workflowContext).toMatchObject({
-      hash: expectedHash,
-      description: 'Analyze runtime event ownership',
-      entryPoint: 'Investigate repository',
-    });
-    expect(planLogEntry).toMatchObject({
-      id: 'plan-1',
-      type: 'plan',
-      title: 'Plan generated',
-      status: 'success',
-      workflowHash: expectedHash,
-    });
-    expect(planLogEntry?.metadata?.['messageId']).toBe(messageId);
   });
 
   it('upserts action updates instead of duplicating action log entries', () => {
@@ -244,51 +177,6 @@ describe('agentWorkflowEvents', () => {
     expect(
       pendingApprovals.find((entry) => entry.id === 'a-terminal')?.workflowHash,
     ).toBeUndefined();
-  });
-
-  it('records step start and task failure in the canonical trail/log path', () => {
-    createAssistantMessage();
-
-    applyAgentStepStarted({
-      taskId: 'task-1',
-      step: 'Open dashboard',
-      stepIndex: 0,
-      totalSteps: 3,
-      type: 'browser',
-      url: 'https://example.com',
-    });
-    applyAgentTaskFailed({
-      taskId: 'task-1',
-      error: 'Navigation failed',
-    });
-
-    const agentState = useAgentStore.getState();
-    const toolState = useToolStore.getState();
-
-    expect(agentState.actionTrail[0]).toMatchObject({
-      type: 'running',
-      message: 'Step 1/3: Open dashboard',
-    });
-    expect(agentState.actionTrail[1]).toMatchObject({
-      type: 'error',
-      message: 'Task failed: Navigation failed',
-    });
-    expect(toolState.actionLog.find((entry) => entry.id === 'task-1-step-0')).toMatchObject({
-      id: 'task-1-step-0',
-      type: 'plan',
-      status: 'running',
-    });
-    expect(toolState.actionLog.find((entry) => entry.id === 'task-1')).toMatchObject({
-      id: 'task-1',
-      type: 'plan',
-      status: 'failed',
-      error: 'Navigation failed',
-    });
-    expect(window.dispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'agi:browser-active',
-      }),
-    );
   });
 
   it('routes tool confirmation requests through canonical approval ownership', () => {
@@ -484,108 +372,6 @@ describe('agentWorkflowEvents', () => {
       id: 'approval-2',
       status: 'failed',
       error: 'Denied by operator',
-    });
-  });
-
-  it('tracks live goal progress and completion via canonical reducers', () => {
-    createAssistantMessage();
-    useAgentStore.setState({
-      agents: [
-        {
-          id: 'agent-1',
-          name: 'Agent 1',
-          status: 'running',
-          currentGoal: 'goal-1',
-          currentStep: 'Planning',
-          progress: 0,
-          startedAt: new Date('2026-04-06T10:00:00.000Z'),
-        },
-      ],
-      agentStatus: {
-        id: 'agent-1',
-        name: 'Agent 1',
-        status: 'running',
-        currentGoal: 'goal-1',
-        currentStep: 'Planning',
-        progress: 0,
-        startedAt: new Date('2026-04-06T10:00:00.000Z'),
-      },
-    });
-
-    applyGoalProgress({
-      goal_id: 'goal-1',
-      completed_steps: 2,
-      total_steps: 5,
-      progress_percent: 40,
-    });
-    applyGoalAchieved({
-      goal_id: 'goal-1',
-      completed_steps: 5,
-      total_steps: 5,
-    });
-
-    const agentState = useAgentStore.getState();
-    const completionLog = useToolStore
-      .getState()
-      .actionLog.find((entry) => entry.id === 'goal-goal-1-complete');
-
-    expect(agentState.agents[0]).toMatchObject({
-      id: 'agent-1',
-      status: 'completed',
-      progress: 100,
-    });
-    expect(agentState.agentStatus).toMatchObject({
-      id: 'agent-1',
-      status: 'completed',
-      progress: 100,
-    });
-    expect(agentState.actionTrail[0]).toMatchObject({
-      type: 'running',
-      message: 'Progress: 40%',
-    });
-    expect(agentState.actionTrail[1]).toMatchObject({
-      type: 'completed',
-      message: 'Completed 5/5 steps',
-    });
-    expect(completionLog).toMatchObject({
-      id: 'goal-goal-1-complete',
-      status: 'success',
-    });
-  });
-
-  it('updates plan steps from AGI goal step completion events', () => {
-    createAssistantMessage();
-    useToolStore.getState().setPlan({
-      id: 'plan-2',
-      description: 'Execute plan',
-      createdAt: new Date('2026-04-06T10:00:00.000Z'),
-      updatedAt: new Date('2026-04-06T10:00:00.000Z'),
-      steps: [
-        {
-          id: 'step-1',
-          title: 'Apply migration',
-          status: 'running',
-        },
-      ],
-    });
-
-    applyGoalStepCompleted({
-      goal_id: 'goal-2',
-      step_id: 'step-1',
-      success: true,
-      execution_time_ms: 1200,
-    });
-
-    const toolState = useToolStore.getState();
-    expect(toolState.plan?.steps[0]).toMatchObject({
-      id: 'step-1',
-      status: 'success',
-      result: 'Completed in 1200ms',
-    });
-    expect(toolState.actionLog.find((entry) => entry.id === 'step-1')).toMatchObject({
-      id: 'step-1',
-      status: 'success',
-      result: 'Completed in 1200ms',
     });
   });
 

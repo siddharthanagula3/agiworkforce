@@ -418,15 +418,4 @@ export function setupGlobalErrorHandler(): (() => void) | undefined {
   };
 }
 
-export function captureErrorBoundaryError(error: Error, errorInfo: { componentStack: string }) {
-  errorTracking.captureError(error, {
-    component: 'react_boundary',
-    severity: ErrorSeverity.HIGH,
-    tags: { type: 'react_error' },
-    extra: {
-      componentStack: errorInfo.componentStack,
-    },
-  });
-}
-
 export { ErrorTrackingService };

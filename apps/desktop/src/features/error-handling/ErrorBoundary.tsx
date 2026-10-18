@@ -45,22 +45,6 @@ class ErrorBoundary extends Component<Props, State> {
       : 'ErrorBoundary';
     console.error(`${boundaryLabel} caught an error:`, error, errorInfo);
 
-    try {
-      window.localStorage.setItem(
-        'agi-last-error-boundary',
-        JSON.stringify({
-          boundaryName: this.props.boundaryName ?? null,
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-          componentStack: errorInfo.componentStack,
-          timestamp: new Date().toISOString(),
-        }),
-      );
-    } catch {
-      // Diagnostics must never make the error boundary itself fail.
-    }
-
     this.setState({
       error,
       errorInfo,

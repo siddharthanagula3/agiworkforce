@@ -129,11 +129,3 @@ export function buildBoundedCloudMessageMetadata(
     droppedRederivableArtifacts: stripped.dropped,
   };
 }
-
-export function exceedsManagedCloudMetadataBudget(
-  metadata: Record<string, unknown> | undefined,
-  maxLength: number = MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
-): boolean {
-  if (!metadata) return false;
-  return managedCloudMetadataLength(metadata) > maxLength;
-}

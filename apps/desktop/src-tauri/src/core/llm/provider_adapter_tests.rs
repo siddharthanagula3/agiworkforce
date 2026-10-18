@@ -1009,14 +1009,10 @@ mod tests {
     }
 
     #[test]
-    fn test_openai_adapter_supports_features() {
+    fn test_openai_adapter_basic() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         assert_eq!(adapter.provider_name(), "OpenAI");
-        assert!(adapter.supports_prompt_caching()); // OpenAI now supports prompt caching
-        assert!(adapter.supports_extended_thinking()); // OpenAI reasoning models
-        assert!(adapter.supports_batch_processing());
-        assert!(adapter.supports_structured_outputs());
     }
 
     #[test]
@@ -1024,8 +1020,6 @@ mod tests {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
 
         assert_eq!(adapter.provider_name(), "Anthropic");
-        assert!(adapter.supports_prompt_caching());
-        assert!(adapter.supports_extended_thinking());
     }
 
     #[test]

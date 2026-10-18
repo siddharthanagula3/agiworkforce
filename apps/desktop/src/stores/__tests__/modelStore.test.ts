@@ -65,15 +65,6 @@ vi.mock('../settingsStore', () => ({
   waitForSettingsHydration: vi.fn(() => Promise.resolve()),
 }));
 
-vi.mock('../ui', () => ({
-  useUIStore: {
-    getState: () => ({
-      mode: 'advanced',
-    }),
-    subscribe: vi.fn(() => () => {}),
-  },
-}));
-
 describe('modelStore', () => {
   beforeEach(() => {
     useModelStore.getState().reset();

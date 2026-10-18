@@ -173,25 +173,6 @@ impl RequestContext {
             )
         }
     }
-
-    /// Log completion of the request
-    pub fn log_completion(&self, success: bool) {
-        let duration_ms = self.elapsed().as_millis();
-
-        if success {
-            tracing::info!(
-                correlation_id = %self.correlation_id,
-                duration_ms = duration_ms,
-                "Request completed successfully"
-            );
-        } else {
-            tracing::warn!(
-                correlation_id = %self.correlation_id,
-                duration_ms = duration_ms,
-                "Request failed"
-            );
-        }
-    }
 }
 
 impl Default for RequestContext {

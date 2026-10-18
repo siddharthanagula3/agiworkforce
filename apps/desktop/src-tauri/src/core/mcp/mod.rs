@@ -13,7 +13,6 @@ pub mod extensions;
 pub mod health;
 pub mod launch_approval;
 pub mod logs;
-pub mod manager;
 pub mod manifest;
 pub mod oauth;
 pub mod protocol;
@@ -40,8 +39,7 @@ pub use extensions::{
     ExtensionRepository, ExtensionResult,
 };
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
-pub use manager::{ManagedServer, McpServerManager, ServerStatus};
-pub use protocol::{McpToolDefinition, ServerCapabilitiesV2, ToolCallResult, ToolContent};
+pub use protocol::{McpToolDefinition, ToolCallResult, ToolContent};
 pub use registry::McpToolRegistry;
 pub use session::McpSession;
 pub use tool_executor::{McpToolExecutor, ToolExecutionResult};

@@ -26,7 +26,7 @@ pub struct PromptToolInjection {
     pub nonce: String,
 }
 
-/// FIX-015 (Sprint 2): build a 16-byte hex nonce that we wrap the
+/// Build a 16-byte hex nonce that we wrap the
 /// injected tool catalog in. The nonce is per-call so a model that's
 /// been jailbroken via attachment text can't pre-construct a forged
 /// `<tool_catalog>` block in its own user-content reply.
@@ -35,7 +35,7 @@ fn build_injection_nonce() -> String {
     format!("{:x}", bytes.as_u128())
 }
 
-/// FIX-015: wrap the catalog text in nonce-bearing sentinels. The model
+/// Wrap the catalog text in nonce-bearing sentinels. The model
 /// is instructed elsewhere (in system instructions) that legitimate tool
 /// catalogs always carry the nonce, anything purporting to be a catalog
 /// without it is treated as untrusted user content.
@@ -45,7 +45,7 @@ fn wrap_with_nonce(nonce: &str, body: &str) -> String {
     )
 }
 
-/// FIX-015: scrub any literal occurrences of `nonce` from a chat message
+/// Scrub any literal occurrences of `nonce` from a chat message
 /// so user-supplied content can't impersonate the catalog boundary.
 fn strip_nonce_occurrences(
     nonce: &str,
@@ -190,7 +190,7 @@ pub fn inject_tools_into_system_prompt_with_nonce(
         };
     }
 
-    // FIX-015 (Sprint 2): wrap the tool catalog in a per-call random nonce
+    // Wrap the tool catalog in a per-call random nonce
     // so a model that's been jailbroken via attachment text can't forge a
     // fake tool catalog inside its own user-content reply. Strip any
     // occurrences of the nonce from the user-content side before building

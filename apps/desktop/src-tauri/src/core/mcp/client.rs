@@ -100,13 +100,27 @@ impl McpClient {
             tools.len()
         );
 
-        self.sessions
+        let displaced = self
+            .sessions
             .write()
             .insert(name.clone(), Arc::new(session));
         match launch {
-            Some(launch) => self.launches.write().insert(name, launch),
+            Some(launch) => self.launches.write().insert(name.clone(), launch),
             None => self.launches.write().remove(&name),
         };
+
+        // Two connects for one name can both pass a caller's "already
+        // connected" check; the session the second one replaced still owns a
+        // running server process.
+        if let Some(displaced) = displaced {
+            if let Err(error) = displaced.shutdown().await {
+                tracing::warn!(
+                    "[MCP Client] Replaced session for '{}' did not shut down: {}",
+                    name,
+                    error
+                );
+            }
+        }
 
         Ok(())
     }
@@ -178,19 +192,6 @@ impl McpClient {
             .collect();
 
         Ok(tools)
-    }
-
-    pub async fn refresh_server_tools(&self, server_name: &str) -> McpResult<Vec<McpTool>> {
-        let session_arc = {
-            let sessions = self.sessions.read();
-            sessions.get(server_name).cloned().ok_or_else(|| {
-                McpError::ServerNotFound(format!("Server '{}' not found", server_name))
-            })?
-        };
-
-        let tools = session_arc.list_tools().await?;
-
-        Ok(tools.into_iter().map(McpTool::from).collect())
     }
 
     pub async fn call_tool(

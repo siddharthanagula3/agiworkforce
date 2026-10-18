@@ -284,13 +284,6 @@ export function initializeChatViewModelSubscription(): void {
   }
 }
 
-export function teardownChatViewModelSubscription(): void {
-  const sub = getModelSubState();
-  sub.unsubscribe?.();
-  sub.unsubscribe = null;
-  sub.initialized = false;
-}
-
 export const selectFocusMode = (state: ChatViewState) => state.focusMode;
 export const selectActiveView = (state: ChatViewState) => state.activeView;
 export const selectConversationMode = (state: ChatViewState) => state.conversationMode;

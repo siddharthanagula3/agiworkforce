@@ -5,7 +5,6 @@ import { MODEL_TYPES } from '@agiworkforce/types';
 import { getAllModels, getAllowedModelsForTier, getModelMetadata } from '../constants/llm';
 import { useUnifiedAuthStore } from '../stores/auth';
 import { useModelStore } from '../stores/modelStore';
-import { useUIStore } from '../stores/ui';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
 const SECOND_FIXTURE_MODEL_ID = 'fixture-model-secondary';
@@ -78,7 +77,6 @@ describe('modelStore', () => {
       error: null,
     });
     useUnifiedAuthStore.setState({ plan: null });
-    useUIStore.setState({ mode: 'simple' });
   });
 
   afterEach(() => {
@@ -180,9 +178,7 @@ describe('modelStore', () => {
 
     it('should downgrade stale manual selections when plan tier is basic', async () => {
       const { useModelStore, enforceModelTierRestriction } = await import('../stores/modelStore');
-      const { useUIStore } = await import('../stores/ui');
 
-      useUIStore.setState({ mode: 'advanced' });
       useModelStore.setState({
         selectedModel: OPENAI_MAX_ONLY_MODEL_ID,
         selectedProvider: 'openai',

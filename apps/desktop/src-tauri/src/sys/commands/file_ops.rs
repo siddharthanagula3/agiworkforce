@@ -159,7 +159,7 @@ fn validate_read_path(path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-/// FIX-016 (Sprint 2): the previous implementation walked a substring
+/// The previous implementation walked a substring
 /// blacklist via `path_lower.contains(blocked)`, which produced both
 /// false positives (`events.txt` blocked because it contained `.ent`-ish
 /// patterns is the canonical example) and false negatives (`.envrc`,
@@ -238,7 +238,7 @@ pub(crate) fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) ->
     allowed_dirs.iter().any(|dir| {
         let dir_str = dir.to_string_lossy();
         let dir_normalized = dir_str.replace('\\', "/");
-        // FIX-F3 (audit 2026-05-19): the previous `starts_with(&dir_normalized)`
+        // The previous `starts_with(&dir_normalized)`
         // matched `/Users/foo` against `/Users/foobar` (prefix lookalike).
         // Trim trailing separator and require exact-match OR subpath-after-sep.
         let dir_trimmed = dir_normalized.trim_end_matches('/');
@@ -414,7 +414,7 @@ pub async fn file_read(
 
     let canonical = validate_read_path(&path)?;
 
-    // AUDIT-FIX: H-15, use canonical (symlink-resolved) path for all fs ops.
+    // Use the canonical (symlink-resolved) path for all fs ops.
     match fs::symlink_metadata(&canonical) {
         Ok(metadata) => {
             if metadata.len() > 100_000_000 {
@@ -427,7 +427,7 @@ pub async fn file_read(
                 return Err(format!("Path is not a file: {}", path));
             }
             if metadata.file_type().is_symlink() {
-                return Err("Refusing to read through symlink".to_string()); // AUDIT-FIX: H-15
+                return Err("Refusing to read through symlink".to_string());
             }
         }
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
@@ -447,7 +447,6 @@ pub async fn file_read(
     }
 
     match fs::read_to_string(&canonical) {
-        // AUDIT-FIX: H-15
         Ok(content) => {
             log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
             info!("Successfully read file: {}", path);
@@ -479,7 +478,7 @@ pub async fn file_write(
 
     let canonical = validate_path_security(&path)?;
     let canonical_str = canonical.to_string_lossy().to_string();
-    // AUDIT-FIX: CI-4, centralized blocked-path denylist.
+    // Centralized blocked-path denylist.
     if crate::sys::security::blocked_paths::is_blocked(&canonical) {
         return Err(format!(
             "Access denied: path is on the blocked-paths denylist: {}",
@@ -494,7 +493,7 @@ pub async fn file_write(
         ));
     }
 
-    // FIX-F2 (audit 2026-05-19): require HITL on file_write so an indirect
+    // Require HITL on file_write so an indirect
     // prompt-injection-driven agent cannot silently overwrite files in the
     // user's allowed dirs (e.g. ~/Projects/.git/hooks/pre-commit,
     // ~/.cargo/config.toml). Pattern mirrors file_delete (line 545).
@@ -521,7 +520,7 @@ pub async fn file_write(
         return Err(error);
     }
 
-    // AUDIT-FIX: H-15, canonicalize parent and rejoin filename so writes to nonexistent files still pin to a real dir.
+    // Canonicalize parent and rejoin filename so writes to nonexistent files still pin to a real dir.
     let write_target: std::path::PathBuf = if canonical.exists() {
         canonical.clone()
     } else {
@@ -740,7 +739,7 @@ pub async fn file_open_with_default_app(
         Err(e) => return Err(format!("Path does not exist or is not accessible: {}", e)),
     }
 
-    // FIX-F4 (audit 2026-05-19): block executable extensions so an LLM that
+    // Block executable extensions so an LLM that
     // dropped a malicious binary through a file write cannot chain into
     // `open` to execute it. macOS `open` will
     // launch .app bundles; Windows Start-Process will execute .exe/.bat/.cmd
@@ -758,7 +757,7 @@ pub async fn file_open_with_default_app(
         }
     }
 
-    // FIX-F4 (audit 2026-05-19): require HITL on open-with-default since
+    // Require HITL on open-with-default since
     // even non-executable extensions can trigger handlers that side-effect
     // (PDF auto-fetch, URL-handler files, etc.).
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
@@ -934,7 +933,7 @@ pub async fn dir_delete(
 
 #[cfg(test)]
 mod fix_016_blacklist_tests {
-    //! FIX-016 (Sprint 2): pin the canonical-path-aware blacklist
+    //! Pin the canonical-path-aware blacklist
     //! semantics so a future refactor can't silently regress to substring
     //! matching.
     use super::is_blacklisted_path;
@@ -965,7 +964,7 @@ mod fix_016_blacklist_tests {
 
     #[test]
     fn does_not_match_substring_false_positives() {
-        // The pre-FIX-016 substring check would have flagged anything
+        // A substring check would flag anything
         // containing `.env`, including `.envrc-prod` and `development/.eslintrc`
         // (no `.env` substring there, but `.environment` is a thing).
         assert!(!is_blacklisted_path("/Users/me/dev/.envrc-prod"));
@@ -1034,7 +1033,7 @@ mod tests {
 
 #[cfg(test)]
 mod fix_f3_path_allowed_prefix_tests {
-    //! FIX-F3 (audit 2026-05-19): pin the canonical-path containment check
+    //! Pin the canonical-path containment check
     //! so a directory `/Users/foo` does NOT also allow `/Users/foobar/...`.
     //! Prefix-vs-component bug fixed in `is_path_allowed`.
     use super::is_path_allowed;

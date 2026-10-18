@@ -66,10 +66,6 @@ macro_rules! trace_operation {
     };
 }
 
-pub fn capture_error(error: &anyhow::Error) {
-    tracing::error!("Error: {:?}", error);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

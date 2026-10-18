@@ -108,6 +108,8 @@ function BackgroundAgentRow({
 
   const terminal = isTerminalBackgroundAgentStatus(agent.status);
   const percentage = Math.min(100, Math.max(0, agent.progress?.percentage ?? 0));
+  const currentStep = agent.progress?.currentStep ?? 0;
+  const totalSteps = agent.progress?.totalSteps ?? 0;
   const boundary = agent.context?.boundary;
   const boundaryLabel = boundary ? BOUNDARY_LABELS[boundary] : undefined;
 
@@ -151,13 +153,21 @@ function BackgroundAgentRow({
       </div>
 
       <div className="mt-2" aria-label={`Progress for ${agent.goal}`}>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full bg-teal-500 transition-all" style={{ width: `${percentage}%` }} />
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Step {agent.progress?.currentStep ?? 0} of {agent.progress?.totalSteps ?? 0} ·{' '}
-          {percentage}%
-        </p>
+        {totalSteps > 0 ? (
+          <>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full bg-teal-500 transition-all"
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Step {currentStep} of {totalSteps} · {percentage}%
+            </p>
+          </>
+        ) : currentStep > 0 ? (
+          <p className="text-xs text-slate-500">Tool call {currentStep}</p>
+        ) : null}
       </div>
 
       <RunResult agent={agent} />

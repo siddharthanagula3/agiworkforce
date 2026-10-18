@@ -422,21 +422,6 @@ impl KnowledgeBase {
         Ok(result)
     }
 
-    pub fn update_memory_access(&self, memory_id: &str) -> Result<()> {
-        let conn = self.connection()?;
-
-        conn.execute(
-            "UPDATE project_memory
-             SET access_count = access_count + 1,
-                 last_accessed = ?1,
-                 salience = MIN(1.0, salience + 0.01)
-             WHERE id = ?2",
-            params![chrono::Utc::now().to_rfc3339(), memory_id],
-        )?;
-
-        Ok(())
-    }
-
     /// Delete a document and its chunks. The connection does not enable
     /// foreign keys, so the chunks are removed explicitly rather than by
     /// cascade.
@@ -458,25 +443,6 @@ impl KnowledgeBase {
     pub fn delete_memory(&self, memory_id: &str) -> Result<()> {
         let conn = self.connection()?;
         conn.execute("DELETE FROM project_memory WHERE id = ?1", [memory_id])?;
-        Ok(())
-    }
-
-    pub fn clear_project_knowledge(&self, project_id: &str) -> Result<()> {
-        let conn = self.connection()?;
-
-        conn.execute(
-            "DELETE FROM knowledge_chunks WHERE project_id = ?1",
-            [project_id],
-        )?;
-        conn.execute(
-            "DELETE FROM knowledge_documents WHERE project_id = ?1",
-            [project_id],
-        )?;
-        conn.execute(
-            "DELETE FROM project_memory WHERE project_id = ?1",
-            [project_id],
-        )?;
-
         Ok(())
     }
 }

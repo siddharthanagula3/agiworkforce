@@ -299,7 +299,7 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone());
-        // [H11] Security fix (supersedes AUDIT-TERMINAL-054): Always use system default shell.
+        // Always use system default shell.
         // The shell type must NOT be LLM-controllable, an LLM requesting
         // shell='wsl' could bypass bash-configured validator rules.
         // If multi-shell support is needed, it must be a user settings preference.
@@ -443,7 +443,7 @@ impl ToolExecutor {
                 }
             }
             _ => {
-                // AUDIT-TERMINAL-068 fix: Don't silently fall back to powershell.exe
+                // Don't silently fall back to powershell.exe
                 // Use system default shell for unknown shells instead
                 let default_shell_type = get_default_shell();
                 match default_shell_type {

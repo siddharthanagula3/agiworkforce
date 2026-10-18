@@ -19,13 +19,6 @@ export interface AppError {
   count: number;
 }
 
-export interface ErrorStatistics {
-  totalErrors: number;
-  errorsByType: Record<string, number>;
-  errorsBySeverity: Record<ErrorSeverity, number>;
-  recentErrors: AppError[];
-}
-
 export interface FileAttachment {
   id: string;
   file: File;
@@ -101,8 +94,6 @@ export interface SidecarState {
   autoTrigger: boolean;
 }
 
-export type UIMode = 'simple' | 'advanced';
-
 interface UIState {
   errors: AppError[];
   maxHistorySize: number;
@@ -128,20 +119,15 @@ interface UIState {
 
   sidecar: SidecarState;
 
-  mode: UIMode;
   onboardingCompleted: boolean;
-  showModeSwitcherHint: boolean;
 
   addError: (error: Omit<AppError, 'id' | 'timestamp' | 'dismissed' | 'count'>) => void;
   dismissError: (id: string) => void;
   dismissAll: () => void;
   clearHistory: () => void;
-  getStatistics: () => ErrorStatistics;
-  exportLogs: () => Promise<string>;
   reportError: (errorId: string) => Promise<void>;
 
   setDraft: (conversationId: number | null, content: string) => void;
-  getDraft: (conversationId: number | null) => string;
   clearDraft: (conversationId: number | null) => void;
   addAttachment: (file: File) => string;
   removeAttachment: (id: string) => void;
@@ -152,7 +138,6 @@ interface UIState {
   updateContextMetadata: (metadata: Partial<ContextMetadata>) => void;
   setInputHeight: (height: number) => void;
   toggleMarkdownPreview: () => void;
-  resetInput: () => void;
 
   setSidecarOpen: (open: boolean) => void;
   setSidecarSection: (section: SidecarSection) => void;
@@ -167,12 +152,7 @@ interface UIState {
   closeSidecar: () => void;
   getSuggestedSidecarMode: (message: EnhancedMessage) => SidecarMode | null;
 
-  setMode: (mode: UIMode) => void;
-  toggleMode: () => void;
   completeOnboarding: () => void;
-  dismissModeSwitcherHint: () => void;
-  isSimpleMode: () => boolean;
-  isAdvancedMode: () => boolean;
 
   resetOnLogout: () => void;
 }
@@ -247,9 +227,7 @@ export const useUIStore = create<UIState>()(
             autoTrigger: false,
           },
 
-          mode: 'simple',
           onboardingCompleted: false,
-          showModeSwitcherHint: true,
 
           addError: (errorData) => {
             const { errors, toasts, maxHistorySize, maxToasts } = get();
@@ -355,46 +333,6 @@ export const useUIStore = create<UIState>()(
             set({ errors: [], toasts: [] }, undefined, 'ui/error/clearHistory');
           },
 
-          getStatistics: () => {
-            const { errors } = get();
-
-            const stats: ErrorStatistics = {
-              totalErrors: errors.length,
-              errorsByType: {},
-              errorsBySeverity: {
-                info: 0,
-                warning: 0,
-                error: 0,
-                critical: 0,
-              },
-              recentErrors: errors.slice(0, 10),
-            };
-
-            errors.forEach((error) => {
-              stats.errorsByType[error.type] = (stats.errorsByType[error.type] || 0) + error.count;
-              stats.errorsBySeverity[error.severity] += error.count;
-            });
-
-            return stats;
-          },
-
-          exportLogs: async () => {
-            const { errors } = get();
-
-            const logs = errors.map((error) => ({
-              id: error.id,
-              type: error.type,
-              severity: error.severity,
-              message: error.message,
-              details: error.details,
-              timestamp: new Date(error.timestamp).toISOString(),
-              context: error.context,
-              count: error.count,
-            }));
-
-            return JSON.stringify(logs, null, 2);
-          },
-
           reportError: async (errorId) => {
             const { errors } = get();
             const error = errors.find((e) => e.id === errorId);
@@ -431,11 +369,6 @@ export const useUIStore = create<UIState>()(
               undefined,
               'ui/input/setDraft',
             );
-          },
-
-          getDraft: (conversationId) => {
-            const drafts = get().drafts;
-            return drafts.get(conversationId)?.content ?? '';
           },
 
           clearDraft: (conversationId) => {
@@ -565,34 +498,6 @@ export const useUIStore = create<UIState>()(
               },
               undefined,
               'ui/input/toggleMarkdownPreview',
-            );
-          },
-
-          resetInput: () => {
-            const attachments = get().attachments;
-            attachments.forEach((attachment) => {
-              if (attachment.previewUrl) {
-                URL.revokeObjectURL(attachment.previewUrl);
-              }
-            });
-
-            set(
-              {
-                drafts: new Map(),
-                attachments: [],
-                isRecording: false,
-                recordingStartTime: null,
-                voiceRecordings: [],
-                contextMetadata: {
-                  workspacePath: undefined,
-                  selectedFilesCount: 0,
-                  openEditorsCount: 0,
-                },
-                inputHeight: 72,
-                showMarkdownPreview: false,
-              },
-              undefined,
-              'ui/input/reset',
             );
           },
 
@@ -776,31 +681,8 @@ export const useUIStore = create<UIState>()(
             return null;
           },
 
-          setMode: (mode) => set({ mode }, undefined, 'ui/mode/set'),
-
-          toggleMode: () => {
-            const currentMode = get().mode;
-            const newMode = currentMode === 'simple' ? 'advanced' : 'simple';
-
-            set(
-              {
-                mode: newMode,
-                showModeSwitcherHint: false,
-              },
-              undefined,
-              'ui/mode/toggle',
-            );
-          },
-
           completeOnboarding: () =>
             set({ onboardingCompleted: true }, undefined, 'ui/onboarding/complete'),
-
-          dismissModeSwitcherHint: () =>
-            set({ showModeSwitcherHint: false }, undefined, 'ui/mode/dismissHint'),
-
-          isSimpleMode: () => get().mode === 'simple',
-
-          isAdvancedMode: () => get().mode === 'advanced',
 
           resetOnLogout: () => {
             clearAllDismissTimers();
@@ -839,9 +721,6 @@ export const useUIStore = create<UIState>()(
                   contextId: null,
                   autoTrigger: false,
                 };
-
-                // Note: mode, onboardingCompleted, showModeSwitcherHint are kept
-                // as they represent user preference, not session state
               },
               undefined,
               'ui/resetOnLogout',
@@ -860,18 +739,14 @@ export const useUIStore = create<UIState>()(
           sidebarCollapsed: state.sidebarCollapsed,
           sidecar: state.sidecar,
 
-          mode: state.mode,
           onboardingCompleted: state.onboardingCompleted,
-          showModeSwitcherHint: state.showModeSwitcherHint,
         }),
         merge: (persistedState: unknown, currentState) => {
           const persisted = persistedState as Partial<{
             sidebarWidth: number;
             sidebarCollapsed: boolean;
             sidecar: SidecarState;
-            mode: UIMode;
             onboardingCompleted: boolean;
-            showModeSwitcherHint: boolean;
           }>;
 
           return {
@@ -885,10 +760,7 @@ export const useUIStore = create<UIState>()(
                   autoTrigger: false,
                 }
               : currentState.sidecar,
-            mode: persisted?.mode ?? currentState.mode,
             onboardingCompleted: persisted?.onboardingCompleted ?? currentState.onboardingCompleted,
-            showModeSwitcherHint:
-              persisted?.showModeSwitcherHint ?? currentState.showModeSwitcherHint,
           };
         },
       },
@@ -921,10 +793,7 @@ export const selectSidecar = (state: UIState) => state.sidecar;
 export const selectIsSidecarVisible = (state: UIState) => state.sidecarOpen || state.sidecar.isOpen;
 export const selectActiveSidecarMode = (state: UIState) => state.sidecar.activeMode;
 
-export const selectIsSimpleMode = (state: UIState) => state.mode === 'simple';
-export const selectUIMode = (state: UIState) => state.mode;
 export const selectOnboardingCompleted = (state: UIState) => state.onboardingCompleted;
-export const selectShowModeSwitcherHint = (state: UIState) => state.showModeSwitcherHint;
 
 /**
  * @deprecated Use useUIStore instead. This alias is for backwards compatibility.

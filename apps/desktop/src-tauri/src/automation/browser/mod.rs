@@ -27,7 +27,7 @@ pub struct BrowserState {
 }
 
 impl BrowserState {
-    /// SEV-DESK-02: production constructor, threads the Tauri `AppHandle`
+    /// Production constructor, threads the Tauri `AppHandle`
     /// through to `ExtensionBridge` so dangerous browser-mutating actions.
     pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self> {
         let extension = match app_handle {

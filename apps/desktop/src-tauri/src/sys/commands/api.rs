@@ -51,22 +51,14 @@ impl ApiState {
         })
     }
 
-    pub async fn execute_request(&self, request: ApiRequest) -> Result<ApiResponse, String> {
-        self.get_client()?
-            .execute(request)
-            .await
-            .map_err(|e| format!("API request failed: {}", e))
-    }
-
     /// Execute a request whose destination the app did not choose.
     ///
     /// The WebView's CSP `connect-src` allowlist has no effect on a request
     /// made from the Rust process, so the destination and every redirect hop
     /// are judged against the same `egress_policy` the tool guard applies to
-    /// LLM-supplied URLs. The unchecked [`Self::execute_request`] is for URLs
-    /// the app builds itself from an already-validated base (account, credits,
-    /// OAuth), which are allowed to reach a `localhost` API server in
-    /// development.
+    /// LLM-supplied URLs. Requests the app builds itself from an
+    /// already-validated base (account, OAuth) use [`Self::get_client`], which may
+    /// reach a `localhost` API server in development.
     pub async fn execute_renderer_request(
         &self,
         request: ApiRequest,

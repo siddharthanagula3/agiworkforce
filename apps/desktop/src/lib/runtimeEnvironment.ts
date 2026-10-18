@@ -1,5 +1,3 @@
-declare const __ELECTRON_BUILD__: boolean | undefined;
-
 const runtimeGlobal =
   typeof globalThis !== 'undefined' ? (globalThis as Record<string, unknown>) : undefined;
 const browserWindow =
@@ -10,9 +8,6 @@ export const isTauri = Boolean(
   browserWindow?.['__TAURI_INTERNALS__'] ||
   browserWindow?.['__TAURI__'],
 );
-
-export const isElectronHost =
-  typeof __ELECTRON_BUILD__ !== 'undefined' && __ELECTRON_BUILD__ === true;
 
 export const isTestEnvironment =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || !!process.env['VITEST']);

@@ -1,27 +1,9 @@
-//! Modular Tool Executor Architecture
+//! The tool executors computer use and web search still run directly, and the
+//! granted-folder checks every path parameter goes through.
 //!
-//! This module provides a trait-based system for executing AGI tools.
-//! Each tool category has its own executor implementing the `ToolExecutor` trait.
-//!
-//! # Architecture
-//!
-//! ```text
-//! AGIExecutor
-//!     └── ExecutorRegistry
-//!             ├── FileExecutor (file_read, file_write, file_delete)
-//!             ├── UiExecutor (ui_screenshot, ui_click, ui_type)
-//!             ├── BrowserExecutor (browser_navigate, browser_click, browser_extract)
-//!             ├── DatabaseExecutor (db_query, db_execute, db_transaction_*)
-//!             ├── GitExecutor (git_status, git_init, git_add, git_commit, git_push, git_clone)
-//!             ├── CloudExecutor (cloud_upload, cloud_download)
-//!             ├── SearchExecutor (search_web)
-//!             ├── TerminalExecutor (terminal_execute)
-//!             ├── CodeExecutor (code_execute, code_analyze)
-//!             ├── ApiExecutor (api_call, api_upload, api_download)
-//!             ├── LlmExecutor (llm_reason)
-//!             ├── ProductivityExecutor (productivity_*, document_*)
-//!             └── OcrExecutor (ocr_extract, ocr_analyze)
-//! ```
+//! `UiExecutor`, `BrowserExecutor` and `ApiExecutor` serve the computer-use
+//! action router; `SearchExecutor` is the web search provider behind the chat
+//! and research search tools.
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -38,18 +20,7 @@ use crate::sys::security::ToolExecutionGuard;
 
 mod api_executor;
 mod browser_executor;
-mod cloud_executor;
-mod code_executor;
-mod database_executor;
-pub mod deploy_executor;
-mod file_executor;
-pub mod git_executor;
-mod llm_executor;
-mod media_executor;
-mod ocr_executor;
-mod productivity_executor;
 pub mod search_executor;
-mod terminal_executor;
 mod ui_executor;
 
 #[cfg(test)]
@@ -57,17 +28,7 @@ mod tests;
 
 pub use api_executor::ApiExecutor;
 pub use browser_executor::BrowserExecutor;
-pub use cloud_executor::CloudExecutor;
-pub use code_executor::CodeExecutor;
-pub use database_executor::DatabaseExecutor;
-pub use file_executor::FileExecutor;
-pub use git_executor::GitExecutor;
-pub use llm_executor::LlmExecutor;
-pub use media_executor::MediaExecutor;
-pub use ocr_executor::OcrExecutor;
-pub use productivity_executor::ProductivityExecutor;
 pub use search_executor::SearchExecutor;
-pub use terminal_executor::TerminalExecutor;
 pub use ui_executor::UiExecutor;
 
 pub(crate) const NO_GRANTED_FOLDER: &str =
@@ -509,113 +470,3 @@ pub trait ToolExecutor: Send + Sync {
     /// Returns a description of this executor
     fn description(&self) -> &'static str;
 }
-
-/// Registry of all tool executors
-pub struct ExecutorRegistry {
-    executors: HashMap<String, Arc<dyn ToolExecutor>>,
-}
-
-impl ExecutorRegistry {
-    /// Creates a new registry with all executors registered
-    pub fn new(router: Arc<tokio::sync::RwLock<LLMRouter>>) -> Self {
-        let mut executors: HashMap<String, Arc<dyn ToolExecutor>> = HashMap::new();
-
-        // Register all executors
-        let file_exec: Arc<dyn ToolExecutor> = Arc::new(FileExecutor::new());
-        for name in file_exec.tool_names() {
-            executors.insert(name.to_string(), file_exec.clone());
-        }
-
-        let ui_exec: Arc<dyn ToolExecutor> = Arc::new(UiExecutor::new());
-        for name in ui_exec.tool_names() {
-            executors.insert(name.to_string(), ui_exec.clone());
-        }
-
-        let browser_exec: Arc<dyn ToolExecutor> = Arc::new(BrowserExecutor::new());
-        for name in browser_exec.tool_names() {
-            executors.insert(name.to_string(), browser_exec.clone());
-        }
-
-        let db_exec: Arc<dyn ToolExecutor> = Arc::new(DatabaseExecutor::new());
-        for name in db_exec.tool_names() {
-            executors.insert(name.to_string(), db_exec.clone());
-        }
-
-        let git_exec: Arc<dyn ToolExecutor> = Arc::new(GitExecutor::new());
-        for name in git_exec.tool_names() {
-            executors.insert(name.to_string(), git_exec.clone());
-        }
-
-        let cloud_exec: Arc<dyn ToolExecutor> = Arc::new(CloudExecutor::new());
-        for name in cloud_exec.tool_names() {
-            executors.insert(name.to_string(), cloud_exec.clone());
-        }
-
-        let search_exec: Arc<dyn ToolExecutor> = Arc::new(SearchExecutor::new());
-        for name in search_exec.tool_names() {
-            executors.insert(name.to_string(), search_exec.clone());
-        }
-
-        let terminal_exec: Arc<dyn ToolExecutor> = Arc::new(TerminalExecutor::new());
-        for name in terminal_exec.tool_names() {
-            executors.insert(name.to_string(), terminal_exec.clone());
-        }
-
-        let code_exec: Arc<dyn ToolExecutor> = Arc::new(CodeExecutor::new());
-        for name in code_exec.tool_names() {
-            executors.insert(name.to_string(), code_exec.clone());
-        }
-
-        let api_exec: Arc<dyn ToolExecutor> = Arc::new(ApiExecutor::new());
-        for name in api_exec.tool_names() {
-            executors.insert(name.to_string(), api_exec.clone());
-        }
-
-        let llm_exec: Arc<dyn ToolExecutor> = Arc::new(LlmExecutor::new(router));
-        for name in llm_exec.tool_names() {
-            executors.insert(name.to_string(), llm_exec.clone());
-        }
-
-        let productivity_exec: Arc<dyn ToolExecutor> = Arc::new(ProductivityExecutor::new());
-        for name in productivity_exec.tool_names() {
-            executors.insert(name.to_string(), productivity_exec.clone());
-        }
-
-        let ocr_exec: Arc<dyn ToolExecutor> = Arc::new(OcrExecutor::new());
-        for name in ocr_exec.tool_names() {
-            executors.insert(name.to_string(), ocr_exec.clone());
-        }
-
-        // Media generation executor (image/video)
-        let media_exec: Arc<dyn ToolExecutor> = Arc::new(MediaExecutor::new());
-        for name in media_exec.tool_names() {
-            executors.insert(name.to_string(), media_exec.clone());
-        }
-
-        Self { executors }
-    }
-
-    /// Gets an executor for a given tool name.
-    pub fn get_executor(&self, tool_name: &str) -> Option<Arc<dyn ToolExecutor>> {
-        self.executors.get(tool_name).cloned()
-    }
-
-    /// Returns all registered tool names.
-    pub fn tool_names(&self) -> Vec<&str> {
-        self.executors.keys().map(|s| s.as_str()).collect()
-    }
-
-    /// Returns the number of registered executors.
-    pub fn executor_count(&self) -> usize {
-        // Count unique executors (not tool names)
-        let unique: std::collections::HashSet<_> =
-            self.executors.values().map(|e| e.description()).collect();
-
-        unique.len()
-    }
-}
-
-// Note: Executor tests are located in the tests/ subdirectory:
-// - tests/file_executor_tests.rs
-// - tests/git_executor_tests.rs
-// - tests/database_executor_tests.rs

@@ -82,6 +82,24 @@ describe('Background Agents panel', () => {
     expect(screen.getByText(/1\/8 active/)).toBeInTheDocument();
   });
 
+  it('counts tool calls for a chat-turn run, which has no fixed step count', async () => {
+    stubBackend({
+      ...AGENT,
+      progress: {
+        currentStep: 3,
+        totalSteps: 0,
+        currentStepDescription: 'Running read_file',
+        percentage: 0,
+        elapsedSecs: 5,
+      },
+    });
+    await openBackgroundTab();
+
+    expect(screen.getByText('Running read_file')).toBeInTheDocument();
+    expect(screen.getByText('Tool call 3')).toBeInTheDocument();
+    expect(screen.queryByText(/of 0/)).not.toBeInTheDocument();
+  });
+
   function sentCommands() {
     return mockInvoke.mock.calls.map(([command]) => command);
   }

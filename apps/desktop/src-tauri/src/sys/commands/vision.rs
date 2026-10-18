@@ -52,16 +52,6 @@ pub struct VisionResponse {
     pub processing_time_ms: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VisualElementLocation {
-    pub description: String,
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub confidence: f32,
-}
-
 pub async fn vision_send_message(
     request: VisionRequest,
     state: State<'_, LLMState>,
@@ -212,80 +202,6 @@ pub async fn vision_send_message(
         .to_string())
 }
 
-pub async fn vision_locate_element(
-    capture_id: String,
-    element_description: String,
-    provider: Option<String>,
-    state: State<'_, LLMState>,
-    db: State<'_, AppDatabase>,
-) -> Result<VisualElementLocation, String> {
-    tracing::info!(
-        "Locating element '{}' in capture {}",
-        element_description,
-        capture_id
-    );
-
-    let prompt = format!(
-        "In this screenshot, locate the element described as: '{}'.
-         Provide the approximate bounding box coordinates (x, y, width, height)
-         and your confidence level (0-100). Format your response as JSON:
-         {{\"x\": 100, \"y\": 200, \"width\": 50, \"height\": 30, \"confidence\": 95}}",
-        element_description
-    );
-
-    let request = VisionRequest {
-        prompt,
-        images: vec![VisionImage {
-            source_type: "capture_id".to_string(),
-            source: capture_id,
-            detail: Some("high".to_string()),
-        }],
-        provider,
-        model: Some(default_vision_model()),
-        temperature: Some(0.0),
-        max_tokens: Some(500),
-        detail_level: Some("high".to_string()),
-    };
-
-    let response = vision_send_message(request, state, db).await?;
-
-    let location = parse_element_location(&response.content, &element_description)?;
-
-    Ok(location)
-}
-
-pub async fn vision_describe_ui_elements(
-    capture_id: String,
-    provider: Option<String>,
-    state: State<'_, LLMState>,
-    db: State<'_, AppDatabase>,
-) -> Result<VisionResponse, String> {
-    tracing::info!("Describing UI elements in capture: {}", capture_id);
-
-    let prompt =
-        "Analyze this screenshot and provide a structured description of all visible UI elements.
-                  For each element, describe: type (button, textbox, label, etc.), text content,
-                  approximate location (top-left, center, bottom-right, etc.), and visual state
-                  (enabled, disabled, selected, etc.). Format as a structured list."
-            .to_string();
-
-    let request = VisionRequest {
-        prompt,
-        images: vec![VisionImage {
-            source_type: "capture_id".to_string(),
-            source: capture_id,
-            detail: Some("high".to_string()),
-        }],
-        provider,
-        model: Some(default_vision_model()),
-        temperature: Some(0.3),
-        max_tokens: Some(2000),
-        detail_level: Some("high".to_string()),
-    };
-
-    vision_send_message(request, state, db).await
-}
-
 pub async fn vision_answer_question(
     image_path: String,
     question: String,
@@ -422,33 +338,4 @@ fn parse_detail_level(detail: &str) -> Result<ImageDetail, String> {
         "auto" => Ok(ImageDetail::Auto),
         _ => Err(format!("Invalid detail level: {}", detail)),
     }
-}
-
-fn parse_element_location(text: &str, description: &str) -> Result<VisualElementLocation, String> {
-    use regex::Regex;
-
-    let re = Regex::new(r"\{[^}]+\}").map_err(|e| format!("Failed to create regex: {}", e))?;
-
-    if let Some(json_match) = re.find(text) {
-        let json_str = json_match.as_str();
-
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
-            let x = parsed["x"].as_i64().unwrap_or(0) as i32;
-            let y = parsed["y"].as_i64().unwrap_or(0) as i32;
-            let width = parsed["width"].as_u64().unwrap_or(0) as u32;
-            let height = parsed["height"].as_u64().unwrap_or(0) as u32;
-            let confidence = parsed["confidence"].as_f64().unwrap_or(0.0) as f32;
-
-            return Ok(VisualElementLocation {
-                description: description.to_string(),
-                x,
-                y,
-                width,
-                height,
-                confidence,
-            });
-        }
-    }
-
-    Err("Failed to parse element location from response".to_string())
 }

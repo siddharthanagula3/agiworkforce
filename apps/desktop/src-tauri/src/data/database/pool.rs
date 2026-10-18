@@ -213,24 +213,6 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn close_connection(&self, connection_id: &str) -> Result<()> {
-        let mut connections = self.connections.write().await;
-
-        if let Some(pos) = connections.iter().position(|c| c.id == connection_id) {
-            connections.remove(pos);
-
-            let mut stats = self.stats.write().await;
-            stats.total_closed += 1;
-            stats.total_connections = connections.len() as u32;
-
-            tracing::debug!("Closed connection: {}", connection_id);
-
-            Ok(())
-        } else {
-            Err(Error::Other("Connection not found".to_string()))
-        }
-    }
-
     pub async fn close_all(&self) -> Result<()> {
         let mut connections = self.connections.write().await;
         let count = connections.len();
@@ -272,10 +254,6 @@ impl ConnectionPool {
 
     pub fn get_config(&self) -> &ConnectionConfig {
         &self.config
-    }
-
-    pub fn get_pool_config(&self) -> &PoolConfig {
-        &self.pool_config
     }
 }
 

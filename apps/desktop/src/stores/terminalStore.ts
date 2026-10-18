@@ -40,15 +40,9 @@ interface TerminalState {
     onExit?: () => void,
   ) => Promise<void>;
   removeOutputListener: (sessionId: string) => void;
-  getSessionById: (sessionId: string) => TerminalSession | undefined;
   reset: () => void;
 
   aiSuggestCommand: (intent: string, shellType: ShellTypeLiteral, cwd?: string) => Promise<string>;
-  aiExplainError: (
-    errorOutput: string,
-    command?: string,
-    shellType?: ShellTypeLiteral,
-  ) => Promise<string>;
   smartCommit: (sessionId: string) => Promise<string>;
   aiSuggestImprovements: (command: string, shellType: ShellTypeLiteral) => Promise<string | null>;
 
@@ -282,11 +276,6 @@ export const useTerminalStore = create<TerminalState>()(
           }
         },
 
-        getSessionById: (sessionId: string) => {
-          const state = get();
-          return state.sessions.find((s) => s.id === sessionId);
-        },
-
         reset: () => {
           const currentListeners = get().listeners;
           currentListeners.forEach((unlisteners) => {
@@ -321,24 +310,6 @@ export const useTerminalStore = create<TerminalState>()(
             return command;
           } catch (error) {
             console.error('Failed to get AI command suggestion:', error);
-            throw error;
-          }
-        },
-
-        aiExplainError: async (
-          errorOutput: string,
-          command?: string,
-          shellType?: ShellTypeLiteral,
-        ) => {
-          try {
-            const explanation = await invoke<string>('terminal_ai_explain_error', {
-              errorOutput,
-              command,
-              shellType: shellType || 'zsh',
-            });
-            return explanation;
-          } catch (error) {
-            console.error('Failed to get AI error explanation:', error);
             throw error;
           }
         },

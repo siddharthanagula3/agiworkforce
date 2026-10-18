@@ -434,6 +434,14 @@ impl TextToSpeech for ElevenLabsTts {
     }
 }
 
+fn openai_speech_url() -> Result<String> {
+    crate::core::llm::providers::direct_api_provider::default_base_url(
+        crate::core::llm::Provider::OpenAI,
+    )
+    .map(|base| format!("{base}/audio/speech"))
+    .ok_or_else(|| Error::Generic("OpenAI has no registered API endpoint".to_string()))
+}
+
 /// OpenAI TTS implementation
 pub struct OpenAiTts {
     config: TtsConfig,
@@ -484,7 +492,7 @@ impl TextToSpeech for OpenAiTts {
 
         let response = self
             .client
-            .post("https://api.openai.com/v1/audio/speech")
+            .post(openai_speech_url()?)
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&payload)

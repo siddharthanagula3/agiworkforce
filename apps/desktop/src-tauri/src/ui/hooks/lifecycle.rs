@@ -1,23 +1,16 @@
-//! The session, prompt, approval and goal events. Each one is raised here so
-//! the chat, confirmation and agent code make a single call and cannot
-//! disagree about when a session or a goal starts and ends.
+//! The session, prompt and approval events. Each one is raised here so the
+//! chat and confirmation code make a single call and cannot disagree about
+//! when a session starts and ends.
 
 use super::{emit_event, emit_event_sync, gating_registry, HookEvent, HookRegistry};
 use crate::sys::security::tool_guard::ToolConfirmationRequest;
 use serde_json::Value;
-use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, MutexGuard};
 
 const TEMPORARY_CHAT: &str = "temporary";
 
 static ACTIVE_SESSIONS: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
-static ACTIVE_GOALS: Mutex<BTreeMap<String, GoalSummary>> = Mutex::new(BTreeMap::new());
-
-struct GoalSummary {
-    description: String,
-    priority: String,
-}
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
@@ -199,120 +192,10 @@ impl PendingApproval {
     }
 }
 
-fn begin_goal(goal_id: &str, payload: &Value) -> Option<HookEvent> {
-    let description = payload
-        .get("description")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    let priority = match payload.get("priority") {
-        Some(Value::String(priority)) => priority.clone(),
-        Some(Value::Null) | None => "unspecified".to_string(),
-        Some(other) => other.to_string(),
-    };
-
-    match locked(&ACTIVE_GOALS).entry(goal_id.to_string()) {
-        Entry::Occupied(_) => None,
-        Entry::Vacant(slot) => {
-            slot.insert(GoalSummary {
-                description: description.clone(),
-                priority: priority.clone(),
-            });
-            Some(HookEvent::goal_start(
-                goal_id.to_string(),
-                goal_id.to_string(),
-                description,
-                priority,
-            ))
-        }
-    }
-}
-
-fn finish_goal(goal_id: &str, outcome: Result<Value, String>) -> Option<HookEvent> {
-    let goal = locked(&ACTIVE_GOALS).remove(goal_id)?;
-    Some(match outcome {
-        Ok(result) => HookEvent::goal_completed(
-            goal_id.to_string(),
-            goal_id.to_string(),
-            goal.description,
-            goal.priority,
-            result,
-        ),
-        Err(error) => HookEvent::goal_error(
-            goal_id.to_string(),
-            goal_id.to_string(),
-            goal.description,
-            goal.priority,
-            error,
-        ),
-    })
-}
-
-fn payload_text(payload: &Value, key: &str, fallback: &str) -> String {
-    payload
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or(fallback)
-        .to_string()
-}
-
-/// Translates the agent engine's own goal events. A goal that started gets
-/// exactly one `GoalCompleted` or `GoalError`: the first ending wins, and a
-/// goal that is cleaned up without one ran its plan to the end.
-fn goal_hook_event(event: &str, payload: &Value) -> Option<HookEvent> {
-    let goal_id = payload.get("goal_id").and_then(Value::as_str)?;
-    match event {
-        "agi:goal:submitted" | "agi:goal:parallel_submitted" | "agi:goal:swarm_submitted" => {
-            begin_goal(goal_id, payload)
-        }
-        "agi:goal:achieved" | "agi:goal:cleanup" => finish_goal(goal_id, Ok(payload.clone())),
-        "agi:goal:parallel_best_result" | "agi:goal:swarm_completed" => {
-            if payload.get("success").and_then(Value::as_bool) == Some(true) {
-                finish_goal(goal_id, Ok(payload.clone()))
-            } else {
-                finish_goal(
-                    goal_id,
-                    Err(payload_text(payload, "error", "The agents did not succeed")),
-                )
-            }
-        }
-        "agi:goal:error" => finish_goal(
-            goal_id,
-            Err(payload_text(payload, "error", "The goal failed")),
-        ),
-        "agi:goal:timeout" => finish_goal(goal_id, Err("The goal timed out".to_string())),
-        "agi:goal:max_iterations" => finish_goal(
-            goal_id,
-            Err("The goal reached its iteration limit".to_string()),
-        ),
-        "agi:goal:unachievable" => finish_goal(
-            goal_id,
-            Err(payload_text(
-                payload,
-                "final_insight",
-                "The goal was judged unachievable",
-            )),
-        ),
-        "agi:goal:cancelled" => finish_goal(goal_id, Err("The goal was cancelled".to_string())),
-        _ => None,
-    }
-}
-
-pub fn agent_event(event: &str, payload: &Value) {
-    if let Some(hook_event) = goal_hook_event(event, payload) {
-        tauri::async_runtime::spawn(emit_event(hook_event));
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::types::{EventContext, HookEventType};
+    use super::super::types::HookEventType;
     use super::*;
-    use serde_json::json;
-
-    fn goal_event(event: &str, payload: Value) -> Option<HookEvent> {
-        goal_hook_event(event, &payload)
-    }
 
     #[test]
     fn a_session_starts_once_and_ends_once() {
@@ -320,96 +203,6 @@ mod tests {
         assert!(!begin_session("lifecycle-session-a"));
         assert!(finish_session("lifecycle-session-a"));
         assert!(!finish_session("lifecycle-session-a"));
-    }
-
-    #[test]
-    fn a_submitted_goal_starts_once_and_carries_its_description() {
-        let payload = json!({
-            "goal_id": "lifecycle-goal-start",
-            "description": "Tidy the downloads folder",
-            "priority": "High",
-        });
-
-        let started = goal_event("agi:goal:submitted", payload.clone()).expect("goal start");
-        assert_eq!(started.event_type, HookEventType::GoalStart);
-        match started.context {
-            EventContext::Goal {
-                goal_id,
-                description,
-                priority,
-                ..
-            } => {
-                assert_eq!(goal_id, "lifecycle-goal-start");
-                assert_eq!(description, "Tidy the downloads folder");
-                assert_eq!(priority, "High");
-            }
-            other => panic!("expected a goal context, got {other:?}"),
-        }
-        assert!(goal_event("agi:goal:submitted", payload).is_none());
-        assert!(goal_event(
-            "agi:goal:cleanup",
-            json!({ "goal_id": "lifecycle-goal-start" })
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn the_first_ending_wins_and_cleanup_adds_nothing() {
-        let id = "lifecycle-goal-error";
-        goal_event("agi:goal:submitted", json!({ "goal_id": id })).expect("goal start");
-
-        let failed = goal_event(
-            "agi:goal:error",
-            json!({ "goal_id": id, "error": "disk full" }),
-        )
-        .expect("goal error");
-        assert_eq!(failed.event_type, HookEventType::GoalError);
-        match failed.context {
-            EventContext::Goal { error, .. } => assert_eq!(error.as_deref(), Some("disk full")),
-            other => panic!("expected a goal context, got {other:?}"),
-        }
-        assert!(goal_event("agi:goal:cleanup", json!({ "goal_id": id })).is_none());
-    }
-
-    #[test]
-    fn a_goal_that_runs_its_plan_out_completes_at_cleanup() {
-        let id = "lifecycle-goal-cleanup";
-        goal_event("agi:goal:submitted", json!({ "goal_id": id })).expect("goal start");
-
-        let completed = goal_event("agi:goal:cleanup", json!({ "goal_id": id })).expect("ending");
-        assert_eq!(completed.event_type, HookEventType::GoalCompleted);
-    }
-
-    #[test]
-    fn a_cancelled_or_unsuccessful_goal_is_an_error() {
-        let cancelled = "lifecycle-goal-cancelled";
-        goal_event("agi:goal:submitted", json!({ "goal_id": cancelled })).expect("goal start");
-        let event = goal_event("agi:goal:cancelled", json!({ "goal_id": cancelled })).expect("end");
-        assert_eq!(event.event_type, HookEventType::GoalError);
-
-        let swarm = "lifecycle-goal-swarm";
-        goal_event("agi:goal:swarm_submitted", json!({ "goal_id": swarm })).expect("goal start");
-        let event = goal_event(
-            "agi:goal:swarm_completed",
-            json!({ "goal_id": swarm, "success": false }),
-        )
-        .expect("end");
-        assert_eq!(event.event_type, HookEventType::GoalError);
-    }
-
-    #[test]
-    fn an_ending_for_a_goal_that_never_started_fires_nothing() {
-        assert!(goal_event(
-            "agi:goal:achieved",
-            json!({ "goal_id": "lifecycle-goal-unknown" })
-        )
-        .is_none());
-        assert!(goal_event(
-            "agi:goal:progress",
-            json!({ "goal_id": "lifecycle-goal-unknown" })
-        )
-        .is_none());
-        assert!(goal_event("agi:goal:submitted", json!({})).is_none());
     }
 
     #[cfg(unix)]

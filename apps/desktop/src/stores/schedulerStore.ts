@@ -43,11 +43,6 @@ export interface ScheduledJob {
   lastOutput?: string | null;
 }
 
-export interface NextRunInfo {
-  jobId: string;
-  nextRun: string;
-}
-
 export type JobExecutionStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface JobExecutionRecord {
@@ -363,9 +358,7 @@ interface SchedulerState {
   error: string | null;
 
   listJobs: () => Promise<void>;
-  getJob: (jobId: string) => Promise<ScheduledJob | null>;
   getHistory: (jobId?: string) => Promise<JobExecutionRecord[]>;
-  getNextRuns: (limit?: number) => Promise<NextRunInfo[]>;
   updateJob: (job: ScheduledJob) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
@@ -424,19 +417,6 @@ export const useSchedulerStore = create<SchedulerState>()(
           }
         },
 
-        getJob: async (jobId: string): Promise<ScheduledJob | null> => {
-          try {
-            const job = await invoke<ScheduledJob | null>('scheduler_get_job', { jobId });
-            return job ?? null;
-          } catch (error) {
-            console.error('[schedulerStore] Failed to get job:', error);
-            throw error;
-          }
-        },
-
-        // The backend records every run into execution_history; without this
-        // there is no way to read it back, so a failed overnight job is
-        // invisible in the app.
         getHistory: async (jobId?: string): Promise<JobExecutionRecord[]> => {
           try {
             const history = await invoke<JobExecutionRecord[]>('scheduler_get_history', {
@@ -445,18 +425,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             return history;
           } catch (error) {
             console.error('[schedulerStore] Failed to get execution history:', error);
-            throw error;
-          }
-        },
-
-        getNextRuns: async (limit?: number): Promise<NextRunInfo[]> => {
-          try {
-            const nextRuns = await invoke<NextRunInfo[]>('scheduler_get_next_runs', {
-              limit: limit ?? 10,
-            });
-            return nextRuns;
-          } catch (error) {
-            console.error('[schedulerStore] Failed to get next runs:', error);
             throw error;
           }
         },
@@ -695,19 +663,3 @@ export const useSchedulerStore = create<SchedulerState>()(
     { name: 'SchedulerStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export function waitForSchedulerHydration(): Promise<void> {
-  return new Promise((resolve) => {
-    const state = useSchedulerStore.getState();
-    if (state._hasHydrated) {
-      resolve();
-      return;
-    }
-    const unsub = useSchedulerStore.subscribe((s) => {
-      if (s._hasHydrated) {
-        unsub();
-        resolve();
-      }
-    });
-  });
-}

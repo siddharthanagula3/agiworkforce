@@ -1,3 +1,4 @@
+use agiworkforce_model_registry::TrustMode;
 use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -5,7 +6,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
-use crate::sys::commands::agi::{self, SpawnAgentRequest};
+use crate::core::agent::unattended_turn::{run_unattended_turn, UnattendedTurn, UnattendedTurnEnd};
 use crate::sys::commands::chat::ChatSendMessageRequest;
 use crate::sys::commands::research::{ResearchModeInput, ResearchRequest, ResearchResponse};
 
@@ -216,7 +217,6 @@ impl DesktopMcpServerExecutor {
             output_config: None,
             temperature: None,
             max_output_tokens: None,
-            enable_agent_mode: Some(false),
             prefer_cloud_credits: false,
             // MCP server calls are treated as local (no ManagedCloud routing).
             active_mode: Some("local".to_string()),
@@ -342,7 +342,6 @@ impl DesktopMcpServerExecutor {
             output_config: None,
             temperature: None,
             max_output_tokens: None,
-            enable_agent_mode: Some(false),
             prefer_cloud_credits: false,
             // MCP server calls are treated as local (no ManagedCloud routing).
             active_mode: Some("local".to_string()),
@@ -535,19 +534,10 @@ impl DesktopMcpServerExecutor {
             Err(outcome) => return Ok(outcome),
         };
 
-        let max_steps = match self.optional_u64_argument(&arguments, "max_steps") {
-            Ok(Some(max_steps)) if (1..=25).contains(&max_steps) => max_steps,
-            Ok(Some(_)) => {
-                return Ok(self.outcome_from_error("max_steps must be between 1 and 25."))
-            }
-            Ok(None) => 10,
-            Err(outcome) => return Ok(outcome),
-        };
-
-        if let Err(refusal) = crate::core::agi::executor::require_tool_approval(
+        if let Err(refusal) = crate::core::agent::tool_approval::require_tool_approval(
             &self.app_handle,
             RUN_TASK_TOOL,
-            &json!({ "task": task, "max_steps": max_steps }),
+            &json!({ "task": task }),
             Some(RUN_TASK_APPROVAL_PROMPT),
         )
         .await
@@ -555,71 +545,25 @@ impl DesktopMcpServerExecutor {
             return Ok(self.outcome_from_error(refusal.to_string()));
         }
 
-        let spawn_request = SpawnAgentRequest {
-            description: task.clone(),
-            priority: Some("medium".to_string()),
-            deadline: None,
-            success_criteria: None,
-            max_steps: Some(max_steps),
+        let turn = UnattendedTurn {
+            prompt: &task,
+            trust_mode: TrustMode::Local,
+            project_folder: None,
+            time_limit: Some(Duration::from_secs(DEFAULT_AGENT_TIMEOUT_SECS)),
+            conversation_id: None,
+            progress: None,
         };
-
-        let orchestrated = crate::sys::commands::orchestrator_spawn_agent(spawn_request).await;
-        match orchestrated {
-            Ok(spawned) => {
-                match agi::wait_for_agent_result(
-                    &spawned.agent_id,
-                    Duration::from_secs(DEFAULT_AGENT_TIMEOUT_SECS),
-                )
-                .await
-                {
-                    Ok(agent_result) => {
-                        let structured = json!({
-                            "agentId": spawned.agent_id,
-                            "maxSteps": max_steps,
-                            "result": self.serialization_value(&agent_result),
-                            "mode": "orchestrator",
-                        });
-                        let text = structured["result"]["result"]
-                            .as_str()
-                            .unwrap_or("Agent task completed.")
-                            .to_string();
-                        Ok(McpServerToolOutcome::success(text, Some(structured)))
-                    }
-                    Err(error) => Ok(self.outcome_from_error(error)),
-                }
+        let ran = run_unattended_turn(&self.app_handle, turn, std::future::pending::<()>()).await;
+        match ran.end {
+            UnattendedTurnEnd::Answered(answer) => {
+                let structured = json!({ "result": answer.clone(), "refusedTools": ran.refusals });
+                Ok(McpServerToolOutcome::success(answer, Some(structured)))
             }
-            Err(orchestrator_error) => {
-                let fallback_result = crate::sys::commands::start_agent_task(
-                    self.app_handle.clone(),
-                    task.clone(),
-                    "auto".to_string(),
-                    self.app_handle
-                        .try_state::<crate::sys::commands::LLMState>()
-                        .ok_or_else(|| "LLMState unavailable".to_string())?,
-                    self.app_handle
-                        .try_state::<crate::sys::billing::BillingStateWrapper>()
-                        .ok_or_else(|| "BillingState unavailable".to_string())?,
-                    Some(MCP_SERVER_USER_ID.to_string()),
-                )
-                .await;
-
-                match fallback_result {
-                    Ok(result) => Ok(McpServerToolOutcome::success(
-                        result.clone(),
-                        Some(json!({
-                            "task": task,
-                            "maxSteps": max_steps,
-                            "result": result,
-                            "mode": "single_pass_fallback",
-                            "fallbackReason": orchestrator_error,
-                        })),
-                    )),
-                    Err(error) => Ok(self.outcome_from_error(format!(
-                        "{}; fallback failed: {}",
-                        orchestrator_error, error
-                    ))),
-                }
-            }
+            UnattendedTurnEnd::Failed(reason) => Ok(self.outcome_from_error(reason)),
+            UnattendedTurnEnd::TimedOut => Ok(self.outcome_from_error(format!(
+                "The task did not finish within {DEFAULT_AGENT_TIMEOUT_SECS} seconds and was stopped."
+            ))),
+            UnattendedTurnEnd::Stopped => Ok(self.outcome_from_error("The task was stopped.")),
         }
     }
 }
@@ -859,7 +803,7 @@ mod tests {
 
         let settled = tokio::time::timeout(
             std::time::Duration::from_millis(250),
-            crate::core::agi::executor::require_tool_approval(
+            crate::core::agent::tool_approval::require_tool_approval(
                 app.handle(),
                 super::RUN_TASK_TOOL,
                 &json!({ "task": "tidy the desktop", "max_steps": 10 }),
@@ -884,7 +828,7 @@ mod tests {
         state.set_agent_mode(AgentMode::Safe);
         app.handle().manage(state);
 
-        let refusal = crate::core::agi::executor::require_tool_approval(
+        let refusal = crate::core::agent::tool_approval::require_tool_approval(
             app.handle(),
             super::RUN_TASK_TOOL,
             &json!({ "task": "tidy the desktop" }),

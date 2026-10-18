@@ -9,7 +9,7 @@ const CURRENT_VERSION: i32 = 89;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
-/// FIX-002: Helper for FTS table creation with better error handling
+/// Helper for FTS table creation with better error handling
 /// Returns Ok(true) if FTS was created, Ok(false) if FTS5 is not available,
 /// or an error if something else went wrong
 fn create_fts_table_with_fallback(conn: &Connection, sql: &str, table_name: &str) -> Result<bool> {
@@ -262,7 +262,7 @@ fn validate_table_name(table: &str) -> Result<()> {
 /// Run a migration within a transaction for atomicity.
 /// If the migration fails, the transaction is rolled back and the database remains unchanged.
 ///
-/// DESK-6 (audit 2026-05-03): the previous implementation used
+/// The previous implementation used
 /// `format!("SAVEPOINT migration_v{version}")` and the matching ROLLBACK
 /// TO / RELEASE statements with raw string interpolation. While `version`
 /// is hard-coded today, the pattern is unsafe by construction, if any
@@ -324,7 +324,6 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )
         .unwrap_or(0);
 
-    // FIX-001: Properly handle database version mismatch instead of silently ignoring
     if current_version > CURRENT_VERSION {
         tracing::warn!(
             current_db_version = current_version,
@@ -701,7 +700,7 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 /// Migration v45: Create FTS sync triggers for messages and conversations
 /// These triggers automatically keep the FTS index in sync with the main tables
 fn apply_migration_v45(conn: &Connection) -> Result<()> {
-    // FIX-002: Use helper with better error handling for FTS table creation
+    // Use helper with better error handling for FTS table creation
     // First ensure the FTS tables exist (they may have been created by fts.rs)
     let messages_fts_created = create_fts_table_with_fallback(
         conn,
@@ -5311,7 +5310,7 @@ fn apply_migration_v62(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v63 (FIX-F6, audit 2026-05-19): close the
+/// Migration v63: close the
 /// remember-able-privileged-transition Lies-in-the-Loop bypass.
 ///
 /// Two changes:
@@ -7459,7 +7458,7 @@ mod tests {
         assert!(has_buffer, "v67 must create the orphan buffer table");
     }
 
-    /// FIX-047: verify run_migrations is idempotent. The current_version
+    /// Verify run_migrations is idempotent. The current_version
     /// guard means the second call should be a no-op (no errors, no
     /// duplicate schema_version rows for a single version, schema still
     /// at CURRENT_VERSION).
@@ -7507,7 +7506,7 @@ mod tests {
         assert_eq!(dup_count, 0, "no version should be applied twice");
     }
 
-    /// FIX-047: verify schema_version table records every migration that
+    /// Verify schema_version table records every migration that
     /// ran. After run_migrations on a fresh DB we should see 1..=CURRENT_VERSION.
     #[test]
     fn test_schema_version_records_every_migration() {
@@ -7529,7 +7528,7 @@ mod tests {
         );
     }
 
-    /// FIX-047: smoke-test the most critical tables produced by the
+    /// Smoke-test the most critical tables produced by the
     /// migration chain, conversations, messages, settings, by doing a
     /// minimal INSERT then SELECT round-trip. Catches "table exists but
     /// is the wrong shape" regressions where a later migration drops or
@@ -8030,7 +8029,7 @@ mod tests {
         assert_eq!(purged.keyring_entries, 0);
     }
 
-    /// FIX-F6 (audit 2026-05-19): pin the behaviour of migration v63, it
+    /// Pin the behaviour of migration v63, it
     /// must (a) add the `never_remember` column to `remembered_tool_choices`
     /// and (b) DELETE any pre-existing row whose `tool_name` is on the
     /// never-rememberable list. The fixture seeds rows that would represent

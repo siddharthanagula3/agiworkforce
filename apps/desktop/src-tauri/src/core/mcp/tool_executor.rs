@@ -151,18 +151,6 @@ impl McpToolExecutor {
             ))),
         }
     }
-
-    pub async fn execute_tools_parallel(
-        &self,
-        executions: Vec<(String, HashMap<String, Value>)>,
-    ) -> Vec<McpResult<ToolExecutionResult>> {
-        let futures: Vec<_> = executions
-            .into_iter()
-            .map(|(tool_id, args)| async move { self.execute_tool(&tool_id, args).await })
-            .collect();
-
-        futures::future::join_all(futures).await
-    }
 }
 
 #[cfg(test)]

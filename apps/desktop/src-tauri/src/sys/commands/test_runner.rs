@@ -191,15 +191,6 @@ pub async fn test_run(
     Ok(result)
 }
 
-/// Detect which test runner would be used for a project.
-pub async fn test_detect_runner(project_root: Option<String>) -> Result<String, String> {
-    let root = resolve_root(project_root)?;
-    let runner = tokio::task::spawn_blocking(move || detect_runner(&root))
-        .await
-        .map_err(|e| format!("Detect task panicked: {}", e))?;
-    Ok(format!("{:?}", runner).to_lowercase())
-}
-
 // ─────────────────────────────────────────────
 // Runner implementations
 // ─────────────────────────────────────────────

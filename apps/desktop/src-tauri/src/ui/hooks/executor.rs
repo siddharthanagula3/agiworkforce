@@ -340,11 +340,6 @@ impl HookExecutor {
         self.commit(|armed| without(armed, name), |_| Ok(())).await
     }
 
-    pub async fn update_hook(&self, hook: Hook) -> Result<()> {
-        self.commit(|armed| with_updated(armed, hook), |_| Ok(()))
-            .await
-    }
-
     pub async fn toggle_hook(&self, name: &str, enabled: bool) -> Result<()> {
         self.commit(|armed| with_toggled(armed, name, enabled), |_| Ok(()))
             .await

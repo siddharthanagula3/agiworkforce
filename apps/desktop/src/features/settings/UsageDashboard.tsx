@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  BarChart3,
-  CalendarClock,
-  Flame,
-  RefreshCw,
-  SlidersHorizontal,
-  TrendingUp,
-} from 'lucide-react';
+import { BarChart3, Flame, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
+import { modelDisplayNameById } from '@agiworkforce/types';
 import { cn } from '../../lib/utils';
 import { Progress } from '@/ui/Progress';
 import { Button } from '@/ui/Button';
@@ -17,13 +11,16 @@ import {
   creditsFromProviderUsd,
   formatProviderCostCredits,
   providerUsdFromCredits,
-  selectBudget,
-  selectBudgetPercentage,
   selectCostAnalytics,
 } from '../../stores/billingUsage';
+import { useModelStore, type UsageStats } from '../../stores/modelStore';
 import type { ModelUsageStats } from '../../types/billing';
 import type { CostOverviewResponse, CostTimeseriesPoint } from '../../types/chat';
-import type { BudgetPeriod } from '../../stores/billing/budgetSlice';
+
+export type ModelUsageSummary = Pick<
+  ModelUsageStats,
+  'model_id' | 'model_name' | 'total_tokens' | 'cost_usd'
+>;
 
 const DAY_MS = 86_400_000;
 const ACTIVITY_SPAN_DAYS = 30;
@@ -40,19 +37,6 @@ function textColorClass(pct: number): string {
   if (pct >= 80) return 'text-warning-text';
   if (pct >= 50) return 'text-info-text';
   return 'text-success-text';
-}
-
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function formatTimeRemaining(futureMs: number): string {
-  const diffMs = Math.max(0, futureMs - Date.now());
-  const totalMinutes = Math.floor(diffMs / 60_000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
 }
 
 function formatIsoDay(iso: string): string {
@@ -169,52 +153,26 @@ export function monthlyBudgetUsage(
   return { budget, remaining, percent: ((budget - remaining) / budget) * 100 };
 }
 
-export function favouriteModel(models: readonly ModelUsageStats[]): ModelUsageStats | null {
-  let best: ModelUsageStats | null = null;
+export function favouriteModel<T extends ModelUsageSummary>(models: readonly T[]): T | null {
+  let best: T | null = null;
   for (const model of models) {
     if (best === null || model.total_tokens > best.total_tokens) best = model;
   }
   return best;
 }
 
-const PERIOD_LABELS: Record<BudgetPeriod, string> = {
-  daily: 'daily',
-  weekly: 'weekly',
-  monthly: 'monthly',
-  'per-conversation': 'per-conversation',
-};
-
-interface UsageRowProps {
-  label: string;
-  sublabel?: string;
-  pct: number;
-  detail: string;
-}
-
-function UsageRow({ label, sublabel, pct, detail }: UsageRowProps) {
-  const clamped = Math.min(Math.max(pct, 0), 100);
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <span className="text-sm font-medium truncate">{label}</span>
-          {sublabel && <span className="ml-1.5 text-xs text-muted-foreground">{sublabel}</span>}
-        </div>
-        <span
-          className={cn('text-xs font-semibold tabular-nums shrink-0', textColorClass(clamped))}
-        >
-          {Math.round(clamped)}% used
-        </span>
-      </div>
-      <Progress
-        value={clamped}
-        max={100}
-        className="h-2 bg-secondary"
-        indicatorClassName={cn('transition-all duration-500', barColorClass(clamped))}
-      />
-      <p className="text-xs text-muted-foreground">{detail}</p>
-    </div>
-  );
+/** Per-model totals from the local ledger, most expensive first. */
+export function modelUsageFromStats(
+  stats: Pick<UsageStats, 'by_model'> | null,
+): ModelUsageSummary[] {
+  return Object.entries(stats?.by_model ?? {})
+    .map(([modelId, usage]) => ({
+      model_id: modelId,
+      model_name: modelDisplayNameById(modelId) ?? modelId,
+      total_tokens: usage.tokens,
+      cost_usd: usage.cost,
+    }))
+    .sort((left, right) => right.cost_usd - left.cost_usd);
 }
 
 interface ModelRowProps {
@@ -280,48 +238,9 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-interface ResetSectionProps {
-  period: BudgetPeriod;
-  periodEnd: number;
-}
-
-function UsageResetSection({ period, periodEnd }: ResetSectionProps) {
-  const upcoming = periodEnd > Date.now();
-  return (
-    <section
-      aria-labelledby="usage-resets-heading"
-      className="rounded-lg border border-border bg-card p-4 space-y-3"
-    >
-      <div className="flex items-center gap-2">
-        <CalendarClock className="h-4 w-4 text-muted-foreground" />
-        <h4 id="usage-resets-heading" className="text-h5">
-          Usage limit resets
-        </h4>
-      </div>
-
-      {upcoming ? (
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{PERIOD_LABELS[period]} token budget</p>
-            <p className="text-xs text-muted-foreground">Resets {formatDate(periodEnd)}</p>
-          </div>
-          <span className="text-xs font-semibold tabular-nums shrink-0">
-            in {formatTimeRemaining(periodEnd)}
-          </span>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          No reset window is running. A new {PERIOD_LABELS[period]} window opens with your next
-          message, and its reset time will show here.
-        </p>
-      )}
-    </section>
-  );
-}
-
 interface ActivitySectionProps {
   timeseries: readonly CostTimeseriesPoint[];
-  models: readonly ModelUsageStats[];
+  models: readonly ModelUsageSummary[];
   nowMs: number;
 }
 
@@ -395,19 +314,19 @@ function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
 }
 
 export function UsageDashboard() {
-  const budget = useBillingUsageStore(selectBudget);
-  const budgetPct = useBillingUsageStore(selectBudgetPercentage);
   const costAnalytics = useBillingUsageStore(selectCostAnalytics);
-  const { usageStats, costOverview, loadCostOverview, loadCostAnalytics, setMonthlyBudget } =
+  const { costOverview, loadCostOverview, loadCostAnalytics, setMonthlyBudget } =
     useBillingUsageStore(
       useShallow((s) => ({
-        usageStats: s.usageStats,
         costOverview: s.costOverview,
         loadCostOverview: s.loadCostOverview,
         loadCostAnalytics: s.loadCostAnalytics,
         setMonthlyBudget: s.setMonthlyBudget,
       })),
     );
+  const { usageStats, getUsageStats } = useModelStore(
+    useShallow((s) => ({ usageStats: s.usageStats, getUsageStats: s.getUsageStats })),
+  );
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAdjustingBudget, setIsAdjustingBudget] = useState(false);
@@ -417,19 +336,24 @@ export function UsageDashboard() {
   useEffect(() => {
     void loadCostOverview();
     void loadCostAnalytics({ days: ACTIVITY_SPAN_DAYS });
-  }, [loadCostOverview, loadCostAnalytics]);
+    void getUsageStats();
+  }, [loadCostOverview, loadCostAnalytics, getUsageStats]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([loadCostOverview(), loadCostAnalytics({ days: ACTIVITY_SPAN_DAYS })]);
+      await Promise.all([
+        loadCostOverview(),
+        loadCostAnalytics({ days: ACTIVITY_SPAN_DAYS }),
+        getUsageStats(),
+      ]);
       toast.success('Usage data refreshed');
     } catch {
       toast.error('Failed to refresh usage data');
     } finally {
       setIsRefreshing(false);
     }
-  }, [loadCostOverview, loadCostAnalytics]);
+  }, [loadCostOverview, loadCostAnalytics, getUsageStats]);
 
   const handleAdjustLimit = useCallback(async () => {
     const parsed = Number.parseFloat(budgetInputValue);
@@ -454,21 +378,13 @@ export function UsageDashboard() {
     }
   }, [budgetInputValue, setMonthlyBudget]);
 
-  const hasTokenData = budget.currentUsage > 0 || budget.enabled;
-  const hasModelData = (usageStats?.model_usage?.length ?? 0) > 0;
+  const modelUsage = useMemo(() => modelUsageFromStats(usageStats), [usageStats]);
+  const hasModelData = modelUsage.length > 0;
   const hasCostData = costOverview !== null;
   const timeseries = costAnalytics?.timeseries ?? [];
   const hasActivityData = timeseries.length > 0;
-  const hasAnyData = hasTokenData || hasModelData || hasCostData || hasActivityData;
+  const hasAnyData = hasModelData || hasCostData || hasActivityData;
 
-  const sessionResetLabel =
-    budget.periodEnd > Date.now()
-      ? `Resets in ${formatTimeRemaining(budget.periodEnd)}`
-      : budget.periodEnd > 0
-        ? `Reset ${formatDate(budget.periodEnd)}`
-        : null;
-
-  const modelUsage = usageStats?.model_usage ?? [];
   const maxModelCost = modelUsage.length > 0 ? Math.max(...modelUsage.map((m) => m.cost_usd)) : 0;
 
   const monthTotal = costOverview?.month_total ?? 0;
@@ -496,52 +412,11 @@ export function UsageDashboard() {
         </Button>
       </div>
 
-      <UsageResetSection period={budget.period} periodEnd={budget.periodEnd} />
-
       {!hasAnyData ? (
         <EmptyUsageState />
       ) : (
         <>
           <ActivitySection timeseries={timeseries} models={modelUsage} nowMs={Date.now()} />
-
-          {hasTokenData && (
-            <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                <h4 className="text-h5">Current session</h4>
-              </div>
-
-              <UsageRow
-                label="Token budget"
-                sublabel={sessionResetLabel ?? undefined}
-                pct={budgetPct}
-                detail={`${budget.currentUsage.toLocaleString()} / ${budget.limit.toLocaleString()} tokens used · about ${formatProviderCostCredits(budget.estimatedCost)}`}
-              />
-
-              {(budget.inputTokens > 0 || budget.outputTokens > 0) && (
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div className="rounded-md bg-muted/50 p-2.5">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
-                      Input
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {budget.inputTokens.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">tokens</p>
-                  </div>
-                  <div className="rounded-md bg-muted/50 p-2.5">
-                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
-                      Output
-                    </p>
-                    <p className="text-sm font-semibold tabular-nums">
-                      {budget.outputTokens.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">tokens</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {hasModelData && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">

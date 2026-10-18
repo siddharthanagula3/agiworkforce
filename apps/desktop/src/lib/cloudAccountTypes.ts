@@ -111,26 +111,3 @@ export interface EmailPreferences {
   created_at: string;
   updated_at: string;
 }
-
-export interface FallbackProfileData {
-  id: string;
-  email: string;
-  display_name: string;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
-  stripe_customer_id: string | null;
-  credits: unknown;
-}
-
-export function isValidProfileData(data: unknown): data is FallbackProfileData {
-  if (typeof data !== 'object' || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj['id'] === 'string' &&
-    typeof obj['email'] === 'string' &&
-    typeof obj['display_name'] === 'string' &&
-    typeof obj['created_at'] === 'string' &&
-    typeof obj['updated_at'] === 'string'
-  );
-}

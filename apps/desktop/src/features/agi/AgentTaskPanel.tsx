@@ -1,22 +1,17 @@
-import { Activity, CalendarClock, ListTodo, Moon, PlusCircle, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Activity, CalendarClock, Moon, type LucideIcon } from 'lucide-react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../../lib/utils';
-import { useAgentTaskStore } from '../../stores/agentTaskStore';
 import { useBackgroundAgentStore } from '../../stores/backgroundAgentStore';
 import { useSchedulerStore } from '../../stores/schedulerStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { ScheduledTasksPanel } from '@/features/scheduler/ScheduledTasksPanel';
 import { AgentStatusMonitor } from '@/features/agent-status-monitor';
-import { AgentTaskCreator } from './AgentTaskCreator';
-import { AgentTaskMonitor } from './AgentTaskMonitor';
 import { BackgroundAgentsPanel } from './BackgroundAgentsPanel';
 import { useNotificationTargetStore } from '../notifications/notificationTarget';
 
-type Tab = 'create' | 'monitor' | 'scheduled' | 'agents' | 'background';
+type Tab = 'scheduled' | 'agents' | 'background';
 
 const TABS: ReadonlyArray<{ id: Tab; label: string; icon: LucideIcon }> = [
-  { id: 'create', label: 'Create', icon: PlusCircle },
-  { id: 'monitor', label: 'Monitor', icon: ListTodo },
   { id: 'scheduled', label: 'Scheduled', icon: CalendarClock },
   { id: 'agents', label: 'Agents', icon: Activity },
   { id: 'background', label: 'Background', icon: Moon },
@@ -42,9 +37,8 @@ function tabIndexForKey(key: string, index: number): number | null {
 }
 
 export function AgentTaskPanel() {
-  const [activeTab, setActiveTab] = useState<Tab>('create');
+  const [activeTab, setActiveTab] = useState<Tab>('scheduled');
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
-  const taskCount = useAgentTaskStore((s) => s.tasks.length);
   const agentStatuses = useUnifiedChatStore((s) => s.agents ?? []);
   const backgroundActiveCount = useBackgroundAgentStore((s) => s.activeCount);
   const scheduledCount = useSchedulerStore(
@@ -59,13 +53,7 @@ export function AgentTaskPanel() {
     if (backgroundAgentRequested) setActiveTab('background');
   }, [backgroundAgentRequested]);
 
-  const handleTaskCreated = useCallback(() => {
-    setActiveTab('monitor');
-  }, []);
-
   const counts: Record<Tab, number> = {
-    create: 0,
-    monitor: taskCount,
     scheduled: scheduledCount,
     agents: agentStatuses.length,
     background: backgroundActiveCount,
@@ -121,11 +109,7 @@ export function AgentTaskPanel() {
         tabIndex={0}
         className="flex-1 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        {activeTab === 'create' ? (
-          <AgentTaskCreator onTaskCreated={handleTaskCreated} />
-        ) : activeTab === 'monitor' ? (
-          <AgentTaskMonitor />
-        ) : activeTab === 'scheduled' ? (
+        {activeTab === 'scheduled' ? (
           <ScheduledTasksPanel />
         ) : activeTab === 'background' ? (
           <BackgroundAgentsPanel />

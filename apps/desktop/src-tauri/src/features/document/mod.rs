@@ -93,7 +93,6 @@ pub mod create_powerpoint;
 pub mod create_word;
 
 pub mod edit_excel;
-pub mod edit_word;
 
 pub use excel::ExcelHandler;
 pub use ooxml::{extract_office_text, is_office_open_xml_extension};
@@ -110,7 +109,6 @@ pub use generated_file_manifest::{
 };
 
 pub use edit_excel::{ExcelEdit, ExcelEditor};
-pub use edit_word::{WordEdit, WordEditor};
 
 use serde::{Deserialize, Serialize};
 

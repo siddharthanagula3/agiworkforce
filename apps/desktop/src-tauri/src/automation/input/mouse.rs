@@ -93,10 +93,9 @@ impl MouseSimulator {
         Ok(())
     }
 
-    /// Get current mouse position
+    /// Current pointer position. An unknown position is an error, never `(0, 0)`:
+    /// callers judge which app a pointer action lands on from it.
     pub fn get_position(&self) -> Result<(i32, i32)> {
-        // Note: enigo doesn't provide a direct way to get position on all platforms
-        // For now, we'll use a platform-specific approach or return a default
         #[cfg(target_os = "macos")]
         {
             use core_graphics::event::CGEvent;
@@ -108,7 +107,7 @@ impl MouseSimulator {
                     return Ok((location.x as i32, location.y as i32));
                 }
             }
-            Ok((0, 0))
+            Err(anyhow!("Could not read the pointer position"))
         }
 
         #[cfg(target_os = "windows")]
@@ -122,19 +121,15 @@ impl MouseSimulator {
                     return Ok((point.x, point.y));
                 }
             }
-            Ok((0, 0))
+            Err(anyhow!("Could not read the pointer position"))
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            // On Linux, we'd need X11 or Wayland APIs
-            // For now, return default
-            Ok((0, 0))
-        }
-
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            Ok((0, 0))
+            let _enigo_lock = lock_enigo()?;
+            self.enigo
+                .location()
+                .map_err(|e| anyhow!("Could not read the pointer position: {:?}", e))
         }
     }
 
@@ -277,10 +272,6 @@ impl MouseSimulator {
         self.enigo
             .scroll(delta, axis)
             .map_err(|e| anyhow!("Failed to scroll: {:?}", e))
-    }
-
-    pub fn drag_to(&mut self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
-        self.drag((from_x, from_y), (to_x, to_y))
     }
 }
 

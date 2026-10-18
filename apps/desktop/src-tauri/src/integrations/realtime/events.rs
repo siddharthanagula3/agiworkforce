@@ -1,5 +1,12 @@
-use super::{CursorPosition, PresenceStatus};
+use super::PresenceStatus;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CursorPosition {
+    pub x: i32,
+    pub y: i32,
+    pub element_id: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]

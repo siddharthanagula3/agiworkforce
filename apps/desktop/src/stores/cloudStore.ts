@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { invoke, listen, openUrl, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, listen, openUrl } from '../lib/tauri-mock';
 import type {
   CloudFile,
   CloudProvider,
@@ -71,8 +71,6 @@ function mapAccount(raw: RawAccountResponse): Account {
   };
 }
 
-const unlistenFunctions: UnlistenFn[] = [];
-
 export const useCloudStore = create<CloudState>((set, get) => {
   async function ensureListeners() {
     if (listenersRegistered) {
@@ -80,26 +78,23 @@ export const useCloudStore = create<CloudState>((set, get) => {
     }
     listenersRegistered = true;
 
-    const unlisten1 = await listen<{ accountId: string }>('cloud:connected', async () => {
+    await listen<string>('cloud:connected', async () => {
       await get().refreshAccounts();
     });
-    unlistenFunctions.push(unlisten1);
 
-    const unlisten2 = await listen('cloud:file_uploaded', async (event) => {
+    await listen('cloud:file_uploaded', async (event) => {
       const payload = event.payload as { accountId?: string };
       if (payload?.accountId && payload.accountId === get().activeAccountId) {
         await get().listFiles(get().currentPath);
       }
     });
-    unlistenFunctions.push(unlisten2);
 
-    const unlisten3 = await listen('cloud:file_deleted', async (event) => {
+    await listen('cloud:file_deleted', async (event) => {
       const payload = event.payload as { accountId?: string };
       if (payload?.accountId && payload.accountId === get().activeAccountId) {
         await get().listFiles(get().currentPath);
       }
     });
-    unlistenFunctions.push(unlisten3);
   }
 
   return {
@@ -374,9 +369,3 @@ export const useCloudStore = create<CloudState>((set, get) => {
     clearError: () => set({ error: null }),
   };
 });
-
-export function cleanupCloudStoreListeners() {
-  unlistenFunctions.forEach((unlisten) => unlisten());
-  unlistenFunctions.length = 0;
-  listenersRegistered = false;
-}

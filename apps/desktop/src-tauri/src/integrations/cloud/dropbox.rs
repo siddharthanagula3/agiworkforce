@@ -55,7 +55,10 @@ impl DropboxClient {
     }
 
     pub fn get_authorization_url(&self, state: &str) -> (String, Option<PkceChallenge>) {
-        let url = self.oauth_client.get_authorization_url(state, None);
+        let url = format!(
+            "{}&token_access_type=offline",
+            self.oauth_client.get_authorization_url(state, None)
+        );
         (url, None)
     }
 

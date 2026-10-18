@@ -239,18 +239,12 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
       setPersistedUrl(raw);
       return;
     }
-    try {
-      new URL(raw);
-      const result = validateUrl(raw, { allowLocalhost: true });
-      if (!result.valid) {
-        toast.error(result.error ?? `Invalid ${runtime.label} URL`);
-        return;
-      }
-      const sanitized = result.sanitized ?? raw;
-      setPersistedUrl(sanitized);
-    } catch {
-      toast.error(`Invalid ${runtime.label} URL`);
+    const result = validateUrl(raw);
+    if (!result.valid) {
+      toast.error(result.error ?? `Invalid ${runtime.label} URL`);
+      return;
     }
+    setPersistedUrl(result.sanitized ?? raw);
   };
 
   return (

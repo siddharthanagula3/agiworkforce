@@ -209,30 +209,6 @@ pub struct ResourceDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResourceReadParams {
-    pub uri: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResourceReadResult {
-    pub contents: Vec<ResourceContent>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum ResourceContent {
-    Text { uri: String, text: String },
-    Blob { uri: String, blob: String },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PromptsListResult {
-    pub prompts: Vec<PromptDefinition>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "nextCursor")]
-    pub next_cursor: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptDefinition {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -248,28 +224,6 @@ pub struct PromptArgument {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub required: Option<bool>,
-}
-
-// ── Capability advertisement (spec 2025-11-25) ────────────────────────────────
-
-/// Extended server capabilities including Elicitation support.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ServerCapabilitiesV2 {
-    /// Tool listing and calling capability.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<std::collections::HashMap<String, Value>>,
-    /// Resource listing and reading capability.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resources: Option<std::collections::HashMap<String, Value>>,
-    /// Prompt listing and retrieval capability.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompts: Option<std::collections::HashMap<String, Value>>,
-    /// Log streaming capability.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logging: Option<std::collections::HashMap<String, Value>>,
-    /// Elicitation support, server can request user input (spec 2025-11-25).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub elicitation: Option<std::collections::HashMap<String, Value>>,
 }
 
 #[cfg(test)]

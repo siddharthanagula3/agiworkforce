@@ -1,4 +1,4 @@
-//! Master-password-derived AES-256-GCM helper (FIX-001 / FIX-002 / FIX-004).
+//! Master-password-derived AES-256-GCM helper.
 //!
 //! Wraps [`MasterPasswordManager`] so credential-storage IPC handlers can
 //! encrypt/decrypt with a single call without each one re-implementing the
@@ -143,7 +143,7 @@ mod tests {
     /// codeql[rust/hard-coded-cryptographic-value]: test fixture only,
     /// never reachable from production paths.
     #[allow(dead_code)]
-    // SEV-DESK-04: must satisfy `enforce_password_complexity` (>= 12 chars,
+    // Must satisfy `enforce_password_complexity` (>= 12 chars,
     // 3-of-4 character classes).
     const TEST_FIXTURE_PASSPHRASE: &str = "Alpha-Beta-Unique-Phrase-9"; // gitleaks:allow
 

@@ -118,13 +118,6 @@ pub fn delete_setting(conn: &Connection, key: &str) -> Result<usize> {
     conn.execute("DELETE FROM settings_v2 WHERE key = ?1", [key])
 }
 
-pub fn delete_settings_by_category(conn: &Connection, category: SettingCategory) -> Result<usize> {
-    conn.execute(
-        "DELETE FROM settings_v2 WHERE category = ?1",
-        rusqlite::params![category.as_str()],
-    )
-}
-
 pub fn delete_settings_by_prefix(conn: &Connection, prefix: &str) -> Result<usize> {
     let pattern = format!("{}%", prefix);
     conn.execute(
@@ -141,25 +134,6 @@ pub fn setting_exists(conn: &Connection, key: &str) -> Result<bool> {
     )?;
 
     Ok(count > 0)
-}
-
-pub fn count_settings_by_category(conn: &Connection) -> Result<Vec<(String, i64)>> {
-    let mut stmt = conn.prepare(
-        "SELECT category, COUNT(*) as coun
-         FROM settings_v2
-         GROUP BY category
-         ORDER BY category",
-    )?;
-
-    let counts = stmt
-        .query_map([], |row| {
-            let category: String = row.get(0)?;
-            let count: i64 = row.get(1)?;
-            Ok((category, count))
-        })?
-        .collect::<Result<Vec<_>>>()?;
-
-    Ok(counts)
 }
 
 fn map_setting_row(row: &Row) -> Result<Setting> {

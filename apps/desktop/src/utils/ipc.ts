@@ -22,9 +22,8 @@ function createCodedError(message: string, code: string): CodedError {
  * their `invoke` from there, and only three (`features/code/FileTree.tsx`,
  * `features/diagnostics/diagnosticsBundle.ts`, `services/automationAuditOutbox.ts`)
  * import this module's `invoke`. Coverage is still not
- * total, `features/startup-recovery/StartupRecoveryBootstrap.tsx` and
- * `lib/browserAutomation.ts` import `@tauri-apps/api/core` directly and reach
- * Rust without passing this check.
+ * total, `features/startup-recovery/StartupRecoveryBootstrap.tsx` imports
+ * `@tauri-apps/api/core` directly and reaches Rust without passing this check.
  *
  * @throws CodedError 'INVALID_COMMAND' if the name is not a Tauri command name
  * @throws CodedError 'UNKNOWN_COMMAND' if the name is not registered in Rust
@@ -106,50 +105,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
   });
 }
 
-export function validateResponse<T>(
-  response: unknown,
-  validator: (value: unknown) => value is T,
-  command: string,
-): T {
-  if (!validator(response)) {
-    throw createCodedError(
-      `Invalid response from '${command}': expected valid structure but got ${JSON.stringify(response)?.substring(0, 100)}`,
-      'INVALID_RESPONSE',
-    );
-  }
-  return response;
-}
-
-export const TypeGuards = {
-  isObject: (value: unknown): value is Record<string, unknown> => {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-  },
-
-  isString: (value: unknown): value is string => {
-    return typeof value === 'string';
-  },
-
-  isNumber: (value: unknown): value is number => {
-    return typeof value === 'number' && !isNaN(value);
-  },
-
-  isBoolean: (value: unknown): value is boolean => {
-    return typeof value === 'boolean';
-  },
-
-  isArray: (value: unknown): value is unknown[] => {
-    return Array.isArray(value);
-  },
-
-  hasProperty: <T extends string>(value: unknown, prop: T): value is Record<T, unknown> => {
-    return TypeGuards.isObject(value) && prop in value;
-  },
-
-  hasProperties: <T extends string>(value: unknown, props: T[]): value is Record<T, unknown> => {
-    return TypeGuards.isObject(value) && props.every((prop) => prop in value);
-  },
-};
-
 /**
  * Enforces rate limiting for IPC commands using a sliding window algorithm.
  * Prevents excessive calls to the same command within a time window.
@@ -157,9 +112,6 @@ export const TypeGuards = {
  * @param key - The command name or key to rate limit
  * @throws CodedError with code 'RATE_LIMIT' if the rate limit is exceeded
  *
- * @example
- * await rateLimit('auth_login');
- * // Proceeds if under limit, throws if exceeded
  */
 async function rateLimit(key: string): Promise<void> {
   while (rateLimitLocks.has(key)) {

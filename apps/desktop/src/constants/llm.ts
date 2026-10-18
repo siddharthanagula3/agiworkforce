@@ -3,7 +3,6 @@ import type { SubscriptionTier } from './planModels';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   canAccessModelForSubscriptionTier,
-  evaluateModelEnvironment,
   formatModelPriceInCredits,
   getAutoRoutingProfiles as getCatalogAutoRoutingProfiles,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
@@ -11,7 +10,6 @@ import {
   getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
   getModels as getCatalogModels,
-  getModelVariantPartner as getCatalogModelVariantPartner,
   getPickerModels as getCatalogPickerModels,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
@@ -22,13 +20,8 @@ import {
   normalizeSubscriptionAccessTier,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
-  type EnvironmentAvailability,
   type ModelCapabilities,
-  type ModelEnvironment,
 } from '@agiworkforce/types';
-
-export type { EnvironmentAvailability, ModelEnvironment };
-export { evaluateModelEnvironment };
 
 export type { ModelCapabilities };
 
@@ -204,10 +197,6 @@ export function getProviderDefaultModel(provider: Provider): string | null {
   return getCatalogProviderDefaultModel(provider);
 }
 
-export function getModelVariantPartner(modelId: string | null | undefined): string | null {
-  return getCatalogModelVariantPartner(modelId);
-}
-
 export function getTaskModelForProvider(
   provider: Provider,
   task:
@@ -261,36 +250,4 @@ export function getManualOverrideModels(
 
 export function getTierPolicy(tier: SubscriptionTier | string | null | undefined) {
   return getCatalogTierPolicy(tier);
-}
-
-export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
-  return { configured: false };
-}
-
-/**
- * Pure function: given a model's metadata, return whether it is selectable
- * under the current (Phase A) environment availability, and why not if locked.
- *
- * Keeping this separate from tier logic means callers (pickers, tests) can
- * consume a single, predictable seam, no gating leak is possible from a
- * partial update.
- *
- * CRITICAL SAFETY: models without requiresEnvironment are always environment-OK,
- * so no current model's appearance or selectability is altered.
- *
- * Returns:
- *   envSelectable: true  → no environment gate applies (proceed to tier check)
- *   envSelectable: false → locked; show `reason` as tooltip/badge copy
- */
-export function getModelEnvironmentGate(model: Pick<ModelMetadata, 'requiresEnvironment'>): {
-  envSelectable: boolean;
-  reason?: string;
-} {
-  if (!model.requiresEnvironment) return { envSelectable: true };
-  const result = evaluateModelEnvironment(
-    model.requiresEnvironment,
-    environmentAvailability(model.requiresEnvironment),
-  );
-  if (result.selectable) return { envSelectable: true };
-  return { envSelectable: false, reason: result.reason };
 }

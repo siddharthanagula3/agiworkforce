@@ -460,13 +460,6 @@ pub struct ScreenElement {
     pub properties: std::collections::HashMap<String, String>,
 }
 
-impl ScreenElement {
-    /// Returns the clickable center point for this element.
-    pub fn click_target(&self) -> Coordinate {
-        self.bounds.center()
-    }
-}
-
 /// Analysis of the current screen state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenAnalysis {

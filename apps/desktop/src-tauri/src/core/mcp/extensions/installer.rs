@@ -576,11 +576,6 @@ impl ExtensionInstaller {
 
         Ok(())
     }
-
-    /// Get the installation path for an extension
-    pub fn get_install_path(&self, extension_id: &str) -> PathBuf {
-        self.extensions_dir.join(extension_id)
-    }
 }
 
 impl Default for ExtensionInstaller {

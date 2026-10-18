@@ -13,13 +13,6 @@ pub struct LLMResponseCache {
     max_entries: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedLLMResponse {
-    pub response: LLMResponse,
-    pub cache_key: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
 impl LLMResponseCache {
     pub fn new(conn: Arc<Mutex<Connection>>, ttl: Duration, max_entries: usize) -> Result<Self> {
         Ok(Self {

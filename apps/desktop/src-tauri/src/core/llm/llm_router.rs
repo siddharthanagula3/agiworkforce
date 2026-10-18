@@ -447,6 +447,22 @@ fn normalize_model_id(id: &str) -> String {
     trimmed
 }
 
+/// The response cache keys on provider, model, temperature, max_tokens and the
+/// text of each message. A request whose answer also depends on something
+/// else (an attached screenshot or file, earlier tool calls, the offered
+/// tools, a requested output schema) would be answered from another
+/// request's entry, and a replayed tool call runs its tool again.
+fn response_is_cacheable(request: &LLMRequest) -> bool {
+    request.tools.as_ref().is_none_or(|tools| tools.is_empty())
+        && request.response_format.is_none()
+        && request.output_config.is_none()
+        && request.messages.iter().all(|message| {
+            message.multimodal_content.is_none()
+                && message.tool_calls.is_none()
+                && message.tool_call_id.is_none()
+        })
+}
+
 /// Rewrite an auth error into a user-friendly message that tells the user
 /// exactly what to do (check their key in Settings).
 fn rewrite_auth_error(error: &str, provider_name: &str) -> String {
@@ -1076,106 +1092,17 @@ impl LLMRouter {
         self.providers.clear();
     }
 
-    pub fn set_openai(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::OpenAI, provider);
-    }
-
-    pub fn set_anthropic(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Anthropic, provider);
-    }
-
-    pub fn set_google(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Google, provider);
-    }
-
     pub fn set_ollama(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::Ollama, provider);
-    }
-
-    pub fn set_xai(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::XAI, provider);
-    }
-
-    pub fn set_deepseek(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::DeepSeek, provider);
-    }
-
-    pub fn set_qwen(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Qwen, provider);
-    }
-
-    pub fn set_moonshot(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Moonshot, provider);
-    }
-
-    pub fn set_minimax(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Minimax, provider);
-    }
-
-    pub fn set_zhipu(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Zhipu, provider);
-    }
-
-    pub fn set_perplexity(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Perplexity, provider);
     }
 
     pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::ManagedCloud, provider);
     }
 
-    pub fn set_together(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Together, provider);
-    }
-
-    pub fn set_fireworks(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Fireworks, provider);
-    }
-
-    pub fn set_cerebras(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Cerebras, provider);
-    }
-
-    pub fn set_deepinfra(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::DeepInfra, provider);
-    }
-
-    pub fn set_cohere(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Cohere, provider);
-    }
-
-    pub fn set_ai21(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::AI21, provider);
-    }
-
-    pub fn set_sambanova(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Sambanova, provider);
-    }
-
-    pub fn set_azure(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Azure, provider);
-    }
-
-    pub fn set_bedrock(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Bedrock, provider);
-    }
-
-    /// Get the cumulative cost (USD) across all LLM invocations in this session.
-    pub fn get_cumulative_cost(&self) -> f64 {
-        *self.cumulative_cost.lock()
-    }
-
     /// Reset the cumulative cost counter to zero.
     pub fn reset_cumulative_cost(&self) {
         *self.cumulative_cost.lock() = 0.0;
-    }
-
-    /// Set a shared rate-limit / 5xx circuit-breaker tracker.
-    pub fn set_rate_limit_tracker(
-        &mut self,
-        tracker: Arc<crate::core::llm::fallback_chain::RateLimitTracker>,
-    ) {
-        self.rate_limit_tracker = Some(tracker);
     }
 
     pub fn has_provider(&self, provider: Provider) -> bool {
@@ -1406,7 +1333,12 @@ impl LLMRouter {
         candidate: &RouteCandidate,
         request: &LLMRequest,
     ) -> Result<RouteOutcome> {
-        if let (Some(cache_manager), Some(db_conn)) = (&self.cache_manager, &self.db_connection) {
+        let cache = self
+            .cache_manager
+            .as_ref()
+            .zip(self.db_connection.as_ref())
+            .filter(|_| response_is_cacheable(request));
+        if let Some((cache_manager, db_conn)) = cache {
             let cache_key = CacheManager::compute_cache_key(
                 candidate.provider,
                 &candidate.model,
@@ -1558,7 +1490,7 @@ impl LLMRouter {
 
         let total_cost = response.cost.unwrap_or(0.0);
 
-        if let (Some(cache_manager), Some(db_conn)) = (&self.cache_manager, &self.db_connection) {
+        if let Some((cache_manager, db_conn)) = cache {
             if let Ok(conn) = db_conn.lock() {
                 let cache_key = CacheManager::compute_cache_key(
                     candidate.provider,
@@ -2195,6 +2127,55 @@ mod spend_cap_tests {
 }
 
 #[cfg(test)]
+mod response_cache_tests {
+    use super::*;
+
+    fn text(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }
+    }
+
+    #[test]
+    fn a_plain_text_request_is_cacheable() {
+        let request = LLMRequest::new(vec![text("user", "hello")], "m".to_string());
+        assert!(response_is_cacheable(&request));
+    }
+
+    // The computer-use loop sends the same instruction with a new screenshot
+    // every step; a text-only key served the first screen's answer again.
+    #[test]
+    fn a_request_whose_answer_depends_on_more_than_its_text_is_not_cacheable() {
+        let mut with_image = text("user", "what is on screen?");
+        with_image.multimodal_content = Some(Vec::new());
+        assert!(!response_is_cacheable(&LLMRequest::new(
+            vec![with_image],
+            "m".to_string()
+        )));
+
+        let mut with_tools = LLMRequest::new(vec![text("user", "read it")], "m".to_string());
+        with_tools.tools = Some(vec![crate::core::llm::ToolDefinition {
+            name: "file_read".to_string(),
+            description: String::new(),
+            parameters: serde_json::json!({}),
+            strict: None,
+        }]);
+        assert!(!response_is_cacheable(&with_tools));
+
+        let mut result = text("tool", "contents");
+        result.tool_call_id = Some("call_1".to_string());
+        assert!(!response_is_cacheable(&LLMRequest::new(
+            vec![text("user", "read it"), result],
+            "m".to_string()
+        )));
+    }
+}
+
+#[cfg(test)]
 mod streaming_cost_guard_tests {
     use super::*;
     use crate::core::llm::sse_parser::TokenUsage;
@@ -2463,7 +2444,7 @@ fn perplexity_search_model(quality_tier: &'static str) -> String {
 /// Checks if `text` contains `word` as a whole word using regex `\b` word boundaries.
 /// Both `text` and `word` should already be lowercase when used with `classify_request`.
 ///
-/// H1 fix: Regex is compiled once per unique word and cached in a thread-local HashMap,
+/// Regex is compiled once per unique word and cached in a thread-local HashMap,
 /// avoiding repeated compilation on every call in the classification hot path.
 pub(crate) fn contains_word(text: &str, word: &str) -> bool {
     use std::cell::RefCell;

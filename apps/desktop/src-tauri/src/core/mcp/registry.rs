@@ -218,14 +218,6 @@ impl McpToolRegistry {
         *self.id_index.write() = index;
     }
 
-    pub fn get_all_tool_schemas(&self) -> Vec<Tool> {
-        let tools = self.mcp_client.list_all_tools();
-        tools
-            .into_iter()
-            .map(|(server_name, mcp_tool)| self.mcp_tool_to_schema(&server_name, &mcp_tool))
-            .collect()
-    }
-
     pub fn tool_id_for(&self, server_name: &str, tool_name: &str) -> String {
         create_safe_tool_id(server_name, tool_name)
     }
@@ -504,14 +496,6 @@ impl McpToolRegistry {
         Ok(self.mcp_tool_to_schema(&server_name, &tool))
     }
 
-    pub fn get_server_tools(&self, server_name: &str) -> McpResult<Vec<Tool>> {
-        let tools = self.mcp_client.list_server_tools(server_name)?;
-        Ok(tools
-            .into_iter()
-            .map(|mcp_tool| self.mcp_tool_to_schema(server_name, &mcp_tool))
-            .collect())
-    }
-
     pub fn to_tool_definition(
         &self,
         server_name: &str,
@@ -548,38 +532,6 @@ impl McpToolRegistry {
             })
             .collect();
         crate::core::mcp::schema_budget::select_tool_schemas(candidates, turn_text)
-    }
-
-    pub fn get_all_tool_definitions(&self) -> Vec<crate::core::llm::ToolDefinition> {
-        let tools = self.mcp_client.list_all_tools();
-        tools
-            .into_iter()
-            .map(|(server_name, mcp_tool)| self.to_tool_definition(&server_name, &mcp_tool))
-            .collect()
-    }
-
-    pub fn to_openai_function(&self, server_name: &str, mcp_tool: &McpTool) -> Value {
-        let raw_desc = mcp_tool
-            .description
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or("(no description)");
-        serde_json::json!({
-            "type": "function",
-            "function": {
-                "name": self.tool_id_for(server_name, &mcp_tool.name),
-                "description": sanitize_mcp_description(raw_desc, server_name),
-                "parameters": sanitize_schema_descriptions(&mcp_tool.input_schema)
-            }
-        })
-    }
-
-    pub fn get_all_openai_functions(&self) -> Vec<Value> {
-        let tools = self.mcp_client.list_all_tools();
-        tools
-            .into_iter()
-            .map(|(server_name, mcp_tool)| self.to_openai_function(&server_name, &mcp_tool))
-            .collect()
     }
 }
 

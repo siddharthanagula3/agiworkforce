@@ -107,13 +107,6 @@ impl SemanticSelector {
         }
     }
 
-    pub fn with_strategy(mut self, strategy: SelectorStrategy) -> Self {
-        self.strategies.push(strategy);
-
-        self.strategies.sort_by_key(|s| s.priority());
-        self
-    }
-
     pub fn with_context(mut self, context: impl Into<String>) -> Self {
         self.context = Some(context.into());
         self
@@ -258,21 +251,6 @@ pub enum ElementType {
     Other(String),
 }
 
-impl ElementType {
-    pub fn from_role(role: &str) -> Self {
-        match role.to_lowercase().as_str() {
-            "button" => ElementType::Button,
-            "link" => ElementType::Link,
-            "textbox" => ElementType::Textbox,
-            "checkbox" => ElementType::Checkbox,
-            "radio" => ElementType::Radio,
-            "combobox" | "listbox" => ElementType::Select,
-            "img" => ElementType::Image,
-            _ => ElementType::Other(role.to_string()),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Modifier {
     First,
@@ -345,21 +323,6 @@ impl NaturalLanguageParser {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccessibilityNode {
-    pub role: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub value: Option<String>,
-    pub selector: String,
-    pub children: Vec<AccessibilityNode>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccessibilityTree {
-    pub root: AccessibilityNode,
-}
-
 pub struct AccessibilityAnalyzer;
 
 impl AccessibilityAnalyzer {
@@ -421,49 +384,6 @@ impl AccessibilityAnalyzer {
         })()
         "#
     }
-
-    pub fn find_by_role_script(role: &str, name: Option<&str>) -> String {
-        if let Some(name) = name {
-            format!(
-                r#"
-                Array.from(document.querySelectorAll('[role="{}"]'))
-                    .filter(el => el.textContent.includes('{}'))
-                    .map(el => ({{
-                        role: el.getAttribute('role'),
-                        name: el.textContent.trim(),
-                        selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase()
-                    }}))
-                "#,
-                escape_script_value(role),
-                escape_script_value(name)
-            )
-        } else {
-            format!(
-                r#"
-                Array.from(document.querySelectorAll('[role="{}"]'))
-                    .map(el => ({{
-                        role: el.getAttribute('role'),
-                        name: el.textContent.trim(),
-                        selector: el.id ? `#${{el.id}}` : el.className ? `.${{el.className.split(' ')[0]}}` : el.tagName.toLowerCase()
-                    }}))
-                "#,
-                escape_script_value(role)
-            )
-        }
-    }
-
-    pub fn get_interactive_elements_script() -> &'static str {
-        r#"
-        Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"]'))
-            .map(el => ({
-                role: el.getAttribute('role') || el.tagName.toLowerCase(),
-                name: el.getAttribute('aria-label') || el.textContent?.trim() || '',
-                description: el.getAttribute('aria-describedby') ? document.getElementById(el.getAttribute('aria-describedby'))?.textContent?.trim() : null,
-                value: el.value || el.getAttribute('aria-valuenow'),
-                selector: el.id ? `#${el.id}` : el.className ? `.${el.className.split(' ')[0]}` : el.tagName.toLowerCase()
-            }))
-        "#
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -496,74 +416,6 @@ impl DOMSemanticGraph {
             relationships: Vec::new(),
         }
     }
-
-    pub fn add_element(&mut self, element: SemanticElement) {
-        self.elements.push(element);
-    }
-
-    pub fn add_relationship(&mut self, relationship: ElementRelationship) {
-        self.relationships.push(relationship);
-    }
-
-    pub fn build_graph_script() -> &'static str {
-        r#"
-        (function() {
-            const elements = [];
-            const relationships = [];
-
-
-            const selector = 'button, a, input, select, textarea, form, [role], [aria-label]';
-            const nodes = document.querySelectorAll(selector);
-
-            nodes.forEach((el, index) => {
-                const id = el.id || `element-${index}`;
-                const role = el.getAttribute('role') || el.tagName.toLowerCase();
-                const label = el.getAttribute('aria-label');
-                const text = el.textContent?.trim().substring(0, 100);
-
-
-                const attributes = {};
-                for (let attr of el.attributes) {
-                    attributes[attr.name] = attr.value;
-                }
-
-
-                const selectors = [];
-                if (el.getAttribute('data-testid')) {
-                    selectors.push({ DataTestId: el.getAttribute('data-testid') });
-                }
-                if (el.getAttribute('aria-label')) {
-                    selectors.push({ AriaLabel: el.getAttribute('aria-label') });
-                }
-                if (el.id) {
-                    selectors.push({ Css: `#${el.id}` });
-                }
-
-                elements.push({
-                    id,
-                    role,
-                    label,
-                    text,
-                    attributes,
-                    selectors
-                });
-
-
-                const labelFor = el.getAttribute('aria-labelledby');
-                if (labelFor) {
-                    relationships.push({ LabelFor: [labelFor, id] });
-                }
-
-                const describedBy = el.getAttribute('aria-describedby');
-                if (describedBy) {
-                    relationships.push({ DescribedBy: [describedBy, id] });
-                }
-            });
-
-            return { elements, relationships };
-        })()
-        "#
-    }
 }
 
 impl Default for DOMSemanticGraph {
@@ -575,60 +427,6 @@ impl Default for DOMSemanticGraph {
 pub struct SelfHealingFinder;
 
 impl SelfHealingFinder {
-    pub fn find_with_healing(selector: &SemanticSelector) -> String {
-        let mut attempts = String::from("(function() {\n");
-        attempts.push_str("  let element = null;\n");
-        attempts.push_str("  let strategy = null;\n\n");
-
-        for (idx, strat) in selector.strategies.iter().enumerate() {
-            attempts.push_str(&format!("  // Strategy {}: {:?}\n", idx, strat));
-            attempts.push_str("  if (!element) {\n");
-            attempts.push_str("    try {\n");
-            attempts.push_str(&format!(
-                "      element = {};\n",
-                strat.to_selector_script()
-            ));
-            attempts.push_str(&format!("      if (element) strategy = \"{:?}\";\n", strat));
-            attempts.push_str("    } catch (e) {}\n");
-            attempts.push_str("  }\n\n");
-        }
-
-        attempts.push_str("  return { element, strategy };\n");
-        attempts.push_str("})()");
-
-        attempts
-    }
-
-    pub fn llm_fallback_prompt(query: &str, a11y_tree: &AccessibilityTree) -> String {
-        format!(
-            r#"Find the element matching: '{}'
-
-Accessibility tree:
-{}
-
-Return a JSON object with the best selector strategy to find this element.
-Format: {{"strategy": "css"|"xpath"|"text", "value": "..."}}"#,
-            query,
-            serde_json::to_string_pretty(a11y_tree).unwrap_or_default()
-        )
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SemanticElementInfo {
-    pub selector: String,
-    pub strategy: String,
-    pub role: Option<String>,
-    pub name: Option<String>,
-    pub text: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SelectorResult {
-    pub strategy: SelectorStrategy,
-    pub found: bool,
-    pub element_info: Option<SemanticElementInfo>,
-    pub error: Option<String>,
 }
 
 pub struct SemanticElementFinder;
@@ -640,51 +438,6 @@ impl SemanticElementFinder {
 
     pub fn builder(query: &str) -> SemanticSelector {
         SemanticSelector::new(query)
-    }
-
-    pub fn parse_query(query: &str) -> SemanticQuery {
-        NaturalLanguageParser::parse(query)
-    }
-
-    pub fn find_element_script(selector: &SemanticSelector) -> String {
-        SelfHealingFinder::find_with_healing(selector)
-    }
-
-    pub fn test_strategies_script(selector: &SemanticSelector) -> String {
-        let mut script = String::from("(function() {\n");
-        script.push_str("  const results = [];\n\n");
-
-        for strat in &selector.strategies {
-            script.push_str(&format!("  // Testing strategy: {:?}\n", strat));
-            script.push_str("  try {\n");
-            script.push_str(&format!("    const el = {};\n", strat.to_selector_script()));
-            script.push_str("    results.push({\n");
-            script.push_str(&format!("      strategy: \"{:?}\",\n", strat));
-            script.push_str("      found: !!el,\n");
-            script.push_str("      element_info: el ? {\n");
-            script.push_str("        selector: el.id ? `#${el.id}` : el.className ? `.${el.className.split(' ')[0]}` : el.tagName.toLowerCase(),\n");
-            script.push_str("        role: el.getAttribute('role'),\n");
-            script.push_str(
-                "        name: el.getAttribute('aria-label') || el.textContent?.trim(),\n",
-            );
-            script.push_str("        text: el.textContent?.trim()\n");
-            script.push_str("      } : null,\n");
-            script.push_str("      error: null\n");
-            script.push_str("    });\n");
-            script.push_str("  } catch (e) {\n");
-            script.push_str("    results.push({\n");
-            script.push_str(&format!("      strategy: \"{:?}\",\n", strat));
-            script.push_str("      found: false,\n");
-            script.push_str("      element_info: null,\n");
-            script.push_str("      error: e.message\n");
-            script.push_str("    });\n");
-            script.push_str("  }\n\n");
-        }
-
-        script.push_str("  return results;\n");
-        script.push_str("})()");
-
-        script
     }
 }
 

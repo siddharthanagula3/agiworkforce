@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 
 export interface CopyToClipboardOptions {
@@ -98,30 +97,4 @@ function fallbackCopyToClipboard(text: string): boolean {
   } finally {
     document.body.removeChild(textarea);
   }
-}
-
-/**
- * Read text from clipboard
- *
- * @returns Promise<string | null> - Clipboard text or null if failed
- */
-export async function readFromClipboard(): Promise<string | null> {
-  if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-    try {
-      return await navigator.clipboard.readText();
-    } catch (err) {
-      console.warn('[Clipboard] Failed to read from clipboard:', err);
-      return null;
-    }
-  }
-
-  console.warn('[Clipboard] Clipboard read not supported in this context');
-  return null;
-}
-
-export function isClipboardSupported(): boolean {
-  return Boolean(
-    (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') ||
-    typeof document.execCommand === 'function',
-  );
 }

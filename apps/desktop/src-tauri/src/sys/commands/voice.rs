@@ -608,8 +608,6 @@ async fn transcribe_with_local_whisper(
     let audio_data =
         std::fs::read(audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
 
-    // Decode audio to PCM f32 samples
-    // For simplicity, we expect WAV files here. In production, consider using symphonia for multiple formats.
     let (samples, sample_rate) = decode_audio_to_samples(&audio_data)
         .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
@@ -1722,7 +1720,7 @@ pub async fn speech_stop_and_transcribe(
     }
 }
 
-/// DESK-17. The transcription endpoint, its multipart fields, and the model
+/// The transcription endpoint, its multipart fields, and the model
 /// were retyped here and again in `apps/cli/src/voice.rs`, so a provider change
 /// could land in one binary and silently miss the other. Both now read
 /// `agiworkforce_llm::speech` and the `voice_transcription` routing slot.

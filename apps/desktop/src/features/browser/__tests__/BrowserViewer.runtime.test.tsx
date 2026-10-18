@@ -32,8 +32,6 @@ function resetBrowserStore() {
     actions: [],
     domSnapshots: [],
     highlightedElement: null,
-    isRecording: false,
-    recordedSteps: [],
     isStreaming: false,
     streamIntervalId: null,
   });

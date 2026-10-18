@@ -57,26 +57,6 @@ pub fn database_path() -> anyhow::Result<PathBuf> {
     Ok(app_data_dir()?.join("agiworkforce.db"))
 }
 
-pub fn logs_dir() -> anyhow::Result<PathBuf> {
-    let dir = app_data_dir()?.join("logs");
-
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-
-    Ok(dir)
-}
-
-pub fn cache_dir() -> anyhow::Result<PathBuf> {
-    let dir = app_data_dir()?.join("cache");
-
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-
-    Ok(dir)
-}
-
 /// Writes `content` to `path`, a path a grant check returned. With
 /// `create_new` the file must not exist yet; otherwise an existing file is
 /// replaced. The last component of `path` is never followed: on unix the

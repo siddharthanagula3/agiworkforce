@@ -110,7 +110,6 @@ interface ConnectorsState {
   access: Record<string, ConnectorAccessDecision>;
 
   refreshAccess: (id: string) => Promise<ConnectorAccessDecision>;
-  isBlockedByWorkspace: (id: string) => boolean;
   connect: (id: string) => Promise<void>;
   connectWithApiKey: (id: string, apiKey: string) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
@@ -144,8 +143,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
           set((state) => ({ access: { ...state.access, [id]: decision } }));
           return decision;
         },
-
-        isBlockedByWorkspace: (id: string) => get().access[id]?.allowed === false,
 
         connect: async (id: string) => {
           set((state) => ({

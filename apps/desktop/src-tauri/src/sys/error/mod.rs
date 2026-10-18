@@ -1,18 +1,5 @@
-use rusqlite;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-pub mod categorization;
-pub mod integration;
-pub mod recovery;
-pub mod retry;
-pub mod translator;
-
-pub use categorization::{Categorizable, ErrorCategory};
-pub use integration::{convert_tool_error, execute_tool_with_recovery, EnhancedExecutionContext};
-pub use recovery::{RecoveryAction, RecoveryManager, RecoveryStrategy};
-pub use retry::{retry_with_policy, BackoffStrategy, RetryPolicy};
-pub use translator::{translate_mcp_error, ErrorTranslator, FriendlyError, FriendlyErrorCategory};
 
 #[derive(Debug, Error, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "details")]
@@ -166,69 +153,6 @@ pub enum ResourceError {
     ConcurrencyLimitExceeded(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorContext {
-    pub id: String,
-    pub error: AGIError,
-    pub timestamp: i64,
-    pub step: Option<String>,
-    pub tool: Option<String>,
-    pub input: Option<serde_json::Value>,
-    pub stacktrace: Vec<String>,
-    pub recovery_attempts: u32,
-    pub user_message: String,
-    pub category: ErrorCategory,
-    pub suggested_action: String,
-}
-
-impl ErrorContext {
-    pub fn new(error: AGIError) -> Self {
-        let category = error.category();
-        let user_message = error.suggested_action();
-        let suggested_action = user_message.clone();
-
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            error,
-            timestamp: chrono::Utc::now().timestamp(),
-            step: None,
-            tool: None,
-            input: None,
-            stacktrace: vec![],
-            recovery_attempts: 0,
-            user_message,
-            category,
-            suggested_action,
-        }
-    }
-
-    pub fn with_step(mut self, step: String) -> Self {
-        self.stacktrace.push(format!("Step: {}", step));
-        self.step = Some(step);
-        self
-    }
-
-    pub fn with_tool(mut self, tool: String) -> Self {
-        self.stacktrace.push(format!("Tool: {}", tool));
-        self.tool = Some(tool);
-        self
-    }
-
-    pub fn with_input(mut self, input: serde_json::Value) -> Self {
-        self.input = Some(input);
-        self
-    }
-
-    pub fn with_stacktrace(mut self, trace: String) -> Self {
-        self.stacktrace.push(trace);
-        self
-    }
-
-    pub fn increment_recovery_attempts(&mut self) {
-        self.recovery_attempts += 1;
-    }
-}
-
 pub type Error = AGIError;
 
 pub type Result<T> = std::result::Result<T, AGIError>;
@@ -270,47 +194,5 @@ impl From<reqwest::Error> for AGIError {
 impl From<serde_json::Error> for AGIError {
     fn from(err: serde_json::Error) -> Self {
         AGIError::ConfigurationError(format!("JSON error: {}", err))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_error_context_creation() {
-        let error = AGIError::TransientError("Network timeout".to_string());
-        let context = ErrorContext::new(error)
-            .with_step("Execute API call".to_string())
-            .with_tool("api_call".to_string());
-
-        assert_eq!(context.step, Some("Execute API call".to_string()));
-        assert_eq!(context.tool, Some("api_call".to_string()));
-        assert_eq!(context.recovery_attempts, 0);
-        assert_eq!(context.stacktrace.len(), 2);
-    }
-
-    #[test]
-    fn test_error_category() {
-        let error = AGIError::TransientError("test".to_string());
-        assert!(matches!(error.category(), ErrorCategory::Transient));
-
-        let error = AGIError::PermissionError("test".to_string());
-        assert!(matches!(error.category(), ErrorCategory::Permission));
-
-        let error = AGIError::FatalError("test".to_string());
-        assert!(matches!(error.category(), ErrorCategory::Permanent));
-    }
-
-    #[test]
-    fn test_error_is_retryable() {
-        let error = AGIError::TransientError("test".to_string());
-        assert!(error.is_retryable());
-
-        let error = AGIError::FatalError("test".to_string());
-        assert!(!error.is_retryable());
-
-        let error = AGIError::ResourceError(ResourceError::MemoryLimitExceeded("test".to_string()));
-        assert!(error.is_retryable());
     }
 }

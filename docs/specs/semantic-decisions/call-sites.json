@@ -62,61 +62,6 @@
       "invocation": "invoke_candidate("
     },
     {
-      "path": "apps/desktop/src-tauri/src/core/agent/autonomous.rs",
-      "line": 1295,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agent/autonomous.rs",
-      "line": 1365,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agent/planner.rs",
-      "line": 100,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs",
-      "line": 853,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/executors/git_executor.rs",
-      "line": 811,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/executors/llm_executor.rs",
-      "line": 279,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/executors/llm_executor.rs",
-      "line": 335,
-      "invocation": "send_message_streaming("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/planner.rs",
-      "line": 206,
-      "invocation": "invoke_candidate("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/planner.rs",
-      "line": 614,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
-      "line": 381,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
-      "line": 814,
-      "invocation": ".send_message("
-    },
-    {
       "path": "apps/desktop/src-tauri/src/core/llm/llm_router.rs",
       "line": 1508,
       "invocation": ".send_message("
@@ -134,11 +79,6 @@
     {
       "path": "apps/desktop/src-tauri/src/core/research/orchestrator.rs",
       "line": 729,
-      "invocation": ".send_message("
-    },
-    {
-      "path": "apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs",
-      "line": 628,
       "invocation": ".send_message("
     },
     {

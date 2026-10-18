@@ -20,7 +20,6 @@ interface CodingCheckpointState {
   lastRewindedPaths: string[];
   error: string | null;
 
-  createCheckpoint: (name: string, paths: string[]) => Promise<string | null>;
   listCheckpoints: () => Promise<NamedFileCheckpoint[]>;
   rewindToCheckpoint: (id: string) => Promise<string[] | null>;
   clearError: () => void;
@@ -35,50 +34,6 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
         isRewinding: false,
         lastRewindedPaths: [],
         error: null,
-
-        createCheckpoint: async (name, paths) => {
-          if (!name.trim()) {
-            toast.error('Checkpoint name cannot be empty');
-            return null;
-          }
-          if (!paths.length) {
-            toast.error('At least one file path is required');
-            return null;
-          }
-          set(
-            (state) => {
-              state.isLoading = true;
-              state.error = null;
-            },
-            undefined,
-            'codingCheckpoint/create/start',
-          );
-          try {
-            const id = await invoke<string>('coding_checkpoint_create', { name, paths });
-            await get().listCheckpoints();
-            set(
-              (state) => {
-                state.isLoading = false;
-              },
-              undefined,
-              'codingCheckpoint/create/done',
-            );
-            toast.success(`Checkpoint "${name}" created`);
-            return id;
-          } catch (err) {
-            const msg = String(err);
-            set(
-              (state) => {
-                state.error = msg;
-                state.isLoading = false;
-              },
-              undefined,
-              'codingCheckpoint/create/error',
-            );
-            toast.error(`Failed to create checkpoint: ${msg}`);
-            return null;
-          }
-        },
 
         listCheckpoints: async () => {
           set(

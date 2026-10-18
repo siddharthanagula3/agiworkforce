@@ -1,21 +1,12 @@
-import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  CheckCircle2,
-  Copy,
-  Download,
-  ExternalLink,
-  FileText,
-  RotateCcw,
-  Sparkles,
-} from 'lucide-react';
+import { CheckCircle2, Copy, Download, FileText, RotateCcw, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { save } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
 import { Button } from '@/ui/Button';
 import { Badge } from '@/ui/Badge';
 import { cn } from '@/lib/utils';
-import { openUrl } from '@/lib/tauri-mock';
 import type { ResearchResponse } from '@/stores/researchStore';
 
 export interface ResearchReportProps {
@@ -61,8 +52,12 @@ export const ResearchReport = memo(function ResearchReport({
 
   const handleExportPdf = useCallback(async () => {
     try {
+      const outputPath = await save({
+        defaultPath: `research-${Date.now()}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (!outputPath) return;
       const { useDocumentStore } = await import('@/stores/documentStore');
-      const outputPath = `/tmp/research-${Date.now()}.pdf`;
       await useDocumentStore
         .getState()
         .generatePdf(outputPath, `Research: ${result.query}`, buildPlainText(result));
@@ -205,23 +200,4 @@ ${result.report}
 Research completed in ${result.duration_secs}s
 Mode: ${result.mode} | Sources cited: ${result.sources_cited} | Confidence: ${result.confidence}
 `;
-}
-
-export function ResearchReportExternalLink({
-  url,
-  children,
-}: {
-  url: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => void openUrl(url)}
-      className="inline-flex items-center gap-0.5 text-indigo-400 hover:underline"
-    >
-      {children}
-      <ExternalLink className="h-3 w-3" />
-    </button>
-  );
 }

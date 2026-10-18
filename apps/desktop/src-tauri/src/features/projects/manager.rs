@@ -129,65 +129,6 @@ impl ProjectManager {
         Ok(())
     }
 
-    pub fn get_project(&self, project_id: &str) -> Result<Option<Project>> {
-        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        let mut stmt = conn.prepare(
-            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
-             FROM projects WHERE id = ?1",
-        )?;
-
-        let result = stmt.query_row([project_id], |row| {
-            Ok(Project {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                custom_instructions: row.get(3)?,
-                visibility: row.get(4)?,
-                created_by: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-            })
-        });
-
-        match result {
-            Ok(project) => Ok(Some(project)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    pub fn get_user_projects(&self, user_id: &str) -> Result<Vec<Project>> {
-        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        let mut stmt = conn.prepare(
-            "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
-             FROM projects WHERE created_by = ?1 ORDER BY updated_at DESC",
-        )?;
-
-        let projects = stmt.query_map([user_id], |row| {
-            Ok(Project {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                custom_instructions: row.get(3)?,
-                visibility: row.get(4)?,
-                created_by: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-            })
-        })?;
-
-        let mut result = Vec::new();
-        for project in projects {
-            result.push(project?);
-        }
-
-        Ok(result)
-    }
-
     pub fn update_project(&self, project: &Project) -> Result<()> {
         let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
             .map_err(|e| anyhow::anyhow!(e))?;
@@ -206,45 +147,6 @@ impl ProjectManager {
         )?;
 
         Ok(())
-    }
-
-    pub fn delete_project(&self, project_id: &str) -> Result<()> {
-        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        conn.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
-
-        self.knowledge_base.clear_project_knowledge(project_id)?;
-
-        Ok(())
-    }
-
-    pub fn get_settings(&self, project_id: &str) -> Result<Option<ProjectSettings>> {
-        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        let mut stmt = conn.prepare(
-            "SELECT project_id, default_model, temperature, enable_memory, enable_rag, rag_top_k, custom_instructions
-             FROM project_settings WHERE project_id = ?1",
-        )?;
-
-        let result = stmt.query_row([project_id], |row| {
-            Ok(ProjectSettings {
-                project_id: row.get(0)?,
-                default_model: row.get(1)?,
-                temperature: row.get(2)?,
-                enable_memory: row.get(3)?,
-                enable_rag: row.get(4)?,
-                rag_top_k: row.get(5)?,
-                custom_instructions: row.get(6)?,
-            })
-        });
-
-        match result {
-            Ok(settings) => Ok(Some(settings)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
     }
 
     pub fn update_settings(&self, settings: &ProjectSettings) -> Result<()> {

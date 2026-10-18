@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { checkForUpdates, relaunchApp, isElectronHost, isTauri } from '../../lib/tauri-mock';
-import { getElectronHostBridge } from '../../lib/tauri-electron/bridgeContract';
+import { checkForUpdates, relaunchApp, isTauri } from '../../lib/tauri-mock';
 import {
   useUpdaterStore,
   shouldShowUpdateNotification,
@@ -51,11 +50,6 @@ export function useUpdater() {
   }, []);
 
   useEffect(() => {
-    if (isElectronHost) {
-      const version = getElectronHostBridge()?.appVersion.trim();
-      if (version) setCurrentVersion(version);
-      return;
-    }
     if (!isTauri) return;
 
     const loadVersion = async () => {
@@ -74,7 +68,7 @@ export function useUpdater() {
   }, []);
 
   const doCheckForUpdates = useCallback(async (): Promise<UpdateInfo | null> => {
-    if (!isTauri && !isElectronHost) {
+    if (!isTauri) {
       setStatus('up-to-date');
       return null;
     }
@@ -133,28 +127,8 @@ export function useUpdater() {
   ]);
 
   const downloadAndInstall = useCallback(async (): Promise<void> => {
-    if (!isTauri && !isElectronHost) {
+    if (!isTauri) {
       setError('Updates are only available in the desktop application');
-      return;
-    }
-
-    if (isElectronHost) {
-      setError(null);
-      try {
-        const { check } = await import('@tauri-apps/plugin-updater');
-        const update = (await check()) as UpdateCheckResult;
-        if (!update.available || !update.downloadAndInstall) {
-          setStatus('up-to-date');
-          return;
-        }
-        await update.downloadAndInstall();
-        setStatus('available');
-      } catch (err) {
-        if (!mountedRef.current) return;
-        console.error('[useUpdater] Failed to open the AGI Cloud installer:', err);
-        setError(err instanceof Error ? err.message : String(err));
-        setStatus('error');
-      }
       return;
     }
 
@@ -239,7 +213,6 @@ export function useUpdater() {
     dismiss,
     retry,
     reset,
-    isManualInstallerUpdate: isElectronHost,
   };
 }
 

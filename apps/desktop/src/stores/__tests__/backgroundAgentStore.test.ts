@@ -68,21 +68,8 @@ describe('backgroundAgentStore command wiring', () => {
       switch (command) {
         case 'background_agent_list':
           return { agents: [agent], activeCount: 1, maxAgents: 8 };
-        case 'background_agent_list_active':
-          return [agent];
         case 'background_agent_get':
           return agent;
-        case 'background_agent_stats':
-          return {
-            totalAgents: 1,
-            runningCount: 0,
-            queuedCount: 1,
-            pausedCount: 0,
-            completedCount: 0,
-            failedCount: 0,
-            maxAgents: 8,
-            atCapacity: false,
-          };
         default:
           return undefined;
       }
@@ -91,28 +78,24 @@ describe('backgroundAgentStore command wiring', () => {
     const store = useBackgroundAgentStore.getState();
 
     await store.listAgents();
-    await store.listActiveAgents();
     await store.getAgent('agent-1');
     await store.pauseAgent('agent-1');
     await store.resumeAgent('agent-1');
     await store.cancelAgent('agent-1');
-    await store.fetchStats();
 
     const invoked = new Set(mockInvoke.mock.calls.map(([command]) => command));
     expect([...invoked].sort()).toEqual([
       'background_agent_cancel',
       'background_agent_get',
       'background_agent_list',
-      'background_agent_list_active',
       'background_agent_pause',
       'background_agent_resume',
-      'background_agent_stats',
     ]);
 
     const pauseCall = mockInvoke.mock.calls.find(([c]) => c === 'background_agent_pause');
     expect(pauseCall?.[1]).toEqual({ agentId: 'agent-1' });
 
-    expect(useBackgroundAgentStore.getState().stats?.maxAgents).toBe(8);
+    expect(useBackgroundAgentStore.getState().maxAgents).toBe(8);
   });
 
   it('subscribes to all eight background agent events', async () => {

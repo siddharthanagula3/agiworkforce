@@ -586,14 +586,6 @@ impl ComputerUseSession {
         });
     }
 
-    /// Emits an error event.
-    pub fn report_error(&self, error: String) {
-        self.emit(SessionEvent::Error {
-            session_id: self.id.clone(),
-            error,
-        });
-    }
-
     /// Returns all snapshots.
     pub fn snapshots(&self) -> &VecDeque<ActionSnapshot> {
         &self.snapshots
@@ -607,36 +599,6 @@ impl ComputerUseSession {
     /// Gets a snapshot by ID.
     pub fn get_snapshot(&self, id: &str) -> Option<&ActionSnapshot> {
         self.snapshots.iter().find(|s| s.id == id)
-    }
-
-    /// Checks if undo is available for the last action.
-    pub fn can_undo(&self) -> bool {
-        // Can only undo if we have a snapshot with before screenshot
-        self.snapshots
-            .back()
-            .map(|s| s.before_screenshot.is_some())
-            .unwrap_or(false)
-    }
-
-    /// Gets the undo action for the last executed action.
-    pub fn get_undo_action(&self) -> Option<UndoAction> {
-        let snapshot = self.snapshots.back()?;
-
-        if snapshot.before_screenshot.is_none() {
-            return Some(UndoAction {
-                original_action_id: snapshot.id.clone(),
-                description: format!("Undo: {}", snapshot.action.description()),
-                available: false,
-                unavailable_reason: Some("No before screenshot available".to_string()),
-            });
-        }
-
-        Some(UndoAction {
-            original_action_id: snapshot.id.clone(),
-            description: format!("Undo: {}", snapshot.action.description()),
-            available: true,
-            unavailable_reason: None,
-        })
     }
 
     /// Returns current action count.
@@ -722,20 +684,6 @@ impl SessionManager {
         Ok(id)
     }
 
-    /// Gets a session by ID.
-    pub async fn get_session(
-        &self,
-        session_id: &str,
-    ) -> Option<tokio::sync::MutexGuard<'_, std::collections::HashMap<String, ComputerUseSession>>>
-    {
-        let sessions = self.sessions.lock().await;
-        if sessions.contains_key(session_id) {
-            Some(sessions)
-        } else {
-            None
-        }
-    }
-
     /// Removes a session.
     pub async fn remove_session(&self, session_id: &str) -> Option<ComputerUseSession> {
         let mut sessions = self.sessions.lock().await;
@@ -746,24 +694,6 @@ impl SessionManager {
     pub async fn list_sessions(&self) -> Vec<String> {
         let sessions = self.sessions.lock().await;
         sessions.keys().cloned().collect()
-    }
-
-    /// Cleans up all completed sessions.
-    pub async fn cleanup_completed(&self) -> Result<()> {
-        let mut sessions = self.sessions.lock().await;
-        let completed: Vec<_> = sessions
-            .iter()
-            .filter(|(_, s)| s.ended_at.is_some())
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for id in completed {
-            if let Some(session) = sessions.remove(&id) {
-                session.cleanup()?;
-            }
-        }
-
-        Ok(())
     }
 }
 

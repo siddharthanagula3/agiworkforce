@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREDITS_PER_USD, formatCredits } from '@agiworkforce/types';
 import { formatProviderCostCredits, useBillingUsageStore } from '../../stores/billingUsage';
+import { useModelStore, type UsageStats } from '../../stores/modelStore';
 import type { ModelUsageStats } from '../../types/billing';
 import {
   UsageDashboard,
@@ -29,6 +30,17 @@ function model(overrides: Partial<ModelUsageStats>): ModelUsageStats {
     cost_usd: 0,
     request_count: 0,
     ...overrides,
+  };
+}
+
+function ledgerStats(byModel: UsageStats['by_model']): UsageStats {
+  const totals = Object.values(byModel);
+  return {
+    total_tokens: totals.reduce((sum, usage) => sum + usage.tokens, 0),
+    total_cost: totals.reduce((sum, usage) => sum + usage.cost, 0),
+    message_count: totals.reduce((sum, usage) => sum + usage.messages, 0),
+    by_provider: {},
+    by_model: byModel,
   };
 }
 
@@ -141,43 +153,16 @@ describe('UsageDashboard', () => {
       loadCostAnalytics: vi.fn().mockResolvedValue(undefined),
       costOverview: null,
       costAnalytics: null,
-      usageStats: null,
     });
+    useModelStore.setState({ getUsageStats: vi.fn().mockResolvedValue(null), usageStats: null });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('shows an empty state in the resets section when no period is running', () => {
-    useBillingUsageStore.setState({
-      budget: { ...useBillingUsageStore.getState().budget, period: 'monthly', periodEnd: 0 },
-    });
-
-    render(<UsageDashboard />);
-
-    expect(screen.getByRole('heading', { name: 'Usage limit resets' })).toBeInTheDocument();
-    expect(screen.getByText(/No reset window is running/i)).toBeInTheDocument();
-  });
-
-  it('shows the time remaining in the resets section when a period is running', () => {
-    useBillingUsageStore.setState({
-      budget: {
-        ...useBillingUsageStore.getState().budget,
-        period: 'weekly',
-        periodEnd: NOW + 2 * 3_600_000 + 30 * 60_000,
-      },
-    });
-
-    render(<UsageDashboard />);
-
-    expect(screen.getByText('weekly token budget')).toBeInTheDocument();
-    expect(screen.getByText('in 2h 30m')).toBeInTheDocument();
-  });
-
   it('renders streak, active-day and favourite-model aggregates from the cost timeseries', () => {
     useBillingUsageStore.setState({
-      budget: { ...useBillingUsageStore.getState().budget, periodEnd: 0 },
       costAnalytics: {
         timeseries: [
           { date: day(0), total_cost: 0.2 },
@@ -186,20 +171,13 @@ describe('UsageDashboard', () => {
         providers: [],
         top_conversations: [],
       },
-      usageStats: {
-        automations_executed: 0,
-        api_calls_made: 0,
-        storage_used_mb: 0,
-        browser_sessions: 0,
-        mcp_tool_calls: 0,
-        llm_tokens_used: 1200,
-        llm_input_tokens: 0,
-        llm_output_tokens: 0,
-        model_usage: [
-          model({ model_id: 'fixture-model-a', model_name: 'Fixture A', total_tokens: 200 }),
-          model({ model_id: 'fixture-model-b', model_name: 'Fixture B', total_tokens: 1000 }),
-        ],
-      },
+    });
+    useModelStore.setState({
+      getUsageStats: vi.fn().mockResolvedValue(null),
+      usageStats: ledgerStats({
+        'fixture-model-a': { tokens: 200, cost: 0.1, messages: 1 },
+        'fixture-model-b': { tokens: 1000, cost: 0.2, messages: 3 },
+      }),
     });
 
     render(<UsageDashboard />);
@@ -207,7 +185,7 @@ describe('UsageDashboard', () => {
     const activity = within(screen.getByRole('region', { name: 'Activity' }));
     expect(activity.getByText('2 days')).toBeInTheDocument();
     expect(activity.getByText('2 / 30')).toBeInTheDocument();
-    expect(activity.getByText('Fixture B')).toBeInTheDocument();
+    expect(activity.getByText('fixture-model-b')).toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: /Activity over the last 30 days/i }),
     ).toBeInTheDocument();
@@ -227,22 +205,12 @@ describe('UsageDashboard in credits', () => {
       loadCostOverview: vi.fn().mockResolvedValue(undefined),
       loadCostAnalytics: vi.fn().mockResolvedValue(undefined),
       setMonthlyBudget: vi.fn().mockResolvedValue(undefined),
-      budget: { ...useBillingUsageStore.getState().budget, enabled: false, currentUsage: 0 },
       costOverview: overview,
       costAnalytics: null,
-      usageStats: {
-        automations_executed: 0,
-        api_calls_made: 0,
-        storage_used_mb: 0,
-        browser_sessions: 0,
-        mcp_tool_calls: 0,
-        llm_tokens_used: 500,
-        llm_input_tokens: 0,
-        llm_output_tokens: 0,
-        model_usage: [
-          model({ model_name: 'Fixture A', total_tokens: 500, cost_usd: 0.3, request_count: 2 }),
-        ],
-      },
+    });
+    useModelStore.setState({
+      getUsageStats: vi.fn().mockResolvedValue(null),
+      usageStats: ledgerStats({ 'fixture-model-a': { tokens: 500, cost: 0.3, messages: 2 } }),
     });
   });
 

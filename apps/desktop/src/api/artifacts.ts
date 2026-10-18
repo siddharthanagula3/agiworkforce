@@ -118,27 +118,6 @@ function unwrapVoid(response: ArtifactResponse<void>): void {
   }
 }
 
-export async function artifactCreate(
-  title: string,
-  artifactType: ArtifactType,
-  content: string,
-  metadata?: ArtifactMetadata,
-  conversationId?: number,
-  messageId?: number,
-  tags?: string[],
-): Promise<Artifact> {
-  const response = await invoke<ArtifactResponse<Artifact>>('artifact_create', {
-    title,
-    artifactType,
-    content,
-    metadata: metadata ?? null,
-    conversationId: conversationId ?? null,
-    messageId: messageId ?? null,
-    tags: tags ?? null,
-  });
-  return unwrap(response);
-}
-
 export async function artifactGet(id: string): Promise<Artifact> {
   const response = await invoke<ArtifactResponse<Artifact>>('artifact_get', { id });
   return unwrap(response);

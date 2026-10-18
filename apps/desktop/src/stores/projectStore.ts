@@ -53,31 +53,15 @@ export interface Project {
   defaultPrivacyMode?: PrivacyMode | null;
 }
 
-export interface ProjectSettings {
-  defaultModel?: string;
-  defaultProvider?: string;
-  contextWindowSize?: number;
-  autoArchiveAfterDays?: number;
-}
-
 export interface ProjectContext {
   folder: string | null;
   name: string | null;
   isValid: boolean;
 }
 
-export interface ProjectFileInfo {
-  path: string;
-  name: string;
-  isDirectory: boolean;
-  size: number | null;
-  extension: string | null;
-}
-
 interface ProjectState {
   projects: Project[];
   activeProjectId: string | null;
-  projectSettings: Record<string, ProjectSettings>;
   isLoading: boolean;
   error: string | null;
 
@@ -92,39 +76,13 @@ interface ProjectState {
   unarchiveProject: (id: string) => Promise<void>;
 
   setActiveProject: (id: string | null) => void;
-  getActiveProject: () => Project | null;
-
-  addFileToProject: (projectId: string, file: Omit<ProjectFile, 'id' | 'addedAt'>) => Promise<void>;
-  removeFileFromProject: (projectId: string, fileId: string) => Promise<void>;
-
-  addKnowledgeBaseFile: (
-    projectId: string,
-    file: Omit<KnowledgeBaseFile, 'id' | 'addedAt'>,
-  ) => Promise<void>;
-  removeKnowledgeBaseFile: (projectId: string, fileId: string) => Promise<void>;
 
   moveConversationToProject: (conversationId: string, projectId: string | null) => Promise<void>;
-  linkConversation: (projectId: string, conversationId: string) => Promise<void>;
-  unlinkConversation: (projectId: string, conversationId: string) => Promise<void>;
-  getProjectForConversation: (conversationId: string) => Project | null;
-
-  getProjectSettings: (projectId: string) => ProjectSettings;
-  updateProjectSettings: (projectId: string, settings: Partial<ProjectSettings>) => Promise<void>;
-
-  searchProjects: (query: string) => Project[];
-  getArchivedProjects: () => Project[];
-  getActiveProjects: () => Project[];
 
   setCurrentFolder: (path: string | null) => void;
   addRecentFolder: (path: string) => void;
   removeRecentFolder: (path: string) => void;
   clearRecentFolders: () => void;
-  getCurrentFolderDisplayName: () => string | null;
-
-  getProjectContext: () => Promise<ProjectContext>;
-  getProjectSummary: () => Promise<string>;
-  listProjectFiles: (maxDepth?: number, includeHidden?: boolean) => Promise<ProjectFileInfo[]>;
-  validateProjectPath: (path: string) => Promise<boolean>;
 
   clearError: () => void;
 }
@@ -186,7 +144,6 @@ export const useProjectStore = create<ProjectState>()(
       subscribeWithSelector((set, get) => ({
         projects: [],
         activeProjectId: null,
-        projectSettings: {},
         isLoading: false,
         error: null,
 
@@ -385,80 +342,6 @@ export const useProjectStore = create<ProjectState>()(
           set({ activeProjectId: id });
         },
 
-        getActiveProject: () => {
-          const { projects, activeProjectId } = get();
-          if (!activeProjectId) return null;
-          return projects.find((p) => p.id === activeProjectId) || null;
-        },
-
-        addFileToProject: async (projectId, fileData) => {
-          if (isManagedCloudMode()) {
-            throw new Error(
-              'Device files stay Local. Upload a Cloud project knowledge file instead.',
-            );
-          }
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          const newFile: ProjectFile = {
-            ...fileData,
-            id: crypto.randomUUID(),
-            addedAt: new Date().toISOString(),
-          };
-
-          const updatedFiles = [...project.files, newFile];
-          await get().updateProject(projectId, { files: updatedFiles });
-        },
-
-        removeFileFromProject: async (projectId, fileId) => {
-          if (isManagedCloudMode()) {
-            throw new Error('Device project files are only available in Local mode.');
-          }
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          const updatedFiles = project.files.filter((f) => f.id !== fileId);
-          await get().updateProject(projectId, { files: updatedFiles });
-        },
-
-        addKnowledgeBaseFile: async (projectId, fileData) => {
-          if (isManagedCloudMode()) {
-            throw new Error('Cloud knowledge uploads must use the managed project upload flow.');
-          }
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          const newFile: KnowledgeBaseFile = {
-            ...fileData,
-            id: crypto.randomUUID(),
-            addedAt: new Date().toISOString(),
-          };
-
-          const updatedFiles = [...(project.knowledgeBaseFiles ?? []), newFile];
-          await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
-        },
-
-        removeKnowledgeBaseFile: async (projectId, fileId) => {
-          if (isManagedCloudMode()) {
-            throw new Error(
-              'Cloud knowledge files must be removed through the managed project source flow.',
-            );
-          }
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          const updatedFiles = (project.knowledgeBaseFiles ?? []).filter((f) => f.id !== fileId);
-          await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
-        },
-
         moveConversationToProject: async (conversationId, projectId) => {
           const projectsBefore = get().projects;
           const chatBefore = useChatStore.getState();
@@ -563,77 +446,6 @@ export const useProjectStore = create<ProjectState>()(
           useChatStore.getState().setConversationProject(conversationId, projectId);
         },
 
-        linkConversation: async (projectId, conversationId) => {
-          await get().moveConversationToProject(conversationId, projectId);
-        },
-
-        unlinkConversation: async (projectId, conversationId) => {
-          const conversation = useChatStore
-            .getState()
-            .conversations.find((candidate) => candidate.id === conversationId);
-          const linkedProject =
-            conversation?.projectId ??
-            get().projects.find((candidate) => candidate.conversationIds.includes(conversationId))
-              ?.id;
-          if (linkedProject !== projectId) return;
-          await get().moveConversationToProject(conversationId, null);
-        },
-
-        getProjectForConversation: (conversationId) => {
-          const { projects } = get();
-          return projects.find((p) => p.conversationIds.includes(conversationId)) || null;
-        },
-
-        getProjectSettings: (projectId) => {
-          return get().projectSettings[projectId] || {};
-        },
-
-        updateProjectSettings: async (projectId, settings) => {
-          if (isManagedCloudMode()) {
-            throw new Error(
-              'Cloud project defaults are not available yet. Project instructions and sources are synced separately.',
-            );
-          }
-          const currentSettings = get().projectSettings[projectId] || {};
-          const updatedSettings = { ...currentSettings, ...settings };
-
-          set((state) => ({
-            projectSettings: {
-              ...state.projectSettings,
-              [projectId]: updatedSettings,
-            },
-          }));
-
-          if (isTauri) {
-            try {
-              await invoke('project_update_settings', {
-                projectId,
-                settings: updatedSettings,
-              });
-            } catch (error) {
-              console.error('[ProjectStore] Failed to persist project settings:', error);
-            }
-          }
-        },
-
-        searchProjects: (query) => {
-          const { projects } = get();
-          const lowerQuery = query.toLowerCase();
-          return projects.filter(
-            (p) =>
-              p.name.toLowerCase().includes(lowerQuery) ||
-              p.description.toLowerCase().includes(lowerQuery),
-          );
-        },
-
-        getArchivedProjects: () => {
-          return get().projects.filter((p) => p.isArchived);
-        },
-
-        getActiveProjects: () => {
-          return get().projects.filter((p) => !p.isArchived);
-        },
-
         setCurrentFolder: (path) => {
           set({ currentFolder: path }, undefined, 'project/setCurrentFolder');
 
@@ -670,59 +482,6 @@ export const useProjectStore = create<ProjectState>()(
           set({ recentFolders: [] }, undefined, 'project/clearRecentFolders');
         },
 
-        getCurrentFolderDisplayName: () => {
-          const { currentFolder } = get();
-          if (!currentFolder) return null;
-          return formatFolderPath(currentFolder);
-        },
-
-        getProjectContext: async () => {
-          try {
-            return await invoke<ProjectContext>('project_context_get_folder');
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to get project context:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        getProjectSummary: async () => {
-          try {
-            return await invoke<string>('project_context_get_summary');
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to get project summary:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        listProjectFiles: async (maxDepth?: number, includeHidden?: boolean) => {
-          try {
-            return await invoke<ProjectFileInfo[]>('project_context_list_files', {
-              maxDepth: maxDepth ?? null,
-              includeHidden: includeHidden ?? null,
-            });
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to list project files:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
-        validateProjectPath: async (path: string) => {
-          try {
-            return await invoke<boolean>('project_context_validate_path', { path });
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[ProjectStore] Failed to validate project path:', errorMessage);
-            set({ error: errorMessage });
-            throw error;
-          }
-        },
-
         clearError: () => {
           set({ error: null });
         },
@@ -744,11 +503,6 @@ export const useProjectStore = create<ProjectState>()(
               state.activeProjectId && localProjectIds.has(state.activeProjectId)
                 ? state.activeProjectId
                 : null,
-            projectSettings: Object.fromEntries(
-              Object.entries(state.projectSettings).filter(([projectId]) =>
-                localProjectIds.has(projectId),
-              ),
-            ),
             currentFolder: state.currentFolder,
           };
         },

@@ -22,11 +22,7 @@ pub mod agents;
 pub mod citation;
 pub mod orchestrator;
 pub mod report;
-pub mod subtask_executor;
-pub mod swarm_bridge;
-pub mod swarm_orchestrator;
 pub mod types;
-pub mod web_search_config;
 
 #[cfg(test)]
 mod tests;
@@ -38,9 +34,7 @@ pub use agents::{
 pub use citation::{Citation, CitationFormat, CitationTracker, SourceType};
 pub use orchestrator::{ResearchOrchestrator, ResearchSession};
 pub use report::{ReportSection, ResearchReport, ResearchReportGenerator};
-pub use swarm_orchestrator::ResearchSwarmOrchestrator;
 pub use types::{
     ConfidenceLevel, ResearchConfig, ResearchError, ResearchMode, ResearchProgress, ResearchQuery,
     ResearchResult, SearchStrategy,
 };
-pub use web_search_config::{WebSearchConfig, WebSearchProvider};

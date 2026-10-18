@@ -25,20 +25,6 @@ pub struct KeyboardSimulator {
     typing_delay_ms: u64,
 }
 
-#[derive(Debug, Clone)]
-pub struct MacroStep {
-    pub action: MacroAction,
-    pub delay_ms: u64,
-}
-
-#[derive(Debug, Clone)]
-pub enum MacroAction {
-    PressKey(Key),
-    ReleaseKey(Key),
-    SendText(String),
-    Hotkey(Vec<Key>, Key),
-}
-
 impl KeyboardSimulator {
     pub fn new() -> Result<Self> {
         let _enigo_lock = lock_enigo()?;
@@ -49,10 +35,6 @@ impl KeyboardSimulator {
             enigo,
             typing_delay_ms: 10,
         })
-    }
-
-    pub fn set_typing_speed(&mut self, delay_ms: u64) {
-        self.typing_delay_ms = delay_ms;
     }
 
     pub async fn send_text(&mut self, text: &str) -> Result<()> {
@@ -121,22 +103,6 @@ impl KeyboardSimulator {
 
         Ok(())
     }
-
-    pub async fn execute_macro(&mut self, steps: &[MacroStep]) -> Result<()> {
-        for step in steps {
-            match &step.action {
-                MacroAction::PressKey(key) => self.press_key(*key)?,
-                MacroAction::ReleaseKey(key) => self.release_key(*key)?,
-                MacroAction::SendText(text) => self.send_text(text).await?,
-                MacroAction::Hotkey(modifiers, key) => self.send_hotkey(modifiers, *key)?,
-            }
-
-            if step.delay_ms > 0 {
-                sleep(Duration::from_millis(step.delay_ms)).await;
-            }
-        }
-        Ok(())
-    }
 }
 
 impl KeyboardSimulator {
@@ -147,30 +113,6 @@ impl KeyboardSimulator {
             "alt" | "option" | "opt" => Some(Key::Alt),
 
             "cmd" | "command" | "meta" | "super" | "windows" => Some(Key::Meta),
-            _ => None,
-        }
-    }
-
-    pub fn vk_to_key(vk: u16) -> Option<Key> {
-        match vk {
-            0x08 => Some(Key::Backspace),
-            0x09 => Some(Key::Tab),
-            0x0D => Some(Key::Return),
-            0x10 => Some(Key::Shift),
-            0x11 => Some(Key::Control),
-            0x12 => Some(Key::Alt),
-            0x1B => Some(Key::Escape),
-            0x20 => Some(Key::Space),
-            0x21 => Some(Key::PageUp),
-            0x22 => Some(Key::PageDown),
-            0x23 => Some(Key::End),
-            0x24 => Some(Key::Home),
-            0x25 => Some(Key::LeftArrow),
-            0x26 => Some(Key::UpArrow),
-            0x27 => Some(Key::RightArrow),
-            0x28 => Some(Key::DownArrow),
-            0x2E => Some(Key::Delete),
-            0x70..=0x87 => Some(Key::F1),
             _ => None,
         }
     }

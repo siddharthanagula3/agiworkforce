@@ -159,43 +159,6 @@ impl ReportGenerator {
         serde_json::to_string_pretty(&data)
     }
 
-    pub fn generate_process_report(&self, process: &ProcessMetrics) -> String {
-        format!(
-            "# Process Report: {}\n\n
-             ## Overview\n
-             - **Total Executions**: {}\n
-             - **Success Rate**: {:.1}%\n
-             - **Error Rate**: {:.1}%\n\n
-             ## Performance\n
-             - **Average Duration**: {:.2} seconds\n
-             - **Total Duration**: {:.2} seconds\n
-             - **Time Saved**: {:.1} hours\n\n
-             ## Financial Impact\n
-             - **Cost Savings**: ${:.2}\n
-             - **Value per Execution**: ${:.2}\n\n
-             ## Execution Details\n
-             - **Successful**: {} executions\n
-             - **Failed**: {} executions\n
-             - **Success Rate**: {:.1}%\n",
-            process.process_type,
-            process.execution_count,
-            process.success_rate,
-            process.error_rate,
-            process.avg_duration_seconds,
-            process.total_duration_seconds,
-            process.time_saved_hours,
-            process.cost_savings_usd,
-            if process.execution_count > 0 {
-                process.cost_savings_usd / process.execution_count as f64
-            } else {
-                0.0
-            },
-            process.success_count,
-            process.failure_count,
-            process.success_rate
-        )
-    }
-
     fn format_timestamp(&self, timestamp: i64) -> String {
         if let Some(dt) = chrono::DateTime::from_timestamp(timestamp, 0) {
             dt.format("%Y-%m-%d").to_string()

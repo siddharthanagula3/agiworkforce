@@ -1,21 +1,17 @@
-import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
+import { useBillingUsageStore } from './billingUsage';
 import { useBrowserStore } from './browserStore';
 import { useCodeStore } from './codeStore';
 import { useConnectorsStore } from './connectorsStore';
-import { useExecutionStore, cleanupExecutionListeners } from './executionStore';
 import { cleanupAgentWorkflowEventListeners } from './chat/agentWorkflowEvents';
-import { cleanupAgentTaskEventListeners, useAgentTaskStore } from './agentTaskStore';
 import { cleanupRuntimeActivityEventListeners } from '../hooks/useAgenticEvents';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
-import { useProductivityStore } from './productivityStore';
 import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
 import { useUnifiedChatStore } from './unifiedChatStore';
 import { useCodingCheckpointStore } from './codingCheckpointStore';
 import { useProjectMemoryStore } from './projectMemoryStore';
-import { useSecurityStore } from './securityStore';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export function cleanupAllStoresOnLogout(): void {
@@ -29,9 +25,6 @@ export function cleanupAllStoresOnLogout(): void {
     const connectorsStore = useConnectorsStore.getState();
     connectorsStore.resetOnLogout();
 
-    const productivityStore = useProductivityStore.getState();
-    productivityStore.resetOnLogout();
-
     const chatStore = useUnifiedChatStore.getState();
     chatStore.resetOnLogout();
 
@@ -39,14 +32,7 @@ export function cleanupAllStoresOnLogout(): void {
     mcpStore.resetOnLogout();
 
     cleanupAgentWorkflowEventListeners();
-    cleanupAgentTaskEventListeners();
-    useAgentTaskStore.getState().resetOnLogout();
-    cleanupExecutionListeners();
     cleanupRuntimeActivityEventListeners();
-    const executionStore = useExecutionStore.getState();
-    executionStore.reset();
-
-    stopMetricsAutoRefresh();
 
     useBillingUsageStore.setState({
       costOverview: null,
@@ -54,25 +40,6 @@ export function cleanupAllStoresOnLogout(): void {
       loadingCostOverview: false,
       loadingCostAnalytics: false,
       costError: null,
-      usageStats: null,
-      usageStatsLoading: false,
-      showAutomationWarning: false,
-      showApiCallWarning: false,
-      showStorageWarning: false,
-      showTokenWarning: false,
-      usageError: null,
-      systemMetrics: null,
-      appMetrics: null,
-      analyticsUsageStats: null,
-      featureUsage: [],
-      isLoadingMetrics: false,
-      isLoadingStats: false,
-      roiReport: null,
-      processMetrics: [],
-      userMetrics: [],
-      toolMetrics: [],
-      trends: {},
-      isLoadingROI: false,
     });
 
     const codeStore = useCodeStore.getState();
@@ -92,11 +59,7 @@ export function cleanupAllStoresOnLogout(): void {
       error: null,
     });
 
-    const featureStores = [
-      useCodingCheckpointStore,
-      useProjectMemoryStore,
-      useSecurityStore,
-    ] as const;
+    const featureStores = [useCodingCheckpointStore, useProjectMemoryStore] as const;
 
     for (const store of featureStores) {
       const state = store.getState() as unknown as Record<string, unknown>;

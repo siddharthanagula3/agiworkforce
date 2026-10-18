@@ -1,17 +1,21 @@
-import {
-  dispatchStatusForAgentTaskState,
-  type CompanionApprovalRequestEvent,
-  type CompanionApprovalResponse,
-  type CompanionApprovalSnapshotEvent,
-  type CompanionApprovalType,
-  type CompanionApprovalClosedEvent,
-  type DispatchTaskControlRequest,
-  type DispatchTaskLifecycleStatus,
-  type DispatchTaskStatusEvent,
+import type {
+  CompanionApprovalRequestEvent,
+  CompanionApprovalResponse,
+  CompanionApprovalSnapshotEvent,
+  CompanionApprovalType,
+  CompanionApprovalClosedEvent,
+  DispatchTaskControlRequest,
+  DispatchTaskLifecycleStatus,
+  DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 
 import { resolveApprovalRequest } from './approvalResolution';
-import { type AgentTask, type AgentTaskStatus, useAgentTaskStore } from '../stores/agentTaskStore';
+import {
+  type BackgroundAgent,
+  type BackgroundAgentStatus,
+  isTerminalBackgroundAgentStatus,
+  useBackgroundAgentStore,
+} from '../stores/backgroundAgentStore';
 import { type ApprovalRequest, useToolStore } from '../stores/chat/toolStore';
 import { useCoworkDispatchStore } from '../stores/coworkDispatchStore';
 import {
@@ -295,11 +299,7 @@ async function resolveCompanionApproval(response: CompanionApprovalResponse): Pr
   }
 }
 
-function statusForAgentTask(status: AgentTaskStatus): DispatchTaskLifecycleStatus {
-  return dispatchStatusForAgentTaskState(status);
-}
-
-function clipStatusText(value: string | undefined): string | undefined {
+function clipStatusText(value: string | null | undefined): string | undefined {
   if (!value) return undefined;
   return value.length <= MAX_STATUS_TEXT_LENGTH
     ? value
@@ -312,8 +312,8 @@ async function sendTaskStatus(
   options: {
     taskId?: string;
     message?: string;
-    result?: string;
-    error?: string;
+    result?: string | null;
+    error?: string | null;
   } = {},
 ): Promise<void> {
   const event: DispatchTaskStatusEvent = {
@@ -331,76 +331,80 @@ async function sendTaskStatus(
   await sendCompanionControl(event.action, { ...event });
 }
 
-function publishAgentTaskStatus(task: AgentTask): void {
-  const requestId = requestIdByTask.get(task.id);
-  if (!requestId) return;
+function mobileAgentStatus(
+  status: BackgroundAgentStatus,
+): 'running' | 'completed' | 'failed' | 'waiting' {
+  if (status === 'running') return 'running';
+  if (status === 'completed') return 'completed';
+  if (isTerminalBackgroundAgentStatus(status)) return 'failed';
+  return 'waiting';
+}
 
+const MOBILE_STATUS_TEXT: Record<BackgroundAgentStatus, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  paused: 'Paused',
+  completed: 'Completed',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+  taken_over: 'Taken over on Desktop',
+};
+
+function mobileAgent(agent: BackgroundAgent) {
+  return {
+    id: agent.id,
+    name: clipStatusText(agent.goal)?.slice(0, 200) || 'Desktop task',
+    model: 'Desktop agent',
+    status: mobileAgentStatus(agent.status),
+    currentStep:
+      clipStatusText(agent.progress.currentStepDescription) ?? MOBILE_STATUS_TEXT[agent.status],
+    progress: agent.status === 'completed' ? 100 : agent.progress.percentage,
+    ...(agent.progress.totalSteps > 0
+      ? { totalSteps: agent.progress.totalSteps, stepsCompleted: agent.progress.currentStep }
+      : {}),
+    steps: [],
+    toolCalls: [],
+    startedAt: agent.startedAt ?? agent.createdAt,
+    updatedAt: agent.completedAt ?? agent.startedAt ?? agent.createdAt,
+  };
+}
+
+async function publishAgentSnapshot(): Promise<void> {
+  const agents = useBackgroundAgentStore.getState().agents.slice(0, 50).map(mobileAgent);
+  await sendCompanionControl('agents_update', { agents });
+}
+
+const DISPATCH_STATUS: Record<BackgroundAgentStatus, DispatchTaskLifecycleStatus> = {
+  queued: 'queued',
+  running: 'running',
+  paused: 'awaiting_input',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  taken_over: 'ready_for_review',
+};
+
+function publishDispatchStatus(agent: BackgroundAgent): void {
+  const requestId = requestIdByTask.get(agent.id);
+  if (!requestId) return;
   const dispatch = dispatchesByRequest.get(requestId);
   if (!dispatch) return;
 
-  const status = statusForAgentTask(task.status);
+  const status = DISPATCH_STATUS[agent.status];
   if (dispatch.lastStatus === status) return;
   dispatch.lastStatus = status;
 
   void sendTaskStatus(requestId, status, {
-    taskId: task.id,
-    message: status === 'ready_for_review' ? 'The task is ready for review on Desktop.' : undefined,
-    result: task.result,
-    error: task.error,
+    taskId: agent.id,
+    message:
+      status === 'awaiting_input'
+        ? 'The task is paused on Desktop.'
+        : status === 'ready_for_review'
+          ? 'The task was taken over on Desktop.'
+          : undefined,
+    result: agent.summary?.description,
+    error: agent.error,
   });
-}
-
-function mobileAgentStatus(
-  status: AgentTaskStatus,
-): 'running' | 'completed' | 'failed' | 'waiting' {
-  if (status === 'running') return 'running';
-  if (status === 'failed' || status === 'cancelled') return 'failed';
-  if (status === 'completed' || status === 'ready_for_review' || status === 'archived') {
-    return 'completed';
-  }
-  return 'waiting';
-}
-
-async function publishAgentSnapshot(): Promise<void> {
-  const state = useAgentTaskStore.getState();
-  const agents = state.tasks.slice(-50).map((task) => {
-    const progress = state.liveProgressByTask[task.id];
-    const liveSteps = state.liveStepsByTask[task.id] ?? [];
-    const currentStep =
-      [...liveSteps].reverse().find((step) => step.status === 'running')?.description ??
-      (task.status === 'ready_for_review'
-        ? 'Ready for review on Desktop'
-        : useAgentTaskStore.getState().getStatusLabel(task.status));
-    const progressPercent =
-      progress && progress.total > 0
-        ? Math.min(100, Math.round((progress.step / progress.total) * 100))
-        : task.status === 'completed' || task.status === 'ready_for_review'
-          ? 100
-          : 0;
-
-    return {
-      id: task.id,
-      name: clipStatusText(task.goal)?.slice(0, 200) || 'Desktop task',
-      model: 'Desktop agent',
-      status: mobileAgentStatus(task.status),
-      currentStep: clipStatusText(currentStep) ?? '',
-      progress: progressPercent,
-      ...(progress ? { totalSteps: progress.total, stepsCompleted: progress.step } : {}),
-      steps: liveSteps.map((step) => ({
-        id: step.id,
-        icon: step.status === 'failed' ? 'error' : step.status === 'done' ? 'success' : 'thinking',
-        message: clipStatusText(step.description) ?? '',
-        ...(step.output ? { detail: clipStatusText(step.output) } : {}),
-        status:
-          step.status === 'done' ? 'completed' : step.status === 'failed' ? 'failed' : 'running',
-      })),
-      toolCalls: [],
-      startedAt: task.createdAt,
-      updatedAt: task.completedAt ?? task.createdAt,
-    };
-  });
-
-  await sendCompanionControl('agents_update', { agents });
 }
 
 async function createTask(
@@ -417,32 +421,25 @@ async function createTask(
 
   const existing = dispatchesByRequest.get(request.requestId);
   if (existing) {
-    const task = useAgentTaskStore
+    const agent = useBackgroundAgentStore
       .getState()
-      .tasks.find((candidate) => candidate.id === existing.taskId);
+      .agents.find((candidate) => candidate.id === existing.taskId);
     await sendTaskStatus(
       request.requestId,
-      task ? statusForAgentTask(task.status) : (existing.lastStatus ?? 'accepted'),
-      { taskId: existing.taskId, result: task?.result, error: task?.error },
+      agent ? DISPATCH_STATUS[agent.status] : (existing.lastStatus ?? 'accepted'),
+      { taskId: existing.taskId, result: agent?.summary?.description, error: agent?.error },
     );
     return;
   }
 
   try {
-    const taskId = await useAgentTaskStore.getState().submitGoal(request.prompt, {
-      assertCurrent: () => {
-        if (!isCurrentSession()) {
-          throw new DOMException('The Remote session ended before dispatch.', 'AbortError');
-        }
-      },
-    });
+    const taskId = await useBackgroundAgentStore.getState().startAgent(request.prompt);
     if (!isCurrentSession()) return;
-    const dispatch: ActiveDispatch = {
+    dispatchesByRequest.set(request.requestId, {
       requestId: request.requestId,
       taskId,
       lastStatus: 'accepted',
-    };
-    dispatchesByRequest.set(request.requestId, dispatch);
+    });
     requestIdByTask.set(taskId, request.requestId);
     await sendTaskStatus(request.requestId, 'accepted', {
       taskId,
@@ -450,6 +447,10 @@ async function createTask(
         ? `“${request.title}” was accepted by Desktop.`
         : 'Task accepted by Desktop.',
     });
+    const agent = useBackgroundAgentStore
+      .getState()
+      .agents.find((candidate) => candidate.id === taskId);
+    if (agent) publishDispatchStatus(agent);
   } catch (error) {
     if (!isCurrentSession()) return;
     await sendTaskStatus(request.requestId, 'failed', {
@@ -472,10 +473,9 @@ async function cancelTask(
     return;
   }
 
-  await useAgentTaskStore.getState().cancelTask(taskId);
+  await useBackgroundAgentStore.getState().cancelAgent(taskId);
   if (!isCurrentSession()) return;
   dispatch.lastStatus = 'cancelled';
-  requestIdByTask.set(taskId, request.requestId);
   await sendTaskStatus(request.requestId, 'cancelled', {
     taskId,
     message: 'Task cancelled on Desktop.',
@@ -496,11 +496,6 @@ function isCancelAllControl(action: string, payload: Record<string, unknown>): b
   return action === 'cancel' && scope === CANCEL_ALL_SCOPE;
 }
 
-function isStoppableAgentTask(status: AgentTaskStatus): boolean {
-  const mobileStatus = mobileAgentStatus(status);
-  return mobileStatus === 'running' || mobileStatus === 'waiting';
-}
-
 interface CancelAllOutcome {
   taskId: string;
   cancelled: boolean;
@@ -508,24 +503,45 @@ interface CancelAllOutcome {
 }
 
 async function cancelAllTasks(isCurrentSession: () => boolean): Promise<void> {
+  const store = useBackgroundAgentStore.getState();
+  await store.listAgents();
+  if (!isCurrentSession()) return;
+  const listError = useBackgroundAgentStore.getState().error;
+  if (listError) {
+    await sendCompanionControl('emergency_stop', {
+      action: 'emergency_stop',
+      version: 1,
+      scope: CANCEL_ALL_SCOPE,
+      requested: 0,
+      cancelled: 0,
+      failed: 0,
+      cancelledTaskIds: [],
+      errorMessage: clipStatusText(
+        `Desktop could not read its running agents, so nothing was stopped: ${listError}`,
+      ),
+      stoppedAt: new Date().toISOString(),
+    });
+    return;
+  }
+
   // Running work is cancelled first: an unattended shell or computer-use session
   // is the reason this control exists, so it must not wait behind queued work.
-  const stoppable = useAgentTaskStore
+  const stoppable = useBackgroundAgentStore
     .getState()
-    .tasks.filter((task) => isStoppableAgentTask(task.status))
+    .agents.filter((agent) => !isTerminalBackgroundAgentStatus(agent.status))
     .sort((left, right) => Number(right.status === 'running') - Number(left.status === 'running'));
 
   // Every cancellation is attempted even when an earlier one throws: a kill
   // switch that stops at the first error is not a kill switch.
   const outcomes: CancelAllOutcome[] = await Promise.all(
-    stoppable.map(async (task): Promise<CancelAllOutcome> => {
+    stoppable.map(async (agent): Promise<CancelAllOutcome> => {
       try {
-        await useAgentTaskStore.getState().cancelTask(task.id);
-        return { taskId: task.id, cancelled: true };
+        await useBackgroundAgentStore.getState().cancelAgent(agent.id);
+        return { taskId: agent.id, cancelled: true };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.warn('[cowork-dispatch] emergency stop could not cancel', task.id, error);
-        return { taskId: task.id, cancelled: false, error: message };
+        console.warn('[cowork-dispatch] emergency stop could not cancel', agent.id, error);
+        return { taskId: agent.id, cancelled: false, error: message };
       }
     }),
   );
@@ -581,7 +597,7 @@ async function cancelAllTasks(isCurrentSession: () => boolean): Promise<void> {
   await publishAgentSnapshot();
 }
 
-async function handleLegacyAgentCommand(payload: Record<string, unknown>): Promise<boolean> {
+async function handleAgentCommand(payload: Record<string, unknown>): Promise<boolean> {
   if (payload['kind'] !== 'agent_command') return false;
   const agentId = boundedString(payload['agentId'], MAX_REQUEST_ID_LENGTH);
   const command = payload['command'];
@@ -589,10 +605,10 @@ async function handleLegacyAgentCommand(payload: Record<string, unknown>): Promi
     return true;
   }
 
-  const store = useAgentTaskStore.getState();
-  if (command === 'pause') await store.pauseTask(agentId, 'Paused from Mobile companion');
-  else if (command === 'resume') await store.resumeTask(agentId);
-  else await store.cancelTask(agentId);
+  const store = useBackgroundAgentStore.getState();
+  if (command === 'pause') await store.pauseAgent(agentId);
+  else if (command === 'resume') await store.resumeAgent(agentId);
+  else await store.cancelAgent(agentId);
   return true;
 }
 
@@ -628,12 +644,14 @@ async function handleCompanionControl(
 
   if (
     (detail.action === 'dispatch_request' || detail.action === 'cancel') &&
-    (await handleLegacyAgentCommand(detail.payload))
+    (await handleAgentCommand(detail.payload))
   ) {
     return;
   }
   if (!isCurrentSession()) return;
   if (detail.action === 'sync_request') {
+    await useBackgroundAgentStore.getState().listAgents();
+    if (!isCurrentSession()) return;
     await Promise.all([publishAgentSnapshot(), publishPendingApprovals(true)]);
     return;
   }
@@ -677,34 +695,12 @@ export function initializeCoworkDispatchRuntime(): () => void {
   window.addEventListener('mobile-companion:control', onControl);
   window.addEventListener(MOBILE_COMPANION_SESSION_ENDED_EVENT, onSessionEnded);
 
-  const unsubscribeTasks = useAgentTaskStore.subscribe((state, previous) => {
-    if (
-      state.tasks === previous.tasks &&
-      state.liveProgressByTask === previous.liveProgressByTask &&
-      state.liveStepsByTask === previous.liveStepsByTask
-    ) {
-      return;
+  const unsubscribeAgents = useBackgroundAgentStore.subscribe((state, previous) => {
+    if (state.agents === previous.agents) return;
+    for (const agent of state.agents) {
+      if (requestIdByTask.has(agent.id)) publishDispatchStatus(agent);
     }
-    let taskLifecycleChanged = false;
-    for (const task of state.tasks) {
-      const previousTask = previous.tasks.find((candidate) => candidate.id === task.id);
-      if (
-        !previousTask ||
-        previousTask.status !== task.status ||
-        previousTask.result !== task.result ||
-        previousTask.error !== task.error
-      ) {
-        taskLifecycleChanged = true;
-        if (requestIdByTask.has(task.id)) publishAgentTaskStatus(task);
-      }
-    }
-    if (
-      taskLifecycleChanged ||
-      state.liveProgressByTask !== previous.liveProgressByTask ||
-      state.liveStepsByTask !== previous.liveStepsByTask
-    ) {
-      void publishAgentSnapshot();
-    }
+    void publishAgentSnapshot();
   });
 
   const unsubscribeApprovals = useToolStore.subscribe((state, previous) => {
@@ -727,7 +723,7 @@ export function initializeCoworkDispatchRuntime(): () => void {
     resetCoworkDispatchSession();
     window.removeEventListener('mobile-companion:control', onControl);
     window.removeEventListener(MOBILE_COMPANION_SESSION_ENDED_EVENT, onSessionEnded);
-    unsubscribeTasks();
+    unsubscribeAgents();
     unsubscribeApprovals();
   };
 }

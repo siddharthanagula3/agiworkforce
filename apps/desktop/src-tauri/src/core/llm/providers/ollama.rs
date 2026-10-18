@@ -660,10 +660,6 @@ impl LLMProvider for OllamaProvider {
         Some(&self.base_url)
     }
 
-    fn supports_vision(&self) -> bool {
-        true
-    }
-
     fn supports_function_calling(&self) -> bool {
         true
     }

@@ -153,116 +153,19 @@ pub trait SearchAgent: Send + Sync {
 // WEB SEARCH AGENT
 // =============================================================================
 
-/// Agent for searching the web.
-pub struct WebSearchAgent {
-    /// HTTP client for making requests
-    http_client: reqwest::Client,
-
-    /// Whether web search is configured
-    configured: bool,
-
-    /// Search API endpoint (e.g., Perplexity, Tavily)
-    api_endpoint: Option<String>,
-
-    /// API key for the search service
-    api_key: Option<String>,
-}
+/// Agent for searching the web through the shared search executor.
+pub struct WebSearchAgent;
 
 impl WebSearchAgent {
-    /// Creates a new web search agent.
     pub fn new() -> Self {
-        Self {
-            http_client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .unwrap_or_default(),
-            configured: false,
-            api_endpoint: None,
-            api_key: None,
-        }
+        Self
     }
 
-    /// Configures the agent with a search API.
-    pub fn configure(mut self, endpoint: &str, api_key: &str) -> Self {
-        self.api_endpoint = Some(endpoint.to_string());
-        self.api_key = Some(api_key.to_string());
-        self.configured = true;
-        self
-    }
-
-    /// Performs a web search using the configured API.
     async fn perform_web_search(
         &self,
         query: &str,
         max_results: usize,
     ) -> Result<Vec<SearchResult>, ResearchError> {
-        // If configured with external API, use it; otherwise fall back to built-in search executor.
-        if self.configured {
-            let endpoint = self.api_endpoint.as_ref().ok_or_else(|| {
-                ResearchError::ConfigError("No search endpoint configured".into())
-            })?;
-
-            let api_key = self
-                .api_key
-                .as_ref()
-                .ok_or_else(|| ResearchError::ConfigError("No API key configured".into()))?;
-
-            let request_body = serde_json::json!({
-                "query": query,
-                "max_results": max_results,
-            });
-
-            let response = self
-                .http_client
-                .post(endpoint)
-                .header("Authorization", format!("Bearer {}", api_key))
-                .json(&request_body)
-                .send()
-                .await
-                .map_err(|e| ResearchError::AgentError {
-                    agent: "web_search".into(),
-                    message: e.to_string(),
-                })?;
-
-            if !response.status().is_success() {
-                return Err(ResearchError::AgentError {
-                    agent: "web_search".into(),
-                    message: format!("Search API returned status: {}", response.status()),
-                });
-            }
-
-            let json: serde_json::Value =
-                response
-                    .json()
-                    .await
-                    .map_err(|e| ResearchError::AgentError {
-                        agent: "web_search".into(),
-                        message: e.to_string(),
-                    })?;
-
-            let mut results = Vec::new();
-            if let Some(items) = json["results"].as_array() {
-                for (idx, item) in items.iter().enumerate() {
-                    let result = SearchResult {
-                        id: format!("web_{}", idx),
-                        title: item["title"].as_str().unwrap_or("Untitled").to_string(),
-                        content: item["snippet"].as_str().unwrap_or("").to_string(),
-                        full_content: item["content"].as_str().map(|s| s.to_string()),
-                        url: item["url"].as_str().map(|s| s.to_string()),
-                        source_type: SourceType::WebPage,
-                        relevance: item["score"].as_f64().unwrap_or(0.5) as f32,
-                        timestamp: None,
-                        author: item["author"].as_str().map(|s| s.to_string()),
-                        metadata: HashMap::new(),
-                    };
-                    results.push(result);
-                }
-            }
-
-            return Ok(results);
-        }
-
-        // Built-in fallback using SearchExecutor (Perplexity if configured, else DuckDuckGo)
         use crate::core::agi::executors::search_executor::{
             SearchExecutor, SearchType as ExecSearchType,
         };
@@ -318,7 +221,6 @@ impl SearchAgent for WebSearchAgent {
     }
 
     fn is_available(&self) -> bool {
-        // Web search is always "available" but may return empty if not configured
         true
     }
 

@@ -307,30 +307,6 @@ impl ToolResultCache {
         Ok(())
     }
 
-    pub fn invalidate_tool(&self, tool_name: &str) -> Result<usize> {
-        let mut removed_count = 0;
-
-        let keys_to_remove: Vec<String> = self
-            .entries
-            .iter()
-            .filter(|entry| entry.value().tool_name == tool_name)
-            .map(|entry| entry.key().clone())
-            .collect();
-
-        for key in keys_to_remove {
-            self.invalidate_key(&key);
-            removed_count += 1;
-        }
-
-        tracing::info!(
-            "[ToolCache] Invalidated {} cache entries for tool '{}'",
-            removed_count,
-            tool_name
-        );
-
-        Ok(removed_count)
-    }
-
     fn invalidate_key(&self, cache_key: &str) {
         if let Some((_, entry)) = self.entries.remove(cache_key) {
             let new_size = {
@@ -365,7 +341,7 @@ impl ToolResultCache {
         Ok(())
     }
 
-    // AUDIT-004-002: Optimized LRU eviction using BinaryHeap
+    // Optimized LRU eviction using BinaryHeap
     // Previously O(n log n) for sorting all entries; now O(k log n) where k = entries to evict
     fn evict_lru(&self, bytes_to_free: usize) -> Result<()> {
         use std::cmp::Reverse;
@@ -456,14 +432,6 @@ impl ToolResultCache {
 
     pub fn get_stats(&self) -> ToolCacheStats {
         self.stats.read().clone()
-    }
-
-    pub fn reset_stats(&self) {
-        let mut stats = self.stats.write();
-        stats.hits = 0;
-        stats.misses = 0;
-        stats.evictions = 0;
-        stats.hit_rate_percent = 0.0;
     }
 
     pub fn len(&self) -> usize {

@@ -1,6 +1,7 @@
 use super::transport::TransportConfig;
 use crate::core::mcp::manifest::AllowlistState;
 use crate::core::mcp::McpResult;
+use crate::sys::commands::mcp_oauth::refreshed_access_token;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -1079,7 +1080,7 @@ impl McpServersConfig {
         // Collect which servers/keys need OAuth refresh vs. can be resolved now.
         // The DB connection is opened, queried, and dropped before any .await.
         //
-        // HIGH-008: rusqlite::Connection is !Send, it must NOT be held across an
+        // `rusqlite::Connection` is !Send, it must NOT be held across an
         // await point. All synchronous DB access happens here; OAuth HTTP refresh
         // (async) is performed below after the connection is gone.
 
@@ -2099,8 +2100,6 @@ struct OAuthTokenData {
     encrypted_access: String,
     expires_at: Option<i64>,
     refresh_token: Option<String>, // already decrypted
-    access_token_key: String,
-    expires_at_key: String,
 }
 
 fn read_oauth_token_data(provider: &str) -> Result<OAuthTokenData, String> {
@@ -2154,60 +2153,7 @@ fn read_oauth_token_data(provider: &str) -> Result<OAuthTokenData, String> {
         encrypted_access,
         expires_at,
         refresh_token,
-        access_token_key,
-        expires_at_key,
     })
-}
-
-/// Write refreshed OAuth token data back to the DB (sync, no async).
-fn store_refreshed_oauth_token(
-    access_token_key: &str,
-    expires_at_key: &str,
-    new_access: &str,
-    new_expires: i64,
-) {
-    let conn = match open_mcp_settings_db() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(
-                "Failed to open MCP settings DB for storing refreshed OAuth token: {}",
-                e
-            );
-            return;
-        }
-    };
-    let encrypted_new = match encrypt_oauth_token(new_access) {
-        Some(enc) => enc,
-        None => {
-            tracing::error!(
-                "Failed to encrypt refreshed OAuth access token for key '{}'",
-                access_token_key
-            );
-            return;
-        }
-    };
-    if let Err(e) =
-        upsert_settings_v2_value(&conn, access_token_key, &encrypted_new, "security", true)
-    {
-        tracing::error!(
-            "Failed to persist refreshed OAuth access token for key '{}': {}",
-            access_token_key,
-            e
-        );
-    }
-    if let Err(e) = upsert_settings_v2_value(
-        &conn,
-        expires_at_key,
-        &new_expires.to_string(),
-        "security",
-        false,
-    ) {
-        tracing::error!(
-            "Failed to persist refreshed OAuth expiry for key '{}': {}",
-            expires_at_key,
-            e
-        );
-    }
 }
 
 const OAUTH_REFRESH_MARGIN_SECS: i64 = 60;
@@ -2280,16 +2226,9 @@ async fn get_oauth_token(provider: &str) -> Result<String, String> {
                 provider
             );
 
-            if let Some(refresh_token) = data.refresh_token {
-                // Async phase: HTTP token refresh, no DB connection in scope here
-                match refresh_oauth_token(provider, &refresh_token).await {
-                    Ok((new_access, new_expires)) => {
-                        store_refreshed_oauth_token(
-                            &data.access_token_key,
-                            &data.expires_at_key,
-                            &new_access,
-                            new_expires,
-                        );
+            if data.refresh_token.is_some() {
+                match refreshed_access_token(provider).await {
+                    Ok(new_access) => {
                         tracing::info!("Successfully refreshed OAuth token for {}", provider);
                         return Ok(new_access);
                     }
@@ -2310,246 +2249,6 @@ async fn get_oauth_token(provider: &str) -> Result<String, String> {
             provider, e
         )
     })
-}
-
-/// OAuth provider configuration for token refresh
-struct OAuthProviderConfig {
-    token_url: &'static str,
-    client_id_keys: &'static [&'static str],
-    client_secret_keys: &'static [&'static str],
-}
-
-/// Get OAuth provider configuration
-fn get_oauth_provider_config(provider: &str) -> Option<OAuthProviderConfig> {
-    match provider {
-        "github" => Some(OAuthProviderConfig {
-            token_url: "https://github.com/login/oauth/access_token",
-            client_id_keys: &[
-                "mcp_oauth_config_github_client_id",
-                "mcp_oauth_github_client_id",
-            ],
-            client_secret_keys: &[
-                "mcp_oauth_config_github_client_secret",
-                "mcp_oauth_github_client_secret",
-            ],
-        }),
-        "google" => Some(OAuthProviderConfig {
-            token_url: "https://oauth2.googleapis.com/token",
-            client_id_keys: &[
-                "mcp_oauth_config_google_client_id",
-                "mcp_oauth_google_client_id",
-            ],
-            client_secret_keys: &[
-                "mcp_oauth_config_google_client_secret",
-                "mcp_oauth_google_client_secret",
-            ],
-        }),
-        "slack" => Some(OAuthProviderConfig {
-            token_url: "https://slack.com/api/oauth.v2.access",
-            client_id_keys: &[
-                "mcp_oauth_config_slack_client_id",
-                "mcp_oauth_slack_client_id",
-            ],
-            client_secret_keys: &[
-                "mcp_oauth_config_slack_client_secret",
-                "mcp_oauth_slack_client_secret",
-            ],
-        }),
-        "microsoft" => Some(OAuthProviderConfig {
-            token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-            client_id_keys: &[
-                "mcp_oauth_config_microsoft_client_id",
-                "mcp_oauth_microsoft_client_id",
-            ],
-            client_secret_keys: &[
-                "mcp_oauth_config_microsoft_client_secret",
-                "mcp_oauth_microsoft_client_secret",
-            ],
-        }),
-        "dropbox" => Some(OAuthProviderConfig {
-            token_url: "https://api.dropboxapi.com/oauth2/token",
-            client_id_keys: &[
-                "mcp_oauth_config_dropbox_client_id",
-                "mcp_oauth_dropbox_client_id",
-            ],
-            client_secret_keys: &[
-                "mcp_oauth_config_dropbox_client_secret",
-                "mcp_oauth_dropbox_client_secret",
-            ],
-        }),
-        _ => None,
-    }
-}
-
-/// Synchronous helper: read OAuth client credentials from DB for a provider.
-/// Returns (client_id, client_secret). Connection is opened and dropped here.
-fn read_oauth_client_credentials(
-    provider: &str,
-    client_id_keys: &[&str],
-    client_secret_keys: &[&str],
-) -> Result<(String, String), String> {
-    use crate::sys::security::vault_credentials::VAULT_LOCKED_MESSAGE;
-
-    let conn = open_mcp_settings_db()?;
-
-    let load_credential =
-        |keys: &[&str], label: &str| -> Result<String, String> {
-            let mut sealed_under_locked_vault = false;
-            for key in keys {
-                let result: Result<String, rusqlite::Error> = conn.query_row(
-                    "SELECT value FROM settings_v2 WHERE key = ?1",
-                    rusqlite::params![key],
-                    |row| row.get(0),
-                );
-                if let Ok(stored_value) = result {
-                    match decrypt_vault_owned_setting(&stored_value) {
-                        Ok(decrypted) => return Ok(decrypted),
-                        Err(e) if e == VAULT_LOCKED_MESSAGE => {
-                            sealed_under_locked_vault = true;
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                            "Config decryption failed for OAuth {} (provider: '{}', key: {}): {}, \
-                             consider re-entering credentials",
-                            label, provider, key, e
-                        );
-                        }
-                    }
-                }
-            }
-            if sealed_under_locked_vault {
-                return Err(VAULT_LOCKED_MESSAGE.to_string());
-            }
-            Err(format!(
-                "OAuth {} not found or could not be decrypted for provider: {}",
-                label, provider
-            ))
-        };
-
-    let client_id = load_credential(client_id_keys, "client_id")?;
-    let client_secret = load_credential(client_secret_keys, "client_secret")?;
-    // conn dropped here
-    Ok((client_id, client_secret))
-}
-
-/// Store a newly-issued refresh token back to the DB (sync).
-fn store_new_refresh_token(provider: &str, new_refresh_token: &str) {
-    let refresh_token_key = format!("mcp_oauth_{}_refresh_token", provider);
-    let encrypted_refresh = match encrypt_oauth_token(new_refresh_token) {
-        Some(enc) => enc,
-        None => {
-            tracing::error!(
-                "Failed to encrypt new refresh token for provider: {}",
-                provider
-            );
-            return;
-        }
-    };
-    let conn = match open_mcp_settings_db() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(
-                "Failed to open MCP settings DB for storing refresh token for provider '{}': {}",
-                provider,
-                e
-            );
-            return;
-        }
-    };
-    if let Err(e) = upsert_settings_v2_value(
-        &conn,
-        &refresh_token_key,
-        &encrypted_refresh,
-        "security",
-        true,
-    ) {
-        tracing::error!(
-            "Failed to persist refresh token for provider '{}': {}",
-            provider,
-            e
-        );
-    } else {
-        tracing::debug!("Stored new refresh token for provider: {}", provider);
-    }
-}
-
-/// Refresh an OAuth token using the refresh token.
-///
-/// All DB access is completed before any `.await` to ensure `rusqlite::Connection`
-/// (which is `!Send`) never crosses an await point.
-async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(String, i64), String> {
-    // Sync phase: resolve provider config and read DB credentials, no !Send across await
-    let provider_config = get_oauth_provider_config(provider)
-        .ok_or_else(|| format!("Unknown OAuth provider: {}", provider))?;
-
-    let (client_id, client_secret) = read_oauth_client_credentials(
-        provider,
-        provider_config.client_id_keys,
-        provider_config.client_secret_keys,
-    )?;
-
-    // Async phase: HTTP request, no DB connection in scope
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(provider_config.token_url)
-        .header("Accept", "application/json")
-        .form(&[
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token),
-            ("client_id", &client_id),
-            ("client_secret", &client_secret),
-        ])
-        .send()
-        .await
-        .map_err(|e| format!("HTTP request failed: {}", e))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!(
-            "Token refresh failed with status {}: {}",
-            status, body
-        ));
-    }
-
-    let token_response: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse token response: {}", e))?;
-
-    // Extract access token
-    let access_token = token_response
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| "access_token not found in response".to_string())?
-        .to_string();
-
-    // Calculate expiry time
-    let expires_in = token_response
-        .get("expires_in")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(3600); // Default to 1 hour if not provided
-
-    let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-
-    let expires_at = current_time + expires_in;
-
-    // If a new refresh token is provided, store it (sync DB write, no conn held across await)
-    if let Some(new_refresh_token) = token_response.get("refresh_token").and_then(|v| v.as_str()) {
-        store_new_refresh_token(provider, new_refresh_token);
-    }
-
-    tracing::info!(
-        "Successfully refreshed OAuth token for {}, expires in {} seconds",
-        provider,
-        expires_in
-    );
-
-    Ok((access_token, expires_at))
 }
 
 /// Decrypt an OAuth token using machine-derived keys.

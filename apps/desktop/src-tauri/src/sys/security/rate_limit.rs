@@ -19,7 +19,7 @@ impl Default for RateLimitConfig {
     }
 }
 
-// AUDIT-003-007 fix: Use VecDeque with bounded capacity as a ring buffer
+// Use VecDeque with bounded capacity as a ring buffer
 // to prevent unbounded memory growth within each rate limit window.
 struct RequestRecord {
     // Ring buffer with fixed capacity equal to max_requests + 1
@@ -40,7 +40,6 @@ impl RateLimiter {
         }
     }
 
-    // AUDIT-003-007 fix: Bounded ring buffer implementation to prevent memory exhaustion
     pub fn check_rate_limit(&self, key: &str) -> Result<(), String> {
         let now = Instant::now();
         let mut records = self.records.lock();
@@ -83,11 +82,6 @@ impl RateLimiter {
     pub fn reset(&self, key: &str) {
         let mut records = self.records.lock();
         records.remove(key);
-    }
-
-    pub fn reset_all(&self) {
-        let mut records = self.records.lock();
-        records.clear();
     }
 }
 

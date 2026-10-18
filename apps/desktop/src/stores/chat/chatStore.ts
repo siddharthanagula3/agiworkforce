@@ -33,11 +33,7 @@ import type {
   InlinePanelContent,
   MessageReaction,
 } from './types';
-import {
-  useChatViewStore,
-  initializeChatViewModelSubscription,
-  teardownChatViewModelSubscription,
-} from './chatViewStore';
+import { useChatViewStore, initializeChatViewModelSubscription } from './chatViewStore';
 import { useChatExecutionStore, registerExecutionMessagePatcher } from './chatExecutionStore';
 
 export type {
@@ -302,13 +298,6 @@ export interface ChatMessageState {
   };
 
   getRecentConversations: (limit?: number) => Promise<RecentConversationSearchResult[]>;
-  getCostOverview: (userId: string) => Promise<CostOverviewResponse | null>;
-  getCostAnalytics: (
-    userId: string,
-    days?: number,
-    provider?: string,
-    model?: string,
-  ) => Promise<CostAnalyticsResponse | null>;
 
   clearHistory: () => void;
   linkConversationId: (uuid: string, dbId: number) => void;
@@ -321,19 +310,6 @@ export interface RecentConversationSearchResult {
   messageCount: number;
   lastUpdated: string;
   snippet?: string;
-}
-
-export interface CostOverviewResponse {
-  todayTotal: number;
-  monthTotal: number;
-  monthlyBudget: number | null;
-  remainingBudget: number | null;
-}
-
-export interface CostAnalyticsResponse {
-  timeseries: Array<{ date: string; cost: number; tokens: number }>;
-  providers: Array<{ provider: string; totalCost: number; messageCount: number }>;
-  topConversations: Array<{ conversationId: number; title: string; totalCost: number }>;
 }
 
 export const useChatMessageStore = create<ChatMessageState>()(
@@ -1534,34 +1510,6 @@ export const useChatMessageStore = create<ChatMessageState>()(
             }
           },
 
-          getCostOverview: async (userId: string) => {
-            try {
-              return await invoke<CostOverviewResponse>('chat_get_cost_overview', { userId });
-            } catch (error) {
-              console.error('[ChatStore] Failed to get cost overview:', error);
-              return null;
-            }
-          },
-
-          getCostAnalytics: async (
-            userId: string,
-            days?: number,
-            provider?: string,
-            model?: string,
-          ) => {
-            try {
-              return await invoke<CostAnalyticsResponse>('chat_get_cost_analytics', {
-                userId,
-                days: days ?? null,
-                provider: provider ?? null,
-                model: model ?? null,
-              });
-            } catch (error) {
-              console.error('[ChatStore] Failed to get cost analytics:', error);
-              return null;
-            }
-          },
-
           clearHistory: () => {
             set(
               (state) => {
@@ -2004,15 +1952,6 @@ export async function initializeChatStoreModelStoreSubscription(): Promise<void>
   })();
 
   return subscriptionState.pending;
-}
-
-export function teardownChatStoreModelStoreSubscription(): void {
-  const subscriptionState = getChatStoreModelSubscriptionState();
-  subscriptionState.unsubscribe?.();
-  subscriptionState.unsubscribe = null;
-  subscriptionState.initialized = false;
-  subscriptionState.pending = null;
-  teardownChatViewModelSubscription();
 }
 
 if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {

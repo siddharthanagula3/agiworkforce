@@ -1,5 +1,6 @@
 use crate::sys::commands::chat::state::{
     is_tool_cancelled, plan_mode_refusal, should_stop_for_conversation, take_tool_cancelled,
+    unattended_refusal,
 };
 use crate::sys::commands::chat::tool_events::{emit_tool_event, get_tool_display_info, ToolEvent};
 use crate::sys::commands::chat::tool_timeouts::{
@@ -201,6 +202,14 @@ pub(super) async fn execute_chat_tool_with_timeout(
                 "mode": "plan",
                 "hint": "Switch to Ask mode to let it run.",
             }),
+        );
+        return Err(refusal);
+    }
+
+    if let Some(refusal) = unattended_refusal(app_handle, conversation_id, tool_name) {
+        info!(
+            "[Chat] Unattended run refused tool {} in conversation {}",
+            tool_name, conversation_id
         );
         return Err(refusal);
     }

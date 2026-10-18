@@ -504,12 +504,6 @@ impl ExtensionManager {
         self.get_extension(&result.extension_id)
     }
 
-    /// Check for available updates
-    pub fn check_updates(&self) -> ExtensionResult<Vec<UpdateInfo>> {
-        tracing::debug!("check_updates called but no remote registry is configured; update checking is not yet implemented");
-        Ok(Vec::new())
-    }
-
     /// Convert a database record to extension info
     fn record_to_info(&self, record: ExtensionRecord) -> ExtensionResult<ExtensionInfo> {
         let manifest: ExtensionManifest = serde_json::from_str(&record.manifest_json)?;
@@ -943,23 +937,6 @@ impl ExtensionManager {
 
         Ok(failures)
     }
-}
-
-/// Information about an available update
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateInfo {
-    /// Extension ID
-    pub extension_id: String,
-
-    /// Current version
-    pub current_version: String,
-
-    /// Available version
-    pub available_version: String,
-
-    /// Changelog
-    pub changelog: Option<String>,
 }
 
 #[cfg(test)]

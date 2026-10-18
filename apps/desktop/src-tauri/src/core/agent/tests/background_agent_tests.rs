@@ -1,8 +1,7 @@
 // C8, BackgroundAgent unit tests.
 //
-// `BackgroundAgentManager` requires an `AppHandle` (Tauri runtime) so it
-// cannot be instantiated in a unit test.  We test everything that CAN be
-// constructed without the runtime:
+// The manager's own tests live in `background_agent.rs`. These cover what
+// is built without it:
 //
 //  * `BackgroundAgentStatus`, enum variants, `Display`, `From<&str>`
 //  * `AgentProgress`, `Default` and manual construction
@@ -375,6 +374,7 @@ mod tests {
             active_mcp_servers: vec!["gmail".to_string()],
             custom_instructions: Some("Be concise.".to_string()),
             boundary: None,
+            run_conversation_id: None,
         };
         assert_eq!(ctx.working_directory.as_deref(), Some("/home/user/project"));
         assert_eq!(
@@ -401,6 +401,7 @@ mod tests {
             active_mcp_servers: vec!["notion".to_string(), "gmail".to_string()],
             custom_instructions: Some("Be verbose.".to_string()),
             boundary: None,
+            run_conversation_id: None,
         };
 
         let json = serde_json::to_string(&ctx).expect("serialize context");
@@ -930,6 +931,7 @@ mod tests {
                 active_mcp_servers: vec!["test-server".to_string()],
                 custom_instructions: None,
                 boundary: None,
+                run_conversation_id: None,
             },
             7,
         );
@@ -983,12 +985,6 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_command_resume_is_constructable() {
-        let cmd = AgentCommand::Resume;
-        assert!(matches!(cmd, AgentCommand::Resume));
-    }
-
-    #[test]
     fn test_agent_command_cancel_is_constructable() {
         let cmd = AgentCommand::Cancel;
         assert!(matches!(cmd, AgentCommand::Cancel));
@@ -1011,19 +1007,6 @@ mod tests {
         let cmd = AgentCommand::Cancel;
         let cloned = cmd.clone();
         assert!(matches!(cloned, AgentCommand::Cancel));
-    }
-
-    // ------------------------------------------------------------------
-    // BackgroundAgentManager (requires AppHandle -- marked #[ignore = "needs a live Tauri AppHandle, which only exists inside a running app"])
-    // ------------------------------------------------------------------
-
-    #[test]
-    #[ignore = "needs a live Tauri AppHandle, which only exists inside a running app"] // BackgroundAgentManager::new() requires a Tauri AppHandle
-    fn test_background_agent_manager_new_requires_app_handle() {
-        // This test documents the limitation: the manager cannot be constructed
-        // without a real or mocked AppHandle from the Tauri test infrastructure.
-        // Use `tauri::test::mock_app()` and pass `app.handle().clone()` when
-        // adding integration tests that exercise manager methods.
     }
 
     // ------------------------------------------------------------------

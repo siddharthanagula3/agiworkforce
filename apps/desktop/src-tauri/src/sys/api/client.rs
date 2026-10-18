@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method, Response, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -32,27 +31,6 @@ fn describe_error(error: &dyn std::error::Error) -> String {
     }
     description
 }
-
-/// Default HTTP client with retry middleware, lazily initialized.
-/// This is shared across all `ApiClient::default()` instances.
-static DEFAULT_CLIENT: Lazy<Arc<ClientWithMiddleware>> = Lazy::new(|| {
-    let retry_policy = ExponentialBackoff::builder()
-        .retry_bounds(Duration::from_millis(500), Duration::from_millis(10000))
-        .build_with_max_retries(3);
-
-    // Use default reqwest client configuration which should never fail
-    let reqwest_client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .redirect(public_destination_redirect_policy())
-        .build()
-        .expect("Failed to create default HTTP client with standard configuration");
-
-    let client = ClientBuilder::new(reqwest_client)
-        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-        .build();
-
-    Arc::new(client)
-});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -137,25 +115,6 @@ pub struct ApiResponse {
     /// True when the body was longer than the client would read and was cut.
     #[serde(default)]
     pub truncated: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct RetryConfig {
-    pub max_retries: u32,
-    pub initial_backoff_ms: u64,
-    pub max_backoff_ms: u64,
-    pub exponential_base: f64,
-}
-
-impl Default for RetryConfig {
-    fn default() -> Self {
-        Self {
-            max_retries: 3,
-            initial_backoff_ms: 500,
-            max_backoff_ms: 10000,
-            exponential_base: 2.0,
-        }
-    }
 }
 
 /// Largest request body sent to a destination the app did not choose.
@@ -719,7 +678,24 @@ pub struct ApiClient {
 
 impl ApiClient {
     pub fn new() -> Result<Self> {
-        Self::with_retry_config(RetryConfig::default())
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_millis(500), Duration::from_millis(10_000))
+            .build_with_max_retries(3);
+
+        let reqwest_client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .redirect(public_destination_redirect_policy())
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
+
+        let client = ClientBuilder::new(reqwest_client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
+
+        Ok(Self {
+            transport: Transport::App(Arc::new(client)),
+            default_timeout: Duration::from_secs(30),
+        })
     }
 
     /// Build the API client used for arbitrary public URLs selected by the
@@ -774,30 +750,6 @@ impl ApiClient {
         })
     }
 
-    pub fn with_retry_config(config: RetryConfig) -> Result<Self> {
-        let retry_policy = ExponentialBackoff::builder()
-            .retry_bounds(
-                Duration::from_millis(config.initial_backoff_ms),
-                Duration::from_millis(config.max_backoff_ms),
-            )
-            .build_with_max_retries(config.max_retries);
-
-        let reqwest_client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .redirect(public_destination_redirect_policy())
-            .build()
-            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
-
-        let client = ClientBuilder::new(reqwest_client)
-            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .build();
-
-        Ok(Self {
-            transport: Transport::App(Arc::new(client)),
-            default_timeout: Duration::from_secs(30),
-        })
-    }
-
     fn public_transport(&self) -> Result<&PublicHttpClient> {
         match &self.transport {
             Transport::Public(transport) => Ok(transport),
@@ -820,9 +772,8 @@ impl ApiClient {
             request.url
         );
 
-        // AUDIT-FIX (reqwest-0.13 migration): the middleware RequestBuilder
-        // does not expose `.query()` in the feature set we ship, so encode
-        // query params directly into the URL before the builder is created.
+        // The middleware RequestBuilder does not expose `.query()` in the
+        // feature set we ship, so the query is encoded into the URL.
         let target_url = url_with_query(&request.url, &request.query_params);
 
         let mut req_builder = client.request(request.method.to_reqwest_method(), &target_url);
@@ -954,15 +905,6 @@ impl ApiClient {
             AuthType::ApiKey { key, header } => builder.header(header, key),
             AuthType::Basic { username, password } => builder.basic_auth(username, Some(password)),
             AuthType::OAuth2 { token } => builder.bearer_auth(token),
-        }
-    }
-}
-
-impl Default for ApiClient {
-    fn default() -> Self {
-        Self {
-            transport: Transport::App(Arc::clone(&DEFAULT_CLIENT)),
-            default_timeout: Duration::from_secs(30),
         }
     }
 }

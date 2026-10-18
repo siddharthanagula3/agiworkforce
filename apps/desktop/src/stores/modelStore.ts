@@ -1,13 +1,10 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
-import { toast } from 'sonner';
 import type { ModelMetadata } from '../constants/llm';
 import {
   getAllModels,
   getAllowedAutoModesForTier,
-  getBestAutoModeForTier as getBestAutoModeForSubscriptionTier,
   getModelMetadata,
-  getModelVariantPartner,
   isModelAllowedForTier,
   normalizeSubscriptionTier,
   normalizeModelId,
@@ -27,7 +24,6 @@ import { useAccountStore } from './auth';
 import type { PlanTier } from '../lib/cloudAccountTypes';
 import { useAppModeStore, type AppMode } from './appModeStore';
 import { useSettingsStore, waitForSettingsHydration } from './settingsStore';
-import { useUIStore } from './ui';
 import { storageFallback } from '../lib/storageFallback';
 import {
   ollamaCheckStatus,
@@ -96,26 +92,19 @@ export interface RouterSuggestion {
   reason: string;
 }
 
+export interface UsageTotals {
+  tokens: number;
+  cost: number;
+  messages: number;
+}
+
+/** What `llm_get_usage_stats` sends: the Rust struct's field names, unrenamed. */
 export interface UsageStats {
-  totalTokens: number;
-  totalCost: number;
-  messageCount: number;
-  byProvider: Record<
-    Provider,
-    {
-      tokens: number;
-      cost: number;
-      messages: number;
-    }
-  >;
-  byModel: Record<
-    string,
-    {
-      tokens: number;
-      cost: number;
-      messages: number;
-    }
-  >;
+  total_tokens: number;
+  total_cost: number;
+  message_count: number;
+  by_provider: Record<string, UsageTotals>;
+  by_model: Record<string, UsageTotals>;
 }
 
 export interface ModelInfo {
@@ -187,8 +176,7 @@ interface ModelState {
   addToRecent: (modelId: string) => void;
   checkProviderStatus: (provider: Provider) => Promise<ProviderStatus>;
   checkAllProviders: () => Promise<void>;
-  getUsageStats: () => Promise<UsageStats>;
-  refreshUsageStats: () => Promise<void>;
+  getUsageStats: () => Promise<UsageStats | null>;
   getAvailableModels: () => Promise<ModelInfo[]>;
 
   getRouterSuggestion: (context?: {
@@ -197,55 +185,15 @@ interface ModelState {
     requiresVision?: boolean;
   }) => Promise<RouterSuggestion>;
 
-  resetSessionCost: () => Promise<void>;
-
   checkOllamaStatus: () => Promise<boolean>;
   fetchOllamaModels: () => Promise<OllamaModel[]>;
   pullOllamaModel: (modelName: string) => Promise<void>;
   deleteOllamaModel: (modelName: string) => Promise<void>;
 
-  cycleModelVariant: () => void;
-
   setSpeedQualityMode: (mode: SpeedQualityMode) => void;
 
   reset: () => void;
 }
-
-const defaultUsageStats: UsageStats = {
-  totalTokens: 0,
-  totalCost: 0,
-  messageCount: 0,
-  byProvider: {
-    openai: { tokens: 0, cost: 0, messages: 0 },
-    anthropic: { tokens: 0, cost: 0, messages: 0 },
-    google: { tokens: 0, cost: 0, messages: 0 },
-    ollama: { tokens: 0, cost: 0, messages: 0 },
-    lmstudio: { tokens: 0, cost: 0, messages: 0 },
-    llamacpp: { tokens: 0, cost: 0, messages: 0 },
-    vllm: { tokens: 0, cost: 0, messages: 0 },
-    xai: { tokens: 0, cost: 0, messages: 0 },
-    deepseek: { tokens: 0, cost: 0, messages: 0 },
-    qwen: { tokens: 0, cost: 0, messages: 0 },
-    moonshot: { tokens: 0, cost: 0, messages: 0 },
-    perplexity: { tokens: 0, cost: 0, messages: 0 },
-    zhipu: { tokens: 0, cost: 0, messages: 0 },
-    managed_cloud: { tokens: 0, cost: 0, messages: 0 },
-    mistral: { tokens: 0, cost: 0, messages: 0 },
-    groq: { tokens: 0, cost: 0, messages: 0 },
-    together: { tokens: 0, cost: 0, messages: 0 },
-    fireworks: { tokens: 0, cost: 0, messages: 0 },
-    cerebras: { tokens: 0, cost: 0, messages: 0 },
-    deepinfra: { tokens: 0, cost: 0, messages: 0 },
-    nvidia_nim: { tokens: 0, cost: 0, messages: 0 },
-    open_router: { tokens: 0, cost: 0, messages: 0 },
-    cohere: { tokens: 0, cost: 0, messages: 0 },
-    ai21: { tokens: 0, cost: 0, messages: 0 },
-    sambanova: { tokens: 0, cost: 0, messages: 0 },
-    azure: { tokens: 0, cost: 0, messages: 0 },
-    bedrock: { tokens: 0, cost: 0, messages: 0 },
-  },
-  byModel: {},
-};
 
 const MODEL_STORE_VERSION = 3;
 
@@ -502,20 +450,12 @@ export const useModelStore = create<ModelState>()(
           } catch (error) {
             console.error('Failed to get usage stats:', error);
             set(
-              {
-                error: getSimpleErrorMessage(error),
-                loading: false,
-                usageStats: defaultUsageStats,
-              },
+              { error: getSimpleErrorMessage(error), loading: false, usageStats: null },
               undefined,
               'model/getUsageStats/error',
             );
-            return defaultUsageStats;
+            return null;
           }
-        },
-
-        refreshUsageStats: async () => {
-          await get().getUsageStats();
         },
 
         getAvailableModels: async () => {
@@ -687,33 +627,6 @@ export const useModelStore = create<ModelState>()(
             set({ routerSuggestion: fallback }, undefined, 'model/getRouterSuggestion/error');
             return fallback;
           }
-        },
-
-        resetSessionCost: async (): Promise<void> => {
-          try {
-            await invoke('reset_session_cost');
-          } catch (error) {
-            console.error('Failed to reset session cost:', error);
-            throw error;
-          }
-        },
-
-        cycleModelVariant: () => {
-          const { selectedModel } = get();
-          if (!selectedModel) {
-            toast.info('No model selected');
-            return;
-          }
-          const canonicalSelectedModel = normalizeModelId(selectedModel) ?? selectedModel;
-          const variantId = getModelVariantPartner(canonicalSelectedModel);
-          if (!variantId) {
-            toast.info('No thinking/reasoning variant available for this model');
-            return;
-          }
-          const variantMeta = getModelMetadata(variantId);
-          const provider = variantMeta?.provider ?? get().selectedProvider ?? 'anthropic';
-          void get().selectModel(variantId, provider);
-          toast.success(`Switched to ${variantId}`);
         },
 
         setSpeedQualityMode: (mode: SpeedQualityMode) => {
@@ -911,10 +824,6 @@ export const initializeModelStoreFromSettings = async () => {
   }
 };
 
-export const getBestAutoModeForTier = (tier: string): string => {
-  return getBestAutoModeForSubscriptionTier(tier);
-};
-
 let _isEnforcingTier = false;
 
 export const enforceModelTierRestriction = (planTier: string | null): void => {
@@ -929,28 +838,20 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
 
   Promise.resolve()
     .then(async () => {
-      const isSimpleMode = useUIStore.getState().mode === 'simple';
       const selectedMetadata = selectedModel ? getModelMetadata(selectedModel) : null;
       const isAutoSelection = selectedModel === 'auto' || selectedModel?.startsWith('auto');
       const isOllamaSelection =
         selectedProvider === 'ollama' || selectedMetadata?.provider === 'ollama';
 
-      if (isSimpleMode) {
-        const bestAutoMode = getBestAutoModeForTier(normalizedTier);
-        if (selectedModel !== bestAutoMode) {
-          await selectModel(bestAutoMode, 'managed_cloud');
-        }
-      } else {
-        if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
-          await selectModel('auto', 'managed_cloud');
-        } else if (
-          selectedModel &&
-          !isAutoSelection &&
-          !isOllamaSelection &&
-          !isModelAllowedForTier(selectedModel, normalizedTier)
-        ) {
-          await selectModel('auto', 'managed_cloud');
-        }
+      if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
+        await selectModel('auto', 'managed_cloud');
+      } else if (
+        selectedModel &&
+        !isAutoSelection &&
+        !isOllamaSelection &&
+        !isModelAllowedForTier(selectedModel, normalizedTier)
+      ) {
+        await selectModel('auto', 'managed_cloud');
       }
     })
     .catch(async (err) => {
@@ -991,28 +892,6 @@ if (typeof window !== 'undefined') {
       useModelStore
         .getState()
         .loadModelsForMode(newMode, useAccountStore.getState().plan ?? 'free');
-    },
-  );
-}
-
-let _unsubscribeUiMode: () => void = () => {};
-
-if (typeof window !== 'undefined') {
-  _unsubscribeUiMode?.();
-  _unsubscribeUiMode = useUIStore.subscribe(
-    (state) => state.mode,
-    (mode, prevMode) => {
-      if (mode !== 'simple' || mode === prevMode) {
-        return;
-      }
-
-      const currentPlan = useAccountStore.getState().account.plan ?? 'free';
-      const targetAutoMode = getBestAutoModeForSubscriptionTier(currentPlan);
-      const modelStore = useModelStore.getState();
-
-      if (modelStore.selectedModel !== targetAutoMode) {
-        void modelStore.selectModel(targetAutoMode, 'managed_cloud');
-      }
     },
   );
 }

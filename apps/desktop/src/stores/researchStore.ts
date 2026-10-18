@@ -69,23 +69,6 @@ export interface ResearchHistoryEntry {
   report?: string;
 }
 
-export interface ResearchAvailability {
-  available: boolean;
-  sources: {
-    web_search: { enabled: boolean; status: string };
-    document_search: { enabled: boolean; status: string };
-    memory_search: { enabled: boolean; status: string };
-  };
-  default_mode: ResearchModeId;
-}
-
-export interface ResearchMode {
-  id: string;
-  name: string;
-  description: string;
-  estimated_time: string;
-}
-
 interface ResearchState {
   activeSession: {
     id: string | null;
@@ -101,17 +84,12 @@ interface ResearchState {
   history: ResearchHistoryEntry[];
 
   config: ResearchConfig | null;
-  availability: ResearchAvailability | null;
 
-  availableModes: ResearchMode[];
-
-  isConfigLoading: boolean;
   isHistoryLoading: boolean;
 }
 
 interface ResearchActions {
   startResearch: (query: string, mode?: ResearchModeId) => Promise<ResearchResponse>;
-  quickResearch: (query: string) => Promise<ResearchResponse>;
   cancelResearch: () => Promise<void>;
   resetSession: () => void;
 
@@ -123,9 +101,6 @@ interface ResearchActions {
   removeFromHistory: (id: string) => void;
 
   loadConfig: () => Promise<void>;
-  updateConfig: (config: Partial<ResearchConfig>) => Promise<void>;
-  checkAvailability: () => Promise<ResearchAvailability>;
-  loadModes: () => Promise<ResearchMode[]>;
 
   initialize: () => Promise<void>;
 }
@@ -161,9 +136,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
         },
         history: [],
         config: null,
-        availability: null,
-        availableModes: [],
-        isConfigLoading: false,
         isHistoryLoading: false,
 
         startResearch: async (query: string, mode?: ResearchModeId) => {
@@ -213,44 +185,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : 'Research failed. Please try again.';
-
-            set((state) => {
-              state.activeSession.status = 'error';
-              state.activeSession.error = errorMessage;
-            });
-
-            throw error;
-          }
-        },
-
-        quickResearch: async (query: string) => {
-          set((state) => {
-            state.activeSession = {
-              id: null,
-              query,
-              mode: 'quick',
-              status: 'researching',
-              progress: null,
-              result: null,
-              error: null,
-              startedAt: Date.now(),
-            };
-          });
-
-          try {
-            const result = await invoke<ResearchResponse>('research_quick', { query });
-
-            set((state) => {
-              state.activeSession.id = result.session_id;
-              state.activeSession.status = 'complete';
-              state.activeSession.result = result;
-            });
-
-            get().addToHistory(result);
-            return result;
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Quick research failed. Please try again.';
 
             set((state) => {
               state.activeSession.status = 'error';
@@ -340,82 +274,23 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
         },
 
         loadConfig: async () => {
-          set((state) => {
-            state.isConfigLoading = true;
-          });
-
           try {
             const config = await invoke<ResearchConfig>('research_get_config');
             set((state) => {
               state.config = config;
-              state.isConfigLoading = false;
             });
           } catch (error) {
             console.error('Failed to load research config:', error);
             set((state) => {
               state.config = DEFAULT_CONFIG;
-              state.isConfigLoading = false;
             });
-          }
-        },
-
-        updateConfig: async (configUpdates: Partial<ResearchConfig>) => {
-          const currentConfig = get().config || DEFAULT_CONFIG;
-          const newConfig = { ...currentConfig, ...configUpdates };
-
-          try {
-            await invoke('research_set_config', { config: newConfig });
-            set((state) => {
-              state.config = newConfig;
-            });
-          } catch (error) {
-            console.error('Failed to update research config:', error);
-            throw error;
-          }
-        },
-
-        checkAvailability: async () => {
-          try {
-            const availability = await invoke<ResearchAvailability>('research_check_availability');
-            set((state) => {
-              state.availability = availability;
-            });
-            return availability;
-          } catch (error) {
-            console.error('Failed to check research availability:', error);
-            const defaultAvailability: ResearchAvailability = {
-              available: false,
-              sources: {
-                web_search: { enabled: false, status: 'unavailable' },
-                document_search: { enabled: false, status: 'unavailable' },
-                memory_search: { enabled: false, status: 'unavailable' },
-              },
-              default_mode: 'standard',
-            };
-            set((state) => {
-              state.availability = defaultAvailability;
-            });
-            return defaultAvailability;
-          }
-        },
-
-        loadModes: async () => {
-          try {
-            const modes = await invoke<ResearchMode[]>('research_get_modes');
-            set((state) => {
-              state.availableModes = modes;
-            });
-            return modes;
-          } catch (error) {
-            console.error('Failed to load research modes:', error);
-            return [];
           }
         },
 
         initialize: async () => {
           if (!isTauri) return;
 
-          await Promise.all([get().loadConfig(), get().checkAvailability(), get().loadModes()]);
+          await get().loadConfig();
 
           if (nativeListenersRegistered) return;
           nativeListenersRegistered = true;
@@ -444,11 +319,9 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
 export const selectActiveSession = (state: ResearchState) => state.activeSession;
 export const selectHistory = (state: ResearchState) => state.history;
 export const selectConfig = (state: ResearchState) => state.config;
-export const selectAvailability = (state: ResearchState) => state.availability;
 export const selectIsResearching = (state: ResearchState) =>
   state.activeSession.status === 'researching';
 export const selectHasResult = (state: ResearchState) =>
   state.activeSession.status === 'complete' && state.activeSession.result !== null;
-export const selectAvailableModes = (state: ResearchState) => state.availableModes;
 
 export default useResearchStore;

@@ -52,12 +52,6 @@ pub fn target_display() -> Option<u32> {
     u32::try_from(TARGET_DISPLAY.load(Ordering::SeqCst)).ok()
 }
 
-pub fn set_target_display(display: Option<u32>) -> Result<ScreenInfo> {
-    let chosen = select_display(&list_displays()?, display)?;
-    TARGET_DISPLAY.store(display.map_or(PRIMARY_DISPLAY, i64::from), Ordering::SeqCst);
-    Ok(chosen)
-}
-
 pub fn select_display(displays: &[ScreenInfo], target: Option<u32>) -> Result<ScreenInfo> {
     if let Some(id) = target {
         return displays

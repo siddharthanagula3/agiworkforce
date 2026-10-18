@@ -302,7 +302,7 @@ this document.
 ### Image generation
 
 - **web**: present. `apps/web/features/chat/lib/imageGenerationOptions.ts`, reached by `apps/web/features/chat/pages/WebChatPage.tsx` (import).
-- **desktop**: present. `apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs`, reached by `apps/desktop/src-tauri/src/integrations/api_integrations/mod.rs` (module).
+- **desktop**: present. `apps/desktop/src-tauri/src/core/llm/tool_executor/media_tools.rs`, reached by `apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs` (module).
 - **mobile**: unverified. Settled by: A mobile composer path that requests an image. Nothing under apps/mobile was found naming the image work mode.
 - **cli**: present. `apps/cli/src/cloud/image.rs`, reached by `apps/cli/src/cloud/mod.rs` (module).
 - **vscode**: absent. Nothing under apps/extension-vscode/src requests an image.

@@ -270,48 +270,6 @@ impl RecorderService {
         })
     }
 
-    pub fn record_hotkey(&self, key: u16, modifiers: Vec<String>) -> Result<()> {
-        let metadata = serde_json::json!({
-            "key": key,
-            "modifiers": modifiers,
-        });
-
-        self.record_action(RecordedAction {
-            id: Uuid::new_v4().to_string(),
-            action_type: ActionType::Hotkey,
-            timestamp_ms: self.get_elapsed_ms()?,
-            target: None,
-            value: Some(format!("{:?}+{}", modifiers, key)),
-            metadata: Some(metadata),
-            app: app_in_focus(),
-        })
-    }
-
-    pub fn record_drag(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
-        let metadata = serde_json::json!({
-            "from_x": from_x,
-            "from_y": from_y,
-            "to_x": to_x,
-            "to_y": to_y,
-        });
-
-        self.record_action(RecordedAction {
-            id: Uuid::new_v4().to_string(),
-            action_type: ActionType::Drag,
-            timestamp_ms: self.get_elapsed_ms()?,
-            target: Some(ElementTarget {
-                x: from_x,
-                y: from_y,
-                element_id: None,
-                element_name: None,
-                element_type: None,
-            }),
-            value: Some(format!("({}, {}) -> ({}, {})", from_x, from_y, to_x, to_y)),
-            metadata: Some(metadata),
-            app: app_at(from_x, from_y),
-        })
-    }
-
     pub fn record_scroll(&self, delta_x: i64, delta_y: i64, x: i32, y: i32) -> Result<()> {
         self.record_action(RecordedAction {
             id: Uuid::new_v4().to_string(),

@@ -313,26 +313,6 @@ pub fn public_destination_redirect_policy() -> reqwest::redirect::Policy {
     })
 }
 
-/// Redirect policy for a public-only client.
-///
-/// Unlike [`public_destination_redirect_policy`], this policy has no
-/// same-origin compatibility exemption: every `Location` target is resolved
-/// and judged. Use this for user-, extension-, automation-, or LLM-selected
-/// public URLs. Intentional loopback clients (Ollama, CDP, local API servers)
-/// must keep their own explicitly local transport instead.
-pub fn strict_public_destination_redirect_policy() -> reqwest::redirect::Policy {
-    reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() >= MAX_REDIRECT_HOPS {
-            return attempt.error("too many redirects");
-        }
-
-        match ensure_public_http_destination(attempt.url().as_str()) {
-            Ok(()) => attempt.follow(),
-            Err(denial) => attempt.error(denial),
-        }
-    })
-}
-
 /// The addresses each host was judged on, shared between the validator and the
 /// transport's DNS resolver.
 ///
@@ -889,11 +869,6 @@ mod tests {
     #[test]
     fn arbitrary_public_surfaces_remain_wired_to_the_public_boundary() {
         let guarded_surfaces = [
-            (
-                "generic webhook",
-                include_str!("../../features/webhooks/mod.rs"),
-                "client: PublicHttpClient",
-            ),
             (
                 "LLM API upload/download",
                 include_str!("../../core/llm/tool_executor/api_tools.rs"),

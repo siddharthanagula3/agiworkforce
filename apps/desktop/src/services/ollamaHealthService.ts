@@ -1,4 +1,3 @@
-
 import { ollamaCheckStatus, ollamaListModels, type OllamaModel } from '../api/ollama';
 import { useModelStore } from '../stores/modelStore';
 import { notifyLocalModelCatalogChanged } from '../lib/localModelCatalog';
@@ -162,15 +161,6 @@ export function stopOllamaHealthService(): void {
     consecutiveFailures: 0,
     modelsCount: 0,
   };
-}
-
-export async function forceHealthCheck(): Promise<boolean> {
-  healthState.consecutiveFailures = 0;
-  return performHealthCheck();
-}
-
-export function getHealthState(): Readonly<HealthState> {
-  return { ...healthState };
 }
 
 export function isOllamaAvailable(): boolean {

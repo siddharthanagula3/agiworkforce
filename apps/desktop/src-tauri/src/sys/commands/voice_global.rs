@@ -27,9 +27,8 @@ use serde::Serialize;
 use tauri::Emitter;
 
 use crate::features::speech::dictation::{
-    start_os_hook, BeginError, DictationOutcome, DictationPhase, DictationSnapshot,
-    DictationSource, HotkeyChord, HotkeyEdge, SessionError, DICTATION_COORDINATOR,
-    DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
+    start_os_hook, BeginError, DictationOutcome, DictationPhase, DictationSource, HotkeyChord,
+    HotkeyEdge, SessionError, DICTATION_COORDINATOR, DICTATION_EVENT_VERSION, GLOBAL_HOTKEY_HOOK,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -169,11 +168,6 @@ pub async fn dictation_session_end(
         Some(format!("{outcome:?}").to_lowercase()),
     );
     Ok(())
-}
-
-/// Current coordinator snapshot for UIs and diagnostics.
-pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
-    Ok(DICTATION_COORDINATOR.snapshot())
 }
 
 // ---------------------------------------------------------------------------

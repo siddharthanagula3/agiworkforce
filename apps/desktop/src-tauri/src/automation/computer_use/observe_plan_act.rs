@@ -473,20 +473,6 @@ impl ComputerUseAgent {
         self
     }
 
-    /// Names the account and device every audit row this agent writes belongs
-    /// to. Without it the trail still records what happened, but not to whom.
-    pub fn with_audit_identity(
-        mut self,
-        actor: impl Into<String>,
-        device_id: impl Into<String>,
-    ) -> Self {
-        self.audit_identity = AuditIdentity {
-            actor: actor.into(),
-            device_id: device_id.into(),
-        };
-        self
-    }
-
     fn automation_service(&self) -> Option<Arc<AutomationService>> {
         crate::automation::shared_service(self.app_handle.as_ref()?).ok()
     }

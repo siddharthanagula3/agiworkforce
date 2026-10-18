@@ -481,16 +481,22 @@ fn resolve_command_path(command: &str) -> String {
     let augmented = build_augmented_path();
     let sep = path_separator();
 
+    // npm installs an extensionless POSIX shell shim beside `npx.cmd`, which
+    // Windows cannot start, so a bare name only matches a launchable extension.
     #[cfg(target_os = "windows")]
-    let extensions = ["", ".exe", ".cmd", ".bat", ".ps1"];
+    let extensions: &[&str] = if std::path::Path::new(command).extension().is_some() {
+        &[""]
+    } else {
+        &[".exe", ".cmd", ".bat"]
+    };
     #[cfg(not(target_os = "windows"))]
-    let extensions = [""];
+    let extensions: &[&str] = &[""];
 
     for dir in augmented.split(sep) {
         if dir.is_empty() {
             continue;
         }
-        for ext in &extensions {
+        for ext in extensions {
             let candidate = std::path::Path::new(dir).join(format!("{}{}", command, ext));
             if candidate.is_file() {
                 let candidate_str = candidate.to_string_lossy().into_owned();

@@ -329,9 +329,7 @@ impl ToolExecutor {
         tool_id: &str,
         args: HashMap<String, serde_json::Value>,
     ) -> Result<ToolResult> {
-        use crate::automation::browser::dom_operations::{
-            ClickOptions, DomOperations, TypeOptions,
-        };
+        use crate::automation::browser::dom_operations::DomOperations;
         use crate::sys::commands::BrowserStateWrapper;
         use tauri::Manager;
 
@@ -376,13 +374,8 @@ impl ToolExecutor {
             }
             "browser_go_back" => {
                 let (client, tab_id) = get_client().await?;
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(anyhow::Error::msg)?;
-                tab_manager
-                    .lock()
-                    .await
-                    .go_back(&tab_id)
+                client
+                    .navigate_history(-1)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
@@ -394,13 +387,8 @@ impl ToolExecutor {
             }
             "browser_go_forward" => {
                 let (client, tab_id) = get_client().await?;
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(anyhow::Error::msg)?;
-                tab_manager
-                    .lock()
-                    .await
-                    .go_forward(&tab_id)
+                client
+                    .navigate_history(1)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
@@ -412,15 +400,7 @@ impl ToolExecutor {
             }
             "browser_reload" => {
                 let (client, tab_id) = get_client().await?;
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(anyhow::Error::msg)?;
-                tab_manager
-                    .lock()
-                    .await
-                    .reload(&tab_id)
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                client.reload().await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "success": true, "tab_id": tab_id, "url": client.get_url().await.unwrap_or_default() }),
@@ -617,7 +597,7 @@ impl ToolExecutor {
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
                 require_safe_selector(selector)?;
                 let (client, tab_id) = get_client().await?;
-                DomOperations::click(&client, selector, ClickOptions::default())
+                DomOperations::click(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
@@ -689,17 +669,9 @@ impl ToolExecutor {
                     .ok_or_else(|| anyhow!("Missing text parameter"))?;
                 let clear_first = parse_optional_browser_bool(&args, "clear_first", true)?;
                 let (client, tab_id) = get_client().await?;
-                DomOperations::type_text(
-                    &client,
-                    selector,
-                    text,
-                    TypeOptions {
-                        clear_first,
-                        ..TypeOptions::default()
-                    },
-                )
-                .await
-                .map_err(anyhow::Error::msg)?;
+                DomOperations::type_text(&client, selector, text, clear_first)
+                    .await
+                    .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
                     data: json!({ "success": true, "selector": selector, "tab_id": tab_id, "clear_first": clear_first }),

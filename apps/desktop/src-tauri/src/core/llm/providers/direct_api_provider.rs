@@ -457,18 +457,6 @@ pub fn local_runtime_label(provider: Provider) -> Option<&'static str> {
     }
 }
 
-/// Joins a capability path onto a provider's registered base URL so callers outside
-/// this module never retype a provider host.
-pub fn provider_endpoint(provider: Provider, path: &str) -> Option<String> {
-    default_base_url(provider).map(|base| {
-        format!(
-            "{}/{}",
-            base.trim_end_matches('/'),
-            path.trim_start_matches('/')
-        )
-    })
-}
-
 /// Returns the default base URL for direct BYOK providers with stable public API endpoints.
 pub fn default_base_url(provider: Provider) -> Option<&'static str> {
     match provider {
@@ -479,14 +467,14 @@ pub fn default_base_url(provider: Provider) -> Option<&'static str> {
         Provider::XAI => Some("https://api.x.ai/v1"),
         Provider::Perplexity => Some("https://api.perplexity.ai"),
         Provider::Qwen => Some("https://dashscope.aliyuncs.com/compatible-mode/v1"),
-        Provider::Moonshot => Some("https://api.moonshot.cn/v1"),
+        Provider::Moonshot => Some("https://api.moonshot.ai/v1"),
         Provider::Minimax => Some("https://api.minimax.io/v1"),
         Provider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4"),
         Provider::Together => Some("https://api.together.xyz/v1"),
         Provider::Fireworks => Some("https://api.fireworks.ai/inference/v1"),
         Provider::Cerebras => Some("https://api.cerebras.ai/v1"),
         Provider::DeepInfra => Some("https://api.deepinfra.com/v1/openai"),
-        Provider::Cohere => Some("https://api.cohere.com/v2"),
+        Provider::Cohere => Some("https://api.cohere.ai/compatibility/v1"),
         Provider::AI21 => Some("https://api.ai21.com/studio/v1"),
         Provider::Sambanova => Some("https://api.sambanova.ai/v1"),
         Provider::NvidiaNim => Some("https://integrate.api.nvidia.com/v1"),
@@ -691,19 +679,6 @@ impl LLMProvider for DirectApiProvider {
 
     fn base_url(&self) -> Option<&str> {
         Some(&self.base_url)
-    }
-
-    fn supports_vision(&self) -> bool {
-        matches!(
-            self.provider,
-            Provider::OpenAI
-                | Provider::Anthropic
-                | Provider::Google
-                | Provider::XAI
-                | Provider::Together
-                | Provider::Fireworks
-                | Provider::DeepInfra
-        )
     }
 
     fn supports_function_calling(&self) -> bool {

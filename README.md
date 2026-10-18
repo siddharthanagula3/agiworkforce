@@ -48,9 +48,7 @@ a unified chat protocol.
   Ollama or LM Studio and sends BYOK requests straight to a user's own provider
   account. The public Electron Desktop is managed-cloud-only; Mobile and VS
   Code are not yet published.
-- **Agentic execution and tools**: Swarm-based orchestration (task
-  decomposition, parallel sub-agent spawning, dependency-graph execution,
-  result aggregation), MCP support in the released CLI and managed remote
+- **Agentic execution and tools**: MCP support in the released CLI and managed remote
   connectors on hosted surfaces, and a tool engine covering file operations,
   code execution, PTY terminal, git, web search, document extraction,
   calendar, email, and clipboard. The CLI adds an interactive TUI and a

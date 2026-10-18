@@ -207,32 +207,6 @@ pub fn emit_tool_progress(
     );
 }
 
-/// Helper to emit a progress event with byte counts (for file/network operations)
-pub fn emit_tool_progress_bytes(
-    app_handle: &AppHandle,
-    tool_id: &str,
-    bytes_processed: u64,
-    bytes_total: u64,
-    message: Option<&str>,
-) {
-    let progress = if bytes_total > 0 {
-        bytes_processed as f32 / bytes_total as f32
-    } else {
-        0.0
-    };
-
-    emit_tool_stream_event(
-        app_handle,
-        ToolStreamEvent::Progress {
-            tool_id: tool_id.to_string(),
-            progress: progress.clamp(0.0, 1.0),
-            message: message.map(|s| s.to_string()),
-            bytes_processed: Some(bytes_processed),
-            bytes_total: Some(bytes_total),
-        },
-    );
-}
-
 /// Helper to emit an output chunk event
 pub fn emit_tool_output_chunk(
     app_handle: &AppHandle,
@@ -349,18 +323,6 @@ impl<'a> ToolStreamContext<'a> {
         }
     }
 
-    /// Set the session ID for context
-    pub fn with_session_id(mut self, session_id: impl Into<String>) -> Self {
-        self.session_id = Some(session_id.into());
-        self
-    }
-
-    /// Set the agent ID for context
-    pub fn with_agent_id(mut self, agent_id: impl Into<String>) -> Self {
-        self.agent_id = Some(agent_id.into());
-        self
-    }
-
     /// Report progress (0.0 - 1.0)
     pub fn progress(&self, progress: f32, message: Option<&str>) {
         emit_tool_stream_event_with_context(
@@ -371,28 +333,6 @@ impl<'a> ToolStreamContext<'a> {
                 message: message.map(|s| s.to_string()),
                 bytes_processed: None,
                 bytes_total: None,
-            },
-            self.session_id.clone(),
-            self.agent_id.clone(),
-        );
-    }
-
-    /// Report progress with byte counts
-    pub fn progress_bytes(&self, bytes_processed: u64, bytes_total: u64, message: Option<&str>) {
-        let progress = if bytes_total > 0 {
-            bytes_processed as f32 / bytes_total as f32
-        } else {
-            0.0
-        };
-
-        emit_tool_stream_event_with_context(
-            self.app_handle,
-            ToolStreamEvent::Progress {
-                tool_id: self.tool_id.clone(),
-                progress: progress.clamp(0.0, 1.0),
-                message: message.map(|s| s.to_string()),
-                bytes_processed: Some(bytes_processed),
-                bytes_total: Some(bytes_total),
             },
             self.session_id.clone(),
             self.agent_id.clone(),

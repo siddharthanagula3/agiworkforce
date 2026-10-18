@@ -1,46 +1,15 @@
-//! Server-side tool definitions for Anthropic Claude API.
-//!
-//! These tools are executed server-side by Anthropic's API, not client-side.
-//! Includes: text_editor, web_search, web_fetch, memory, bash, tool_search.
+//! Anthropic-defined tool entries the chat path sends in the native format:
+//! the `web_search` server tool and the computer use client toolset.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 pub const COMPUTER_TOOLSET_TYPE: &str = "computer_toolset_20260801";
 
-/// The `toolset_name` Anthropic sets on every computer member `tool_use` block
-/// and requires on every result that answers one.
-pub const COMPUTER_TOOLSET_NAME: &str = "computer";
-
-/// Server-side tool definition that runs on Anthropic's servers
+/// Anthropic-defined tool entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerTool {
-    /// Current provider-defined text editor tool for file operations.
-    #[serde(rename = "text_editor_20250728")]
-    TextEditor20250728 {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_characters: Option<u32>,
-    },
-
-    /// Legacy text editor tool for earlier model families.
-    #[serde(rename = "text_editor_20250429")]
-    TextEditor20250429 {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_characters: Option<u32>,
-    },
-
-    /// Legacy text editor tool for older model families.
-    #[serde(rename = "text_editor_20250124")]
-    TextEditor20250124 {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_characters: Option<u32>,
-    },
-
     /// Web search tool for real-time search (web_search_20250305)
     #[serde(rename = "web_search_20250305")]
     WebSearch20250305 {
@@ -55,30 +24,6 @@ pub enum ServerTool {
         user_location: Option<UserLocation>,
     },
 
-    /// Web fetch tool for retrieving web content (web_fetch_20250305)
-    #[serde(rename = "web_fetch_20250305")]
-    WebFetch20250305 {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_uses: Option<u32>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        allowed_domains: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        blocked_domains: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        citations: Option<CitationsConfig>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        max_content_tokens: Option<u32>,
-    },
-
-    /// Memory tool for persistent storage (memory_20250728)
-    #[serde(rename = "memory_20250728")]
-    Memory20250728 { name: String },
-
-    /// Bash tool for command execution (bash_20250124)
-    #[serde(rename = "bash_20250124")]
-    Bash20250124 { name: String },
-
     /// Computer use client toolset. The entry takes no `name` and no display
     /// size; the API rejects both.
     #[serde(rename = "computer_toolset_20260801")]
@@ -86,18 +31,6 @@ pub enum ServerTool {
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         configs: BTreeMap<String, ToolsetMemberConfig>,
     },
-
-    /// Tool search tool with regex (tool_search_tool_regex_20251119)
-    #[serde(rename = "tool_search_tool_regex_20251119")]
-    ToolSearchRegex20251119 { name: String },
-
-    /// Tool search tool with BM25 (tool_search_tool_bm25_20251119)
-    #[serde(rename = "tool_search_tool_bm25_20251119")]
-    ToolSearchBm2520251119 { name: String },
-
-    /// Code execution tool for sandboxed Python (code_execution_20250522)
-    #[serde(rename = "code_execution_20250522")]
-    CodeExecution20250522 { name: String },
 }
 
 /// Per-member settings of a client toolset entry. The API accepts only these
@@ -133,78 +66,11 @@ impl UserLocation {
     }
 }
 
-/// Citations configuration for web fetch
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CitationsConfig {
-    pub enabled: bool,
-}
-
-/// Server tool use block in responses
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerToolUse {
-    #[serde(rename = "type")]
-    pub block_type: String, // "server_tool_use"
-    pub id: String,
-    pub name: String,
-    pub input: Value,
-}
-
-/// Tool search result reference
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolReference {
-    #[serde(rename = "type")]
-    pub reference_type: String, // "tool_reference"
-    pub tool_name: String,
-}
-
-/// Web search result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebSearchResult {
-    #[serde(rename = "type")]
-    pub result_type: String, // "web_search_result"
-    pub url: String,
-    pub title: String,
-    pub encrypted_content: String,
-    pub page_age: String,
-}
-
-/// Web fetch result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebFetchResult {
-    #[serde(rename = "type")]
-    pub result_type: String, // "web_fetch_result"
-    pub url: String,
-    pub content: DocumentContent,
-    pub retrieved_at: String,
-}
-
-/// Content from a fetched document
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocumentContent {
-    #[serde(rename = "type")]
-    pub content_type: String,
-    pub text: String,
-}
-
 /// Known Anthropic server tool names for detection during request adaptation.
 /// When a tool name matches one of these, it should be sent in the server-tool
 /// format (`{"type": "web_search_20250305", ...}`) rather than the regular
 /// function-calling format (`{"name": ..., "input_schema": ...}`).
-pub const ANTHROPIC_SERVER_TOOL_NAMES: &[&str] = &[
-    COMPUTER_TOOLSET_TYPE,
-    "web_search",
-    "web_fetch",
-    "text_editor",
-    "bash",
-    "memory",
-    "code_execution",
-    // Canonical names
-    "tool_search_tool_regex",
-    "tool_search_tool_bm25",
-    // Backward-compatible aliases
-    "tool_search_regex",
-    "tool_search_bm25",
-];
+pub const ANTHROPIC_SERVER_TOOL_NAMES: &[&str] = &[COMPUTER_TOOLSET_TYPE, "web_search"];
 
 /// Check if a tool name corresponds to a known Anthropic server-side tool.
 pub fn is_anthropic_server_tool(name: &str) -> bool {
@@ -226,36 +92,7 @@ pub fn build_server_tool_definition(
             "name": "web_search",
             "max_uses": 5
         })),
-        "web_fetch" => Some(serde_json::json!({
-            "type": "web_fetch_20250305",
-            "name": "web_fetch",
-            "max_uses": 5
-        })),
-        "text_editor" => Some(serde_json::json!({
-            "type": "text_editor_20250728",
-            "name": "text_editor"
-        })),
-        "bash" => Some(serde_json::json!({
-            "type": "bash_20250124",
-            "name": "bash"
-        })),
-        "memory" => Some(serde_json::json!({
-            "type": "memory_20250728",
-            "name": "memory"
-        })),
         COMPUTER_TOOLSET_TYPE => Some(computer_toolset_definition(parameters)),
-        "code_execution" => Some(serde_json::json!({
-            "type": "code_execution_20250522",
-            "name": "code_execution"
-        })),
-        "tool_search_tool_regex" | "tool_search_regex" => Some(serde_json::json!({
-            "type": "tool_search_tool_regex_20251119",
-            "name": "tool_search_tool_regex"
-        })),
-        "tool_search_tool_bm25" | "tool_search_bm25" => Some(serde_json::json!({
-            "type": "tool_search_tool_bm25_20251119",
-            "name": "tool_search_tool_bm25"
-        })),
         _ => None,
     }
 }
@@ -273,6 +110,7 @@ fn computer_toolset_definition(parameters: &serde_json::Value) -> serde_json::Va
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn test_server_tool_serialization() {
@@ -312,36 +150,6 @@ mod tests {
                 tool_name
             );
         }
-    }
-
-    #[test]
-    fn test_tool_search_names_use_latest_versions() {
-        let regex_tool = build_server_tool_definition("tool_search_tool_regex", &Value::Null)
-            .expect("regex tool definition");
-        assert_eq!(
-            regex_tool["type"], "tool_search_tool_regex_20251119",
-            "regex tool must use latest versioned type"
-        );
-        assert_eq!(regex_tool["name"], "tool_search_tool_regex");
-
-        let bm25_tool = build_server_tool_definition("tool_search_tool_bm25", &Value::Null)
-            .expect("bm25 tool definition");
-        assert_eq!(
-            bm25_tool["type"], "tool_search_tool_bm25_20251119",
-            "bm25 tool must use latest versioned type"
-        );
-        assert_eq!(bm25_tool["name"], "tool_search_tool_bm25");
-    }
-
-    #[test]
-    fn test_tool_search_legacy_aliases_map_to_canonical_names() {
-        let regex_alias = build_server_tool_definition("tool_search_regex", &Value::Null)
-            .expect("regex alias definition");
-        assert_eq!(regex_alias["name"], "tool_search_tool_regex");
-
-        let bm25_alias = build_server_tool_definition("tool_search_bm25", &Value::Null)
-            .expect("bm25 alias definition");
-        assert_eq!(bm25_alias["name"], "tool_search_tool_bm25");
     }
 
     /// Anthropic's computer tool is a client tool versioned per model, with

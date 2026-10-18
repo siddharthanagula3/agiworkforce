@@ -123,55 +123,6 @@ impl FullTextSearch {
         Ok(())
     }
 
-    pub fn index_conversation(
-        &self,
-        conversation_id: &str,
-        title: &str,
-        description: Option<&str>,
-        project_id: Option<&str>,
-        timestamp: &str,
-    ) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-
-        conn.execute(
-            "DELETE FROM conversations_fts WHERE conversation_id = ?1",
-            params![conversation_id],
-        )?;
-
-        conn.execute(
-            "INSERT INTO conversations_fts (conversation_id, title, description, project_id, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![conversation_id, title, description, project_id, timestamp],
-        )?;
-
-        Ok(())
-    }
-
-    pub fn index_knowledge_chunk(
-        &self,
-        chunk_id: &str,
-        project_id: &str,
-        content: &str,
-        source_file: &str,
-        chunk_index: u32,
-        timestamp: &str,
-    ) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-
-        conn.execute(
-            "DELETE FROM knowledge_fts WHERE chunk_id = ?1",
-            params![chunk_id],
-        )?;
-
-        conn.execute(
-            "INSERT INTO knowledge_fts (chunk_id, project_id, content, source_file, chunk_index, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![chunk_id, project_id, content, source_file, chunk_index, timestamp],
-        )?;
-
-        Ok(())
-    }
-
     pub fn search_messages(
         &self,
         query: &str,
@@ -238,62 +189,6 @@ impl FullTextSearch {
                     timestamp: row.get(5)?,
                     message_type: row.get(4)?,
                     sender: row.get(3)?,
-                })
-            },
-        )?;
-
-        let mut search_results = Vec::new();
-        for result in results {
-            search_results.push(result?);
-        }
-
-        Ok(search_results)
-    }
-
-    pub fn search_conversations(
-        &self,
-        query: &str,
-        project_id: Option<String>,
-        options: SearchOptions,
-    ) -> Result<Vec<SearchResult>> {
-        let conn = Connection::open(&self.db_path)?;
-
-        let mut sql = String::from(
-            "SELECT conversation_id, title, description, project_id, timestamp,
-                    snippet(conversations_fts, 1, '<mark>', '</mark>', '...', ?1) as snippet,
-                    rank
-             FROM conversations_fts
-             WHERE conversations_fts MATCH ?2",
-        );
-
-        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
-            Box::new(options.snippet_length as i64),
-            Box::new(query.to_string()),
-        ];
-
-        if let Some(proj_id) = project_id {
-            sql.push_str(" AND project_id = ?");
-            params.push(Box::new(proj_id));
-        }
-
-        sql.push_str(" ORDER BY rank LIMIT ? OFFSET ?");
-        params.push(Box::new(options.limit as i64));
-        params.push(Box::new(options.offset as i64));
-
-        let mut stmt = conn.prepare(&sql)?;
-
-        let results = stmt.query_map(
-            rusqlite::params_from_iter(params.iter().map(|p| p.as_ref())),
-            |row| {
-                Ok(SearchResult {
-                    id: row.get(0)?,
-                    conversation_id: None,
-                    content: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                    snippet: row.get(5)?,
-                    rank: row.get(6)?,
-                    timestamp: row.get(4)?,
-                    message_type: "conversation".to_string(),
-                    sender: "system".to_string(),
                 })
             },
         )?;
@@ -379,15 +274,6 @@ impl FullTextSearch {
         Ok(())
     }
 
-    pub fn delete_project_knowledge(&self, project_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-        conn.execute(
-            "DELETE FROM knowledge_fts WHERE project_id = ?1",
-            [project_id],
-        )?;
-        Ok(())
-    }
-
     pub fn optimize(&self) -> Result<()> {
         let conn = Connection::open(&self.db_path)?;
 
@@ -401,25 +287,6 @@ impl FullTextSearch {
         )?;
         conn.execute(
             "INSERT INTO knowledge_fts(knowledge_fts) VALUES('optimize')",
-            [],
-        )?;
-
-        Ok(())
-    }
-
-    pub fn rebuild_index(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
-
-        conn.execute(
-            "INSERT INTO messages_fts(messages_fts) VALUES('rebuild')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO conversations_fts(conversations_fts) VALUES('rebuild')",
-            [],
-        )?;
-        conn.execute(
-            "INSERT INTO knowledge_fts(knowledge_fts) VALUES('rebuild')",
             [],
         )?;
 

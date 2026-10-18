@@ -76,17 +76,6 @@ export interface BackgroundAgent {
   timeoutSecs: number;
 }
 
-export interface BackgroundAgentStats {
-  totalAgents: number;
-  runningCount: number;
-  queuedCount: number;
-  pausedCount: number;
-  completedCount: number;
-  failedCount: number;
-  maxAgents: number;
-  atCapacity: boolean;
-}
-
 interface ListAgentsResponse {
   agents: BackgroundAgent[];
   activeCount: number;
@@ -100,19 +89,17 @@ export interface BackgroundAgentEventPayload {
 
 interface BackgroundAgentState {
   agents: BackgroundAgent[];
-  stats: BackgroundAgentStats | null;
   activeCount: number;
   maxAgents: number;
   isLoading: boolean;
   error: string | null;
 
+  startAgent: (goal: string) => Promise<string>;
   listAgents: () => Promise<BackgroundAgent[]>;
-  listActiveAgents: () => Promise<BackgroundAgent[]>;
   getAgent: (agentId: string) => Promise<BackgroundAgent | null>;
   pauseAgent: (agentId: string) => Promise<void>;
   resumeAgent: (agentId: string) => Promise<void>;
   cancelAgent: (agentId: string) => Promise<void>;
-  fetchStats: () => Promise<BackgroundAgentStats>;
 
   clearError: () => void;
   reset: () => void;
@@ -138,13 +125,18 @@ function countActive(agents: BackgroundAgent[]): number {
 
 export const useBackgroundAgentStore = create<BackgroundAgentState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       agents: [],
-      stats: null,
       activeCount: 0,
       maxAgents: DEFAULT_MAX_AGENTS,
       isLoading: false,
       error: null,
+
+      startAgent: async (goal) => {
+        const agentId = await invoke<string>('background_agent_start', { goal });
+        await get().getAgent(agentId);
+        return agentId;
+      },
 
       listAgents: async () => {
         set({ isLoading: true, error: null }, undefined, 'backgroundAgent/list/start');
@@ -164,16 +156,6 @@ export const useBackgroundAgentStore = create<BackgroundAgentState>()(
         } catch (error) {
           const message = toMessage(error);
           set({ error: message, isLoading: false }, undefined, 'backgroundAgent/list/error');
-          return [];
-        }
-      },
-
-      listActiveAgents: async () => {
-        try {
-          return await invoke<BackgroundAgent[]>('background_agent_list_active');
-        } catch (error) {
-          const message = toMessage(error);
-          set({ error: message }, undefined, 'backgroundAgent/listActive/error');
           return [];
         }
       },
@@ -235,18 +217,11 @@ export const useBackgroundAgentStore = create<BackgroundAgentState>()(
         }
       },
 
-      fetchStats: async () => {
-        const stats = await invoke<BackgroundAgentStats>('background_agent_stats');
-        set({ stats, maxAgents: stats.maxAgents }, undefined, 'backgroundAgent/stats/success');
-        return stats;
-      },
-
       clearError: () => set({ error: null }, undefined, 'backgroundAgent/clearError'),
       reset: () =>
         set(
           {
             agents: [],
-            stats: null,
             activeCount: 0,
             maxAgents: DEFAULT_MAX_AGENTS,
             isLoading: false,

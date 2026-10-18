@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import {
-  artifactCreate,
   artifactGet,
   artifactUpdate,
   artifactRollback,
@@ -20,13 +19,7 @@ export type {
   ArtifactSummary,
 } from '@/api/artifacts';
 
-import type {
-  ArtifactType,
-  ArtifactStatus,
-  ArtifactMetadata,
-  Artifact,
-  ArtifactSummary,
-} from '@/api/artifacts';
+import type { ArtifactStatus, ArtifactMetadata, Artifact, ArtifactSummary } from '@/api/artifacts';
 
 export interface ArtifactDraft {
   key: string;
@@ -45,16 +38,6 @@ interface ArtifactStoreState {
   summariesError: string | null;
 
   draft: ArtifactDraft | null;
-
-  createArtifact: (
-    title: string,
-    artifactType: ArtifactType,
-    content: string,
-    metadata?: ArtifactMetadata,
-    conversationId?: number,
-    messageId?: number,
-    tags?: string[],
-  ) => Promise<Artifact | null>;
 
   getArtifact: (id: string) => Promise<Artifact | null>;
 
@@ -107,40 +90,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       isLoading: false,
       summariesError: null,
       draft: null,
-
-      createArtifact: async (
-        title,
-        artifactType,
-        content,
-        metadata,
-        conversationId,
-        messageId,
-        tags,
-      ) => {
-        set({ isLoading: true });
-        try {
-          const artifact = await artifactCreate(
-            title,
-            artifactType,
-            content,
-            metadata,
-            conversationId,
-            messageId,
-            tags,
-          );
-          set((state) => {
-            const newArtifacts = new Map(state.artifacts);
-            newArtifacts.set(artifact.id, artifact);
-            return { artifacts: newArtifacts, isLoading: false };
-          });
-          return artifact;
-        } catch (error) {
-          console.error('Error creating artifact:', error);
-          return null;
-        } finally {
-          set({ isLoading: false });
-        }
-      },
 
       getArtifact: async (id) => {
         const cached = get().artifacts.get(id);

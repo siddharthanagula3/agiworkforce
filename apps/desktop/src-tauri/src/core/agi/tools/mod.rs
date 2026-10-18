@@ -10,7 +10,6 @@ use std::sync::Mutex;
 
 pub struct ToolRegistry {
     tools: Mutex<HashMap<String, Tool>>,
-    capabilities_index: Mutex<HashMap<ToolCapability, Vec<String>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,7 +78,6 @@ impl ToolRegistry {
     pub fn new() -> Result<Self> {
         Ok(Self {
             tools: Mutex::new(HashMap::new()),
-            capabilities_index: Mutex::new(HashMap::new()),
         })
     }
 
@@ -1193,131 +1191,6 @@ impl ToolRegistry {
         })?;
 
         self.register_tool(Tool {
-            id: "db_query".to_string(),
-            name: "Database Query".to_string(),
-            description: "Execute database query".to_string(),
-            capabilities: vec![ToolCapability::DatabaseAccess, ToolCapability::DataAnalysis],
-            parameters: vec![
-                ToolParameter {
-                    name: "connection_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Database connection ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "query".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "SQL query".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 5.0,
-                memory_mb: 50,
-                network_mb: 1.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "db_execute".to_string(),
-            name: "Database Execute".to_string(),
-            description: "Execute database DML operations (INSERT, UPDATE, DELETE)".to_string(),
-            capabilities: vec![ToolCapability::DatabaseAccess, ToolCapability::DataAnalysis],
-            parameters: vec![
-                ToolParameter {
-                    name: "connection_id".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Database connection ID".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "sql".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "SQL statement (INSERT, UPDATE, DELETE)".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "params".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "Optional parameterized query values".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 5.0,
-                memory_mb: 50,
-                network_mb: 1.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "db_transaction_begin".to_string(),
-            name: "Begin Database Transaction".to_string(),
-            description: "Start a database transaction".to_string(),
-            capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![ToolParameter {
-                name: "connection_id".to_string(),
-                parameter_type: ParameterType::String,
-                required: true,
-                description: "Database connection ID".to_string(),
-                default: None,
-            }],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 10,
-                network_mb: 0.5,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "db_transaction_commit".to_string(),
-            name: "Commit Database Transaction".to_string(),
-            description: "Commit a database transaction".to_string(),
-            capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![ToolParameter {
-                name: "connection_id".to_string(),
-                parameter_type: ParameterType::String,
-                required: true,
-                description: "Database connection ID".to_string(),
-                default: None,
-            }],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 10,
-                network_mb: 0.5,
-            },
-            dependencies: vec!["db_transaction_begin".to_string()],
-        })?;
-
-        self.register_tool(Tool {
-            id: "db_transaction_rollback".to_string(),
-            name: "Rollback Database Transaction".to_string(),
-            description: "Rollback a database transaction".to_string(),
-            capabilities: vec![ToolCapability::DatabaseAccess],
-            parameters: vec![ToolParameter {
-                name: "connection_id".to_string(),
-                parameter_type: ParameterType::String,
-                required: true,
-                description: "Database connection ID".to_string(),
-                default: None,
-            }],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 2.0,
-                memory_mb: 10,
-                network_mb: 0.5,
-            },
-            dependencies: vec!["db_transaction_begin".to_string()],
-        })?;
-
-        self.register_tool(Tool {
             id: "api_call".to_string(),
             name: "API Call".to_string(),
             description: "Make HTTP API call to REST/JSON endpoints with authentication support (bearer, basic, API key, OAuth2). For web searches, use search_web instead. For browsing websites, use physical_scrape instead.".to_string(),
@@ -1597,35 +1470,6 @@ impl ToolRegistry {
                 cpu_percent: 10.0,
                 memory_mb: 50,
                 network_mb: 0.0,
-            },
-            dependencies: vec![],
-        })?;
-
-        self.register_tool(Tool {
-            id: "llm_reason".to_string(),
-            name: "LLM Reasoning".to_string(),
-            description: "Use LLM for reasoning and problem solving".to_string(),
-            capabilities: vec![ToolCapability::Planning, ToolCapability::Learning],
-            parameters: vec![
-                ToolParameter {
-                    name: "prompt".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: true,
-                    description: "Reasoning prompt".to_string(),
-                    default: None,
-                },
-                ToolParameter {
-                    name: "context".to_string(),
-                    parameter_type: ParameterType::Object,
-                    required: false,
-                    description: "Additional context".to_string(),
-                    default: None,
-                },
-            ],
-            estimated_resources: ResourceUsage {
-                cpu_percent: 25.0,
-                memory_mb: 300,
-                network_mb: 10.0,
             },
             dependencies: vec![],
         })?;
@@ -3819,47 +3663,12 @@ impl ToolRegistry {
     }
 
     pub fn register_tool(&self, tool: Tool) -> Result<()> {
-        let mut capabilities_index = self
-            .capabilities_index
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Tool capabilities index lock poisoned: {}", e))?;
-        for capability in &tool.capabilities {
-            capabilities_index
-                .entry(capability.clone())
-                .or_default()
-                .push(tool.id.clone());
-        }
-        drop(capabilities_index);
-
         let mut tools = self
             .tools
             .lock()
             .map_err(|e| anyhow::anyhow!("Tool registry lock poisoned: {}", e))?;
         tools.insert(tool.id.clone(), tool);
         Ok(())
-    }
-
-    pub fn find_tools_by_capability(&self, capability: &ToolCapability) -> Vec<Tool> {
-        let capabilities_index = match self.capabilities_index.lock() {
-            Ok(index) => index,
-            Err(e) => {
-                tracing::error!("Tool capabilities index lock poisoned: {}", e);
-                return Vec::new();
-            }
-        };
-
-        let tools = match self.tools.lock() {
-            Ok(t) => t,
-            Err(e) => {
-                tracing::error!("Tool registry lock poisoned: {}", e);
-                return Vec::new();
-            }
-        };
-
-        capabilities_index
-            .get(capability)
-            .map(|ids| ids.iter().filter_map(|id| tools.get(id).cloned()).collect())
-            .unwrap_or_default()
     }
 
     pub fn get_tool(&self, id: &str) -> Option<Tool> {
@@ -3880,63 +3689,5 @@ impl ToolRegistry {
                 Vec::new()
             }
         }
-    }
-
-    pub fn suggest_tools(&self, goal_description: &str) -> Vec<Tool> {
-        let mut suggested = Vec::new();
-
-        let description_lower = goal_description.to_lowercase();
-
-        if description_lower.contains("file")
-            || description_lower.contains("read")
-            || description_lower.contains("write")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::FileRead));
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::FileWrite));
-        }
-
-        if description_lower.contains("click")
-            || description_lower.contains("ui")
-            || description_lower.contains("automate")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::UIAutomation));
-        }
-
-        if description_lower.contains("browser")
-            || description_lower.contains("web")
-            || description_lower.contains("url")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::BrowserAutomation));
-        }
-
-        if description_lower.contains("code")
-            || description_lower.contains("execute")
-            || description_lower.contains("run")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::CodeExecution));
-        }
-
-        if description_lower.contains("database")
-            || description_lower.contains("query")
-            || description_lower.contains("sql")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::DatabaseAccess));
-        }
-
-        if description_lower.contains("api")
-            || description_lower.contains("http")
-            || description_lower.contains("request")
-        {
-            suggested.extend(self.find_tools_by_capability(&ToolCapability::APICall));
-        }
-
-        if let Some(tool) = self.get_tool("llm_reason") {
-            suggested.push(tool);
-        }
-
-        suggested.sort_by(|a, b| a.id.cmp(&b.id));
-        suggested.dedup_by(|a, b| a.id == b.id);
-
-        suggested
     }
 }

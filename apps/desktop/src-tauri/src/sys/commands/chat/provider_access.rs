@@ -176,23 +176,3 @@ pub(crate) async fn ensure_vllm_provider(
         }
     }
 }
-
-/// Reuse the chat runtime-registration seam for non-chat local work. This does
-/// not select a model or broaden the trust boundary; it only makes the exact
-/// provider already admitted by the Task submission reachable in the shared
-/// router. BYOK providers are registered at startup by
-/// `rehydrate_byok_providers` from the encrypted `api_key_*` rows in the app
-/// database's `settings_v2` table, not from the OS keyring, and never here.
-pub(crate) async fn ensure_task_provider(
-    router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
-    provider: Provider,
-) {
-    match provider {
-        Provider::Ollama => ensure_ollama_provider(router).await,
-        Provider::LmStudio => ensure_lmstudio_provider(router).await,
-        Provider::LlamaCpp => ensure_llamacpp_provider(router).await,
-        Provider::Vllm => ensure_vllm_provider(router).await,
-        Provider::ManagedCloud => ensure_managed_cloud_provider(router).await,
-        _ => {}
-    }
-}

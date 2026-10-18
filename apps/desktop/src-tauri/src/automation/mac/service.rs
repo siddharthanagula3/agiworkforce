@@ -104,13 +104,6 @@ impl AXElement {
         let guard = self.inner.lock();
         f(*guard)
     }
-
-    /// Get the raw pointer value for use as a cache key or identifier.
-    /// This does not provide access to the element itself.
-    pub fn ptr_value(&self) -> usize {
-        let guard = self.inner.lock();
-        *guard as usize
-    }
 }
 
 impl Drop for AXElement {
@@ -211,24 +204,6 @@ impl MacAutomationService {
                     "Failed to get element at position: error {}",
                     error
                 ))
-            }
-        })
-    }
-
-    pub fn focused_element(&self) -> Result<AXElement> {
-        let attr = CFString::new("AXFocusedUIElement");
-        self.system_wide.with_element(|system_wide_ptr| unsafe {
-            let mut value_ref: *const c_void = std::ptr::null();
-            let error = AXUIElementCopyAttributeValue(
-                system_wide_ptr,
-                attr.as_concrete_TypeRef(),
-                &mut value_ref,
-            );
-            if error == 0 && !value_ref.is_null() {
-                let element_ref = value_ref as AXUIElementRef;
-                Ok(AXElement::new(element_ref))
-            } else {
-                Err(anyhow!("Failed to get focused element: error {}", error))
             }
         })
     }

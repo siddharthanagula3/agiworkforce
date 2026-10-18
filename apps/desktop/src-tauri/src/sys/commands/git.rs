@@ -238,7 +238,7 @@ async fn run_remote_transfer<T: Send + 'static>(
     }
 }
 
-/// FIX-013 (Sprint 2): every `path: String` argument crossing into a git
+/// Every `path: String` argument crossing into a git
 /// operation goes through `validate_path_security` so symlinks, `..`
 /// traversal, and `/etc/passwd`-style targets fail loudly before libgit2
 /// touches the disk. Returns the canonical path as a String for callers
@@ -317,7 +317,7 @@ fn validate_git_relative_path(repo_path: &str, relative_path: &str) -> Result<St
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 10 * 1024;
 
-/// FIX-013 (Sprint 2): bound commit messages and strip control characters
+/// Bound commit messages and strip control characters
 /// other than the standard whitespace ones (\\n, \\r, \\t). git itself is
 /// tolerant of garbage, but anything that lands in our log/audit pipeline
 /// should be safe to echo back.
@@ -455,7 +455,7 @@ pub(crate) async fn git_add_at(path: String, files: Vec<String>) -> Result<Strin
     tracing::info!("Adding {} files to staging", files.len());
     let path = validate_git_path(&path)?;
 
-    // FIX-013 (Sprint 2): validate every entry in `files` before we hand
+    // Validate every entry in `files` before we hand
     // them to libgit2's index. The `.` shortcut is allowed verbatim; every
     // other entry must canonicalize cleanly.
     let mut validated_files = Vec::with_capacity(files.len());
@@ -532,7 +532,7 @@ pub(crate) async fn git_commit_at(path: String, message: String) -> Result<Strin
             .find_tree(tree_id)
             .map_err(|e| e.message().to_string())?;
 
-        // AUDIT-003-008 fix: Log warning when using fallback signature to make
+        // Log warning when using fallback signature to make
         // it explicit that the true committer identity is not configured
         let sig = match repo.signature() {
             Ok(sig) => sig,
@@ -844,7 +844,7 @@ pub async fn git_delete_branch(
     let path = granted_git_path(&app, &path).await?;
     tracing::info!("Deleting branch: {}", branch_name);
 
-    // AUDIT-FIX: Enforce user confirmation for branch deletion
+    // Enforce user confirmation for branch deletion
     let confirmation_args = serde_json::json!({
         "path": path,
         "branch_name": branch_name
@@ -939,7 +939,6 @@ pub(crate) async fn git_diff_at(
             opts.pathspec(fp);
         }
 
-        // AUDIT-P3-002: Avoid unwrap() on index() - use proper error handling
         let diff = if staged {
             let head = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
             let index = repo.index().map_err(|e| e.message().to_string())?;

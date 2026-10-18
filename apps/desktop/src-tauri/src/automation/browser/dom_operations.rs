@@ -1,48 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::time::Duration;
 
 use crate::sys::error::Result;
 
 use super::cdp_client::CdpClient;
-use super::tab_manager::TabId;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Selector {
-    pub value: String,
-    pub selector_type: SelectorType,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SelectorType {
-    Css,
-    XPath,
-    Text,
-}
-
-impl Selector {
-    pub fn css(value: impl Into<String>) -> Self {
-        Self {
-            value: value.into(),
-            selector_type: SelectorType::Css,
-        }
-    }
-
-    pub fn xpath(value: impl Into<String>) -> Self {
-        Self {
-            value: value.into(),
-            selector_type: SelectorType::XPath,
-        }
-    }
-
-    pub fn text(value: impl Into<String>) -> Self {
-        Self {
-            value: value.into(),
-            selector_type: SelectorType::Text,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElementInfo {
@@ -60,74 +20,12 @@ pub struct ElementBounds {
     pub height: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClickOptions {
-    pub button: MouseButton,
-    pub click_count: u32,
-    pub delay: Option<u64>,
-}
-
-impl Default for ClickOptions {
-    fn default() -> Self {
-        Self {
-            button: MouseButton::Left,
-            click_count: 1,
-            delay: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MouseButton {
-    Left,
-    Right,
-    Middle,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TypeOptions {
-    pub delay: Option<u64>,
-    pub clear_first: bool,
-}
-
-impl Default for TypeOptions {
-    fn default() -> Self {
-        Self {
-            delay: Some(0),
-            clear_first: true,
-        }
-    }
-}
-
 pub struct DomOperations;
 
 impl DomOperations {
-    pub async fn click_with_cdp(
-        cdp: Arc<CdpClient>,
-        selector: &str,
-        options: ClickOptions,
-    ) -> Result<()> {
-        tracing::info!("Clicking element: {}", selector);
-
-        if let Some(delay) = options.delay {
-            tokio::time::sleep(Duration::from_millis(delay)).await;
-        }
-
-        cdp.click_element(selector).await?;
-
-        tracing::info!("Element clicked: {}", selector);
-        Ok(())
-    }
-
-    pub async fn click(client: &CdpClient, selector: &str, options: ClickOptions) -> Result<()> {
+    pub async fn click(client: &CdpClient, selector: &str) -> Result<()> {
         tracing::debug!("Clicking element: {}", selector);
 
-        if let Some(delay) = options.delay {
-            tokio::time::sleep(Duration::from_millis(delay)).await;
-        }
-
-        // Use CDP client to click
         client.click_element(selector).await?;
 
         tracing::info!("Element clicked: {}", selector);
@@ -138,23 +36,12 @@ impl DomOperations {
         client: &CdpClient,
         selector: &str,
         text: &str,
-        options: TypeOptions,
+        clear_first: bool,
     ) -> Result<()> {
         tracing::debug!("Typing text into: {}", selector);
 
-        if let Some(delay) = options.delay {
-            // If explicit delay requested, we might need a custom loop,
-            // but CdpClient::type_into_element handles basic typing.
-            // For now, we'll just sleep before typing if delay is set,
-            // or if we truly need character-by-character with delay, we'd need to extend CdpClient.
-            // Let's rely on CdpClient's atomic type_into_element for now unless specific delay logic is needed.
-            if delay > 0 {
-                tokio::time::sleep(Duration::from_millis(delay)).await;
-            }
-        }
-
         client
-            .type_into_element(selector, text, options.clear_first)
+            .type_into_element(selector, text, clear_first)
             .await?;
 
         tracing::info!("Text typed into element: {}", selector);
@@ -175,34 +62,6 @@ impl DomOperations {
         tracing::debug!("Getting attribute {} from: {}", attribute, selector);
         let value = client.get_attribute(selector, attribute).await?;
         Ok(value)
-    }
-
-    pub async fn set_attribute(
-        client: &CdpClient,
-        selector: &str,
-        attribute: &str,
-        value: &str,
-    ) -> Result<()> {
-        tracing::info!("Setting attribute {} on element: {}", attribute, selector);
-
-        // Use Runtime.evaluate to set the attribute via CDP
-        let js = format!(
-            r#"(function() {{
-                var el = document.querySelector('{}');
-                if (!el) throw new Error('Element not found: {}');
-                el.setAttribute('{}', '{}');
-                return true;
-            }})()"#,
-            Self::escape_js(selector),
-            Self::escape_js(selector),
-            Self::escape_js(attribute),
-            Self::escape_js(value),
-        );
-
-        client.evaluate(&js).await?;
-
-        tracing::info!("Attribute set successfully");
-        Ok(())
     }
 
     pub async fn get_element_info(client: &CdpClient, selector: &str) -> Result<ElementInfo> {
@@ -299,10 +158,6 @@ impl DomOperations {
         Ok(())
     }
 
-    pub async fn element_exists(client: &CdpClient, selector: &str) -> Result<bool> {
-        client.element_exists(selector).await
-    }
-
     pub async fn select_option(client: &CdpClient, selector: &str, value: &str) -> Result<()> {
         tracing::debug!("Selecting option in {}: {}", selector, value);
         client.select_option(selector, value).await?;
@@ -327,22 +182,10 @@ impl DomOperations {
         Ok(())
     }
 
-    pub async fn blur(tab_id: &TabId, selector: &str) -> Result<()> {
-        tracing::info!("Blurring element in tab {}: {}", tab_id, selector);
-
-        tracing::info!("Element blurred: {}", selector);
-        Ok(())
-    }
-
     pub async fn hover(client: &CdpClient, selector: &str) -> Result<()> {
         tracing::debug!("Hovering element: {}", selector);
         client.hover_element(selector).await?;
         Ok(())
-    }
-
-    pub async fn evaluate(client: &CdpClient, script: &str) -> Result<serde_json::Value> {
-        tracing::debug!("Evaluating script");
-        client.evaluate(script).await
     }
 
     pub async fn query_all(client: &CdpClient, selector: &str) -> Result<Vec<ElementInfo>> {
@@ -386,31 +229,5 @@ impl DomOperations {
 
     pub async fn scroll_into_view(client: &CdpClient, selector: &str) -> Result<()> {
         client.scroll_into_view(selector).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_selector_creation() {
-        let css_sel = Selector::css("#my-id");
-        assert_eq!(css_sel.value, "#my-id");
-
-        let xpath_sel = Selector::xpath("//div[@class='test']");
-        assert_eq!(xpath_sel.value, "//div[@class='test']");
-    }
-
-    #[tokio::test]
-    async fn test_click_options_default() {
-        let options = ClickOptions::default();
-        assert_eq!(options.click_count, 1);
-    }
-
-    #[tokio::test]
-    async fn test_type_options_default() {
-        let options = TypeOptions::default();
-        assert!(options.clear_first);
     }
 }

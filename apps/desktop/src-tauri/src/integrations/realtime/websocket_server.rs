@@ -9,6 +9,7 @@ use crate::integrations::native_messaging::messages::{ExtensionCapabilities, Nat
 use crate::integrations::native_messaging::{
     stage_selected_context_handoff, ConnectionState, NativeMessage,
 };
+use crate::sys::commands::capabilities::capability_refusal;
 use crate::sys::commands::BrowserStateWrapper;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
@@ -37,7 +38,7 @@ use tokio_tungstenite::{
     WebSocketStream,
 };
 
-// SEV-DESK-01 limits ─────────────────────────────────────────────────────────
+// Limits ─────────────────────────────────────────────────────────
 //
 // The realtime server binds 127.0.0.1 and accepts ws+http upgrades from
 // the Chrome extension, VS Code extension, and Tauri webview. Without these
@@ -522,9 +523,9 @@ pub struct RealtimeServer {
     /// Existing connections keep the snapshot they captured at handshake.
     token: Arc<TokioRwLock<String>>,
     app_handle: Option<tauri::AppHandle>,
-    /// SEV-DESK-01: caps simultaneous accepted connections at MAX_CONNECTIONS.
+    /// Caps simultaneous accepted connections at MAX_CONNECTIONS.
     connection_semaphore: Arc<Semaphore>,
-    /// SEV-DESK-01: per-source-IP auth-failure record; entries decay after
+    /// Per-source-IP auth-failure record; entries decay after
     /// AUTH_FAILURE_WINDOW elapses without further failures.
     auth_failures: Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
     /// E2 fix: token issued by POST /pair and stored for subsequent
@@ -550,12 +551,6 @@ impl RealtimeServer {
             pair_token: Arc::new(TokioRwLock::new(String::new())),
             pending_pair_requests: Arc::new(TokioMutex::new(HashMap::new())),
         }
-    }
-
-    /// Return the current pair token for X-Bridge-Token validation.
-    /// Returns an empty string if no pairing has been performed yet.
-    pub async fn get_pair_token(&self) -> String {
-        self.pair_token.read().await.clone()
     }
 
     /// Pairing requests awaiting the user's confirmation, newest first. The
@@ -607,7 +602,7 @@ impl RealtimeServer {
             .any(|client| client.user_id.as_deref() == Some(user_id))
     }
 
-    /// SEV-DESK-01: returns true if `ip` is currently in the lockout window.
+    /// Returns true if `ip` is currently in the lockout window.
     /// Also opportunistically clears expired lockouts so the map does not
     /// grow without bound for transient offenders.
     async fn is_locked_out(
@@ -634,7 +629,7 @@ impl RealtimeServer {
         false
     }
 
-    /// SEV-DESK-01: records an auth failure for `ip` and applies the lockout
+    /// Records an auth failure for `ip` and applies the lockout
     /// rule. Returns true iff the failure caused a new lockout.
     async fn record_auth_failure(
         map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
@@ -671,42 +666,13 @@ impl RealtimeServer {
         false
     }
 
-    /// SEV-DESK-01: clears any failure record for `ip` after a successful auth.
+    /// Clears any failure record for `ip` after a successful auth.
     async fn clear_auth_failures(
         map: &Arc<TokioMutex<HashMap<IpAddr, AuthFailureRecord>>>,
         ip: IpAddr,
     ) {
         let mut failures = map.lock().await;
         failures.remove(&ip);
-    }
-
-    pub async fn disconnect_all_clients(&self) {
-        let ids: Vec<String> = {
-            let clients = self.clients.lock().await;
-            clients.keys().cloned().collect()
-        };
-        let count = ids.len();
-        if count == 0 {
-            return;
-        }
-        {
-            let mut senders = self.senders.lock().await;
-            for id in &ids {
-                if let Some(mut sender) = senders.remove(id) {
-                    let _ = futures::SinkExt::close(&mut sender).await;
-                }
-            }
-        }
-        {
-            let mut clients = self.clients.lock().await;
-            for id in &ids {
-                clients.remove(id);
-            }
-        }
-        tracing::info!(
-            "Token rotation: disconnected {} authenticated client(s)",
-            count
-        );
     }
 
     pub async fn start(&self, port: u16) -> Result<(), Box<dyn std::error::Error>> {
@@ -722,7 +688,7 @@ impl RealtimeServer {
         loop {
             match listener.accept().await {
                 Ok((stream, peer)) => {
-                    // SEV-DESK-01: cap simultaneous connections. `try_acquire_owned`
+                    // Cap simultaneous connections. `try_acquire_owned`
                     // is non-blocking, when the cap is reached we drop the
                     // connection at the TCP layer rather than queue it (queueing
                     // would still consume the FD and let an attacker hold it
@@ -741,7 +707,7 @@ impl RealtimeServer {
                         }
                     };
 
-                    // SEV-DESK-01: skip handshake entirely for IPs in lockout.
+                    // Skip handshake entirely for IPs in lockout.
                     if Self::is_locked_out(&self.auth_failures, peer.ip()).await {
                         tracing::warn!(
                             "SEV-DESK-01: rejecting connection from locked-out IP {}",
@@ -1199,7 +1165,7 @@ impl RealtimeServer {
             Ok(response)
         };
 
-        // SEV-DESK-01: bound per-frame size. tungstenite default is 64 MiB;
+        // Bound per-frame size. tungstenite default is 64 MiB;
         // none of our valid messages are anywhere near 4 MiB. A peer that
         // sends a frame above this gets disconnected at the protocol layer
         // before any deserialisation runs.
@@ -1293,7 +1259,7 @@ impl RealtimeServer {
         };
 
         if let Some(reason) = auth_failure_reason {
-            // SEV-DESK-01: record the failure against the source IP. If this
+            // Record the failure against the source IP. If this
             // crosses MAX_AUTH_FAILURES inside the rolling window, future
             // connections from this IP are rejected at the listener for
             // LOCKOUT_DURATION.
@@ -1315,7 +1281,7 @@ impl RealtimeServer {
             return;
         }
 
-        // SEV-DESK-01: success, clear any prior failure budget for this IP
+        // Success, clear any prior failure budget for this IP
         // so a transient typo or token-rotation race does not poison future
         // connections.
         Self::clear_auth_failures(&auth_failures, peer.ip()).await;
@@ -1925,16 +1891,13 @@ impl RealtimeServer {
             NativeMessage::CreateTab { url } => {
                 Self::ensure_bridge_navigation_allowed(&url).await?;
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
-                let browser_state = app.state::<BrowserStateWrapper>();
-                let tab_manager = browser_state
-                    .get_tab_manager()
-                    .map_err(|e| format!("Browser state unavailable: {}", e))?;
-                let tab_id = tab_manager
-                    .lock()
-                    .await
-                    .open_tab(&url)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                if let Some(off) = capability_refusal(app, "browser_navigate").await {
+                    return Err(off);
+                }
+                let tab_id = app
+                    .state::<BrowserStateWrapper>()
+                    .create_cdp_tab(&url)
+                    .await?;
 
                 Ok(json!({
                     "created": true,
@@ -2557,27 +2520,16 @@ impl RealtimeServer {
         allow_create: bool,
         initial_url: Option<&str>,
     ) -> Result<(Arc<CdpClient>, String), String> {
+        if let Some(off) = capability_refusal(app_handle, "browser_navigate").await {
+            return Err(off);
+        }
         let browser_state = app_handle.state::<BrowserStateWrapper>();
         let resolved_tab_id = if let Some(tab_id) = requested_tab_id {
             tab_id.to_string()
         } else {
-            let tab_manager = browser_state
-                .get_tab_manager()
-                .map_err(|e| format!("Browser state unavailable: {}", e))?;
-            let tab_manager = tab_manager.lock().await;
-            let tabs = tab_manager.list_tabs().await.map_err(|e| e.to_string())?;
-
-            if let Some(tab) = tabs.first() {
-                tab.id.clone()
-            } else if allow_create {
-                let url = initial_url.unwrap_or("about:blank");
-                tab_manager.open_tab(url).await.map_err(|e| e.to_string())?
-            } else {
-                return Err(
-                    "No browser tabs available. Open a tab or provide a valid tab_id first."
-                        .to_string(),
-                );
-            }
+            browser_state
+                .resolve_cdp_tab(None, allow_create, initial_url)
+                .await?
         };
 
         let cdp = browser_state

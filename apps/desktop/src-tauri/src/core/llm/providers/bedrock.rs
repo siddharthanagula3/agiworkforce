@@ -895,10 +895,6 @@ impl LLMProvider for BedrockProvider {
         "Bedrock"
     }
 
-    fn supports_vision(&self) -> bool {
-        true
-    }
-
     fn supports_function_calling(&self) -> bool {
         true
     }

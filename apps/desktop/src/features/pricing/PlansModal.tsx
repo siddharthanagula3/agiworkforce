@@ -212,7 +212,3 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
     </>
   );
 }
-
-export function openPlansModal() {
-  window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }));
-}

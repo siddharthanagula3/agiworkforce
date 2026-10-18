@@ -26,7 +26,6 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
     downloadProgress,
     error,
     isDownloading,
-    isManualInstallerUpdate,
     currentVersion,
     downloadAndInstall,
     dismiss,
@@ -96,14 +95,10 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
           </DialogTitle>
           <DialogDescription>
             {isError
-              ? isManualInstallerUpdate
-                ? 'There was a problem checking or opening the installer.'
-                : 'There was a problem downloading the update.'
+              ? 'There was a problem downloading the update.'
               : isDownloadComplete
                 ? 'The update has been downloaded and is ready to install.'
-                : isManualInstallerUpdate
-                  ? 'A new signed AGI Cloud installer is available.'
-                  : 'A new version of AGI Workforce is available.'}
+                : 'A new version of AGI Workforce is available.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -217,7 +212,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
               </Button>
               <Button onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
-                {isManualInstallerUpdate ? 'Download Installer' : 'Download & Install'}
+                Download &amp; Install
               </Button>
             </>
           )}

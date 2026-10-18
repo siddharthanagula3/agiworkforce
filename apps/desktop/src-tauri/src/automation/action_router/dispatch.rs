@@ -14,7 +14,7 @@ use tauri::Manager;
 use tokio::sync::RwLock;
 
 use super::{ExecutorTier, RoutedCall};
-use crate::core::agi::executor::require_tool_approval;
+use crate::core::agent::tool_approval::require_tool_approval;
 use crate::core::agi::executors::{
     ApiExecutor, BrowserExecutor, ExecutorContext, ToolExecutor, UiExecutor,
 };

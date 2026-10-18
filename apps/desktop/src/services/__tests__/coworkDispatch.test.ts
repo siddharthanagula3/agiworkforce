@@ -21,7 +21,11 @@ import {
   parseDispatchTaskControl,
   resetCoworkDispatchRuntimeForTests,
 } from '../coworkDispatch';
-import { useAgentTaskStore } from '../../stores/agentTaskStore';
+import {
+  type BackgroundAgent,
+  type BackgroundAgentStatus,
+  useBackgroundAgentStore,
+} from '../../stores/backgroundAgentStore';
 import { useCoworkDispatchStore } from '../../stores/coworkDispatchStore';
 import { type ApprovalRequest, useToolStore } from '../../stores/chat/toolStore';
 
@@ -34,6 +38,48 @@ const request = {
   sentAt: '2026-07-30T12:00:00.000Z',
 } as const;
 
+function agent(
+  id: string,
+  status: BackgroundAgentStatus,
+  goal = 'Background work',
+  progress: Partial<BackgroundAgent['progress']> = {},
+): BackgroundAgent {
+  return {
+    id,
+    conversationId: 'conversation-1',
+    goal,
+    status,
+    progress: {
+      currentStep: 0,
+      totalSteps: 0,
+      currentStepDescription: '',
+      percentage: 0,
+      elapsedSecs: 0,
+      ...progress,
+    },
+    summary: null,
+    error: null,
+    createdAt: request.sentAt,
+    startedAt: status === 'queued' ? null : request.sentAt,
+    completedAt: null,
+    context: {
+      workingDirectory: null,
+      environment: {},
+      conversationSnapshot: [],
+      activeMcpServers: [],
+      customInstructions: null,
+    },
+    priority: 0,
+    timeoutSecs: 3_600,
+  };
+}
+
+function sendControl(action: string, payload: Record<string, unknown>) {
+  window.dispatchEvent(
+    new CustomEvent('mobile-companion:control', { detail: { action, payload } }),
+  );
+}
+
 let cleanupRuntime: (() => void) | undefined;
 
 describe('Cowork Dispatch runtime', () => {
@@ -42,15 +88,15 @@ describe('Cowork Dispatch runtime', () => {
     sendCompanionControl.mockClear();
     resetCoworkDispatchRuntimeForTests();
     useCoworkDispatchStore.setState({ enabled: false });
-    useAgentTaskStore.setState({
-      tasks: [],
-      loading: false,
-      liveStepsByTask: {},
-      liveProgressByTask: {},
-      submitGoal: vi.fn().mockResolvedValue('goal-1'),
-      cancelTask: vi.fn().mockResolvedValue(undefined),
-      pauseTask: vi.fn().mockResolvedValue(undefined),
-      resumeTask: vi.fn().mockResolvedValue(undefined),
+    useBackgroundAgentStore.setState({
+      agents: [],
+      activeCount: 0,
+      error: null,
+      startAgent: vi.fn().mockResolvedValue('agent-1'),
+      listAgents: vi.fn(async () => useBackgroundAgentStore.getState().agents),
+      cancelAgent: vi.fn().mockResolvedValue(undefined),
+      pauseAgent: vi.fn().mockResolvedValue(undefined),
+      resumeAgent: vi.fn().mockResolvedValue(undefined),
     });
     useToolStore.setState({ pendingApprovals: [] });
     cleanupRuntime = initializeCoworkDispatchRuntime();
@@ -87,205 +133,195 @@ describe('Cowork Dispatch runtime', () => {
   });
 
   it('rejects new tasks while Dispatch is disabled', async () => {
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: { action: request.action, payload: request },
-      }),
-    );
+    sendControl(request.action, request);
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
-        expect.objectContaining({
-          requestId: 'request-1',
-          status: 'rejected',
-        }),
+        expect.objectContaining({ requestId: 'request-1', status: 'rejected' }),
       );
     });
-    expect(useAgentTaskStore.getState().submitGoal).not.toHaveBeenCalled();
+    expect(useBackgroundAgentStore.getState().startAgent).not.toHaveBeenCalled();
   });
 
-  it('starts a real AGI task and mirrors its lifecycle to Mobile', async () => {
+  it('starts a background run and mirrors its lifecycle to Mobile', async () => {
     useCoworkDispatchStore.setState({ enabled: true });
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: { action: request.action, payload: request },
-      }),
-    );
+    sendControl(request.action, request);
 
     await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalledWith(request.prompt, {
-        assertCurrent: expect.any(Function),
-      });
+      expect(useBackgroundAgentStore.getState().startAgent).toHaveBeenCalledWith(request.prompt);
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
         expect.objectContaining({
           requestId: request.requestId,
-          taskId: 'goal-1',
+          taskId: 'agent-1',
           status: 'accepted',
         }),
       );
     });
 
-    useAgentTaskStore.setState({
-      tasks: [
-        {
-          id: 'goal-1',
-          goal: request.prompt,
+    useBackgroundAgentStore.setState({ agents: [agent('agent-1', 'running', request.prompt)] });
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'dispatch.task.status',
+        expect.objectContaining({
+          requestId: request.requestId,
+          taskId: 'agent-1',
           status: 'running',
-          createdAt: request.sentAt,
+        }),
+      );
+    });
+
+    useBackgroundAgentStore.setState({
+      agents: [
+        {
+          ...agent('agent-1', 'completed', request.prompt),
+          summary: {
+            description: 'Release notes drafted.',
+            filesChanged: [],
+            actionsTaken: [],
+            warnings: [],
+            goalAchieved: true,
+          },
         },
       ],
     });
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'dispatch.task.status',
+        expect.objectContaining({
+          taskId: 'agent-1',
+          status: 'completed',
+          result: 'Release notes drafted.',
+        }),
+      );
+    });
+  });
+
+  it('reports a run Desktop could not start as failed', async () => {
+    useCoworkDispatchStore.setState({ enabled: true });
+    useBackgroundAgentStore.setState({
+      startAgent: vi.fn().mockRejectedValue(new Error('Too many background agents are running.')),
+    });
+    sendControl(request.action, request);
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
         expect.objectContaining({
           requestId: request.requestId,
-          taskId: 'goal-1',
-          status: 'running',
+          status: 'failed',
+          error: 'Too many background agents are running.',
         }),
       );
     });
   });
 
-  it('does not install a deferred task mapping after the companion session ends', async () => {
-    let resolveGoal!: (taskId: string) => void;
-    const pendingGoal = new Promise<string>((resolve) => {
-      resolveGoal = resolve;
+  it('does not install a task mapping after the companion session ends', async () => {
+    let resolveStart!: (agentId: string) => void;
+    const pendingStart = new Promise<string>((resolve) => {
+      resolveStart = resolve;
     });
     useCoworkDispatchStore.setState({ enabled: true });
-    useAgentTaskStore.setState({ submitGoal: vi.fn().mockReturnValue(pendingGoal) });
+    useBackgroundAgentStore.setState({ startAgent: vi.fn().mockReturnValue(pendingStart) });
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: { action: request.action, payload: request },
-      }),
+    sendControl(request.action, request);
+    await vi.waitFor(() =>
+      expect(useBackgroundAgentStore.getState().startAgent).toHaveBeenCalledOnce(),
     );
-    await vi.waitFor(() => expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalledOnce());
 
     window.dispatchEvent(new Event('mobile-companion:session-ended'));
-    const authority = vi.mocked(useAgentTaskStore.getState().submitGoal).mock.calls[0]?.[1]
-      ?.assertCurrent;
-    expect(authority).toBeTypeOf('function');
-    expect(() => authority?.()).toThrow(expect.objectContaining({ name: 'AbortError' }));
-    resolveGoal('goal-stale');
-    await pendingGoal;
+    resolveStart('agent-stale');
+    await pendingStart;
     await Promise.resolve();
 
     expect(sendCompanionControl).not.toHaveBeenCalledWith(
       'dispatch.task.status',
-      expect.objectContaining({ status: 'accepted', taskId: 'goal-stale' }),
+      expect.objectContaining({ status: 'accepted', taskId: 'agent-stale' }),
     );
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'dispatch.task.cancel',
-          payload: {
-            action: 'dispatch.task.cancel',
-            version: 1,
-            requestId: request.requestId,
-            taskId: 'goal-stale',
-            sentAt: request.sentAt,
-          },
-        },
-      }),
-    );
+    sendControl('dispatch.task.cancel', {
+      action: 'dispatch.task.cancel',
+      version: 1,
+      requestId: request.requestId,
+      taskId: 'agent-stale',
+      sentAt: request.sentAt,
+    });
 
     await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().cancelTask).not.toHaveBeenCalled();
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
         expect.objectContaining({ status: 'rejected', requestId: request.requestId }),
       );
     });
+    expect(useBackgroundAgentStore.getState().cancelAgent).not.toHaveBeenCalled();
   });
 
-  it('cancels the task associated with a Dispatch request even after disabling new work', async () => {
+  it('cancels the run started by a Dispatch request even after disabling new work', async () => {
     useCoworkDispatchStore.setState({ enabled: true });
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: { action: request.action, payload: request },
-      }),
+    sendControl(request.action, request);
+    await vi.waitFor(() =>
+      expect(useBackgroundAgentStore.getState().startAgent).toHaveBeenCalled(),
     );
-    await vi.waitFor(() => expect(useAgentTaskStore.getState().submitGoal).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'dispatch.task.status',
+        expect.objectContaining({ status: 'accepted', taskId: 'agent-1' }),
+      ),
+    );
 
     useCoworkDispatchStore.setState({ enabled: false });
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'dispatch.task.cancel',
-          payload: {
-            action: 'dispatch.task.cancel',
-            version: 1,
-            requestId: request.requestId,
-            taskId: 'goal-1',
-            sentAt: request.sentAt,
-          },
-        },
-      }),
-    );
+    sendControl('dispatch.task.cancel', {
+      action: 'dispatch.task.cancel',
+      version: 1,
+      requestId: request.requestId,
+      taskId: 'agent-1',
+      sentAt: request.sentAt,
+    });
 
     await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().cancelTask).toHaveBeenCalledWith('goal-1');
+      expect(useBackgroundAgentStore.getState().cancelAgent).toHaveBeenCalledWith('agent-1');
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
-        expect.objectContaining({ status: 'cancelled', taskId: 'goal-1' }),
+        expect.objectContaining({ status: 'cancelled', taskId: 'agent-1' }),
       );
     });
   });
 
-  it('does not let an untracked request cancel an arbitrary Desktop task', async () => {
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'dispatch.task.cancel',
-          payload: {
-            action: 'dispatch.task.cancel',
-            version: 1,
-            requestId: 'unknown-request',
-            taskId: 'goal-existing',
-            sentAt: request.sentAt,
-          },
-        },
-      }),
-    );
+  it('does not let a Dispatch cancel reach an arbitrary Desktop agent', async () => {
+    useBackgroundAgentStore.setState({ agents: [agent('agent-existing', 'running')] });
+
+    sendControl('dispatch.task.cancel', {
+      action: 'dispatch.task.cancel',
+      version: 1,
+      requestId: 'unknown-request',
+      taskId: 'agent-existing',
+      sentAt: request.sentAt,
+    });
 
     await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().cancelTask).not.toHaveBeenCalled();
       expect(sendCompanionControl).toHaveBeenCalledWith(
         'dispatch.task.status',
-        expect.objectContaining({
-          requestId: 'unknown-request',
-          status: 'rejected',
-        }),
+        expect.objectContaining({ requestId: 'unknown-request', status: 'rejected' }),
       );
     });
+    expect(useBackgroundAgentStore.getState().cancelAgent).not.toHaveBeenCalled();
   });
 
-  it('cancels every running Desktop task when Mobile sends the Emergency Stop control', async () => {
-    const cancelTask = vi.fn().mockResolvedValue(undefined);
-    useAgentTaskStore.setState({
-      cancelTask,
-      tasks: [
-        { id: 'goal-queued', goal: 'Queued work', status: 'queued', createdAt: request.sentAt },
-        { id: 'goal-running', goal: 'Shell loop', status: 'running', createdAt: request.sentAt },
-        { id: 'goal-paused', goal: 'Paused work', status: 'paused', createdAt: request.sentAt },
-        { id: 'goal-done', goal: 'Finished work', status: 'completed', createdAt: request.sentAt },
+  it('cancels every unfinished background agent when Mobile sends the Emergency Stop control', async () => {
+    const cancelAgent = vi.fn().mockResolvedValue(undefined);
+    useBackgroundAgentStore.setState({
+      cancelAgent,
+      agents: [
+        agent('agent-queued', 'queued'),
+        agent('agent-running', 'running'),
+        agent('agent-paused', 'paused'),
+        agent('agent-done', 'completed'),
       ],
     });
     sendCompanionControl.mockClear();
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'cancel',
-          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
-        },
-      }),
-    );
+    sendControl('cancel', { action: 'cancel', scope: 'all', sentAt: request.sentAt });
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith(
@@ -298,36 +334,30 @@ describe('Cowork Dispatch runtime', () => {
         }),
       );
     });
-    expect(cancelTask.mock.calls.map(([taskId]) => taskId)).toEqual([
-      'goal-running',
-      'goal-queued',
-      'goal-paused',
+    expect(useBackgroundAgentStore.getState().listAgents).toHaveBeenCalled();
+    expect(cancelAgent.mock.calls.map(([agentId]) => agentId)).toEqual([
+      'agent-running',
+      'agent-queued',
+      'agent-paused',
     ]);
-    expect(cancelTask).not.toHaveBeenCalledWith('goal-done');
+    expect(cancelAgent).not.toHaveBeenCalledWith('agent-done');
   });
 
-  it('keeps cancelling the remaining tasks when one Emergency Stop cancellation throws', async () => {
-    const cancelTask = vi.fn(async (taskId: string) => {
-      if (taskId === 'goal-running-a') throw new Error('backend refused');
+  it('keeps cancelling the remaining agents when one Emergency Stop cancellation throws', async () => {
+    const cancelAgent = vi.fn(async (agentId: string) => {
+      if (agentId === 'agent-a') throw new Error('backend refused');
     });
-    useAgentTaskStore.setState({
-      cancelTask,
-      tasks: [
-        { id: 'goal-running-a', goal: 'First', status: 'running', createdAt: request.sentAt },
-        { id: 'goal-running-b', goal: 'Second', status: 'running', createdAt: request.sentAt },
-        { id: 'goal-running-c', goal: 'Third', status: 'running', createdAt: request.sentAt },
+    useBackgroundAgentStore.setState({
+      cancelAgent,
+      agents: [
+        agent('agent-a', 'running'),
+        agent('agent-b', 'running'),
+        agent('agent-c', 'running'),
       ],
     });
     sendCompanionControl.mockClear();
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'cancel',
-          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
-        },
-      }),
-    );
+    sendControl('cancel', { action: 'cancel', scope: 'all', sentAt: request.sentAt });
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith(
@@ -336,34 +366,23 @@ describe('Cowork Dispatch runtime', () => {
           requested: 3,
           cancelled: 2,
           failed: 1,
-          failedTaskIds: ['goal-running-a'],
-          cancelledTaskIds: ['goal-running-b', 'goal-running-c'],
+          failedTaskIds: ['agent-a'],
+          cancelledTaskIds: ['agent-b', 'agent-c'],
         }),
       );
     });
-    expect(cancelTask.mock.calls.map(([taskId]) => taskId)).toEqual([
-      'goal-running-a',
-      'goal-running-b',
-      'goal-running-c',
+    expect(cancelAgent.mock.calls.map(([agentId]) => agentId)).toEqual([
+      'agent-a',
+      'agent-b',
+      'agent-c',
     ]);
   });
 
   it('reports an honest Emergency Stop result when nothing is running', async () => {
-    useAgentTaskStore.setState({
-      tasks: [
-        { id: 'goal-done', goal: 'Finished work', status: 'completed', createdAt: request.sentAt },
-      ],
-    });
+    useBackgroundAgentStore.setState({ agents: [agent('agent-done', 'completed')] });
     sendCompanionControl.mockClear();
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'cancel',
-          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
-        },
-      }),
-    );
+    sendControl('cancel', { action: 'cancel', scope: 'all', sentAt: request.sentAt });
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith(
@@ -376,66 +395,77 @@ describe('Cowork Dispatch runtime', () => {
         }),
       );
     });
-    expect(useAgentTaskStore.getState().cancelTask).not.toHaveBeenCalled();
+    expect(useBackgroundAgentStore.getState().cancelAgent).not.toHaveBeenCalled();
   });
 
-  it('still routes a single-agent remote cancel to that one task', async () => {
-    useAgentTaskStore.setState({
-      tasks: [
-        { id: 'goal-running', goal: 'Shell loop', status: 'running', createdAt: request.sentAt },
-        { id: 'goal-other', goal: 'Other work', status: 'running', createdAt: request.sentAt },
-      ],
-    });
-
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: {
-          action: 'cancel',
-          payload: {
-            kind: 'agent_command',
-            agentId: 'goal-running',
-            command: 'cancel',
-            sentAt: request.sentAt,
-          },
-        },
+  it('does not claim nothing was running when Desktop cannot read its agents', async () => {
+    useBackgroundAgentStore.setState({
+      agents: [],
+      listAgents: vi.fn(async () => {
+        useBackgroundAgentStore.setState({ error: 'database locked' });
+        return [];
       }),
-    );
-
-    await vi.waitFor(() => {
-      expect(useAgentTaskStore.getState().cancelTask).toHaveBeenCalledWith('goal-running');
-    });
-    expect(useAgentTaskStore.getState().cancelTask).toHaveBeenCalledTimes(1);
-  });
-
-  it('answers Mobile refresh requests with a bounded agent snapshot', async () => {
-    useAgentTaskStore.setState({
-      tasks: [
-        {
-          id: 'goal-existing',
-          goal: 'Review the release candidate',
-          status: 'running',
-          createdAt: request.sentAt,
-        },
-      ],
-      liveProgressByTask: {
-        'goal-existing': { step: 2, total: 4 },
-      },
     });
     sendCompanionControl.mockClear();
 
-    window.dispatchEvent(
-      new CustomEvent('mobile-companion:control', {
-        detail: { action: 'sync_request', payload: { reason: 'agent_refresh' } },
-      }),
+    sendControl('cancel', { action: 'cancel', scope: 'all', sentAt: request.sentAt });
+
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'emergency_stop',
+        expect.objectContaining({
+          requested: 0,
+          errorMessage: expect.stringContaining('database locked'),
+        }),
+      );
+    });
+    expect(sendCompanionControl).not.toHaveBeenCalledWith(
+      'emergency_stop',
+      expect.objectContaining({ message: 'No tasks were running on Desktop.' }),
     );
+  });
+
+  it('routes a single-agent remote cancel to that one background agent', async () => {
+    useBackgroundAgentStore.setState({
+      agents: [agent('agent-running', 'running'), agent('agent-other', 'running')],
+    });
+
+    sendControl('cancel', {
+      kind: 'agent_command',
+      agentId: 'agent-running',
+      command: 'cancel',
+      sentAt: request.sentAt,
+    });
+
+    await vi.waitFor(() => {
+      expect(useBackgroundAgentStore.getState().cancelAgent).toHaveBeenCalledWith('agent-running');
+    });
+    expect(useBackgroundAgentStore.getState().cancelAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers Mobile refresh requests with a bounded agent snapshot', async () => {
+    useBackgroundAgentStore.setState({
+      agents: [
+        agent('agent-existing', 'running', 'Review the release candidate', {
+          currentStep: 2,
+          totalSteps: 4,
+          percentage: 50,
+          currentStepDescription: 'Running read_file',
+        }),
+      ],
+    });
+    sendCompanionControl.mockClear();
+
+    sendControl('sync_request', { reason: 'agent_refresh' });
 
     await vi.waitFor(() => {
       expect(sendCompanionControl).toHaveBeenCalledWith('agents_update', {
         agents: [
           expect.objectContaining({
-            id: 'goal-existing',
+            id: 'agent-existing',
             name: 'Review the release candidate',
             status: 'running',
+            currentStep: 'Running read_file',
             progress: 50,
           }),
         ],
@@ -448,6 +478,7 @@ describe('Cowork Dispatch runtime', () => {
         }),
       );
     });
+    expect(useBackgroundAgentStore.getState().listAgents).toHaveBeenCalled();
   });
 
   it('builds a bounded versioned approval request from authoritative Desktop state', () => {

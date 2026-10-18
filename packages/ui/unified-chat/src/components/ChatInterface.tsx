@@ -47,7 +47,6 @@ import type { MessageActionSlots, RegenerateModelOption } from './ActionBar';
 import { useModelStore } from '../stores/modelStore';
 import { ConversationHeader, type ConversationHeaderProps } from './ConversationHeader';
 import { ConversationStatsPanel } from './ConversationStatsPanel';
-import { GoalHandoffChip } from './GoalHandoffChip';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
 import { useChat } from '../hooks/useChat';
@@ -296,7 +295,6 @@ export interface ChatInterfaceProps {
    * page header and passes none of these.
    */
   conversationActions?: ConversationHeaderProps;
-  onSubmitGoal?: (goal: string) => void | Promise<void>;
   deriveMessageArtifacts?: DeriveMessageArtifacts;
   showProvenanceFooter?: boolean;
   /**
@@ -350,7 +348,6 @@ export function ChatInterface({
   composerSlot,
   artifactMode = 'split',
   conversationActions,
-  onSubmitGoal,
   deriveMessageArtifacts,
   showProvenanceFooter = true,
   messageActions,
@@ -868,9 +865,6 @@ export function ChatInterface({
           />
         )}
         {hasMessages && statsOpen ? <ConversationStatsPanel messages={messages} /> : null}
-        {hasMessages && onSubmitGoal ? (
-          <GoalHandoffChip messages={messages} onSubmitGoal={onSubmitGoal} />
-        ) : null}
 
         {/* Content area, grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}

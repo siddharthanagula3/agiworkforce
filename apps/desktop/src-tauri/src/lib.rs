@@ -27,16 +27,16 @@ use crate::sys::commands::{
     mcp_server::McpServerState,
     project_memory::ProjectMemoryState,
     research::ResearchState,
-    security::{AuthManagerState, SecretManagerState},
+    security::SecretManagerState,
     skills::SkillsState,
     tool_confirmation::ToolConfirmationState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CloudState, ComputerUseState, DatabaseState,
     DocumentState, FileWatcherState, LLMState, McpOAuthState, McpState, McpbState, MemoryState,
-    NativeMessagingStateWrapper, ProductivityState, SchedulerState, SettingsServiceState,
-    SettingsState, ShortcutsState, VoiceState,
+    ProductivityState, SchedulerState, SettingsServiceState, SettingsState, ShortcutsState,
+    VoiceState,
 };
-use crate::sys::security::{AuthManager, SecretManager};
+use crate::sys::security::SecretManager;
 use crate::sys::telemetry;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -488,10 +488,6 @@ pub fn run() {
                 tracing::warn!("Network proxy settings were not applied: {error}");
             }
 
-            let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
-            app.manage(AuthManagerState(auth_manager));
-            tracing::info!("AuthManager initialized");
-
             // Master Password state for SECSYS-001 security enhancement
             // FIX-001 / FIX-002 / FIX-004: also publish a `MasterPasswordEncryption`
             // wrapper so credential-storage IPC handlers can grab a single
@@ -617,10 +613,6 @@ pub fn run() {
                 }
             };
             app.manage(browser_state);
-
-            // Native Messaging state for browser extension communication
-            app.manage(NativeMessagingStateWrapper::new());
-            tracing::info!("NativeMessagingStateWrapper initialized");
 
             app.manage(crate::sys::commands::dispatch_hmac::DispatchHmacState::new());
 
@@ -876,16 +868,6 @@ pub fn run() {
             app.manage(ResearchState::new());
             tracing::info!("Research state initialized");
 
-            let app_for_orchestrator = app.handle().clone();
-            async_runtime::spawn(async move {
-                let router = app_for_orchestrator.state::<LLMState>().router.clone();
-                if let Err(reason) =
-                    crate::sys::commands::agi::ensure_orchestrator(&app_for_orchestrator, router)
-                {
-                    tracing::info!("Agent orchestrator starts on first use: {reason}");
-                }
-            });
-
             // Tool Confirmation state for safety tier confirmation dialogs
             app.manage(ToolConfirmationState::new_with_db(db_conn_arc.clone()));
             tracing::info!("Tool confirmation state initialized");
@@ -897,13 +879,7 @@ pub fn run() {
             // Background Agent Manager for "&" prefix background tasks
             {
                 use crate::core::agent::{BackgroundAgentManager, BackgroundAgentManagerState};
-                use crate::sys::commands::llm::LLMState;
-
-                // LLMState is managed earlier in this setup block, so ordering is safe.
-                let llm_state: tauri::State<LLMState> = app.state();
-                let router = Some(llm_state.router.clone());
-
-                let bg_agent_manager = BackgroundAgentManager::new(db_conn_arc.clone(), router);
+                let bg_agent_manager = BackgroundAgentManager::new(db_conn_arc.clone());
                 let mut bg_manager_with_handle = bg_agent_manager;
                 bg_manager_with_handle.set_app_handle(app.handle().clone());
                 let bg_state = BackgroundAgentManagerState::new(bg_manager_with_handle);
@@ -1033,11 +1009,9 @@ pub fn run() {
                 }
             }
 
-            // B6 fix: share a single Arc<RwLock<String>> between the live
-            // RealtimeServer (which authenticates handshakes against it)
-            // and the RealtimeState that backs the bridge_rotate_token /
-            // bridge_get_token Tauri commands. Rotation now updates both
-            // sides through the same lock.
+            // The live RealtimeServer authenticates handshakes against this
+            // token, and RealtimeState holds the same lock, so both always
+            // see one value.
             let realtime_token_shared =
                 std::sync::Arc::new(tokio::sync::RwLock::new(realtime_token));
             let realtime_server = Arc::new(crate::integrations::realtime::RealtimeServer::new(
@@ -1154,22 +1128,11 @@ pub fn run() {
             crate::sys::startup_recovery::startup_export_diagnostics,
             crate::sys::startup_recovery::startup_quit,
 
-            crate::sys::commands::agi_submit_goal,
-            crate::sys::commands::agi_submit_goal_parallel,
-            crate::sys::commands::agi_get_goal_status,
-            crate::sys::commands::agi_get_task_state,
-            crate::sys::commands::agi_list_goals,
-            crate::sys::commands::agi_cancel_goal,
-            crate::sys::commands::agi_pause_goal,
-            crate::sys::commands::agi_resume_goal,
 
             // Reflection Engine
-            crate::sys::commands::agi_get_reflection_insights,
 
-            crate::sys::commands::orchestrator_cancel_agent,
 
             crate::sys::commands::get_system_resources,
-            crate::sys::commands::refresh_agent_status,
 
             crate::sys::commands::agent_resolve_approval,
             crate::sys::commands::agent_set_workflow_hash,
@@ -1213,8 +1176,6 @@ pub fn run() {
             crate::sys::commands::chat::search::get_recent_conversations,
             crate::sys::commands::conversation_export,
             crate::sys::commands::conversation_export_pdf,
-
-            // AGI Task Control (pause/resume/abort running tasks)
 
             crate::sys::commands::cloud_connect,
             crate::sys::commands::cloud_complete_oauth,
@@ -1545,8 +1506,6 @@ pub fn run() {
             crate::sys::commands::scheduler_add_job,
             crate::sys::commands::scheduler_remove_job,
             crate::sys::commands::scheduler_list_jobs,
-            crate::sys::commands::scheduler_get_job,
-            crate::sys::commands::scheduler_get_next_runs,
             crate::sys::commands::scheduler_toggle_job,
             crate::sys::commands::scheduler_stop_run,
             crate::sys::commands::scheduler_running_jobs,
@@ -1558,8 +1517,6 @@ pub fn run() {
             crate::sys::commands::research_start,
             crate::sys::commands::research_cancel,
             crate::sys::commands::research_get_config,
-            crate::sys::commands::research_set_config,
-            crate::sys::commands::research_check_availability,
 
 
             crate::sys::commands::get_user_preference,
@@ -1606,7 +1563,6 @@ pub fn run() {
             // Background LLM (queue-based LLM processing)
 
 
-            crate::sys::commands::security::auth_login,
             crate::sys::commands::security::secret_manager_has,
             crate::sys::commands::security::secret_manager_set,
             crate::sys::commands::security::secret_manager_delete,
@@ -1707,17 +1663,12 @@ pub fn run() {
             // ============================================================
             // Newly registered commands (batch registration)
             // ============================================================
-            crate::sys::commands::agi_init,
-            crate::sys::commands::agi_should_use_swarm,
-            crate::sys::commands::agi_submit_goal_auto,
-            crate::sys::commands::agi_submit_goal_swarm,
             crate::sys::commands::approve_operation,
             crate::sys::commands::get_local_user_id,
             crate::sys::commands::background_agent_cancel,
+            crate::sys::commands::background_agent_start,
             crate::sys::commands::background_agent_get,
-            crate::sys::commands::background_agent_list_active,
             crate::sys::commands::background_agent_pause,
-            crate::sys::commands::background_agent_stats,
             crate::sys::commands::chat_archive_conversation,
             crate::sys::commands::chat_delete_conversation,
             crate::sys::commands::chat_delete_message,
@@ -1741,18 +1692,12 @@ pub fn run() {
             crate::sys::commands::metrics_set_cache_hit_rate,
             crate::sys::commands::metrics_set_mcp_servers,
             crate::sys::commands::notification_unread_count,
-            crate::sys::commands::orchestrator_cancel_all,
-            crate::sys::commands::orchestrator_cleanup,
-            crate::sys::commands::pause_agent,
             crate::sys::commands::project_context_get_folder,
             crate::sys::commands::project_context_get_summary,
             crate::sys::commands::project_context_list_files,
             crate::sys::commands::project_context_validate_path,
             crate::sys::commands::reject_operation,
-            crate::sys::commands::research_get_modes,
-            crate::sys::commands::research_quick,
             crate::sys::commands::reset_session_cost,
-            crate::sys::commands::resume_agent,
             crate::sys::commands::project_memory::save_architectural_decision,
             crate::sys::commands::computer_use_revoke_consent,
             crate::sys::commands::shortcuts_apply_quick_query_preferences,

@@ -283,20 +283,4 @@ describe('schedulerStore, Tauri command wiring', () => {
   ] as const)('infers %s as %s', (cronExpression, expectedInterval) => {
     expect(inferTaskInterval(cronExpression)).toBe(expectedInterval);
   });
-
-  it('getNextRuns invokes scheduler_get_next_runs with a limit parameter', async () => {
-    mockInvoke.mockResolvedValueOnce([]);
-
-    await useSchedulerStore.getState().getNextRuns(5);
-
-    expect(mockInvoke).toHaveBeenCalledWith('scheduler_get_next_runs', { limit: 5 });
-  });
-
-  it('getNextRuns defaults to limit 10 when no argument provided', async () => {
-    mockInvoke.mockResolvedValueOnce([]);
-
-    await useSchedulerStore.getState().getNextRuns();
-
-    expect(mockInvoke).toHaveBeenCalledWith('scheduler_get_next_runs', { limit: 10 });
-  });
 });

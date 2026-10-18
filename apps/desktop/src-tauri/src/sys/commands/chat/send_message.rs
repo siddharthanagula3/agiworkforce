@@ -52,7 +52,7 @@ pub async fn chat_send_message(
         "Chat send_message started"
     );
 
-    let flags = resolve_request_flags(&request, &app_handle);
+    let flags = resolve_request_flags(&request);
     let (provider_enum, model) = resolve_provider_and_model(&request);
     let preferences = build_router_preferences(&request, provider_enum, &model, "byok".to_string());
     let db = AppDatabase {

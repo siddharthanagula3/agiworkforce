@@ -31,13 +31,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::core::agent::autonomous::{
-    AutonomousAgent, RunControl, RunEnd, RunReport, StepProgress, StopReason,
+use crate::core::agent::unattended_turn::{
+    bounded_answer, open_run_conversation, run_unattended_turn, UnattendedTurn, UnattendedTurnEnd,
 };
-use crate::core::agent::AgentConfig;
-use crate::core::llm::LLMRouter;
+use crate::sys::commands::chat::state::UnattendedProgress;
 use crate::sys::commands::notification_center::{
     deliver_notification, CreateNotificationInput, NotificationCenterState, NotificationPriority,
     NotificationRoute, NotificationType,
@@ -165,6 +165,10 @@ pub struct BackgroundAgentContext {
     /// The boundary the app was in when the run was created. The run's
     /// model calls stay inside it however the app is switched afterwards.
     pub boundary: Option<TrustMode>,
+    /// The conversation the run works in, once it has started. A resumed run
+    /// goes on in it.
+    #[serde(default)]
+    pub run_conversation_id: Option<i64>,
 }
 
 /// A message in the conversation snapshot.
@@ -318,7 +322,7 @@ impl BackgroundAgent {
 fn mark_interrupted(agent: &mut BackgroundAgent) {
     agent.status = BackgroundAgentStatus::Paused;
     agent.progress.current_step_description =
-        "Interrupted when the app closed. Resume to run it again.".to_string();
+        "Interrupted when the app closed. Resume to go on from where it stopped.".to_string();
 }
 
 /// Command to control a running background agent.
@@ -326,8 +330,6 @@ fn mark_interrupted(agent: &mut BackgroundAgent) {
 pub enum AgentCommand {
     /// Pause the agent.
     Pause,
-    /// Resume the agent.
-    Resume,
     /// Cancel the agent.
     Cancel,
     /// Stop the run because the app is closing.
@@ -362,23 +364,17 @@ pub struct BackgroundAgentManager {
     app_handle: Option<AppHandle>,
     /// Queue of agents waiting to run.
     queue: Arc<RwLock<Vec<String>>>,
-    /// LLM router for the autonomous agent (None if not yet available).
-    router: Option<Arc<RwLock<LLMRouter>>>,
 }
 
 impl BackgroundAgentManager {
     /// Create a new background agent manager.
-    pub fn new(
-        db_conn: Arc<std::sync::Mutex<Connection>>,
-        router: Option<Arc<RwLock<LLMRouter>>>,
-    ) -> Self {
+    pub fn new(db_conn: Arc<std::sync::Mutex<Connection>>) -> Self {
         Self {
             agents: Arc::new(RwLock::new(HashMap::new())),
             handles: Arc::new(Mutex::new(HashMap::new())),
             db_conn,
             app_handle: None,
             queue: Arc::new(RwLock::new(Vec::new())),
-            router,
         }
     }
 
@@ -550,21 +546,19 @@ impl BackgroundAgentManager {
             .count()
     }
 
-    /// Pause a running background agent. The run stays alive, holds at its
-    /// next step, and goes on from there when resumed.
+    /// Pause a background agent. A live run is stopped and has ended before
+    /// this returns; resuming it goes on in the conversation it worked in.
     pub async fn pause_agent(&self, agent_id: &str) -> anyhow::Result<()> {
-        {
-            let handles = self.handles.lock().await;
-            if let Some(handle) = handles.get(agent_id) {
-                let _ = handle.command_tx.send(AgentCommand::Pause).await;
-            }
-        }
+        self.stop_run(agent_id, AgentCommand::Pause).await;
 
         {
             let mut agents = self.agents.write().await;
             if let Some(agent) = agents.get_mut(agent_id) {
-                agent.pause();
-                self.persist_agent(agent)?;
+                if agent.status == BackgroundAgentStatus::Running {
+                    agent.pause();
+                    agent.progress.current_step_description = PAUSED_RUN.to_string();
+                    self.persist_agent(agent)?;
+                }
             }
         }
 
@@ -572,14 +566,14 @@ impl BackgroundAgentManager {
         Ok(())
     }
 
-    /// Resume a paused background agent. A run paused while it was running
-    /// goes on from the step it stopped at; a run that was parked for
-    /// approval, or restored after the app closed, starts from its first step.
+    /// Resume a paused background agent. A run that already worked goes on in
+    /// its conversation with what it did in view; a run parked for approval
+    /// starts from its goal.
     pub async fn resume_agent(&self, agent_id: &str) -> anyhow::Result<()> {
         {
-            let agents = self.agents.read().await;
+            let mut agents = self.agents.write().await;
             let agent = agents
-                .get(agent_id)
+                .get_mut(agent_id)
                 .ok_or_else(|| anyhow::anyhow!("Agent not found: {}", agent_id))?;
 
             if !agent.can_resume() {
@@ -589,30 +583,11 @@ impl BackgroundAgentManager {
                     agent.status
                 ));
             }
+            agent.progress.awaiting_approval = false;
+            agent.progress.current_step_description = "Starting...".to_string();
         }
 
-        let live_run = {
-            let handles = self.handles.lock().await;
-            match handles.get(agent_id) {
-                Some(handle) => handle.command_tx.send(AgentCommand::Resume).await.is_ok(),
-                None => false,
-            }
-        };
-
-        if live_run {
-            let mut agents = self.agents.write().await;
-            if let Some(agent) = agents.get_mut(agent_id) {
-                agent.status = BackgroundAgentStatus::Running;
-                self.persist_agent(agent)?;
-            }
-        } else {
-            {
-                let mut agents = self.agents.write().await;
-                if let Some(agent) = agents.get_mut(agent_id) {
-                    agent.progress.awaiting_approval = false;
-                    agent.progress.current_step_description = "Starting...".to_string();
-                }
-            }
+        {
             let mut queue = self.queue.write().await;
             if !queue.contains(&agent_id.to_string()) {
                 queue.push(agent_id.to_string());
@@ -620,11 +595,7 @@ impl BackgroundAgentManager {
         }
 
         self.emit_agent_event("background_agent:resumed", agent_id, None)?;
-
-        if !live_run {
-            self.process_queue().await?;
-        }
-
+        self.process_queue().await?;
         Ok(())
     }
 
@@ -754,7 +725,6 @@ impl BackgroundAgentManager {
         let db_conn = Arc::clone(&self.db_conn);
         let app_handle = self.app_handle.clone();
         let timeout_secs = agent.timeout_secs;
-        let router = self.router.clone();
         let handles_clone = Arc::clone(&self.handles);
 
         // The run removes its own handle when it ends, so the handle goes in
@@ -770,7 +740,6 @@ impl BackgroundAgentManager {
                     db_conn,
                     app_handle,
                     timeout_secs,
-                    router,
                     handles_clone,
                 )
                 .await
@@ -922,8 +891,8 @@ impl BackgroundAgentManager {
     /// queued.
     ///
     /// A run that was going when the app closed has no task behind it now
-    /// and lost its place. One a person started is paused, to run again from
-    /// its first step if they resume it. One a trigger started is ended: the
+    /// and lost its place. One a person started is paused, to go on in its
+    /// conversation if they resume it. One a trigger started is ended: the
     /// trigger counts a run that has not ended as still going and would never
     /// fire again, and its next firing starts a fresh run anyway.
     async fn resume_queued_agents(&self) -> anyhow::Result<()> {
@@ -1115,7 +1084,7 @@ fn interrupted_notice(agent_id: &str, goal: &str) -> CreateNotificationInput {
         agent_id,
         "Background Task Interrupted",
         format!(
-            "Task: {}\nThe app closed while it was running. Open it and resume to run it again from its first step.",
+            "Task: {}\nThe app closed while it was running. Open it and resume to go on from where it stopped.",
             truncate_string(goal, 60)
         ),
         NotificationType::AgentActivity,
@@ -1184,55 +1153,28 @@ async fn deliver_agent_notice_when_ready(
 /// task driving it is dropped outright.
 const RUN_STOP_GRACE: Duration = Duration::from_secs(10);
 
-/// A run's time limit, counted only while the run is not paused.
-struct RunClock {
-    remaining: Duration,
-    running_since: Option<tokio::time::Instant>,
+/// Why the manager told a run to stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopReason {
+    Cancelled,
+    Paused,
+    AppClosing,
 }
 
-impl RunClock {
-    fn new(limit: Duration) -> Self {
-        Self {
-            remaining: limit,
-            running_since: Some(tokio::time::Instant::now()),
-        }
-    }
+/// The step a paused run shows until it is resumed.
+const PAUSED_RUN: &str = "Paused. Resume to go on from where it stopped.";
 
-    fn pause(&mut self) {
-        if let Some(since) = self.running_since.take() {
-            self.remaining = self.remaining.saturating_sub(since.elapsed());
-        }
-    }
-
-    fn resume(&mut self) {
-        if self.running_since.is_none() {
-            self.running_since = Some(tokio::time::Instant::now());
-        }
-    }
-
-    /// Resolves when the limit is used up, and never while paused.
-    async fn expired(&self) {
-        match self.running_since {
-            Some(since) => tokio::time::sleep_until(since + self.remaining).await,
-            None => std::future::pending().await,
-        }
-    }
-}
-
-async fn reached(deadline: Option<tokio::time::Instant>) {
-    match deadline {
-        Some(deadline) => tokio::time::sleep_until(deadline).await,
-        None => std::future::pending().await,
-    }
-}
+/// What a resumed run is told in the conversation it already worked in, so it
+/// goes on from what it did instead of doing it again.
+const CONTINUE_RUN: &str =
+    "Continue from where you stopped. Do not repeat steps you already finished.";
 
 /// Runs one background agent to its end and reports that end once.
 ///
-/// The run is one future driven from here, not a task of its own, so a stop
-/// leaves nothing running behind it. Commands reach the run through
-/// `control`: a pause holds it at the next step and a resume lets it go on
-/// from there, and cancel, app quit and the time limit stop it.
-/// It prevents OS sleep while the run is not paused.
+/// The run is one turn of the chat loop in a conversation of its own, driven
+/// from here, so a stop leaves nothing running behind it. Pause, cancel and
+/// app quit stop the turn, and the time limit ends it. It prevents OS sleep
+/// while it runs.
 async fn execute_background_agent(
     agent_id: String,
     agent: BackgroundAgent,
@@ -1241,19 +1183,24 @@ async fn execute_background_agent(
     db_conn: Arc<std::sync::Mutex<Connection>>,
     app_handle: Option<AppHandle>,
     timeout_secs: u64,
-    router: Option<Arc<RwLock<LLMRouter>>>,
     handles: Arc<Mutex<HashMap<String, AgentHandle>>>,
 ) {
     tracing::info!(
-        "[BackgroundAgent] Starting real execution for agent {}: {}",
+        "[BackgroundAgent] Starting execution for agent {}: {}",
         agent_id,
         agent.goal
     );
 
     let goal = agent.goal.clone();
+    let started = crate::ui::hooks::HookEvent::goal_start(
+        agent_id.clone(),
+        agent_id.clone(),
+        goal.clone(),
+        agent.priority.to_string(),
+    );
+    crate::ui::hooks::emit_event(started).await;
     let planned_goal = goal_with_instructions(&goal, agent.context.custom_instructions.as_deref());
-    let prepared = prepare_run(&agent, router, app_handle.as_ref()).await;
-    let outcome = match prepared {
+    let outcome = match prepare_run(&agent, app_handle.as_ref()).await {
         Err(reason) => {
             tracing::warn!(
                 "[BackgroundAgent] Agent {} could not start: {}",
@@ -1262,91 +1209,36 @@ async fn execute_background_agent(
             );
             RunOutcome::CouldNotStart(reason)
         }
-        Ok((autonomous, managed)) => {
-            let control = RunControl::new();
-            let mut clock = RunClock::new(Duration::from_secs(if timeout_secs == 0 {
-                DEFAULT_AGENT_TIMEOUT_SECS
-            } else {
-                timeout_secs
-            }));
-            let mut sleep_guard = Some(crate::sys::power::SleepPrevention::enable());
-            let mut commands_open = true;
-            let mut stop_deadline = None;
-            let mut progress = control.progress();
-            let mut progress_open = true;
-
-            let run = crate::sys::account::scope_managed_auth_boundary(
-                managed,
-                autonomous.run_goal(planned_goal, &control),
-            );
-            tokio::pin!(run);
-            loop {
-                tokio::select! {
-                    end = &mut run => break outcome_of(end),
-                    command = command_rx.recv(), if commands_open => match command {
-                        Some(AgentCommand::Pause) => {
-                            control.pause();
-                            clock.pause();
-                            sleep_guard = None;
-                        }
-                        Some(AgentCommand::Resume) => {
-                            control.resume();
-                            clock.resume();
-                            if sleep_guard.is_none() {
-                                sleep_guard = Some(crate::sys::power::SleepPrevention::enable());
-                            }
-                        }
-                        Some(AgentCommand::Interrupt) => control.stop(StopReason::AppClosing),
-                        Some(AgentCommand::Cancel) => control.stop(StopReason::Cancelled),
-                        None => {
-                            commands_open = false;
-                            control.stop(StopReason::Cancelled);
-                        }
-                    },
-                    changed = progress.changed(), if progress_open => {
-                        progress_open = changed.is_ok();
-                        let latest = progress.borrow_and_update().clone();
-                        if let Some(step) = latest {
-                            record_progress(&agents, &db_conn, app_handle.as_ref(), &agent_id, step)
-                                .await;
-                        }
-                    }
-                    _ = clock.expired(), if control.stop_reason().is_none() => {
-                        control.stop(StopReason::TimeLimit);
-                    }
-                    _ = reached(stop_deadline) => {
-                        break stopped_outcome(
-                            control.stop_reason().unwrap_or(StopReason::Cancelled),
-                        );
-                    }
-                }
-                if stop_deadline.is_none() && control.stop_reason().is_some() {
-                    stop_deadline = Some(tokio::time::Instant::now() + RUN_STOP_GRACE);
-                }
-            }
+        Ok(run) => {
+            let run_state = RunState {
+                agent_id: &agent_id,
+                agents: &agents,
+                db_conn: &db_conn,
+            };
+            drive_run(run, &planned_goal, timeout_secs, &mut command_rx, run_state).await
         }
     };
 
     // Every run ends here, whether it finished, failed, was stopped or never
     // started: one record update, one event and at most one notice. A run
-    // the manager cancelled or interrupted is recorded and
+    // the manager cancelled, paused or interrupted is recorded and
     // announced by the manager, once this function has returned.
     let failure = failure_reason(&outcome, timeout_secs);
     {
         let mut agents_lock = agents.write().await;
         if let Some(a) = agents_lock.get_mut(&agent_id) {
             let recorded = match &outcome {
-                RunOutcome::Completed(report) => {
+                RunOutcome::Completed(run) => {
                     a.status = BackgroundAgentStatus::Completed;
                     a.completed_at = Some(Utc::now());
-                    a.summary = Some(summary_of(&goal, report));
+                    a.summary = Some(summary_of(&goal, run));
                     true
                 }
                 RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => {
                     a.fail(failure.clone().unwrap_or_default());
                     true
                 }
-                RunOutcome::Cancelled | RunOutcome::Interrupted => false,
+                RunOutcome::Cancelled | RunOutcome::Paused | RunOutcome::Interrupted => false,
             };
             if recorded {
                 save_in_order(&db_conn, a).await;
@@ -1357,12 +1249,12 @@ async fn execute_background_agent(
 
     if let Some(ref app) = app_handle {
         let emit_result = match &outcome {
-            RunOutcome::Completed(report) => app.emit(
+            RunOutcome::Completed(run) => app.emit(
                 "background_agent:completed",
                 serde_json::json!({
                     "agentId": agent_id,
                     "goal": goal,
-                    "summary": report.summary,
+                    "summary": summary_of(&goal, run).description,
                 }),
             ),
             RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => app
@@ -1375,7 +1267,7 @@ async fn execute_background_agent(
                         "message": failure,
                     }),
                 ),
-            RunOutcome::Cancelled | RunOutcome::Interrupted => Ok(()),
+            RunOutcome::Cancelled | RunOutcome::Paused | RunOutcome::Interrupted => Ok(()),
         };
         if let Err(e) = emit_result {
             tracing::warn!("Failed to emit background_agent event: {}", e);
@@ -1385,6 +1277,9 @@ async fn execute_background_agent(
             deliver_agent_notice(app, &agent_id, notice).await;
         }
     }
+
+    let ended = goal_ended(&agent_id, &goal, agent.priority, &outcome, timeout_secs);
+    crate::ui::hooks::emit_event(ended).await;
 
     // Clean up the handle entry so dead handles do not accumulate.
     {
@@ -1399,11 +1294,122 @@ async fn execute_background_agent(
             RunOutcome::Completed(_) => "completed",
             RunOutcome::Failed(_) => "failed",
             RunOutcome::Cancelled => "cancelled",
+            RunOutcome::Paused => "paused",
             RunOutcome::TimedOut => "timed_out",
             RunOutcome::Interrupted => "interrupted",
             RunOutcome::CouldNotStart(_) => "could_not_start",
         }
     );
+}
+
+/// Where a run writes what it reaches.
+struct RunState<'a> {
+    agent_id: &'a str,
+    agents: &'a Arc<RwLock<HashMap<String, BackgroundAgent>>>,
+    db_conn: &'a Arc<std::sync::Mutex<Connection>>,
+}
+
+/// Drives a prepared run to its end. Its conversation is recorded before its
+/// first turn, so a run cut off at any point resumes there; each tool call
+/// the turn makes is put into the record; and the manager's commands and the
+/// time limit stop it.
+async fn drive_run(
+    run: PreparedRun,
+    goal: &str,
+    timeout_secs: u64,
+    command_rx: &mut mpsc::Receiver<AgentCommand>,
+    state: RunState<'_>,
+) -> RunOutcome {
+    let conversation_id = match run.continue_in {
+        Some(conversation_id) => conversation_id,
+        None => match open_run_conversation(&run.app, goal, run.trust_mode).await {
+            Ok(conversation_id) => conversation_id,
+            Err(reason) => return RunOutcome::CouldNotStart(reason),
+        },
+    };
+    record_run_conversation(&state, conversation_id).await;
+
+    let stop = CancellationToken::new();
+    let mut stop_reason = None;
+    let mut commands_open = true;
+    let _awake = crate::sys::power::SleepPrevention::enable();
+    let limit = Duration::from_secs(if timeout_secs == 0 {
+        DEFAULT_AGENT_TIMEOUT_SECS
+    } else {
+        timeout_secs
+    });
+    let (progress, mut progress_rx) = tokio::sync::watch::channel(UnattendedProgress::default());
+    let mut progress_open = true;
+
+    let unattended = UnattendedTurn {
+        prompt: if run.continue_in.is_some() {
+            CONTINUE_RUN
+        } else {
+            goal
+        },
+        trust_mode: run.trust_mode,
+        project_folder: run.folder,
+        time_limit: Some(limit),
+        conversation_id: Some(conversation_id),
+        progress: Some(progress),
+    };
+    let turn = crate::sys::account::scope_managed_auth_boundary(
+        run.managed,
+        run_unattended_turn(&run.app, unattended, stop.cancelled()),
+    );
+    tokio::pin!(turn);
+    loop {
+        tokio::select! {
+            ran = &mut turn => break outcome_of(ran.end, ran.refusals, stop_reason),
+            command = command_rx.recv(), if commands_open => {
+                let reason = match command {
+                    Some(AgentCommand::Pause) => StopReason::Paused,
+                    Some(AgentCommand::Interrupt) => StopReason::AppClosing,
+                    Some(AgentCommand::Cancel) => StopReason::Cancelled,
+                    None => {
+                        commands_open = false;
+                        StopReason::Cancelled
+                    }
+                };
+                stop_reason.get_or_insert(reason);
+                stop.cancel();
+            }
+            changed = progress_rx.changed(), if progress_open => {
+                progress_open = changed.is_ok();
+                if progress_open {
+                    let step = progress_rx.borrow_and_update().clone();
+                    record_progress(&state, &run.app, &step).await;
+                }
+            }
+        }
+    }
+}
+
+/// Records the conversation a run works in, before its first turn starts.
+async fn record_run_conversation(state: &RunState<'_>, conversation_id: i64) {
+    let mut agents_lock = state.agents.write().await;
+    if let Some(agent) = agents_lock.get_mut(state.agent_id) {
+        agent.context.run_conversation_id = Some(conversation_id);
+        save_in_order(state.db_conn, agent).await;
+    }
+}
+
+/// Puts the tool call a run has reached into its record and tells the panel.
+async fn record_progress(state: &RunState<'_>, app: &AppHandle, step: &UnattendedProgress) {
+    {
+        let mut agents_lock = state.agents.write().await;
+        let Some(agent) = agents_lock.get_mut(state.agent_id) else {
+            return;
+        };
+        agent.update_progress(step.tool_calls, 0, format!("Running {}", step.tool_name));
+        save_in_order(state.db_conn, agent).await;
+    }
+    if let Err(error) = app.emit(
+        "background_agent:progress",
+        serde_json::json!({ "agentId": state.agent_id }),
+    ) {
+        tracing::warn!("Failed to emit background_agent:progress: {}", error);
+    }
 }
 
 /// Saves a run's record while the record's lock is held and waits for the
@@ -1429,32 +1435,6 @@ async fn save_in_order(db_conn: &Arc<std::sync::Mutex<Connection>>, agent: &Back
                 agent.id,
                 error
             )
-        }
-    }
-}
-
-/// Puts the step a run has reached into its record and tells the panel.
-async fn record_progress(
-    agents: &Arc<RwLock<HashMap<String, BackgroundAgent>>>,
-    db_conn: &Arc<std::sync::Mutex<Connection>>,
-    app_handle: Option<&AppHandle>,
-    agent_id: &str,
-    step: StepProgress,
-) {
-    {
-        let mut agents_lock = agents.write().await;
-        let Some(agent) = agents_lock.get_mut(agent_id) else {
-            return;
-        };
-        agent.update_progress(step.step, step.total, step.description);
-        save_in_order(db_conn, agent).await;
-    }
-    if let Some(app) = app_handle {
-        if let Err(e) = app.emit(
-            "background_agent:progress",
-            serde_json::json!({ "agentId": agent_id }),
-        ) {
-            tracing::warn!("Failed to emit background_agent:progress: {}", e);
         }
     }
 }
@@ -1524,47 +1504,56 @@ async fn prune_finished(
     }
 }
 
+/// What a finished run produced: its answer and the tool calls it was refused.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RunSummary {
+    answer: String,
+    refusals: Vec<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome {
-    Completed(RunReport),
+    Completed(RunSummary),
     Failed(String),
     Cancelled,
+    Paused,
     TimedOut,
     Interrupted,
     CouldNotStart(String),
 }
 
-fn outcome_of(end: RunEnd) -> RunOutcome {
+fn outcome_of(
+    end: UnattendedTurnEnd,
+    refusals: Vec<String>,
+    stopped: Option<StopReason>,
+) -> RunOutcome {
     match end {
-        RunEnd::Completed(report) => RunOutcome::Completed(report),
-        RunEnd::Failed(reason) => RunOutcome::Failed(reason),
-        RunEnd::Stopped(reason) => stopped_outcome(reason),
-    }
-}
-
-fn stopped_outcome(reason: StopReason) -> RunOutcome {
-    match reason {
-        StopReason::Cancelled => RunOutcome::Cancelled,
-        StopReason::TimeLimit => RunOutcome::TimedOut,
-        StopReason::AppClosing => RunOutcome::Interrupted,
-    }
-}
-
-/// The record's summary of a finished run: what the run itself reported.
-/// It is kept in the agent record and nowhere else; a run writes no file of
-/// its own, because a file dropped in a watched folder would start the next
-/// run.
-fn summary_of(goal: &str, report: &RunReport) -> AgentSummary {
-    AgentSummary {
-        description: if report.summary.trim().is_empty() {
-            format!("Finished with nothing to report: {goal}")
-        } else {
-            report.summary.clone()
+        UnattendedTurnEnd::Answered(answer) => {
+            RunOutcome::Completed(RunSummary { answer, refusals })
+        }
+        UnattendedTurnEnd::Failed(reason) => RunOutcome::Failed(reason),
+        UnattendedTurnEnd::TimedOut => RunOutcome::TimedOut,
+        UnattendedTurnEnd::Stopped => match stopped {
+            Some(StopReason::Paused) => RunOutcome::Paused,
+            Some(StopReason::AppClosing) => RunOutcome::Interrupted,
+            Some(StopReason::Cancelled) | None => RunOutcome::Cancelled,
         },
+    }
+}
+
+/// The record's summary of a finished run: what the run answered, with each
+/// tool call it was refused as a warning. A run that was refused a tool is not
+/// counted as having reached its goal. It is kept in the agent record and
+/// nowhere else; a run writes no file of its own, because a file dropped in a
+/// watched folder would start the next run.
+fn summary_of(goal: &str, run: &RunSummary) -> AgentSummary {
+    AgentSummary {
+        description: bounded_answer(&run.answer)
+            .unwrap_or_else(|| format!("Finished with nothing to report: {goal}")),
         files_changed: Vec::new(),
-        actions_taken: report.steps.clone(),
-        warnings: report.notes.clone(),
-        goal_achieved: true,
+        actions_taken: Vec::new(),
+        warnings: run.refusals.clone(),
+        goal_achieved: run.refusals.is_empty(),
     }
 }
 
@@ -1677,53 +1666,69 @@ async fn working_folder_for(
     }
 }
 
-/// Builds the agent for one run, or says why the run cannot start. No step
-/// an agent can take uses the desktop-control service, so a run does not wait
-/// on the Accessibility permission.
-fn build_autonomous_agent(
-    router: Option<Arc<RwLock<LLMRouter>>>,
-    app_handle: Option<&AppHandle>,
+/// What a run needs before it starts.
+struct PreparedRun {
+    app: AppHandle,
     trust_mode: TrustMode,
-    working_folder: Option<std::path::PathBuf>,
-) -> Result<AutonomousAgent, String> {
-    let router = router.ok_or_else(|| MODELS_NOT_READY.to_string())?;
-    let config = AgentConfig {
-        // P1: Explicit cost caps for background agents (run unattended)
-        max_cost_per_task: 5.0,
-        max_session_cost: 50.0,
-        ..Default::default()
-    };
-    let mut agent = AutonomousAgent::new(config, router, trust_mode)
-        .map_err(|error| format!("The task could not be set up: {error}"))?;
-    if let Some(app) = app_handle {
-        agent.set_app_handle(app.clone());
-    }
-    if let Some(folder) = working_folder {
-        agent.set_working_folder(folder);
-    }
-    Ok(agent)
+    managed: Option<crate::sys::account::ManagedAuthBoundary>,
+    folder: Option<String>,
+    /// The conversation an earlier part of this run worked in.
+    continue_in: Option<i64>,
 }
 
-/// Everything a run needs before its first step, or why it cannot start.
+/// Everything a run needs before it starts, or why it cannot start. No tool
+/// a run can call uses the desktop-control service unasked, so a run does not
+/// wait on the Accessibility permission.
 async fn prepare_run(
     agent: &BackgroundAgent,
-    router: Option<Arc<RwLock<LLMRouter>>>,
     app_handle: Option<&AppHandle>,
-) -> Result<
-    (
-        AutonomousAgent,
-        Option<crate::sys::account::ManagedAuthBoundary>,
-    ),
-    String,
-> {
+) -> Result<PreparedRun, String> {
+    let app = app_handle.cloned().ok_or_else(|| MODELS_NOT_READY.to_string())?;
     let trust_mode = boundary_of(&agent.context)?;
     let managed = managed_boundary_for(
         trust_mode,
         crate::sys::account::app_mode::is_cloud_app_mode(),
     )?;
-    let folder = working_folder_for(app_handle, &agent.context).await?;
-    let autonomous = build_autonomous_agent(router, app_handle, trust_mode, folder)?;
-    Ok((autonomous, managed))
+    let folder = working_folder_for(Some(&app), &agent.context).await?;
+    Ok(PreparedRun {
+        app,
+        trust_mode,
+        managed,
+        folder: folder.map(|folder| folder.to_string_lossy().into_owned()),
+        continue_in: agent.context.run_conversation_id,
+    })
+}
+
+/// The `GoalCompleted` or `GoalError` hook event for how a run ended. Every
+/// run that raised `GoalStart` raises exactly one of them.
+fn goal_ended(
+    agent_id: &str,
+    goal: &str,
+    priority: u8,
+    outcome: &RunOutcome,
+    timeout_secs: u64,
+) -> crate::ui::hooks::HookEvent {
+    use crate::ui::hooks::HookEvent;
+
+    let (session_id, goal_id) = (agent_id.to_string(), agent_id.to_string());
+    let error = match outcome {
+        RunOutcome::Completed(run) => {
+            return HookEvent::goal_completed(
+                session_id,
+                goal_id,
+                goal.to_string(),
+                priority.to_string(),
+                serde_json::json!({ "summary": summary_of(goal, run).description }),
+            );
+        }
+        RunOutcome::Cancelled => "The run was cancelled.".to_string(),
+        RunOutcome::Paused => "The run was paused.".to_string(),
+        RunOutcome::Interrupted => "The app closed while the run was going.".to_string(),
+        RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => {
+            failure_reason(outcome, timeout_secs).unwrap_or_default()
+        }
+    };
+    HookEvent::goal_error(session_id, goal_id, goal.to_string(), priority.to_string(), error)
 }
 
 /// Why a run failed, in the words the person reads, or `None` when it did not.
@@ -1733,13 +1738,17 @@ fn failure_reason(outcome: &RunOutcome, timeout_secs: u64) -> Option<String> {
         RunOutcome::TimedOut => Some(format!(
             "It ran for {timeout_secs} seconds without finishing and was stopped."
         )),
-        RunOutcome::Completed(_) | RunOutcome::Cancelled | RunOutcome::Interrupted => None,
+        RunOutcome::Completed(_)
+        | RunOutcome::Cancelled
+        | RunOutcome::Paused
+        | RunOutcome::Interrupted => None,
     }
 }
 
-/// The one notice a run's ending raises. Cancelling is done by the person
-/// from the panel or a chat approval, and a run cut off by the app closing
-/// is reported when the app comes back, so neither raises one here.
+/// The one notice a run's ending raises. Cancelling and pausing are done by
+/// the person from the panel or a chat approval, and a run cut off by the app
+/// closing is reported when the app comes back, so none of them raises one
+/// here.
 fn ending_notice(
     agent_id: &str,
     goal: &str,
@@ -1747,10 +1756,10 @@ fn ending_notice(
     timeout_secs: u64,
 ) -> Option<CreateNotificationInput> {
     match outcome {
-        RunOutcome::Completed(report) => {
-            Some(completion_notice(agent_id, goal, &summary_of(goal, report)))
+        RunOutcome::Completed(run) => {
+            Some(completion_notice(agent_id, goal, &summary_of(goal, run)))
         }
-        RunOutcome::Cancelled | RunOutcome::Interrupted => None,
+        RunOutcome::Cancelled | RunOutcome::Paused | RunOutcome::Interrupted => None,
         RunOutcome::Failed(_) | RunOutcome::TimedOut | RunOutcome::CouldNotStart(_) => {
             failure_reason(outcome, timeout_secs)
                 .map(|reason| failure_notice(agent_id, goal, &reason))
@@ -1860,47 +1869,7 @@ mod tests {
         )
         .unwrap();
 
-        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)), None)
-    }
-
-    struct HeldProvider;
-
-    #[async_trait::async_trait]
-    impl crate::core::llm::LLMProvider for HeldProvider {
-        async fn send_message(
-            &self,
-            _request: &crate::core::llm::LLMRequest,
-        ) -> Result<crate::core::llm::LLMResponse, Box<dyn std::error::Error + Send + Sync>>
-        {
-            std::future::pending().await
-        }
-
-        fn is_configured(&self) -> bool {
-            true
-        }
-
-        fn name(&self) -> &str {
-            "held"
-        }
-    }
-
-    fn create_test_manager_with_live_runs() -> BackgroundAgentManager {
-        let mut router = LLMRouter::new();
-        router.set_provider(crate::core::llm::Provider::Ollama, Box::new(HeldProvider));
-        let manager = create_test_manager();
-        BackgroundAgentManager::new(manager.db_conn.clone(), Some(Arc::new(RwLock::new(router))))
-    }
-
-    async fn wait_until_running(manager: &BackgroundAgentManager, agent_id: &str) {
-        for _ in 0..200 {
-            let running = manager.handles.lock().await.contains_key(agent_id);
-            let status = manager.get_agent(agent_id).await.map(|agent| agent.status);
-            if running && status == Some(BackgroundAgentStatus::Running) {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        panic!("the run never started");
+        BackgroundAgentManager::new(Arc::new(std::sync::Mutex::new(conn)))
     }
 
     #[test]
@@ -2016,18 +1985,17 @@ mod tests {
 
     #[test]
     fn a_finished_run_reports_what_it_found_not_its_goal() {
-        let report = RunReport {
-            summary: "Three unread messages from Dana about the March invoice.".to_string(),
-            steps: vec!["Read the inbox: 3 unread".to_string()],
-            notes: vec!["The plan change the model asked for was not adopted: x".to_string()],
+        let run = RunSummary {
+            answer: "Three unread messages from Dana about the March invoice.".to_string(),
+            refusals: Vec::new(),
         };
-        let outcome = RunOutcome::Completed(report.clone());
+        let outcome = RunOutcome::Completed(run.clone());
 
         let notice = ending_notice("agent-3", "Sync the inbox", &outcome, 600)
             .expect("a finished run raises a notice");
 
         assert_eq!(notice.title, "Background Task Completed");
-        assert_eq!(notice.message, report.summary);
+        assert_eq!(notice.message, run.answer);
         assert_eq!(notice.notification_type, NotificationType::TaskComplete);
         assert_eq!(
             notice.action_url.as_deref(),
@@ -2035,16 +2003,29 @@ mod tests {
         );
         assert_eq!(failure_reason(&outcome, 600), None);
 
-        let record = summary_of("Sync the inbox", &report);
-        assert_eq!(record.description, report.summary);
-        assert_eq!(record.actions_taken, report.steps);
-        assert_eq!(record.warnings, report.notes);
+        let record = summary_of("Sync the inbox", &run);
+        assert_eq!(record.description, run.answer);
+        assert!(record.goal_achieved);
+        assert!(record.warnings.is_empty());
         assert!(record.files_changed.is_empty());
     }
 
     #[test]
+    fn a_run_that_was_refused_a_tool_says_so_and_is_not_counted_as_done() {
+        let run = RunSummary {
+            answer: "Drafted the reply but could not send it.".to_string(),
+            refusals: vec![NAVIGATION_REFUSED.to_string()],
+        };
+
+        let record = summary_of("Answer Dana", &run);
+
+        assert!(!record.goal_achieved);
+        assert_eq!(record.warnings, run.refusals);
+    }
+
+    #[test]
     fn a_run_with_nothing_to_report_says_so() {
-        let record = summary_of("Sync the inbox", &RunReport::default());
+        let record = summary_of("Sync the inbox", &RunSummary::default());
 
         assert_eq!(
             record.description,
@@ -2063,7 +2044,11 @@ mod tests {
 
     #[test]
     fn a_run_the_manager_stopped_raises_no_notice_from_the_run() {
-        for outcome in [RunOutcome::Cancelled, RunOutcome::Interrupted] {
+        for outcome in [
+            RunOutcome::Cancelled,
+            RunOutcome::Paused,
+            RunOutcome::Interrupted,
+        ] {
             assert!(ending_notice("agent-3", "Sync the inbox", &outcome, 600).is_none());
             assert_eq!(failure_reason(&outcome, 600), None);
         }
@@ -2071,41 +2056,30 @@ mod tests {
 
     #[test]
     fn each_way_a_run_stops_has_one_outcome() {
+        let stopped = |reason| outcome_of(UnattendedTurnEnd::Stopped, Vec::new(), reason);
+        assert_eq!(stopped(Some(StopReason::Cancelled)), RunOutcome::Cancelled);
+        assert_eq!(stopped(Some(StopReason::Paused)), RunOutcome::Paused);
+        assert_eq!(stopped(Some(StopReason::AppClosing)), RunOutcome::Interrupted);
+        assert_eq!(stopped(None), RunOutcome::Cancelled);
         assert_eq!(
-            outcome_of(RunEnd::Stopped(StopReason::Cancelled)),
-            RunOutcome::Cancelled
-        );
-        assert_eq!(
-            outcome_of(RunEnd::Stopped(StopReason::TimeLimit)),
+            outcome_of(UnattendedTurnEnd::TimedOut, Vec::new(), None),
             RunOutcome::TimedOut
         );
         assert_eq!(
-            outcome_of(RunEnd::Stopped(StopReason::AppClosing)),
-            RunOutcome::Interrupted
+            outcome_of(UnattendedTurnEnd::Failed("No model".to_string()), Vec::new(), None),
+            RunOutcome::Failed("No model".to_string())
         );
         assert_eq!(
-            outcome_of(RunEnd::Failed("Step s2 failed".to_string())),
-            RunOutcome::Failed("Step s2 failed".to_string())
+            outcome_of(
+                UnattendedTurnEnd::Answered("Done".to_string()),
+                vec!["refused".to_string()],
+                Some(StopReason::Cancelled),
+            ),
+            RunOutcome::Completed(RunSummary {
+                answer: "Done".to_string(),
+                refusals: vec!["refused".to_string()],
+            })
         );
-    }
-
-    #[tokio::test]
-    async fn the_time_limit_does_not_run_while_the_run_is_paused() {
-        let mut clock = RunClock::new(Duration::from_millis(200));
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        clock.pause();
-        assert!(
-            tokio::time::timeout(Duration::from_millis(400), clock.expired())
-                .await
-                .is_err(),
-            "a paused run timed out"
-        );
-
-        clock.resume();
-        tokio::time::timeout(Duration::from_millis(400), clock.expired())
-            .await
-            .expect("the limit runs out once the run goes on");
     }
 
     #[test]
@@ -2208,12 +2182,8 @@ mod tests {
         let ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (seen_by_run, ended_by_run) = (Arc::clone(&seen), Arc::clone(&ended));
         let done = tokio::spawn(async move {
-            while let Some(command) = command_rx.recv().await {
-                let stops = !matches!(command, AgentCommand::Pause | AgentCommand::Resume);
+            if let Some(command) = command_rx.recv().await {
                 seen_by_run.lock().unwrap().push(command);
-                if stops {
-                    break;
-                }
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
             ended_by_run.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -2250,32 +2220,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resuming_a_paused_live_run_continues_it_and_starts_no_second_run() {
+    async fn pausing_a_live_run_ends_it_and_resuming_starts_it_again() {
         let manager = create_test_manager();
         let (agent_id, seen, ended) = live_run(&manager, BackgroundAgentStatus::Running).await;
 
         manager.pause_agent(&agent_id).await.expect("pause");
-        assert_eq!(
-            manager.get_agent(&agent_id).await.expect("agent").status,
-            BackgroundAgentStatus::Paused
-        );
-        manager.resume_agent(&agent_id).await.expect("resume");
-        tokio::time::sleep(Duration::from_millis(50)).await;
 
+        assert!(
+            ended.load(std::sync::atomic::Ordering::SeqCst),
+            "pause returned while the run was still going"
+        );
         assert!(matches!(
             seen.lock().unwrap().as_slice(),
-            [AgentCommand::Pause, AgentCommand::Resume]
+            [AgentCommand::Pause]
         ));
-        assert_eq!(
-            manager.get_agent(&agent_id).await.expect("agent").status,
-            BackgroundAgentStatus::Running
-        );
-        assert!(
-            manager.queue.read().await.is_empty(),
-            "the run was queued to start again"
-        );
-        assert_eq!(manager.handles.lock().await.len(), 1);
-        assert!(!ended.load(std::sync::atomic::Ordering::SeqCst));
+        let paused = manager.get_agent(&agent_id).await.expect("agent");
+        assert_eq!(paused.status, BackgroundAgentStatus::Paused);
+        assert_eq!(paused.progress.current_step_description, PAUSED_RUN);
+        assert!(manager.handles.lock().await.is_empty());
+
+        manager.resume_agent(&agent_id).await.expect("resume");
+        for _ in 0..200 {
+            let agent = manager.get_agent(&agent_id).await.expect("agent");
+            if agent.status == BackgroundAgentStatus::Failed {
+                assert_eq!(agent.error.as_deref(), Some(MODELS_NOT_READY));
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the resumed run was never started again");
     }
 
     #[tokio::test]
@@ -2313,10 +2286,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_run_that_cannot_start_says_which_part_is_missing() {
+    #[tokio::test]
+    async fn a_run_that_cannot_start_says_which_part_is_missing() {
+        let agent = restored("conv_1", BackgroundAgentStatus::Queued);
         assert_eq!(
-            build_autonomous_agent(None, None, TrustMode::Local, None).err(),
+            prepare_run(&agent, None).await.err(),
             Some(MODELS_NOT_READY.to_string())
         );
     }
@@ -2591,7 +2565,7 @@ mod tests {
             .expect("the run function");
 
         assert!(!run.contains("drop(tokio::task::spawn_blocking"));
-        assert_eq!(run.matches("save_in_order(").count(), 3);
+        assert_eq!(run.matches("save_in_order(").count(), 4);
     }
 
     #[test]
@@ -2778,7 +2752,7 @@ mod tests {
             .await
             .unwrap();
 
-        let reloaded = BackgroundAgentManager::new(manager.db_conn.clone(), None);
+        let reloaded = BackgroundAgentManager::new(manager.db_conn.clone());
         reloaded.load_persisted_agents().await.unwrap();
 
         assert_eq!(
@@ -2850,22 +2824,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_cancel_agent() {
-        let manager = create_test_manager_with_live_runs();
-        let context = BackgroundAgentContext::default();
+        let manager = create_test_manager();
+        let (agent_id, _, _) = live_run(&manager, BackgroundAgentStatus::Running).await;
 
-        let agent_id = manager
-            .push_to_background(
-                "conv_cancel".to_string(),
-                "Cancel me".to_string(),
-                context,
-                0,
-            )
-            .await
-            .unwrap();
-
-        wait_until_running(&manager, &agent_id).await;
-
-        // Cancel the agent
         manager.cancel_agent(&agent_id).await.unwrap();
 
         let agent = manager.get_agent(&agent_id).await.unwrap();
@@ -2927,38 +2888,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_list_active_agents_excludes_cancelled() {
-        let manager = create_test_manager_with_live_runs();
+        let manager = create_test_manager();
+        let (id1, _, _) = live_run(&manager, BackgroundAgentStatus::Running).await;
+        let (id2, _, _) = live_run(&manager, BackgroundAgentStatus::Running).await;
 
-        let id1 = manager
-            .push_to_background(
-                "c1".to_string(),
-                "Task 1".to_string(),
-                BackgroundAgentContext::default(),
-                0,
-            )
-            .await
-            .unwrap();
-
-        let id2 = manager
-            .push_to_background(
-                "c2".to_string(),
-                "Task 2".to_string(),
-                BackgroundAgentContext::default(),
-                0,
-            )
-            .await
-            .unwrap();
-
-        wait_until_running(&manager, &id1).await;
-        wait_until_running(&manager, &id2).await;
-
-        // Cancel the first agent
         manager.cancel_agent(&id1).await.unwrap();
 
         let active = manager.list_active_agents().await;
-        // Only one should remain active
         assert_eq!(active.len(), 1);
-        assert_eq!(active[0].conversation_id, "c2");
+        assert_eq!(active[0].id, id2);
     }
 
     #[tokio::test]

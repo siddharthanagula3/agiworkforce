@@ -118,14 +118,6 @@ impl AnalyticsMetricsCollector {
         self.app_metrics.active_sessions = count;
     }
 
-    pub fn increment_api_calls(&mut self) {
-        self.app_metrics.total_api_calls += 1;
-    }
-
-    pub fn increment_failed_operations(&mut self) {
-        self.app_metrics.failed_operations += 1;
-    }
-
     pub fn reset_app_metrics(&mut self) {
         self.app_metrics = AppMetrics::default();
     }

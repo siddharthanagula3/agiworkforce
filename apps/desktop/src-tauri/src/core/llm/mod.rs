@@ -470,16 +470,6 @@ impl EffortLevel {
             Self::High => "high",
         }
     }
-
-    /// Parse from a string value, case-insensitive.
-    pub fn from_str_loose(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "low" => Some(Self::Low),
-            "medium" | "med" => Some(Self::Medium),
-            "high" => Some(Self::High),
-            _ => None,
-        }
-    }
 }
 
 /// Cache control configuration for prompt caching
@@ -839,26 +829,7 @@ pub trait LLMProvider: Send + Sync {
         true
     }
 
-    fn supports_vision(&self) -> bool {
-        false
-    }
-
     fn supports_function_calling(&self) -> bool {
-        false
-    }
-
-    /// Whether the provider supports audio input (e.g., speech-to-text)
-    fn supports_audio_input(&self) -> bool {
-        false
-    }
-
-    /// Whether the provider supports audio output (e.g., text-to-speech)
-    fn supports_audio_output(&self) -> bool {
-        false
-    }
-
-    /// Whether the provider supports streaming audio in real-time
-    fn supports_streaming_audio(&self) -> bool {
         false
     }
 }

@@ -2,7 +2,7 @@
  * Host dispatch for the desktop renderer, despite the filename.
  *
  * `invoke` here is not a mock. It routes a command to whichever host is
- * actually present: the Tauri core, the Electron bridge, or a cloud API. The
+ * actually present: the Tauri core or a cloud API. The
  * fixture `switch` further down exists for tests and the local UI dev shell and
  * is unreachable in any shipped build, because `shouldServeFixtures` answers on
  * `test || desktopUiDev` alone and a production bundle satisfies neither.
@@ -23,19 +23,11 @@ import {
 import { getTaskModelForProvider } from '../constants/llm';
 import { assertRegisteredCommand } from '../utils/ipc';
 import { REGISTERED_COMMANDS } from '../utils/registeredCommands';
-import {
-  isCloudWeb,
-  isDesktopUiDevLocal,
-  isElectronHost,
-  isTauri,
-  isTestEnvironment,
-} from './runtimeEnvironment';
-import { getElectronHostBridge, isElectronBridgeCommand } from './tauri-electron/bridgeContract';
+import { isCloudWeb, isDesktopUiDevLocal, isTauri, isTestEnvironment } from './runtimeEnvironment';
 
 export {
   isCloudWeb,
   isDesktopUiDevLocal,
-  isElectronHost,
   isTauri,
   supportsLocalAppMode,
 } from './runtimeEnvironment';
@@ -44,12 +36,6 @@ const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
 const NATIVE_ONLY_FEATURE_MESSAGE =
   'This feature runs only in the AGI Workforce desktop app. Switch to Local mode there, or download it from https://agiworkforce.com/download';
 const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
-const NATIVE_AGENT_EXECUTION_COMMANDS = new Set([
-  'agi_submit_goal',
-  'agi_submit_goal_parallel',
-  'agi_submit_goal_auto',
-  'agi_submit_goal_swarm',
-]);
 const MOCK_INSTALLED_MCP_BUNDLES = new Set<string>();
 
 function mockMcpBundles() {
@@ -106,40 +92,6 @@ function mockMcpBundles() {
       updateAvailable: false,
     },
   ];
-}
-
-/**
- * Whether this build can execute a native agent task at all.
- *
- * The same question `shouldRejectNativeExecutionFallback` answers at dispatch,
- * asked before a control is drawn rather than after a user has pressed it.
- * Electron is `isCloudWeb` here, because `supportsLocalAppMode` deliberately
- * excludes it, so the shipped desktop binary answers false: its renderer has
- * no transport to the Rust automation service.
- *
- * Exported so a surface can refuse to advertise a capability it cannot
- * deliver. Before this existed, the task screen defaulted to "ready" whenever
- * it was not running under Tauri, which is every shipped Electron build, and
- * the failure surfaced only on submit.
- */
-export function canRunNativeAgentExecution(runtime: {
-  test: boolean;
-  cloudWeb: boolean;
-  desktopUiDev: boolean;
-}): boolean {
-  if (runtime.test) return true;
-  return !runtime.cloudWeb && !runtime.desktopUiDev;
-}
-
-export function shouldRejectNativeExecutionFallback(
-  command: string,
-  runtime: { test: boolean; cloudWeb: boolean; desktopUiDev: boolean },
-): boolean {
-  return (
-    !runtime.test &&
-    (runtime.cloudWeb || runtime.desktopUiDev) &&
-    NATIVE_AGENT_EXECUTION_COMMANDS.has(command)
-  );
 }
 
 function mockDocumentCreationResult(args: Record<string, unknown> | undefined, format: string) {
@@ -278,16 +230,6 @@ async function handleCloudWebCommand<T>(
       }
     }
 
-    case 'llm_get_usage_stats': {
-      return {
-        totalTokens: 0,
-        totalCost: 0,
-        messageCount: 0,
-        byProvider: {},
-        byModel: {},
-      } as T;
-    }
-
     default:
       return CLOUD_WEB_FALLTHROUGH as typeof CLOUD_WEB_FALLTHROUGH;
   }
@@ -330,30 +272,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     return tauriInvoke<T>(command, args);
   }
 
-  if (isElectronHost && isElectronBridgeCommand(command)) {
-    const electronHost = getElectronHostBridge();
-    if (!electronHost?.handles(command)) {
-      throw new Error(`The Electron Cloud account bridge is unavailable for ${command}.`);
-    }
-    return tauriInvoke<T>(command, args);
-  }
-
   if (isCloudWeb) {
     const cloudResult = await handleCloudWebCommand<T>(command, args);
     if (cloudResult !== CLOUD_WEB_FALLTHROUGH) {
       return cloudResult;
     }
     // Fall through to test-mode mock values for desktop-only commands
-  }
-
-  if (
-    shouldRejectNativeExecutionFallback(command, {
-      test: isTestEnvironment,
-      cloudWeb: isCloudWeb,
-      desktopUiDev: isDesktopUiDevLocal,
-    })
-  ) {
-    throw new Error('Agent execution requires the AGI Workforce desktop application');
   }
 
   if (!shouldServeFixtures({ test: isTestEnvironment, desktopUiDev: isDesktopUiDevLocal })) {
@@ -446,19 +370,11 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'project_update':
     case 'project_delete':
-    case 'project_update_settings':
     case 'file_open_with_default_app':
       return undefined as T;
 
     case 'document_create_pdf_simple_manifest':
       return mockDocumentCreationResult(args, 'pdf') as T;
-    case 'document_create_word_simple_manifest':
-      return mockDocumentCreationResult(args, 'docx') as T;
-    case 'document_create_excel_simple_manifest':
-    case 'document_create_excel_numbers_manifest':
-      return mockDocumentCreationResult(args, 'xlsx') as T;
-    case 'document_create_powerpoint_simple_manifest':
-      return mockDocumentCreationResult(args, 'pptx') as T;
 
     case 'chat_send_message':
       throw new Error('Chat functionality requires the desktop application');
@@ -476,9 +392,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'router_suggestions':
       throw new Error('Router suggestions require the desktop application');
 
-    case 'orchestrator_cancel_agent':
-      return undefined as T;
-
     case 'research_start':
       return `session_mock_${Date.now()}` as T;
     case 'research_cancel':
@@ -494,45 +407,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         show_confidence_indicators: true,
         generate_inline_citations: true,
       } as T;
-    case 'research_set_config':
-      return undefined as T;
-    case 'research_check_availability':
-      return {
-        available: false,
-        sources: {
-          web_search: { enabled: false, status: 'unavailable' },
-          document_search: { enabled: false, status: 'unavailable' },
-          memory_search: { enabled: false, status: 'unavailable' },
-        },
-        default_mode: 'standard',
-      } as T;
-
-    case 'agi_submit_goal':
-      return { goalId: `goal_mock_${Date.now()}` } as T;
-    case 'agi_submit_goal_parallel':
-      return {
-        goalId: `goal_mock_${Date.now()}`,
-        state: 'ready_for_review',
-        output: 'Parallel agent work is ready for review.',
-        error: null,
-      } as T;
-    case 'agi_list_goals':
-      return [] as T;
-    case 'agi_get_goal_status':
-      return {
-        state: 'queued',
-        currentIteration: 0,
-        context: { tool_results: [] },
-      } as T;
-    case 'agi_get_task_state':
-      return null as T;
-    case 'agi_cancel_goal':
-    case 'agi_pause_goal':
-    case 'agi_resume_goal':
-      return undefined as T;
-    case 'agi_get_reflection_insights':
-      return null as T;
-
     case 'mcp_list_connected_providers':
       return [] as T;
     case 'mcp_get_supported_connector_ids':
@@ -714,11 +588,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'scheduler_run_job_now':
       return undefined as T;
 
-    case 'scheduler_get_job':
-      return null as T;
-
     case 'scheduler_get_history':
-    case 'scheduler_get_next_runs':
     case 'scheduler_running_jobs':
       return [] as T;
 
@@ -735,71 +605,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'analytics_get_session_id':
       return 'mock-session-id' as T;
-
-    case 'metrics_get_system':
-      return {
-        cpu_usage: 0,
-        memory_used_mb: 0,
-        memory_total_mb: 8192,
-        disk_used_gb: 0,
-        disk_total_gb: 256,
-        network_rx_bytes: 0,
-        network_tx_bytes: 0,
-        uptime_seconds: 0,
-      } as T;
-
-    case 'metrics_get_app':
-      return {
-        automations_count: 0,
-        goals_count: 0,
-        mcp_servers_count: 0,
-        cache_hit_rate: 0,
-        avg_goal_duration_ms: 0,
-        active_sessions: 0,
-        total_api_calls: 0,
-        failed_operations: 0,
-      } as T;
-
-    case 'analytics_get_usage_stats':
-      return {
-        dau: 0,
-        mau: 0,
-        total_users: 1,
-        new_users_today: 0,
-        new_users_this_week: 0,
-        new_users_this_month: 0,
-        avg_session_duration_ms: 0,
-        total_events: 0,
-        events_today: 0,
-        retention_rate: 0,
-      } as T;
-
-    case 'analytics_get_feature_usage':
-      return [] as T;
-
-    case 'analytics_calculate_roi':
-      return {
-        time_saved_hours: 0,
-        cost_savings_usd: 0,
-        error_reduction_percent: 0,
-        productivity_gain_percent: 0,
-        total_automations: 0,
-        successful_executions: 0,
-        failed_executions: 0,
-        avg_execution_time_ms: 0,
-        total_llm_cost_usd: 0,
-        llm_cost_saved_usd: 0,
-        report_start_date: 0,
-        report_end_date: 0,
-      } as T;
-
-    case 'analytics_get_process_metrics':
-    case 'analytics_get_user_metrics':
-    case 'analytics_get_tool_metrics':
-      return [] as T;
-
-    case 'analytics_get_metric_trends':
-      return [] as T;
 
     case 'automation_record_start':
       return {
@@ -912,11 +717,11 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'llm_get_usage_stats':
       return {
-        totalTokens: 0,
-        totalCost: 0,
-        messageCount: 0,
-        byProvider: {},
-        byModel: {},
+        total_tokens: 0,
+        total_cost: 0,
+        message_count: 0,
+        by_provider: {},
+        by_model: {},
       } as T;
 
     case 'llm_get_available_models':
@@ -960,9 +765,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_agent_list':
       return { agents: [], activeCount: 0, maxAgents: 8 } as T;
 
-    case 'background_agent_list_active':
-      return [] as T;
-
     case 'background_agent_get':
       return null as T;
 
@@ -970,18 +772,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'background_agent_resume':
     case 'background_agent_cancel':
       return undefined as T;
-
-    case 'background_agent_stats':
-      return {
-        totalAgents: 0,
-        runningCount: 0,
-        queuedCount: 0,
-        pausedCount: 0,
-        completedCount: 0,
-        failedCount: 0,
-        maxAgents: 8,
-        atCapacity: false,
-      } as T;
 
     case 'skill_list':
       return [] as T;
@@ -1048,22 +838,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'voice_tts_speak_local':
     case 'voice_tts_speak_with_barge_in':
     case 'voice_tts_stop':
-      return undefined as T;
-
-    case 'agi_init':
-      return undefined as T;
-
-    case 'agi_should_use_swarm':
-      return false as T;
-
-    case 'agi_submit_goal_auto':
-    case 'agi_submit_goal_swarm':
-      return { goalId: `goal_mock_${Date.now()}` } as T;
-
-    case 'orchestrator_cancel_all':
-    case 'orchestrator_cleanup':
-    case 'pause_agent':
-    case 'resume_agent':
       return undefined as T;
 
     case 'notification_set_settings':
@@ -1157,10 +931,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'shortcuts_check_key':
       return false as T;
 
-    case 'track_workflow_view':
-      return undefined as T;
-
-    case 'artifact_create':
     case 'artifact_get':
     case 'artifact_update':
     case 'artifact_rollback': {
@@ -1273,21 +1043,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'chat_delete_conversation':
     case 'computer_use_execute_opa_task':
-    case 'approve_operation':
-    case 'reject_operation':
     case 'llm_list_ollama_models':
-    case 'metrics_increment_automations':
-    case 'metrics_increment_goals':
-    case 'metrics_set_cache_hit_rate':
-    case 'metrics_set_mcp_servers':
-    case 'reset_session_cost':
     case 'project_context_set_folder':
-    case 'project_context_get_folder':
-    case 'project_context_get_summary':
-    case 'project_context_list_files':
-    case 'project_context_validate_path':
-    case 'research_get_modes':
-    case 'research_quick':
       return undefined as T;
 
     case 'file_write':
@@ -1323,9 +1080,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'update_trigger':
     case 'unregister_trigger':
     case 'toggle_trigger':
-    case 'productivity_trello_move_card':
-    case 'productivity_asana_assign_task':
-    case 'productivity_asana_mark_complete':
     case 'save_custom_instructions':
     case 'log_tool_execution':
     case 'log_workflow_execution':
@@ -1351,24 +1105,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
   }
 }
 
-export function convertFileSrc(filePath: string, protocol = 'asset'): string {
-  if (isTauri) {
-    const encode = encodeURIComponent;
-    return `${protocol}://localhost/${encode(filePath)}`;
-  }
-
-  return filePath;
-}
-
 export function isTauriContext(): boolean {
   return isTauri;
-}
-
-export function getMockStatus(): { isTauri: boolean; mode: string } {
-  return {
-    isTauri,
-    mode: isTauri ? 'tauri' : 'web-mock',
-  };
 }
 
 export type EventCallback<T> = (event: { payload: T; id: number }) => void;
@@ -1444,7 +1182,7 @@ interface UpdateCheckResult {
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult | null> {
-  if (isTauri || isElectronHost) {
+  if (isTauri) {
     const { check } = await import('@tauri-apps/plugin-updater');
     return check();
   }

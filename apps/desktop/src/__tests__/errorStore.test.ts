@@ -134,41 +134,6 @@ describe('errorStore', () => {
     });
   });
 
-  describe('getStatistics', () => {
-    it('should return correct statistics', () => {
-      const { addError, getStatistics } = useErrorStore.getState();
-
-      addError({ type: 'NETWORK_ERROR', severity: 'error', message: 'Network error 1' });
-      addError({ type: 'NETWORK_ERROR', severity: 'error', message: 'Network error 2' });
-      addError({ type: 'DATABASE_ERROR', severity: 'critical', message: 'Database error' });
-      addError({ type: 'FILE_ERROR', severity: 'warning', message: 'File error' });
-
-      const stats = getStatistics();
-
-      expect(stats.totalErrors).toBe(4);
-      expect(stats.errorsByType['NETWORK_ERROR']).toBe(2);
-      expect(stats.errorsByType['DATABASE_ERROR']).toBe(1);
-      expect(stats.errorsBySeverity['error']).toBe(2);
-      expect(stats.errorsBySeverity['critical']).toBe(1);
-      expect(stats.errorsBySeverity['warning']).toBe(1);
-    });
-  });
-
-  describe('exportLogs', () => {
-    it('should export errors as JSON', async () => {
-      const { addError, exportLogs } = useErrorStore.getState();
-
-      addError({ type: 'TEST_ERROR', severity: 'error', message: 'Test error' });
-
-      const json = await exportLogs();
-      const parsed = JSON.parse(json);
-
-      expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].message).toBe('Test error');
-    });
-  });
-
   describe('FIFO eviction order (M35)', () => {
     it('evicts oldest errors first when history exceeds maxHistorySize', () => {
       const { addError } = useErrorStore.getState();

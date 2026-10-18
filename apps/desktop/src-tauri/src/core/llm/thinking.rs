@@ -32,9 +32,6 @@ pub const THINKING_BUDGET_MEDIUM: u32 = 32_000;
 /// Default token budget for high thinking mode ("ultrathink")
 pub const THINKING_BUDGET_HIGH: u32 = 128_000;
 
-/// Maximum output tokens when thinking is enabled for the current catalog route.
-pub const MAX_OUTPUT_WITH_THINKING: u32 = 128_000;
-
 /// Thinking budget levels that map to different token allocations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

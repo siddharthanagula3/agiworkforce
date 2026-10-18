@@ -161,10 +161,16 @@ impl PerplexityClient {
             .build()
             .map_err(APIError::HttpError)?;
 
+        let base_url = crate::core::llm::providers::direct_api_provider::default_base_url(
+            crate::core::llm::Provider::Perplexity,
+        )
+        .ok_or_else(|| APIError::APIError("Perplexity has no registered API endpoint".to_string()))?
+        .to_string();
+
         Ok(Self {
             client,
             api_key: config.api_key,
-            base_url: "https://api.perplexity.ai".to_string(),
+            base_url,
             default_model: model,
         })
     }
@@ -225,18 +231,6 @@ impl PerplexityClient {
     /// Deep research query using the catalog's best research variant.
     pub async fn deep_research(&self, query: &str) -> Result<PerplexityResponse> {
         self.search_with_model(query, PerplexityModel::DeepResearch)
-            .await
-    }
-
-    /// Pro search - more thorough than standard search
-    pub async fn search_pro(&self, query: &str) -> Result<PerplexityResponse> {
-        self.search_with_model(query, PerplexityModel::Thorough)
-            .await
-    }
-
-    /// Reasoning search - best for complex analytical questions
-    pub async fn search_reasoning(&self, query: &str) -> Result<PerplexityResponse> {
-        self.search_with_model(query, PerplexityModel::Reasoning)
             .await
     }
 

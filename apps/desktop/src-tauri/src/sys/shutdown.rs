@@ -48,7 +48,6 @@ pub const QUIT_LABEL: &str = "Quit and Stop All";
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct LiveWork {
     pub chat_replies: usize,
-    pub agent_tasks: usize,
     pub background_agents: usize,
     pub terminals: usize,
     pub scheduled_runs: usize,
@@ -89,12 +88,6 @@ pub fn live_work_lines(work: &LiveWork) -> Vec<String> {
         lines.push(format!(
             "{} still being written",
             plural(work.chat_replies, "chat reply", "chat replies")
-        ));
-    }
-    if work.agent_tasks > 0 {
-        lines.push(format!(
-            "{} still running",
-            plural(work.agent_tasks, "agent task", "agent tasks")
         ));
     }
     if work.background_agents > 0 {
@@ -240,11 +233,10 @@ async fn confirm_then_quit(app: AppHandle, code: i32) {
 pub async fn live_work(app: &AppHandle) -> LiveWork {
     use crate::core::agent::{BackgroundAgentManagerState, BackgroundAgentStatus};
     use crate::features::terminal::SessionManager;
-    use crate::sys::commands::{agi, SchedulerState};
+    use crate::sys::commands::SchedulerState;
 
     let mut work = LiveWork {
         chat_replies: crate::sys::commands::chat::active_turn_count(),
-        agent_tasks: agi::live_goal_count().await + agi::awaited_agent_run_count(),
         ..LiveWork::default()
     };
 
@@ -295,7 +287,7 @@ pub async fn stop_services(app: &AppHandle) {
     use crate::core::agent::BackgroundAgentManagerState;
     use crate::features::terminal::SessionManager;
     use crate::sys::commands::analytics::TelemetryState;
-    use crate::sys::commands::{agi, AppDatabase, BrowserStateWrapper, McpState, SchedulerState};
+    use crate::sys::commands::{AppDatabase, BrowserStateWrapper, McpState, SchedulerState};
 
     tracing::info!("[shutdown] stopping services");
 
@@ -332,13 +324,6 @@ pub async fn stop_services(app: &AppHandle) {
         .map(|s| s.0.clone());
     bounded_step("agents", async move {
         let _ = crate::sys::commands::chat_stop_generation(None).await;
-        let goals = agi::cancel_live_goals().await;
-        let orchestrated = agi::cancel_live_orchestrator_agents().await;
-        if goals + orchestrated > 0 {
-            tracing::info!(
-                "[shutdown] cancelled {goals} agent task(s) and {orchestrated} orchestrated agent(s)"
-            );
-        }
         if let Some(agents) = agents {
             agents.read().await.interrupt_all_runs().await;
         }
@@ -448,7 +433,6 @@ mod tests {
     fn prompt_names_each_kind_of_work_that_stops() {
         let prompt = quit_prompt(&LiveWork {
             chat_replies: 2,
-            agent_tasks: 1,
             background_agents: 2,
             terminals: 3,
             scheduled_runs: 1,
@@ -456,7 +440,6 @@ mod tests {
         .expect("live work must ask before quitting");
         assert_eq!(prompt.title, "Quit AGI Workforce?");
         assert!(prompt.body.contains("• 2 chat replies still being written"));
-        assert!(prompt.body.contains("• 1 agent task still running"));
         assert!(prompt.body.contains("• 2 background agents still running"));
         assert!(prompt.body.contains("• 1 scheduled run in progress"));
         assert!(prompt.body.contains("• 3 terminals open"));

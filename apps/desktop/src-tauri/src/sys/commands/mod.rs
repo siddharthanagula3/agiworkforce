@@ -1,6 +1,4 @@
 pub mod agent;
-pub mod agent_context;
-pub mod agi;
 pub mod analytics;
 pub mod api;
 pub mod artifacts;
@@ -72,6 +70,7 @@ pub mod triggers;
 
 pub mod code_search; // Grep + Glob + Formatter pipeline
 pub mod system_permissions;
+pub mod system_resources;
 pub mod test_runner; // Test runner integration (cargo / pytest / jest / etc.)
 pub mod tool_confirmation;
 pub mod undo;
@@ -88,10 +87,6 @@ mod path_validation_tests;
 mod window_tests;
 
 pub use agent::*;
-pub use agent_context::{
-    try_get_command_name, try_get_conversation_id, try_get_request_id, CommandContext, COMMAND_CTX,
-};
-pub use agi::*;
 pub use analytics::*;
 pub use api::*;
 pub use artifacts::*;
@@ -153,6 +148,7 @@ pub use settings_v2::*;
 pub use shortcuts::*;
 pub use skills::*;
 pub use system_permissions::*;
+pub use system_resources::*;
 pub use terminal::*;
 pub use test_runner::*;
 pub use thinking::*;

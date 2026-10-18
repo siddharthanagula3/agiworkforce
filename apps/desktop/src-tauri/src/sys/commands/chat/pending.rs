@@ -230,7 +230,6 @@ pub async fn chat_pop_pending_message(
     }
 
     let msg = if let Some(conversation_id) = request.conversation_id {
-        // AUDIT-STREAM-062 fix: Pop message for specific conversation if provided.
         let idx = queue
             .iter()
             .position(|m| m.conversation_id == Some(conversation_id));
@@ -282,7 +281,7 @@ pub fn has_pending_messages() -> bool {
         .unwrap_or(false)
 }
 
-// AUDIT-STREAM-062 fix: Check pending messages for a specific conversation
+// Check pending messages for a specific conversation
 pub fn has_pending_messages_for_conversation(conversation_id: i64) -> bool {
     PENDING_MESSAGES
         .lock()
@@ -295,7 +294,7 @@ pub fn pending_messages_count() -> usize {
     PENDING_MESSAGES.lock().map(|q| q.len()).unwrap_or(0)
 }
 
-// AUDIT-STREAM-062 fix: Peek at pending messages for a specific conversation
+// Peek at pending messages for a specific conversation
 pub fn peek_pending_messages_for_conversation(conversation_id: i64) -> Vec<PendingUserMessage> {
     PENDING_MESSAGES
         .lock()

@@ -7,7 +7,7 @@ interface UpdatePillProps {
 }
 
 export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) {
-  const { status, updateInfo, downloadAndInstall, isManualInstallerUpdate } = useUpdater();
+  const { status, updateInfo, downloadAndInstall } = useUpdater();
 
   if (status !== 'available' && status !== 'downloaded' && status !== 'downloading') {
     return null;
@@ -26,9 +26,7 @@ export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) 
       ? `Restart to update to v${updateInfo?.version ?? '...'}`
       : status === 'downloading'
         ? 'Downloading update...'
-        : isManualInstallerUpdate
-          ? `Download v${updateInfo?.version ?? '...'} installer`
-          : `Update to v${updateInfo?.version ?? '...'}`;
+        : `Update to v${updateInfo?.version ?? '...'}`;
 
   return (
     <button

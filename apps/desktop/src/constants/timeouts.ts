@@ -1,24 +1,4 @@
-export const DEFAULT_API_TIMEOUT_MS = 30_000;
-
-export const DEVICE_LINK_POLL_TIMEOUT_MS = 60_000;
-
-export const SESSION_CHECK_TIMEOUT_MS = 5_000;
-
-export const AUTH_SIGN_IN_TIMEOUT_MS = 30_000;
-
-export const AUTH_SIGN_OUT_TIMEOUT_MS = 2_000;
-
 export const PROFILE_FETCH_TIMEOUT_MS = 15_000;
-
-export const SUBSCRIPTION_FETCH_TIMEOUT_MS = 30_000;
-
-export const FEATURE_FLAGS_FETCH_TIMEOUT_MS = 15_000;
-
-export const DATABASE_WARMUP_TIMEOUT_MS = 30_000;
-
-export const WEB_API_FALLBACK_TIMEOUT_MS = 30_000;
-
-export const BROWSER_AUTOMATION_TIMEOUT_MS = 30_000;
 
 export const MCP_TIMEOUT_MS = 30_000;
 
@@ -27,10 +7,6 @@ export const MCP_TOOL_CALL_TIMEOUT_MS = 120_000;
 export const MCP_INIT_TIMEOUT_MS = 60_000;
 
 export const MCP_OAUTH_TIMEOUT_MS = 60_000;
-
-export const MCP_SIGN_IN_TIMEOUT_MS = 150_000;
-
-export const COMPLETION_TIMEOUT_MS = 500;
 
 export const OLLAMA_TIMEOUT_MS = 10_000;
 
@@ -42,42 +18,10 @@ export const INVOKE_TIMEOUT_MS = 10_000;
 
 export const IPC_TIMEOUT_MS = 30_000;
 
-export const UI_FEEDBACK_DURATION_MS = 2_000;
-
-export const UI_FEEDBACK_LONG_DURATION_MS = 3_000;
-
-export const EXPORT_FEEDBACK_DURATION_MS = 5_000;
-
-export const ERROR_AUTO_CLEAR_DURATION_MS = 4_000;
-
-export const URL_REVOKE_DELAY_MS = 60_000;
-
-export const SUBSCRIPTION_CHANGE_DEBOUNCE_MS = 2_000;
-
-export const AUTH_RESEND_TICK_MS = 1_000;
-
-export const SESSION_TIMER_INTERVAL_MS = 1_000;
-
 export const DEFAULT_MAX_RETRIES = 3;
 
 export const RETRY_BASE_DELAY_MS = 1_000;
 
 export const RETRY_BACKOFF_MULTIPLIER = 2;
 
-export const CIRCUIT_BREAKER_MAX_FAILURES = 5;
-
-export const CIRCUIT_BREAKER_COOLDOWN_MS = 60_000;
-
-export const EXPONENTIAL_BACKOFF_BASE_MS = 100;
-
 export const AUTH_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
-
-export const APPROVAL_MODAL_TIMEOUT_SECONDS = 120;
-
-export const UPLOAD_RETRY_DELAY_MS = 500;
-
-export const FEEDBACK_DIALOG_DELAY_MS = 500;
-
-export const CHAT_RETRY_DELAY_MS = 500;
-
-export const MISSION_CONTROL_REFRESH_DELAY_MS = 500;

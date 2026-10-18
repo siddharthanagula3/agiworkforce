@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::sys::error::{Error, Result};
-use crate::sys::security::egress_policy::public_destination_redirect_policy;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuth2Config {
@@ -97,15 +96,13 @@ impl Clone for OAuth2Client {
 
 impl OAuth2Client {
     pub fn new(config: OAuth2Config) -> crate::sys::error::Result<Self> {
-        // `token_url` is judged once, by `ensure_oauth_endpoints_public`, before
-        // this client is built. That check is worth nothing on its own while the
-        // client then follows up to ten `Location:` headers unjudged: the three
-        // token calls below POST `client_secret` in a form body, and a 307/308
-        // preserves both method and body, so an allowed token endpoint that
-        // redirects can replay the secret to a destination nobody judged.
+        // The token calls below POST `client_secret` and the refresh token in a
+        // form body, and a 307/308 preserves both method and body. Judging the
+        // next hop only proves it is public, not that it is the provider, so
+        // this client follows no redirect at all.
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
-            .redirect(public_destination_redirect_policy())
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| {
                 crate::sys::error::Error::Other(format!(
@@ -123,10 +120,6 @@ impl OAuth2Client {
 
     pub fn redirect_uri(&self) -> &str {
         &self.config.redirect_uri
-    }
-
-    pub fn uses_pkce(&self) -> bool {
-        self.config.use_pkce
     }
 
     pub fn get_authorization_url(&self, state: &str, pkce: Option<&PkceChallenge>) -> String {
@@ -237,10 +230,16 @@ impl OAuth2Client {
             )));
         }
 
-        let token_response: TokenResponse = response
+        let mut token_response: TokenResponse = response
             .json()
             .await
             .map_err(|e| Error::Other(format!("Failed to parse token response: {}", e)))?;
+
+        // RFC 6749 §6: a provider that issues no new refresh token leaves the
+        // old one valid, and Google and Dropbox never reissue one.
+        if token_response.refresh_token.is_none() {
+            token_response.refresh_token = Some(refresh_token.to_string());
+        }
 
         tracing::info!("Successfully refreshed access token");
 
@@ -363,11 +362,9 @@ mod tests {
         assert!(url.contains("code_challenge_method=S256"));
     }
 
-    /// The token endpoint is judged once, before this client exists. That check
-    /// is worthless while the client follows `Location:` unjudged: a 307
-    /// preserves method AND body, so the `client_secret` in the form body is
-    /// replayed verbatim to wherever the redirect points. This asserts the
-    /// second hop into loopback is never opened, and therefore that the secret
+    /// A 307 preserves method AND body, so a followed redirect would replay the
+    /// `client_secret` in the form body verbatim to wherever it points. This
+    /// asserts the second hop is never opened, and therefore that the secret
     /// never leaves for it.
     #[tokio::test]
     async fn token_requests_do_not_replay_the_client_secret_across_a_redirect() {
@@ -433,7 +430,7 @@ mod tests {
         let result = client.exchange_code("auth_code", None).await;
         assert!(
             result.is_err(),
-            "a token redirect into loopback must not be followed"
+            "a token redirect must not be followed"
         );
 
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
@@ -447,7 +444,7 @@ mod tests {
         assert_eq!(
             sink_hits.load(Ordering::SeqCst),
             0,
-            "the client followed a redirect into loopback"
+            "the client followed a redirect"
         );
         assert_eq!(
             token_hits.load(Ordering::SeqCst),

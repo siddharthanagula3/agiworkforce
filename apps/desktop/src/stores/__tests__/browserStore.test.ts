@@ -30,8 +30,6 @@ describe('browserStore', () => {
       actions: [],
       domSnapshots: [],
       highlightedElement: null,
-      isRecording: false,
-      recordedSteps: [],
       isStreaming: false,
       streamIntervalId: null,
     });
@@ -197,17 +195,6 @@ describe('browserStore', () => {
     useBrowserStore.getState().setActiveSession('session-2');
 
     expect(useBrowserStore.getState().activeSessionId).toBe('session-2');
-  });
-
-  it('should start and stop recording', () => {
-    const { startRecording, stopRecording } = useBrowserStore.getState();
-
-    startRecording();
-    expect(useBrowserStore.getState().isRecording).toBe(true);
-    expect(useBrowserStore.getState().recordedSteps).toEqual([]);
-
-    stopRecording();
-    expect(useBrowserStore.getState().isRecording).toBe(false);
   });
 
   it('should clear actions', () => {

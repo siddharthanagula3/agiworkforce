@@ -7,14 +7,13 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use image::{DynamicImage, RgbaImage};
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::timeout;
 
-use crate::automation::screen::{capture_display, capture_region, CapturedImage};
+use crate::automation::screen::{capture_display, CapturedImage};
 use crate::core::llm::llm_router::LLMRouter;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
@@ -99,17 +98,6 @@ impl Default for VisualReasonerConfig {
             trust_mode: None,
         }
     }
-}
-
-/// Detection result from analyzing an image region.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElementDetection {
-    /// Detected elements with their properties.
-    pub elements: Vec<ScreenElement>,
-    /// Overall confidence of the detection.
-    pub confidence: f32,
-    /// Time taken for detection.
-    pub detection_time_ms: u64,
 }
 
 /// Observation of the current screen state.
@@ -252,31 +240,6 @@ impl VisualReasoner {
         Ok(observation)
     }
 
-    /// Captures and analyzes a specific region of the screen.
-    pub async fn observe_region(&self, bounds: ElementBounds) -> Result<ScreenObservation> {
-        let front_app = self.ensure_front_app_may_be_captured().await?;
-        let region = capture_region(bounds.left, bounds.top, bounds.width, bounds.height)
-            .context("Failed to capture region")?;
-
-        // Create a CapturedImage from the region
-        let screenshot = CapturedImage {
-            pixels: region.pixels,
-            screen_index: region.screen_index,
-            display: region.display,
-        };
-
-        let image_base64 = self.prepare_image_for_llm(&screenshot.pixels)?;
-        let analysis = self.analyze_screenshot(&screenshot, &image_base64).await?;
-
-        Ok(ScreenObservation {
-            screenshot,
-            analysis,
-            image_base64,
-            timestamp: Instant::now(),
-            front_app: Some(front_app),
-        })
-    }
-
     /// Analyzes a screenshot to extract UI elements and understand the screen state.
     async fn analyze_screenshot(
         &self,
@@ -330,64 +293,6 @@ Focus on interactive elements that can be clicked, typed into, or otherwise inte
         let parsed = self.parse_analysis_response(&response, screenshot)?;
 
         Ok(parsed)
-    }
-
-    /// Finds elements matching a description on the current screen.
-    pub async fn find_element(&self, description: &str) -> Result<Option<ScreenElement>> {
-        let observation = self.observe_screen().await?;
-
-        let find_prompt = format!(
-            r#"Look at this screenshot and find the UI element that best matches this description:
-"{}"
-
-If you find a matching element, respond with JSON:
-{{
-  "found": true,
-  "element": {{
-    "id": "target",
-    "element_type": "button|text_field|link|etc",
-    "label": "visible label or text",
-    "bounds_percent": {{"left": 45, "top": 80, "width": 10, "height": 5}},
-    "is_interactive": true,
-    "is_focused": false,
-    "confidence": 0.9
-  }},
-  "reasoning": "Why this element matches"
-}}
-
-If no matching element is found, respond with:
-{{
-  "found": false,
-  "reasoning": "Why no element matches"
-}}"#,
-            description
-        );
-
-        let response = self
-            .call_vision_llm(&find_prompt, &observation.image_base64)
-            .await?;
-
-        // Parse find result
-        let json_str = self.extract_json(&response)?;
-        let parsed: serde_json::Value =
-            serde_json::from_str(json_str).context("Failed to parse find response")?;
-
-        if parsed
-            .get("found")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
-            if let Some(elem) = parsed.get("element") {
-                let element = self.parse_element_json(
-                    elem,
-                    observation.screenshot.pixels.width(),
-                    observation.screenshot.pixels.height(),
-                )?;
-                return Ok(Some(element));
-            }
-        }
-
-        Ok(None)
     }
 
     /// Locates text on the screen and returns its position.
@@ -762,10 +667,16 @@ If not found:
         screen_width: u32,
         screen_height: u32,
     ) -> Result<ElementBounds> {
-        let left_pct = bounds.get("left").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let top_pct = bounds.get("top").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let width_pct = bounds.get("width").and_then(|v| v.as_f64()).unwrap_or(10.0);
-        let height_pct = bounds.get("height").and_then(|v| v.as_f64()).unwrap_or(5.0);
+        let percent = |name: &str| {
+            bounds
+                .get(name)
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| anyhow::anyhow!("bounds_percent is missing a numeric '{name}'"))
+        };
+        let left_pct = percent("left")?;
+        let top_pct = percent("top")?;
+        let width_pct = percent("width")?;
+        let height_pct = percent("height")?;
 
         Ok(ElementBounds {
             left: ((left_pct / 100.0) * screen_width as f64) as i32,

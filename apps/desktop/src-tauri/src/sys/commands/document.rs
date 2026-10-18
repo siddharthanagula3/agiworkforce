@@ -121,11 +121,9 @@ pub async fn document_detect_type(file_path: String, app: tauri::AppHandle) -> R
 /// with the edits applied, so existing sheets and cells survive. That is what
 /// makes this safe to expose.
 ///
-/// There is deliberately no `document_edit_word` counterpart: `WordEditor`
-/// cannot parse an existing .docx (docx_rs is write-only) and builds a NEW
-/// document from the edits alone, discarding the source. Exposing that as
-/// "edit your document" would silently destroy the user's content. See
-/// docs/decisions/wire-or-cut.md.
+/// There is deliberately no `document_edit_word` counterpart: docx_rs is
+/// write-only, so a Word edit could only build a new document from the edits
+/// alone and discard the source. See docs/decisions/wire-or-cut.md.
 pub async fn document_edit_excel(
     file_path: String,
     output_path: String,

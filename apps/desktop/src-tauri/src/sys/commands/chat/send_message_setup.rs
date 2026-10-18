@@ -13,7 +13,6 @@ use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SendMessageFlags {
-    pub agent_mode: bool,
     pub is_deep_research: bool,
     pub is_web_focus: bool,
     pub stream_mode: bool,
@@ -32,7 +31,6 @@ pub(super) struct PreparedSendMessage {
     pub preferences: RouterPreferences,
     pub provider_enum: Option<Provider>,
     pub model: String,
-    pub agent_instruction: String,
     pub tool_registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
     pub flags: SendMessageFlags,
 }
@@ -52,17 +50,7 @@ pub(super) fn log_chat_request(request: &ChatSendMessageRequest, correlation_id:
     }
 }
 
-pub(super) fn resolve_request_flags(
-    request: &ChatSendMessageRequest,
-    app_handle: &tauri::AppHandle,
-) -> SendMessageFlags {
-    let explicit_model = is_explicit_model_selection(request.model_override.as_deref());
-    let agent_mode = if explicit_model {
-        request.enable_agent_mode == Some(true)
-    } else {
-        detect_agent_mode(request.enable_agent_mode, &request.content, app_handle)
-    };
-
+pub(super) fn resolve_request_flags(request: &ChatSendMessageRequest) -> SendMessageFlags {
     // Determine whether the request is operating in local-only mode.
     // The frontend sends `active_mode: "local" | "cloud"` from the toggle.
     // Fall back to !prefer_cloud_credits for legacy callers that omit active_mode.
@@ -78,7 +66,6 @@ pub(super) fn resolve_request_flags(
     );
 
     SendMessageFlags {
-        agent_mode,
         is_deep_research: matches!(request.focus_mode.as_deref(), Some("deep-research"))
             || request.research_task_id.is_some(),
         is_web_focus: matches!(request.focus_mode.as_deref(), Some("web") | Some("search")),
@@ -332,17 +319,15 @@ pub(super) async fn prepare_send_message(
     )
     .await?;
 
-    let project_context_for_agent = effective_folder.as_ref().map(|folder| {
-        let project_context_content = build_project_context_message(folder);
+    if let Some(folder) = effective_folder.as_ref() {
         llm_messages.push(ChatMessage {
             role: "system".to_string(),
-            content: project_context_content.clone(),
+            content: build_project_context_message(folder),
             tool_calls: None,
             tool_call_id: None,
             multimodal_content: None,
         });
-        project_context_content
-    });
+    }
 
     // Inject coding context if project folder exists
     if let Some(ref folder) = effective_folder {
@@ -432,18 +417,7 @@ pub(super) async fn prepare_send_message(
             multimodal_content: None,
         });
     }
-    let attachment_text_context =
-        process_document_attachments(request.attachments.as_ref(), &mut llm_messages);
-
-    let mut agent_instruction = request.content.clone();
-    if let Some(context) = project_context_for_agent.as_ref() {
-        agent_instruction.push_str("\n\n");
-        agent_instruction.push_str(context);
-    }
-    if let Some(docs) = attachment_text_context.as_ref() {
-        agent_instruction.push_str("\n\n");
-        agent_instruction.push_str(docs);
-    }
+    process_document_attachments(request.attachments.as_ref(), &mut llm_messages);
 
     // Run automatic compaction against the exact prospective request, including
     // injected system context. If it persists a compacted history, reload the
@@ -567,7 +541,6 @@ pub(super) async fn prepare_send_message(
         preferences,
         provider_enum,
         model,
-        agent_instruction,
         tool_registry,
         flags,
     })
@@ -1401,7 +1374,6 @@ mod tests {
             output_config: None,
             temperature: None,
             max_output_tokens: None,
-            enable_agent_mode: None,
             prefer_cloud_credits,
             active_mode: active_mode.map(String::from),
             execution_mode: None,

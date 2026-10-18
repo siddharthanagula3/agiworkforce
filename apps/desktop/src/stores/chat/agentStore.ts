@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { invoke, isTauri, listen } from '../../lib/tauri-mock';
+import { isTauri, listen } from '../../lib/tauri-mock';
 
 export interface AgentStatus {
   id: string;
@@ -45,13 +45,6 @@ export interface AgentState {
   setAgentStatus: (status: AgentStatus | null) => void;
   addAgent: (agent: AgentStatus) => void;
   removeAgent: (id: string) => void;
-
-  pauseAgent: (agentId: string) => Promise<void>;
-  resumeAgent: (agentId: string) => Promise<void>;
-  cancelAgent: (agentId: string) => Promise<void>;
-  cancelAllAgents: () => Promise<void>;
-  cleanupAgents: () => Promise<number>;
-  refreshAgentStatuses: () => Promise<void>;
 
   addActionTrailEntry: (entry: Omit<ActionTrailEntry, 'id' | 'timestamp'>) => void;
   removeActionTrailEntry: (id: string) => void;
@@ -113,121 +106,6 @@ export const useAgentStore = create<AgentState>()(
             undefined,
             'agent/removeAgent',
           ),
-
-        pauseAgent: async (agentId) => {
-          try {
-            await invoke('pause_agent', { agentId });
-            set(
-              (state) => {
-                const agent = state.agents.find((a) => a.id === agentId);
-                if (agent) agent.status = 'paused';
-                if (state.agentStatus?.id === agentId && state.agentStatus) {
-                  state.agentStatus.status = 'paused';
-                }
-              },
-              undefined,
-              'agent/pauseAgent',
-            );
-          } catch (error) {
-            console.error('[AgentStore] Failed to pause agent:', error);
-            throw error;
-          }
-        },
-
-        resumeAgent: async (agentId) => {
-          try {
-            await invoke('resume_agent', { agentId });
-            set(
-              (state) => {
-                const agent = state.agents.find((a) => a.id === agentId);
-                if (agent) agent.status = 'running';
-                if (state.agentStatus?.id === agentId && state.agentStatus) {
-                  state.agentStatus.status = 'running';
-                }
-              },
-              undefined,
-              'agent/resumeAgent',
-            );
-          } catch (error) {
-            console.error('[AgentStore] Failed to resume agent:', error);
-            throw error;
-          }
-        },
-
-        cancelAgent: async (agentId) => {
-          try {
-            await invoke('orchestrator_cancel_agent', { agentId });
-            set(
-              (state) => {
-                const agent = state.agents.find((a) => a.id === agentId);
-                if (agent) agent.status = 'failed';
-                if (state.agentStatus?.id === agentId && state.agentStatus) {
-                  state.agentStatus.status = 'failed';
-                }
-              },
-              undefined,
-              'agent/cancelAgent',
-            );
-          } catch (error) {
-            console.error('[AgentStore] Failed to cancel agent:', error);
-            throw error;
-          }
-        },
-
-        cancelAllAgents: async () => {
-          try {
-            await invoke('orchestrator_cancel_all');
-            set(
-              (state) => {
-                for (const agent of state.agents) {
-                  if (agent.status === 'running' || agent.status === 'paused') {
-                    agent.status = 'failed';
-                  }
-                }
-                if (state.agentStatus) {
-                  state.agentStatus.status = 'failed';
-                }
-              },
-              undefined,
-              'agent/cancelAllAgents',
-            );
-          } catch (error) {
-            console.error('[AgentStore] Failed to cancel all agents:', error);
-            throw error;
-          }
-        },
-
-        cleanupAgents: async () => {
-          try {
-            const removed = await invoke<number>('orchestrator_cleanup');
-            if (removed > 0) {
-              set(
-                (state) => {
-                  state.agents = state.agents.filter(
-                    (a) => a.status === 'running' || a.status === 'paused' || a.status === 'idle',
-                  );
-                },
-                undefined,
-                'agent/cleanupAgents',
-              );
-            }
-            return removed;
-          } catch (error) {
-            console.error('[AgentStore] Failed to cleanup agents:', error);
-            return 0;
-          }
-        },
-
-        refreshAgentStatuses: async () => {
-          try {
-            const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
-            applyAgentStatusSnapshot(Array.isArray(agents) ? agents : []);
-          } catch {
-            console.debug(
-              '[AgentStore] Agent status refresh returned empty (orchestrator not yet initialized)',
-            );
-          }
-        },
 
         addActionTrailEntry: (entry) =>
           set(
@@ -367,26 +245,12 @@ export async function initializeAgentStatusListener() {
   agentStatusListenerInitialized = true;
 
   try {
-    await bootstrapAgentStatuses();
-
     await listen<AgentStatusPayload>('agent:status:update', (event) => {
       applyAgentStatusUpdate(event.payload);
     });
   } catch (error) {
     agentStatusListenerInitialized = false;
     console.error('[AgentStore] Failed to initialize agent status listener:', error);
-  }
-}
-
-async function bootstrapAgentStatuses() {
-  try {
-    const agents = await invoke<AgentStatusPayload[]>('refresh_agent_status');
-    applyAgentStatusSnapshot(Array.isArray(agents) ? agents : []);
-  } catch {
-    applyAgentStatusSnapshot([]);
-    console.debug(
-      '[AgentStore] Agent status bootstrap returned empty (orchestrator not yet initialized)',
-    );
   }
 }
 

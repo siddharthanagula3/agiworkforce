@@ -18,14 +18,7 @@ impl McpAuth {
     }
 
     pub fn verify(&self, provided: &str) -> bool {
-        let expected = self.token.as_bytes();
-        let got = provided.as_bytes();
-        if expected.len() != got.len() {
-            // Constant-time compare still runs to prevent timing attacks
-            let _ = expected.ct_eq(expected);
-            return false;
-        }
-        expected.ct_eq(got).into()
+        self.token.as_bytes().ct_eq(provided.as_bytes()).into()
     }
 }
 

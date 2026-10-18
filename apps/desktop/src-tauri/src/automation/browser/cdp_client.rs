@@ -19,6 +19,14 @@ fn escape_js_string_cdp(s: &str) -> String {
         .replace('\r', "\\r")
 }
 
+fn history_edge_message(offset: i64) -> String {
+    if offset < 0 {
+        "There is no earlier page in this tab's history".to_string()
+    } else {
+        "There is no later page in this tab's history".to_string()
+    }
+}
+
 pub struct CdpClient {
     ws_url: String,
     message_id: Arc<AtomicU64>,
@@ -347,22 +355,6 @@ impl CdpClient {
         Ok(())
     }
 
-    pub async fn element_exists(&self, selector: &str) -> Result<bool> {
-        let safe = escape_js_string_cdp(selector);
-        let script = format!(
-            r#"
-            (function() {{
-                return !!document.querySelector('{}');
-            }})()
-            "#,
-            safe
-        );
-
-        let result = self.evaluate(&script).await?;
-
-        Ok(result.as_bool().unwrap_or(false))
-    }
-
     pub async fn select_option(&self, selector: &str, value: &str) -> Result<()> {
         let safe_sel = escape_js_string_cdp(selector);
         let safe_val = escape_js_string_cdp(value);
@@ -518,6 +510,44 @@ impl CdpClient {
         });
 
         self.send_command("Page.navigate", params).await?;
+        Ok(())
+    }
+
+    /// Move through this tab's own history: `offset` -1 is back, 1 is forward.
+    /// The page it lands on is held to the same host policy as [`Self::navigate`].
+    pub async fn navigate_history(&self, offset: i64) -> Result<()> {
+        let history = self
+            .send_command("Page.getNavigationHistory", json!({}))
+            .await?;
+        let current = history
+            .get("currentIndex")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| Error::Other("The tab reported no current history entry".to_string()))?;
+        let entries = history
+            .get("entries")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let entry = usize::try_from(current + offset)
+            .ok()
+            .and_then(|index| entries.get(index))
+            .ok_or_else(|| Error::Other(history_edge_message(offset)))?;
+        if let Some(url) = entry.get("url").and_then(Value::as_str) {
+            crate::automation::computer_use::ensure_navigation_url_allowed(url)
+                .map_err(Error::Other)?;
+        }
+        let entry_id = entry
+            .get("id")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| Error::Other("The history entry has no id".to_string()))?;
+
+        self.send_command("Page.navigateToHistoryEntry", json!({ "entryId": entry_id }))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn reload(&self) -> Result<()> {
+        self.send_command("Page.reload", json!({})).await?;
         Ok(())
     }
 

@@ -188,87 +188,6 @@ impl NotionClient {
         Ok(all_pages)
     }
 
-    pub async fn get_page_content(&self, page_id: &str) -> Result<serde_json::Value> {
-        let _permit = self.rate_limiter.acquire().await?;
-
-        let response = self
-            .client
-            .get(format!("{}/blocks/{}/children", NOTION_BASE_URL, page_id))
-            .bearer_auth(&self.token)
-            .send()
-            .await
-            .map_err(Error::from)?;
-
-        self.rate_limiter.wait_for_rate_limit().await;
-
-        if response.status().is_success() {
-            let data = response.json().await.map_err(Error::from)?;
-            Ok(data)
-        } else {
-            Err(Error::Provider(format!(
-                "Failed to get Notion page content: {}",
-                response.status()
-            )))
-        }
-    }
-
-    pub async fn create_page(
-        &self,
-        parent_id: &str,
-        title: &str,
-        properties: Option<serde_json::Value>,
-    ) -> Result<String> {
-        let _permit = self.rate_limiter.acquire().await?;
-
-        let mut body = serde_json::json!({
-            "parent": { "page_id": parent_id },
-            "properties": {
-                "title": {
-                    "title": [
-                        {
-                            "text": { "content": title }
-                        }
-                    ]
-                }
-            }
-        });
-
-        if let Some(props) = properties {
-            if let Some(obj) = body.get_mut("properties") {
-                if let Some(obj) = obj.as_object_mut() {
-                    if let Some(props_obj) = props.as_object() {
-                        for (key, value) in props_obj {
-                            obj.insert(key.clone(), value.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        let response = self
-            .client
-            .post(format!("{}/pages", NOTION_BASE_URL))
-            .bearer_auth(&self.token)
-            .json(&body)
-            .send()
-            .await
-            .map_err(Error::from)?;
-
-        self.rate_limiter.wait_for_rate_limit().await;
-
-        if response.status().is_success() {
-            let page: NotionPage = response.json().await.map_err(Error::from)?;
-            Ok(page.id)
-        } else {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            Err(Error::Provider(format!(
-                "Failed to create Notion page ({}): {}",
-                status, error_text
-            )))
-        }
-    }
-
     pub async fn query_database(
         &self,
         database_id: &str,
@@ -357,7 +276,7 @@ impl NotionClient {
             .unwrap_or_else(|| "Untitled".to_string())
     }
 
-    /// FIX-003: Try multiple common property names for status field
+    /// Try multiple common property names for status field
     /// Notion databases can use different property names for status
     fn extract_status(properties: &serde_json::Value) -> TaskStatus {
         // Common status property names in different languages and conventions
@@ -440,7 +359,7 @@ impl NotionClient {
             description: None,
             status,
             due_date: None,
-            // FIX-005: Notion people properties could be extracted here if needed
+            // Notion people properties could be extracted here if needed
             assignee: None,
             assignee_name: None,
             priority: None,

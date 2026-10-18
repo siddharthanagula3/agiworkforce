@@ -29,7 +29,7 @@ export type {
   ConversationMode,
 } from './types';
 
-export type { ChatState, CostOverviewResponse, CostAnalyticsResponse } from './chatStore';
+export type { ChatState } from './chatStore';
 export type { AgentStatus, ActionTrailEntry, AgentState, AgentStatusPayload } from './agentStore';
 export type {
   FileOperationType,

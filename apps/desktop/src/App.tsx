@@ -34,17 +34,11 @@ import { subscribeToLocalModelCatalogChanges } from './lib/localModelCatalog';
 import { isLocalProvider } from './types/provider';
 import { getCloudModels, getCloudUsage, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { clearSessionToolApprovals } from './api/toolConfirmation';
-import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import { subscribeToComputerUseEvents } from './stores/computerUseStore';
 import {
   cleanupAgentWorkflowEventListeners,
   initializeAgentWorkflowEventListeners,
 } from './stores/chat/agentWorkflowEvents';
-import {
-  cleanupExecutionListeners,
-  initializeExecutionGoalSubscription,
-  initializeExecutionListeners,
-} from './stores/executionStore';
 import {
   cleanupRuntimeActivityEventListeners,
   initializeRuntimeActivityEventListeners,
@@ -128,11 +122,6 @@ import { getDesktopSubscriptionOwnerPolicy } from './lib/subscriptionOwnership';
 
 registerChatStoreStateReader(useSharedChatStore);
 
-const VisualizationLayer = lazy(() =>
-  import('./features/overlay/VisualizationLayer').then((m) => ({
-    default: m.VisualizationLayer,
-  })),
-);
 const FloatingChat = lazy(() =>
   import('./features/floating-chat').then((m) => ({
     default: m.FloatingChat,
@@ -156,6 +145,11 @@ const SearchModal = lazy(() =>
 const CommandPalette = lazy(() =>
   import('./features/chat/CommandPalette').then((m) => ({
     default: m.CommandPalette,
+  })),
+);
+const KeyboardShortcutsOverlay = lazy(() =>
+  import('./features/chat/KeyboardShortcutsOverlay').then((m) => ({
+    default: m.KeyboardShortcutsOverlay,
   })),
 );
 const QuickQuery = lazy(() =>
@@ -284,7 +278,7 @@ const LoadingFallback = () => (
   </div>
 );
 
-type DesktopWindowMode = 'default' | 'overlay' | 'floating' | 'recorder-hud';
+type DesktopWindowMode = 'default' | 'floating' | 'recorder-hud';
 
 function resolveDesktopWindowMode(): DesktopWindowMode {
   if (typeof window === 'undefined') return 'default';
@@ -292,11 +286,9 @@ function resolveDesktopWindowMode(): DesktopWindowMode {
   try {
     const pathname = window.location.pathname;
     if (pathname === '/floating') return 'floating';
-    if (pathname === '/overlay') return 'overlay';
     if (pathname === '/recorder-hud') return 'recorder-hud';
 
     const mode = new URLSearchParams(window.location.search).get('mode');
-    if (mode === 'overlay') return 'overlay';
     if (mode === 'floating') return 'floating';
     if (mode === 'recorder-hud') return 'recorder-hud';
   } catch {
@@ -325,6 +317,8 @@ const DesktopShell = () => {
   const settingsInitialTab = useSettingsDialogStore((s) => s.settingsInitialTab);
   const openSettingsDialog = useSettingsDialogStore((s) => s.openSettings);
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
+  const shortcutsOpen = useSettingsDialogStore((s) => s.shortcutsOpen);
+  const closeShortcuts = useSettingsDialogStore((s) => s.closeShortcuts);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
   const [externalSendRequest, setExternalSendRequest] = useState<{
     id: string;
@@ -663,23 +657,16 @@ const DesktopShell = () => {
     installClientFailureReporting();
     registerCleanup(() => resetClientFailureReporting());
 
-    registerCleanup(() => cleanupExecutionListeners());
     registerCleanup(() => cleanupAgentWorkflowEventListeners());
     registerCleanup(() => cleanupRuntimeActivityEventListeners());
     registerCleanup(initializeCoworkDispatchRuntime());
 
-    void runStartupStep('Execution goal subscription', async () => {
-      initializeExecutionGoalSubscription();
-    });
-
     if (isTauri) {
       void runStartupStep('Agent status listener', () => initializeAgentStatusListener());
       void runStartupStep('Tool event listener', () => initializeToolEventListener());
-      void runStartupStep('Agent task event listener', () => initializeAgentTaskEventListeners());
       void runStartupStep('Agent workflow event listener', () =>
         initializeAgentWorkflowEventListeners(),
       );
-      void runStartupStep('Execution event listener', () => initializeExecutionListeners());
       void runStartupStep('Runtime activity event listener', () =>
         initializeRuntimeActivityEventListeners(),
       );
@@ -1870,6 +1857,11 @@ const DesktopShell = () => {
             />
           ) : null}
         </Suspense>
+        <Suspense fallback={null}>
+          {shortcutsOpen ? (
+            <KeyboardShortcutsOverlay open={shortcutsOpen} onClose={closeShortcuts} />
+          ) : null}
+        </Suspense>
         {/* Settings: Cloud mode renders the shared SettingsModal shell; Local mode keeps SettingsPanel */}
         <Suspense fallback={null}>
           {isCloudMode ? (
@@ -2037,8 +2029,6 @@ const App = () => {
 
   const renderContent = () => {
     switch (windowMode) {
-      case 'overlay':
-        return <VisualizationLayer />;
       case 'floating':
         return <FloatingChat />;
       case 'recorder-hud':

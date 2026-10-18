@@ -22,7 +22,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose, Engine as _};
-use image::{imageops::FilterType, DynamicImage, RgbaImage};
+use image::{imageops::FilterType, DynamicImage};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
@@ -184,11 +184,6 @@ impl ZoomAction {
         }
     }
 
-    /// Creates a zoom action from element bounds.
-    pub fn from_bounds(bounds: ElementBounds, zoom_level: ZoomLevel) -> Self {
-        Self::new(Region::from_element_bounds(&bounds), zoom_level)
-    }
-
     /// Sets the output path for saving the zoomed image.
     pub fn with_save_path(mut self, path: impl Into<String>) -> Self {
         self.save_path = Some(path.into());
@@ -278,22 +273,6 @@ pub struct ZoomResult {
     pub processing_time_ms: u64,
 }
 
-impl ZoomResult {
-    /// Decodes the base64 image to raw bytes.
-    pub fn decode_image(&self) -> Result<Vec<u8>> {
-        general_purpose::STANDARD
-            .decode(&self.image_base64)
-            .context("Failed to decode base64 image")
-    }
-
-    /// Returns the zoomed image as an RgbaImage.
-    pub fn to_rgba_image(&self) -> Result<RgbaImage> {
-        let bytes = self.decode_image()?;
-        let img = image::load_from_memory(&bytes).context("Failed to load image from memory")?;
-        Ok(img.to_rgba8())
-    }
-}
-
 /// Performs a zoom operation on a screen region.
 ///
 /// Captures the specified region from the screen and scales it
@@ -363,29 +342,6 @@ pub fn zoom_region(action: &ZoomAction) -> Result<ZoomResult> {
         saved_path,
         processing_time_ms,
     })
-}
-
-/// Performs a zoom operation and returns the raw image data.
-///
-/// This is a lower-level function that returns the scaled image
-/// directly without base64 encoding.
-pub fn zoom_region_raw(action: &ZoomAction) -> Result<RgbaImage> {
-    action.validate()?;
-
-    let captured = capture_region(
-        action.region.x,
-        action.region.y,
-        action.region.width,
-        action.region.height,
-    )
-    .context("Failed to capture screen region")?;
-
-    let (out_width, out_height) = action.output_dimensions();
-    let dynamic_image = DynamicImage::ImageRgba8(captured.pixels);
-    let scaled =
-        dynamic_image.resize_exact(out_width, out_height, action.interpolation.to_filter_type());
-
-    Ok(scaled.to_rgba8())
 }
 
 /// Creates a ZoomAction centered on a coordinate with auto-sizing.

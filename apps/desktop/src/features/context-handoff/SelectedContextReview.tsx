@@ -48,21 +48,6 @@ function containsHiddenUnicode(value: string): boolean {
   });
 }
 
-export function parseSelectedContextHandoff(
-  payload: unknown,
-  now: number = Date.now(),
-): SelectedContextHandoff | null {
-  const parsed = parseSelectedContextCandidate(payload);
-  if (
-    !parsed ||
-    now - parsed.selectedAt > SELECTED_CONTEXT_HANDOFF_TTL_MS ||
-    parsed.selectedAt > now + SELECTED_CONTEXT_HANDOFF_FUTURE_SKEW_MS
-  ) {
-    return null;
-  }
-  return parsed;
-}
-
 function parseSelectedContextCandidate(payload: unknown): SelectedContextHandoff | null {
   if (!isRecord(payload)) return null;
   const keys = Object.keys(payload).sort();

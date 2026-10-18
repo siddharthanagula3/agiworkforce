@@ -96,10 +96,6 @@ impl ElicitationBroker {
         *self.app.write() = Some(app);
     }
 
-    pub fn is_attached(&self) -> bool {
-        self.app.read().is_some()
-    }
-
     fn touch(&self, server_name: &str) {
         self.activity
             .lock()

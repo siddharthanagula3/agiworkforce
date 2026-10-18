@@ -746,8 +746,8 @@
         "desktop": {
           "state": "present",
           "via": "module",
-          "entry": "apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs",
-          "mount": "apps/desktop/src-tauri/src/integrations/api_integrations/mod.rs"
+          "entry": "apps/desktop/src-tauri/src/core/llm/tool_executor/media_tools.rs",
+          "mount": "apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs"
         },
         "mobile": {
           "state": "unverified",

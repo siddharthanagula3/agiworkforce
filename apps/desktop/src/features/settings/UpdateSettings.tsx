@@ -17,7 +17,6 @@ export function UpdateSettings() {
     downloadProgress,
     error,
     isChecking,
-    isManualInstallerUpdate,
     currentVersion,
     checkForUpdates,
     downloadAndInstall,
@@ -71,9 +70,7 @@ export function UpdateSettings() {
       case 'available':
         return {
           title: 'Update Available',
-          description: isManualInstallerUpdate
-            ? `Version ${updateInfo?.version} is available as a signed macOS installer.`
-            : `Version ${updateInfo?.version} is available for download.`,
+          description: `Version ${updateInfo?.version} is available for download.`,
           icon: <Download className="h-6 w-6 text-muted-foreground" />,
         };
       case 'downloading':
@@ -117,9 +114,7 @@ export function UpdateSettings() {
       <div>
         <h3 className="text-h3 mb-4">Software Update</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          {isManualInstallerUpdate
-            ? 'Check for signed AGI Cloud installers. Downloads open in your browser; installation stays under your control.'
-            : 'Check for updates to the AGI Workforce desktop application'}
+          Check for updates to the AGI Workforce desktop application
         </p>
       </div>
 
@@ -178,7 +173,7 @@ export function UpdateSettings() {
                 <>
                   <Button onClick={() => void downloadAndInstall()} size="sm">
                     <Download className="mr-2 h-4 w-4" />
-                    {isManualInstallerUpdate ? 'Download Installer' : 'Download & Install'}
+                    Download &amp; Install
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
                     View Details

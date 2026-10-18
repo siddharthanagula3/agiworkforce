@@ -69,14 +69,19 @@ impl SecretManager {
     pub fn get_or_create_jwt_secret(&self) -> Result<String, SecretError> {
         debug!("Attempting to retrieve JWT secret");
 
-        // Try database
+        // Only a missing row may be replaced: a stored secret that cannot be
+        // read right now must not be overwritten with a new one.
         match self.get_secret_from_database(JWT_SECRET_DB_KEY) {
             Ok(secret) => {
                 info!("JWT secret retrieved from database");
                 return Ok(secret);
             }
+            Err(e) if is_missing_secret(&e) => {
+                debug!("No JWT secret found in database");
+            }
             Err(e) => {
-                debug!("No JWT secret found in database: {}", sanitize_error(&e));
+                error!("Stored JWT secret is unreadable: {}", sanitize_error(&e));
+                return Err(e);
             }
         }
 
@@ -256,11 +261,12 @@ impl SecretManager {
     /// Get or create a secondary encryption key (stored encrypted in database)
     /// This is used for additional layered encryption if needed
     pub fn get_or_create_secondary_key(&self) -> Result<Vec<u8>, SecretError> {
-        // Try to get existing key
-        if let Ok(key_b64) = self.get_secret_from_database(DB_ENCRYPTION_KEY_DB_KEY) {
-            return general_purpose::STANDARD
-                .decode(&key_b64)
-                .map_err(|e| SecretError::EncryptionError(format!("Invalid key format: {}", e)));
+        match self.get_secret_from_database(DB_ENCRYPTION_KEY_DB_KEY) {
+            Ok(key_b64) => {
+                return general_purpose::STANDARD.decode(&key_b64).map_err(invalid_key_format);
+            }
+            Err(e) if is_missing_secret(&e) => {}
+            Err(e) => return Err(e),
         }
 
         // Generate a new key
@@ -307,6 +313,18 @@ impl SecretManager {
 
         Ok(())
     }
+}
+
+fn is_missing_secret(error: &SecretError) -> bool {
+    matches!(
+        error,
+        SecretError::SecretNotFound
+            | SecretError::DatabaseRetrieveError(rusqlite::Error::QueryReturnedNoRows)
+    )
+}
+
+fn invalid_key_format(error: base64::DecodeError) -> SecretError {
+    SecretError::EncryptionError(format!("Invalid key format: {}", error))
 }
 
 /// Sanitize error messages to prevent secret leakage

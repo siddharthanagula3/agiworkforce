@@ -68,7 +68,6 @@ pub async fn execute_terminal_command(
     shell: Option<String>,
     stream_id: Option<String>,
     emit_events: Option<bool>,
-    // AUDIT-TERMINAL-066 fix: Add timeout_ms parameter instead of hardcoded 60s
     timeout_ms: Option<u64>,
 ) -> Result<ExecuteResult, String> {
     use std::process::Stdio;
@@ -141,7 +140,6 @@ pub async fn execute_terminal_command(
         })
         .transpose()?;
 
-    // AUDIT-TERMINAL-054 fix: Use system default shell instead of hardcoded powershell/bash
     let shell = shell.unwrap_or_else(|| match get_default_shell() {
         ShellType::PowerShell => "powershell".to_string(),
         ShellType::Cmd => "cmd".to_string(),
@@ -153,7 +151,7 @@ pub async fn execute_terminal_command(
         ShellType::GitBash => "gitbash".to_string(),
     });
 
-    // AUDIT-TERMINAL-065/068 fix: Proper shell routing that honors requested shell
+    // Proper shell routing that honors requested shell
     // and doesn't select powershell.exe on non-Windows for unknown shells
     let (program, args): (String, Vec<String>) = match shell.to_lowercase().as_str() {
         "cmd" => (
@@ -210,7 +208,7 @@ pub async fn execute_terminal_command(
             ],
         ),
         _ => {
-            // AUDIT-TERMINAL-068 fix: Don't silently fall back to powershell.exe on non-Windows
+            // Don't silently fall back to powershell.exe on non-Windows
             // Use system default shell for unknown shells instead
             match get_default_shell() {
                 ShellType::PowerShell => (
@@ -399,7 +397,6 @@ pub async fn execute_terminal_command(
         buffer
     });
 
-    // AUDIT-TERMINAL-066 fix: Use configurable timeout instead of hardcoded 60s
     let timeout_ms = timeout_ms.unwrap_or(60_000);
     let timeout_duration = tokio::time::Duration::from_millis(timeout_ms);
     let status = match tokio::time::timeout(timeout_duration, child.wait()).await {
@@ -594,11 +591,11 @@ pub async fn terminal_send_input(
     Ok(())
 }
 
-// AUDIT-003-010 fix: Terminal resize bounds constants
+// Terminal resize bounds constants
 // These prevent potential issues with extreme terminal dimensions
 const MIN_TERMINAL_COLS: u16 = 1;
 const MIN_TERMINAL_ROWS: u16 = 1;
-// AUDIT-P3-012: Practical limits to prevent resource exhaustion
+// Practical limits to prevent resource exhaustion
 // (removed u16::MAX constants as they're redundant - u16 cannot exceed its max)
 const PRACTICAL_MAX_COLS: u16 = 1000;
 const PRACTICAL_MAX_ROWS: u16 = 500;
@@ -612,7 +609,7 @@ pub async fn terminal_resize(
 ) -> Result<(), String> {
     terminal_opened_this_run()?;
 
-    // AUDIT-003-010 fix: Add bounds checking for terminal dimensions
+    // Add bounds checking for terminal dimensions
     // Validate minimum bounds
     if cols < MIN_TERMINAL_COLS {
         return Err(format!(
@@ -627,7 +624,7 @@ pub async fn terminal_resize(
         ));
     }
 
-    // AUDIT-P3-012: Validate practical bounds and warn for impractical values
+    // Validate practical bounds and warn for impractical values
     // Note: Maximum u16 bounds removed as they were always-false comparisons
     if cols > PRACTICAL_MAX_COLS || rows > PRACTICAL_MAX_ROWS {
         tracing::warn!(

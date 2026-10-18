@@ -136,22 +136,6 @@ export function safeRemoveItem(key: string): boolean {
 }
 
 /**
- * Safely clears all items from localStorage.
- *
- * @returns true if cleared successfully, false on error
- */
-export function safeClear(): boolean {
-  try {
-    const storage = getStorageInstance();
-    storage.clear();
-    return true;
-  } catch (error) {
-    console.error('[localStorage] Failed to clear storage:', error);
-    return false;
-  }
-}
-
-/**
  * Retrieves and parses a JSON value from localStorage.
  * Returns the default value if the key doesn't exist or JSON parsing fails.
  *
@@ -210,27 +194,6 @@ function tryCleanupOldData(): void {
   } catch (error) {
     console.error('[localStorage] Failed to cleanup old data:', error);
   }
-}
-
-/**
- * Returns the type of storage currently in use.
- * Useful for debugging and informing users about data persistence.
- *
- * @returns 'localStorage' if browser storage is available, 'memory' otherwise
- */
-export function getStorageType(): 'localStorage' | 'memory' {
-  const storage = getStorageInstance();
-  return storage instanceof MemoryStorage ? 'memory' : 'localStorage';
-}
-
-/**
- * Checks if browser localStorage is available and writable.
- * Returns false in private browsing mode or when storage is disabled.
- *
- * @returns true if localStorage is available, false otherwise
- */
-export function isStorageAvailable(): boolean {
-  return isLocalStorageAvailable();
 }
 
 /**

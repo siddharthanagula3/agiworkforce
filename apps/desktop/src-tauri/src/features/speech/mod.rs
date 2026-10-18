@@ -24,6 +24,4 @@ pub use tts::{
 pub use vad::{AudioResampler, VadMode, VadModelManager, VAD_CHUNK_SIZE, VAD_SAMPLE_RATE};
 #[cfg(feature = "vad")]
 pub use vad::{SharedVad, WebRtcVad};
-pub use wake::{
-    is_vad_available, list_audio_devices, AudioDeviceInfo, VoiceWake, WakeWordConfig, WakeWordEvent,
-};
+pub use wake::{is_vad_available, VoiceWake, WakeWordConfig, WakeWordEvent};

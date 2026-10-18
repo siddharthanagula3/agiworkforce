@@ -166,21 +166,6 @@ pub enum VerifyOk {
     UnsignedTransitional,
 }
 
-/// A signed envelope as it appears on the wire. `payload` is held as a
-/// raw JSON value so we sign over the original bytes, re-canonicalizing
-/// would break compatibility with mobile's `JSON.stringify` insertion order.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Envelope<'a> {
-    pub hmac: String,
-    pub nonce: String,
-    #[serde(borrow)]
-    pub payload: &'a RawValue,
-    pub ts: i64,
-    #[serde(rename = "type")]
-    pub msg_type: String,
-    pub v: i64,
-}
-
 /// An envelope without an `hmac` field, used for the transitional window
 /// where mobile may still receive unsigned desktop messages.
 #[derive(Debug, Deserialize)]

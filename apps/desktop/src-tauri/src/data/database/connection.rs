@@ -137,23 +137,6 @@ impl ConnectionConfig {
         }
     }
 
-    pub fn from_connection_string(connection_string: &str) -> Result<Self> {
-        let db_type = Self::detect_db_type(connection_string)?;
-
-        Ok(Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            db_type,
-            host: None,
-            port: None,
-            username: None,
-            password: None,
-            database: None,
-            connection_string: Some(connection_string.to_string()),
-            options: HashMap::new(),
-            ssl_config: None,
-        })
-    }
-
     fn detect_db_type(connection_string: &str) -> Result<DatabaseType> {
         if connection_string.starts_with("postgres:")
             || connection_string.starts_with("postgresql:")

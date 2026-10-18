@@ -101,37 +101,6 @@ fn parse_json_response<T: DeserializeOwned>(response: &ApiResponse) -> Result<T,
     })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceLinkRequest {
-    pub device_id: String,
-    pub device_name: Option<String>,
-    pub device_type: Option<String>,
-    pub device_fingerprint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceLinkResponse {
-    pub link_code: String,
-    pub device_id: String,
-    pub expires_at: u64,
-    pub qr_code_url: Option<String>,
-    pub verify_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevicePollRequest {
-    pub device_id: String,
-    pub device_fingerprint: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevicePollResponse {
-    pub status: String,
-    pub access_token: Option<String>,
-    pub refresh_token: Option<String>,
-    pub user: Option<UserProfile>,
-}
-
 /// Minimal response returned to the Desktop device-authorization client.
 ///
 /// Device authorization intentionally runs through the native HTTP client:
@@ -406,110 +375,6 @@ pub struct PlanInfo {
     pub current_period_end: Option<u64>,
 }
 
-/// Generate a stable device fingerprint by hashing the device_id together with
-/// machine-stable environment signals.  The result is a lowercase hex SHA-256 digest
-/// (64 characters) that is deterministic for the same machine + device_id combination.
-fn generate_device_fingerprint(device_id: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(device_id.as_bytes());
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "unknown-host".to_string());
-    let username = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown-user".to_string());
-    hasher.update(hostname.as_bytes());
-    hasher.update(username.as_bytes());
-    hasher.update(b"agi-workforce-device-v1");
-    hex::encode(hasher.finalize())
-}
-
-pub async fn device_link_initiate(
-    state: State<'_, ApiState>,
-) -> Result<DeviceLinkResponse, String> {
-    let hostname = std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("COMPUTERNAME"))
-        .unwrap_or_else(|_| "Desktop".to_string());
-    let device_id = generate_device_fingerprint(&hostname);
-    let request = DeviceLinkRequest {
-        device_id: device_id.clone(),
-        device_name: Some(hostname),
-        device_type: Some("desktop".to_string()),
-        device_fingerprint: Some(generate_device_fingerprint(&device_id)),
-    };
-    let api_base = get_api_base_url();
-
-    let url = format!("{}/api/device/link", api_base);
-
-    let body =
-        serde_json::to_string(&request).map_err(|e| format!("Serialization error: {}", e))?;
-
-    let api_request = ApiRequest {
-        method: HttpMethod::Post,
-        url,
-        body: Some(body),
-        headers: std::collections::HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]),
-        ..Default::default()
-    };
-
-    let response = state
-        .get_client()?
-        .execute(api_request)
-        .await
-        .map_err(|e| format!("Device link request failed: {}", e))?;
-
-    if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
-    }
-
-    parse_json_response(&response)
-}
-
-pub async fn device_link_poll(
-    device_id: String,
-    state: State<'_, ApiState>,
-) -> Result<DevicePollResponse, String> {
-    let request = DevicePollRequest {
-        device_id: device_id.clone(),
-        device_fingerprint: Some(generate_device_fingerprint(&device_id)),
-    };
-    let api_base = get_api_base_url();
-
-    let url = format!("{}/api/device/poll", api_base);
-
-    let body =
-        serde_json::to_string(&request).map_err(|e| format!("Serialization error: {}", e))?;
-
-    let api_request = ApiRequest {
-        method: HttpMethod::Post,
-        url,
-        body: Some(body),
-        headers: std::collections::HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]),
-        ..Default::default()
-    };
-
-    let response = state
-        .get_client()?
-        .execute(api_request)
-        .await
-        .map_err(|e| format!("Device poll request failed: {}", e))?;
-
-    if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
-    }
-
-    // Note: We no longer store tokens here. The frontend receives the response
-    // and should update the app auth session.
-    parse_json_response(&response)
-}
-
 #[tauri::command]
 pub async fn fetch_user_profile(
     access_token: String,
@@ -574,41 +439,6 @@ pub(crate) fn apply_server_speech_gate(
         feature_flags,
         env!("CARGO_PKG_VERSION"),
     ));
-}
-
-pub async fn oauth_refresh(
-    refresh_token: String,
-    state: State<'_, ApiState>,
-) -> Result<serde_json::Value, String> {
-    let api_base = get_api_base_url();
-
-    let url = format!("{}/oauth/refresh", api_base);
-
-    let body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
-
-    let api_request = ApiRequest {
-        method: HttpMethod::Post,
-        url,
-        body: Some(body),
-        headers: std::collections::HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]),
-        ..Default::default()
-    };
-
-    let response = state
-        .get_client()?
-        .execute(api_request)
-        .await
-        .map_err(|e| format!("Token refresh failed: {}", e))?;
-
-    if !response.success {
-        return Err(format!("API error {}: {}", response.status, response.body));
-    }
-
-    // Note: We no longer manually store tokens. Frontend should handle the result.
-    parse_json_response(&response)
 }
 
 use std::future::Future;
@@ -739,6 +569,18 @@ pub(crate) fn capture_managed_auth_boundary() -> Result<ManagedAuthBoundary, Str
         identity,
         generation: state.generation,
     })
+}
+
+/// The id the desktop chat lists conversations under for the signed-in
+/// account: the access token's subject, the same claim the renderer reads.
+/// `None` when nobody is signed in.
+pub(crate) fn signed_in_account_id() -> Option<String> {
+    ACCESS_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .identity
+        .as_ref()
+        .map(|identity| identity.subject.clone())
 }
 
 /// Return the boundary inherited by the currently executing native goal.
@@ -1512,77 +1354,6 @@ pub(crate) fn replace_access_token_for_managed_boundary_test(access_token: Optio
     }
 }
 
-/// Subscription information from credits API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscriptionInfo {
-    pub plan_tier: String,
-    pub status: String,
-    pub current_period_end: Option<String>,
-}
-
-/// Credits information from credits API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreditsInfo {
-    pub usage_percentage: f64,
-    pub reset_at: Option<String>,
-    pub seconds_until_reset: u64,
-    pub has_usage_remaining: bool,
-}
-
-/// Credit balance response from the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreditBalanceResponse {
-    pub object: String,
-    pub subscription: SubscriptionInfo,
-    pub credits: CreditsInfo,
-}
-
-impl CreditBalanceResponse {
-    /// Helper method to check if user has credits available
-    pub fn has_credits(&self) -> bool {
-        self.credits.has_usage_remaining
-    }
-}
-
-/// Fetch current credit balance from the API
-pub async fn fetch_credit_balance(
-    state: State<'_, ApiState>,
-) -> Result<CreditBalanceResponse, String> {
-    let token = get_access_token()?;
-    let api_base = get_api_base_url();
-
-    let url = format!("{}/api/llm/v1/credits/balance", api_base);
-
-    let api_request = ApiRequest {
-        method: HttpMethod::Get,
-        url,
-        auth: AuthType::Bearer { token },
-        ..Default::default()
-    };
-
-    let response = state
-        .get_client()?
-        .execute(api_request)
-        .await
-        .map_err(|e| format!("Failed to fetch credit balance: {}", e))?;
-
-    if !response.success {
-        // Provide more context for common error codes
-        let hint = match response.status {
-            401 => " (Token may be expired or from a different auth environment)",
-            500 => " (Server crashed - check API logs)",
-            502 | 503 => " (API server is down or restarting)",
-            _ => "",
-        };
-        return Err(format!(
-            "API error {}{}: {}",
-            response.status, hint, response.body
-        ));
-    }
-
-    parse_json_response(&response)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1591,7 +1362,7 @@ mod tests {
         load_cloud_credential, normalize_device_user_code, refresh_token_change,
         renewed_cloud_session, saved_cloud_refresh_token, store_cloud_credential,
         validate_api_base_url, validate_api_base_url_for_build, withhold_refresh_token,
-        CloudCredentialVault, CreditBalanceResponse, DeviceAuthorizationHttpResponse,
+        CloudCredentialVault, DeviceAuthorizationHttpResponse,
         ManagedAuthSessionIdentity, OsCloudCredentialVault, RefreshTokenChange, RenewalRefusal,
         SessionRenewal, UserProfile, CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
         CLOUD_ACCESS_TOKEN_SECRET_KEY, CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
@@ -1926,26 +1697,6 @@ mod tests {
         assert!(validate_api_base_url("http://api.agiworkforce.com").is_err());
         // Non-http(s) schemes are rejected.
         assert!(validate_api_base_url("ftp://api.agiworkforce.com").is_err());
-    }
-
-    #[test]
-    fn parses_percentage_only_managed_usage_balance() {
-        let response: CreditBalanceResponse = serde_json::from_str(
-            r#"{
-                "object":"credit_balance",
-                "subscription":{"plan_tier":"pro","status":"active","current_period_end":null},
-                "credits":{
-                    "usage_percentage":42.5,
-                    "reset_at":"2026-08-01T00:00:00.000Z",
-                    "seconds_until_reset":86400,
-                    "has_usage_remaining":true
-                }
-            }"#,
-        )
-        .expect("public balance contract should deserialize");
-
-        assert!(response.has_credits());
-        assert_eq!(response.credits.usage_percentage, 42.5);
     }
 
     #[test]

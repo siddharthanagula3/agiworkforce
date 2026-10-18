@@ -19,7 +19,6 @@ vi.mock('../../../services/cloudAccountAuth', async (importOriginal) => ({
   cloudAccountAuth: { getUser: mocks.getUser },
 }));
 
-import { createBudgetSlice, type BudgetSlice } from '../budgetSlice';
 import {
   createCostSlice,
   creditsFromProviderUsd,
@@ -32,16 +31,6 @@ function costStore() {
   return create<CostSlice>()((set, get) =>
     createCostSlice(set as Parameters<typeof createCostSlice>[0], get),
   );
-}
-
-function budgetStore() {
-  const store = create<BudgetSlice>()((set, get) =>
-    createBudgetSlice(set as Parameters<typeof createBudgetSlice>[0], get),
-  );
-  store.getState().setBudgetLimit(1_000);
-  store.getState().setWarningThreshold(80);
-  store.getState().setBudgetEnabled(true);
-  return store;
 }
 
 beforeEach(() => {
@@ -112,27 +101,5 @@ describe('monthly credit limit', () => {
       'Invalid budget amount',
     );
     expect(store.getState().costError).toContain('Invalid budget amount');
-  });
-});
-
-describe('token budget alerts', () => {
-  it.each([
-    { tokens: 850, type: 'warning' },
-    { tokens: 950, type: 'danger' },
-    { tokens: 1_200, type: 'exceeded' },
-  ] as const)('states the estimated spend of a $type alert in credits', ({ tokens, type }) => {
-    const store = budgetStore();
-    const costUsd = 0.25;
-
-    store.getState().addDetailedTokenUsage({
-      inputTokens: tokens - 100,
-      outputTokens: 100,
-      costUsd,
-    });
-
-    const alert = store.getState().budgetAlerts.find((candidate) => candidate.type === type);
-    expect(alert?.message).toContain(`About ${formatProviderCostCredits(costUsd)}`);
-    expect(alert?.message).toContain(formatCredits(costUsd * CREDITS_PER_USD));
-    expect(alert?.message).not.toContain('$');
   });
 });

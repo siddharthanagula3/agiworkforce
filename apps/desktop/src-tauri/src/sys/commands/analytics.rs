@@ -358,7 +358,7 @@ pub async fn analytics_get_metric_trends(
         .map_err(|e| format!("Failed to calculate trends: {}", e))
 }
 
-// AUDIT-ANALYTICS-087 fix: Aliases for specific trend commands
+// Aliases for specific trend commands
 #[tauri::command]
 pub async fn analytics_export_report(
     format: String,

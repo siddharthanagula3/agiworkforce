@@ -301,20 +301,6 @@ pub struct AppPermission {
     pub denied_at: Option<DateTime<Utc>>,
 }
 
-/// Request for app permission (sent to frontend for user decision).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppPermissionRequest {
-    /// Unique request identifier.
-    pub request_id: String,
-    /// Application name that needs permission.
-    pub app_name: String,
-    /// Bundle identifier if known.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bundle_id: Option<String>,
-    /// Description of the intended action.
-    pub action_description: String,
-}
-
 /// User's response to an app permission request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -337,17 +323,6 @@ impl AppPermissionManager {
     pub fn new() -> Self {
         Self {
             permissions: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    /// Creates a manager pre-loaded with permissions.
-    pub fn with_permissions(permissions: Vec<AppPermission>) -> Self {
-        let map: HashMap<String, AppPermission> = permissions
-            .into_iter()
-            .map(|p| (p.app_name.clone(), p))
-            .collect();
-        Self {
-            permissions: Arc::new(RwLock::new(map)),
         }
     }
 

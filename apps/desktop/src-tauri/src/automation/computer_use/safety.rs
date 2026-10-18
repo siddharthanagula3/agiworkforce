@@ -384,19 +384,9 @@ impl ComputerUseSafetyLayer {
         }
     }
 
-    /// Attaches a permission manager to an existing safety layer.
-    pub fn set_app_permissions(&mut self, app_permissions: Arc<AppPermissionManager>) {
-        self.app_permissions = Some(app_permissions);
-    }
-
     /// Creates a safety layer with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(SafetyConfig::default())
-    }
-
-    /// Returns whether per-app gating is wired up.
-    pub fn has_app_permissions(&self) -> bool {
-        self.app_permissions.is_some()
     }
 
     /// Consults the per-app permission registry against the currently-focused

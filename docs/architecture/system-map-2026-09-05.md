@@ -143,9 +143,8 @@ and idempotency are contract-level:
 `crates/agiworkforce-protocol/src/tool_primitive.rs`.
 
 MCP is two independent stacks, not one wrapping the other:
-`packages/tools/mcp` for web (`apps/web/app/api/connectors/custom/route.ts`) and desktop's
-renderer (`apps/desktop/src/services/mcp.ts`), and `crates/agiworkforce-mcp`
-for the CLI and the Tauri privileged host. A protocol change lands twice.
+`packages/tools/mcp` for web (`apps/web/app/api/connectors/custom/route.ts`), and
+`crates/agiworkforce-mcp` for the CLI and the Tauri privileged host. A protocol change lands twice.
 Contradicts `docs/agent-context/repo-map.json`'s implied single ownership per
 surface; the two never share a runtime.
 

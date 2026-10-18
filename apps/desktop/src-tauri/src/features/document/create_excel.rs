@@ -30,16 +30,6 @@ pub enum ExcelCell {
     Empty,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExcelCellStyle {
-    pub bold: Option<bool>,
-    pub italic: Option<bool>,
-    pub font_size: Option<f64>,
-    pub font_color: Option<String>,
-    pub bg_color: Option<String>,
-    pub alignment: Option<String>,
-}
-
 pub struct ExcelDocumentCreator;
 
 impl ExcelDocumentCreator {

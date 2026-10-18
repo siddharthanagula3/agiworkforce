@@ -122,7 +122,7 @@ pub struct BrowserStateWrapper {
 
 impl BrowserStateWrapper {
     /// Creates a new browser state wrapper with full functionality.
-    /// SEV-DESK-02: requires an `AppHandle` so the underlying `ExtensionBridge`
+    /// Requires an `AppHandle` so the underlying `ExtensionBridge`
     /// can prompt the user before executing arbitrary JS, navigating, or
     /// reading/writing cookies and localStorage. Tests may pass `None`.
     pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self, String> {
@@ -525,14 +525,14 @@ pub async fn browser_get_screenshot_stream(
     Ok(STANDARD.encode(bytes))
 }
 
-/// AUDIT-FIX: CI-3, system-default-browser navigation gated by HITL.
+/// System-default-browser navigation gated by HITL.
 ///
 /// Opens an http(s) URL in the user's default browser after explicit
 /// confirmation via `request_confirmation_simple`. Rejects non-http(s)
 /// schemes to block `file://`, `javascript:`, and other vectors that
 /// prompt-injected agents could use to read local files or execute JS.
 ///
-/// AUDIT-FIX: BUG_002, delegate to the `open` crate so Windows uses
+/// Delegates to the `open` crate so Windows uses
 /// `ShellExecuteW` instead of `cmd /C start`. The previous implementation
 /// shell-injected on URLs whose query string contained `&` (and other cmd
 /// metacharacters), because cmd.exe re-parses its command line after Rust's

@@ -93,6 +93,7 @@ impl ToolExecutor {
             active_mcp_servers: Vec::new(),
             custom_instructions,
             boundary,
+            run_conversation_id: None,
         };
 
         let manager = state.0.read().await;

@@ -105,14 +105,6 @@ impl User {
         verify_password(password, &self.password_hash)
     }
 
-    pub fn is_locked(&self) -> bool {
-        if let Some(locked_until) = self.locked_until {
-            Utc::now() < locked_until
-        } else {
-            false
-        }
-    }
-
     pub fn record_failed_login(&mut self) {
         self.failed_login_attempts += 1;
         if self.failed_login_attempts >= MAX_FAILED_ATTEMPTS {
@@ -247,23 +239,6 @@ impl AuthManager {
         self.secret_manager
             .get_or_create_jwt_secret()
             .map_err(|e| format!("Failed to retrieve JWT secret: {}", e))
-    }
-
-    /// Compute the HMAC-SHA256 signature for a JWT's `header.payload` using the
-    /// stored JWT secret and return the complete signed token (`header.payload.signature`).
-    pub fn sign_jwt(&self, header_b64: &str, payload_b64: &str) -> Result<String, String> {
-        let secret = self.get_jwt_secret()?;
-        sign_jwt_with_secret(header_b64, payload_b64, &secret)
-    }
-
-    /// Verify the HMAC-SHA256 signature of a JWT token using the stored JWT secret.
-    ///
-    /// Splits the token into `header.payload` and `signature`, recomputes the
-    /// HMAC, and performs a constant-time comparison via the `hmac` crate.
-    /// Returns `Ok(())` on success or an error string on failure.
-    pub fn verify_jwt_signature(&self, token: &str) -> Result<(), String> {
-        let secret = self.get_jwt_secret()?;
-        verify_jwt_signature_with_secret(token, &secret)
     }
 
     pub fn rotate_jwt_secret(&self) -> Result<(), String> {
@@ -417,25 +392,6 @@ impl AuthManager {
         Ok(user)
     }
 
-    /// SECSYS-003 fix: Clean up expired rate limit entries to prevent memory growth
-    pub fn cleanup_rate_limits(&self) {
-        let mut attempts = self.validation_attempts.write();
-        attempts.retain(|_, attempt| !attempt.is_window_expired());
-    }
-
-    pub fn get_user(&self, user_id: &str) -> Option<User> {
-        let users = self.users.read();
-        users.get(user_id).cloned()
-    }
-
-    pub fn update_role(&self, user_id: &str, role: UserRole) -> Result<(), String> {
-        let mut users = self.users.write();
-        let user = users.get_mut(user_id).ok_or("User not found")?;
-
-        user.role = role;
-        Ok(())
-    }
-
     pub fn change_password(
         &self,
         user_id: &str,
@@ -455,14 +411,6 @@ impl AuthManager {
 
         user.password_hash = hash_password(new_password)?;
         Ok(())
-    }
-
-    pub fn cleanup_expired_sessions(&self) {
-        let mut sessions = self.sessions.write();
-        sessions.retain(|_, session| !session.is_expired());
-        drop(sessions);
-        // SECSYS-003 fix: Also cleanup expired rate limit entries
-        self.cleanup_rate_limits();
     }
 }
 

@@ -91,16 +91,6 @@ impl McpHealthMonitor {
         health
     }
 
-    pub fn get_all_health(&self) -> Vec<ServerHealth> {
-        let records = self.health_records.lock();
-        records.values().cloned().collect()
-    }
-
-    pub fn get_server_health(&self, server_name: &str) -> Option<ServerHealth> {
-        let records = self.health_records.lock();
-        records.get(server_name).cloned()
-    }
-
     pub async fn refresh_connected_health(&self) -> Vec<ServerHealth> {
         let connected_servers = self.client.get_connected_servers();
         let connected_names: HashSet<String> = connected_servers.iter().cloned().collect();

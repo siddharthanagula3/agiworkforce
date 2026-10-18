@@ -128,7 +128,6 @@ impl NativeRequestAuthenticator {
 
 /// Native messaging host that runs as a subprocess
 pub struct NativeMessagingHost {
-    state: Arc<RwLock<NativeMessagingState>>,
     message_tx: mpsc::Sender<NativeRequest>,
     response_rx: Arc<Mutex<mpsc::Receiver<NativeResponse>>>,
     session_secret: [u8; 32],
@@ -158,7 +157,6 @@ impl NativeMessagingHost {
         rand::rngs::OsRng.fill_bytes(&mut session_secret);
 
         let host = Self {
-            state: Arc::new(RwLock::new(NativeMessagingState::new())),
             message_tx: msg_tx,
             response_rx: Arc::new(Mutex::new(resp_rx)),
             session_secret,
@@ -318,22 +316,6 @@ impl NativeMessagingHost {
             buffered_responses.insert(response.id.clone(), response);
         }
     }
-
-    pub async fn get_state(&self) -> ConnectionState {
-        self.state.read().await.connection_state.clone()
-    }
-
-    pub async fn set_connected(&self, extension_id: String) {
-        let mut state = self.state.write().await;
-        state.connection_state = ConnectionState::Connected;
-        state.extension_id = Some(extension_id);
-    }
-
-    pub async fn set_disconnected(&self) {
-        let mut state = self.state.write().await;
-        state.connection_state = ConnectionState::Disconnected;
-        state.extension_id = None;
-    }
 }
 
 fn current_epoch_millis() -> u64 {
@@ -373,224 +355,6 @@ pub fn extension_id_from_launch_origin(origin: Option<&str>) -> Result<Option<St
         return Err(anyhow!("Invalid Chrome extension launch destination"));
     }
     Ok(Some(extension_id.to_string()))
-}
-
-/// Handler for processing native messaging requests
-pub struct NativeMessageHandler {
-    /// Channel to send browser commands
-    browser_tx: mpsc::Sender<BrowserCommand>,
-}
-
-/// Commands sent to browser automation
-#[derive(Debug, Clone)]
-pub enum BrowserCommand {
-    Click {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    Type {
-        selector: String,
-        text: String,
-        tab_id: Option<i32>,
-    },
-    Navigate {
-        url: String,
-        tab_id: Option<i32>,
-    },
-    Screenshot {
-        tab_id: Option<i32>,
-        format: String,
-    },
-    GetElement {
-        selector: String,
-        tab_id: Option<i32>,
-    },
-    GetAccessibilityTree {
-        tab_id: Option<i32>,
-    },
-    GetTabs,
-    CreateTab {
-        url: String,
-    },
-    CloseTab {
-        tab_id: i32,
-    },
-    GetCookies {
-        url: Option<String>,
-    },
-    GetPageContent {
-        tab_id: Option<i32>,
-    },
-}
-
-impl NativeMessageHandler {
-    pub fn new(browser_tx: mpsc::Sender<BrowserCommand>) -> Self {
-        Self { browser_tx }
-    }
-
-    /// Process an incoming native message and return a response
-    pub async fn handle_message(&self, request: NativeRequest) -> NativeResponse {
-        match request.message {
-            NativeMessage::Ping => {
-                NativeResponse::success(request.id, serde_json::json!({"pong": true}))
-            }
-
-            NativeMessage::Connect { extension_id } => {
-                tracing::info!("Extension connected: {}", extension_id);
-                NativeResponse::success(
-                    request.id,
-                    serde_json::json!({
-                        "connected": true,
-                        "version": env!("CARGO_PKG_VERSION")
-                    }),
-                )
-            }
-
-            NativeMessage::Disconnect { reason } => {
-                tracing::info!("Extension disconnecting: {:?}", reason);
-                NativeResponse::success(request.id, serde_json::json!({"disconnected": true}))
-            }
-
-            NativeMessage::Click { selector, tab_id } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::Click { selector, tab_id })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"clicked": true}))
-                    }
-                    Err(e) => NativeResponse::error(request.id, format!("Failed to click: {}", e)),
-                }
-            }
-
-            NativeMessage::Type {
-                selector,
-                text,
-                tab_id,
-            } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::Type {
-                        selector,
-                        text,
-                        tab_id,
-                    })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"typed": true}))
-                    }
-                    Err(e) => NativeResponse::error(request.id, format!("Failed to type: {}", e)),
-                }
-            }
-
-            NativeMessage::Navigate { url, tab_id } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::Navigate { url, tab_id })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"navigated": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to navigate: {}", e))
-                    }
-                }
-            }
-
-            NativeMessage::Screenshot { tab_id, format } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::Screenshot {
-                        tab_id,
-                        format: format.unwrap_or_else(|| "png".to_string()),
-                    })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"capturing": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to capture: {}", e))
-                    }
-                }
-            }
-
-            NativeMessage::GetAccessibilityTree { tab_id } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::GetAccessibilityTree { tab_id })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"fetching": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to get tree: {}", e))
-                    }
-                }
-            }
-
-            NativeMessage::GetTabs => match self.browser_tx.send(BrowserCommand::GetTabs).await {
-                Ok(_) => NativeResponse::success(request.id, serde_json::json!({"fetching": true})),
-                Err(e) => NativeResponse::error(request.id, format!("Failed to get tabs: {}", e)),
-            },
-
-            NativeMessage::CreateTab { url } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::CreateTab { url })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"creating": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to create tab: {}", e))
-                    }
-                }
-            }
-
-            NativeMessage::GetCookies { url } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::GetCookies { url })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"fetching": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to get cookies: {}", e))
-                    }
-                }
-            }
-
-            NativeMessage::GetPageContent { tab_id } => {
-                match self
-                    .browser_tx
-                    .send(BrowserCommand::GetPageContent { tab_id })
-                    .await
-                {
-                    Ok(_) => {
-                        NativeResponse::success(request.id, serde_json::json!({"fetching": true}))
-                    }
-                    Err(e) => {
-                        NativeResponse::error(request.id, format!("Failed to get content: {}", e))
-                    }
-                }
-            }
-
-            _ => NativeResponse::error(request.id, "Unsupported message type"),
-        }
-    }
-}
-
-/// Install the native messaging host manifest
-pub fn install_native_host_manifest() -> Result<()> {
-    super::manifest::install_manifests(None).map(|_| ())
 }
 
 #[cfg(test)]

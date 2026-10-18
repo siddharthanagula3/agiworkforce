@@ -253,28 +253,6 @@ export interface CategoryData {
   percentage?: number;
 }
 
-export interface SystemMetrics {
-  cpu_usage: number;
-  memory_used_mb: number;
-  memory_total_mb: number;
-  disk_used_gb: number;
-  disk_total_gb: number;
-  network_rx_bytes: number;
-  network_tx_bytes: number;
-  uptime_seconds: number;
-}
-
-export interface AppMetrics {
-  automations_count: number;
-  goals_count: number;
-  mcp_servers_count: number;
-  cache_hit_rate: number;
-  avg_goal_duration_ms: number;
-  active_sessions: number;
-  total_api_calls: number;
-  failed_operations: number;
-}
-
 export interface AnalyticsExport {
   user_id?: string;
   export_date: string;

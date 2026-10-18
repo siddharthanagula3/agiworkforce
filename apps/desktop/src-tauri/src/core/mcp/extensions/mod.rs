@@ -49,7 +49,7 @@ mod repository;
 
 pub use error::{ExtensionError, ExtensionResult};
 pub use installer::{ExtensionInstaller, InstallPhase, InstallProgress, InstallResult};
-pub use manager::{ExtensionInfo, ExtensionManager, UpdateInfo};
+pub use manager::{ExtensionInfo, ExtensionManager};
 pub use manifest::{
     ConfigProperty, ConfigSchema, ExtensionCapability, ExtensionManifest, ExtensionTool,
     ToolParameter, TransportType,

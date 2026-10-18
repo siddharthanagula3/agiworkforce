@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
-// AUDIT-004-005 fix: Add maximum session limit to prevent unbounded memory growth
+// Add maximum session limit to prevent unbounded memory growth
 const MAX_SESSIONS: usize = 50;
 
 #[derive(Clone, Debug)]
@@ -33,7 +33,6 @@ impl SessionManager {
         shell_type: ShellType,
         cwd: Option<String>,
     ) -> Result<String> {
-        // AUDIT-004-005 fix: Check session count before creating new session
         {
             let sessions = self.sessions.lock().await;
             if sessions.len() >= MAX_SESSIONS {
@@ -230,7 +229,7 @@ impl SessionManager {
                 if !is_alive {
                     let _ = app_handle.emit(&format!("terminal-exit-{}", session_id), ());
 
-                    // AUDIT-TERMINAL-032 fix: Remove session from backend when process exits
+                    // Remove session from backend when process exits
                     // This ensures backend state is consistent with frontend cleanup
                     let mut sessions_lock = sessions.lock().await;
                     sessions_lock.remove(&session_id);
@@ -244,7 +243,7 @@ impl SessionManager {
                 if bytes_read > 0 {
                     let output = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
 
-                    // AUDIT-TERMINAL-031 fix: Emit object format for consistent payload shape
+                    // Emit object format for consistent payload shape
                     // This matches the one-shot terminal command output format
                     let payload = serde_json::json!({
                         "stream": "stdout",
@@ -422,7 +421,6 @@ async fn log_command_to_db(
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // AUDIT-TERMINAL-029 fix: Include session_id to make history session-scoped
     conn.execute(
         "INSERT INTO command_history (command, working_dir, created_at, session_id) VALUES (?1, ?2, ?3, ?4)",
         params![sanitized_command, working_dir, timestamp, session_id],
@@ -455,7 +453,6 @@ pub async fn get_command_history(
 
     rescrub_stored_history_once(&conn);
 
-    // AUDIT-TERMINAL-029 fix: Filter by session_id to make history session-scoped
     let mut stmt = conn
         .prepare("SELECT command FROM command_history WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2")
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;

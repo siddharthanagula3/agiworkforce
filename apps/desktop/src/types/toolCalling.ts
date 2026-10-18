@@ -17,22 +17,10 @@ export type ToolCapability =
   | 'Planning';
 
 export type ToolExecutionStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'awaiting_approval';
+  'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'awaiting_approval';
 
 export type ToolParameterType =
-  | 'String'
-  | 'Integer'
-  | 'Float'
-  | 'Boolean'
-  | 'Object'
-  | 'Array'
-  | 'FilePath'
-  | 'URL';
+  'String' | 'Integer' | 'Float' | 'Boolean' | 'Object' | 'Array' | 'FilePath' | 'URL';
 
 export interface ToolParameter {
   name: string;
@@ -259,12 +247,7 @@ export interface ToolRegistryEntry {
 export type OutputChunkType = 'stdout' | 'stderr' | 'log' | 'data' | 'binary';
 
 export type ToolStreamEventType =
-  | 'started'
-  | 'progress'
-  | 'output_chunk'
-  | 'completed'
-  | 'error'
-  | 'cancelled';
+  'started' | 'progress' | 'output_chunk' | 'completed' | 'error' | 'cancelled';
 
 export interface ToolStreamEventBase {
   type: ToolStreamEventType;
@@ -326,104 +309,4 @@ export interface ToolStreamEventPayload {
   timestamp: string;
   session_id?: string;
   agent_id?: string;
-}
-
-export interface ToolStreamState {
-  tool_id: string;
-  tool_name: string;
-  status: 'running' | 'completed' | 'error' | 'cancelled';
-  progress: number;
-  progressMessage?: string;
-  outputChunks: string[];
-  outputBuffer: string;
-  bytesProcessed?: number;
-  bytesTotal?: number;
-  result?: unknown;
-  error?: string;
-  startedAt: Date;
-  completedAt?: Date;
-  duration_ms?: number;
-  retryable?: boolean;
-}
-
-export type ToolStreamMap = Map<string, ToolStreamState>;
-
-export function createToolStreamState(
-  event: ToolStreamStartedEvent,
-  timestamp: string,
-): ToolStreamState {
-  return {
-    tool_id: event.tool_id,
-    tool_name: event.tool_name,
-    status: 'running',
-    progress: 0,
-    outputChunks: [],
-    outputBuffer: '',
-    startedAt: new Date(timestamp),
-  };
-}
-
-export function updateToolStreamState(
-  state: ToolStreamState,
-  event: ToolStreamEvent,
-  timestamp: string,
-): ToolStreamState {
-  switch (event.type) {
-    case 'started':
-      return {
-        ...state,
-        tool_name: event.tool_name,
-        status: 'running',
-        progress: 0,
-        startedAt: new Date(timestamp),
-      };
-
-    case 'progress':
-      return {
-        ...state,
-        progress: event.progress,
-        progressMessage: event.message,
-        bytesProcessed: event.bytes_processed,
-        bytesTotal: event.bytes_total,
-      };
-
-    case 'output_chunk':
-      return {
-        ...state,
-        outputChunks: [...state.outputChunks, event.chunk],
-        outputBuffer: state.outputBuffer + event.chunk,
-      };
-
-    case 'completed':
-      return {
-        ...state,
-        status: 'completed',
-        progress: 1.0,
-        result: event.result,
-        completedAt: new Date(timestamp),
-        duration_ms: event.duration_ms,
-      };
-
-    case 'error':
-      return {
-        ...state,
-        status: 'error',
-        error: event.error,
-        completedAt: new Date(timestamp),
-        duration_ms: event.duration_ms,
-        retryable: event.retryable,
-      };
-
-    case 'cancelled':
-      return {
-        ...state,
-        status: 'cancelled',
-        error: event.reason,
-        completedAt: new Date(timestamp),
-        duration_ms: event.duration_ms,
-      };
-
-    default:
-      return state;
-  }
 }

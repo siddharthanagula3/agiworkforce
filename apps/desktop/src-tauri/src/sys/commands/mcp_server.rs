@@ -37,15 +37,14 @@ pub async fn mcp_server_status(state: State<'_, McpServerState>) -> Result<bool,
     Ok(state.server.lock().await.is_running())
 }
 
-/// Bug #89 fix: Redact the auth token from the IPC response so it is
-/// never exposed to the frontend JavaScript context.
+/// The auth token is redacted so it never reaches the frontend JavaScript
+/// context.
 #[tauri::command]
 pub async fn mcp_server_get_config(
     state: State<'_, McpServerState>,
 ) -> Result<serde_json::Value, String> {
     let server = state.server.lock().await;
     let token = server.auth.token();
-    // Show only the last 4 characters, mask the rest
     let redacted = if token.len() > 4 {
         format!(
             "{}...{}",

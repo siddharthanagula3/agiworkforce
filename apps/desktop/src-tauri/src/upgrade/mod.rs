@@ -9,7 +9,8 @@ pub mod recovery;
 pub const LOCAL_RUNTIME_VERSION: u32 = 1;
 
 /// The `llama-cpp-2` requirement `LOCAL_RUNTIME_VERSION` above was last
-/// reviewed against. scripts/verify-desktop-upgrade.mjs fails when this and.
+/// reviewed against. scripts/verify-desktop-upgrade.mjs fails when Cargo.toml
+/// declares a different one.
 pub const LOCAL_RUNTIME_DEPENDENCY: &str = "0.1";
 
 /// The oldest local runtime whose cached artifacts this build still reads.

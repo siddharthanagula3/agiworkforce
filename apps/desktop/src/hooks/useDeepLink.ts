@@ -229,8 +229,3 @@ function handleDeepLink(url: string) {
     }),
   );
 }
-
-/** @deprecated Use `parseDeepLink` for validation before dispatching events. */
-export function handleDeepLinkForTests(url: string) {
-  handleDeepLink(url);
-}

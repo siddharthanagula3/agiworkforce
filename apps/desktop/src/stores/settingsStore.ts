@@ -184,7 +184,6 @@ interface SettingsState {
   setTemporaryChat: (enabled: boolean) => void;
   setSendShortcut: (shortcut: 'enter' | 'mod-enter') => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
-  setAutoSaveMemories: (enabled: boolean) => Promise<void>;
   setMemoryEnabled: (enabled: boolean) => Promise<void>;
   setAllowToolAssistedMemoryGeneration: (enabled: boolean) => Promise<void>;
   setAgentMode: (mode: AgentMode) => Promise<void>;
@@ -1100,10 +1099,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAllowToolAssistedMemoryGeneration',
           );
-        },
-
-        setAutoSaveMemories: async (enabled: boolean) => {
-          await get().setMemoryEnabled(enabled);
         },
 
         setAutoApproveTools: async (enabled: boolean) => {

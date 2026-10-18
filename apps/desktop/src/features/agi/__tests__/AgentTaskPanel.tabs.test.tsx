@@ -14,12 +14,14 @@ import { AgentTaskPanel } from '@/features/agi/AgentTaskPanel';
 import { invoke } from '@/lib/tauri-mock';
 import { useNotificationTargetStore } from '@/features/notifications/notificationTarget';
 
-const TAB_NAMES = ['Create', 'Monitor', 'Scheduled', 'Agents', 'Background'];
+const TAB_NAMES = ['Scheduled', 'Agents', 'Background'];
 
 describe('AgentTaskPanel tabs', () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockResolvedValue(undefined);
+    vi.mocked(invoke).mockImplementation(async (command: string) =>
+      command === 'scheduler_list_jobs' ? [] : undefined,
+    );
   });
 
   afterEach(() => cleanup());
@@ -41,42 +43,45 @@ describe('AgentTaskPanel tabs', () => {
     render(<AgentTaskPanel />);
     const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
 
-    expect(tab('Create')).toHaveAttribute('tabindex', '0');
-    expect(tab('Monitor')).toHaveAttribute('tabindex', '-1');
+    expect(tab('Scheduled')).toHaveAttribute('tabindex', '0');
+    expect(tab('Agents')).toHaveAttribute('tabindex', '-1');
 
-    tab('Create').focus();
-    fireEvent.keyDown(tab('Create'), { key: 'ArrowRight' });
-    expect(tab('Monitor')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Monitor')).toHaveFocus();
-    expect(tab('Create')).toHaveAttribute('tabindex', '-1');
-    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', tab('Monitor').id);
+    tab('Scheduled').focus();
+    fireEvent.keyDown(tab('Scheduled'), { key: 'ArrowRight' });
+    expect(tab('Agents')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Agents')).toHaveFocus();
+    expect(tab('Scheduled')).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', tab('Agents').id);
 
-    fireEvent.keyDown(tab('Monitor'), { key: 'ArrowLeft' });
-    fireEvent.keyDown(tab('Create'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(tab('Agents'), { key: 'ArrowLeft' });
+    fireEvent.keyDown(tab('Scheduled'), { key: 'ArrowLeft' });
     expect(tab('Background')).toHaveAttribute('aria-selected', 'true');
     expect(tab('Background')).toHaveFocus();
 
     fireEvent.keyDown(tab('Background'), { key: 'ArrowRight' });
-    expect(tab('Create')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Scheduled')).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(tab('Create'), { key: 'End' });
+    fireEvent.keyDown(tab('Scheduled'), { key: 'End' });
     expect(tab('Background')).toHaveAttribute('aria-selected', 'true');
     fireEvent.keyDown(tab('Background'), { key: 'Home' });
-    expect(tab('Create')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Create')).toHaveFocus();
+    expect(tab('Scheduled')).toHaveAttribute('aria-selected', 'true');
+    expect(tab('Scheduled')).toHaveFocus();
   });
 
   it('leaves other keys alone', () => {
     render(<AgentTaskPanel />);
-    const create = screen.getByRole('tab', { name: /^Create/ });
+    const scheduled = screen.getByRole('tab', { name: /^Scheduled/ });
 
-    fireEvent.keyDown(create, { key: 'a' });
-    expect(create).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(scheduled, { key: 'a' });
+    expect(scheduled).toHaveAttribute('aria-selected', 'true');
   });
 
   it('opens the Background tab when a notification names a background agent', async () => {
     render(<AgentTaskPanel />);
-    expect(screen.getByRole('tab', { name: /^Create/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Scheduled/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
 
     act(() => {
       useNotificationTargetStore.getState().request({ kind: 'background-agent', id: 'agent-1' });

@@ -115,28 +115,6 @@ fn window_covers(window: &PricingWindowEntry, as_of: NaiveDate) -> bool {
     from.is_none_or(|start| start <= as_of) && until.is_none_or(|end| as_of <= end)
 }
 
-/// Media type for per-unit pricing (images and video).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MediaType {
-    /// Standard-quality image generation through a catalog-selected image model.
-    ImageStandard,
-    /// High-quality / HD image generation through a catalog-selected image model.
-    ImageHD,
-    /// Video generation priced per second through a catalog-selected provider.
-    VideoPerSecond,
-}
-
-/// Per-unit pricing for media generation (images, video).
-///
-/// Unlike token-based pricing, media generation uses a fixed per-unit cost:
-/// - Images: cost per image generated
-/// - Video: cost per second of video generated
-#[derive(Debug, Clone)]
-struct MediaPricing {
-    /// Cost per unit (per image, or per second of video)
-    cost_per_unit: f64,
-}
-
 /// Catalog entry -> pricing record, carrying the model's dated schedule so the
 /// per-request date can select the window that applies.
 fn catalog_pricing(model: &ModelEntry) -> Pricing {
@@ -165,8 +143,6 @@ fn catalog_pricing(model: &ModelEntry) -> Pricing {
 pub struct CostCalculator {
     pricing: HashMap<(Provider, String), Pricing>,
     provider_defaults: HashMap<Provider, Pricing>,
-    /// Per-unit pricing for media generation keyed on (Provider, MediaType)
-    media_pricing: HashMap<(Provider, MediaType), MediaPricing>,
 }
 
 impl Default for CostCalculator {
@@ -219,51 +195,9 @@ impl CostCalculator {
             }
         }
 
-        // ---------------------------------------------------------
-        // Media Generation Per-Unit Pricing (stays hardcoded)
-        // ---------------------------------------------------------
-        let mut media_pricing = HashMap::new();
-
-        // OpenAI image generation
-        media_pricing.insert(
-            (Provider::OpenAI, MediaType::ImageStandard),
-            MediaPricing {
-                cost_per_unit: 0.04,
-            },
-        );
-        media_pricing.insert(
-            (Provider::OpenAI, MediaType::ImageHD),
-            MediaPricing {
-                cost_per_unit: 0.08,
-            },
-        );
-        // Google catalog-selected image generation
-        media_pricing.insert(
-            (Provider::Google, MediaType::ImageStandard),
-            MediaPricing {
-                cost_per_unit: 0.04,
-            },
-        );
-        media_pricing.insert(
-            (Provider::Google, MediaType::ImageHD),
-            MediaPricing {
-                cost_per_unit: 0.08,
-            },
-        );
-        // Google catalog-selected video generation (~$0.08 per second)
-        media_pricing.insert(
-            (Provider::Google, MediaType::VideoPerSecond),
-            MediaPricing {
-                cost_per_unit: 0.08,
-            },
-        );
-
-        // ManagedCloud inherits from origin providers (handled in calculate_media_cost)
-
         Self {
             pricing,
             provider_defaults,
-            media_pricing,
         }
     }
 
@@ -472,47 +406,6 @@ impl CostCalculator {
         let output_cost = completion_tokens as f64 * output_rate;
         input_cost + output_cost
     }
-
-    /// Calculates the cost for a media generation operation.
-    ///
-    /// - For images: `units` is the number of images generated.
-    /// - For video: `units` is the number of seconds of video generated.
-    ///
-    /// Returns 0.0 if no pricing is found for the provider/media_type combination.
-    pub fn calculate_media_cost(
-        &self,
-        provider: Provider,
-        media_type: MediaType,
-        units: u32,
-    ) -> f64 {
-        if units == 0 {
-            return 0.0;
-        }
-
-        let media_price = self.media_pricing.get(&(provider, media_type)).or_else(|| {
-            // ManagedCloud fallback: check origin providers
-            if provider == Provider::ManagedCloud {
-                Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
-                    .iter()
-                    .find_map(|&p| self.media_pricing.get(&(p, media_type)))
-            } else {
-                None
-            }
-        });
-
-        match media_price {
-            Some(pricing) => pricing.cost_per_unit * units as f64,
-            None => {
-                tracing::warn!(
-                    provider = ?provider,
-                    media_type = ?media_type,
-                    units,
-                    "no media pricing found for provider/media type; returning 0.0 cost"
-                );
-                0.0
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -567,7 +460,6 @@ mod tests {
         CostCalculator {
             pricing: map,
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         }
     }
 
@@ -610,7 +502,6 @@ mod tests {
         CostCalculator {
             pricing: map,
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         }
     }
 
@@ -650,7 +541,6 @@ mod tests {
         CostCalculator {
             pricing: map,
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         }
     }
 
@@ -958,7 +848,6 @@ mod tests {
         let calc = CostCalculator {
             pricing: HashMap::new(),
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         };
         let cost = calc.calculate(
             Provider::Bedrock,
@@ -979,7 +868,6 @@ mod tests {
         let calc = CostCalculator {
             pricing: HashMap::new(),
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         };
         let cost = calc.calculate_with_cache(
             Provider::Anthropic,
@@ -1159,7 +1047,6 @@ mod tests {
         let calc = CostCalculator {
             pricing: HashMap::new(),
             provider_defaults: HashMap::new(),
-            media_pricing: HashMap::new(),
         };
         let cost = calc.calculate(
             Provider::OpenAI,

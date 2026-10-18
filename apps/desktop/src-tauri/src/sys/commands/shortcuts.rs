@@ -18,11 +18,6 @@ pub struct Shortcut {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ShortcutConfig {
-    pub shortcuts: Vec<Shortcut>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuickQueryHotkeyPreferences {
     pub enabled: bool,

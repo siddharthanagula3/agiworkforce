@@ -210,48 +210,6 @@ impl AdvancedBrowserOps {
         }
     }
 
-    pub async fn execute_in_frame(
-        cdp: Arc<CdpClient>,
-        frame_id: &str,
-        script: &str,
-    ) -> Result<Value> {
-        // Basic script validation to prevent obviously dangerous operations
-        const MAX_SCRIPT_LENGTH: usize = 100_000;
-        if script.len() > MAX_SCRIPT_LENGTH {
-            return Err(Error::Generic(format!(
-                "Script exceeds maximum length of {} bytes",
-                MAX_SCRIPT_LENGTH
-            )));
-        }
-
-        let params = json!({
-            "frameId": frame_id,
-            "expression": script,
-            "returnByValue": true,
-            "awaitPromise": true,
-        });
-
-        let result = cdp.send_command("Runtime.evaluate", params).await?;
-
-        if let Some(value) = result.get("result").and_then(|r| r.get("value")) {
-            Ok(value.clone())
-        } else {
-            Ok(Value::Null)
-        }
-    }
-
-    pub async fn get_frames(cdp: Arc<CdpClient>) -> Result<Vec<FrameContext>> {
-        let result = cdp.send_command("Page.getFrameTree", json!({})).await?;
-
-        let mut frames = Vec::new();
-
-        if let Some(frame_tree) = result.get("frameTree") {
-            Self::extract_frames(frame_tree, &mut frames, None);
-        }
-
-        Ok(frames)
-    }
-
     fn extract_frames(
         frame_tree: &Value,
         frames: &mut Vec<FrameContext>,
@@ -286,65 +244,6 @@ impl AdvancedBrowserOps {
                     Self::extract_frames(child, frames, Some(frame_id.clone()));
                 }
             }
-        }
-    }
-
-    pub async fn fill_form(cdp: Arc<CdpClient>, fields: Vec<FormField>) -> Result<()> {
-        for field in fields {
-            Self::wait_for_interactive(Arc::clone(&cdp), &field.selector, 5000).await?;
-
-            match field.field_type {
-                FormFieldType::Text | FormFieldType::Email | FormFieldType::Password => {
-                    cdp.type_into_element(&field.selector, &field.value, true)
-                        .await?;
-                }
-                FormFieldType::Checkbox => {
-                    let checked = field.value.to_lowercase() == "true";
-                    cdp.set_checked(&field.selector, checked).await?;
-                }
-                FormFieldType::Select => {
-                    cdp.select_option(&field.selector, &field.value).await?;
-                }
-                FormFieldType::Radio => {
-                    cdp.click_element(&field.selector).await?;
-                }
-                FormFieldType::Textarea => {
-                    cdp.type_into_element(&field.selector, &field.value, true)
-                        .await?;
-                }
-            }
-
-            tokio::time::sleep(Duration::from_millis(200)).await;
-        }
-
-        Ok(())
-    }
-
-    pub async fn wait_for_navigation(cdp: Arc<CdpClient>, timeout_ms: u64) -> Result<String> {
-        let script = r"
-            new Promise((resolve) => {
-                if (document.readyState === 'complete') {
-                    resolve(window.location.href);
-                } else {
-                    window.addEventListener('load', () => {
-                        resolve(window.location.href);
-                    });
-                }
-            })
-        ";
-
-        let result = tokio::time::timeout(Duration::from_millis(timeout_ms), cdp.evaluate(script))
-            .await
-            .map_err(|_| {
-                Error::CommandTimeout(format!("Navigation timeout after {}ms", timeout_ms))
-            })?
-            .map_err(|e| Error::Other(format!("Navigation failed: {}", e)))?;
-
-        match result.as_str() {
-            Some(url) => Ok(url.to_string()),
-            None => Err(Error::Other(
-                "Failed to get URL after navigation".to_string(),
-            )),
         }
     }
 
@@ -467,23 +366,6 @@ impl AdvancedBrowserOps {
         Self::upload_files(cdp, selector, &[file_path.to_string()]).await
     }
 
-    pub async fn call_function(
-        cdp: Arc<CdpClient>,
-        function_name: &str,
-        args: Vec<Value>,
-    ) -> Result<Value> {
-        let args_json = serde_json::to_string(&args)
-            .map_err(|e| Error::Other(format!("Failed to serialize arguments: {}", e)))?;
-
-        let script = format!(
-            "window['{}'](...{})",
-            escape_js_string(function_name),
-            args_json
-        );
-
-        cdp.evaluate(&script).await
-    }
-
     pub async fn get_cookies(cdp: Arc<CdpClient>) -> Result<Vec<Cookie>> {
         let result = cdp.send_command("Network.getCookies", json!({})).await?;
 
@@ -514,38 +396,6 @@ impl AdvancedBrowserOps {
         cdp.send_command("Network.clearBrowserCookies", json!({}))
             .await?;
         Ok(())
-    }
-
-    pub async fn enable_request_interception(cdp: Arc<CdpClient>) -> Result<()> {
-        let params = json!({
-            "patterns": [{"urlPattern": "*"}]
-        });
-
-        cdp.send_command("Fetch.enable", params).await?;
-        Ok(())
-    }
-
-    pub async fn get_performance_metrics(cdp: Arc<CdpClient>) -> Result<PerformanceMetrics> {
-        let script = r"
-            JSON.stringify({
-                navigationStart: performance.timing.navigationStart,
-                loadComplete: performance.timing.loadEventEnd,
-                domContentLoaded: performance.timing.domContentLoadedEventEnd,
-                firstPaint: performance.getEntriesByType('paint')
-                    .find(e => e.name === 'first-paint')?.startTime || 0,
-                firstContentfulPaint: performance.getEntriesByType('paint')
-                    .find(e => e.name === 'first-contentful-paint')?.startTime || 0,
-                memoryUsage: performance.memory?.usedJSHeapSize || 0
-            })
-        ";
-
-        let result = cdp.evaluate(script).await?;
-        let json_str = result
-            .as_str()
-            .ok_or_else(|| Error::Other("Failed to get performance data".to_string()))?;
-
-        serde_json::from_str(json_str)
-            .map_err(|e| Error::Other(format!("Failed to parse performance metrics: {}", e)))
     }
 }
 

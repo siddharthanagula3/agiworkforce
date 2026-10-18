@@ -1,8 +1,7 @@
 import { listen, UnlistenFn } from '../lib/tauri-mock';
-import { toast } from 'sonner';
 import { useEffect } from 'react';
 import { isTauri } from '../lib/tauri-mock';
-import { automation, browserExtension } from '@agiworkforce/desktop-command-client';
+import { browserExtension } from '@agiworkforce/desktop-command-client';
 import {
   getMcpToolDisplayName,
   mapToolNameToActionType,
@@ -616,33 +615,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
     }),
   );
   push(unlistenExtensionTaskResult);
-
-  const unlistenPermRequired = await listen<{
-    reason: string;
-    message: string;
-    graceful?: boolean;
-  }>('automation:permission_required', (event) => {
-    if (!ctx.listenersActive) return;
-    const { message, reason, graceful } = event.payload;
-    const openSettings = () => {
-      void automation.requestAutomationPermission(reason ?? 'accessibility').catch((err) => {
-        console.error('Failed to request automation permission:', err);
-      });
-    };
-    if (graceful) {
-      toast(message, {
-        duration: 8000,
-        action: { label: 'Open Settings', onClick: openSettings },
-      });
-    } else {
-      toast.error(message, {
-        duration: 12000,
-        action: { label: 'Open Settings', onClick: openSettings },
-      });
-      openSettings();
-    }
-  });
-  push(unlistenPermRequired);
 
   const unlistenAutomationRecordingStarted = await listen<Record<string, unknown>>(
     'automation:recording_started',

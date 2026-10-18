@@ -577,15 +577,3 @@ export function getToolDisplayInfo(technicalName: string | undefined | null): To
     category: 'system',
   };
 }
-
-export function getFriendlyToolName(technicalName: string | undefined | null): string {
-  return getToolDisplayInfo(technicalName).displayName;
-}
-
-export function getToolActiveForm(technicalName: string | undefined | null): string {
-  return getToolDisplayInfo(technicalName).activeForm;
-}
-
-export function getToolCompletedForm(technicalName: string | undefined | null): string {
-  return getToolDisplayInfo(technicalName).completedForm;
-}

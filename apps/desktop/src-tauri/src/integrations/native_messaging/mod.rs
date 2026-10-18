@@ -10,7 +10,6 @@ use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
-use tokio::sync::RwLock;
 
 pub mod endpoint;
 pub mod host;
@@ -541,55 +540,6 @@ pub fn write_message<W: Write>(writer: &mut W, response: &NativeResponse) -> Res
     Ok(())
 }
 
-/// Generate the native messaging host manifest for Chrome
-pub fn generate_host_manifest(
-    host_name: &str,
-    description: &str,
-    executable_path: &str,
-    extension_ids: &[&str],
-) -> serde_json::Value {
-    serde_json::json!({
-        "name": host_name,
-        "description": description,
-        "path": executable_path,
-        "type": "stdio",
-        "allowed_origins": extension_ids.iter()
-            .map(|id| format!("chrome-extension://{}/", id))
-            .collect::<Vec<_>>()
-    })
-}
-
-/// Get the path where the native messaging host manifest should be installed
-pub fn get_manifest_path(host_name: &str) -> Result<std::path::PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home =
-            std::env::var("HOME").map_err(|_| anyhow!("HOME environment variable not set"))?;
-        Ok(std::path::PathBuf::from(format!(
-            "{}/Library/Application Support/Google/Chrome/NativeMessagingHosts/{}.json",
-            home, host_name
-        )))
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        Ok(std::path::PathBuf::from(format!(
-            "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\NativeMessagingHosts\\{}",
-            host_name
-        )))
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let home =
-            std::env::var("HOME").map_err(|_| anyhow!("HOME environment variable not set"))?;
-        Ok(std::path::PathBuf::from(format!(
-            "{}/.config/google-chrome/NativeMessagingHosts/{}.json",
-            home, host_name
-        )))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -614,19 +564,6 @@ mod tests {
         let expected_len = json.len() as u32;
         let actual_len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         assert_eq!(expected_len, actual_len);
-    }
-
-    #[test]
-    fn test_generate_manifest() {
-        let manifest = generate_host_manifest(
-            "com.agiworkforce.native",
-            "AGI Workforce Native Host",
-            "/usr/local/bin/agiworkforce-native",
-            &["abcdefghijklmnopqrstuvwxyz123456"],
-        );
-
-        assert_eq!(manifest["name"], "com.agiworkforce.native");
-        assert_eq!(manifest["type"], "stdio");
     }
 
     #[test]

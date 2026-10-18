@@ -148,7 +148,6 @@ pub struct VoiceWake {
     config: WakeWordConfig,
     is_listening: Arc<AtomicBool>,
     remote_gate: Arc<Mutex<RemoteSpeechGate>>,
-    event_tx: Option<mpsc::Sender<WakeWordEvent>>,
     #[cfg(feature = "vad")]
     vad: Option<SharedVad>,
 }
@@ -160,7 +159,6 @@ impl VoiceWake {
             config,
             is_listening: Arc::new(AtomicBool::new(false)),
             remote_gate: Arc::new(Mutex::new(RemoteSpeechGate::open())),
-            event_tx: None,
             #[cfg(feature = "vad")]
             vad: None,
         }
@@ -212,11 +210,6 @@ impl VoiceWake {
 
         tracing::info!("VAD initialized successfully");
         Ok(())
-    }
-
-    /// Set event sender for wake word detection
-    pub fn set_event_sender(&mut self, tx: mpsc::Sender<WakeWordEvent>) {
-        self.event_tx = Some(tx);
     }
 
     /// Start listening for wake word
@@ -345,7 +338,7 @@ impl VoiceWake {
 
         tracing::info!("Audio capture started, listening for wake words...");
 
-        // AUDIT-004-007 fix: Add maximum buffer size limits (16MB max for speech, 1MB for audio)
+        // Add maximum buffer size limits (16MB max for speech, 1MB for audio)
         // At 16kHz sample rate with f32 (4 bytes), 16MB = ~1 million samples = ~62 seconds
         const MAX_SPEECH_BUFFER_SAMPLES: usize = 1_000_000;
         // Audio buffer needs less since it's processed incrementally
@@ -363,7 +356,6 @@ impl VoiceWake {
             // Collect audio samples with timeout
             match audio_rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(samples) => {
-                    // AUDIT-004-007 fix: Check buffer size before extending
                     if audio_buffer.len() + samples.len() <= MAX_AUDIO_BUFFER_SAMPLES {
                         audio_buffer.extend(samples);
                     } else {
@@ -414,7 +406,6 @@ impl VoiceWake {
                         }
                     }
                     SpeechState::Speaking => {
-                        // AUDIT-004-007 fix: Check speech buffer size before extending
                         if speech_buffer.len() + vad_chunk.len() <= MAX_SPEECH_BUFFER_SAMPLES {
                             speech_buffer.extend(&vad_chunk);
                         } else {
@@ -449,7 +440,6 @@ impl VoiceWake {
                             // False alarm, continue recording
                             state = SpeechState::Speaking;
                             last_speech_time = Some(now);
-                            // AUDIT-004-007 fix: Check buffer size before extending
                             if speech_buffer.len() + vad_chunk.len() <= MAX_SPEECH_BUFFER_SAMPLES {
                                 speech_buffer.extend(&vad_chunk);
                             }
@@ -470,18 +460,12 @@ impl VoiceWake {
                                         speech_buffer.len()
                                     );
 
-                                    // Process the speech buffer for wake word detection
-                                    // In a full implementation, this would:
-                                    // 1. Send audio to speech-to-text service
-                                    // 2. Match transcription against wake phrases
-                                    // 3. Emit event if matched
-
-                                    // For now, emit a placeholder event
-                                    // Real implementation would integrate with recognition.rs
-                                    // Use blocking_send since we're in a sync context
+                                    // Reports voice activity only: nothing transcribes the
+                                    // buffer, so `wake_phrase_detection_available` stays false
+                                    // and voice_wake_enable refuses before this loop starts.
                                     let _ = tx.blocking_send(WakeWordEvent {
                                         phrase_detected: "speech_detected".to_string(),
-                                        confidence: 0.0, // Placeholder
+                                        confidence: 0.0,
                                         timestamp: chrono::Utc::now().timestamp_millis(),
                                     });
                                 }
@@ -604,65 +588,6 @@ impl VoiceWake {
 impl Default for VoiceWake {
     fn default() -> Self {
         Self::new(WakeWordConfig::default())
-    }
-}
-
-/// Information about an available audio input device
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AudioDeviceInfo {
-    /// Device name
-    pub name: String,
-    /// Whether this is the default device
-    pub is_default: bool,
-    /// Sample rate (if available)
-    pub sample_rate: Option<u32>,
-    /// Number of channels (if available)
-    pub channels: Option<u16>,
-}
-
-/// List available audio input devices
-///
-/// # Returns
-/// A list of available audio input devices with their properties
-pub fn list_audio_devices() -> Result<Vec<AudioDeviceInfo>> {
-    #[cfg(feature = "vad")]
-    {
-        use cpal::traits::{DeviceTrait, HostTrait};
-
-        let host = cpal::default_host();
-        let default_device = host.default_input_device();
-        let default_name = default_device.as_ref().and_then(|d| d.name().ok());
-
-        let devices = host
-            .input_devices()
-            .map_err(|e| Error::Config(format!("Failed to enumerate audio devices: {}", e)))?;
-
-        let mut result = Vec::new();
-        for device in devices {
-            let name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-            let is_default = default_name.as_ref().map(|n| n == &name).unwrap_or(false);
-
-            let (sample_rate, channels) = device
-                .default_input_config()
-                .map(|c| (Some(c.sample_rate().0), Some(c.channels())))
-                .unwrap_or((None, None));
-
-            result.push(AudioDeviceInfo {
-                name,
-                is_default,
-                sample_rate,
-                channels,
-            });
-        }
-
-        Ok(result)
-    }
-
-    #[cfg(not(feature = "vad"))]
-    {
-        Err(Error::Config(
-            "VAD feature not enabled, audio device enumeration not available".to_string(),
-        ))
     }
 }
 

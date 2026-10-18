@@ -294,8 +294,6 @@ fn parse_quality(value: &str) -> Result<PiperQuality> {
 pub struct PiperLocal {
     /// Path to the Piper executable
     piper_path: PathBuf,
-    /// Directory containing voice models
-    models_dir: PathBuf,
     /// Currently selected voice
     voice_id: String,
     /// Voice model path
@@ -332,7 +330,6 @@ impl PiperLocal {
 
         Ok(Self {
             piper_path,
-            models_dir,
             voice_id: voice_id.to_string(),
             model_path,
             sample_rate,
@@ -553,11 +550,6 @@ impl PiperLocal {
             channels: 1,
             duration_seconds: duration,
         })
-    }
-
-    /// List available voices in the models directory
-    pub fn list_available_voices(&self) -> Vec<VoiceInfo> {
-        PiperVoiceDefinitions::discover(&self.models_dir).unwrap_or_default()
     }
 
     /// Download a voice model
@@ -796,28 +788,6 @@ impl PiperLocal {
     pub fn default_bin_dir() -> Result<PathBuf> {
         let home = dirs::home_dir().ok_or_else(|| anyhow!("Could not determine home directory"))?;
         Ok(home.join(".agiworkforce").join("bin"))
-    }
-
-    /// Delete a downloaded voice
-    pub async fn delete_voice(models_dir: &Path, voice_id: &str) -> Result<()> {
-        validate_runtime_id(voice_id)?;
-        let (model_path, config_path) =
-            PiperVoiceDefinitions::artifact_paths(models_dir, voice_id)?;
-
-        if model_path.exists() {
-            tokio::fs::remove_file(&model_path)
-                .await
-                .context("Failed to delete model file")?;
-        }
-
-        if config_path.exists() {
-            tokio::fs::remove_file(&config_path)
-                .await
-                .context("Failed to delete config file")?;
-        }
-
-        tracing::info!("Deleted Piper voice: {}", voice_id);
-        Ok(())
     }
 }
 

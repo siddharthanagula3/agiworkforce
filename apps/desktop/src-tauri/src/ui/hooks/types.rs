@@ -30,9 +30,6 @@ impl HookEventType {
             HookEventType::PreToolUse,
             HookEventType::PostToolUse,
             HookEventType::ToolError,
-            HookEventType::StepStart,
-            HookEventType::StepCompleted,
-            HookEventType::StepError,
             HookEventType::GoalStart,
             HookEventType::GoalCompleted,
             HookEventType::GoalError,
@@ -155,13 +152,6 @@ pub enum EventContext {
         error: Option<String>,
         execution_time_ms: Option<u64>,
     },
-    Step {
-        step_id: String,
-        step_description: String,
-        goal_id: String,
-        result: Option<serde_json::Value>,
-        error: Option<String>,
-    },
     Goal {
         goal_id: String,
         description: String,
@@ -268,68 +258,6 @@ impl HookEvent {
                 result: None,
                 error: Some(error),
                 execution_time_ms: None,
-            },
-        }
-    }
-
-    pub fn step_start(
-        session_id: String,
-        step_id: String,
-        step_description: String,
-        goal_id: String,
-    ) -> Self {
-        Self {
-            event_type: HookEventType::StepStart,
-            timestamp: Utc::now(),
-            session_id,
-            context: EventContext::Step {
-                step_id,
-                step_description,
-                goal_id,
-                result: None,
-                error: None,
-            },
-        }
-    }
-
-    pub fn step_completed(
-        session_id: String,
-        step_id: String,
-        step_description: String,
-        goal_id: String,
-        result: serde_json::Value,
-    ) -> Self {
-        Self {
-            event_type: HookEventType::StepCompleted,
-            timestamp: Utc::now(),
-            session_id,
-            context: EventContext::Step {
-                step_id,
-                step_description,
-                goal_id,
-                result: Some(result),
-                error: None,
-            },
-        }
-    }
-
-    pub fn step_error(
-        session_id: String,
-        step_id: String,
-        step_description: String,
-        goal_id: String,
-        error: String,
-    ) -> Self {
-        Self {
-            event_type: HookEventType::StepError,
-            timestamp: Utc::now(),
-            session_id,
-            context: EventContext::Step {
-                step_id,
-                step_description,
-                goal_id,
-                result: None,
-                error: Some(error),
             },
         }
     }

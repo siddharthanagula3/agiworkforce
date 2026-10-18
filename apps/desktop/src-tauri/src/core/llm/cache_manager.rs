@@ -237,92 +237,9 @@ impl CacheManager {
         Ok(())
     }
 
-    pub fn get_overall_stats(&self, conn: &Connection) -> SqlResult<OverallCacheStats> {
-        let mut stmt = conn.prepare(
-            "SELECT
-                COUNT(*) as total_entries,
-                SUM(hit_count) as total_hits,
-                SUM(tokens_saved) as total_tokens_saved,
-                SUM(cost_saved) as total_cost_saved,
-                AVG(CASE WHEN hit_count > 0 THEN hit_count ELSE NULL END) as avg_hits_per_entry
-             FROM cache_entries",
-        )?;
-
-        let stats = stmt.query_row([], |row| {
-            Ok(OverallCacheStats {
-                total_entries: row.get::<_, i64>(0)?,
-                total_hits: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
-                total_tokens_saved: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                total_cost_saved: row.get::<_, Option<f64>>(3)?.unwrap_or(0.0),
-                avg_hits_per_entry: row.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
-            })
-        })?;
-        Ok(stats)
-    }
-
-    pub fn get_provider_stats(&self, conn: &Connection) -> SqlResult<Vec<ProviderCacheStats>> {
-        let mut stmt = conn.prepare(
-            "SELECT
-                provider,
-                model,
-                COUNT(*) as entry_count,
-                SUM(hit_count) as total_hits,
-                SUM(tokens_saved) as total_tokens_saved,
-                SUM(cost_saved) as total_cost_saved
-             FROM cache_entries
-             GROUP BY provider, model
-             ORDER BY total_cost_saved DESC",
-        )?;
-
-        let stats = stmt
-            .query_map([], |row| {
-                Ok(ProviderCacheStats {
-                    provider: row.get(0)?,
-                    model: row.get(1)?,
-                    entry_count: row.get(2)?,
-                    total_hits: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                    total_tokens_saved: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-                    total_cost_saved: row.get::<_, Option<f64>>(5)?.unwrap_or(0.0),
-                })
-            })?
-            .collect::<SqlResult<Vec<_>>>()?;
-
-        Ok(stats)
-    }
-
     pub fn clear_all(&self, conn: &Connection) -> SqlResult<usize> {
         conn.execute("DELETE FROM cache_entries", [])
     }
-
-    pub fn clear_provider(&self, conn: &Connection, provider: Provider) -> SqlResult<usize> {
-        conn.execute(
-            "DELETE FROM cache_entries WHERE provider = ?1",
-            params![provider.as_string()],
-        )
-    }
-
-    pub fn clear_model(&self, conn: &Connection, model: &str) -> SqlResult<usize> {
-        conn.execute("DELETE FROM cache_entries WHERE model = ?1", params![model])
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct OverallCacheStats {
-    pub total_entries: i64,
-    pub total_hits: i64,
-    pub total_tokens_saved: i64,
-    pub total_cost_saved: f64,
-    pub avg_hits_per_entry: f64,
-}
-
-#[derive(Debug, Clone)]
-pub struct ProviderCacheStats {
-    pub provider: String,
-    pub model: String,
-    pub entry_count: i64,
-    pub total_hits: i64,
-    pub total_tokens_saved: i64,
-    pub total_cost_saved: f64,
 }
 
 fn parse_datetime(value: &str) -> DateTime<Utc> {

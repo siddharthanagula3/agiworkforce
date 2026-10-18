@@ -187,40 +187,6 @@ impl Message {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenUsage {
-    pub id: i64,
-    pub user_id: String,
-    pub input_tokens: i32,
-    pub output_tokens: i32,
-    pub total_cost: f64,
-    pub model: Option<String>,
-    pub provider: Option<String>,
-    pub created_at: DateTime<Utc>,
-}
-
-impl TokenUsage {
-    pub fn new(
-        user_id: String,
-        input_tokens: i32,
-        output_tokens: i32,
-        total_cost: f64,
-        model: Option<String>,
-        provider: Option<String>,
-    ) -> Self {
-        Self {
-            id: 0,
-            user_id,
-            input_tokens,
-            output_tokens,
-            total_cost,
-            model,
-            provider,
-            created_at: Utc::now(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostTimeseriesPoint {
     pub date: String,
     pub total_cost: f64,
@@ -257,19 +223,6 @@ pub struct CacheEntry {
     pub cost_saved: f64,
     pub temperature: Option<f32>,
     pub max_tokens: Option<i32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CacheStatistics {
-    pub provider: String,
-    pub model: String,
-    pub entry_count: i64,
-    pub total_hits: i64,
-    pub total_tokens_saved: i64,
-    pub total_cost_saved: f64,
-    pub avg_hits_per_entry: f64,
-    pub oldest_entry: DateTime<Utc>,
-    pub most_recent_use: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -359,83 +312,6 @@ impl AutomationHistory {
         self.error = Some(error);
         self
     }
-
-    pub fn with_cost(mut self, cost: f64) -> Self {
-        self.cost = Some(cost);
-        self
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum OverlayEventType {
-    Click,
-    Type,
-    RegionHighlight,
-    ScreenshotFlash,
-}
-
-impl OverlayEventType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            OverlayEventType::Click => "click",
-            OverlayEventType::Type => "type",
-            OverlayEventType::RegionHighlight => "region_highlight",
-            OverlayEventType::ScreenshotFlash => "screenshot_flash",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "click" => Some(OverlayEventType::Click),
-            "type" => Some(OverlayEventType::Type),
-            "region_highlight" => Some(OverlayEventType::RegionHighlight),
-            "screenshot_flash" => Some(OverlayEventType::ScreenshotFlash),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OverlayEvent {
-    pub id: i64,
-    pub event_type: OverlayEventType,
-    pub x: i32,
-    pub y: i32,
-    pub data: Option<String>,
-    pub timestamp: DateTime<Utc>,
-}
-
-impl OverlayEvent {
-    pub fn new(event_type: OverlayEventType, x: i32, y: i32) -> Self {
-        Self {
-            id: 0,
-            event_type,
-            x,
-            y,
-            data: None,
-            timestamp: Utc::now(),
-        }
-    }
-
-    pub fn with_data(mut self, data: String) -> Self {
-        self.data = Some(data);
-        self
-    }
-}
-
-/// AUDIT-004-001 fix: Paginated response for overlay events.
-/// Includes total count to support UI pagination controls.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaginatedOverlayEvents {
-    /// The overlay events for the current page
-    pub events: Vec<OverlayEvent>,
-    /// Total count of events matching the filter (before pagination)
-    pub total_count: i64,
-    /// The limit used for this query
-    pub limit: i64,
-    /// The offset used for this query
-    pub offset: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,65 +362,6 @@ impl PermissionType {
             "PROCESS_TERMINATE" => Some(PermissionType::ProcessTerminate),
             _ => None,
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PermissionState {
-    Allowed,
-    Prompt,
-    PromptOnce,
-    Denied,
-}
-
-impl PermissionState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            PermissionState::Allowed => "allowed",
-            PermissionState::Prompt => "prompt",
-            PermissionState::PromptOnce => "prompt_once",
-            PermissionState::Denied => "denied",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "allowed" => Some(PermissionState::Allowed),
-            "prompt" => Some(PermissionState::Prompt),
-            "prompt_once" => Some(PermissionState::PromptOnce),
-            "denied" => Some(PermissionState::Denied),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Permission {
-    pub id: i64,
-    pub permission_type: PermissionType,
-    pub state: PermissionState,
-    pub pattern: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl Permission {
-    pub fn new(permission_type: PermissionType, state: PermissionState) -> Self {
-        let now = Utc::now();
-        Self {
-            id: 0,
-            permission_type,
-            state,
-            pattern: None,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-
-    pub fn with_pattern(mut self, pattern: String) -> Self {
-        self.pattern = Some(pattern);
-        self
     }
 }
 
@@ -616,18 +433,6 @@ impl CommandHistoryEntry {
             created_at: Utc::now(),
         }
     }
-
-    pub fn with_args(mut self, args: Vec<String>) -> Self {
-        self.args = Some(args);
-        self
-    }
-
-    pub fn with_output(mut self, exit_code: i32, stdout: String, stderr: String) -> Self {
-        self.exit_code = Some(exit_code);
-        self.stdout = Some(stdout);
-        self.stderr = Some(stderr);
-        self
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -646,10 +451,5 @@ impl ClipboardHistoryEntry {
             content_type: "text".to_string(),
             created_at: Utc::now(),
         }
-    }
-
-    pub fn with_type(mut self, content_type: String) -> Self {
-        self.content_type = content_type;
-        self
     }
 }

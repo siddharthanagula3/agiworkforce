@@ -58,8 +58,8 @@ mod tests;
 
 pub use app_permissions::{
     ensure_navigation_url_allowed, is_always_blocked_bundle, is_always_blocked_host, AppPermission,
-    AppPermissionManager, AppPermissionRequest, PermissionDecision, PermissionStatus,
-    ALWAYS_BLOCKED_BUNDLE_IDS, ALWAYS_BLOCKED_URL_HOSTS,
+    AppPermissionManager, PermissionDecision, PermissionStatus, ALWAYS_BLOCKED_BUNDLE_IDS,
+    ALWAYS_BLOCKED_URL_HOSTS,
 };
 pub use approval::{action_class, action_tool_name, approval_request};
 pub use clipboard_permission::{
@@ -97,14 +97,12 @@ pub use types::{
     ComputerUseAction, ComputerUseTask, Coordinate, ElementBounds, HotkeyModifier, MouseButton,
     ScreenAnalysis, ScreenElement, ScrollDirection, TaskOutcome, TaskProgress, WaitCondition,
 };
-pub use visual_reasoner::{
-    ElementDetection, ScreenObservation, VisualReasoner, VisualReasonerConfig,
-};
+pub use visual_reasoner::{ScreenObservation, VisualReasoner, VisualReasonerConfig};
 pub use window_manager::{
     ActiveWindow, AppWindow, WindowActivation, WindowCoordinator, WindowEnumerator,
     WindowManagerConfig,
 };
 pub use zoom::{
-    suggest_zoom_level, zoom_around_point, zoom_region, zoom_region_raw, InterpolationMethod,
-    Region, ZoomAction, ZoomLevel, ZoomResult,
+    suggest_zoom_level, zoom_around_point, zoom_region, InterpolationMethod, Region, ZoomAction,
+    ZoomLevel, ZoomResult,
 };

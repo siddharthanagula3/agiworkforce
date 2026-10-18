@@ -169,7 +169,7 @@ fn build_registry_tool_definitions(registry: &ToolRegistry) -> Vec<ToolDefinitio
 /// the model can actually use (e.g. no browser tools for models without
 /// `computerUse`).
 ///
-/// AUDIT-TOOLS-048 fix: When no registry is provided, create one internally
+/// When no registry is provided, create one internally
 /// to ensure schema/runtime consistency. This prevents drift between the
 /// tool definitions sent to the LLM and the actual execution behavior.
 pub fn build_chat_tools(

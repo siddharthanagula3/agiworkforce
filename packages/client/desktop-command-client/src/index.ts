@@ -29,7 +29,6 @@ export * as autostart from './autostart';
 
 export * as mcp from './mcp';
 
-export * as agent from './agent';
 export * as automation from './automation';
 export * as browserExtension from './browserExtension';
 

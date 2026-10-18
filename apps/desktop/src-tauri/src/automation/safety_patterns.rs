@@ -56,19 +56,6 @@ pub fn dangerous_key_combinations() -> &'static Vec<String> {
     })
 }
 
-/// Dangerous task-level keywords checked against full task descriptions.
-pub const DANGEROUS_TASK_KEYWORDS: &[&str] = &[
-    "delete system",
-    "format drive",
-    "remove windows",
-    "steal",
-    "hack",
-    "crack password",
-    "bypass security",
-    "disable firewall",
-    "disable antivirus",
-];
-
 #[cfg(test)]
 mod tests {
     use super::*;
