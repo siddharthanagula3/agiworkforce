@@ -1,6 +1,8 @@
-export const BANK_ACCOUNTS_CONNECTOR_ID = 'bank-accounts';
-export const BANK_ACCOUNTS_LINK_PATH = '/api/connectors/bank-accounts/link';
-export const BANK_ACCOUNTS_EXCHANGE_PATH = '/api/connectors/bank-accounts/exchange';
+export {
+  BANK_ACCOUNTS_CONNECTOR_ID,
+  BANK_ACCOUNTS_EXCHANGE_PATH,
+  BANK_ACCOUNTS_LINK_PATH,
+} from '@agiworkforce/cloud-contracts';
 
 type PlaidEnvironment = 'sandbox' | 'production';
 

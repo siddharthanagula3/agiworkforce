@@ -19,6 +19,7 @@ import {
 import type { PlatformCapability } from '@agiworkforce/types';
 import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
 import { enqueueJob } from '@/lib/jobs/job-service';
+import { logger } from '@/lib/logger';
 
 /**
  * What the device registry says about the machine a step would be sent to.
@@ -201,7 +202,12 @@ export async function propagateDeviceRevocation(
       // One job per revocation: a device re-paired and revoked again later is a
       // new revocation, and its revoke must not dedupe into the finished one.
       idempotencyKey: `device-revoke:${revocation.deviceId}:${revocation.reason}:${revokedAt}`,
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      logger.error(
+        { error, deviceId: revocation.deviceId, reason: revocation.reason },
+        '[device-registry] revocation retry could not be queued; the live socket stays open until the relay is reached',
+      );
+    });
   }
   return { remoteWorkStopped, liveSessionsDropped: null, signalingReachable: false };
 }

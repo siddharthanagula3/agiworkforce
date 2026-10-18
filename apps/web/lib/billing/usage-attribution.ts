@@ -7,23 +7,7 @@ export interface UsageAttribution {
   sessionId?: string | null;
 }
 
-const WORKLOAD_LABELS: Readonly<Record<string, string>> = {
-  chat: 'Chat',
-  work: 'AGI Work',
-  research: 'Deep Research',
-  code: 'AGI Code',
-  browser: 'Browser',
-  unknown: 'Not attributed',
-};
-
-/**
- * What a product area is called wherever spend is broken down by it. A surface
- * that spells its own labels renames the same bucket between the workspace
- * console and the account's own usage page.
- */
-export function usageWorkloadLabel(key: string): string {
-  return WORKLOAD_LABELS[key] ?? key;
-}
+export { usageWorkloadLabel } from '@agiworkforce/types';
 
 const USAGE_ATTRIBUTION_ID = /^[A-Za-z0-9_.:-]{1,200}$/u;
 

@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { chargeMicrousdForProviderCost } from '@agiworkforce/types';
+import { chargeMicrousdForProviderCost, MICROUSD_PER_USD } from '@agiworkforce/types';
+
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 
 import {
   hostedCodeExecutionProviderOf,
@@ -398,9 +400,6 @@ export function calculateObservedProviderUsageCostDollars(
     )
   );
 }
-
-const MICROUSD_PER_USD = 1_000_000;
-const MICROUSD_PER_LEDGER_CENT = 10_000;
 
 /**
  * The ledger's unit since 0182. Work that produced nothing costs nothing, and

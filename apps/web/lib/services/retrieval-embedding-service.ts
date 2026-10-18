@@ -17,6 +17,7 @@ import {
   getRegistryRoute,
   getRoutingSlotModel,
   listManagedRoutesForModel,
+  MICROUSD_PER_USD,
   resolveEffectiveModelPricingForInputTokens,
   type ModelMetadata,
   type PricedModel,
@@ -24,6 +25,7 @@ import {
 
 import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { logger } from '@/lib/logger';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { embedTextsWithGoogle, GoogleEmbeddingError } from '@/lib/server/google-embeddings';
 import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
 import {
@@ -45,9 +47,7 @@ import {
 
 const EMBEDDING_SLOT = 'embedding_default';
 const EMBEDDING_LEASE_SECONDS = 120;
-const MICROUSD_PER_USD = 1_000_000;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
-const MICROUSD_PER_LEDGER_CENT = 10_000;
 
 function operationDigest(operationKey: string): string {
   return createHash('sha256').update(operationKey).digest('hex').slice(0, 32);

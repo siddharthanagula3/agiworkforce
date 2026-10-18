@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { MICROUSD_PER_USD } from '@agiworkforce/types';
+
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 
@@ -31,7 +33,6 @@ import { getKeyValueStore } from '@/lib/server/key-value';
 
 export const EVENT_BUDGET_USD_ENV = 'AGI_EVENT_GLOBAL_BUDGET_USD';
 
-const MICROUSD_PER_USD = 1_000_000;
 const BUDGET_KEY = 'agi-event:spend-microusd';
 /**
  * Outlives any plausible event, so the counter cannot silently reset mid-event

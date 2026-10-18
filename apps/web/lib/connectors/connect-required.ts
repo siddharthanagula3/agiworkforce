@@ -5,14 +5,12 @@ import {
   getConnectorOAuthProvider,
   isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
+import {
+  CONNECTOR_AUTHORIZATION_REQUIRED_KEY,
+  type ConnectorAuthorizationReason,
+} from '@agiworkforce/types';
 
-export const CONNECTOR_AUTHORIZATION_REQUIRED_KEY = 'agi_connector_authorization_required';
-
-export type ConnectorAuthorizationReason =
-  | 'not_connected'
-  | 'authorization_expired'
-  | 'insufficient_scope'
-  | 'authorization_unavailable';
+export { CONNECTOR_AUTHORIZATION_REQUIRED_KEY, type ConnectorAuthorizationReason };
 
 export interface ConnectorAuthorizationRequiredPayload {
   agi_connector_authorization_required: true;

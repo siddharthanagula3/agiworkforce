@@ -1,13 +1,18 @@
 import { freeQuotaSelection } from '@/features/chat/lib/free-quota-selection';
 import { z } from 'zod';
-import { listCanonicalModels, normalizeModelId, type ModelType } from '@agiworkforce/types';
+import {
+  CHAT_MODEL_TYPES as CANONICAL_CHAT_MODEL_TYPES,
+  listCanonicalModels,
+  normalizeModelId,
+  type ModelType,
+} from '@agiworkforce/types';
 import {
   ManagedCloudCreateConversationRequestSchema,
   ManagedCloudCreateMessageRequestSchema,
   ManagedCloudUpdateConversationRequestSchema,
 } from '@agiworkforce/cloud-contracts';
 
-const CHAT_MODEL_TYPES = new Set<ModelType>(['chat', 'code', 'reasoning', 'multimodal', 'search']);
+const CHAT_MODEL_TYPES = new Set<ModelType>(CANONICAL_CHAT_MODEL_TYPES);
 const MESSAGE_MODEL_TYPES = new Set<ModelType>([...CHAT_MODEL_TYPES, 'image']);
 const AUTO_MODEL_IDS = ['auto', 'auto-economy', 'auto-balanced', 'auto-premium'] as const;
 const ACTIVE_CANONICAL_MODELS = listCanonicalModels().filter(

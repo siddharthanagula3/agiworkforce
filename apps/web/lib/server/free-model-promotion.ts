@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 import {
+  MICROUSD_PER_USD,
   MODEL_FAMILY_REGISTRY,
   getModelMetadataById,
   isAutoModeModelId,
@@ -15,7 +16,6 @@ import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
 
-const MICROUSD_PER_USD = 1_000_000;
 const MILLISECONDS_PER_SECOND = 1_000;
 const MESSAGE_FRAME_TOKENS = 8;
 const MANAGED_API_KEY = 'managed';

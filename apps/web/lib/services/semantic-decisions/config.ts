@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { ALLOWED_DECISION_TRANSPORT_HOSTS, validateBaseUrl } from '@agiworkforce/provider-runtime';
+import { MICROUSD_PER_CENT } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 
@@ -61,7 +62,6 @@ export function readDecisionTransportConfig(
   };
 }
 
-const MICROUSD_PER_CENT = 10_000;
 const TOKENS_PER_MTOK = 1_000_000;
 
 // Rounded up to the cent the ledger column holds, so a run of sub-cent calls

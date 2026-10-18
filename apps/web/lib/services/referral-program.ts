@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomBytes } from 'node:crypto';
+import { REFERRAL_STATUSES, type ReferralStatus } from '@agiworkforce/cloud-contracts';
 import { absoluteUrl } from '@/lib/seo/site';
 import { BONUS_CREDIT_EXPIRY_DAYS } from '@/lib/services/bonus-credit-service';
 
@@ -22,16 +23,7 @@ export const REFERRAL_ATTRIBUTION_COOKIE = 'agi_referral';
 
 export const REFERRAL_WELCOME_PATH = '/r/welcome';
 
-export const REFERRAL_STATUSES = [
-  'signed_up',
-  'converted',
-  'rewarded',
-  'capped',
-  'blocked',
-  'clawed_back',
-] as const;
-
-export type ReferralStatus = (typeof REFERRAL_STATUSES)[number];
+export { REFERRAL_STATUSES, type ReferralStatus };
 
 export type ReferralBlockReason =
   'same_card' | 'same_device' | 'same_network' | 'email_alias' | 'disposable_email';

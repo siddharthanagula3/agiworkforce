@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { KeyValueStore, RateLimiter } from '@agiworkforce/key-value';
+import { MICROUSD_PER_CENT } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { getKeyValueRateLimiter } from '@/lib/server/key-value';
@@ -27,7 +28,6 @@ import type {
  */
 
 const KEY_RETENTION_SECONDS = 30 * 24 * 60 * 60;
-const MICROUSD_PER_CENT = 10_000;
 
 export interface FreeModelPromotionLedger {
   store: KeyValueStore;
