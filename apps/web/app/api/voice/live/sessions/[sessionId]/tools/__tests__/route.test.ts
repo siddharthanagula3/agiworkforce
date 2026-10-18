@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   getUserScopedDb: vi.fn(),
-  isVoiceSessionStoreReady: vi.fn(),
   touchVoiceSession: vi.fn(),
   handleLiveVoiceToolCall: vi.fn(),
   recordAuditEvent: vi.fn(),
@@ -106,7 +105,6 @@ vi.mock('../../../lib/voice-session-store', () => ({
   listVoiceSessionHistory: vi.fn(),
   meteredVoiceSessionSeconds: vi.fn(),
   updateVoiceSessionSettings: vi.fn(),
-  isVoiceSessionStoreReady: mocks.isVoiceSessionStoreReady,
   touchVoiceSession: mocks.touchVoiceSession,
 }));
 
@@ -140,7 +138,6 @@ describe('POST /api/voice/live/sessions/[sessionId]/tools', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1' });
-    mocks.isVoiceSessionStoreReady.mockResolvedValue(true);
     mocks.touchVoiceSession.mockResolvedValue(session);
     mocks.handleLiveVoiceToolCall.mockResolvedValue({ status: 'completed', output: 'sunny' });
   });
@@ -196,15 +193,6 @@ describe('POST /api/voice/live/sessions/[sessionId]/tools', () => {
     const response = await POST(request(call), context);
 
     expect(response.status).toBe(403);
-    expect(mocks.touchVoiceSession).not.toHaveBeenCalled();
-  });
-
-  it('returns 503 when voice session records are unavailable', async () => {
-    mocks.isVoiceSessionStoreReady.mockResolvedValue(false);
-
-    const response = await POST(request(call), context);
-
-    expect(response.status).toBe(503);
     expect(mocks.touchVoiceSession).not.toHaveBeenCalled();
   });
 

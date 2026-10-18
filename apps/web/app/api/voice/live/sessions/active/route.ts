@@ -13,7 +13,6 @@ import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution'
 import { settleAbandonedVoiceSessions } from '../lib/voice-session-settlement';
 import {
   getActiveVoiceSessionForConversation,
-  isVoiceSessionStoreReady,
   listVoiceSessionHistory,
 } from '../lib/voice-session-store';
 
@@ -31,9 +30,6 @@ async function handleReadVoiceSession(request: NextRequest) {
       { error: { message: 'Managed usage tenant mismatch.', type: 'invalid_request_error' } },
       { status: 403, headers },
     );
-  }
-  if (!(await isVoiceSessionStoreReady(scoped.db))) {
-    return NextResponse.json({ session: null, history: [] }, { headers });
   }
 
   const conversationId = request.nextUrl.searchParams.get('conversationId');

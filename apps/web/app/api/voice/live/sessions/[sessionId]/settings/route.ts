@@ -12,7 +12,6 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isLiveVoice } from '@features/chat/lib/live-voices';
 import {
-  isVoiceSessionStoreReady,
   updateVoiceSessionSettings,
   VOICE_PACE_MAX,
   VOICE_PACE_MIN,
@@ -64,13 +63,6 @@ async function handleUpdateVoiceSession(
       { status: 403, headers },
     );
   }
-  if (!(await isVoiceSessionStoreReady(scoped.db))) {
-    return NextResponse.json(
-      { error: { message: 'Voice session records are not available.', type: 'api_error' } },
-      { status: 503, headers },
-    );
-  }
-
   const record = await updateVoiceSessionSettings({
     db: scoped.db,
     userId,

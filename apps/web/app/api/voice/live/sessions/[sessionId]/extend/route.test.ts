@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   entitlement: vi.fn(),
   reserveStep: vi.fn(),
   readReservation: vi.fn(),
-  storeReady: vi.fn(),
   getSession: vi.fn(),
   touchSession: vi.fn(),
   readFreeSession: vi.fn(),
@@ -85,7 +84,6 @@ vi.mock('../../lib/voice-session-budget', async (importOriginal) => ({
 }));
 vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
   ...(await importOriginal<ScanModule11>()),
-  isVoiceSessionStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
   getVoiceSessionByProviderId: (...args: unknown[]) => mocks.getSession(...args),
   touchVoiceSession: (...args: unknown[]) => mocks.touchSession(...args),
 }));
@@ -143,7 +141,6 @@ beforeEach(() => {
   mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: 3 });
   mocks.readFreeSession.mockResolvedValue(null);
   mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 120, fresh: true });
-  mocks.storeReady.mockResolvedValue(true);
   mocks.getSession.mockResolvedValue(activeSession());
   mocks.touchSession.mockResolvedValue(activeSession());
   mocks.readReservation.mockResolvedValue({
@@ -357,6 +354,15 @@ describe('a session running on the Free monthly voice allowance', () => {
 
     expect(response.status).toBe(409);
     expect((await errorBody(response))['code']).toBe('voice_session_closed');
+  });
+
+  it('answers 503 rather than reporting the session ended when its record cannot be read', async () => {
+    mocks.getSession.mockRejectedValue(new Error('connection reset'));
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(503);
+    expect((await errorBody(response))['code']).toBe('voice_session_unreadable');
   });
 
   it('answers 503 billing_unavailable when the grant cannot be written', async () => {

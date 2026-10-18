@@ -84,13 +84,6 @@ const COLUMNS = `id, user_id, organization_id, conversation_id, provider, provid
                  model_id, surface, voice, language, pace, active_tools, last_turn_id, status,
                  close_reason, started_at, last_seen_at, closed_at`;
 
-export async function isVoiceSessionStoreReady(db: VoiceSessionDb): Promise<boolean> {
-  const [row] = await db.query<{ ready: boolean }>(
-    `select to_regclass('public.voice_sessions') is not null as ready`,
-  );
-  return row?.ready === true;
-}
-
 export function clampVoicePace(pace: number | null | undefined): number {
   if (typeof pace !== 'number' || !Number.isFinite(pace)) return VOICE_PACE_DEFAULT;
   return Math.min(VOICE_PACE_MAX, Math.max(VOICE_PACE_MIN, Math.round(pace * 100) / 100));

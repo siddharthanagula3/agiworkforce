@@ -7,7 +7,6 @@ const {
   userScopedDbMock,
   isLiveVoiceMock,
   updateVoiceSessionSettingsMock,
-  isVoiceSessionStoreReadyMock,
 } = vi.hoisted(() => ({
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -15,7 +14,6 @@ const {
   userScopedDbMock: vi.fn(),
   isLiveVoiceMock: vi.fn(),
   updateVoiceSessionSettingsMock: vi.fn(),
-  isVoiceSessionStoreReadyMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,7 +24,6 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('@features/chat/lib/live-voices', () => ({ isLiveVoice: isLiveVoiceMock }));
 vi.mock('../../../lib/voice-session-store', () => ({
   updateVoiceSessionSettings: updateVoiceSessionSettingsMock,
-  isVoiceSessionStoreReady: isVoiceSessionStoreReadyMock,
   VOICE_PACE_MIN: 0.25,
   VOICE_PACE_MAX: 4,
 }));
@@ -62,7 +59,6 @@ beforeEach(() => {
     organizationId: null,
   });
   isLiveVoiceMock.mockReturnValue(true);
-  isVoiceSessionStoreReadyMock.mockResolvedValue(true);
 });
 
 describe('PATCH /api/voice/live/sessions/[sessionId]/settings', () => {
@@ -112,13 +108,6 @@ describe('PATCH /api/voice/live/sessions/[sessionId]/settings', () => {
     updateVoiceSessionSettingsMock.mockResolvedValue(null);
     const response = await PATCH(patch({ pace: 1 }), params());
     expect(response.status).toBe(404);
-  });
-
-  it('503s when the voice session store is not ready', async () => {
-    isVoiceSessionStoreReadyMock.mockResolvedValue(false);
-    const response = await PATCH(patch({ pace: 1 }), params());
-    expect(response.status).toBe(503);
-    expect(updateVoiceSessionSettingsMock).not.toHaveBeenCalled();
   });
 
   it('returns the csrf response and never updates when the token is missing', async () => {

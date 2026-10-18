@@ -45,7 +45,6 @@ import {
 } from '../../lib/voice-session-budget';
 import {
   getVoiceSessionByProviderId,
-  isVoiceSessionStoreReady,
   touchVoiceSession,
   type VoiceSessionRecord,
 } from '../../lib/voice-session-store';
@@ -160,13 +159,17 @@ async function handleExtendLiveSession(
     return voiceJsonError(request, 403, 'tenant_mismatch', 'Managed usage tenant mismatch.');
   }
 
-  let record: VoiceSessionRecord | null = null;
+  let record: VoiceSessionRecord | null;
   try {
-    if (await isVoiceSessionStoreReady(scoped.db)) {
-      record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
-    }
+    record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
   } catch (error) {
     logger.warn({ error, userId, sessionId }, 'Voice session record could not be read');
+    return voiceJsonError(
+      request,
+      503,
+      'voice_session_unreadable',
+      'The voice session could not be read, so it was not extended. Try again.',
+    );
   }
   if (!record || record.status !== 'active') {
     return voiceJsonError(request, 409, 'voice_session_closed', 'This voice session has ended.');

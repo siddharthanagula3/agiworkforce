@@ -109,7 +109,6 @@ import {
   clampVoicePace,
   closeVoiceSessionsForConversation,
   createVoiceSession,
-  isVoiceSessionStoreReady,
   VOICE_PACE_DEFAULT,
   VOICE_PACE_MAX,
   VOICE_PACE_MIN,
@@ -242,23 +241,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       400,
       'voice_conversation_required',
       'Live voice needs a conversation to record the session in.',
-    );
-  }
-  let storeReady = false;
-  try {
-    storeReady = await isVoiceSessionStoreReady(scoped.db);
-  } catch (error) {
-    logger.error(
-      { event: 'voice_session_store_unreadable', error, userId },
-      'Voice session store readiness could not be determined',
-    );
-  }
-  if (!storeReady) {
-    return voiceJsonError(
-      request,
-      503,
-      'voice_session_not_recorded',
-      'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
     );
   }
 

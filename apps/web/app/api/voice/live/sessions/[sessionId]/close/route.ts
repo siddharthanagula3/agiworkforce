@@ -18,7 +18,6 @@ import { settleVoiceSession } from '@/app/api/voice/live/sessions/lib/voice-sess
 import {
   closeVoiceSession,
   getVoiceSessionByProviderId,
-  isVoiceSessionStoreReady,
   meteredVoiceSessionSeconds,
   type VoiceSessionRecord,
 } from '../../lib/voice-session-store';
@@ -96,20 +95,6 @@ async function handleCloseLiveSession(
   // its connection reports the last usage event it saw, which is none at all
   // when the drop came first, and that report alone billed the session at zero
   // and left the plan's voice allowance untouched for the minutes it ran.
-  let storeReady = false;
-  try {
-    storeReady = await isVoiceSessionStoreReady(scoped.db);
-  } catch (error) {
-    logger.warn({ error, userId, sessionId }, 'Voice session store readiness could not be read');
-  }
-  if (!storeReady) {
-    return voiceJsonError(
-      request,
-      503,
-      'voice_session_unreadable',
-      'The voice session could not be read, so it was not closed. Try again.',
-    );
-  }
   let record: VoiceSessionRecord | null;
   try {
     record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);

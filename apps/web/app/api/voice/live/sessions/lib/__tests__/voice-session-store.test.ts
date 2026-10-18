@@ -6,7 +6,6 @@ import {
   closeVoiceSession,
   createVoiceSession,
   getActiveVoiceSessionForConversation,
-  isVoiceSessionStoreReady,
   listVoiceSessionHistory,
   meteredVoiceSessionSeconds,
   updateVoiceSessionSettings,
@@ -177,11 +176,6 @@ describe('close and history', () => {
     expect(calls[0]?.[0]).toContain('order by started_at desc');
     expect(calls[0]?.[1]?.[1]).toBe(200);
     expect(history).toHaveLength(1);
-  });
-
-  it('reports the table missing rather than throwing', async () => {
-    const { db } = stubDb([[{ ready: false }]]);
-    expect(await isVoiceSessionStoreReady(db)).toBe(false);
   });
 });
 

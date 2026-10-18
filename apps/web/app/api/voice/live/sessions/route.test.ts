@@ -707,21 +707,6 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
-  it('starts nothing and reserves nothing when the session store is not ready', async () => {
-    mocks.userScopedDb.mockResolvedValue({
-      db: { query: vi.fn(async () => [{ ready: false }]) },
-      userId: 'user-1',
-      organizationId: null,
-    });
-
-    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
-
-    expect(response.status).toBe(503);
-    expect(await errorCode(response)).toBe('voice_session_not_recorded');
-    expect(mocks.reserve).not.toHaveBeenCalled();
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
   it('answers 503 with a configuration code when the provider key is missing', async () => {
     mocks.requireEnv.mockImplementation(() => {
       throw new Error('FATAL: OPENAI_API_KEY environment variable is required but not set.');

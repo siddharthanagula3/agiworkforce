@@ -13,7 +13,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { handleLiveVoiceToolCall } from '@/lib/voice/live-voice-tool-runner';
-import { isVoiceSessionStoreReady, touchVoiceSession } from '../../lib/voice-session-store';
+import { touchVoiceSession } from '../../lib/voice-session-store';
 
 async function handleVoiceToolCall(
   request: NextRequest,
@@ -45,12 +45,6 @@ async function handleVoiceToolCall(
     return NextResponse.json(
       { error: { message: 'Managed usage tenant mismatch.', type: 'invalid_request_error' } },
       { status: 403, headers },
-    );
-  }
-  if (!(await isVoiceSessionStoreReady(scoped.db))) {
-    return NextResponse.json(
-      { error: { message: 'Voice session records are not available.', type: 'api_error' } },
-      { status: 503, headers },
     );
   }
   const session = await touchVoiceSession({ db: scoped.db, userId, providerSessionId: sessionId });

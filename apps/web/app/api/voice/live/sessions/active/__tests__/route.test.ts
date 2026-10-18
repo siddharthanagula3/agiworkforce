@@ -6,7 +6,6 @@ const {
   userScopedDbMock,
   settleAbandonedMock,
   getActiveVoiceSessionForConversationMock,
-  isVoiceSessionStoreReadyMock,
   listVoiceSessionHistoryMock,
 } = vi.hoisted(() => ({
   authUserMock: vi.fn(),
@@ -14,7 +13,6 @@ const {
   userScopedDbMock: vi.fn(),
   settleAbandonedMock: vi.fn(),
   getActiveVoiceSessionForConversationMock: vi.fn(),
-  isVoiceSessionStoreReadyMock: vi.fn(),
   listVoiceSessionHistoryMock: vi.fn(),
 }));
 
@@ -29,7 +27,6 @@ vi.mock('../../lib/voice-session-settlement', async (importOriginal) => ({
 vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getActiveVoiceSessionForConversation: getActiveVoiceSessionForConversationMock,
-  isVoiceSessionStoreReady: isVoiceSessionStoreReadyMock,
   listVoiceSessionHistory: listVoiceSessionHistoryMock,
 }));
 
@@ -61,7 +58,6 @@ beforeEach(() => {
     userId: 'user-1',
     organizationId: null,
   });
-  isVoiceSessionStoreReadyMock.mockResolvedValue(true);
   settleAbandonedMock.mockResolvedValue(0);
   getActiveVoiceSessionForConversationMock.mockResolvedValue(null);
   listVoiceSessionHistoryMock.mockResolvedValue([]);
@@ -109,15 +105,6 @@ describe('GET /api/voice/live/sessions/active', () => {
     const body = await response.json();
     expect(body.history).toHaveLength(1);
     expect(body.history[0].sessionId).toBe('live_1');
-  });
-
-  it('answers with an empty session and history when the store is not ready', async () => {
-    isVoiceSessionStoreReadyMock.mockResolvedValue(false);
-    const response = await GET(get('?conversationId=conv-1&history=true'));
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual({ session: null, history: [] });
-    expect(getActiveVoiceSessionForConversationMock).not.toHaveBeenCalled();
   });
 
   it('settles a session its tab abandoned before it can be offered as resumable', async () => {
