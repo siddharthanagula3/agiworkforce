@@ -9,6 +9,7 @@ import {
 } from '../src/features/cloud-bridge/freeTrialClient';
 import {
   executeChromeManagedChat,
+  MANAGED_TOOL_CONTINUATION_RETRIES,
   MAX_MANAGED_TOOL_LEGS,
   type ChromeManagedChatDependencies,
 } from '../src/features/cloud-bridge/managedChatHandler';
@@ -348,6 +349,101 @@ describe('executeChromeManagedChat tool continuation', () => {
     expect(result.status).toBe('success');
     expect(streamChat).toHaveBeenCalledTimes(MAX_MANAGED_TOOL_LEGS);
     expect(streamChat.mock.calls.at(-1)![2]?.tools).toBeUndefined();
+  });
+
+  it('retries a continuation the gateway refused before admitting it, then stops retrying', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const settle = async <T>(promise: Promise<T>): Promise<T> => {
+      let done = false;
+      void promise.finally(() => {
+        done = true;
+      });
+      for (let step = 0; step < 50 && !done; step += 1) await vi.advanceTimersByTimeAsync(500);
+      return promise;
+    };
+    try {
+      const refused = (): AsyncGenerator<FreeTrialChunk> =>
+        stream({
+          type: 'error',
+          code: 'server_error',
+          message: 'This conversation already has a response in progress.',
+        });
+      const streamChat = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          stream({ type: 'tool-handoff', calls: [readCall] }, { type: 'done' }),
+        )
+        .mockImplementationOnce(refused)
+        .mockImplementationOnce(() =>
+          stream({ type: 'text', text: 'It says hi.' }, { type: 'done' }),
+        );
+      const pending = executeChromeManagedChat(
+        {
+          id: 'stream-1',
+          text: 'Read it',
+          modelSelection: 'auto',
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        dependencies({
+          streamChat,
+          onToolHandoff: vi.fn(async () => ({
+            status: 'resolved' as const,
+            results: [{ toolCallId: 'call_1', content: 'Page' }],
+          })),
+        }),
+      );
+      await expect(settle(pending)).resolves.toMatchObject({ status: 'success' });
+      expect(streamChat).toHaveBeenCalledTimes(3);
+      const keys = streamChat.mock.calls.map(
+        (call) => (call[2] as ManagedChatStreamOptions).idempotencyKey,
+      );
+      expect(new Set(keys).size).toBe(3);
+
+      const alwaysRefused = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          stream({ type: 'tool-handoff', calls: [readCall] }, { type: 'done' }),
+        )
+        .mockImplementation(refused);
+      const failing = executeChromeManagedChat(
+        {
+          id: 'stream-2',
+          text: 'Read it',
+          modelSelection: 'auto',
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        dependencies({
+          streamChat: alwaysRefused,
+          onToolHandoff: vi.fn(async () => ({
+            status: 'resolved' as const,
+            results: [{ toolCallId: 'call_1', content: 'Page' }],
+          })),
+        }),
+      );
+      await expect(settle(failing)).resolves.toMatchObject({
+        status: 'error',
+        code: 'server_error',
+      });
+      expect(alwaysRefused).toHaveBeenCalledTimes(1 + 1 + MANAGED_TOOL_CONTINUATION_RETRIES);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry the first leg of a turn', async () => {
+    const streamChat = vi.fn(() =>
+      stream({ type: 'error', code: 'server_error', message: 'Unavailable.' }),
+    );
+    await executeChromeManagedChat(
+      {
+        id: 'stream-1',
+        text: 'Read it',
+        modelSelection: 'auto',
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      dependencies({ streamChat }),
+    );
+    expect(streamChat).toHaveBeenCalledOnce();
   });
 
   it('never offers browser tools to an unattended scheduled turn', async () => {

@@ -59,6 +59,22 @@ const MAX_SYSTEM_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
 export const MAX_MANAGED_TOOL_LEGS = 10;
+export const MANAGED_TOOL_CONTINUATION_RETRIES = 2;
+export const MANAGED_TOOL_CONTINUATION_RETRY_MS = 750;
+
+function waitBeforeContinuationRetry(attempt: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, MANAGED_TOOL_CONTINUATION_RETRY_MS * 2 ** attempt);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -770,75 +786,102 @@ export async function executeChromeManagedChat(
     let legText = '';
     let handoff: ToolCall[] | null = null;
     let terminal: ChromeManagedChatResult | null = null;
-    for await (const chunk of dependencies.streamChat(messages, token, legOptions)) {
-      if (chunk.type === 'text') {
-        legText += chunk.text;
-        await dependencies.onText(chunk.text);
-        continue;
-      }
-      if (chunk.type === 'code-execution') {
-        await dependencies.onCodeExecution?.(chunk);
-        continue;
-      }
-      if (chunk.type === 'agent-event') {
-        if (chunk.envelope.event.type === 'task-state-changed') {
-          latestTaskState = chunk.envelope.event.state;
+    for (let attempt = 0; ; attempt += 1) {
+      let admitted = false;
+      terminal = null;
+      const attemptOptions: ManagedChatStreamOptions =
+        attempt === 0
+          ? legOptions
+          : {
+              ...legOptions,
+              idempotencyKey: await managedChatIdempotencyKey(
+                'send',
+                `${streamOptions.idempotencyKey}:${leg}:${attempt}`,
+              ),
+            };
+      for await (const chunk of dependencies.streamChat(messages, token, attemptOptions)) {
+        if (chunk.type !== 'error' && chunk.type !== 'answered-model') admitted = true;
+        if (chunk.type === 'text') {
+          legText += chunk.text;
+          await dependencies.onText(chunk.text);
+          continue;
         }
-        await dependencies.onAgentEvent?.(chunk);
-        continue;
-      }
-      if (chunk.type === 'generated-files') {
-        await dependencies.onGeneratedFiles?.(chunk);
-        continue;
-      }
-      if (chunk.type === 'interactive-card') {
-        await dependencies.onInteractiveCard?.(chunk);
-        continue;
-      }
-      if (chunk.type === 'sources') {
-        await dependencies.onSources?.(chunk);
-        continue;
-      }
-      if (chunk.type === 'run') {
-        if (chunk.run.state) latestTaskState = chunk.run.state;
-        await dependencies.onRunReference?.(chunk.run);
-        continue;
-      }
-      if (chunk.type === 'quota-warning') {
-        await dependencies.onQuotaWarning?.(chunk.warning);
-        continue;
-      }
-      if (chunk.type === 'answered-model') {
-        if (chunk.model !== (routingResult.answeredModel ?? routingResult.modelKey)) {
-          routingResult = { ...routingResult, answeredModel: chunk.model };
-          await dependencies.onRouting?.(routingResult);
+        if (chunk.type === 'code-execution') {
+          await dependencies.onCodeExecution?.(chunk);
+          continue;
         }
-        continue;
-      }
-      if (chunk.type === 'tool-handoff') {
-        handoff = chunk.calls;
-        continue;
-      }
-      if (chunk.type === 'error') {
-        terminal = {
-          status: 'error',
-          code: chunk.code,
-          message: chunk.message,
-          ...(chunk.retryAfterSeconds !== undefined
-            ? { retryAfterSeconds: chunk.retryAfterSeconds }
-            : {}),
-          ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
-          ...(chunk.quota ? { quota: chunk.quota } : {}),
-          routing: routingResult,
-        };
+        if (chunk.type === 'agent-event') {
+          if (chunk.envelope.event.type === 'task-state-changed') {
+            latestTaskState = chunk.envelope.event.state;
+          }
+          await dependencies.onAgentEvent?.(chunk);
+          continue;
+        }
+        if (chunk.type === 'generated-files') {
+          await dependencies.onGeneratedFiles?.(chunk);
+          continue;
+        }
+        if (chunk.type === 'interactive-card') {
+          await dependencies.onInteractiveCard?.(chunk);
+          continue;
+        }
+        if (chunk.type === 'sources') {
+          await dependencies.onSources?.(chunk);
+          continue;
+        }
+        if (chunk.type === 'run') {
+          if (chunk.run.state) latestTaskState = chunk.run.state;
+          await dependencies.onRunReference?.(chunk.run);
+          continue;
+        }
+        if (chunk.type === 'quota-warning') {
+          await dependencies.onQuotaWarning?.(chunk.warning);
+          continue;
+        }
+        if (chunk.type === 'answered-model') {
+          if (chunk.model !== (routingResult.answeredModel ?? routingResult.modelKey)) {
+            routingResult = { ...routingResult, answeredModel: chunk.model };
+            await dependencies.onRouting?.(routingResult);
+          }
+          continue;
+        }
+        if (chunk.type === 'tool-handoff') {
+          handoff = chunk.calls;
+          continue;
+        }
+        if (chunk.type === 'error') {
+          terminal = {
+            status: 'error',
+            code: chunk.code,
+            message: chunk.message,
+            ...(chunk.retryAfterSeconds !== undefined
+              ? { retryAfterSeconds: chunk.retryAfterSeconds }
+              : {}),
+            ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
+            ...(chunk.quota ? { quota: chunk.quota } : {}),
+            routing: routingResult,
+          };
+          break;
+        }
+        if (!handoff) {
+          terminal = adjudicateManagedChatCompletion(
+            request.completionMode,
+            latestTaskState,
+            routingResult,
+          );
+        }
         break;
       }
-      if (!handoff) {
-        terminal = adjudicateManagedChatCompletion(
-          request.completionMode,
-          latestTaskState,
-          routingResult,
-        );
+      if (
+        leg > 0 &&
+        !admitted &&
+        attempt < MANAGED_TOOL_CONTINUATION_RETRIES &&
+        terminal?.status === 'error' &&
+        terminal.code === 'server_error' &&
+        !request.signal?.aborted
+      ) {
+        await waitBeforeContinuationRetry(attempt, request.signal);
+        continue;
       }
       break;
     }

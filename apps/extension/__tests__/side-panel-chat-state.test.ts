@@ -25,6 +25,40 @@ function message(index: number, role: 'user' | 'assistant' = 'user'): SidePanelC
   };
 }
 
+describe('in-chat browser activity', () => {
+  it('restores a finished browser task and settles one the panel closed on as cancelled', () => {
+    const envelope = (sequence: number, state: 'running' | 'completed') => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'browser:m1',
+      turnId: 'browser:m1',
+      sequence,
+      emittedAtMs: 1_000 + sequence,
+      event: { type: 'task-state-changed' as const, taskId: 'cu_run_a', state },
+    });
+    const finished = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Done.',
+        timestamp: 5_000,
+        browserEvents: [envelope(0, 'running'), envelope(1, 'completed')],
+      },
+      'm1',
+    );
+    expect(finished.browserActivity?.status).toBe('completed');
+    const interrupted = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: '',
+        timestamp: 5_000,
+        browserEvents: [envelope(0, 'running')],
+      },
+      'm1',
+    );
+    expect(interrupted.browserActivity?.status).toBe('cancelled');
+    expect(interrupted.agentActivity).toBeUndefined();
+  });
+});
+
 describe('side-panel chat state', () => {
   it.each([
     'Summarize this page.',
