@@ -4037,18 +4037,6 @@ Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
-## CHROME-SAME-ACCOUNT-NEW-SESSION-HISTORY-01
-
-Severity: Medium. Status: reproduced against current source `49d0c30f`; deployed behavior unknown.
-
-The history drawer and active conversation lookup cannot find the retained record. Pending local mirror work is also filtered out. This hides data rather than deleting it; account-backed history cannot be rehydrated by the current flags-only pull.
-
-The real upsertConversation/listConversations/getConversation functions ran against callback-correct mocked chrome.storage.local. Old-session owner could list/read the chat, another account saw none, and the persisted conversations array retained one record. The same account/new-session list returned [] instead of one chat. Clerk resolveSessionOwner sets authIncarnation to session.id. Persistent conversation owner is that complete ManagedCloudOwner, and sameManagedCloudOwner compares both accountId and authIncarnation. The mounted owner-transition resets visible messages/conversation id and drawer calls listConversations for the current owner. Cloud delta pull filters the same owner and its insert port is a no-op, so it cannot recover earlier-session history.
-
-Source: `apps/extension/src/features/background/conversation-history.ts:1392`. [Exact harness, source hashes and output](evidence/2026-09-29-ecosystem-review/chrome-review.json). Limits: Real persistence normalization/filtering is tested with callback Chrome storage mocks. Real Clerk login and whole panel rendering are not mounted. Changing session authority comparison globally would weaken the correctly strict in-flight ownership boundary and is not the proposed fix.
-
-Resolution/acceptance: Save account A history under session A1, revoke/sign out, sign in as A2 and require retained history plus safe pending mirror recovery; account B remains isolated. Model persistent data ownership separately from auth-incarnation operation leases, retaining strict stale-stream/approval/cancellation fencing.
-
 ## MEMORY-SENSITIVE-OFF-KEEPS-SAVED-01
 
 Severity: Medium. Status: open; recorded 2026-10-02 on `lane/memory-sensitive`.
