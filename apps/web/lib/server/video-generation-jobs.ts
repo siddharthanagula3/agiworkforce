@@ -40,7 +40,7 @@ export function lifecycleStatusForVideoJob(status: VideoJobStatus): LifecycleSta
 }
 export type VideoJobResolution = '480p' | '720p' | '1080p' | '4k';
 export type VideoJobAspectRatio = '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '21:9';
-export type VideoJobSourceSurface = 'web' | 'mobile' | 'desktop';
+export type VideoJobSourceSurface = 'web' | 'mobile' | 'desktop' | 'chrome';
 
 export interface VideoGenerationJob {
   id: string;

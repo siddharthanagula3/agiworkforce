@@ -1020,6 +1020,42 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it('records the Chrome extension as the source of a chrome media key', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-chrome' }) });
+
+      const response = await POST(
+        makeAuthedRequest(
+          { prompt: 'a sunset', provider: 'runway', model: RUNWAY_MODEL_ID },
+          { 'Idempotency-Key': 'agi.media.chrome.video.operation-123' },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(durableJobMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceSurface: 'chrome' }),
+      );
+    });
+
+    it('keeps chat transcript binding to the web surface', async () => {
+      const response = await POST(
+        makeAuthedRequest(
+          {
+            prompt: 'a sunset',
+            provider: 'runway',
+            model: RUNWAY_MODEL_ID,
+            conversation_id: '0f8fad5b-d9cb-469f-a165-70867728950e',
+            assistant_message_id: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+          },
+          { 'Idempotency-Key': 'agi.media.chrome.video.operation-123' },
+        ),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toMatchObject({ code: 'invalid_video_transcript_surface' });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
     it('persists and starts the accepted video task without settling before delivery', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-xyz' }) });
 

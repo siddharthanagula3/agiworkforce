@@ -235,7 +235,7 @@ export interface UpsertVideoMediaAssetParams {
   prompt: string;
   provider: string;
   model: string;
-  sourceSurface: 'web' | 'mobile' | 'desktop';
+  sourceSurface: 'web' | 'mobile' | 'desktop' | 'chrome';
   conversationId: string | null;
   metadata: Record<string, unknown>;
 }

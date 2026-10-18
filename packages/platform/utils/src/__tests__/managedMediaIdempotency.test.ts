@@ -26,6 +26,8 @@ describe('managed media idempotency identity', () => {
       { surface: 'mobile', operation: 'image', operationId },
       { surface: 'desktop', operation: 'video', operationId },
       { surface: 'web', operation: 'video', operationId },
+      { surface: 'chrome', operation: 'image', operationId },
+      { surface: 'chrome', operation: 'video', operationId },
     ] as const;
 
     const keys = identities.map(createManagedMediaIdempotencyKey);

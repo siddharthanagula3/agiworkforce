@@ -906,7 +906,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const requestHash = fingerprintManagedUsageRequest(validationResult.data);
   let idempotencyKey: string;
   let candidateIdempotencyKeys: string[];
-  let sourceSurface: 'web' | 'mobile' | 'desktop';
+  let sourceSurface: 'web' | 'mobile' | 'desktop' | 'chrome';
   let organizationId: string | null;
   let scopedDb: ManagedUsageRequestReservation['db'];
   try {
@@ -1182,7 +1182,7 @@ interface VideoCandidateSubmissionInput {
   resolution: VideoResolution;
   aspectRatio: VideoAspectRatio;
   generateAudio: boolean;
-  sourceSurface: 'web' | 'mobile' | 'desktop';
+  sourceSurface: 'web' | 'mobile' | 'desktop' | 'chrome';
   estimatedCostCents: number;
   estimatedDurationSecs: number;
 }
