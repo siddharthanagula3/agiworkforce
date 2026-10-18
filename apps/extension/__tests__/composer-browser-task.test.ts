@@ -25,7 +25,7 @@ const browserSource = source.slice(browserStart, browserEnd);
 const browserControlsStart = source.indexOf("cuPanel.panelEl.querySelector('.sp-cu-stop-btn')");
 const browserControlsSource = source.slice(
   browserControlsStart,
-  source.indexOf('runsTabBtn.addEventListener', browserControlsStart),
+  source.indexOf('const viewTabs', browserControlsStart),
 );
 const sendSource = program.statements
   .filter(

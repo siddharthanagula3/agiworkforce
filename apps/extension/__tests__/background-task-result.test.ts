@@ -407,21 +407,6 @@ describe('the side panel can reach a stored background result', () => {
     expect(sidePanel).toContain('envelope.type === OPEN_BROWSER_CONVERSATION_MESSAGE');
     expect(sidePanel).toContain('openStoredConversation(request.conversationId)');
   });
-
-  it('renders a View result control on task rows that have one', () => {
-    expect(sidePanel).toContain("backgroundConversationId('task', task.id)");
-    expect(sidePanel).toContain('storedConversationIds.has(resultConversationId)');
-    expect(sidePanel).toContain("title: 'View last result'");
-  });
-
-  it('does the same for prompt shortcuts and opens the answer right after a replay', () => {
-    expect(sidePanel).toContain("backgroundConversationId('shortcut', sc.id)");
-    expect(sidePanel).toContain(
-      'isPromptBased && resultConversationId && storedConversationIds.has(resultConversationId)',
-    );
-    expect(sidePanel).toContain('if (!isPromptBased || !resultConversationId) {');
-    expect(sidePanel).toContain('openStoredConversation(resultConversationId).then((opened)');
-  });
 });
 
 describe('shared client-id constants', () => {

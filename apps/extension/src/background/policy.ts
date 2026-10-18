@@ -103,6 +103,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   CAPTURE_SCREENSHOT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_ACCESSIBILITY_TREE: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   OPEN_SIDE_PANEL: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  GET_SIDE_PANEL_OPEN: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   WEBMCP_TOOLS_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },

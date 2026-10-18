@@ -26,17 +26,6 @@ if (screenshotDirectory) {
   console.log(`screenshot capture enabled: ${screenshotDirectory}`);
 }
 
-async function openDrawerGroup(page, label) {
-  await page.evaluate((rowLabel) => {
-    const row = [...document.querySelectorAll('.sp-drawer-row')].find(
-      (candidate) => candidate.querySelector('.sp-drawer-row-label')?.textContent === rowLabel,
-    );
-    if (!row) throw new Error(`drawer row ${rowLabel} was never built`);
-    row.click();
-  }, label);
-  await page.waitForTimeout(100);
-}
-
 async function captureScreenshot(page, filename, options = {}) {
   if (!screenshotDirectory) return;
   const outputPath = join(screenshotDirectory, filename);
@@ -997,83 +986,49 @@ try {
     await page.waitForTimeout(200);
 
     await page.click('#sp-menu-btn');
-    const drawerMenuRows = await page.evaluate(() => ({
-      title: document.getElementById('sp-drawer-title')?.textContent,
-      rows: [...document.querySelectorAll('.sp-drawer-row-label')].map((row) => row.textContent),
-    }));
-    if (
-      drawerMenuRows.title !== 'Menu' ||
-      drawerMenuRows.rows.join('|') !==
-        'Chat|Automate|Projects|Artifacts|Tools|Desktop connection|Settings|Help'
-    ) {
-      fail(`drawer menu: unexpected rows ${JSON.stringify(drawerMenuRows)}`);
-    }
-    await openDrawerGroup(page, 'Help');
-    await page.waitForFunction(
-      () =>
-        document
-          .querySelector('.sp-drawer-group:not([hidden])')
-          ?.querySelectorAll('.sp-help-shortcuts dd').length >= 6,
-    );
-    const helpState = await page.evaluate(() => {
-      const group = document.querySelector('.sp-drawer-group:not([hidden])');
+    const moreState = await page.evaluate(() => {
+      const menu = document.getElementById('sp-more-menu');
       return {
-        title: document.getElementById('sp-drawer-title')?.textContent,
-        menuHidden: document.getElementById('sp-drawer-menu')?.hidden,
-        pageHidden: document.getElementById('sp-drawer-page')?.hidden,
-        labels: [
-          ...(group?.querySelectorAll('.sp-drawer-launcher-label > div:first-child') ?? []),
-        ].map((label) => label.textContent),
-        shortcutKeys: group?.querySelectorAll('.sp-help-shortcuts dt').length ?? 0,
-        shortcutActions: group?.querySelectorAll('.sp-help-shortcuts dd').length ?? 0,
+        open: menu?.hidden === false,
+        role: menu?.getAttribute('role'),
+        labels: [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])].map((row) =>
+          row.textContent?.trim(),
+        ),
+        version: menu?.querySelector('.sp-more-footer')?.textContent,
+        fullHeightDrawer: Boolean(document.getElementById('sp-drawer')),
+        focusOnFirst: document.activeElement === menu?.querySelector('[role="menuitem"]'),
       };
     });
     if (
-      helpState.title !== 'Help' ||
-      !helpState.menuHidden ||
-      helpState.pageHidden ||
-      helpState.labels.join('|') !==
-        'Help center|Documentation|Contact support|Report a bug|System status|Release notes' ||
-      helpState.shortcutKeys < 6 ||
-      helpState.shortcutActions !== helpState.shortcutKeys
+      !moreState.open ||
+      moreState.role !== 'menu' ||
+      moreState.labels.length < 3 ||
+      moreState.labels.length > 4 ||
+      !moreState.labels.includes('Extension settings') ||
+      !/v\d/.test(moreState.version ?? '') ||
+      moreState.fullHeightDrawer ||
+      !moreState.focusOnFirst
     ) {
-      fail(
-        `help: drawer group did not expose its links and shortcuts ${JSON.stringify(helpState)}`,
-      );
+      fail(`more menu: unexpected popover ${JSON.stringify(moreState)}`);
     }
-    await page.click('#sp-drawer-back');
-    const helpBack = await page.evaluate(() => ({
-      title: document.getElementById('sp-drawer-title')?.textContent,
-      menuHidden: document.getElementById('sp-drawer-menu')?.hidden,
-      pageHidden: document.getElementById('sp-drawer-page')?.hidden,
-      backHidden: document.getElementById('sp-drawer-back')?.hidden,
-    }));
-    if (
-      helpBack.title !== 'Menu' ||
-      helpBack.menuHidden ||
-      !helpBack.pageHidden ||
-      !helpBack.backHidden
-    ) {
-      fail(`help: back button did not restore the menu ${JSON.stringify(helpBack)}`);
-    }
-    await page.locator('#sp-drawer-close').focus();
+    await page.keyboard.press('ArrowDown');
+    const movedFocus = await page.evaluate(
+      () =>
+        document.activeElement === document.querySelectorAll('#sp-more-menu [role="menuitem"]')[1],
+    );
+    if (!movedFocus) fail('more menu: ArrowDown did not move focus to the second row');
     await page.keyboard.press('Escape');
-    const helpDismissed = await page.evaluate(() => ({
-      open: document.getElementById('sp-drawer')?.classList.contains('open'),
-      inert: document.getElementById('sp-drawer')?.hasAttribute('inert'),
+    const moreDismissed = await page.evaluate(() => ({
+      hidden: document.getElementById('sp-more-menu')?.hidden,
       focusReturned: document.activeElement?.id === 'sp-menu-btn',
     }));
-    if (helpDismissed.open || !helpDismissed.inert || !helpDismissed.focusReturned) {
-      fail(`help: escape did not dismiss and restore focus ${JSON.stringify(helpDismissed)}`);
+    if (!moreDismissed.hidden || !moreDismissed.focusReturned) {
+      fail(`more menu: escape did not dismiss and restore focus ${JSON.stringify(moreDismissed)}`);
     }
-    await page.waitForTimeout(200);
-
     await page.click('#sp-menu-btn');
-    const drawerOpen = await page.evaluate(
-      () => document.getElementById('sp-drawer')?.classList.contains('open') === true,
-    );
-    if (!drawerOpen) fail('drawer: menu button did not open the navigation drawer');
-    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await page.mouse.click(8, 300);
+    const moreOutside = await page.evaluate(() => document.getElementById('sp-more-menu')?.hidden);
+    if (!moreOutside) fail('more menu: an outside click did not dismiss it');
 
     await page.click('#sp-model-selector-btn');
     await page.waitForTimeout(300);
@@ -1107,125 +1062,17 @@ try {
       fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
     }
 
-    await page.click('#sp-menu-btn');
-    await openDrawerGroup(page, 'Automate');
-    const workflowLauncher = await page.evaluate(() => {
-      const launcher = document.getElementById('sp-drawer-wf-btn');
-      return {
-        title: launcher?.getAttribute('title'),
-        description: launcher?.querySelector('.sp-drawer-launcher-desc')?.textContent,
-      };
-    });
-    if (
-      workflowLauncher.title !== 'Open Workflows' ||
-      workflowLauncher.description !== 'Shortcuts and scheduled tasks'
-    ) {
-      fail(`workflows: misleading launcher ${JSON.stringify(workflowLauncher)}`);
-    }
-    await page.click('#sp-drawer-wf-btn');
-    const workflowLaunchState = await page.evaluate(() => ({
-      selected: document.getElementById('sp-tab-workflows')?.getAttribute('aria-selected'),
-      panelHidden: document.getElementById('sp-workflows')?.getAttribute('aria-hidden'),
-      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open'),
-    }));
-    if (
-      workflowLaunchState.selected !== 'true' ||
-      workflowLaunchState.panelHidden !== 'false' ||
-      workflowLaunchState.drawerOpen
-    ) {
-      fail(`workflows: launcher did not activate its panel ${JSON.stringify(workflowLaunchState)}`);
-    }
-    await page.locator('#sp-tab-workflows').focus();
-    await page.keyboard.press('ArrowRight');
-    const computerUseTabState = await page.evaluate(() => ({
-      selected: document.getElementById('sp-tab-computer-use')?.getAttribute('aria-selected'),
-      tabIndex: document.getElementById('sp-tab-computer-use')?.getAttribute('tabindex'),
-      panelHidden: document.getElementById('sp-cu-panel')?.getAttribute('aria-hidden'),
-      controls: document.getElementById('sp-tab-computer-use')?.getAttribute('aria-controls'),
-    }));
-    if (
-      computerUseTabState.selected !== 'true' ||
-      computerUseTabState.tabIndex !== '0' ||
-      computerUseTabState.panelHidden !== 'false' ||
-      computerUseTabState.controls !== 'sp-cu-panel'
-    ) {
-      fail(
-        `view tabs: ArrowRight did not activate Computer Use ${JSON.stringify(computerUseTabState)}`,
-      );
-    }
-    await page.keyboard.press('ArrowLeft');
-    const workflowsSelected = await page.getAttribute('#sp-tab-workflows', 'aria-selected');
-    if (workflowsSelected !== 'true') fail('view tabs: ArrowLeft did not return to Workflows');
-    await page.click('#sp-wf-create-shortcut-btn');
-    const shortcutSurface = await page.evaluate(() => {
-      return {
-        modalOpen:
-          document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open') ===
-          true,
-        namePresent: Boolean(document.getElementById('sp-sc-name')),
-        promptPresent: Boolean(document.getElementById('sp-sc-prompt')),
-        deadStartFromPresent: Boolean(document.getElementById('sp-sc-starturl')),
-        deadSchedulePresent: Boolean(document.getElementById('sp-sc-schedule')),
-        hidden: document.getElementById('sp-create-shortcut-overlay')?.getAttribute('aria-hidden'),
-        role: document.querySelector('.sp-create-shortcut-modal')?.getAttribute('role'),
-        modal: document.querySelector('.sp-create-shortcut-modal')?.getAttribute('aria-modal'),
-      };
-    });
-    if (
-      !shortcutSurface.modalOpen ||
-      !shortcutSurface.namePresent ||
-      !shortcutSurface.promptPresent ||
-      shortcutSurface.deadStartFromPresent ||
-      shortcutSurface.deadSchedulePresent ||
-      shortcutSurface.hidden !== 'false' ||
-      shortcutSurface.role !== 'dialog' ||
-      shortcutSurface.modal !== 'true'
-    ) {
-      fail(
-        `workflows: misleading or unfinished shortcut controls ${JSON.stringify(shortcutSurface)}`,
-      );
-    }
-    await page.fill('#sp-sc-name', 'Smoke shortcut');
-    await page.fill('#sp-sc-prompt', 'Summarize this synthetic smoke input');
-    const shortcutInputState = await page.evaluate(() => ({
-      name: document.getElementById('sp-sc-name')?.value,
-      prompt: document.getElementById('sp-sc-prompt')?.value,
-      command: document.getElementById('sp-sc-command')?.textContent,
-    }));
-    if (
-      shortcutInputState.name !== 'Smoke shortcut' ||
-      shortcutInputState.prompt !== 'Summarize this synthetic smoke input' ||
-      !shortcutInputState.command?.includes('/smoke-shortcut')
-    ) {
-      fail(
-        `workflows: shortcut inputs did not update the command ${JSON.stringify(shortcutInputState)}`,
-      );
-    }
-    await page.locator('.sp-create-shortcut-close').focus();
-    await page.keyboard.press('Shift+Tab');
-    const shortcutFocusWrapped = await page.evaluate(
-      () => document.activeElement?.classList.contains('sp-create-shortcut-save') === true,
+    const removedViews = await page.evaluate(() =>
+      [
+        'sp-tab-workflows',
+        'sp-workflows',
+        'sp-tab-cloud-runs',
+        'sp-tab-page',
+        'sp-quota-badge',
+      ].filter((id) => document.getElementById(id)),
     );
-    await page.keyboard.press('Tab');
-    const shortcutFocusReturned = await page.evaluate(
-      () => document.activeElement?.classList.contains('sp-create-shortcut-close') === true,
-    );
-    await page.keyboard.press('Escape');
-    const shortcutDismissed = await page.evaluate(() => ({
-      open: document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open'),
-      hidden: document.getElementById('sp-create-shortcut-overlay')?.getAttribute('aria-hidden'),
-      focusReturned: document.activeElement?.id === 'sp-wf-create-shortcut-btn',
-    }));
-    if (
-      !shortcutFocusWrapped ||
-      !shortcutFocusReturned ||
-      shortcutDismissed.open ||
-      shortcutDismissed.hidden !== 'true' ||
-      !shortcutDismissed.focusReturned
-    ) {
-      fail(
-        `workflows: shortcut keyboard contract failed ${JSON.stringify({ shortcutFocusWrapped, shortcutFocusReturned, ...shortcutDismissed })}`,
-      );
+    if (removedViews.length > 0) {
+      fail(`panel chrome: views that moved to Options are still built: ${removedViews.join(', ')}`);
     }
 
     const slashOpened = await page.evaluate(() => {

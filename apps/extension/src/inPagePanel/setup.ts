@@ -5,6 +5,34 @@ import {
   attachScrollBehaviour,
 } from '../features/content/in-page-panel/launcher';
 import { createPanel } from '../features/content/in-page-panel/panel';
+import { isSidePanelPresenceMessage } from '../features/side-panel/panelPresence';
+
+let realSidePanelOpen = false;
+
+function applySidePanelPresence(): void {
+  for (const host of document.querySelectorAll<HTMLElement>(
+    '[data-agi-launcher], [data-agi-panel]',
+  )) {
+    if (realSidePanelOpen) host.style.setProperty('display', 'none', 'important');
+    else host.style.setProperty('display', 'block', 'important');
+  }
+}
+
+function watchSidePanelPresence(): void {
+  chrome.runtime.onMessage.addListener((message: unknown, sender) => {
+    if (sender.id !== chrome.runtime.id || sender.tab || !isSidePanelPresenceMessage(message))
+      return;
+    realSidePanelOpen = message.open;
+    applySidePanelPresence();
+  });
+  void chrome.runtime
+    .sendMessage({ type: 'GET_SIDE_PANEL_OPEN' })
+    .then((response: { open?: boolean } | undefined) => {
+      realSidePanelOpen = response?.open === true;
+      applySidePanelPresence();
+    })
+    .catch(() => {});
+}
 
 export const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
 
@@ -76,6 +104,7 @@ export async function setupInPagePanel(
     document.body.appendChild(launcherHost);
 
     attachScrollBehaviour(launcherHost);
+    watchSidePanelPresence();
   } catch (err) {
     logger?.warn('setupInPagePanel failed (non-fatal)', err);
   }

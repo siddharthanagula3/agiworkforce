@@ -35,46 +35,6 @@
     "message": " Capture",
     "description": "Screenshot button at rest. The leading space separates the label from its icon."
   },
-  "spDrawerCapturing": {
-    "message": " Capturing…",
-    "description": "Screenshot button while the capture is in flight. The leading space stands in for the icon the label replaces."
-  },
-  "spDrawerCaptured": {
-    "message": " Screenshot added",
-    "description": "Screenshot button after a successful capture is added to the chat composer"
-  },
-  "spDrawerCaptureFailed": {
-    "message": " Failed",
-    "description": "Screenshot button after a failed capture"
-  },
-  "spDrawerUngroupTab": {
-    "message": " Ungroup",
-    "description": "Tab-group button while the tab is already grouped"
-  },
-  "spDrawerGroupTab": {
-    "message": " Group",
-    "description": "Tab-group button while the tab is not grouped"
-  },
-  "spTabGroupAddTitle": {
-    "message": "Add current tab to the AGI Workforce group",
-    "description": "Tooltip for a control that adds the active tab to AGI's tab group"
-  },
-  "spTabGroupRemoveTitle": {
-    "message": "Remove current tab from the AGI Workforce group",
-    "description": "Tooltip for a control that removes the active tab from AGI's tab group"
-  },
-  "spTabGroupChecking": {
-    "message": "Checking current tab group…",
-    "description": "Tooltip while the extension reads the active tab's group"
-  },
-  "spTabGroupAlreadyGrouped": {
-    "message": "Current tab is already in the AGI Workforce group",
-    "description": "Tooltip for the disabled add button when the active tab is grouped"
-  },
-  "spTabGroupNotGrouped": {
-    "message": "Current tab is not in the AGI Workforce group",
-    "description": "Tooltip for the disabled remove button when the active tab is not grouped"
-  },
   "spTabGroupUpdateFailed": {
     "message": "Could not update the current tab group. Try again.",
     "description": "Fallback error after Chrome rejects a tab-group change"
@@ -119,195 +79,33 @@
     "message": "Confirm Code",
     "description": "Button that sends the typed pairing code to Desktop"
   },
-  "spPairingSecretHint": {
-    "message": "Operator setup: paste the desktop bridge token to pair without a code.",
-    "description": "Instruction above the operator bridge-token input"
-  },
-  "spPairingSecretPlaceholder": {
-    "message": "Desktop bridge token",
-    "description": "Placeholder for the operator bridge-token input"
-  },
-  "spPairingSecretSave": {
-    "message": "Save Bridge Token",
-    "description": "Button that stores the operator-supplied desktop bridge token"
-  },
-  "spAllowlistNoSite": {
-    "message": "No site to add on this page",
-    "description": "Automation allowlist row when the active tab has no addable origin"
-  },
-  "spAllowlistRemove": {
-    "message": "Remove",
-    "description": "Button that removes the active origin from the automation allowlist"
-  },
-  "spAllowlistAdd": {
-    "message": "Add",
-    "description": "Button that adds the active origin to the automation allowlist"
-  },
-  "spAllowlistHostPermissionRefused": {
-    "message": "Chrome did not grant access to $ORIGIN$, so it was not approved.",
-    "description": "Shown when the user declines Chrome's host-permission prompt for a site being added to the allowlist",
-    "placeholders": {
-      "origin": {
-        "content": "$1",
-        "example": "https://example.com"
-      }
-    }
-  },
-  "spMemoryDeleteConfirm": {
-    "message": "Confirm?",
-    "description": "Memory row delete button waiting for the second click"
-  },
-  "spMemoryDelete": {
-    "message": "Delete",
-    "description": "Memory row delete button in its resting state"
-  },
-  "spBridgeUrlNotAllowed": {
-    "message": "Only local URLs ($HOSTS$) are allowed",
-    "description": "Error shown when the desktop bridge URL points outside the allowed local hosts",
-    "placeholders": {
-      "hosts": {
-        "content": "$1",
-        "example": "localhost, 127.0.0.1"
-      }
-    }
-  },
-  "spCloudSignIn": {
-    "message": "Sign in to AGI Cloud",
-    "description": "Primary button of the signed-out cloud panel"
-  },
-  "spCloudSignInChecking": {
-    "message": "Checking…",
-    "description": "Sign-in button while the panel re-checks a session started in another tab"
-  },
-  "spCloudSignInOpening": {
-    "message": "Opening sign in…",
-    "description": "Sign-in button while the hosted sign-in tab opens"
-  },
-  "spCloudSignInReturnTab": {
-    "message": "Finish sign-in in the new tab, then return here and click Check sign-in.",
-    "description": "Shown right after the sign-in tab is opened from the panel"
-  },
-  "spCloudSignInOpenFailed": {
-    "message": "Unable to open AGI account sign-in.",
-    "description": "Fallback when opening the hosted sign-in tab throws without a message"
-  },
   "spCloudCheckSignIn": {
     "message": "Check sign-in",
     "description": "Button that re-reads the session after the user signed in elsewhere"
-  },
-  "spCloudSignInFinishTab": {
-    "message": "Finish sign-in in the new tab, then click Check sign-in.",
-    "description": "Signed-out description while a sign-in tab is still open"
-  },
-  "spCloudSignInPrompt": {
-    "message": "Sign in to use AGI Managed Cloud chat.",
-    "description": "Signed-out description of the cloud panel"
-  },
-  "spCloudSignInUnconfigured": {
-    "message": "AGI account sign-in is not configured in this build.",
-    "description": "Signed-out description when the build ships without auth configuration"
   },
   "spCloudSessionExpired": {
     "message": "Your session expired. Sign in again to continue.",
     "description": "Signed-out description after the stored token was rejected"
   },
-  "spCloudAccountFallbackName": {
-    "message": "AGI Account",
-    "description": "Account row label before, or in place of, a display name"
-  },
   "spAccountUnavailableAction": {
     "message": "Open account",
     "description": "Button that opens the web page explaining why the account is suspended, locked or closed"
-  },
-  "spCloudAccountUnavailable": {
-    "message": "Account unavailable",
-    "description": "Account tier row when entitlements could not be read"
-  },
-  "spCloudFreeTier": {
-    "message": "Free tier",
-    "description": "Account tier row before entitlements are read"
-  },
-  "spCloudSignOutSyncFailed": {
-    "message": "Signed out here. The web session could not be ended.",
-    "description": "Shown next to Sign out when the sync host session revoke call fails"
-  },
-  "spCloudAvatarFallback": {
-    "message": "A",
-    "description": "Avatar initial when the profile carries none"
-  },
-  "spBillingPastDue": {
-    "message": "Payment is past due. Update billing to restore Managed Cloud chat.",
-    "description": "Quota row for a past_due subscription"
-  },
-  "spBillingCanceled": {
-    "message": "This subscription is canceled. Manage billing to restore Managed Cloud chat.",
-    "description": "Quota row for a canceled subscription"
-  },
-  "spBillingOtherStatus": {
-    "message": "This subscription is $STATUS$. Manage billing to restore Managed Cloud chat.",
-    "description": "Quota row for any other non-entitled subscription status",
-    "placeholders": {
-      "status": {
-        "content": "$1",
-        "example": "incomplete expired"
-      }
-    }
-  },
-  "spBillingPaused": {
-    "message": "Managed Cloud chat is paused on this account until billing is fixed.",
-    "description": "Quota sub-label while a paid subscription is not entitled"
   },
   "spBillingManage": {
     "message": "Manage billing",
     "description": "Quota button that opens the billing settings page"
   },
-  "spQuotaPaidPlanRequired": {
-    "message": "Checking your shared AGI plan and usage…",
-    "description": "Quota row before entitlements are read"
-  },
   "spQuotaProRequired": {
     "message": "Managed Cloud chat is not available for this account.",
     "description": "Quota row for an account without managed-chat capability"
-  },
-  "spQuotaFreeElsewhere": {
-    "message": "Your AGI plan and usage are shared across account apps.",
-    "description": "Quota sub-label explaining the single account subscription"
-  },
-  "spQuotaUpgrade": {
-    "message": "View plans",
-    "description": "Quota button and header badge that open the pricing page"
-  },
-  "spQuotaFreeHeading": {
-    "message": "Upgrade for higher capacity",
-    "description": "Heading over the single upgrade action shown on the Free plan, which never shows usage meters"
   },
   "spQuotaManageUsage": {
     "message": "Manage usage",
     "description": "Button that opens the shared usage page"
   },
-  "spQuotaHeading": {
-    "message": "Cloud usage",
-    "description": "Heading over the per-window credit meters in the account section"
-  },
   "spQuotaAllocationPending": {
     "message": "Your plan's credits have not been allocated yet. Try again shortly, or contact support if this continues.",
     "description": "Quota notice and composer gate while a paid plan's credit allowance has not been granted"
-  },
-  "spQuotaPurchasedLabel": {
-    "message": "Purchased credits",
-    "description": "Label of the purchased credit balance, shown apart from the plan windows"
-  },
-  "spQuotaPurchasedUnavailable": {
-    "message": "Unavailable",
-    "description": "Purchased credit balance when the server could not read it"
-  },
-  "spQuotaPurchasedOn": {
-    "message": "Spent when a plan limit stops you",
-    "description": "Under the purchased balance when overage is on"
-  },
-  "spQuotaPurchasedOff": {
-    "message": "Off. Turn on in billing to spend them past a plan limit",
-    "description": "Under the purchased balance when overage is off"
   },
   "spQuotaUsingPurchased": {
     "message": "Plan limit reached. Your purchased credits are covering usage.",
@@ -320,24 +118,6 @@
   "spQuotaRecoverySupport": {
     "message": "Contact support",
     "description": "Button that opens the support page named by the server for a blocked account"
-  },
-  "spQuotaByModelHeading": {
-    "message": "By model, last $DAYS$ days",
-    "description": "Heading over settled credit spend per model in the account section",
-    "placeholders": {
-      "days": {
-        "content": "$1",
-        "example": "30"
-      }
-    }
-  },
-  "spQuotaByModelEmpty": {
-    "message": "No settled usage in this period.",
-    "description": "Shown under the per-model heading when nothing has settled"
-  },
-  "spQuotaByModelUnavailable": {
-    "message": "Usage by model is unavailable right now.",
-    "description": "Shown when the per-model usage history could not be read"
   },
   "spGateUsageLimit": {
     "message": "Your Managed Cloud usage limit has been reached.",
@@ -417,21 +197,9 @@
     "message": "AGI Cloud access required",
     "description": "Composer input placeholder while the account cannot use Chrome chat"
   },
-  "spShortcutActionsFailed": {
-    "message": "Failed to retrieve actions",
-    "description": "Save-shortcut name field placeholder after the recorded actions could not be read"
-  },
   "spShortcutSaveFailed": {
     "message": "Failed to save shortcut",
     "description": "Save-shortcut name field placeholder after the save was rejected"
-  },
-  "spAboutBrowserPage": {
-    "message": "Browser page",
-    "description": "Drawer footer label for a browser-internal tab that has no meaningful hostname"
-  },
-  "spAboutUnknownPage": {
-    "message": "Unknown",
-    "description": "Drawer footer label when the active tab URL cannot be parsed"
   },
   "spShortcutSaving": {
     "message": "Saving...",
@@ -440,38 +208,6 @@
   "spShortcutCreate": {
     "message": "Create shortcut",
     "description": "Create-shortcut button in its resting state"
-  },
-  "spShortcutPlay": {
-    "message": " Play",
-    "description": "Shortcut row replay button. The leading space stands in for the icon beside it."
-  },
-  "spTaskCreate": {
-    "message": "Create Task",
-    "description": "Scheduled-task form submit button in its resting state"
-  },
-  "spTaskCreating": {
-    "message": "Creating…",
-    "description": "Scheduled-task form submit button while the task is being created"
-  },
-  "spTaskCreateFailed": {
-    "message": "The scheduled task could not be created.",
-    "description": "Scheduled-task form error when the background reports no reason"
-  },
-  "spGroupTabAdd": {
-    "message": "+ Group Tab",
-    "description": "Workflows button that moves the active tab into the AGI tab group"
-  },
-  "spGroupTabAdded": {
-    "message": "Added current tab to the AGI Workforce group.",
-    "description": "Success notice after the active tab joins AGI's tab group"
-  },
-  "spGroupTabRemove": {
-    "message": "- Ungroup Tab",
-    "description": "Workflows button that removes the active tab from the AGI tab group"
-  },
-  "spGroupTabRemoved": {
-    "message": "Removed current tab from the AGI Workforce group.",
-    "description": "Success notice after the active tab leaves AGI's tab group"
   },
   "spContextChipCapturing": {
     "message": "capturing…",
@@ -665,14 +401,6 @@
     "message": "Dictation",
     "description": "Settings section title for side-panel voice input"
   },
-  "spDictationLanguageLabel": {
-    "message": "Language",
-    "description": "Settings label for the dictation language"
-  },
-  "spDictationLanguageAria": {
-    "message": "Dictation language",
-    "description": "Accessible name for the dictation language control"
-  },
   "spDictationLanguageHelp": {
     "message": "The microphone transcribes in this language. The list is the languages this browser is set up for; add more in Chrome's language settings.",
     "description": "Help text under the dictation language control"
@@ -688,10 +416,6 @@
   "spPageAssistantOverlay": {
     "message": "Page assistant overlay",
     "description": "Settings label for the compact in-page assistant"
-  },
-  "spPageAssistantToggleAria": {
-    "message": "Toggle page assistant overlay",
-    "description": "Accessible name for the in-page assistant preference"
   },
   "spPageAssistantSaving": {
     "message": "Saving…",
@@ -717,10 +441,6 @@
     "message": "Saved workflows could not be loaded. Please try again.",
     "description": "Workflows status when shortcut listing fails"
   },
-  "spTaskLoadFailed": {
-    "message": "Scheduled tasks could not be loaded. Please try again.",
-    "description": "Workflows status when scheduled-task listing fails"
-  },
   "spWorkflowRunning": {
     "message": "Running $NAME$…",
     "description": "Workflows status while a workflow is replaying",
@@ -730,10 +450,6 @@
         "example": "Daily brief"
       }
     }
-  },
-  "spWorkflowRunningButton": {
-    "message": "Running…",
-    "description": "Workflow replay button while a replay is active"
   },
   "spWorkflowRunFailed": {
     "message": "$NAME$ could not run. Please try again.",
@@ -748,26 +464,6 @@
   "spWorkflowCompleted": {
     "message": "$NAME$ completed.",
     "description": "Workflows status after replay completes",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spWorkflowCompletedOpen": {
-    "message": "$NAME$ completed and its result is open.",
-    "description": "Workflows status after a prompt workflow result opens",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spWorkflowCompletedOpenFailed": {
-    "message": "$NAME$ completed, but its saved result could not be opened.",
-    "description": "Workflows status when replay completes but its result cannot open",
     "placeholders": {
       "name": {
         "content": "$1",
@@ -805,245 +501,21 @@
       }
     }
   },
-  "spRecordingPrivacySaving": {
-    "message": "Saving recording privacy preference…",
-    "description": "Workflows status while value-capture preference is saved"
-  },
   "spRecordingPrivacySaveFailed": {
     "message": "Recording privacy preference could not be saved. Please try again.",
     "description": "Workflows status after value-capture preference save fails"
-  },
-  "spRecordingValueCaptureEnabled": {
-    "message": "Typed-value capture enabled.",
-    "description": "Workflows status after typed-value capture is enabled"
-  },
-  "spRecordingValueCaptureDisabled": {
-    "message": "Typed-value capture disabled.",
-    "description": "Workflows status after typed-value capture is disabled"
-  },
-  "spTaskEnableAria": {
-    "message": "Enable scheduled task $NAME$",
-    "description": "Accessible name for a disabled scheduled task toggle",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskDisableAria": {
-    "message": "Disable scheduled task $NAME$",
-    "description": "Accessible name for an enabled scheduled task toggle",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskEnabling": {
-    "message": "Enabling $NAME$…",
-    "description": "Workflows status while a scheduled task is enabled",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskDisabling": {
-    "message": "Disabling $NAME$…",
-    "description": "Workflows status while a scheduled task is disabled",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskEnableFailed": {
-    "message": "$NAME$ could not be enabled. Please try again.",
-    "description": "Workflows status after enabling a task fails",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskDisableFailed": {
-    "message": "$NAME$ could not be disabled. Please try again.",
-    "description": "Workflows status after disabling a task fails",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskEnabled": {
-    "message": "$NAME$ enabled.",
-    "description": "Workflows status after a task is enabled",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskDisabled": {
-    "message": "$NAME$ disabled.",
-    "description": "Workflows status after a task is disabled",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
   },
   "spQuickMode": {
     "message": "Quick",
     "description": "Composer toggle that trades reasoning depth for latency"
   },
-  "spProjectsTitle": {
-    "message": "Projects",
-    "description": "Drawer section heading for account projects"
-  },
-  "spProjectsHelp": {
-    "message": "Projects on your AGI account. Pick one and this chat, and everything it produces, is filed under it on every device.",
-    "description": "Drawer projects section explanation"
-  },
-  "spProjectsNew": {
-    "message": "New project",
-    "description": "Button that opens the project create form"
-  },
-  "spProjectsNamePlaceholder": {
-    "message": "Project name",
-    "description": "Placeholder for the project name field"
-  },
-  "spProjectsInstructionsPlaceholder": {
-    "message": "Instructions for every chat in this project (optional)",
-    "description": "Placeholder for the project instructions field"
-  },
-  "spProjectsCreate": {
-    "message": "Create",
-    "description": "Submit button on the project create form"
-  },
-  "spProjectsCreating": {
-    "message": "Creating…",
-    "description": "Project create button while the request is in flight"
-  },
-  "spProjectsCancel": {
-    "message": "Cancel",
-    "description": "Cancel button on the project create form"
-  },
-  "spProjectsEmpty": {
-    "message": "No projects on this account yet.",
-    "description": "Empty state for the projects list"
-  },
-  "spProjectsLoading": {
-    "message": "Loading projects…",
-    "description": "Status while the projects list is being read"
-  },
-  "spProjectsRetry": {
-    "message": "Try again",
-    "description": "Retry button for a failed projects read"
-  },
   "spProjectsSignIn": {
     "message": "Sign in",
     "description": "Action that opens the AGI sign-in page from the projects section"
   },
-  "spProjectsSigningIn": {
-    "message": "Opening…",
-    "description": "Projects sign-in action while the sign-in page is opening"
-  },
-  "spProjectsUse": {
-    "message": "Use in this chat",
-    "description": "Button that files the current chat under a project"
-  },
-  "spProjectsInUse": {
-    "message": "Used in this chat",
-    "description": "Marker on the project the current chat is filed under"
-  },
-  "spProjectsStopUse": {
-    "message": "Stop using",
-    "description": "Button that unfiles the current chat from its project"
-  },
-  "spProjectsDelete": {
-    "message": "Delete",
-    "description": "Project delete button at rest"
-  },
-  "spProjectsDeleteConfirm": {
-    "message": "Confirm delete",
-    "description": "Project delete button waiting for the second click"
-  },
-  "spProjectsDeleting": {
-    "message": "Deleting project…",
-    "description": "Status while a project delete is in flight"
-  },
-  "spProjectsDeleted": {
-    "message": "Project deleted.",
-    "description": "Status after a project was deleted"
-  },
-  "spProjectsNoInstructions": {
-    "message": "No instructions yet.",
-    "description": "Shown when an opened project has no instructions"
-  },
-  "spProjectsConversations": {
-    "message": "Recent chats",
-    "description": "Heading above a project’s recent conversations"
-  },
-  "spProjectsNoConversations": {
-    "message": "No chats in this project yet.",
-    "description": "Empty state for a project’s conversation list"
-  },
-  "spProjectsConversationsFailed": {
-    "message": "Recent chats could not be read.",
-    "description": "Shown when a project’s conversation list failed to load"
-  },
   "spProjectsChipStopUse": {
     "message": "Stop using this project",
     "description": "Accessible label for the header chip that unfiles the chat"
-  },
-  "spProjectsDeleteWarning": {
-    "message": "Deleting $NAME$ removes its instructions and knowledge files on every device. Its chats stay on your account with no project. This cannot be undone.",
-    "description": "Consequence stated before a project delete is confirmed",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Launch plan"
-      }
-    }
-  },
-  "spProjectsCount_one": {
-    "message": "$COUNT$ chat",
-    "description": "Conversation count on a project row when the count takes the one plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "3"
-      }
-    }
-  },
-  "spProjectsCount_other": {
-    "message": "$COUNT$ chats",
-    "description": "Conversation count on a project row for every other plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "3"
-      }
-    }
-  },
-  "spProjectsUsedNotice": {
-    "message": "New messages in this chat are filed under $NAME$.",
-    "description": "Status after a project is selected for the chat",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Launch plan"
-      }
-    }
   },
   "spProjectsChip": {
     "message": "Project · $NAME$",
@@ -1054,58 +526,6 @@
         "example": "Launch plan"
       }
     }
-  },
-  "spProjectsCleared": {
-    "message": "This chat is no longer filed under a project.",
-    "description": "Status after the chat project is cleared"
-  },
-  "spArtifactsTitle": {
-    "message": "Artifacts",
-    "description": "Drawer section heading for account artifacts"
-  },
-  "spArtifactsHelp": {
-    "message": "Code, documents and diagrams your chats produced, from every device on your account.",
-    "description": "Drawer artifacts section explanation"
-  },
-  "spArtifactsEmpty": {
-    "message": "No artifacts on this account yet.",
-    "description": "Empty state for the artifacts list"
-  },
-  "spArtifactsLoading": {
-    "message": "Loading artifacts…",
-    "description": "Status while the artifact index is being read"
-  },
-  "spArtifactsRetry": {
-    "message": "Try again",
-    "description": "Retry button for a failed artifacts read"
-  },
-  "spArtifactsSignIn": {
-    "message": "Sign in",
-    "description": "Action that opens the AGI sign-in page from the artifacts section"
-  },
-  "spArtifactsSigningIn": {
-    "message": "Opening…",
-    "description": "Artifacts sign-in action while the sign-in page is opening"
-  },
-  "spArtifactsOpen": {
-    "message": "Open",
-    "description": "Button that opens the chat an artifact came from in a new tab"
-  },
-  "spArtifactsCopy": {
-    "message": "Copy source",
-    "description": "Button that copies the message an artifact was derived from"
-  },
-  "spArtifactsCopying": {
-    "message": "Copying…",
-    "description": "Artifact copy button while the source message is being read"
-  },
-  "spArtifactsCopied": {
-    "message": "Copied the message this artifact was derived from.",
-    "description": "Status after an artifact source was copied"
-  },
-  "spArtifactsCopyFailed": {
-    "message": "That artifact could not be copied.",
-    "description": "Status after an artifact source copy failed"
   },
   "spArtifactsUntitled": {
     "message": "Untitled artifact",
@@ -1313,45 +733,9 @@
     "message": "Act on approved sites without asking",
     "description": "One-line description of the full-access permission mode"
   },
-  "spMenuTitle": {
-    "message": "Menu",
-    "description": "Title of the side panel menu drawer"
-  },
-  "spMenuBack": {
-    "message": "Back to the menu",
-    "description": "Accessible label of the drawer back button"
-  },
-  "spMenuClose": {
-    "message": "Close the menu",
-    "description": "Accessible label of the drawer close button"
-  },
-  "spMenuChat": {
-    "message": "Chat",
-    "description": "Menu row for chat actions"
-  },
-  "spMenuAutomate": {
-    "message": "Automate",
-    "description": "Menu row for workflows and cloud runs"
-  },
-  "spMenuProjects": {
-    "message": "Projects",
-    "description": "Menu row for account projects"
-  },
-  "spMenuArtifacts": {
-    "message": "Artifacts",
-    "description": "Menu row for account artifacts"
-  },
-  "spMenuTools": {
-    "message": "Tools",
-    "description": "Menu row for browser tools"
-  },
   "spMenuPairing": {
     "message": "Desktop connection",
     "description": "Menu row for pairing with the desktop app"
-  },
-  "spMenuSettings": {
-    "message": "Settings",
-    "description": "Menu row for the remaining extension settings"
   },
   "spRecentsTitle": {
     "message": "Recent chats",
@@ -1364,10 +748,6 @@
   "spModelAutoDescription": {
     "message": "Picks a model for each turn: a quick one for a summary, a stronger one for code",
     "description": "One-line description of the automatic model choice"
-  },
-  "spPlansHeading": {
-    "message": "What each plan includes",
-    "description": "Disclosure heading over the per-plan comparison in the account section"
   },
   "spPlansYourPlan": {
     "message": "$PLAN$ (your plan)",
@@ -1420,10 +800,6 @@
         "example": "Pro"
       }
     }
-  },
-  "spPlansPricing": {
-    "message": "Prices and checkout",
-    "description": "Button that opens web pricing from the plan comparison"
   },
   "spVoiceMicBlocked": {
     "message": "Microphone access is blocked. Allow the microphone for AGI in Chrome site settings, then try again.",
@@ -2191,10 +1567,6 @@
       }
     }
   },
-  "spShortcutDeleteAgain": {
-    "message": "Select again to delete",
-    "description": "Accessible name of a shortcut's delete button while it waits for confirmation"
-  },
   "spShortcutDeleteConfirm": {
     "message": "Select delete again to remove $NAME$. $COMMAND$ stops working in chat, and the shortcut cannot be recovered.",
     "description": "Confirmation shown after the first press of delete on a prompt shortcut",
@@ -2727,212 +2099,6 @@
       }
     }
   },
-  "spPersonalizationTitle": {
-    "message": "Personalization",
-    "description": "Drawer section title for the account personalization settings"
-  },
-  "spPersonalizationHelp": {
-    "message": "Your name, background, response style and custom instructions shape side-panel chats too. They are kept in your account settings.",
-    "description": "Explains that side-panel chats follow the account personalization settings"
-  },
-  "spPersonalizationOpen": {
-    "message": "Open personalization settings",
-    "description": "Button that opens the account personalization settings on the web"
-  },
-  "spMemoryScopePersonal": {
-    "message": "Showing your personal memory. Memory saved in a workspace stays in that workspace.",
-    "description": "Which memory the drawer lists when no workspace is active"
-  },
-  "spMemoryScopeWorkspace": {
-    "message": "Showing the memory for the $WORKSPACE$ workspace. Your personal memory is kept apart.",
-    "description": "Which memory the drawer lists when a workspace is active",
-    "placeholders": {
-      "workspace": {
-        "content": "$1",
-        "example": "Acme"
-      }
-    }
-  },
-  "spMemoryShowMore": {
-    "message": "Show more",
-    "description": "Button that loads the next page of saved memories"
-  },
-  "spMemoryShowing_one": {
-    "message": "$COUNT$ memory shown",
-    "description": "How many saved memories the drawer lists, one plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "1"
-      }
-    }
-  },
-  "spMemoryShowing_other": {
-    "message": "$COUNT$ memories shown",
-    "description": "How many saved memories the drawer lists, every other plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "12"
-      }
-    }
-  },
-  "spMemoryShowingMore_one": {
-    "message": "$COUNT$ memory shown, more are saved",
-    "description": "How many saved memories the drawer lists when more remain, one plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "1"
-      }
-    }
-  },
-  "spMemoryShowingMore_other": {
-    "message": "$COUNT$ memories shown, more are saved",
-    "description": "How many saved memories the drawer lists when more remain, every other plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "100"
-      }
-    }
-  },
-  "spMemoryOriginLearnedFromTitled": {
-    "message": "Learned from “$TITLE$”",
-    "description": "Provenance of a memory learned from a named conversation",
-    "placeholders": {
-      "title": {
-        "content": "$1",
-        "example": "Trip planning"
-      }
-    }
-  },
-  "spMemoryOriginLearnedFromChat": {
-    "message": "Learned from a chat",
-    "description": "Provenance of a memory learned from a conversation"
-  },
-  "spMemoryOriginImported": {
-    "message": "Imported",
-    "description": "Provenance of an imported memory"
-  },
-  "spMemoryOriginAdded": {
-    "message": "Added by you",
-    "description": "Provenance of a memory the user typed"
-  },
-  "spMemoryNeverRememberTitle": {
-    "message": "Never remember",
-    "description": "Title of the list of terms memory never saves"
-  },
-  "spMemoryNeverRememberHelp": {
-    "message": "New memories containing any of these terms are discarded before they are saved, on every device. Matching ignores case. This applies to new memories only, and anything already saved stays until you delete it.",
-    "description": "Explains the never remember list"
-  },
-  "spMemoryNeverRememberPlaceholder": {
-    "message": "e.g. my home address",
-    "description": "Example term for the never remember list"
-  },
-  "spMemoryNeverRememberInputLabel": {
-    "message": "Term to never remember",
-    "description": "Accessible name of the never remember input"
-  },
-  "spMemoryNeverRememberAdd": {
-    "message": "Add",
-    "description": "Button that adds a term to the never remember list"
-  },
-  "spMemoryNeverRememberRemove": {
-    "message": "Remove $TERM$",
-    "description": "Accessible name of the button that removes a never remember term",
-    "placeholders": {
-      "term": {
-        "content": "$1",
-        "example": "home address"
-      }
-    }
-  },
-  "spMemoryNeverRememberEmpty": {
-    "message": "No terms yet. Memory keeps anything you ask it to.",
-    "description": "Empty never remember list"
-  },
-  "spMemoryNeverRememberTooShort": {
-    "message": "Enter at least $COUNT$ characters, shorter terms match almost anything.",
-    "description": "A never remember term that is too short",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "3"
-      }
-    }
-  },
-  "spMemoryNeverRememberFull": {
-    "message": "You can store up to $COUNT$ terms.",
-    "description": "The never remember list is full",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "50"
-      }
-    }
-  },
-  "spMemoryNeverRememberSaveFailed": {
-    "message": "Could not save the never remember list. Try again.",
-    "description": "Saving the never remember list failed"
-  },
-  "spMemoryNeverRememberLoadFailed": {
-    "message": "Could not load the never remember list.",
-    "description": "Loading the never remember list failed"
-  },
-  "spMemorySignedOut": {
-    "message": "Sign in to your AGI account to change memory.",
-    "description": "Memory settings need a signed-in account"
-  },
-  "spMemoryConflictsTitle": {
-    "message": "When memories disagree",
-    "description": "Title of the replaced memories list"
-  },
-  "spMemoryConflictsRule": {
-    "message": "When two memories disagree, a pinned memory wins, then one you added over one learned from a chat, then the newer one. The replaced one is kept here so you can switch back.",
-    "description": "The rule that decides which of two conflicting memories is used"
-  },
-  "spMemoryConflictsListLabel": {
-    "message": "Replaced memories",
-    "description": "Accessible name of the replaced memories list"
-  },
-  "spMemoryConflictsEmpty": {
-    "message": "No memory has replaced another.",
-    "description": "Empty replaced memories list"
-  },
-  "spMemoryConflictUsing": {
-    "message": "Using: $MEMORY$",
-    "description": "The memory that won a conflict",
-    "placeholders": {
-      "memory": {
-        "content": "$1",
-        "example": "Prefers aisle seats"
-      }
-    }
-  },
-  "spMemoryConflictReplaced": {
-    "message": "Replaced: $MEMORY$",
-    "description": "The memory that lost a conflict",
-    "placeholders": {
-      "memory": {
-        "content": "$1",
-        "example": "Prefers window seats"
-      }
-    }
-  },
-  "spMemoryConflictRestore": {
-    "message": "Use the replaced one instead",
-    "description": "Button that switches back to the replaced memory"
-  },
-  "spMemoryConflictRestoreFailed": {
-    "message": "Could not switch back to that memory. Try again.",
-    "description": "Switching back to a replaced memory failed"
-  },
-  "spMemoryConflictsLoadFailed": {
-    "message": "Could not load replaced memories. Try again later.",
-    "description": "Loading replaced memories failed"
-  },
   "spMemoryForgetPrompt_one": {
     "message": "Forget $LIST$? Chats stop using it, and it cannot be restored.",
     "description": "Asks before forgetting one memory the user asked to forget, one plural form",
@@ -3104,56 +2270,6 @@
       "name": {
         "content": "$1",
         "example": "Daily briefing"
-      }
-    }
-  },
-  "spProjectsOpenChat": {
-    "message": "Open $TITLE$ on the web",
-    "description": "Tooltip of a project chat that opens on the web",
-    "placeholders": {
-      "title": {
-        "content": "$1",
-        "example": "Launch plan"
-      }
-    }
-  },
-  "spProjectsDescriptionPlaceholder": {
-    "message": "Description (optional)",
-    "description": "Placeholder of the project description field"
-  },
-  "spProjectsSave": {
-    "message": "Save",
-    "description": "Button that saves project edits"
-  },
-  "spProjectsSaved": {
-    "message": "Project saved.",
-    "description": "A project was edited"
-  },
-  "spProjectsEdit": {
-    "message": "Edit",
-    "description": "Button that edits the project name, description and instructions"
-  },
-  "spProjectsInstructions": {
-    "message": "Instructions",
-    "description": "Heading of the project instructions"
-  },
-  "spProjectsFileCount_one": {
-    "message": "$COUNT$ file",
-    "description": "Number of knowledge files in a project, one plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "1"
-      }
-    }
-  },
-  "spProjectsFileCount_other": {
-    "message": "$COUNT$ files",
-    "description": "Number of knowledge files in a project, every other plural form",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "3"
       }
     }
   },
@@ -3333,114 +2449,6 @@
     "message": "Menu",
     "description": "Marks a command palette entry that opens a section of the side panel menu"
   },
-  "spMenuHelp": {
-    "message": "Help",
-    "description": "Side panel menu section with help links and keyboard shortcuts"
-  },
-  "spHelpCenter": {
-    "message": "Help center",
-    "description": "Opens the help center on the web"
-  },
-  "spHelpCenterDetail": {
-    "message": "Answers to common questions.",
-    "description": "Describes the help center link"
-  },
-  "spHelpDocs": {
-    "message": "Documentation",
-    "description": "Opens the documentation on the web"
-  },
-  "spHelpDocsDetail": {
-    "message": "Guides for every surface, from chat to the CLI.",
-    "description": "Describes the documentation link"
-  },
-  "spHelpContact": {
-    "message": "Contact support",
-    "description": "Opens the support page on the web"
-  },
-  "spHelpContactDetail": {
-    "message": "Reach a person about your account.",
-    "description": "Describes the contact support link"
-  },
-  "spHelpReportBug": {
-    "message": "Report a bug",
-    "description": "Opens the bug report form on the web"
-  },
-  "spHelpReportBugDetail": {
-    "message": "Tell us what broke and how to reproduce it.",
-    "description": "Describes the bug report link"
-  },
-  "spHelpStatus": {
-    "message": "System status",
-    "description": "Opens the service status page"
-  },
-  "spHelpStatusDetail": {
-    "message": "Current availability of managed services.",
-    "description": "Describes the status page link"
-  },
-  "spHelpReleaseNotes": {
-    "message": "Release notes",
-    "description": "Opens the changelog on the web"
-  },
-  "spHelpReleaseNotesDetail": {
-    "message": "What shipped, and when.",
-    "description": "Describes the release notes link"
-  },
-  "spHelpShortcutsTitle": {
-    "message": "Keyboard shortcuts",
-    "description": "Heading of the keyboard shortcut list in the Help menu"
-  },
-  "spHelpShortcutsChange": {
-    "message": "Change browser shortcuts",
-    "description": "Opens Chrome's page for editing extension shortcuts"
-  },
-  "spHelpKeyCtrl": {
-    "message": "Ctrl",
-    "description": "Name of the Control key in a shortcut"
-  },
-  "spHelpKeyEnter": {
-    "message": "Enter",
-    "description": "Name of the Enter key in a shortcut"
-  },
-  "spHelpKeyShift": {
-    "message": "Shift",
-    "description": "Name of the Shift key in a shortcut"
-  },
-  "spHelpKeyEscape": {
-    "message": "Esc",
-    "description": "Name of the Escape key in a shortcut"
-  },
-  "spHelpShortcutPalette": {
-    "message": "Search commands and chats",
-    "description": "What the command palette shortcut does"
-  },
-  "spHelpShortcutSend": {
-    "message": "Send the message",
-    "description": "What Enter does in the composer"
-  },
-  "spHelpShortcutNewLine": {
-    "message": "Start a new line",
-    "description": "What Shift Enter does in the composer"
-  },
-  "spHelpShortcutSlash": {
-    "message": "Prompts and saved shortcuts",
-    "description": "What typing a slash in the composer opens"
-  },
-  "spHelpShortcutMention": {
-    "message": "Attach a tab or choose a project",
-    "description": "What typing @ in the composer opens"
-  },
-  "spHelpShortcutEscape": {
-    "message": "Close a menu or dialog",
-    "description": "What Escape does in the side panel"
-  },
-  "spHelpShortcutOpenPanel": {
-    "message": "Open the side panel",
-    "description": "What the browser shortcut for the extension does"
-  },
-  "spHelpShortcutCapture": {
-    "message": "Capture the page",
-    "description": "What the page capture browser shortcut does"
-  },
   "spAttachmentUploadsOff": {
     "message": "File uploads aren’t available for this account.",
     "description": "The account's capability document denies file uploads, so an attached file was not added"
@@ -3498,10 +2506,6 @@
   "spScheduleRunNoAnswer": {
     "message": "This run finished without an answer to show.",
     "description": "A finished schedule run carried no answer text"
-  },
-  "spArtifactsDownload": {
-    "message": "Download source",
-    "description": "Saves an artifact's own content as a file"
   },
   "spArtifactsDownloaded": {
     "message": "Saved $NAME$.",
@@ -3695,34 +2699,6 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
-  "spSetupMemoryRemember": {
-    "message": "Remember details across chats",
-    "description": "Turns saved memory on or off"
-  },
-  "spSetupMemorySearch": {
-    "message": "Search past chats for context",
-    "description": "Lets AGI search earlier chats when answering"
-  },
-  "spSetupMemorySignedOut": {
-    "message": "Sign in to choose how AGI uses memory.",
-    "description": "Memory step text while signed out"
-  },
-  "spSetupMemoryOrgOff": {
-    "message": "Your workspace has turned memory off.",
-    "description": "The workspace does not allow memory"
-  },
-  "spSetupMemoryUnavailable": {
-    "message": "Your memory settings could not be loaded. You can change them later under Settings.",
-    "description": "Loading memory settings failed"
-  },
-  "spMemoryPreferenceSaved": {
-    "message": "Memory setting saved.",
-    "description": "Confirms a memory switch in the menu was saved"
-  },
-  "spMemoryPreferenceSaveFailed": {
-    "message": "The memory setting could not be saved. Try again.",
-    "description": "Saving a memory switch failed"
-  },
   "spSchedulesDescriptionLabel": {
     "message": "Description (optional)",
     "description": "Label of the optional schedule description field"
@@ -3803,56 +2779,6 @@
       }
     }
   },
-  "spTaskDescriptionLabel": {
-    "message": "Description (optional)",
-    "description": "Label of the optional description field on the scheduled-task form"
-  },
-  "spTaskDescriptionPlaceholder": {
-    "message": "What this task is for",
-    "description": "Placeholder of the scheduled-task description field"
-  },
-  "spTaskSaveChanges": {
-    "message": "Save changes",
-    "description": "Scheduled-task form submit button while editing an existing task"
-  },
-  "spTaskSaving": {
-    "message": "Saving…",
-    "description": "Scheduled-task form submit button while an edit is being saved"
-  },
-  "spTaskSaveFailed": {
-    "message": "The scheduled task could not be saved.",
-    "description": "Scheduled-task form error when saving an edit fails and the background gives no reason"
-  },
-  "spTaskUpdated": {
-    "message": "$NAME$ updated.",
-    "description": "Workflows status after a scheduled task is edited",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskEdit": {
-    "message": "Edit $NAME$",
-    "description": "Accessible name of the edit button on a scheduled task",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
-  "spTaskDeleteConfirm": {
-    "message": "Select delete again to remove $NAME$. It stops running and cannot be recovered.",
-    "description": "Confirmation shown after the first press of delete on a scheduled task",
-    "placeholders": {
-      "name": {
-        "content": "$1",
-        "example": "Daily brief"
-      }
-    }
-  },
   "spPlanReviewHeading": {
     "message": "Plan",
     "description": "Heading of the AGI Work plan a person reviews before the work starts"
@@ -3901,10 +2827,6 @@
     "message": "You cancelled this plan. Nothing was run.",
     "description": "Note left on an AGI Work turn whose plan the person cancelled"
   },
-  "spHelpLinkMemory": {
-    "message": "How memory works",
-    "description": "Link from the memory settings to the help article about memory"
-  },
   "spHelpLinkTemporary": {
     "message": "How temporary chats work",
     "description": "Link from the temporary chat notice to the help article about temporary chats"
@@ -3913,29 +2835,9 @@
     "message": "How sharing works",
     "description": "Link from the share confirmation to the help article about shared links"
   },
-  "spHelpLinkShortcuts": {
-    "message": "All keyboard shortcuts",
-    "description": "Link from the Help shortcuts list to the full keyboard shortcuts article"
-  },
-  "spHelpLinkUsage": {
-    "message": "How usage and credits work",
-    "description": "Link from the usage meter to the help article about usage limits and credits"
-  },
-  "spHelpLinkArtifacts": {
-    "message": "How artifacts work",
-    "description": "Link from the artifacts list to the help article about artifacts"
-  },
-  "spHelpLinkProjects": {
-    "message": "How projects work",
-    "description": "Link from the projects list to the help article about projects"
-  },
   "spHelpLinkSchedules": {
     "message": "How schedules work",
     "description": "Link from the schedules section to the help article about schedules"
-  },
-  "spHelpLinkRuns": {
-    "message": "How AGI Work runs a task",
-    "description": "Link from the cloud runs list to the help article about AGI Work"
   },
   "spProjectChatNotSaved": {
     "message": "This reply goes without the project's files and instructions, because the chat could not be saved to your account first.",
@@ -3974,114 +2876,6 @@
         "example": "the best fit for this kind of request"
       }
     }
-  },
-  "spRunLatestOutput": {
-    "message": "Latest output",
-    "description": "Heading of a live cloud run's most recent answer text in the runs panel"
-  },
-  "spRunResult": {
-    "message": "Result",
-    "description": "Heading of a finished cloud run's final answer in the runs panel"
-  },
-  "spRunReport": {
-    "message": "Report",
-    "description": "Heading of a finished research run's report in the runs panel"
-  },
-  "spInstructionsLabel": {
-    "message": "Custom instructions",
-    "description": "Label of the account custom instructions field in the side panel settings"
-  },
-  "spInstructionsPlaceholder": {
-    "message": "What should AGI keep in mind when it answers? For example: answer in British English.",
-    "description": "Placeholder of the custom instructions field"
-  },
-  "spInstructionsEnabled": {
-    "message": "Use these instructions in new chats",
-    "description": "Checkbox that turns the account custom instructions on or off"
-  },
-  "spInstructionsSave": {
-    "message": "Save instructions",
-    "description": "Button that saves the custom instructions to the account"
-  },
-  "spResponseStyleLabel": {
-    "message": "Response style",
-    "description": "Label of the account response style choice"
-  },
-  "spResponseStyleDefault": {
-    "message": "Default",
-    "description": "Response style option that adds no style guidance"
-  },
-  "spResponseStyleConcise": {
-    "message": "Concise",
-    "description": "Response style option for short, direct answers"
-  },
-  "spResponseStyleExplanatory": {
-    "message": "Explanatory",
-    "description": "Response style option for answers that explain their reasoning"
-  },
-  "spResponseStyleFormal": {
-    "message": "Formal",
-    "description": "Response style option for a formal register"
-  },
-  "spResponseLengthLabel": {
-    "message": "Response length",
-    "description": "Label of the account response length choice"
-  },
-  "spResponseLengthDefault": {
-    "message": "Default",
-    "description": "Response length option that adds no length guidance"
-  },
-  "spResponseLengthShorter": {
-    "message": "Shorter",
-    "description": "Response length option for shorter answers"
-  },
-  "spResponseLengthLonger": {
-    "message": "Longer",
-    "description": "Response length option for fuller answers"
-  },
-  "spPersonalizationSaving": {
-    "message": "Saving…",
-    "description": "Status while personalization settings are being saved"
-  },
-  "spPersonalizationSaved": {
-    "message": "Saved to your account. New chats use it on every device.",
-    "description": "Status after personalization settings are saved"
-  },
-  "spPersonalizationSaveFailed": {
-    "message": "Your personalization could not be saved. Try again.",
-    "description": "Status when saving personalization fails without a reason"
-  },
-  "spPersonalizationUnavailable": {
-    "message": "Your personalization could not be loaded.",
-    "description": "Status when the account personalization cannot be read"
-  },
-  "spAccountNameEdit": {
-    "message": "Edit name",
-    "description": "Button in the account area that opens the display name editor"
-  },
-  "spAccountNameLabel": {
-    "message": "Your name",
-    "description": "Accessible name of the display name field"
-  },
-  "spAccountNameSave": {
-    "message": "Save",
-    "description": "Button that saves the edited display name to the account"
-  },
-  "spAccountNameCancel": {
-    "message": "Cancel",
-    "description": "Button that closes the display name editor without saving"
-  },
-  "spAccountNameRequired": {
-    "message": "Enter a name.",
-    "description": "Status when the display name is saved empty"
-  },
-  "spAccountNameSaved": {
-    "message": "Name saved to your account.",
-    "description": "Status after the display name is saved"
-  },
-  "spAccountNameSaveFailed": {
-    "message": "Your name could not be saved. Try again.",
-    "description": "Status when saving the display name fails without a reason"
   },
   "spAllModels": {
     "message": "All models ($COUNT$)",
@@ -5005,6 +3799,40 @@
       "host": {
         "content": "$1",
         "example": "example.com"
+      }
+    }
+  },
+  "spMoreLabel": {
+    "message": "More",
+    "description": "Accessible name and tooltip of the side panel More button"
+  },
+  "spMoreShortcuts": {
+    "message": "Shortcuts",
+    "description": "More menu entry that opens the saved prompts and schedules in extension settings"
+  },
+  "spMoreHelp": {
+    "message": "Help",
+    "description": "More menu entry that opens the help links in extension settings"
+  },
+  "spTitleSchedule": {
+    "message": "Schedule…",
+    "description": "Conversation menu action that starts a scheduled task from this chat"
+  },
+  "spTitleAddToProject": {
+    "message": "Add to project",
+    "description": "Conversation menu action that files the open chat under a project"
+  },
+  "spHistoryArchiveConfirm": {
+    "message": "Archive this chat? It leaves your recent chats and moves to Archived, on this device and in your AGI account. You can restore it from there.",
+    "description": "Confirmation shown before a chat is archived"
+  },
+  "spMoreVersion": {
+    "message": "AGI for Chrome v$VERSION$",
+    "description": "Footer of the More menu naming the installed extension version",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.2.0"
       }
     }
   }

@@ -227,6 +227,11 @@ import { WELCOME_PAGE_PATH } from './features/onboarding/paths';
 import { createTaskNotifier, isSidePanelInFocus } from './background/task-notifications';
 import { flushAutomationAuditOutbox } from './features/observability/automationAudit';
 import {
+  SIDE_PANEL_PORT_NAME,
+  SIDE_PANEL_PRESENCE_MESSAGE,
+  type SidePanelPresenceMessage,
+} from './features/side-panel/panelPresence';
+import {
   isCurrentManagedCloudOperation,
   managedCloudOwnerKey,
   normalizeManagedCloudOwner,
@@ -919,6 +924,7 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
+  chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
   void initializeSyncedPreferences(chrome.storage, (error) => {
     logger.warn('Failed to mirror a cross-device preference', error);
   }).catch((error) => {
@@ -944,6 +950,58 @@ function initialize(): void {
     .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
   void migrateAutofillProfile().catch((err) => {
     logger.debug('Autofill profile migration failed (non-fatal)', err);
+  });
+}
+
+const openSidePanelWindows = new Map<number, number>();
+
+function publishSidePanelPresence(windowId: number): void {
+  const message: SidePanelPresenceMessage = {
+    type: SIDE_PANEL_PRESENCE_MESSAGE,
+    open: openSidePanelWindows.has(windowId),
+  };
+  void chrome.tabs
+    .query({ windowId })
+    .then((tabs) => {
+      for (const tab of tabs) {
+        if (tab.id !== undefined) void chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+      }
+    })
+    .catch(() => {});
+}
+
+function handleSidePanelPresencePort(port: chrome.runtime.Port): void {
+  if (port.name !== SIDE_PANEL_PORT_NAME) return;
+  if (
+    !isTrustedExtensionPageSender(
+      {
+        id: port.sender?.id,
+        url: port.sender?.url,
+        origin: port.sender?.origin,
+        tabUrl: port.sender?.tab?.url,
+        hasTab: port.sender?.tab != null,
+      },
+      chrome.runtime.id,
+      chrome.runtime.getURL('/').replace(/\/+$/, ''),
+    )
+  ) {
+    port.disconnect();
+    return;
+  }
+  let registeredWindow: number | null = null;
+  port.onMessage.addListener((message: unknown) => {
+    const windowId = (message as { windowId?: unknown } | null)?.windowId;
+    if (typeof windowId !== 'number' || registeredWindow !== null) return;
+    registeredWindow = windowId;
+    openSidePanelWindows.set(windowId, (openSidePanelWindows.get(windowId) ?? 0) + 1);
+    publishSidePanelPresence(windowId);
+  });
+  port.onDisconnect.addListener(() => {
+    if (registeredWindow === null) return;
+    const remaining = (openSidePanelWindows.get(registeredWindow) ?? 1) - 1;
+    if (remaining > 0) openSidePanelWindows.set(registeredWindow, remaining);
+    else openSidePanelWindows.delete(registeredWindow);
+    publishSidePanelPresence(registeredWindow);
   });
 }
 
@@ -4082,6 +4140,17 @@ async function handleMessageAsync(
         logger.warn('OPEN_SIDE_PANEL: no active tab');
       }
       return { success: true } as ExtensionResponse;
+    }
+
+    case 'GET_SIDE_PANEL_OPEN': {
+      const windowId = sender.tab?.windowId;
+      const panels = await chrome.runtime
+        .getContexts({ contextTypes: ['SIDE_PANEL' as chrome.runtime.ContextType] })
+        .catch(() => []);
+      return {
+        success: true,
+        open: windowId !== undefined && panels.some((panel) => panel.windowId === windowId),
+      } as ExtensionResponse;
     }
 
     case 'CAPTURE_SCREENSHOT': {

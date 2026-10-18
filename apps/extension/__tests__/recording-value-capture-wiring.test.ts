@@ -7,24 +7,21 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'utf8');
 
 describe('recording value-capture is wired end to end', () => {
-  const sidePanel = read('src/side_panel.ts');
+  const shortcuts = read('src/features/options/shortcuts-section.ts');
   const background = read('src/background.ts');
   const content = read('src/content.ts');
 
-  it('side panel renders a capture-values toggle that sends SET_RECORDING_VALUE_CAPTURE', () => {
-    expect(sidePanel).toMatch(/sp-wf-capture-values/);
-    expect(sidePanel).toMatch(/type:\s*'SET_RECORDING_VALUE_CAPTURE',\s*enabled/);
+  it('options shortcuts render a capture-values toggle that sends SET_RECORDING_VALUE_CAPTURE', () => {
+    expect(shortcuts).toMatch(/opt-record-capture/);
+    expect(shortcuts).toMatch(/type:\s*'SET_RECORDING_VALUE_CAPTURE',\s*enabled/);
   });
 
   it('does not start recording until the active tab acknowledges the capture policy', () => {
-    const start = sidePanel.indexOf('// Sync the value-capture choice to the active tab');
-    const end = sidePanel.indexOf("{ type: 'START_RECORDING' }", start);
+    const start = shortcuts.indexOf('if (!(await setCapture(tab.id)))');
+    const end = shortcuts.indexOf("type: 'START_RECORDING'", start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    const admission = sidePanel.slice(start, end);
-
-    expect(sidePanel).toContain('function syncCaptureValues(): Promise<boolean>');
-    expect(admission).toContain('await syncCaptureValues()');
+    const admission = shortcuts.slice(start, end);
     expect(admission).toContain('return;');
   });
 

@@ -106,6 +106,7 @@ const chromeMock = vi.hoisted(() => {
 });
 
 const account = vi.hoisted(() => ({
+  accessReads: 0,
   tier: 'free',
   sessionUsedPercent: 0,
   hasUsageRemaining: true,
@@ -131,28 +132,31 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
     ...actual,
     getManagedModelAccess: async (): Promise<
       import('../src/features/cloud-bridge/freeTrialClient').ManagedModelAccess
-    > => ({
-      subscriptionTier: account.tier,
-      subscriptionStatus: 'active',
-      modelIds: [],
-      allowedAutoModes: [],
-      usage: parseManagedUsageSummaryResponse({
-        plan_tier: account.tier,
-        usage_percentage: 0,
-        usage_reset_at: null,
-        period_start: null,
-        period_end: null,
-        session_usage_percentage: account.sessionUsedPercent,
-        session_reset_at: new Date(Date.now() + 2 * 3_600_000).toISOString(),
-        weekly_usage_percentage: 0,
-        weekly_reset_at: null,
-        flagship_weekly_usage_percentage: 0,
-        flagship_weekly_reset_at: null,
-        has_usage_remaining: account.hasUsageRemaining,
-        usage_allocation: 'provisioned',
-        subscription_status: 'active',
-      }),
-    }),
+    > => (
+      (account.accessReads += 1),
+      {
+        subscriptionTier: account.tier,
+        subscriptionStatus: 'active',
+        modelIds: [],
+        allowedAutoModes: [],
+        usage: parseManagedUsageSummaryResponse({
+          plan_tier: account.tier,
+          usage_percentage: 0,
+          usage_reset_at: null,
+          period_start: null,
+          period_end: null,
+          session_usage_percentage: account.sessionUsedPercent,
+          session_reset_at: new Date(Date.now() + 2 * 3_600_000).toISOString(),
+          weekly_usage_percentage: 0,
+          weekly_reset_at: null,
+          flagship_weekly_usage_percentage: 0,
+          flagship_weekly_reset_at: null,
+          has_usage_remaining: account.hasUsageRemaining,
+          usage_allocation: 'provisioned',
+          subscription_status: 'active',
+        }),
+      }
+    ),
     getManagedUsageHistory: async () => null,
   };
 });
@@ -219,9 +223,10 @@ function visibleText(): string {
 
 async function refreshAs(patch: Partial<typeof account>): Promise<void> {
   Object.assign(account, patch);
+  const reads = account.accessReads;
   account.onChange!();
-  await vi.waitFor(() => expect(byId('sp-quota-bar-wrap').style.display).not.toBe('none'));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await vi.waitFor(() => expect(account.accessReads).toBeGreaterThan(reads));
+  await new Promise((resolve) => setTimeout(resolve, 20));
 }
 
 describe('a Free account in the side panel', () => {
@@ -231,9 +236,8 @@ describe('a Free account in the side panel', () => {
 
     expect(usageMeters()).toHaveLength(0);
     expect(document.getElementById('sp-quota-badge')).toBeNull();
-    expect(byId('sp-plan-compare').hidden).toBe(true);
-    expect(byId('sp-quota-label').textContent).toBe('Upgrade for higher capacity');
-    expect(byId('sp-quota-upgrade-btn').textContent).toBe('Upgrade');
+    expect(document.getElementById('sp-quota-bar-wrap')).toBeNull();
+    expect(document.getElementById('sp-plan-compare')).toBeNull();
 
     expect(byId('sp-usage-warning').classList.contains('visible')).toBe(false);
     expect(visibleText()).not.toMatch(/\d+\s?%/);
@@ -248,7 +252,6 @@ describe('a Free account in the side panel', () => {
       /^You've reached the Free limit for now\. Resets in /,
     );
     expect(byId('sp-cloud-gate-action').textContent).toBe('Upgrade');
-    expect(byId('sp-quota-upgrade-btn').textContent).toBe('Upgrade');
     expect(visibleText()).not.toMatch(/\d+\s?%/);
 
     byId('sp-cloud-gate-action').click();
@@ -259,12 +262,10 @@ describe('a Free account in the side panel', () => {
     );
   });
 
-  it('leaves a paid plan its meters and the share it has used', async () => {
+  it('leaves a paid plan its near-limit warning and the share it has used', async () => {
     await refreshAs({ tier: 'pro', sessionUsedPercent: 80, hasUsageRemaining: true });
 
-    expect(usageMeters().length).toBeGreaterThan(0);
     expect(document.getElementById('sp-quota-badge')).toBeNull();
-    expect(byId('sp-plan-compare').hidden).toBe(false);
     expect(byId('sp-usage-warning-text').textContent).toContain('80%');
   });
 

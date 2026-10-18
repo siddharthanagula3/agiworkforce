@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 const TRUSTED_ORIGINS = new Set([

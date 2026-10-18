@@ -122,35 +122,24 @@ describe('Chrome side-panel demo surface', () => {
 
   it('supports keyboard navigation for modal and menu surfaces', () => {
     expect(source).toContain("if (event.key !== 'Tab') return");
-    expect(source).toContain('drawer.querySelectorAll<HTMLElement>');
     expect(source).toContain("modelDropdownEl.addEventListener('keydown'");
     expect(source).toContain("attachMenu.addEventListener('keydown'");
     expect(source).toContain("['ArrowDown', 'ArrowUp', 'Home', 'End']");
   });
 
-  it('presents the menu as a flat list of rows that open one page each', () => {
-    expect(source).toContain("'aria-label': 'AGI menu'");
-    expect(source).toContain("el('h2', { id: 'sp-drawer-title' }, t('spMenuTitle'))");
-    expect(source).toContain("class: 'sp-drawer-row'");
-    expect(source).toContain("class: 'sp-drawer-row-chevron'");
-    expect(source).toContain('function openDrawerGroup(');
-    expect(source).toContain('drawerTitle.textContent = group.label');
-    for (const key of [
-      'spMenuChat',
-      'spMenuAutomate',
-      'spMenuProjects',
-      'spMenuArtifacts',
-      'spMenuTools',
-      'spMenuPairing',
-      'spMenuSettings',
-    ]) {
+  it('presents More as a small popover with the Options destinations and the version', () => {
+    expect(source).toContain("id: 'sp-more-menu'");
+    expect(source).toContain('const moreHandle = wirePopupMenu(menuBtn, moreMenu)');
+    expect(source).toContain("t('spMoreVersion'");
+    for (const key of ['spExtensionSettings', 'spMoreShortcuts', 'spMoreHelp']) {
       expect(source).toContain(`t('${key}')`);
     }
+    expect(source).not.toContain("id: 'sp-drawer'");
   });
 
-  it('does not expose unfinished console or desktop actions in the public drawer', () => {
-    expect(source).not.toContain('chatActionsRow.appendChild(drawerConsoleBtn)');
-    expect(source).not.toContain('chatActionsRow.appendChild(drawerOpenDesktopBtn)');
+  it('does not expose unfinished console or desktop actions', () => {
+    expect(source).not.toContain('drawerConsoleBtn');
+    expect(source).not.toContain('drawerOpenDesktopBtn');
   });
 
   it('does not present native WebMCP declarations as managed chat tools', () => {
@@ -177,12 +166,9 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).not.toContain("document.createTextNode(' Clear')");
   });
 
-  it('announces workflow mutation progress, success, and errors', () => {
-    expect(source).toContain("id: 'sp-wf-mutation-status'");
-    expect(source).toContain("'aria-live': 'polite'");
-    expect(source).toContain("announceWorkflowMutation(t('spWorkflowRunning', [sc.name]))");
-    expect(source).toContain("announceWorkflowMutation(t('spWorkflowDeleting', [task.name]))");
-    expect(source).toContain("t('spTaskEnabled', [task.name])");
+  it('keeps the Workflows view out of the panel', () => {
+    expect(source).not.toContain("id: 'sp-workflows'");
+    expect(source).not.toContain('announceWorkflowMutation');
   });
 
   it('gates sends on attachment intake and names each refused file', () => {
@@ -220,16 +206,10 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain("t('spGateUsageLimit')");
   });
 
-  it('shows canonical account usage and truthful Web handoffs for cloud connectors and teams', () => {
+  it('derives the chat gate from the canonical account usage', () => {
     expect(source).toContain('const usage = access.usage;');
     expect(source).toContain('usageWindowViews(usage)');
     expect(source).toContain('purchasedCreditsView(usage)');
-    expect(source).toContain('Manage usage');
-    expect(source).toContain('Connect apps');
-    expect(source).toContain('Cloud connectors open on Web');
-    expect(source).toContain('Team & Enterprise');
-    expect(source).toContain('/connectors?from=chrome-extension');
-    expect(source).toContain('/teams?from=chrome-extension');
   });
 
   it('routes inactive retained subscriptions to billing instead of enabling paid Chrome access', () => {
@@ -294,24 +274,6 @@ describe('Chrome side-panel composer input state', () => {
   });
 });
 
-describe('Chrome side-panel tab-group state', () => {
-  it('renders every group control from one active-tab state', () => {
-    expect(source).toContain('const tabGroupStateRenderers = new Set<TabGroupStateRenderer>()');
-    expect(source.match(/registerTabGroupStateRenderer\(/g)?.length).toBe(4);
-    expect(source).toContain("{ type: 'GET_TAB_GROUP_STATE' }");
-    expect(source).toContain('refreshTabGroupUI();');
-    expect(source).toContain("id: 'sp-tab-group-notice'");
-    expect(source).toContain("t('spTabGroupUpdateFailed')");
-  });
-
-  it('routes all group changes through the shared mutation path', () => {
-    expect(source).toContain('function requestTabGroupChange(grouped: boolean)');
-    expect(source.match(/requestTabGroupChange\(/g)?.length).toBe(5);
-    expect(source).not.toContain('let drawerGrouped = false');
-    expect(source).not.toContain('let isGrouped = false');
-  });
-});
-
 describe('Chrome side-panel composer placeholder never shows a stale literal', () => {
   it('creates the composer with the catalog ready copy, not a hardcoded literal', () => {
     const start = source.indexOf("id: 'sp-input',");
@@ -336,7 +298,7 @@ describe('Chrome side-panel composer placeholder never shows a stale literal', (
 });
 
 describe('Chrome side-panel feature surfaces', () => {
-  it('shows only an upgrade action on the Free plan and never a usage meter', () => {
+  it('shows no usage meter on the Free plan and clears the usage banner', () => {
     const start = source.indexOf('function presentManagedUsage');
     const end = source.indexOf('refreshCloudAccountUI = async function', start);
     const body = source.slice(start, end);
@@ -345,7 +307,7 @@ describe('Chrome side-panel feature surfaces', () => {
     expect(body).toContain(
       'const upgradeOnly = isFreeBillingPlanTier(normalizeBillingPlanTier(access.subscriptionTier))',
     );
-    expect(body).toMatch(/if \(!upgradeOnly\) \{\s*for \(const view of views\)/);
+    expect(body).not.toContain('progressbar');
     expect(freeBranch).toBeGreaterThan(-1);
     expect(body.indexOf('renderUsageBanner(banner)')).toBeGreaterThan(freeBranch);
     expect(body.slice(freeBranch, body.indexOf('return;', freeBranch))).toContain(
@@ -353,8 +315,8 @@ describe('Chrome side-panel feature surfaces', () => {
     );
   });
 
-  it('gives the drawer menu the arrow-key contract its role promises', () => {
-    expect(source).toContain('wireMenuArrowKeys(drawerMenu)');
+  it('gives the More popover the arrow-key contract its role promises', () => {
+    expect(source).toContain('wirePopupMenu(menuBtn, moreMenu)');
   });
 
   it('moves focus to the first available attach menu item when it opens', () => {
@@ -367,7 +329,9 @@ describe('Chrome side-panel feature surfaces', () => {
     expect(source).toContain('.sp-video-progress__label');
   });
 
-  it('starts the drawer footer page label empty until the tab is read', () => {
-    expect(source).not.toMatch(/id: 'sp-drawer-about-url' \},\s*', ',/);
+  it('has no in-panel account block, plan badge or auth bar', () => {
+    expect(source).not.toContain("id: 'sp-quota-badge'");
+    expect(source).not.toContain("id: 'sp-auth-bar'");
+    expect(source).not.toContain("id: 'sp-bridge-url-input'");
   });
 });

@@ -19,8 +19,6 @@ const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8'
 const LOCALIZED_SOURCES = [
   'src/side_panel.ts',
   'src/background.ts',
-  'src/features/side-panel/projectsDrawer.ts',
-  'src/features/side-panel/artifactsDrawer.ts',
   'src/features/side-panel/artifactPanel.ts',
   'src/features/side-panel/schedulesSection.ts',
   'src/features/side-panel/planComparison.ts',
@@ -35,7 +33,6 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/mediaViewer.ts',
   'src/features/side-panel/commandPalette.ts',
   'src/features/side-panel/agiWorkPlanReview.ts',
-  'src/features/side-panel/cloudRunsPanel.ts',
   'src/features/side-panel/freePlanNotices.ts',
   'src/features/side-panel/markdown.ts',
   'src/features/options/destinations.ts',
@@ -263,10 +260,8 @@ describe('user-facing copy reaches the DOM through the catalog', () => {
     });
   }
 
-  it('routes the upgrade button by state rather than by reading its own label', () => {
-    const panel = read('src/side_panel.ts');
-    expect(panel).not.toMatch(/\.textContent\s*===/);
-    expect(panel).toContain("quotaUpgradeBtn.dataset['destination'] === 'billing'");
+  it('never routes a control by reading its own label', () => {
+    expect(read('src/side_panel.ts')).not.toMatch(/\.textContent\s*===/);
   });
 });
 

@@ -97,8 +97,10 @@ describe('composer and header at narrow widths', () => {
     expect(rule).toContain('text-overflow: ellipsis;');
   });
 
-  it('gives the plan badge a pointer target of at least 24px', () => {
-    expect(cssRule('#sp-quota-badge')).toContain('min-height: 24px;');
+  it('gives the conversation title menu trigger and its row a pointer target of at least 24px', () => {
+    expect(cssRule('.sp-drawer-history-more')).toContain('width: var(--control-sm);');
+    expect(cssRule('.sp-drawer-history-more')).toContain('height: var(--control-sm);');
+    expect(cssRule('#sp-title-row')).toContain('min-height: var(--control-md);');
   });
 });
 

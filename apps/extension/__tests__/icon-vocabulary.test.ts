@@ -38,13 +38,15 @@ describe('options page reachability', () => {
     expect(JSON.parse(read('manifest.json')).options_page).toBe('src/options.html');
   });
 
-  it('has an in-product entry point', () => {
+  it('has an in-product entry point that opens it at a named destination', () => {
     const panel = read('src/side_panel.ts');
-    expect(panel).toContain('chrome.runtime.openOptionsPage()');
-    expect(panel).toContain("id: 'sp-drawer-options-btn'");
+    expect(panel).toContain('openOptionsDestination(OPTIONS_DESTINATION.permissions)');
+    expect(panel).toContain("id: 'sp-more-menu'");
   });
 
-  it('falls back to the manifest URL on hosts without openOptionsPage', () => {
-    expect(read('src/side_panel.ts')).toContain("chrome.runtime.getURL('src/options.html')");
+  it('builds the destination URL from the manifest options page', () => {
+    expect(read('src/features/side-panel/optionsLinks.ts')).toContain(
+      "chrome.runtime.getURL('src/options.html')",
+    );
   });
 });
