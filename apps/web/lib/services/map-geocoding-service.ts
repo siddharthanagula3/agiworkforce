@@ -8,6 +8,7 @@ import {
   type MapSearchView,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { SITE_URL } from '@/lib/seo/site';
 
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 const GEOCODE_TIMEOUT_MS = 4_000;
@@ -16,7 +17,7 @@ export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
 
 function userAgent(): string {
   const contact = process.env['AGI_MAP_GEOCODER_CONTACT']?.trim();
-  return `AGIWorkforce/1.0 (${contact && contact.length <= 120 ? contact : 'https://agiworkforce.com'})`;
+  return `AGIWorkforce/1.0 (${contact && contact.length <= 120 ? contact : SITE_URL})`;
 }
 
 interface NominatimResult {

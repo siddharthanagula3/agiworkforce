@@ -3,6 +3,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { ORG_SHARED_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
 import { createError } from '@/lib/errors';
 import {
   getOrganizationEntitlements,
@@ -10,15 +11,9 @@ import {
   isOrgResourceLimitError,
 } from '@/lib/services/org-entitlements';
 
-export const ORG_SHARED_CONNECTOR_PREFIX = 'orgmcp-';
-
-export function orgSharedConnectorServerId(orgShortId: string): string {
-  return `${ORG_SHARED_CONNECTOR_PREFIX}${orgShortId}`;
-}
-
 export function orgShortIdFromServerId(serverId: string): string | null {
-  if (!serverId.startsWith(ORG_SHARED_CONNECTOR_PREFIX)) return null;
-  const shortId = serverId.slice(ORG_SHARED_CONNECTOR_PREFIX.length);
+  if (!serverId.startsWith(ORG_SHARED_SERVER_PREFIX)) return null;
+  const shortId = serverId.slice(ORG_SHARED_SERVER_PREFIX.length);
   return /^[0-9a-f]{10}$/.test(shortId) ? shortId : null;
 }
 

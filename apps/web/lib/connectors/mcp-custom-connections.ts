@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
+import { CUSTOM_SERVER_PREFIX, customServerId } from '@/lib/connectors/custom-server-ids';
 import { isEdgeBlockedError } from '@/lib/connectors/edge-block';
 import {
   getCustomRemoteMcpLimit,
@@ -24,7 +25,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { McpSuppliedOAuthClient } from '@/lib/connectors/mcp-oauth-provider';
 
-export const CUSTOM_CONNECTOR_ID_PREFIX = 'custom-';
 const SSE_PATH_SUFFIX = '/sse';
 const CONNECTION_TIMEOUT_MS = 30_000;
 const SHORT_ID_BYTES = 5;
@@ -37,8 +37,6 @@ const NO_CAPABILITIES_MESSAGE = 'The server did not advertise any supported MCP 
 const CUSTOM_CONNECTORS_RESOURCE = 'custom_connectors';
 const OAUTH_CLIENT_SECRET_PURPOSE = 'oauth-client-secret';
 
-export const CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE =
-  'Custom connectors are not available in this environment';
 export const SHORT_ID_ALLOCATION_FAILED_MESSAGE =
   'Could not allocate a connector identifier. Try again.';
 export const DUPLICATE_URL_MESSAGE = 'You already have a custom connector for this URL.';
@@ -46,7 +44,7 @@ export const CONNECTOR_UNREACHABLE_CODE = 'CONNECTOR_UNREACHABLE';
 export const CONNECTOR_BLOCKED_CODE = 'CONNECTOR_BLOCKED';
 
 export function customConnectorId(shortId: string): string {
-  return `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
+  return customServerId(shortId);
 }
 
 export function transportForUrl(url: URL, requested?: unknown): CustomConnectorTransport {
@@ -208,16 +206,11 @@ export interface CustomConnectorCapacity {
 }
 
 async function countCustomConnectors(db: DatabaseAdapter, userId: string): Promise<number> {
-  try {
-    const rows = await db.query<{ count: string }>(
-      `select count(*)::text as count from user_custom_connectors where user_id = $1`,
-      [userId],
-    );
-    return Number(rows[0]?.count ?? '0');
-  } catch (error) {
-    if (isUndefinedTableError(error)) return 0;
-    throw error;
-  }
+  const rows = await db.query<{ count: string }>(
+    `select count(*)::text as count from user_custom_connectors where user_id = $1`,
+    [userId],
+  );
+  return Number(rows[0]?.count ?? '0');
 }
 
 export async function assertCustomConnectorCapacity(
@@ -252,16 +245,11 @@ export function assertConnectorToolCapacity(
 async function allocateShortId(db: DatabaseAdapter, userId: string): Promise<string> {
   for (let attempt = 0; attempt < SHORT_ID_MAX_ATTEMPTS; attempt++) {
     const candidate = randomBytes(SHORT_ID_BYTES).toString('hex');
-    try {
-      const rows = await db.query<{ exists: boolean }>(
-        `select exists(select 1 from user_custom_connectors where user_id = $1 and short_id = $2) as exists`,
-        [userId, candidate],
-      );
-      if (!rows[0]?.exists) return candidate;
-    } catch (error) {
-      if (isUndefinedTableError(error)) return candidate;
-      throw error;
-    }
+    const rows = await db.query<{ exists: boolean }>(
+      `select exists(select 1 from user_custom_connectors where user_id = $1 and short_id = $2) as exists`,
+      [userId, candidate],
+    );
+    if (!rows[0]?.exists) return candidate;
   }
   throw createError.internal(SHORT_ID_ALLOCATION_FAILED_MESSAGE);
 }
@@ -319,9 +307,6 @@ export async function insertCustomConnector(
       ],
     );
   } catch (error) {
-    if (isUndefinedTableError(error)) {
-      throw createError.serviceUnavailable(CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE);
-    }
     if (isUniqueViolation(error)) {
       if (isShortIdViolation(error)) {
         throw createError.serviceUnavailable(SHORT_ID_ALLOCATION_FAILED_MESSAGE);
@@ -354,21 +339,15 @@ export async function getCustomConnectorOAuthClient(
   userId: string,
   connectorId: string,
 ): Promise<McpSuppliedOAuthClient | null> {
-  if (!connectorId.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)) return null;
-  const shortId = connectorId.slice(CUSTOM_CONNECTOR_ID_PREFIX.length);
+  if (!connectorId.startsWith(CUSTOM_SERVER_PREFIX)) return null;
+  const shortId = connectorId.slice(CUSTOM_SERVER_PREFIX.length);
   const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
-  let rows: CustomConnectorOAuthClientRow[];
-  try {
-    rows = await db.query<CustomConnectorOAuthClientRow>(
-      `select oauth_client_id, oauth_client_secret_enc
-         from user_custom_connectors
-        where user_id = $1 and organization_id is null and short_id = $2`,
-      [userId, shortId],
-    );
-  } catch (error) {
-    if (isUndefinedTableError(error)) return null;
-    throw error;
-  }
+  const rows = await db.query<CustomConnectorOAuthClientRow>(
+    `select oauth_client_id, oauth_client_secret_enc
+       from user_custom_connectors
+      where user_id = $1 and organization_id is null and short_id = $2`,
+    [userId, shortId],
+  );
   const row = rows[0];
   if (!row?.oauth_client_id) return null;
   return {
@@ -392,21 +371,14 @@ export async function updateCustomConnectorCredential(
   rowId: string,
   credentialEnc: string,
 ): Promise<CustomConnectorRow | null> {
-  try {
-    const [row] = await db.query<CustomConnectorRow>(
-      `update user_custom_connectors
-          set auth_header_enc = $3, updated_at = now()
-        where id = $1 and user_id = $2
-        returning id, short_id, name, url, transport, created_at, updated_at`,
-      [rowId, userId, credentialEnc],
-    );
-    return row ?? null;
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      throw createError.serviceUnavailable(CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE);
-    }
-    throw error;
-  }
+  const [row] = await db.query<CustomConnectorRow>(
+    `update user_custom_connectors
+        set auth_header_enc = $3, updated_at = now()
+      where id = $1 and user_id = $2
+      returning id, short_id, name, url, transport, created_at, updated_at`,
+    [rowId, userId, credentialEnc],
+  );
+  return row ?? null;
 }
 
 export async function findCustomConnectorRow(
@@ -414,18 +386,11 @@ export async function findCustomConnectorRow(
   userId: string,
   rowId: string,
 ): Promise<{ id: string; short_id: string; name: string } | null> {
-  try {
-    const rows = await db.query<{ id: string; short_id: string; name: string }>(
-      `select id, short_id, name from user_custom_connectors where id = $1 and user_id = $2 and organization_id is null`,
-      [rowId, userId],
-    );
-    return rows[0] ?? null;
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      throw createError.serviceUnavailable(CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE);
-    }
-    throw error;
-  }
+  const rows = await db.query<{ id: string; short_id: string; name: string }>(
+    `select id, short_id, name from user_custom_connectors where id = $1 and user_id = $2 and organization_id is null`,
+    [rowId, userId],
+  );
+  return rows[0] ?? null;
 }
 
 export async function deleteCustomConnectorRows(
@@ -433,17 +398,10 @@ export async function deleteCustomConnectorRows(
   userId: string,
   rowId: string,
 ): Promise<Array<{ id: string; short_id: string }>> {
-  try {
-    return await db.query<{ id: string; short_id: string }>(
-      `delete from user_custom_connectors where id = $1 and user_id = $2 returning id, short_id`,
-      [rowId, userId],
-    );
-  } catch (error) {
-    if (isUndefinedTableError(error)) {
-      throw createError.serviceUnavailable(CUSTOM_CONNECTORS_UNAVAILABLE_MESSAGE);
-    }
-    throw error;
-  }
+  return db.query<{ id: string; short_id: string }>(
+    `delete from user_custom_connectors where id = $1 and user_id = $2 returning id, short_id`,
+    [rowId, userId],
+  );
 }
 
 export async function clearConnectorToolPermissions(
@@ -457,7 +415,6 @@ export async function clearConnectorToolPermissions(
       [userId, connectorId],
     );
   } catch (error) {
-    if (isUndefinedTableError(error)) return;
     logger.warn(
       { userId, connectorId, error },
       '[mcp-custom-connections] tool permissions could not be cleared on disconnect',

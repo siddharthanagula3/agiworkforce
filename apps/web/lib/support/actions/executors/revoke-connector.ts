@@ -3,9 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { resolveSupportAccountContext } from '../../account/context-resolver';
+import { CUSTOM_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
-
-export const CUSTOM_CONNECTOR_PREFIX = 'custom-';
 
 export const CUSTOM_CONNECTOR_CONTROL = Object.freeze({
   label: 'Settings → Connections',
@@ -30,7 +29,7 @@ export async function assertConnectorRevocable(
   userId: string,
   connectorId: string,
 ): Promise<void> {
-  if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
+  if (connectorId.startsWith(CUSTOM_SERVER_PREFIX)) refuseCustomConnector();
 
   const context = await resolveSupportAccountContext(db, userId);
   const owned = context.connectors.some(
@@ -51,7 +50,7 @@ export async function executeRevokeConnector(args: {
   connectorId: string;
 }): Promise<SupportActionResult> {
   const { db, userId, connectorId } = args;
-  if (connectorId.startsWith(CUSTOM_CONNECTOR_PREFIX)) refuseCustomConnector();
+  if (connectorId.startsWith(CUSTOM_SERVER_PREFIX)) refuseCustomConnector();
 
   if (connectorId === 'github') {
     await db.execute(`delete from github_installations where user_id = $1`, [userId]);

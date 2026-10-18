@@ -75,9 +75,7 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   resolveOrgMembership: mocks.resolveOrgMembership,
 }));
 vi.mock('@/lib/services/org-shared-connector-service', () => ({
-  ORG_SHARED_CONNECTOR_PREFIX: 'orgmcp-',
   listSharedConnectors: vi.fn(),
-  orgSharedConnectorServerId: vi.fn(),
   orgShortIdFromServerId: vi.fn(),
   shareConnector: mocks.shareConnector,
   unshareConnector: mocks.unshareConnector,

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import { sendTransactionalEmail, type SendEmailResult } from '@/lib/support/handoff/resend-client';
 
@@ -11,14 +12,6 @@ function notificationsFromEmail(): string {
 
 export function isNotificationEmailConfigured(): boolean {
   return Boolean(process.env['RESEND_API_KEY']?.trim()) && notificationsFromEmail().length > 0;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 export interface ScheduleEmailInput {

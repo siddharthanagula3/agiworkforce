@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { BANK_ACCOUNTS_CONNECTOR_ID } from '@agiworkforce/cloud-contracts';
 import { resolveConnectorToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 
@@ -19,7 +20,7 @@ export const SENSITIVE_DATA_CONNECTORS: Readonly<Record<string, SensitiveDataCon
     regionRefusal: 'HealthEx is available in the United States only.',
     authorizationTtlSeconds: HEALTHEX_AUTHORIZATION_TTL_SECONDS,
   },
-  'bank-accounts': {
+  [BANK_ACCOUNTS_CONNECTOR_ID]: {
     regionRefusal: 'Connecting a bank account is available in the United States only.',
   },
 };

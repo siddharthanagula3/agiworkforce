@@ -10,10 +10,9 @@ vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   getOrganizationEntitlements: mockEntitlements,
 }));
 
+import { ORG_SHARED_SERVER_PREFIX, orgSharedServerId } from '@/lib/connectors/custom-server-ids';
 import {
-  ORG_SHARED_CONNECTOR_PREFIX,
   listSharedConnectors,
-  orgSharedConnectorServerId,
   orgShortIdFromServerId,
   shareConnector,
   unshareConnector,
@@ -63,9 +62,9 @@ beforeEach(() => {
 
 describe('org-shared connector namespace', () => {
   it('is distinct from the personal custom- namespace', () => {
-    expect(ORG_SHARED_CONNECTOR_PREFIX).toBe('orgmcp-');
-    expect(orgSharedConnectorServerId('a1b2c3d4e5')).toBe('orgmcp-a1b2c3d4e5');
-    expect(orgSharedConnectorServerId('a1b2c3d4e5')).not.toContain('_');
+    expect(ORG_SHARED_SERVER_PREFIX).toBe('orgmcp-');
+    expect(orgSharedServerId('a1b2c3d4e5')).toBe('orgmcp-a1b2c3d4e5');
+    expect(orgSharedServerId('a1b2c3d4e5')).not.toContain('_');
   });
 
   it('refuses a personal server id and any malformed short id', () => {

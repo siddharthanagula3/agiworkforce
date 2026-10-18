@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { CUSTOM_SERVER_PREFIX, ORG_SHARED_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 import { filterConnectorScopes } from '@/lib/connectors/oauth-scope-allowlist';
 
@@ -28,7 +29,7 @@ const CLIENT_SECRET_ENV_SUFFIX = '_CLIENT_SECRET';
 const CONNECTOR_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const RESERVED_CONNECTOR_IDS = new Set(['github']);
-const RESERVED_CONNECTOR_PREFIXES = ['custom-', 'orgmcp-'];
+const RESERVED_CONNECTOR_PREFIXES = [CUSTOM_SERVER_PREFIX, ORG_SHARED_SERVER_PREFIX];
 
 const PROTECTED_AUTHORIZATION_PARAMS = new Set([
   'client_id',

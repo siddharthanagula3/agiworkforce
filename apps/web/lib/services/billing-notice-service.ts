@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { escapeHtml } from '@/lib/html-escape';
 import {
   CONTACT_EMAIL,
   LEGAL_ENTITY,
@@ -39,14 +40,6 @@ export interface BillingNoticeResult {
 const UNSUBSCRIBE_URL = contactMailto(UNSUBSCRIBE_SUBJECT);
 const PROMOTION_OPT_OUT = `To get no more emails like this, reply with the word unsubscribe or write to ${CONTACT_EMAIL}.`;
 const SENDER_ADDRESS = `${LEGAL_ENTITY}, ${NOTICE_ADDRESS}`;
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function footerParagraph(html: string): string {
   return `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${html}</p>`;

@@ -10,6 +10,7 @@ import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
 } from '@/lib/auth/account-lifecycle';
+import { SITE_URL } from '@/lib/seo/site';
 
 /**
  * Published artifact persistence (CAP-015 slice 1).
@@ -273,8 +274,7 @@ export function mintPublishToken(): string {
 }
 
 export function buildPublishedArtifactUrl(token: string): string {
-  const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-  return `${appUrl.replace(/\/+$/, '')}/shared-artifact/${token}`;
+  return `${SITE_URL}/shared-artifact/${token}`;
 }
 
 export async function publishArtifactRecord(

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 
 export const PAGER_WEBHOOK_ENV = 'PAGER_WEBHOOK_URL';
@@ -14,14 +15,6 @@ export type PageOutcome = 'paged' | 'unconfigured' | 'failed';
 export interface PageTarget {
   handle: string;
   email: string;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;');
 }
 
 export function alertHtml(text: string): string {

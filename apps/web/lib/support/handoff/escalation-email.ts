@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { escapeHtml } from '@/lib/html-escape';
 import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
 import { SITE_URL } from '@/lib/seo/site';
 import {
@@ -20,15 +21,6 @@ const REASON_COPY: Record<HandoffReason, string> = {
   no_citation: 'The agent had no source to cite, so it abstained',
   action_refused: 'The agent refused or failed to run an account action',
 };
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;')
-    .replace(/'/gu, '&#39;');
-}
 
 function formatAt(value: string): string {
   const date = new Date(value);
