@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   CLOUD_API_KEY_SCOPES,
@@ -82,6 +83,7 @@ function ActiveSessionsSection() {
   const [notice, setNotice] = useState<string | null>(null);
   const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     const current = ++generation.current;
@@ -149,8 +151,29 @@ function ActiveSessionsSection() {
     }
   };
 
+  const confirmRevoke = (session: CloudAccountSession) =>
+    confirm({
+      title: `End the ${session.device} session?`,
+      description:
+        'That device is signed out of your AGI Cloud account at once and has to sign in again to use it.',
+      confirmLabel: 'Sign that device out',
+      destructive: true,
+      onConfirm: () => handleRevoke(session),
+    });
+
+  const confirmRevokeAll = () =>
+    confirm({
+      title: 'Log out of all devices?',
+      description:
+        'Every browser and mobile session on this account ends at once, and this Desktop signs out too. You have to sign in again on each device. Local Mode chats, files, and model keys stay on this device.',
+      confirmLabel: 'Log out everywhere',
+      destructive: true,
+      onConfirm: handleRevokeAll,
+    });
+
   return (
     <div className="flex flex-col gap-3" data-testid="cloud-active-sessions">
+      {confirmDialog}
       <div>
         <h3 className="text-h5 text-foreground">Active sessions</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -206,7 +229,7 @@ function ActiveSessionsSection() {
                 className={`${SMALL_BUTTON} text-destructive`}
                 disabled={revokingId === session.id || revokingAll}
                 aria-busy={revokingId === session.id || undefined}
-                onClick={() => void handleRevoke(session)}
+                onClick={() => confirmRevoke(session)}
               >
                 {revokingId === session.id ? 'Ending…' : 'End session'}
               </button>
@@ -236,7 +259,7 @@ function ActiveSessionsSection() {
           className={`${SECONDARY_BUTTON} border-destructive/60 text-destructive`}
           disabled={revokingAll || loading}
           aria-busy={revokingAll || undefined}
-          onClick={() => void handleRevokeAll()}
+          onClick={confirmRevokeAll}
           data-testid="cloud-log-out-everywhere"
         >
           {revokingAll ? 'Logging out…' : 'Log out of all devices'}
@@ -261,6 +284,7 @@ function ApiKeysSection() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     const current = ++generation.current;
@@ -325,10 +349,21 @@ function ApiKeysSection() {
     }
   };
 
+  const confirmRevoke = (key: CloudApiKey) =>
+    confirm({
+      title: `Revoke the "${key.name}" API key?`,
+      description:
+        'Anything that uses this key is refused at once. A revoked key cannot be restored, so you would have to create a new one and update every place that used it.',
+      confirmLabel: 'Revoke key',
+      destructive: true,
+      onConfirm: () => handleRevoke(key),
+    });
+
   const canCreate = name.trim().length > 0 && scopes.length > 0 && !creating;
 
   return (
     <div className="flex flex-col gap-3" data-testid="cloud-api-keys">
+      {confirmDialog}
       <div>
         <h3 className="text-h5 text-foreground">API keys</h3>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -372,7 +407,7 @@ function ApiKeysSection() {
                 className={`${SMALL_BUTTON} text-destructive`}
                 disabled={revokingId === key.id}
                 aria-busy={revokingId === key.id || undefined}
-                onClick={() => void handleRevoke(key)}
+                onClick={() => confirmRevoke(key)}
               >
                 {revokingId === key.id ? 'Revoking…' : 'Revoke'}
               </button>

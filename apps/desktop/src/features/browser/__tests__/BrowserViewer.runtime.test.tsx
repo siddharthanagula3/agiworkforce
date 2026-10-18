@@ -50,6 +50,23 @@ describe('BrowserViewer browser-control runtime', () => {
     cleanupBrowserStore();
   });
 
+  it('keeps the live view paused once the user pauses it', async () => {
+    const user = userEvent.setup();
+    invokeMock.mockResolvedValue(undefined);
+
+    render(<BrowserViewer tabId="tab-1" />);
+
+    await waitFor(() => expect(useBrowserStore.getState().isStreaming).toBe(true));
+    await user.click(screen.getByRole('button', { name: /Pause/ }));
+
+    await waitFor(() => expect(useBrowserStore.getState().isStreaming).toBe(false));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(useBrowserStore.getState().isStreaming).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: /Resume/ }));
+    await waitFor(() => expect(useBrowserStore.getState().isStreaming).toBe(true));
+  });
+
   it('starts the browser-control runtime from the viewer when nothing is running', async () => {
     const user = userEvent.setup();
     invokeMock.mockImplementation(async (command: string) => {

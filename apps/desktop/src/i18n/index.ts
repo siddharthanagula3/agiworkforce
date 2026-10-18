@@ -1,4 +1,3 @@
-
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
@@ -10,8 +9,6 @@ import {
 } from '@agiworkforce/i18n';
 
 export { SUPPORTED_LANGUAGES };
-export type SupportedLanguage = string;
-export const defaultLanguage = DEFAULT_LANGUAGE;
 
 void i18n
   .use(LanguageDetector)

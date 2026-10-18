@@ -180,10 +180,7 @@ interface ControlStatePayload {
 interface ComputerUseState {
   isActive: boolean;
   takenOver: boolean;
-  sessionId: string | null;
   currentScreenshot: string | null;
-  screenWidth: number | null;
-  screenHeight: number | null;
   actionLog: DesktopComputerAction[];
   error: string | null;
   isExecutingOpa: boolean;
@@ -202,7 +199,6 @@ interface ComputerUseState {
   handBack: () => Promise<void>;
   stopComputerUse: () => Promise<void>;
   logAction: (action: DesktopComputerAction) => void;
-  clearLog: () => void;
   reset: () => void;
 
   setComputerUseEnabled: (enabled: boolean) => void;
@@ -233,10 +229,7 @@ export const useComputerUseStore = create<ComputerUseState>()(
     immer((set, get) => ({
       isActive: false,
       takenOver: false,
-      sessionId: null,
       currentScreenshot: null,
-      screenWidth: null,
-      screenHeight: null,
       actionLog: [],
       error: null,
       isExecutingOpa: false,
@@ -397,25 +390,12 @@ export const useComputerUseStore = create<ComputerUseState>()(
         );
       },
 
-      clearLog: () => {
-        set(
-          (state) => {
-            state.actionLog = [];
-          },
-          undefined,
-          'computerUse/clearLog',
-        );
-      },
-
       reset: () => {
         void get().cancelOpaTask();
         set(
           {
             isActive: false,
-            sessionId: null,
             currentScreenshot: null,
-            screenWidth: null,
-            screenHeight: null,
             actionLog: [],
             error: null,
             isExecutingOpa: false,
@@ -741,20 +721,15 @@ export function subscribeToComputerUseEvents(): () => void {
   );
 
   unlisteners.push(
-    listen<{ session_id: string }>('computer_use:session_started', (event) => {
-      useComputerUseStore.setState({
-        isActive: true,
-        sessionId: event.payload.session_id,
-        actionLog: [],
-      });
+    listen('computer_use:session_started', () => {
+      useComputerUseStore.setState({ isActive: true, actionLog: [] });
     }),
   );
 
   unlisteners.push(
-    listen<{ session_id: string }>('computer_use:session_completed', () => {
+    listen('computer_use:session_completed', () => {
       useComputerUseStore.setState({
         isActive: false,
-        sessionId: null,
         pausedConfirmation: null,
         pendingApproval: null,
         isResolvingConfirmation: false,
@@ -770,36 +745,6 @@ export function subscribeToComputerUseEvents(): () => void {
     );
   };
 }
-
-export const selectIsActive = (state: ComputerUseState) => state.isActive;
-export const selectSessionId = (state: ComputerUseState) => state.sessionId;
-export const selectCurrentScreenshot = (state: ComputerUseState) => state.currentScreenshot;
-export const selectScreenWidth = (state: ComputerUseState) => state.screenWidth;
-export const selectScreenHeight = (state: ComputerUseState) => state.screenHeight;
-export const selectActionLog = (state: ComputerUseState) => state.actionLog;
-export const selectComputerUseError = (state: ComputerUseState) => state.error;
-export const selectIsExecutingOpa = (state: ComputerUseState) => state.isExecutingOpa;
-export const selectLastOpaResult = (state: ComputerUseState) => state.lastOpaResult;
-export const selectLastRouting = (state: ComputerUseState) => state.lastRouting;
-export const selectPendingApproval = (state: ComputerUseState) => state.pendingApproval;
-export const selectPausedConfirmation = (state: ComputerUseState) => state.pausedConfirmation;
-export const selectIsResolvingConfirmation = (state: ComputerUseState) =>
-  state.isResolvingConfirmation;
-export const selectLastClickPosition = (state: ComputerUseState) => {
-  for (let i = state.actionLog.length - 1; i >= 0; i--) {
-    const action = state.actionLog[i];
-    if (!action) continue;
-    if (
-      (action.action_type === 'click' ||
-        action.action_type === 'double_click' ||
-        action.action_type === 'right_click') &&
-      action.coordinates
-    ) {
-      return action.coordinates;
-    }
-  }
-  return null;
-};
 
 export const selectComputerUseEnabled = (state: ComputerUseState) => state.computerUseEnabled;
 export const selectConsentAccepted = (state: ComputerUseState) => state.consentAccepted;

@@ -162,6 +162,8 @@ export interface DesktopShellV3Props {
   runtime: ChatRuntime | null;
   className?: string;
   externalSendRequest?: ChatInterfaceProps['externalSendRequest'];
+  externalAttachmentRequest?: { id: string; files: File[] } | null;
+  onExternalAttachmentRequestApplied?: (requestId: string) => void;
   hostBridge?: ChatHostBridge | null;
   onModelSelectorClick?: () => void;
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
@@ -180,6 +182,8 @@ export function DesktopShellV3({
   runtime,
   className,
   externalSendRequest,
+  externalAttachmentRequest,
+  onExternalAttachmentRequestApplied,
   hostBridge,
   onModelSelectorClick,
   onNavigateView,
@@ -388,6 +392,17 @@ export function DesktopShellV3({
   useEffect(() => {
     setPendingAttachments(null);
   }, [composerAttachmentOwnerKey]);
+
+  useEffect(() => {
+    if (!externalAttachmentRequest) return;
+    setActivePanel('chat');
+    setPendingAttachments({
+      id: `external-${externalAttachmentRequest.id}`,
+      files: externalAttachmentRequest.files,
+      ownerKey: composerAttachmentOwnerKey,
+    });
+    onExternalAttachmentRequestApplied?.(externalAttachmentRequest.id);
+  }, [composerAttachmentOwnerKey, externalAttachmentRequest, onExternalAttachmentRequestApplied]);
 
   const activePendingAttachments =
     pendingAttachments?.ownerKey === composerAttachmentOwnerKey ? pendingAttachments : null;

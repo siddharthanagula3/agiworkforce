@@ -71,6 +71,7 @@ export interface Artifact {
   id: string;
   title: string;
   artifact_type: ArtifactType;
+  render_type?: string;
   content: string;
   metadata: ArtifactMetadata;
   conversation_id?: number;

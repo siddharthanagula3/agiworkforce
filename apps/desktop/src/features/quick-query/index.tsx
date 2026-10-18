@@ -382,10 +382,6 @@ export function QuickQuery({
           </button>
 
           <ScreenCaptureButton
-            mode="quick"
-            variant="ghost"
-            size="icon"
-            suppressToasts
             className="h-8 w-8 rounded-lg border border-white/[0.06] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
             onCaptureComplete={(result) => {
               void Promise.resolve(handleRequestCapture(result));

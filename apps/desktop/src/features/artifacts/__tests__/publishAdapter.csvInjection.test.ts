@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { writeTextFile, mkdir } = vi.hoisted(() => ({
+const { writeFile, writeTextFile, mkdir } = vi.hoisted(() => ({
+  writeFile: vi.fn(async () => undefined),
   writeTextFile: vi.fn(async () => undefined),
   mkdir: vi.fn(async () => undefined),
 }));
@@ -10,7 +11,7 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: async (...parts: string[]) => parts.join('/'),
 }));
 
-vi.mock('@tauri-apps/plugin-fs', () => ({ writeTextFile, mkdir }));
+vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile, writeTextFile, mkdir }));
 
 import { makeDesktopPublishCallback } from '../publishAdapter';
 
@@ -102,5 +103,35 @@ describe('desktop publish adapter writes no evaluable formula to disk', () => {
 
     expect(path.startsWith('/data/artifacts/')).toBe(true);
     expect(path).not.toContain('..');
+  });
+});
+
+describe('desktop publish adapter saves an image as its bytes', () => {
+  it('decodes an embedded image instead of writing its text into a .png', async () => {
+    writeFile.mockClear();
+    const result = await makeDesktopPublishCallback({
+      id: 'art-2',
+      title: 'Chart',
+      type: 'image',
+      content: 'data:image/jpeg;base64,/9j/4A==',
+    })();
+
+    const call = writeFile.mock.calls.at(-1) as unknown as [string, Uint8Array] | undefined;
+    expect(call?.[0]).toBe('/data/artifacts/Chart-art-2.jpg');
+    expect(Array.from(call?.[1] ?? [])).toEqual([0xff, 0xd8, 0xff, 0xe0]);
+    expect(writeTextFile).not.toHaveBeenCalled();
+    expect(result.shareUrl).toBe('file:///data/artifacts/Chart-art-2.jpg');
+  });
+
+  it('refuses an image it only has a link to rather than saving a broken file', async () => {
+    await expect(
+      makeDesktopPublishCallback({
+        id: 'art-3',
+        title: 'Remote',
+        type: 'image',
+        content: 'https://example.com/picture.png',
+      })(),
+    ).rejects.toThrow('cannot be saved as a file');
+    expect(writeTextFile).not.toHaveBeenCalled();
   });
 });

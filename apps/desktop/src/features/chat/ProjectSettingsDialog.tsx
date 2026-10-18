@@ -36,6 +36,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@agiworkforce/unified-chat';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import {
   useProjectStore,
@@ -222,6 +223,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [knowledgeSync, setKnowledgeSync] = useState<ProjectKnowledgeSync | null>(null);
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
   const cloudKnowledgeInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
@@ -718,6 +720,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {confirmDialog}
       <DialogContent
         disableAnimation={disableDialogAnimation}
         className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden border-border bg-card p-0 sm:max-h-[calc(100dvh-3rem)]"
@@ -1147,7 +1150,16 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                               size="sm"
                               aria-label={`Remove ${file.fileName}`}
                               disabled={removingCloudKnowledgeIds.has(file.id)}
-                              onClick={() => void handleRemoveCloudKnowledge(file.id)}
+                              onClick={() =>
+                                confirm({
+                                  title: `Remove ${file.fileName} from this project?`,
+                                  description:
+                                    'The stored copy is deleted from your Cloud project, and new chats in the project stop using it. To use it again you have to upload it again.',
+                                  confirmLabel: 'Remove source',
+                                  destructive: true,
+                                  onConfirm: () => handleRemoveCloudKnowledge(file.id),
+                                })
+                              }
                               className="shrink-0 text-muted-foreground hover:text-danger-text"
                             >
                               {removingCloudKnowledgeIds.has(file.id) ? (

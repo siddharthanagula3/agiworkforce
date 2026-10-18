@@ -29,15 +29,12 @@ describe('useScreenCapture', () => {
     const { result } = renderHook(() => useScreenCapture());
 
     await act(async () => {
-      const capture = await result.current.captureWindow('12345', 42);
+      const capture = await result.current.captureWindow('12345');
       expect(capture.captureType).toBe('window');
       expect(capture.metadata.windowTitle).toBe('App Window');
     });
 
-    expect(invokeMock).toHaveBeenCalledWith('capture_screen_window', {
-      hwnd: '12345',
-      conversation_id: 42,
-    });
+    expect(invokeMock).toHaveBeenCalledWith('capture_screen_window', { hwnd: '12345' });
   });
 
   it('returns a bounded timeout error instead of hanging on full-screen capture', async () => {

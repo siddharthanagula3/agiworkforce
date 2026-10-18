@@ -7,10 +7,20 @@ import { useSettingsStore } from '../../../stores/settingsStore';
 
 Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 });
 Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 });
+Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', {
+  configurable: true,
+  value: 1920,
+});
+Object.defineProperty(HTMLImageElement.prototype, 'naturalHeight', {
+  configurable: true,
+  value: 1080,
+});
 
 afterAll(() => {
   Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
   Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
+  Reflect.deleteProperty(HTMLImageElement.prototype, 'naturalWidth');
+  Reflect.deleteProperty(HTMLImageElement.prototype, 'naturalHeight');
 });
 
 function setOverlayPreference(showComputerUseOverlay: boolean) {
@@ -29,8 +39,6 @@ describe('ExecutionSidecarScreenView action overlay', () => {
     useComputerUseStore.setState({
       isActive: true,
       currentScreenshot: 'iVBORw0KGgo=',
-      screenWidth: 1920,
-      screenHeight: 1080,
       actionLog: [
         {
           action_type: 'type',

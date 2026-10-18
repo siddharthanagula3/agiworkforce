@@ -16,7 +16,7 @@ export function nativeArtifactToChat(native: NativeArtifact): ChatArtifact {
   };
   return {
     id: native.id,
-    type: resolveArtifactRenderType(undefined, native.artifact_type),
+    type: resolveArtifactRenderType(native.render_type, native.artifact_type),
     title: native.title,
     content: native.content,
     language: metadata.Code?.language,

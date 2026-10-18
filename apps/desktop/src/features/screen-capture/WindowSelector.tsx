@@ -7,6 +7,8 @@ import { ScrollArea } from '@/ui/ScrollArea';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { WindowInfo } from '../../types/capture';
 import { cn } from '../../lib/utils';
+import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import { Spinner } from '@/ui/Spinner';
 
 interface WindowSelectorProps {
   onConfirm: (window: WindowInfo) => void;
@@ -18,15 +20,18 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
   const [selectedWindow, setSelectedWindow] = useState<WindowInfo | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { getAvailableWindows } = useScreenCapture();
 
   const loadWindows = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const availableWindows = await getAvailableWindows();
       setWindows(availableWindows);
     } catch (error) {
-      console.error('Failed to load windows:', error);
+      setWindows([]);
+      setLoadError(getSimpleErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +85,7 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
             <Monitor className="h-5 w-5 text-primary" />
             <h2 className="text-h3">Select Window to Capture</h2>
           </div>
-          <Button variant="ghost" size="icon" onClick={onCancel}>
+          <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -96,8 +101,14 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
               className="pl-9"
             />
           </div>
-          <Button variant="outline" size="icon" onClick={loadWindows} disabled={isLoading}>
-            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={loadWindows}
+            disabled={isLoading}
+            aria-label="Refresh windows"
+          >
+            <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
 
@@ -106,9 +117,15 @@ export function WindowSelector({ onConfirm, onCancel }: WindowSelectorProps) {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                <RefreshCw className="h-8 w-8 animate-spin" />
+                <Spinner size="lg" aria-label="Loading windows" />
                 <p className="text-sm">Loading windows...</p>
               </div>
+            </div>
+          ) : loadError ? (
+            <div className="flex items-center justify-center px-6 py-12">
+              <p role="alert" className="text-center text-sm text-danger-text">
+                {loadError}
+              </p>
             </div>
           ) : filteredWindows.length === 0 ? (
             <div className="flex items-center justify-center py-12">

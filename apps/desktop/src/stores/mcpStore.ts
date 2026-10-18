@@ -34,7 +34,6 @@ interface McpState {
   activeOperations: number;
   isLoading: boolean;
   error: string | null;
-  selectedServer: string | null;
   searchQuery: string;
 
   initialize: () => Promise<void>;
@@ -90,7 +89,6 @@ interface McpState {
   selectExtensionPackage: () => Promise<string | null>;
   getExtensionConfig: (extensionId: string) => Promise<Record<string, unknown>>;
   setExtensionConfig: (extensionId: string, config: Record<string, unknown>) => Promise<void>;
-  setSelectedServer: (name: string | null) => void;
   setSearchQuery: (query: string) => void;
   clearError: () => void;
   resetOnLogout: () => void;
@@ -124,7 +122,6 @@ export const useMcpStore = create<McpState>()(
         activeOperations: 0,
         isLoading: false,
         error: null,
-        selectedServer: null,
         searchQuery: '',
 
         initialize: async () => {
@@ -908,10 +905,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        setSelectedServer: (name: string | null) => {
-          set({ selectedServer: name }, undefined, 'mcp/setSelectedServer');
-        },
-
         setSearchQuery: (query: string) => {
           set({ searchQuery: query }, undefined, 'mcp/setSearchQuery');
         },
@@ -938,7 +931,6 @@ export const useMcpStore = create<McpState>()(
               activeOperations: 0,
               isLoading: false,
               error: null,
-              selectedServer: null,
               searchQuery: '',
             },
             undefined,
@@ -951,9 +943,6 @@ export const useMcpStore = create<McpState>()(
   ),
 );
 
-// Legacy selectors (re-exported from sub-stores where possible; kept here for
 export const selectMcpServers = (state: McpState) => state.servers;
 export const selectMcpHealth = (state: McpState) => state.health;
-export const selectMcpIsInitialized = (state: McpState) => state.isInitialized;
 export const selectMcpIsLoading = (state: McpState) => state.isLoading;
-export const selectMcpError = (state: McpState) => state.error;

@@ -21,9 +21,10 @@ import {
 interface MemorySettingsContentProps {
   adapter: MemoryEditorDataAdapter;
   scope: 'local' | 'cloud';
+  loadError?: string | null;
 }
 
-function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
+function MemorySettingsContent({ adapter, scope, loadError = null }: MemorySettingsContentProps) {
   const memoryEnabled = useSettingsStore((state) => state.chatPreferences.memoryEnabled === true);
   const allowToolAssistedGeneration = useSettingsStore(
     (state) => state.chatPreferences.allowToolAssistedMemoryGeneration === true,
@@ -325,6 +326,11 @@ function MemorySettingsContent({ adapter, scope }: MemorySettingsContentProps) {
             Nothing was deleted.
           </p>
         ) : null}
+        {loadError ? (
+          <p role="alert" className="text-xs text-destructive">
+            The memories saved on this device could not be loaded. {loadError}
+          </p>
+        ) : null}
       </section>
 
       <MemoryEditor
@@ -467,7 +473,6 @@ function CloudMemoryTab() {
 
 function LocalMemoryTab() {
   const memories = useDesktopMemoryStore((state) => state.memories);
-  const isLoading = useDesktopMemoryStore((state) => state.isLoading);
   const error = useDesktopMemoryStore((state) => state.error);
   const loadAll = useDesktopMemoryStore((state) => state.loadAll);
   const storeMemory = useDesktopMemoryStore((state) => state.storeMemory);
@@ -493,7 +498,7 @@ function LocalMemoryTab() {
     () => ({
       scope: 'local',
       facts,
-      syncStatus: error ? 'error' : isLoading ? 'syncing' : 'synced',
+      syncStatus: 'unavailable',
       hydrateFromServer: loadAll,
       add: async (text) => {
         const topic = `manual_${crypto.randomUUID()}`;
@@ -515,10 +520,10 @@ function LocalMemoryTab() {
       },
       clear: deleteAll,
     }),
-    [deleteAll, deleteMemory, error, facts, isLoading, loadAll, memories, storeMemory],
+    [deleteAll, deleteMemory, facts, loadAll, memories, storeMemory],
   );
 
-  return <MemorySettingsContent adapter={adapter} scope="local" />;
+  return <MemorySettingsContent adapter={adapter} scope="local" loadError={error} />;
 }
 
 export function MemoryTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {

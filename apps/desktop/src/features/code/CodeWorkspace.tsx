@@ -1,4 +1,5 @@
 import { useShallow } from 'zustand/react/shallow';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { ErrorBoundary } from '@/features/error-handling';
 import {
   ChevronLeft,
@@ -90,6 +91,42 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
 
   const formatPathForToast = (filePath: string) => filePath.split(/[/\\]/).pop() ?? filePath;
 
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const saveBeforeClosing = (
+    affected: OpenFile[],
+    request: { title: string; confirmLabel: string },
+    action: () => void,
+  ) => {
+    const dirty = affected.filter((file) => file.isDirty);
+    if (dirty.length === 0) {
+      action();
+      return;
+    }
+    const [onlyFile] = dirty;
+    confirm({
+      title: request.title,
+      description: `${
+        dirty.length === 1 && onlyFile
+          ? `${formatPathForToast(onlyFile.path)} has`
+          : `${dirty.length} open files have`
+      } unsaved changes. They are saved first, so nothing you typed is lost.`,
+      confirmLabel: request.confirmLabel,
+      destructive: false,
+      onConfirm: async () => {
+        try {
+          for (const file of dirty) {
+            await saveFile(file.path);
+          }
+        } catch (error) {
+          toast.error(getSimpleErrorMessage(error));
+          return;
+        }
+        action();
+      },
+    });
+  };
+
   const persistFile = async (filePath: string, options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     try {
@@ -166,9 +203,15 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
       const selected = await invoke<string | null>('pick_folder', { purpose: 'project_folder' });
 
       if (selected) {
-        setRootPath(selected);
-        closeAllFiles();
-        toast.success(`Opened folder: ${selected}`);
+        saveBeforeClosing(
+          openFiles,
+          { title: 'Save your changes before opening the folder?', confirmLabel: 'Save and open' },
+          () => {
+            setRootPath(selected);
+            closeAllFiles();
+            toast.success(`Opened folder: ${selected}`);
+          },
+        );
       }
     } catch (error) {
       console.error('Failed to select folder:', error);
@@ -311,13 +354,25 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     };
 
     const closeOthers = () => {
-      closeOtherFiles(tabMenu.path);
+      const keptPath = tabMenu.path;
       setTabMenu(null);
+      saveBeforeClosing(
+        openFiles.filter((file) => file.path !== keptPath),
+        {
+          title: 'Save your changes before closing the other tabs?',
+          confirmLabel: 'Save and close',
+        },
+        () => closeOtherFiles(keptPath),
+      );
     };
 
     const closeAll = () => {
-      closeAllFiles();
       setTabMenu(null);
+      saveBeforeClosing(
+        openFiles,
+        { title: 'Save your changes before closing every tab?', confirmLabel: 'Save and close' },
+        closeAllFiles,
+      );
     };
 
     const moveLeft = () => {
@@ -434,6 +489,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
 
   return (
     <ErrorBoundary>
+      {confirmDialog}
       <div
         data-testid="code-workspace"
         className={cn(

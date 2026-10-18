@@ -135,6 +135,8 @@ describe('KeybindingsSettings backend sync', () => {
 
     render(<KeybindingsSettings />);
     fireEvent.click(screen.getByRole('button', { name: /Reset all to defaults/ }));
+    expect(mockReset).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset all shortcuts' }));
 
     await waitFor(() => {
       expect(mockToast.error).toHaveBeenCalledWith(

@@ -20,7 +20,6 @@ export const AUTH_LABEL_CLASS = 'auth-field-label';
 export const AUTH_MUTED_LINE_CLASS =
   'text-center text-[1.0625rem] leading-relaxed text-[var(--text-secondary)]';
 export const AUTH_ERROR_CLASS = 'mt-2 text-base leading-normal text-danger-text';
-export const AUTH_LINK_CLASS = 'auth-inline rounded text-accent-text underline underline-offset-4';
 export const AUTH_INPUT_CLASS = `auth-field auth-field-float h-13 w-full rounded-none border-0 border-b bg-transparent px-0 text-base ${PRIMARY_TEXT}`;
 export const AUTH_FIELD_TOGGLE_CLASS =
   'auth-inline absolute end-0 bottom-1.5 flex size-11 items-center justify-center rounded-full text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]';
@@ -28,7 +27,6 @@ export const AUTH_PRIMARY_BUTTON_CLASS = `${CONTROL} mt-6 inline-flex items-cent
 export const AUTH_PROVIDER_BUTTON_CLASS = `${CONTROL} relative inline-flex items-center justify-center gap-3 bg-[var(--auth-provider-fill)] px-4 text-base font-medium leading-snug ${PRIMARY_TEXT} transition-colors hover:bg-[var(--auth-provider-fill-hover)] disabled:cursor-not-allowed disabled:opacity-60`;
 export const AUTH_PROVIDER_STACK_CLASS = 'flex flex-col gap-3';
 export const AUTH_QUIET_BUTTON_CLASS = `auth-inline ${TOUCH_TARGET} rounded text-base text-accent-text underline-offset-4 transition-colors hover:underline disabled:opacity-50`;
-export const AUTH_COUNTDOWN_CLASS = `${TOUCH_TARGET} rounded ${SECONDARY_TEXT}`;
 export const AUTH_TAIL_CLASS = 'mt-auto pt-8';
 export const AUTH_TAIL_RULE_CLASS = 'border-t border-[var(--rule)] pt-4';
 export const AUTH_FOOTER_CLASS = `flex flex-wrap items-center justify-center gap-x-1 ${SMALL_SECONDARY_TEXT}`;

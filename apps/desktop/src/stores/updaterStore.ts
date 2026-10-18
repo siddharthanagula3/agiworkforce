@@ -202,9 +202,3 @@ export function waitForUpdaterHydration(): Promise<void> {
     });
   });
 }
-
-export const selectUpdateStatus = (state: UpdaterState) => state.status;
-export const selectUpdateInfo = (state: UpdaterState) => state.updateInfo;
-export const selectDownloadProgress = (state: UpdaterState) => state.downloadProgress;
-export const selectError = (state: UpdaterState) => state.error;
-export const selectAutoCheckEnabled = (state: UpdaterState) => state.autoCheckEnabled;

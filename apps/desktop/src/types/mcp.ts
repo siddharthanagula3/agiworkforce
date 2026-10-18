@@ -72,34 +72,6 @@ export interface McpConfigLocation {
   exists: boolean;
 }
 
-export interface McpToolResult {
-  success: boolean;
-  data: unknown;
-  error?: string;
-}
-
-export interface McpToolParameter {
-  name: string;
-  type: string;
-  required: boolean;
-  description: string;
-  default?: unknown;
-}
-
-export interface McpToolDefinition {
-  id: string;
-  name: string;
-  description: string;
-  parameters: McpToolParameter[];
-  server: string;
-}
-
-export interface McpStats {
-  serverName: string;
-  toolCount: number;
-  connected: boolean;
-}
-
 export interface McpRuntimeServerConfig {
   port: number;
   token: string;
@@ -122,67 +94,6 @@ export interface McpServerHealth {
   tool_count: number;
   consecutive_failures: number;
 }
-
-export interface McpCredential {
-  serverName: string;
-  key: string;
-  value: string;
-}
-
-export enum McpToolExecutionStatus {
-  Pending = 'pending',
-  Running = 'running',
-  Success = 'success',
-  Failed = 'failed',
-}
-
-export interface McpToolExecutionEvent {
-  toolId: string;
-  status: McpToolExecutionStatus;
-  result?: unknown;
-  error?: string;
-  timestamp: number;
-}
-
-export enum McpServerStatus {
-  Disconnected = 'disconnected',
-  Connecting = 'connecting',
-  Connected = 'connected',
-  Error = 'error',
-}
-
-export interface McpServerConnectionEvent {
-  serverName: string;
-  status: McpServerStatus;
-  error?: string;
-  timestamp: number;
-}
-
-export enum McpErrorType {
-  ServerNotFound = 'server_not_found',
-  ToolNotFound = 'tool_not_found',
-  ExecutionFailed = 'execution_failed',
-  ConfigurationError = 'configuration_error',
-  ConnectionFailed = 'connection_failed',
-  CredentialError = 'credential_error',
-}
-
-export interface McpError {
-  type: McpErrorType;
-  message: string;
-  serverName?: string;
-  toolId?: string;
-  details?: unknown;
-}
-
-export type McpEventType =
-  | 'mcp:connection_changed'
-  | 'mcp:tools_updated'
-  | 'mcp:tool_execution_started'
-  | 'mcp:tool_execution_completed'
-  | 'mcp:server_unhealthy'
-  | 'mcp:system_initialized'
-  | 'mcp:configuration_updated';
 
 export interface McpToolExecutionStartedPayload {
   type: 'tool_execution_started';
@@ -226,14 +137,6 @@ export interface McpSystemInitializedPayload {
   server_count: number;
   tool_count: number;
 }
-
-export type McpEventPayload =
-  | McpToolExecutionStartedPayload
-  | McpToolExecutionCompletedPayload
-  | McpConnectionChangedPayload
-  | McpToolsUpdatedPayload
-  | McpServerUnhealthyPayload
-  | McpSystemInitializedPayload;
 
 export interface McpBundle {
   id: string;

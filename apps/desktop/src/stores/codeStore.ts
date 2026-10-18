@@ -432,22 +432,3 @@ export const useCodeStore = create<CodeState>()(
     { name: 'CodeStore', enabled: import.meta.env.DEV },
   ),
 );
-
-export const selectOpenFiles = (state: CodeState) => state.openFiles;
-export const selectActiveFilePath = (state: CodeState) => state.activeFilePath;
-export const selectRootPath = (state: CodeState) => state.rootPath;
-export const selectPersistedOpenPaths = (state: CodeState) => state.persistedOpenPaths;
-
-export const selectActiveFile = (state: CodeState) =>
-  state.openFiles.find((f) => f.path === state.activeFilePath);
-export const selectDirtyFiles = (state: CodeState) => state.openFiles.filter((f) => f.isDirty);
-export const selectHasDirtyFiles = (state: CodeState) => state.openFiles.some((f) => f.isDirty);
-export const selectOpenFileCount = (state: CodeState) => state.openFiles.length;
-export const selectDirtyFileCount = (state: CodeState) =>
-  state.openFiles.filter((f) => f.isDirty).length;
-export const selectFileByPath = (path: string) => (state: CodeState) =>
-  state.openFiles.find((f) => f.path === path);
-export const selectIsFileDirty = (path: string) => (state: CodeState) =>
-  state.openFiles.find((f) => f.path === path)?.isDirty ?? false;
-export const selectIsFileOpen = (path: string) => (state: CodeState) =>
-  state.openFiles.some((f) => f.path === path);

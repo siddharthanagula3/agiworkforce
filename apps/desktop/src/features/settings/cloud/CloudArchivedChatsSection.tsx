@@ -1,5 +1,5 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   deleteCloudConversation,
@@ -27,6 +27,7 @@ export function CloudArchivedChatsSection() {
   const [notice, setNotice] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const generation = useRef(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const loadFirstPage = useCallback(async () => {
     const current = ++generation.current;
@@ -93,6 +94,7 @@ export function CloudArchivedChatsSection() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="cloud-archived-chats">
+      {confirmDialog}
       <SectionHeading
         title="Archived chats"
         description="Cloud conversations you have archived. Restore one to bring it back into your history, or delete it permanently."
@@ -146,12 +148,20 @@ export function CloudArchivedChatsSection() {
                   className={`${SMALL_BUTTON} text-destructive`}
                   disabled={pendingId === conversation.id}
                   onClick={() =>
-                    void runAction(
-                      conversation,
-                      deleteCloudConversation,
-                      `Deleted “${conversation.title}”.`,
-                      'Could not delete this chat.',
-                    )
+                    confirm({
+                      title: `Delete “${conversation.title}”?`,
+                      description:
+                        'The conversation and its messages are removed from your Cloud account for good. A deleted chat cannot be restored.',
+                      confirmLabel: 'Delete chat',
+                      destructive: true,
+                      onConfirm: () =>
+                        runAction(
+                          conversation,
+                          deleteCloudConversation,
+                          `Deleted “${conversation.title}”.`,
+                          'Could not delete this chat.',
+                        ),
+                    })
                   }
                 >
                   Delete

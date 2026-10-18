@@ -192,6 +192,8 @@ describe('CloudSharedLinksSection', () => {
     expect(await screen.findByText('Quarterly plan')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
+    expect(mocks.revokeCloudSharedLink).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
     await waitFor(() => expect(mocks.revokeCloudSharedLink).toHaveBeenCalledWith('tok_1'));
     await waitFor(() => expect(screen.queryByText('Quarterly plan')).toBeNull());
@@ -286,6 +288,8 @@ describe('CloudAccountControls', () => {
     render(<CloudAccountControls />);
 
     await user.click(await screen.findByRole('button', { name: 'End session' }));
+    expect(mocks.revokeCloudSession).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Sign that device out' }));
 
     await waitFor(() => expect(mocks.revokeCloudSession).toHaveBeenCalledWith('sess_phone'));
     await waitFor(() => expect(screen.queryByText('iPhone')).toBeNull());
@@ -301,6 +305,8 @@ describe('CloudAccountControls', () => {
     render(<CloudAccountControls />);
 
     await user.click(await screen.findByTestId('cloud-log-out-everywhere'));
+    expect(mocks.revokeAllCloudSessions).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
 
     await waitFor(() => expect(mocks.revokeAllCloudSessions).toHaveBeenCalledOnce());
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
@@ -313,6 +319,7 @@ describe('CloudAccountControls', () => {
     render(<CloudAccountControls />);
 
     await user.click(await screen.findByTestId('cloud-log-out-everywhere'));
+    await user.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
 
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('upstream unavailable'),

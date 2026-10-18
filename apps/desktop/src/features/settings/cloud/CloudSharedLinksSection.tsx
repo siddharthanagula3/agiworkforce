@@ -1,5 +1,5 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   listCloudSharedLinks,
@@ -23,6 +23,7 @@ export function CloudSharedLinksSection() {
   const [notice, setNotice] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const generation = useRef(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     const current = ++generation.current;
@@ -62,6 +63,16 @@ export function CloudSharedLinksSection() {
     }
   };
 
+  const confirmRevoke = (share: CloudSharedLink) =>
+    confirm({
+      title: `Revoke the link for “${share.title}”?`,
+      description:
+        'Anyone who opens this link sees nothing from now on. A revoked link cannot be restored; sharing the conversation again creates a different link.',
+      confirmLabel: 'Revoke link',
+      destructive: true,
+      onConfirm: () => handleRevoke(share),
+    });
+
   const handleCopy = async (share: CloudSharedLink) => {
     setError(null);
     setNotice(null);
@@ -79,6 +90,7 @@ export function CloudSharedLinksSection() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="cloud-shared-links">
+      {confirmDialog}
       <SectionHeading
         title="Shared links"
         description="Conversations you have published as read-only links. Revoking a link takes it offline immediately; the conversation itself is untouched."
@@ -136,7 +148,7 @@ export function CloudSharedLinksSection() {
                   className={`${SMALL_BUTTON} text-destructive`}
                   disabled={revoking === share.token}
                   aria-busy={revoking === share.token || undefined}
-                  onClick={() => void handleRevoke(share)}
+                  onClick={() => confirmRevoke(share)}
                 >
                   {revoking === share.token ? 'Revoking…' : 'Revoke'}
                 </button>

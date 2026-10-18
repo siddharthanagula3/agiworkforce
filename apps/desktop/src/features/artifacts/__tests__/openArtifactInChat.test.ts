@@ -64,6 +64,15 @@ describe('openArtifactInChat', () => {
     });
   });
 
+  it('reopens a React or SVG artifact with the renderer it was made with', () => {
+    expect(
+      nativeArtifactToChat({ ...native, artifact_type: 'code', render_type: 'react' }).type,
+    ).toBe('react');
+    expect(
+      nativeArtifactToChat({ ...native, artifact_type: 'image', render_type: 'svg' }).type,
+    ).toBe('svg');
+  });
+
   it('opens the artifact in the chat panel inside the chat that made it', async () => {
     mocks.getArtifact.mockResolvedValue(native);
     const navigate = vi.fn();

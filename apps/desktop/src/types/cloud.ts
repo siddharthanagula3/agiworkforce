@@ -1,11 +1,5 @@
 export type CloudProvider = 'google_drive' | 'dropbox' | 'one_drive';
 
-export interface CloudAccount {
-  account_id: string;
-  provider: CloudProvider;
-  label?: string | null;
-}
-
 export interface CloudFile {
   id: string;
   name: string;

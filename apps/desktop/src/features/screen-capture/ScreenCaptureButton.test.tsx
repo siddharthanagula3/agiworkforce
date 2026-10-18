@@ -62,12 +62,12 @@ describe('ScreenCaptureButton', () => {
         <ScreenCaptureButton />
       </TooltipProvider>,
     );
-    fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
 
-    const menu = await screen.findByRole('menu');
-    expect(menu).toHaveTextContent('Capture Region');
-    expect(menu).toHaveTextContent('Capture Window');
-    expect(menu.textContent).not.toMatch(/(ctrl|cmd|command|control|alt|opt|meta)\s*\+/i);
+    const labels = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
+    expect(labels).toEqual(['Capture screenshot', 'Share window']);
+    for (const label of labels) {
+      expect(label).not.toMatch(/(ctrl|cmd|command|control|alt|opt|meta)\s*\+/i);
+    }
   });
 
   it('uses native desktop region picker on macOS in Tauri mode', async () => {
@@ -82,7 +82,7 @@ describe('ScreenCaptureButton', () => {
 
     render(
       <TooltipProvider>
-        <ScreenCaptureButton mode="quick" />
+        <ScreenCaptureButton />
       </TooltipProvider>,
     );
     fireEvent.click(screen.getAllByRole('button')[0]!);
@@ -99,7 +99,7 @@ describe('ScreenCaptureButton', () => {
 
     render(
       <TooltipProvider>
-        <ScreenCaptureButton mode="quick" />
+        <ScreenCaptureButton />
       </TooltipProvider>,
     );
 
@@ -121,7 +121,7 @@ describe('ScreenCaptureButton', () => {
 
     render(
       <TooltipProvider>
-        <ScreenCaptureButton mode="quick" onCaptureComplete={onCaptureComplete} />
+        <ScreenCaptureButton onCaptureComplete={onCaptureComplete} />
       </TooltipProvider>,
     );
 
@@ -131,7 +131,7 @@ describe('ScreenCaptureButton', () => {
     fireEvent.click(screen.getByRole('button', { name: /Capture \(Enter\)/i }));
 
     await waitFor(() => {
-      expect(captureWindowMock).toHaveBeenCalledWith('win-1', undefined);
+      expect(captureWindowMock).toHaveBeenCalledWith('win-1');
       expect(onCaptureComplete).toHaveBeenCalledWith(captureResult);
     });
   });

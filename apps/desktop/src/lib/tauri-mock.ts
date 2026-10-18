@@ -492,10 +492,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
           ('npmPackage' in bundle && bundle.npmPackage?.toLowerCase().includes(query)),
       ) as T;
     }
-    case 'mcpb_get_bundle_details': {
-      const bundleId = String(args?.['bundleId'] ?? '');
-      return (mockMcpBundles().find((bundle) => bundle.id === bundleId) ?? null) as T;
-    }
     case 'mcpb_get_categories':
       return ['other', 'search'] as T;
     case 'mcpb_get_featured':
@@ -513,8 +509,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       MOCK_INSTALLED_MCP_BUNDLES.delete(bundleId);
       return `Bundle '${bundleId}' removed in UI development mode` as T;
     }
-    case 'mcpb_check_updates':
-      return [] as T;
 
     case 'mcp_initialize':
       return 'MCP initialized' as T;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   CLOUD_TEAM_ROLES,
@@ -45,6 +46,7 @@ export function CloudTeamSection() {
   const [inviteRole, setInviteRole] = useState<CloudTeamRole>('member');
   const [adding, setAdding] = useState(false);
   const generation = useRef(0);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const load = useCallback(async () => {
     const current = ++generation.current;
@@ -134,6 +136,7 @@ export function CloudTeamSection() {
 
   return (
     <div className="flex flex-col gap-5" data-testid="cloud-team">
+      {confirmDialog}
       <SectionHeading
         title="Team &amp; enterprise"
         description="Workspace membership for your AGI Cloud account. Local Mode data on this device is never shared with a workspace."
@@ -224,7 +227,16 @@ export function CloudTeamSection() {
                           className={`${SMALL_BUTTON} text-destructive`}
                           disabled={pendingMemberId === member.id}
                           aria-busy={pendingMemberId === member.id || undefined}
-                          onClick={() => void handleRemove(member)}
+                          onClick={() =>
+                            confirm({
+                              title: `Remove ${member.name} from the workspace?`,
+                              description:
+                                'They lose access to the workspace and its shared chats and projects at once. To bring them back you have to add them again.',
+                              confirmLabel: 'Remove member',
+                              destructive: true,
+                              onConfirm: () => handleRemove(member),
+                            })
+                          }
                         >
                           Remove
                         </button>

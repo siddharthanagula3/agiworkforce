@@ -12,10 +12,6 @@ export const OLLAMA_TIMEOUT_MS = 10_000;
 
 export const PRIVACY_TIMEOUT_MS = 30_000;
 
-export const STREAM_TIMEOUT_MS = 60_000;
-
-export const INVOKE_TIMEOUT_MS = 10_000;
-
 export const IPC_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MAX_RETRIES = 3;

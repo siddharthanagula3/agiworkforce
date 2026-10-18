@@ -1,13 +1,5 @@
 import type { Monaco } from '@monaco-editor/react';
 
-export const defaultEditorOptions = {
-  fontSize: 14,
-  fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-  fontLigatures: true,
-  minimap: { enabled: true },
-  scrollBeyondLastLine: false,
-};
-
 export function configureMonacoTypescript(monaco: Monaco): void {
   monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
     target: monaco.languages.typescript.ScriptTarget.ES2020,

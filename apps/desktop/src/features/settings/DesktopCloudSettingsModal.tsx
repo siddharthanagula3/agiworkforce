@@ -34,11 +34,9 @@
  *
  * Four sections are not inline API renders, for stated reasons rather than
  * convenience:
- *   plugins → no plugin contract exists on ANY surface (web renders a static
- *             catalogue preview with `plugins: []`), and the old bridged path
- *             `/settings/plugins` does not exist on the web app at all. The
- *             section says so and links to the public catalogue in the system
- *             browser, see `cloud/CloudPluginsSection.tsx`.
+ *   plugins → installation is a web account flow; the section opens
+ *             `/settings/plugins` in the system browser, see
+ *             `cloud/CloudPluginsSection.tsx`.
  *   referrals → the invite link, friend progress and bonus credits are a web
  *               account page; the section opens `/settings/referrals` in the
  *               system browser, see `cloud/CloudReferralsSection.tsx`.
@@ -1248,7 +1246,7 @@ export function DesktopCloudSettingsModal({
       ),
       plugins: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyCloudPlugins onOpenSection={setActiveSection} />
+          <LazyCloudPlugins />
         </Suspense>
       ),
       slack: (

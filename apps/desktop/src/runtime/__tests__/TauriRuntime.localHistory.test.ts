@@ -337,6 +337,16 @@ describe('TauriRuntime Local history', () => {
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('chat_delete_message');
   });
 
+  it('stops a temporary chat under the id the native turn runs as', () => {
+    conversations.push({ id: 'temp-stop', incognito: true, title: 'Temporary chat' });
+    uuidToDbIdMock.mockReturnValue(undefined);
+    invokeMock.mockResolvedValue(undefined);
+
+    new TauriRuntime().stopGeneration('temp-stop');
+
+    expect(invokeMock).toHaveBeenCalledWith('chat_stop_generation', { conversationId: -1 });
+  });
+
   it('ignores tool events from another conversation and shows tool progress', async () => {
     const events: Array<{
       type: string;

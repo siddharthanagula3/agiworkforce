@@ -2015,32 +2015,7 @@ export function waitForSettingsHydration(): Promise<void> {
   });
 }
 
-export const selectLlmConfig = (state: SettingsState) => state.llmConfig;
-export const selectDefaultProvider = (state: SettingsState) => state.llmConfig.defaultProvider;
-export const selectTemperature = (state: SettingsState) => state.llmConfig.temperature;
-export const selectMaxTokens = (state: SettingsState) => state.llmConfig.maxTokens;
-export const selectDefaultModels = (state: SettingsState) => state.llmConfig.defaultModels;
-export const selectTaskRouting = (state: SettingsState) => state.llmConfig.taskRouting;
-
-export const selectWindowPreferences = (state: SettingsState) => state.windowPreferences;
-export const selectTheme = (state: SettingsState) => state.windowPreferences.theme;
 export const selectLanguage = (state: SettingsState) => state.windowPreferences.language;
-export const selectStartupPosition = (state: SettingsState) =>
-  state.windowPreferences.startupPosition;
-export const selectDockOnStartup = (state: SettingsState) => state.windowPreferences.dockOnStartup;
-
-export const selectChatPreferences = (state: SettingsState) => state.chatPreferences;
-
-export const selectExecutionPreferences = (state: SettingsState) => state.executionPreferences;
-export const selectMaxTimeoutMinutes = (state: SettingsState) =>
-  state.executionPreferences.maxTimeoutMinutes;
-
-export const selectGlobalHotkeyPreferences = (state: SettingsState) =>
-  state.globalHotkeyPreferences;
-export const selectGlobalHotkeyEnabled = (state: SettingsState) =>
-  state.globalHotkeyPreferences.enabled;
-export const selectGlobalHotkeyCombo = (state: SettingsState) =>
-  state.globalHotkeyPreferences.combo;
 
 export const selectApprovalTimeoutSeconds = (state: SettingsState) =>
   state.executionPreferences.approvalTimeoutSeconds;
@@ -2050,11 +2025,6 @@ export const selectStreamInactivityTimeoutSeconds = (state: SettingsState) =>
   state.executionPreferences.streamInactivityTimeoutSeconds;
 export const selectTerminalSandbox = (state: SettingsState) =>
   state.executionPreferences.terminalSandbox;
-
-export const selectAllowedDirectories = (state: SettingsState) => state.allowedDirectories;
-export const selectSettingsLoading = (state: SettingsState) => state.loading;
-export const selectSettingsError = (state: SettingsState) => state.error;
-export const selectSettingsHasHydrated = (state: SettingsState) => state._hasHydrated;
 
 export const selectPersonalization = (state: SettingsState) =>
   state.personalization ?? defaultPersonalization;

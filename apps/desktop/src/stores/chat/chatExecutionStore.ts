@@ -60,8 +60,6 @@ export interface ChatExecutionState {
   clearThinkingContent: (messageId: string) => void;
 
   setAgenticLoopStatus: (status: ChatExecutionState['agenticLoopStatus']) => void;
-
-  resetExecutionState: () => void;
 }
 
 const _recentTimelineIds = new Set<string>();
@@ -407,24 +405,6 @@ export const useChatExecutionStore = create<ChatExecutionState>()(
             },
             undefined,
             'exec/setAgenticLoopStatus',
-          ),
-
-        resetExecutionState: () =>
-          set(
-            (state) => {
-              state.isLoading = false;
-              state.isLoadingMessages = false;
-              state.isStreaming = false;
-              state.currentStreamingMessageId = null;
-              state.pendingMessages = [];
-              state.toolTimelineByMessage = {};
-              state.thinkingByMessage = {};
-              state.agenticLoopStatus = null;
-              state.lastStreamActivityAt = null;
-              state.streamWatchdogTimerId = null;
-            },
-            undefined,
-            'exec/resetExecutionState',
           ),
       })),
     ),

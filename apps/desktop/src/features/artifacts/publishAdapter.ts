@@ -20,7 +20,7 @@
  */
 
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
+import { writeFile, writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
 import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
 import { publishArtifact as corePublishArtifact } from '@agiworkforce/artifacts';
 import type { LocalPublishResult } from '@agiworkforce/artifacts';
@@ -64,16 +64,48 @@ function artifactTypeToExtension(type: string, language?: string): string {
   }
 }
 
+const IMAGE_DATA_URL = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=\s]+)$/;
+
+const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+function decodeImageArtifact(content: string): { bytes: Uint8Array; ext: string } {
+  const match = IMAGE_DATA_URL.exec(content.trim());
+  const mime = match?.[1];
+  const payload = match?.[2];
+  if (!mime || !payload) {
+    throw new Error(
+      'This image is not stored inside the artifact, so it cannot be saved as a file. Open it and save it from there.',
+    );
+  }
+  const binary = atob(payload.replace(/\s/g, ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return { bytes, ext: IMAGE_MIME_EXTENSIONS[mime] ?? 'png' };
+}
+
 async function tauriLocalFileWriter(artifact: PublishableArtifact): Promise<string> {
+  const image = artifact.type === 'image' ? decodeImageArtifact(artifact.content) : null;
   const dataDir = await appDataDir();
   const artifactsDir = await join(dataDir, 'artifacts');
 
   await mkdir(artifactsDir, { recursive: true });
 
-  const ext = artifactTypeToExtension(artifact.type, artifact.language);
+  const ext = image?.ext ?? artifactTypeToExtension(artifact.type, artifact.language);
   const safeTitle = artifact.title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
   const fileName = `${safeTitle}-${artifact.id}.${ext}`;
   const filePath = await join(artifactsDir, fileName);
+
+  if (image) {
+    await writeFile(filePath, image.bytes);
+    return `file://${filePath}`;
+  }
 
   // artifact.language is model-controlled, so `code` publishes can name this file .csv and
   // the success toast hands the user its path: neutralize before the bytes reach disk

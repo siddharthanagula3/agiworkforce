@@ -21,9 +21,6 @@ const mcpbApi = {
   searchBundles: (query: string) => invoke<McpBundle[]>('mcpb_search_bundles', { query }),
   installBundle: (bundleId: string) => invoke<void>('mcpb_install_bundle', { bundleId }),
   uninstallBundle: (bundleId: string) => invoke<void>('mcpb_uninstall_bundle', { bundleId }),
-  getBundleDetails: (bundleId: string) =>
-    invoke<McpBundle>('mcpb_get_bundle_details', { bundleId }),
-  checkUpdates: () => invoke<McpBundle[]>('mcpb_check_updates'),
   updateBundle: (bundleId: string) => invoke<void>('mcpb_update_bundle', { bundleId }),
   getInstalledBundles: () => invoke<McpBundle[]>('mcpb_get_installed_bundles'),
   getCategories: () => invoke<McpBundleCategory[]>('mcpb_get_categories'),
@@ -49,8 +46,6 @@ interface McpbState {
   filterByCategory: (category: McpBundleCategory | null) => void;
   installBundle: (bundleId: string) => Promise<void>;
   uninstallBundle: (bundleId: string) => Promise<void>;
-  getBundleDetails: (bundleId: string) => Promise<McpBundle | null>;
-  checkUpdates: () => Promise<void>;
   updateBundle: (bundleId: string) => Promise<void>;
   clearError: () => void;
   setInstallProgress: (progress: BundleInstallProgress | null) => void;
@@ -174,39 +169,6 @@ export const useMcpbStore = create<McpbState>()(
         }
       },
 
-      getBundleDetails: async (bundleId: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          const bundle = await mcpbApi.getBundleDetails(bundleId);
-          set({ isLoading: false });
-          return bundle;
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : `Failed to get details for ${bundleId}`,
-            isLoading: false,
-          });
-          return null;
-        }
-      },
-
-      checkUpdates: async () => {
-        set({ isLoading: true, error: null });
-        try {
-          const bundlesWithUpdates = await mcpbApi.checkUpdates();
-          const { installedBundles } = get();
-          const updatedInstalledBundles = installedBundles.map((bundle) => {
-            const hasUpdate = bundlesWithUpdates.some((b) => b.id === bundle.id);
-            return { ...bundle, updateAvailable: hasUpdate };
-          });
-          set({ installedBundles: updatedInstalledBundles, isLoading: false });
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to check for updates',
-            isLoading: false,
-          });
-        }
-      },
-
       updateBundle: async (bundleId: string) => {
         set({
           isInstalling: true,
@@ -273,17 +235,6 @@ export const useMcpbStore = create<McpbState>()(
   ),
 );
 
-export const selectBundles = (state: McpbState) => state.bundles;
-export const selectInstalledBundles = (state: McpbState) => state.installedBundles;
-export const selectFeaturedBundles = (state: McpbState) => state.featuredBundles;
-export const selectCategories = (state: McpbState) => state.categories;
-export const selectSelectedCategory = (state: McpbState) => state.selectedCategory;
-export const selectSearchQuery = (state: McpbState) => state.searchQuery;
-export const selectIsLoading = (state: McpbState) => state.isLoading;
-export const selectIsInstalling = (state: McpbState) => state.isInstalling;
-export const selectInstallProgress = (state: McpbState) => state.installProgress;
-export const selectError = (state: McpbState) => state.error;
-
 export const selectFilteredBundles = (state: McpbState) => {
   const { bundles, selectedCategory, searchQuery } = state;
   let filtered = bundles;
@@ -304,10 +255,6 @@ export const selectFilteredBundles = (state: McpbState) => {
 
   return filtered;
 };
-
-export const selectBundleById = (bundleId: string) => (state: McpbState) =>
-  state.bundles.find((b) => b.id === bundleId) ||
-  state.installedBundles.find((b) => b.id === bundleId);
 
 export const selectBundlesWithUpdates = (state: McpbState) =>
   state.installedBundles.filter((bundle) => bundle.updateAvailable);

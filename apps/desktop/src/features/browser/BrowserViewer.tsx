@@ -82,6 +82,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   );
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pausedTabId, setPausedTabId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -156,22 +157,24 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     }
   }, []);
 
-  useEffect(() => {
-    if (currentTabId && !isStreaming) {
-      startStreaming(currentTabId);
-    }
+  const streamPaused = Boolean(currentTabId) && pausedTabId === currentTabId;
 
+  useEffect(() => {
+    if (!currentTabId || streamPaused) return;
+    startStreaming(currentTabId);
+    return () => {
+      stopStreaming();
+    };
+  }, [currentTabId, streamPaused, startStreaming, stopStreaming]);
+
+  useEffect(() => {
     const observer = new ResizeObserver(updateImageDims);
     const containerEl = containerRef.current;
     if (containerEl) observer.observe(containerEl);
-
     return () => {
-      if (isStreaming) {
-        stopStreaming();
-      }
       observer.disconnect();
     };
-  }, [currentTabId, isStreaming, startStreaming, stopStreaming, updateImageDims]);
+  }, [updateImageDims]);
 
   const scaledBounds = useMemo(() => {
     if (!highlightedElement || !imageDims || imageDims.naturalWidth === 0) return null;
@@ -188,9 +191,12 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   }, [highlightedElement, imageDims]);
 
   const toggleStreaming = () => {
+    if (!currentTabId) return;
     if (isStreaming) {
-      stopStreaming();
-    } else if (currentTabId) {
+      setPausedTabId(currentTabId);
+    } else if (streamPaused) {
+      setPausedTabId(null);
+    } else {
       startStreaming(currentTabId);
     }
   };

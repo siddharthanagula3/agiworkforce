@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Keyboard, RotateCcw, Search, AlertTriangle, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { useConfirmAction } from '@agiworkforce/ui';
 
 import {
   DEFAULT_SHORTCUTS,
@@ -156,6 +157,7 @@ export function KeybindingsSettings() {
 
   const shortcutStoreUpdate = useShortcutStore((s) => s.update);
   const shortcutStoreReset = useShortcutStore((s) => s.reset);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -238,21 +240,28 @@ export function KeybindingsSettings() {
   );
 
   const handleResetAll = useCallback(() => {
-    void (async () => {
-      let restored: unknown[] = [];
-      try {
-        restored = await shortcutStoreReset();
-      } catch (error) {
-        console.warn('[KeybindingsSettings] shortcuts_reset rejected:', error);
-      }
-      resetAllCustomKeybindings();
-      if (restored.length === 0) {
-        toast.error('In-app shortcuts were reset, but the system hotkeys could not be restored.');
-        return;
-      }
-      toast.success('All shortcuts reset to defaults');
-    })();
-  }, [resetAllCustomKeybindings, shortcutStoreReset]);
+    confirm({
+      title: 'Reset every shortcut to its default?',
+      description:
+        'All the shortcuts you changed go back to the shipped keys, including the system-wide hotkeys. Your custom keys are not kept, so you would have to set each one again.',
+      confirmLabel: 'Reset all shortcuts',
+      destructive: true,
+      onConfirm: async () => {
+        let restored: unknown[] = [];
+        try {
+          restored = await shortcutStoreReset();
+        } catch (error) {
+          console.warn('[KeybindingsSettings] shortcuts_reset rejected:', error);
+        }
+        resetAllCustomKeybindings();
+        if (restored.length === 0) {
+          toast.error('In-app shortcuts were reset, but the system hotkeys could not be restored.');
+          return;
+        }
+        toast.success('All shortcuts reset to defaults');
+      },
+    });
+  }, [confirm, resetAllCustomKeybindings, shortcutStoreReset]);
 
   const query = searchQuery.toLowerCase();
   const filteredShortcuts = DEFAULT_SHORTCUTS.filter(
@@ -291,6 +300,7 @@ export function KeybindingsSettings() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       {/* Header */}
       <div>
         <div className="flex items-center justify-between mb-1">

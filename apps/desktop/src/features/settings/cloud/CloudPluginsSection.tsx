@@ -1,26 +1,24 @@
-
 import { useState } from 'react';
 
 import { WEB_APP_URL } from '../../../api/config';
 import { openExternalUrl } from '../../../utils/navigation';
 import { SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
 
-export interface CloudPluginsSectionProps {
-  onOpenSection?: (section: string) => void;
-}
+const PLUGINS_WEB_PATH = '/settings/plugins';
+const OPEN_FAILED_MESSAGE = 'Could not open your plugins.';
 
-export function CloudPluginsSection({ onOpenSection }: CloudPluginsSectionProps) {
+export function CloudPluginsSection() {
   const [error, setError] = useState<string | null>(null);
 
-  const openCatalogue = () => {
+  const openPlugins = () => {
     setError(null);
     try {
-      const url = new URL('/apps', WEB_APP_URL);
+      const url = new URL(PLUGINS_WEB_PATH, WEB_APP_URL);
       void Promise.resolve(openExternalUrl(url.toString())).catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : 'Could not open the plugin catalogue.');
+        setError(caught instanceof Error ? caught.message : OPEN_FAILED_MESSAGE);
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not open the plugin catalogue.');
+      setError(caught instanceof Error ? caught.message : OPEN_FAILED_MESSAGE);
     }
   };
 
@@ -28,50 +26,23 @@ export function CloudPluginsSection({ onOpenSection }: CloudPluginsSectionProps)
     <div className="flex flex-col gap-5" data-testid="cloud-plugins">
       <SectionHeading
         title="Plugins"
-        description="Account-level plugin packaging is still a catalogue preview: no surface can install or enable a Cloud plugin yet, and there is no API to report which are active."
+        description="Plugin packs that add skills and connectors to your AGI Cloud account."
       />
 
       <div className="rounded-lg border border-border bg-card/40 p-5">
-        <p className="text-sm text-foreground">Nothing to manage here yet</p>
+        <p className="text-sm text-foreground">Plugins open in your browser</p>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          AGI Cloud does not expose installed plugins for an account, so this section would have
-          nothing true to show. Browsing the catalogue opens the public plugin pages in your
-          browser.
+          Installing, updating and removing plugins for your Cloud account happens in your AGI
+          Workforce account on the web.
         </p>
         {error ? (
           <p role="alert" className="mt-3 text-xs text-destructive">
             {error}
           </p>
         ) : null}
-        <button type="button" className={`mt-4 ${SECONDARY_BUTTON}`} onClick={openCatalogue}>
-          Browse the plugin catalogue
+        <button type="button" className={`mt-4 ${SECONDARY_BUTTON}`} onClick={openPlugins}>
+          Manage plugins
         </button>
-      </div>
-
-      <div className="rounded-lg border border-border bg-card/40 p-5">
-        <p className="text-sm text-foreground">What does work today</p>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          Connectors and Skills are the account-owned extension surfaces this Desktop can read and
-          change right now. Both render live account data in this window.
-        </p>
-        {onOpenSection ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={SECONDARY_BUTTON}
-              onClick={() => onOpenSection('connectors')}
-            >
-              Open Connectors
-            </button>
-            <button
-              type="button"
-              className={SECONDARY_BUTTON}
-              onClick={() => onOpenSection('skills')}
-            >
-              Open Skills
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <p className="text-xs leading-5 text-muted-foreground">

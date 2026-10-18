@@ -1353,7 +1353,9 @@ export class TauriRuntime implements ChatRuntime {
     if (this._stopFlags.get(conversationId)) return;
     this._stopFlags.set(conversationId, true);
     this._stopSettlers.get(conversationId)?.();
-    const backendConversationId = uuidToDbId(conversationId);
+    const backendConversationId = this.isTemporaryConversation(conversationId)
+      ? TEMPORARY_CONVERSATION_ID
+      : uuidToDbId(conversationId);
     if (backendConversationId === undefined) return;
     void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
       // Ignore errors, the stop flag already prevents further yields

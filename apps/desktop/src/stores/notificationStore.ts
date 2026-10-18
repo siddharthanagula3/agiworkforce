@@ -103,6 +103,11 @@ export const useNotificationStore = create<NotificationState>()(
             return result;
           } catch (err) {
             console.error('[NotificationStore] markRead failed:', err);
+            set(
+              { error: `Could not mark the notification as read: ${String(err)}` },
+              undefined,
+              'notification/markRead/error',
+            );
             return false;
           }
         },
@@ -127,6 +132,11 @@ export const useNotificationStore = create<NotificationState>()(
             return count;
           } catch (err) {
             console.error('[NotificationStore] markAllRead failed:', err);
+            set(
+              { error: `Could not mark your notifications as read: ${String(err)}` },
+              undefined,
+              'notification/markAllRead/error',
+            );
             return 0;
           }
         },
@@ -156,6 +166,11 @@ export const useNotificationStore = create<NotificationState>()(
             return result;
           } catch (err) {
             console.error('[NotificationStore] deleteNotification failed:', err);
+            set(
+              { error: `Could not delete the notification: ${String(err)}` },
+              undefined,
+              'notification/delete/error',
+            );
             return false;
           }
         },
@@ -174,6 +189,11 @@ export const useNotificationStore = create<NotificationState>()(
             return count;
           } catch (err) {
             console.error('[NotificationStore] deleteAllRead failed:', err);
+            set(
+              { error: `Could not delete your read notifications: ${String(err)}` },
+              undefined,
+              'notification/deleteAllRead/error',
+            );
             return 0;
           }
         },

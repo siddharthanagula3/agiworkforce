@@ -301,28 +301,19 @@ describe('CloudReflectSection', () => {
 });
 
 describe('CloudPluginsSection', () => {
-  it('states there is nothing to manage instead of bridging to a non-existent page', async () => {
+  it('opens the web plugin settings in the system browser', async () => {
     const user = userEvent.setup();
 
     render(<CloudPluginsSection />);
 
     expect(screen.getByTestId('cloud-plugins')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Sign in again to manage this' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Manage plugins' }));
 
-    await user.click(screen.getByRole('button', { name: 'Browse the plugin catalogue' }));
-
-    await waitFor(() => expect(mocks.openExternalUrl).toHaveBeenCalled());
-    expect(String(mocks.openExternalUrl.mock.calls[0]?.[0])).toContain('/apps');
-  });
-
-  it('routes to the extension surfaces that are actually wired', async () => {
-    const user = userEvent.setup();
-    const onOpenSection = vi.fn();
-
-    render(<CloudPluginsSection onOpenSection={onOpenSection} />);
-    await user.click(screen.getByRole('button', { name: 'Open Connectors' }));
-
-    expect(onOpenSection).toHaveBeenCalledWith('connectors');
+    await waitFor(() => expect(mocks.openExternalUrl).toHaveBeenCalledTimes(1));
+    expect(new URL(String(mocks.openExternalUrl.mock.calls[0]?.[0])).pathname).toBe(
+      '/settings/plugins',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
 

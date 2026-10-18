@@ -79,7 +79,6 @@ describe('mcpStore', () => {
       isInitialized: false,
       isLoading: false,
       error: null,
-      selectedServer: null,
       searchQuery: '',
     });
 
@@ -102,7 +101,6 @@ describe('mcpStore', () => {
       expect(state.isInitialized).toBe(false);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
-      expect(state.selectedServer).toBeNull();
       expect(state.searchQuery).toBe('');
     });
   });
@@ -447,19 +445,6 @@ describe('mcpStore', () => {
   });
 
   describe('UI state management', () => {
-    it('should set selected server', () => {
-      useMcpStore.getState().setSelectedServer('server-1');
-
-      expect(useMcpStore.getState().selectedServer).toBe('server-1');
-    });
-
-    it('should clear selected server', () => {
-      useMcpStore.getState().setSelectedServer('server-1');
-      useMcpStore.getState().setSelectedServer(null);
-
-      expect(useMcpStore.getState().selectedServer).toBeNull();
-    });
-
     it('should set search query', () => {
       useMcpStore.getState().setSearchQuery('test query');
 

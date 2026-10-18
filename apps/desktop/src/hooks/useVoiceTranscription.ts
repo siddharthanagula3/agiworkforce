@@ -6,8 +6,6 @@ import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
-export type TranscriptionMode = 'web-speech' | 'whisper';
-
 type SpeechRecognitionLike = EventTarget & {
   continuous: boolean;
   interimResults: boolean;

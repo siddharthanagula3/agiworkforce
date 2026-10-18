@@ -202,6 +202,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 vi.mock('@tauri-apps/plugin-fs', () => ({
   readFile: vi.fn(),
   readTextFile: vi.fn(),
+  writeFile: vi.fn(),
   writeTextFile: vi.fn(),
   readBinaryFile: vi.fn(),
   writeBinaryFile: vi.fn(),

@@ -1,13 +1,6 @@
 import { useState } from 'react';
-import { Camera, Monitor, CropIcon, Image } from 'lucide-react';
+import { Camera, Image } from 'lucide-react';
 import { Button } from '@/ui/Button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/ui/DropdownMenu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 import { RegionSelector } from './RegionSelector';
 import { WindowSelector } from './WindowSelector';
@@ -17,48 +10,14 @@ import { toast } from 'sonner';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 interface ScreenCaptureButtonProps {
-  conversationId?: number;
   onCaptureComplete?: (result: CaptureResult) => void;
-  variant?: 'default' | 'ghost' | 'outline';
-  size?: 'default' | 'sm' | 'lg' | 'icon';
-  disabled?: boolean;
-  suppressToasts?: boolean;
-  mode?: 'menu' | 'quick';
   className?: string;
 }
 
-export function ScreenCaptureButton({
-  conversationId,
-  onCaptureComplete,
-  variant = 'ghost',
-  size = 'icon',
-  disabled = false,
-  suppressToasts = false,
-  mode = 'menu',
-  className,
-}: ScreenCaptureButtonProps) {
+export function ScreenCaptureButton({ onCaptureComplete, className }: ScreenCaptureButtonProps) {
   const [showRegionSelector, setShowRegionSelector] = useState(false);
   const [showWindowSelector, setShowWindowSelector] = useState(false);
-  const { captureFullScreen, captureRegion, captureWindow, getAvailableWindows, isCapturing } =
-    useScreenCapture();
-
-  const handleFullScreen = async () => {
-    try {
-      const result = await captureFullScreen(conversationId);
-      if (!suppressToasts) {
-        toast.success('Screen captured successfully');
-      }
-      onCaptureComplete?.(result);
-    } catch (error) {
-      const message = getSimpleErrorMessage(error);
-      toast.error(message);
-      console.error('Capture error:', error);
-    }
-  };
-
-  const handleRegionCapture = () => {
-    setShowRegionSelector(true);
-  };
+  const { captureRegion, captureWindow, getAvailableWindows, isCapturing } = useScreenCapture();
 
   const handleWindowCapture = async () => {
     try {
@@ -69,7 +28,7 @@ export function ScreenCaptureButton({
       }
       setShowWindowSelector(true);
     } catch (error) {
-      toast.error('Failed to get available windows');
+      toast.error(getSimpleErrorMessage(error));
       console.error('Window list error:', error);
     }
   };
@@ -77,14 +36,9 @@ export function ScreenCaptureButton({
   const handleRegionConfirm = async (region: Region) => {
     setShowRegionSelector(false);
     try {
-      const result = await captureRegion(region, conversationId);
-      if (!suppressToasts) {
-        toast.success('Region captured successfully');
-      }
-      onCaptureComplete?.(result);
+      onCaptureComplete?.(await captureRegion(region));
     } catch (error) {
-      const message = getSimpleErrorMessage(error);
-      toast.error(message);
+      toast.error(getSimpleErrorMessage(error));
       console.error('Capture error:', error);
     }
   };
@@ -92,135 +46,62 @@ export function ScreenCaptureButton({
   const handleWindowConfirm = async (window: WindowInfo) => {
     setShowWindowSelector(false);
     try {
-      const result = await captureWindow(window.handle, conversationId);
-      if (!suppressToasts) {
-        toast.success(`Window "${window.title}" captured successfully`);
-      }
-      onCaptureComplete?.(result);
+      onCaptureComplete?.(await captureWindow(window.handle));
     } catch (error) {
-      const message = getSimpleErrorMessage(error);
-      toast.error(message);
+      toast.error(getSimpleErrorMessage(error));
       console.error('Capture error:', error);
     }
   };
 
-  const handleRegionCancel = () => {
-    setShowRegionSelector(false);
-  };
-
-  const handleWindowCancel = () => {
-    setShowWindowSelector(false);
-  };
-
-  if (mode === 'quick') {
-    return (
-      <>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={variant}
-              size={size}
-              disabled={isCapturing || disabled}
-              onClick={handleRegionCapture}
-              className={className}
-            >
-              <Camera className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            align="center"
-            sideOffset={10}
-            className="pointer-events-none"
-          >
-            <p>Capture screenshot</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={variant}
-              size={size}
-              disabled={isCapturing || disabled}
-              onClick={handleWindowCapture}
-              className={className}
-            >
-              <Image className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            align="center"
-            sideOffset={10}
-            className="pointer-events-none"
-          >
-            <p>Share window</p>
-          </TooltipContent>
-        </Tooltip>
-
-        {showRegionSelector && (
-          <RegionSelector onConfirm={handleRegionConfirm} onCancel={handleRegionCancel} />
-        )}
-        {showWindowSelector && (
-          <WindowSelector onConfirm={handleWindowConfirm} onCancel={handleWindowCancel} />
-        )}
-      </>
-    );
-  }
-
   return (
     <>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant={variant}
-                size={size}
-                disabled={isCapturing || disabled}
-                className={className}
-              >
-                <Camera className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent
-            side="right"
-            align="center"
-            sideOffset={10}
-            className="pointer-events-none"
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={isCapturing}
+            onClick={() => setShowRegionSelector(true)}
+            className={className}
+            aria-label="Capture screenshot"
           >
-            <p>Screen capture</p>
-          </TooltipContent>
-        </Tooltip>
+            <Camera className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
+          <p>Capture screenshot</p>
+        </TooltipContent>
+      </Tooltip>
 
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing || disabled}>
-            <Monitor className="mr-2 h-4 w-4" />
-            <span>Capture Full Screen</span>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={handleRegionCapture} disabled={isCapturing || disabled}>
-            <CropIcon className="mr-2 h-4 w-4" />
-            <span>Capture Region</span>
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-
-          <DropdownMenuItem onClick={handleWindowCapture} disabled={isCapturing || disabled}>
-            <Image className="mr-2 h-4 w-4" />
-            <span>Capture Window</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={isCapturing}
+            onClick={handleWindowCapture}
+            className={className}
+            aria-label="Share window"
+          >
+            <Image className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="center" sideOffset={10} className="pointer-events-none">
+          <p>Share window</p>
+        </TooltipContent>
+      </Tooltip>
 
       {showRegionSelector && (
-        <RegionSelector onConfirm={handleRegionConfirm} onCancel={handleRegionCancel} />
+        <RegionSelector
+          onConfirm={handleRegionConfirm}
+          onCancel={() => setShowRegionSelector(false)}
+        />
       )}
-
       {showWindowSelector && (
-        <WindowSelector onConfirm={handleWindowConfirm} onCancel={handleWindowCancel} />
+        <WindowSelector
+          onConfirm={handleWindowConfirm}
+          onCancel={() => setShowWindowSelector(false)}
+        />
       )}
     </>
   );

@@ -28,6 +28,7 @@ import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { useQuickQueryDoubleTap } from './hooks/useQuickQueryDoubleTap';
+import { useScreenCapture } from './hooks/useScreenCapture';
 import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
 import { subscribeToLocalModelCatalogChanges } from './lib/localModelCatalog';
@@ -224,13 +225,13 @@ import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { resetCloudConversationCoordinator } from './services/cloudChat';
 import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSync';
 import { createManagedCloudRequestContext } from './services/managedCloudRequestContext';
-import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
+import { getSimpleErrorMessage } from './lib/errorMessages';
 import { PlansModal } from './features/pricing/PlansModal';
 import { openExternalUrl } from './utils/navigation';
 import { WEB_APP_URL } from './api/config';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { readFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { exportDesktopDiagnostics } from './features/diagnostics';
 import { useUpdaterStore } from './stores/updaterStore';
 
@@ -323,6 +324,10 @@ const DesktopShell = () => {
   const [externalSendRequest, setExternalSendRequest] = useState<{
     id: string;
     content: string;
+  } | null>(null);
+  const [externalAttachmentRequest, setExternalAttachmentRequest] = useState<{
+    id: string;
+    files: File[];
   } | null>(null);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -1115,6 +1120,8 @@ const DesktopShell = () => {
     clearHistory();
   }, [clearHistory]);
 
+  const { captureFullScreen } = useScreenCapture();
+
   const routeToChatSurface = useCallback(
     async (draft?: string) => {
       if (isTauri) {
@@ -1196,14 +1203,26 @@ const DesktopShell = () => {
     async (captureResult?: CaptureResult, draft = '') => {
       await routeToChatSurface(draft);
       setQuickQueryOpen(false);
-      window.dispatchEvent(
-        new CustomEvent(CHAT_COMPOSER_CAPTURE_EVENT, {
-          detail: captureResult ? { captureResult } : {},
-        }),
-      );
+      try {
+        const capture = captureResult ?? (await captureFullScreen());
+        const bytes = await readFile(capture.path);
+        const fileName = capture.path.split(/[\\/]/).pop() || `capture-${capture.id}.png`;
+        setExternalAttachmentRequest({
+          id: capture.id,
+          files: [new File([bytes], fileName, { type: 'image/png' })],
+        });
+      } catch (error) {
+        toast.error('The screenshot was not attached to your message.', {
+          description: getSimpleErrorMessage(error),
+        });
+      }
     },
-    [routeToChatSurface],
+    [captureFullScreen, routeToChatSurface],
   );
+
+  const handleExternalAttachmentRequestApplied = useCallback((requestId: string) => {
+    setExternalAttachmentRequest((current) => (current?.id === requestId ? null : current));
+  }, []);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -1794,6 +1813,8 @@ const DesktopShell = () => {
                 runtime={chatRuntime}
                 className="h-full w-full"
                 externalSendRequest={externalSendRequest}
+                externalAttachmentRequest={externalAttachmentRequest}
+                onExternalAttachmentRequestApplied={handleExternalAttachmentRequestApplied}
                 hostBridge={chatHostBridge}
                 onModelSelectorClick={() =>
                   openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys')

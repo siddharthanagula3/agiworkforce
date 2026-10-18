@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, type SyntheticEvent } from 'react';
 import { Monitor, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useComputerUseStore } from '../../stores/computerUseStore';
@@ -11,18 +11,19 @@ export function ExecutionSidecarScreenView() {
   const [isExpanded, setIsExpanded] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
 
   const computerUseActive = useComputerUseStore((s) => s.isActive);
   const computerUseScreenshot = useComputerUseStore((s) => s.currentScreenshot);
   const actionLog = useComputerUseStore((s) => s.actionLog);
-  const screenWidth = useComputerUseStore((s) => s.screenWidth);
-  const screenHeight = useComputerUseStore((s) => s.screenHeight);
 
   const showOverlay = useSettingsStore((s) => s.executionPreferences.showComputerUseOverlay);
 
   const lastAction = actionLog.length > 0 ? actionLog[actionLog.length - 1] : undefined;
 
-  const handleImageLoad = useCallback(() => {
+  const handleImageLoad = useCallback((event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    setImageSize({ width: image.naturalWidth, height: image.naturalHeight });
     if (imageContainerRef.current) {
       setContainerSize({
         width: imageContainerRef.current.clientWidth,
@@ -100,20 +101,24 @@ export function ExecutionSidecarScreenView() {
           )}
           onLoad={handleImageLoad}
         />
-        {showOverlay && computerUseActive && lastAction && containerSize.width > 0 && (
-          <ComputerUseOverlay
-            lastAction={{
-              type: lastAction.action_type,
-              x: lastAction.coordinates?.[0],
-              y: lastAction.coordinates?.[1],
-              text: lastAction.text ?? undefined,
-            }}
-            containerWidth={containerSize.width}
-            containerHeight={containerSize.height}
-            displayWidth={screenWidth ?? 1920}
-            displayHeight={screenHeight ?? 1080}
-          />
-        )}
+        {showOverlay &&
+          computerUseActive &&
+          lastAction &&
+          containerSize.width > 0 &&
+          imageSize.width > 0 && (
+            <ComputerUseOverlay
+              lastAction={{
+                type: lastAction.action_type,
+                x: lastAction.coordinates?.[0],
+                y: lastAction.coordinates?.[1],
+                text: lastAction.text ?? undefined,
+              }}
+              containerWidth={containerSize.width}
+              containerHeight={containerSize.height}
+              displayWidth={imageSize.width}
+              displayHeight={imageSize.height}
+            />
+          )}
       </div>
     </div>
   );
