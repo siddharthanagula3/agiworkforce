@@ -92,9 +92,15 @@ pub struct MarketplaceEntry {
     #[serde(default)]
     pub version: Option<String>,
     #[serde(default)]
-    pub declared_skills: Vec<serde_json::Value>,
+    pub declared_skills: Vec<String>,
     #[serde(default)]
-    pub required_connectors: Vec<serde_json::Value>,
+    pub required_connectors: Vec<String>,
+    #[serde(default)]
+    pub agents: Vec<String>,
+    #[serde(default)]
+    pub permissions: Vec<String>,
+    #[serde(default)]
+    pub example_prompts: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -233,7 +239,48 @@ pub fn render_entries(source: &MarketplaceSource, entries: &[MarketplaceEntry]) 
         }
     }
     lines.push(format!(
-        "Install one on your account with `agi marketplace get <plugin>@{}`.",
+        "See what one adds with `agi marketplace show <plugin>@{0}`, and install it with `agi marketplace get <plugin>@{0}`.",
+        sanitize(&source.name)
+    ));
+    lines.join("\n")
+}
+
+/// One plugin's page before it is installed: what it adds, the connections it
+/// needs and the permissions it asks for.
+pub fn render_entry_detail(source: &MarketplaceSource, entry: &MarketplaceEntry) -> String {
+    let sanitize = |text: &str| crate::terminal_text::sanitize_terminal_text(text).into_owned();
+    let list = |items: &[String]| {
+        items
+            .iter()
+            .map(|item| sanitize(item))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut lines = vec![format!(
+        "{}@{}  {}",
+        sanitize(&entry.name),
+        sanitize(&source.name),
+        entry.version.as_deref().map(sanitize).unwrap_or_default()
+    )];
+    if let Some(description) = entry.description.as_deref() {
+        lines.push(format!("  {}", sanitize(description)));
+    }
+    for (label, items) in [
+        ("Skills", &entry.declared_skills),
+        ("Agents", &entry.agents),
+        ("Needs", &entry.required_connectors),
+        ("Permissions", &entry.permissions),
+    ] {
+        if !items.is_empty() {
+            lines.push(format!("  {label:<12} {}", list(items)));
+        }
+    }
+    for prompt in entry.example_prompts.iter().take(3) {
+        lines.push(format!("  {:<12} \"{}\"", "Try", sanitize(prompt)));
+    }
+    lines.push(format!(
+        "Install it on your account with `agi marketplace get {}@{}`.",
+        sanitize(&entry.name),
         sanitize(&source.name)
     ));
     lines.join("\n")
@@ -263,4 +310,45 @@ pub fn render(sources: &[MarketplaceSource]) -> String {
         }
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_plugin_page_shows_what_it_adds_and_asks_for_before_install() {
+        let source: MarketplaceSource = serde_json::from_value(serde_json::json!({
+            "id": "src-1", "name": "acme", "status": "ready"
+        }))
+        .expect("source");
+        let entry: MarketplaceEntry = serde_json::from_value(serde_json::json!({
+            "id": "entry-1",
+            "sourceId": "src-1",
+            "pluginKey": "release-tools",
+            "name": "release-tools",
+            "description": "Ship releases",
+            "version": "1.2.0",
+            "declaredSkills": ["changelog", "tagging"],
+            "requiredConnectors": ["github"],
+            "agents": ["release-manager"],
+            "examplePrompts": ["Draft the changelog for v2"],
+            "permissions": ["read repositories"],
+            "contentHash": "sha256:abc"
+        }))
+        .expect("entry");
+        let page = render_entry_detail(&source, &entry);
+        for expected in [
+            "release-tools@acme  1.2.0",
+            "Ship releases",
+            "Skills       changelog, tagging",
+            "Agents       release-manager",
+            "Needs        github",
+            "Permissions  read repositories",
+            "Try          \"Draft the changelog for v2\"",
+            "agi marketplace get release-tools@acme",
+        ] {
+            assert!(page.contains(expected), "{expected} missing from\n{page}");
+        }
+    }
 }
