@@ -182,6 +182,21 @@ describe('DirectoryPanel layout', () => {
     expect(headings[1]).toBe('Top connectors');
   });
 
+  it('leads the plugins catalog with Popular plugins when entries are popular', () => {
+    renderPanel('plugins', {
+      plugins: {
+        installable: true,
+        entries: [
+          { id: 'productivity', name: 'Productivity', description: 'Manage tasks', popular: true },
+          { id: 'design', name: 'Design', description: 'Design things' },
+        ],
+      },
+    });
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
+    expect(headings[0]).toBe('Popular plugins');
+    expect(screen.queryByRole('heading', { name: 'Top connectors' })).toBeNull();
+  });
+
   it('starts at the catalog when the account has installed nothing', () => {
     renderPanel('plugins');
     expect(screen.queryByRole('heading', { name: 'Installed' })).toBeNull();
