@@ -412,6 +412,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { requestUsageResetReminder } from '@/features/chat/lib/usage-reset-reminder';
+import { useProjectChatDefaults } from '@/features/projects/hooks/use-project-chat-defaults';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -1926,6 +1927,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       setSelectedModelId(resolveSelectableModelId(activeProjectDefaultModelId));
     }
   }, [activeProjectDefaultModelId, activeProjectId, displayedConversationId, setSelectedModelId]);
+
+  useProjectChatDefaults({
+    projectId: activeProjectId,
+    chatDefaults: activeProjectId
+      ? storeProjects.find((project) => project.id === activeProjectId)?.chatDefaults
+      : null,
+    conversationId: displayedConversationId ?? null,
+  });
 
   const handleConversationModelChange = useCallback(
     async (nextModelId: string): Promise<boolean> => {

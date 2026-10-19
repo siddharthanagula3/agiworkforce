@@ -1,4 +1,8 @@
-import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
+import {
+  ProjectChatDefaultsSchema,
+  type ManagedCloudProject,
+  type ProjectChatDefaults,
+} from '@agiworkforce/cloud-contracts';
 import {
   SYNCED_APP_SURFACES,
   type ProjectAccentColor,
@@ -42,6 +46,7 @@ export interface MappedProject {
   defaultProviderMode: ManagedCloudProject['defaultProviderMode'];
   allowedSurfaces: ManagedCloudProject['allowedSurfaces'][number][];
   defaultModelId: string | null;
+  chatDefaults: ProjectChatDefaults;
   conversationCount: number;
   lastUsedAt: string | null;
   iconEmoji: string | null;
@@ -99,6 +104,16 @@ function asMetadata(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function asChatDefaults(value: unknown): ProjectChatDefaults {
+  const stored = asMetadata(value) ?? {};
+  const parsed = ProjectChatDefaultsSchema.safeParse({
+    codeExecution: stored['codeExecution'],
+    research: stored['research'],
+    skillName: stored['skillName'],
+  });
+  return parsed.success ? parsed.data : {};
+}
+
 export const DEFAULT_PROJECT_COLOR = '#3b82f6';
 
 export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowledgeFile {
@@ -142,6 +157,7 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     defaultProviderMode: asProviderMode(row['default_provider_mode']),
     allowedSurfaces: asAllowedSurfaces(row['allowed_surfaces']),
     defaultModelId: asString(row['default_model_id']),
+    chatDefaults: asChatDefaults(row['chat_defaults']),
     conversationCount:
       typeof row['conversation_count'] === 'number' ? row['conversation_count'] : 0,
     lastUsedAt: asString(row['last_used_at']),

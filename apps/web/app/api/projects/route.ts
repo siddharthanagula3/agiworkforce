@@ -69,7 +69,8 @@ async function handleGetProjects(request: NextRequest) {
          select p.id, p.user_id, p.organization_id, p.name, p.description, p.instructions,
                 p.color, p.is_archived, p.uses_global_memory, p.uses_account_instructions,
                 p.uses_account_style, p.metadata, p.default_privacy_mode,
-                p.default_provider_mode, p.allowed_surfaces, p.default_model_id, p.last_used_at,
+                p.default_provider_mode, p.allowed_surfaces, p.default_model_id,
+                to_jsonb(p)->'chat_defaults' as chat_defaults, p.last_used_at,
                 p.icon_emoji, p.accent_color, p.imported_from, p.created_at, p.updated_at,
                 to_char(p.updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
                 (p.user_id <> $1) as is_org_shared,
@@ -170,6 +171,10 @@ async function handleCreateProject(request: NextRequest) {
   if (body.defaultModelId !== undefined) {
     columns.push('default_model_id');
     values.push(body.defaultModelId);
+  }
+  if (body.chatDefaults !== undefined) {
+    columns.push('chat_defaults');
+    values.push(JSON.stringify(body.chatDefaults));
   }
   if (body.importedFrom !== undefined) {
     columns.push('imported_from');
