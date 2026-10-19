@@ -2227,6 +2227,9 @@ enum MarketplaceSubcommand {
     },
     /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
     Get { reference: String },
+    /// Show one marketplace plugin before installing it: what it adds, the
+    /// connections it needs and the permissions it asks for.
+    Show { reference: String },
     /// Search the plugins on the marketplaces added to your account.
     Search {
         /// Search query.
@@ -2530,6 +2533,55 @@ async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
         .and_then(|index| sessions.get(index))
         .ok_or_else(|| anyhow::anyhow!("No session picked."))?;
     Ok(choice.id.clone())
+}
+
+/// A marketplace plugin on the account, named `plugin@marketplace`.
+async fn marketplace_entry(
+    reference: &str,
+) -> Result<(
+    cloud::CloudClient,
+    cloud::marketplaces::MarketplaceSource,
+    cloud::marketplaces::MarketplaceEntry,
+)> {
+    if let Some(refusal) =
+        tier_cache::capability_refusal(tier_cache::MARKETPLACE_CAPABILITY, "The plugin marketplace")
+    {
+        anyhow::bail!(refusal);
+    }
+    let (plugin, marketplace_name) = reference.rsplit_once('@').ok_or_else(|| {
+        anyhow::anyhow!(
+            "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
+        )
+    })?;
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let sources = cloud::marketplaces::list(&client)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let source = sources
+        .into_iter()
+        .find(|candidate| cloud::marketplaces::source_matches(candidate, marketplace_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                terminal_text::sanitize_terminal_text(marketplace_name)
+            )
+        })?;
+    let entries = cloud::marketplaces::entries(&client)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let entry = entries
+        .into_iter()
+        .find(|entry| entry.source_id == source.id && entry.name.eq_ignore_ascii_case(plugin))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
+                terminal_text::sanitize_terminal_text(&source.name),
+                terminal_text::sanitize_terminal_text(plugin),
+                terminal_text::sanitize_terminal_text(&source.name)
+            )
+        })?;
+    Ok((client, source, entry))
 }
 
 async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
@@ -6432,6 +6484,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     fmt_tag,
                                     terminal_text::sanitize_terminal_text(&signature.label())
                                 );
+                                if let Some((manifest, _)) = plugins::load_manifest_for(&path) {
+                                    for (label, value) in plugins::plugin_contents(&manifest) {
+                                        println!(
+                                            "  {label:<10} {}",
+                                            terminal_text::sanitize_terminal_text(&value)
+                                        );
+                                    }
+                                }
                                 let root = path
                                     .file_name()
                                     .and_then(|name| name.to_str())
@@ -7066,52 +7126,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         println!("{}", blocks.join("\n\n"));
                         Ok(())
                     }
+                    MarketplaceSubcommand::Show { reference } => {
+                        let (_, source, entry) = marketplace_entry(reference).await?;
+                        println!(
+                            "{}",
+                            cloud::marketplaces::render_entry_detail(&source, &entry)
+                        );
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Get { reference } => {
-                        if let Some(refusal) = tier_cache::capability_refusal(
-                            tier_cache::MARKETPLACE_CAPABILITY,
-                            "The plugin marketplace",
-                        ) {
-                            anyhow::bail!(refusal);
-                        }
-                        let (plugin, marketplace_name) =
-                            reference.rsplit_once('@').ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
-                                )
-                            })?;
-                        let client = cloud::CloudClient::connect(account_privacy_mode())
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let sources = cloud::marketplaces::list(&client)
-                            .await
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let source = sources
-                            .iter()
-                            .find(|candidate| {
-                                cloud::marketplaces::source_matches(candidate, marketplace_name)
-                            })
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
-                                    terminal_text::sanitize_terminal_text(marketplace_name)
-                                )
-                            })?;
-                        let entries = cloud::marketplaces::entries(&client)
-                            .await
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let entry = entries
-                            .iter()
-                            .find(|entry| {
-                                entry.source_id == source.id
-                                    && entry.name.eq_ignore_ascii_case(plugin)
-                            })
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
-                                    terminal_text::sanitize_terminal_text(&source.name),
-                                    terminal_text::sanitize_terminal_text(plugin),
-                                    terminal_text::sanitize_terminal_text(&source.name)
-                                )
-                            })?;
+                        let (client, source, entry) = marketplace_entry(reference).await?;
                         let installation = cloud::marketplaces::install(&client, &entry.id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;

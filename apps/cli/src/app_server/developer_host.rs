@@ -1264,17 +1264,25 @@ impl CliDeveloperSessionHost {
         self.validate_session_workspace(&session)
     }
 
+    async fn needs_input(&self, thread_id: &str) -> bool {
+        self.pending_approvals
+            .lock()
+            .await
+            .values()
+            .any(|approval| approval.thread_id == thread_id)
+            || self
+                .pending_user_inputs
+                .lock()
+                .await
+                .values()
+                .any(|question| question.thread_id == thread_id)
+    }
+
     async fn status_for(&self, summary: &ManagedSessionSummary) -> ThreadStatus {
         if summary.archived_at.is_some() {
             return ThreadStatus::Archived;
         }
-        if self
-            .pending_approvals
-            .lock()
-            .await
-            .values()
-            .any(|approval| approval.thread_id == summary.session_id)
-        {
+        if self.needs_input(&summary.session_id).await {
             return ThreadStatus::AwaitingApproval;
         }
         if self
@@ -2254,6 +2262,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 summary.workspace_root.as_deref() == Some(self.workspace_root.as_path());
             (params.include_archived || summary.archived_at.is_none()) && workspace_matches
         });
+        let mut waiting = HashSet::new();
+        for summary in &summaries {
+            if self.needs_input(&summary.session_id).await {
+                waiting.insert(summary.session_id.clone());
+            }
+        }
+        summaries.sort_by_key(|summary| !waiting.contains(&summary.session_id));
 
         let start = params
             .cursor
@@ -10271,6 +10286,60 @@ mod tests {
             false,
         )
         .expect("host")
+    }
+
+    #[tokio::test]
+    async fn a_thread_waiting_on_the_user_is_listed_first() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let client = AppServerClientInfo {
+            name: "agi_vscode".to_string(),
+            title: String::new(),
+            version: String::new(),
+        };
+        let mut started = Vec::new();
+        for title in ["Older, waiting", "Newer, idle"] {
+            started.push(
+                host.start_thread(
+                    ThreadStartParams {
+                        model: None,
+                        provider: None,
+                        cwd: None,
+                        title: Some(title.to_string()),
+                    },
+                    client.clone(),
+                )
+                .await
+                .expect("thread"),
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let before = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert_eq!(before.threads[0].title, "Newer, idle");
+
+        let (responder, _answer) = oneshot::channel();
+        host.pending_user_inputs.lock().await.insert(
+            "question-1".to_string(),
+            PendingUserInput {
+                thread_id: started[0].id.clone(),
+                turn_id: "turn-1".to_string(),
+                snapshot: PendingUserInputSnapshot {
+                    request_id: "question-1".to_string(),
+                    question: "Which branch?".to_string(),
+                },
+                responder,
+            },
+        );
+        let after = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert_eq!(after.threads[0].title, "Older, waiting");
+        assert_eq!(after.threads[0].status, ThreadStatus::AwaitingApproval);
     }
 
     #[tokio::test]
