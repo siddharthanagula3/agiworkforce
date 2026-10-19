@@ -95,4 +95,5 @@ export type AppServerCapabilities = {
    * adding to it.
    */
   sideQuestion?: boolean;
+  threadRename?: boolean;
 };

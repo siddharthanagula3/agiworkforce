@@ -7,6 +7,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell';
 import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
+import { useReleaseUpdateNotice } from '@/src/features/release-state/releaseUpdateNotice';
 
 export { default as ErrorBoundary } from './error';
 
@@ -17,6 +18,7 @@ export default function AppLayout() {
   const { drawerWidth, usesPersistentDrawer } = useTabletLayout();
   const gestures = drawerGestureOptions({ usesPersistentDrawer });
   useDeviceRegistryHeartbeat();
+  useReleaseUpdateNotice();
 
   return (
     <>
@@ -59,6 +61,7 @@ export default function AppLayout() {
         <Drawer.Screen name="projects/[id]" options={HIDDEN} />
         <Drawer.Screen name="projects/settings/[id]" options={HIDDEN} />
         <Drawer.Screen name="projects/shared/[id]" options={HIDDEN} />
+        <Drawer.Screen name="study" options={HIDDEN} />
 
         <Drawer.Screen name="tasks" options={HIDDEN} />
 

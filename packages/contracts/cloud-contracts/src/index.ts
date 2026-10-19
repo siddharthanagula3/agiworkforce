@@ -16,6 +16,7 @@ export * from './health-space';
 export * from './library';
 export * from './memory-summary';
 export * from './partner-applications';
+export * from './usage-reset-reminder';
 export * from './managed-media';
 export * from './me';
 export * from './client-handshake';
@@ -82,3 +83,6 @@ export * from './localized-pricing';
 
 export * from './workspaces';
 export * from './agents';
+export * from './developer-console';
+export * from './agent-drafts';
+export * from './plugin-directory';

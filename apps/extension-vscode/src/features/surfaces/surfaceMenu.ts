@@ -217,8 +217,16 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
   },
 ];
 
+export const DRAFT_SLASH_COMMANDS: readonly Omit<SlashCommandItem, 'command'>[] = [
+  {
+    name: '/btw',
+    description: 'Ask a side question that is not added to this chat',
+    aliases: ['side'],
+  },
+];
+
 export type SlashMenuAction =
-  { kind: 'command'; command: string } | { kind: 'prompt' } | { kind: 'skill' } | { kind: 'cli' };
+  { kind: 'command'; command: string } | { kind: 'prompt' } | { kind: 'cli' };
 
 export interface SlashMenuEntry {
   name: string;
@@ -230,10 +238,10 @@ function bareName(name: string): string {
   return name.replace(/^\//u, '').toLowerCase();
 }
 
-function extensionCommandFor(
+function extensionCommandFor<T extends Omit<SlashCommandItem, 'command'>>(
   names: readonly string[],
-  extensionCommands: readonly SlashCommandItem[],
-): SlashCommandItem | undefined {
+  extensionCommands: readonly T[],
+): T | undefined {
   const wanted = new Set(names.map(bareName));
   return extensionCommands.find(
     (item) =>
@@ -248,6 +256,7 @@ export function slashMenuEntries(
   const entries = new Map<string, SlashMenuEntry>();
   for (const command of listed) {
     const name = `/${bareName(command.name)}`;
+    if (extensionCommandFor([command.name, ...command.aliases], DRAFT_SLASH_COMMANDS)) continue;
     const served = extensionCommandFor([command.name, ...command.aliases], extensionCommands);
     if (served !== undefined) {
       const servedName = `/${bareName(served.name)}`;
@@ -261,15 +270,16 @@ export function slashMenuEntries(
       continue;
     }
     const action: SlashMenuAction | undefined =
-      command.prompt === true
-        ? { kind: 'prompt' }
-        : command.source === 'skill' && !command.runnable
-          ? { kind: 'skill' }
-          : command.runnable
-            ? { kind: 'cli' }
-            : undefined;
+      command.prompt === true ? { kind: 'prompt' } : command.runnable ? { kind: 'cli' } : undefined;
     if (action === undefined || entries.has(name)) continue;
     entries.set(name, { name, description: command.description, action });
+  }
+  for (const item of DRAFT_SLASH_COMMANDS) {
+    entries.set(item.name, {
+      name: item.name,
+      description: item.description,
+      action: { kind: 'prompt' },
+    });
   }
   for (const item of extensionCommands) {
     const name = `/${bareName(item.name)}`;

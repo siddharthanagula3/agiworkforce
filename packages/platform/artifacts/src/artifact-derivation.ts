@@ -102,7 +102,22 @@ export const EXPLICIT_ARTIFACT_MARKER_FOR = {
   svg: EXPLICIT_ARTIFACT_MARKERS[1],
   react: EXPLICIT_ARTIFACT_MARKERS[0],
   mermaid: EXPLICIT_ARTIFACT_MARKERS[3],
+  markdown: EXPLICIT_ARTIFACT_MARKERS[1],
 } as const;
+
+const MARKDOWN_LANGUAGES: ReadonlySet<string> = new Set(['markdown', 'md']);
+const DECK_LINE = /^\s*<!--\s*deck\b[^>]*-->\s*$/m;
+
+export function isMarkedMarkdownDocument(language: string, content: string): boolean {
+  if (!MARKDOWN_LANGUAGES.has(language.toLowerCase())) return false;
+  const firstLine = content.split('\n', 1)[0] ?? '';
+  return firstLine.trim() === EXPLICIT_ARTIFACT_MARKER_FOR.markdown;
+}
+
+function stripMarkdownMarker(content: string): string {
+  const newline = content.indexOf('\n');
+  return newline === -1 ? '' : content.slice(newline + 1).trim();
+}
 
 function isArtifactMarkerLine(trimmedLine: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => trimmedLine === marker);
@@ -113,10 +128,14 @@ export function hasExplicitArtifactMarker(content: string): boolean {
 }
 
 export function isExplicitlyRenderableArtifact(language: string, content: string): boolean {
+  if (isMarkedMarkdownDocument(language, content)) return true;
   return isRenderableArtifact(language, content) && hasExplicitArtifactMarker(content);
 }
 
 export function detectArtifactType(language: string, content: string): SharedArtifactType {
+  if (isMarkedMarkdownDocument(language, content)) {
+    return DECK_LINE.test(stripMarkdownMarker(content)) ? 'presentation' : 'document';
+  }
   const lang = language.toLowerCase();
   if (lang === 'mermaid') return 'mermaid';
   if (lang === 'svg' || content.trim().startsWith('<svg')) return 'svg';
@@ -264,7 +283,10 @@ function blockIncluded(
   if (include === 'explicit-renderable') {
     return isExplicitlyRenderableArtifact(block.language, block.content);
   }
-  return isRenderableArtifact(block.language, block.content);
+  return (
+    isRenderableArtifact(block.language, block.content) ||
+    isMarkedMarkdownDocument(block.language, block.content)
+  );
 }
 
 export function deriveArtifacts(
@@ -277,12 +299,14 @@ export function deriveArtifacts(
   const artifacts: SharedArtifact[] = [];
   for (const block of blocks ?? extractCodeBlocks(markdown)) {
     if (!blockIncluded(block, include, minCodeLines)) continue;
+    const markedDocument = isMarkedMarkdownDocument(block.language, block.content);
+    const content = markedDocument ? stripMarkdownMarker(block.content) : block.content;
     artifacts.push({
       id: computeDerivedArtifactId(conversationId, messageId, block.ordinal),
       type: detectArtifactType(block.language, block.content),
-      title: extractArtifactTitle(block.content) ?? defaultTitle(block),
-      content: block.content,
-      language: block.language,
+      title: extractArtifactTitle(content) ?? defaultTitle(block),
+      content,
+      language: markedDocument ? 'markdown' : block.language,
       version: 1,
       createdAt: now,
       updatedAt: now,

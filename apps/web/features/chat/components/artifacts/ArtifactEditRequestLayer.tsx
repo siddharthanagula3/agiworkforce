@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Check, MessageSquarePlus, X } from 'lucide-react';
+import { Check, ImageUp, MessageSquarePlus, X } from 'lucide-react';
+import { isImageSelection } from './design/design-edits';
 import type { ArtifactPickerSelection } from '@/lib/artifact-sandbox';
 import { cn } from '@shared/lib/utils';
 import { normalizeEditInstruction } from './artifact-edit-request';
@@ -11,6 +12,7 @@ export const CANCEL_EDIT_REQUEST = 'Cancel';
 export const DESCRIBE_CHANGE_PLACEHOLDER = 'Describe the change...';
 export const SEND_EDIT_REQUEST_LABEL = 'Send the change request';
 export const COMMENT_ON_ELEMENT_LABEL = 'Comment on this element';
+export const REPLACE_IMAGE_LABEL = 'Replace this image';
 const INPUT_WIDTH_PX = 320;
 const EDGE_GAP_PX = 8;
 const INPUT_HEIGHT_ESTIMATE_PX = 52;
@@ -43,11 +45,13 @@ export function ArtifactEditRequestLayer({
   onSubmit,
   onCancel,
   onComment,
+  onReplaceImage,
 }: {
   selection: ArtifactPickerSelection | null;
   onSubmit: (instruction: string) => void;
   onCancel: () => void;
   onComment?: (point: { selection: ArtifactPickerSelection; x: number; y: number }) => void;
+  onReplaceImage?: (selection: ArtifactPickerSelection) => void;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +131,18 @@ export function ArtifactEditRequestLayer({
           >
             <Check className="h-4 w-4" aria-hidden="true" />
           </button>
+          {onReplaceImage && isImageSelection(selection.html) ? (
+            <button
+              type="button"
+              onClick={() => onReplaceImage(selection)}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8 sm:w-8"
+              aria-label={REPLACE_IMAGE_LABEL}
+              title={REPLACE_IMAGE_LABEL}
+              data-testid="artifact-edit-request-replace-image"
+            >
+              <ImageUp className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
           {onComment ? (
             <button
               type="button"

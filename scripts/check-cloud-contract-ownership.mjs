@@ -21,6 +21,7 @@ const cloudModules = [
   'library',
   'memory-summary',
   'partner-applications',
+  'usage-reset-reminder',
   'managed-media',
   'me',
   'client-handshake',
@@ -86,6 +87,7 @@ const cloudModules = [
   'localized-pricing',
   'workspaces',
   'agents',
+  'developer-console',
 ];
 
 const cloudMovedFiles = [

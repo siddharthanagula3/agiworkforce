@@ -326,6 +326,10 @@ async function runStep(
     case 'device_wait':
       await invokeScreenStep({ ms: input['ms'] });
       return 'Waited. Take a screenshot to see the screen now.';
+    case 'device_open_app': {
+      const opened = await invokeScreenStep({ application: input['application'] });
+      return `Opened ${String(input['application'])}.${frontNote(frontOf(opened))} Take a screenshot to see it.`;
+    }
     case 'device_read_file': {
       const file = await invokeDeviceCommand<FileTextContent>(command, {
         rootId: input['rootId'],

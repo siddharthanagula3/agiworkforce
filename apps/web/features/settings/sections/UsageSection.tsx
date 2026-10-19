@@ -243,16 +243,21 @@ function LoadingNotice({ label }: { label: string }) {
   );
 }
 
+const PERIOD_NOT_RENEWED_DETAIL =
+  'Your billing period ended and has not renewed yet, so there are no credits to use. Check Billing.';
+
 function UsageBar({
   label,
   percent,
   detail,
   unknown = false,
+  unknownDetail = 'Could not read your usage. Retry to load it.',
 }: {
   label: string;
   percent: number;
   detail: string;
   unknown?: boolean;
+  unknownDetail?: string;
 }) {
   const urgency = getUsageUrgency(percent);
   return (
@@ -277,9 +282,7 @@ function UsageBar({
         }
         style={{ background: 'var(--chat-border-strong)' }}
       />
-      <span style={DETAIL}>
-        {unknown ? 'Could not read your usage. Retry to load it.' : detail}
-      </span>
+      <span style={DETAIL}>{unknown ? unknownDetail : detail}</span>
     </div>
   );
 }
@@ -813,6 +816,10 @@ export function UsageSection() {
   }, []);
 
   const usageUnknown = !usage;
+  const periodLapsed =
+    usage?.usage_allocation === 'pending' &&
+    Boolean(usage.period_end) &&
+    Date.parse(usage.period_end ?? '') <= nowMs;
   const usedPercent = normalizeUsagePercentage(usage?.usage_percentage);
   const sessionUsedPercent = normalizeUsagePercentage(usage?.session_usage_percentage);
   const weeklyUsedPercent = normalizeUsagePercentage(usage?.weekly_usage_percentage);
@@ -913,19 +920,6 @@ export function UsageSection() {
             </div>
           ) : (
             <>
-              {usage?.usage_allocation === 'pending' && (
-                <p role="status" style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
-                  Usage for your current billing period is not available yet, because your plan has
-                  not renewed on your account. Check your plan in{' '}
-                  <SettingsSectionLink
-                    section="billing"
-                    className="text-primary underline underline-offset-4"
-                  >
-                    Billing
-                  </SettingsSectionLink>
-                  .
-                </p>
-              )}
               <UsageBar
                 unknown={usageUnknown}
                 label={managedUsageBucketLabel('session')}
@@ -962,19 +956,16 @@ export function UsageSection() {
                 />
               )}
               <UsageBar
-                unknown={usageUnknown}
+                unknown={usageUnknown || periodLapsed}
+                {...(periodLapsed ? { unknownDetail: PERIOD_NOT_RENEWED_DETAIL } : {})}
                 label={managedUsageBucketLabel('period')}
                 percent={usedPercent}
-                detail={
-                  usage?.usage_allocation === 'pending'
-                    ? 'Not available until your plan renews'
-                    : usageDetail(
-                        100 - usedPercent,
-                        usage?.usage_reset_at ?? null,
-                        nowMs,
-                        credits?.monthly,
-                      )
-                }
+                detail={usageDetail(
+                  100 - usedPercent,
+                  usage?.usage_reset_at ?? null,
+                  nowMs,
+                  credits?.monthly,
+                )}
               />
               <VoiceEstimateRow
                 credits={credits}

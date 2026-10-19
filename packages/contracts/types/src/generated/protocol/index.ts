@@ -381,6 +381,8 @@ export * from './ThreadNameUpdatedEvent';
 export * from './ThreadPlanNotification';
 export * from './ThreadReadResponse';
 export * from './ThreadReconnectResponse';
+export * from './ThreadRenameParams';
+export * from './ThreadRenameResponse';
 export * from './ThreadRevertParams';
 export * from './ThreadRevertResponse';
 export * from './ThreadRevertRestore';

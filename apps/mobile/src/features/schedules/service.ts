@@ -82,6 +82,7 @@ function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
     lastRunStatus:
       task.lastExecutedAt === null ? null : task.lastError === null ? 'success' : 'failed',
     pausedReason: task.pausedReason ?? null,
+    projectId: task.projectId ?? null,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };

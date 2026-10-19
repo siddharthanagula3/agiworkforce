@@ -411,6 +411,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { requestUsageResetReminder } from '@/features/chat/lib/usage-reset-reminder';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -1617,6 +1618,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     return {
       reason: accountUsageBlock.reason || paywallLimitHeadline(accountUsageBlock.feature),
       ...(resetAt ? { resetAt } : {}),
+      ...(resetAt && !isDesktopHost()
+        ? { onRemindAtReset: () => requestUsageResetReminder(resetAt) }
+        : {}),
       ...(accountUsageBlock.showUpgradeCta === false
         ? {}
         : {

@@ -274,6 +274,11 @@ export const rateLimitConfigs = {
     window: '1 h',
     failClosed: false,
   },
+  'usage-reset-reminder': {
+    limit: 10,
+    window: '1 h',
+    failClosed: false,
+  },
   'chat-conversation-read': {
     limit: 120,
     window: '1 m',

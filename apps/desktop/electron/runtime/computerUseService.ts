@@ -267,7 +267,7 @@ export function computerUseAvailability(prompt = false): ComputerUseAvailability
  * runs only after the user granted computer.use, so the System Settings pane it
  * opens is the answer to something they just asked for.
  */
-function requireAvailable(): void {
+export function requireAvailable(): void {
   const availability = computerUseAvailability(true);
   if (!availability.supported) {
     throw new ComputerUseRefused(
@@ -320,6 +320,40 @@ async function captureDisplay(display: Electron.Display): Promise<Electron.Nativ
     );
   }
   return source.thumbnail;
+}
+
+/**
+ * Typing the user's own dictation needs only Accessibility: nothing is read
+ * from the screen, so Screen Recording is not asked for.
+ */
+function requireInputAccess(): void {
+  const support = computerUseSupport();
+  if (!support.supported) throw new ComputerUseRefused('unsupported', support.reason);
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    throw new ComputerUseRefused(
+      'permission',
+      'Accessibility is off for this app, so it cannot type into other apps. Turn it on in System Settings > Privacy & Security > Accessibility.',
+    );
+  }
+}
+
+export async function applicationTakingInput(): Promise<
+  (ScreenApplication & { secureInput: boolean }) | null
+> {
+  requireInputAccess();
+  const raw = (await sendToHelper({ action: 'front' }))['front'];
+  const app = readScreenApplication(raw);
+  if (!app) return null;
+  const secureInput =
+    typeof raw === 'object' &&
+    raw !== null &&
+    (raw as Record<string, unknown>)['secureInput'] === true;
+  return { ...app, secureInput };
+}
+
+export async function typeForUser(text: string): Promise<void> {
+  requireInputAccess();
+  await sendToHelper({ action: 'type', text });
 }
 
 export async function readFrontWindow(): Promise<FrontWindowReading> {

@@ -194,6 +194,29 @@ describe('UsageSection', () => {
     expect(requested).not.toContain('/api/usage/limits');
   });
 
+  it('says the billing period lapsed instead of showing a full allowance it will not honour', async () => {
+    stubUsageApi({
+      summary: () =>
+        answer({
+          ...proSummary({ monthly: creditWindow(2_000, 0) }),
+          usage_percentage: 0,
+          usage_allocation: 'pending',
+          has_usage_remaining: false,
+          period_end: inDays(-0.1),
+          usage_reset_at: inDays(-0.1),
+        }),
+      limits: () => answer(monthlyLimits()),
+    });
+    renderSection();
+
+    expect(
+      await screen.findByText(
+        'Your billing period ended and has not renewed yet, so there are no credits to use. Check Billing.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/2,000 left|0 of 2,000/)).toBeNull();
+  });
+
   it('reports a reading that never loaded instead of inventing one', async () => {
     stubUsageApi({ summary: () => FAILED });
     renderSection();
@@ -288,36 +311,6 @@ describe('UsageSection stated in credits', () => {
       0,
     );
     expect(screen.getAllByText(/Used 400 of 2,000 credits · 1,600 left/).length).toBeGreaterThan(0);
-  });
-
-  it('says the billing period has not opened instead of showing an unspent allowance', async () => {
-    stubUsageApi({
-      summary: () =>
-        answer({
-          ...proSummary({ monthly: { ...creditWindow(2_000, 0), remaining: 0 } }),
-          usage_percentage: 0,
-          has_usage_remaining: false,
-          usage_allocation: 'pending',
-          period_start: null,
-          period_end: null,
-          usage_reset_at: null,
-        }),
-      limits: () => answer(monthlyLimits()),
-      history: () => FAILED,
-    });
-    renderSection();
-
-    await screen.findByText(managedUsageBucketLabel('session'));
-    expect(
-      screen
-        .getAllByRole('status')
-        .some(
-          (node) =>
-            node.textContent ===
-            'Usage for your current billing period is not available yet, because your plan has not renewed on your account. Check your plan in Billing.',
-        ),
-    ).toBe(true);
-    expect(screen.queryByText(/2,000 left/)).toBeNull();
   });
 
   it('keeps the bar fill on the percentage the server sends', async () => {

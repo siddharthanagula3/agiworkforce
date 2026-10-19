@@ -121,6 +121,7 @@ export { DesktopSettingsSection } from './components/DesktopSettingsSection';
 export { DesktopTitleStrip } from './components/DesktopTitleStrip';
 export { DesktopUpdateRow } from './components/DesktopUpdateRow';
 export { DesktopUpdateNotice } from './components/DesktopUpdateNotice';
+export { DictationBar } from './components/DictationBar';
 export { LocalAccessSection } from './components/LocalAccessSection';
 export { LocalCommandDialog, type LocalCommandDialogProps } from './components/LocalCommandDialog';
 export {

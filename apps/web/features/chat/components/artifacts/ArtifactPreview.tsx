@@ -38,7 +38,11 @@ import {
   GitFork,
   History,
   MousePointerClick,
+  LayoutTemplate,
+  ListChecks,
   MessageSquare,
+  Palette,
+  PenTool,
   Sparkles,
   TextCursorInput,
 } from 'lucide-react';
@@ -72,6 +76,19 @@ import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { StudyDocument } from './study/StudyDocument';
+import { replaceImageInHtml } from './design/design-edits';
+import { ArtifactChangesReview } from './review/ArtifactChangesReview';
+import { BrandKitDialog, SaveTemplateDialog } from './library/LibraryDialogs';
+import { useStudioLibrary, type BrandPayload } from './library/studio-library-client';
+import { buildApplyBrandRequest } from './library/brand-request';
+import { brandThemeMeta } from './presentation/deck-themes';
+import { DesignBriefDialog } from './design/DesignBriefDialog';
+import { buildBriefRevisionRequest, readDesignBrief } from './design/design-brief';
+import {
+  IMAGE_EMBED_FAILURE_COPY,
+  ImageEmbedError,
+  embedImageFile,
+} from './presentation/image-embed';
 import { hasStudyBlocks } from './study/study-set';
 import { ArtifactCommentsPanel, COMMENTS_LABEL } from './comments/ArtifactCommentsPanel';
 import {
@@ -445,6 +462,35 @@ export function ArtifactPreview({
   const renameArtifact = useArtifactsStore((s) => s.renameArtifact);
   const [renaming, setRenaming] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [reviewingKey, setReviewingKey] = useState<string | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [brandApply, setBrandApply] = useState<((meta: Record<string, string>) => void) | null>(
+    null,
+  );
+  const studioLibrary = useStudioLibrary();
+  const savedBrands = useMemo(
+    () =>
+      studioLibrary.items.flatMap((item) =>
+        item.kind === 'brand' ? [{ id: item.id, name: item.name, brand: item.payload }] : [],
+      ),
+    [studioLibrary.items],
+  );
+  const brandThemes = useMemo(
+    () =>
+      savedBrands.map(({ id, name, brand }) => ({
+        id,
+        name,
+        meta: brandThemeMeta({ name, ...brand }),
+      })),
+    [savedBrands],
+  );
+  const loadStudioLibrary = studioLibrary.load;
+  const wantsLibrary =
+    variant === 'panel' && (artifact.type === 'presentation' || artifact.type === 'document');
+  useEffect(() => {
+    if (wantsLibrary) void loadStudioLibrary();
+  }, [wantsLibrary, loadStudioLibrary]);
   const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
   const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
@@ -527,6 +573,8 @@ export function ArtifactPreview({
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const imageReplaceInputRef = useRef<HTMLInputElement>(null);
+  const [imageReplaceTarget, setImageReplaceTarget] = useState<string | null>(null);
 
   // Leaving native fullscreen through Escape or browser UI fires
   // fullscreenchange without going through the button.
@@ -1342,6 +1390,13 @@ export function ArtifactPreview({
           handEdited={versionCount > 1}
           onSave={saveArtifactContent}
           {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+          brandThemes={brandThemes}
+          {...(canEditSource
+            ? {
+                onCreateBrand: (apply: (meta: Record<string, string>) => void) =>
+                  setBrandApply(() => apply),
+              }
+            : {})}
           {...(canComment
             ? {
                 onCommentSlide: (slide: number) => {
@@ -1509,6 +1564,32 @@ export function ArtifactPreview({
     [pickerSelection, onRequestEdits, artifact.title, cancelEditRequest],
   );
 
+  const replaceImage = useCallback(
+    async (selector: string, file: File) => {
+      try {
+        const dataUrl = await embedImageFile(file);
+        const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+        const next = stored ? replaceImageInHtml(stored.content, selector, dataUrl) : null;
+        if (!stored || next === null) {
+          toast.error('That image could not be found in the source. Ask for the change instead.');
+          return;
+        }
+        upsertArtifact({ ...stored, content: next, createdAt: new Date() });
+        cancelEditRequest();
+        toast.success('Image replaced. The previous version is in the history.');
+      } catch (error) {
+        toast.error(
+          error instanceof ImageEmbedError
+            ? IMAGE_EMBED_FAILURE_COPY[error.failure]
+            : 'That image could not be placed.',
+        );
+      } finally {
+        setImageReplaceTarget(null);
+      }
+    },
+    [artifact.id, upsertArtifact, cancelEditRequest],
+  );
+
   const startDocumentEdit = useCallback(() => {
     setSourceDraft(activeContent);
     setDraftOrigin('editor');
@@ -1564,6 +1645,10 @@ export function ArtifactPreview({
   );
 
   const canComment = variant === 'panel' && isStoredArtifact && canCommentOn(artifact.id);
+  const designBrief = useMemo(
+    () => (artifact.type === 'html' && variant === 'panel' ? readDesignBrief(activeContent) : null),
+    [artifact.type, variant, activeContent],
+  );
   const openCommentAnchors = useMemo(
     () =>
       artifactComments
@@ -1645,6 +1730,15 @@ export function ArtifactPreview({
         onSelect: startDocumentEdit,
         ariaLabel: 'Edit artifact source',
         testId: 'artifact-edit-source',
+      });
+    }
+    if (canShowChanges && isTextDocument && isLatestVersion && canEditSource) {
+      moreMenuItems.push({
+        id: 'review-changes',
+        label: 'Review changes',
+        icon: ListChecks,
+        onSelect: () => setReviewingKey(changesKey),
+        testId: 'artifact-review-changes',
       });
     }
     if (canShowChanges) {
@@ -1741,6 +1835,43 @@ export function ArtifactPreview({
           icon: Download,
           group: 'Download',
           onSelect: download.run,
+        }),
+      );
+    }
+    if (designBrief && onRequestEdits && isLatestVersion) {
+      moreMenuItems.push({
+        id: 'design-brief',
+        label: 'Design brief',
+        icon: PenTool,
+        testId: 'artifact-design-brief',
+        onSelect: () => setBriefOpen(true),
+      });
+    }
+    if (variant === 'panel' && isStoredArtifact && (isMarkdownDoc || isPresentation)) {
+      moreMenuItems.push({
+        id: 'save-template',
+        label: 'Save as template',
+        icon: LayoutTemplate,
+        group: 'Keep',
+        testId: 'artifact-save-template',
+        onSelect: () => setTemplateDialogOpen(true),
+      });
+    }
+    if (isTextDocument && onRequestEdits && isLatestVersion) {
+      savedBrands.forEach(({ id, name, brand }) =>
+        moreMenuItems.push({
+          id: `apply-brand-${id}`,
+          label: name,
+          icon: Palette,
+          group: 'Apply brand voice',
+          testId: 'artifact-apply-brand',
+          onSelect: () => {
+            if (
+              !onRequestEdits(buildApplyBrandRequest(artifact.title || 'Document', name, brand))
+            ) {
+              toast.error('The change request was not sent. Try again.');
+            }
+          },
         }),
       );
     }
@@ -2252,6 +2383,34 @@ export function ArtifactPreview({
             commentStyles['highlightScope'],
           )}
         >
+          <input
+            ref={imageReplaceInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            data-testid="artifact-replace-image-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file && imageReplaceTarget) void replaceImage(imageReplaceTarget, file);
+            }}
+          />
+          {reviewingKey === changesKey && previousVersionContent !== undefined && (
+            <div className="absolute inset-0 z-[var(--z-content-raised)] bg-background">
+              <ArtifactChangesReview
+                previous={previousVersionContent}
+                next={activeContent}
+                fromVersion={shownVersionIndex}
+                toVersion={shownVersionIndex + 1}
+                onClose={() => setReviewingKey(null)}
+                onApply={(text) => {
+                  saveArtifactContent(text);
+                  setReviewingKey(null);
+                  toast.success('Saved your choices as a new version');
+                }}
+              />
+            </div>
+          )}
           {canComment && commentsOpen && (
             <ArtifactCommentsPanel
               artifactId={artifact.id}
@@ -2283,6 +2442,14 @@ export function ArtifactPreview({
               selection={pickerSelection}
               onSubmit={submitEditRequest}
               onCancel={cancelEditRequest}
+              {...(artifact.type === 'html' && canEditSource
+                ? {
+                    onReplaceImage: (selection: ArtifactPickerSelection) => {
+                      setImageReplaceTarget(selection.selector);
+                      imageReplaceInputRef.current?.click();
+                    },
+                  }
+                : {})}
               {...(canComment
                 ? {
                     onComment: ({
@@ -2446,6 +2613,40 @@ export function ArtifactPreview({
               </ScrollArea>
             ))}
         </div>
+        <SaveTemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          kind={isPresentation ? 'deck_template' : 'document_template'}
+          defaultName={artifact.title || 'Template'}
+          title={artifact.title || 'Untitled'}
+          content={activeContent}
+        />
+        <BrandKitDialog
+          open={brandApply !== null}
+          onOpenChange={(open) => {
+            if (!open) setBrandApply(null);
+          }}
+          onSaved={(item) => {
+            if (item.kind === 'brand')
+              brandApply?.(brandThemeMeta({ name: item.name, ...(item.payload as BrandPayload) }));
+          }}
+        />
+        {designBrief && onRequestEdits ? (
+          <DesignBriefDialog
+            open={briefOpen}
+            onOpenChange={setBriefOpen}
+            initial={designBrief}
+            heading="Design brief"
+            submitLabel="Update design"
+            onSubmit={(brief) => {
+              const sent = onRequestEdits(
+                buildBriefRevisionRequest(artifact.title || 'Design', brief),
+              );
+              if (!sent) toast.error('The change request was not sent. Try again.');
+              return sent;
+            }}
+          />
+        ) : null}
         {confirmDialog}
       </div>
     );

@@ -6,7 +6,10 @@ import {
   loadSkillsCatalog,
   skillAuthoringCapability,
 } from '@features/skills/services/skills-catalog';
-import type { SkillEditorDialogProps } from '@features/skills/components/SkillEditorDialog';
+import type {
+  SkillEditorDialogProps,
+  SkillWorkspaceShare,
+} from '@features/skills/components/SkillEditorDialog';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -16,6 +19,8 @@ const CATALOG_PRELOAD_SECTIONS = ['connectors', 'skills', 'plugins'];
 const NEW_SKILL_LABEL = 'New skill';
 const SKILL_LOAD_FAILURE = 'Could not load this skill.';
 const SKILL_SAVE_FAILURE = 'Could not save this skill.';
+const SKILL_SHARE_FAILURE = 'Could not share this skill with the workspace.';
+const WORKSPACE_PLUGINS_PATH = '/api/settings/organization/plugins';
 
 type AuthoredSkill = { name: string; description: string };
 
@@ -76,6 +81,59 @@ export function useSkillsSettingsAdapter({
   const [editingSkillBodyError, setEditingSkillBodyError] = useState<string | null>(null);
   const [skillSubmitting, setSkillSubmitting] = useState(false);
   const [skillSubmitError, setSkillSubmitError] = useState<string | null>(null);
+
+  const [canShareToWorkspace, setCanShareToWorkspace] = useState(false);
+  const [shareState, setShareState] = useState<Omit<SkillWorkspaceShare, 'onShare'>>({
+    sharing: false,
+    shared: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (skillEditorMode !== 'edit') return;
+    let cancelled = false;
+    setShareState({ sharing: false, shared: false, error: null });
+    void (async () => {
+      try {
+        const res = await fetch(WORKSPACE_PLUGINS_PATH, {
+          credentials: 'include',
+          headers: await authedHeaders(),
+        });
+        const body = res.ok ? ((await res.json()) as { canManage?: unknown }) : null;
+        if (!cancelled) setCanShareToWorkspace(body?.canManage === true);
+      } catch {
+        if (!cancelled) setCanShareToWorkspace(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authedHeaders, skillEditorMode]);
+
+  const shareToWorkspace = useCallback(async () => {
+    if (!editingSkillName) return;
+    setShareState({ sharing: true, shared: false, error: null });
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(editingSkillName)}/workspace`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: await authedHeaders({ 'x-csrf-token': await getCsrfToken() }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message ?? SKILL_SHARE_FAILURE);
+      }
+      setShareState({ sharing: false, shared: true, error: null });
+    } catch (error) {
+      setShareState({
+        sharing: false,
+        shared: false,
+        error: toUserMessage(error, SKILL_SHARE_FAILURE),
+      });
+    }
+  }, [authedHeaders, editingSkillName]);
 
   const closeSkillEditor = useCallback(() => {
     setSkillEditorMode(null);
@@ -181,6 +239,10 @@ export function useSkillsSettingsAdapter({
       submitting: skillSubmitting,
       submitError: skillSubmitError,
       onSubmit: submitSkillDraft,
+      workspaceShare:
+        skillEditorMode === 'edit' && canShareToWorkspace
+          ? { ...shareState, onShare: shareToWorkspace }
+          : null,
     },
   };
 }

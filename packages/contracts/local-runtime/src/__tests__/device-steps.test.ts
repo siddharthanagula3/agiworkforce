@@ -118,6 +118,53 @@ describe('screen step arguments', () => {
   });
 });
 
+describe('opening an app', () => {
+  it('passes a name or a bundle id through and drops a trailing .app', () => {
+    expect(planDeviceStep('device_open_app', { application: ' Notes ' }, [])).toEqual({
+      tool: 'device_open_app',
+      application: 'Notes',
+    });
+    expect(
+      planDeviceStep('device_open_app', { application: 'Visual Studio Code.app' }, []),
+    ).toEqual({
+      tool: 'device_open_app',
+      application: 'Visual Studio Code',
+    });
+    expect(planDeviceStep('device_open_app', { application: 'com.apple.Notes' }, [])).toEqual({
+      tool: 'device_open_app',
+      application: 'com.apple.Notes',
+    });
+  });
+
+  it('refuses anything that is not an app name or bundle id', () => {
+    for (const bad of [
+      undefined,
+      '',
+      'a'.repeat(101),
+      '/Applications/Notes.app',
+      'Notes"; rm',
+      '../x',
+      'x\ny',
+    ]) {
+      expect(
+        () => planDeviceStep('device_open_app', { application: bad }, []),
+        String(bad),
+      ).toThrow(DeviceStepRefused);
+    }
+  });
+
+  it('is a screen step under computer.use that says which app it opens', () => {
+    expect(DEVICE_STEP_DEFINITIONS.device_open_app).toMatchObject({
+      command: 'computer_open_app',
+      capability: 'computer.use',
+      scope: 'screen',
+    });
+    expect(describeDeviceStep({ tool: 'device_open_app', application: 'Notes' }, [])).toBe(
+      'Open Notes',
+    );
+  });
+});
+
 describe('screenshots across displays', () => {
   it('passes a named display through and leaves it out when none is named', () => {
     expect(planDeviceStep('device_screenshot', { display: 2 }, [])).toEqual({

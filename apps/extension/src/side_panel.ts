@@ -128,10 +128,7 @@ import {
   replaceConversationOwner,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
-import {
-  normalizeApprovedSiteOrigin,
-  requestApprovedSiteHostPermission,
-} from './features/options/site-allowlist';
+import { normalizeApprovedSiteOrigin } from './features/options/site-allowlist';
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   grantBrowserControlConsent,
@@ -142,6 +139,12 @@ import {
 } from './features/computer-use/browserControlConsent';
 import { loadSitePolicyInput, readUserSiteAllowlist } from './features/site-policy/store';
 import { isUserBlockedSite, readUserSiteBlocklist } from './features/site-policy/userBlocklist';
+import { requestReadGrant, type ReadGrant } from './features/side-panel/readGrant';
+import {
+  activePageQuery,
+  assistantHostWindowId,
+  pageWindowQuery,
+} from './features/surface/assistantPanel';
 import {
   forgetTransientHostPermissions,
   recordTransientHostPermission,
@@ -5929,7 +5932,7 @@ async function capturePageContext(
     if (limit <= 0) return { ok: false, reason: 'The attached pages exceed the context budget.' };
     const tab = selected
       ? await chrome.tabs.get(selected.tabId)
-      : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+      : (await chrome.tabs.query(await activePageQuery()))[0];
     if (!tab?.id || !tab.url) return { ok: false, reason: 'No readable website tab is open.' };
     const url = new URL(tab.url);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
@@ -6651,7 +6654,7 @@ function startComposerBrowserTask(
 
   void (async () => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query(await activePageQuery());
       if (!ownsComposerBrowserConversation(run) || run.cancelling) return;
       if (typeof tab?.id !== 'number') {
         throw new Error('Could not determine the active tab. Please try again.');
@@ -6988,7 +6991,7 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
 async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
   let tab: chrome.tabs.Tab | undefined;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query(await activePageQuery());
   } catch {
     return undefined;
   }
@@ -7028,7 +7031,7 @@ async function requestBrowserSiteAccess(
 ): Promise<BrowserSiteAccess> {
   let tab: chrome.tabs.Tab | undefined;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query(await activePageQuery());
   } catch {
     tab = undefined;
   }
@@ -7205,17 +7208,13 @@ function siteAccessRefusal(access: BrowserSiteAccess): string {
 }
 
 async function runReadPageTool(streamId: string, toolCallId: string): Promise<string> {
-  let [tab] = await chrome.tabs
-    .query({ active: true, currentWindow: true })
-    .catch((): chrome.tabs.Tab[] => []);
+  let [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
   let access: BrowserSiteAccess = { status: 'granted' };
   let capture = await capturePageContext();
   if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
     access = await requestBrowserSiteAccess(streamId, 'read');
     if (access.status !== 'granted') return siteAccessRefusal(access);
-    [tab] = await chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .catch((): chrome.tabs.Tab[] => []);
+    [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
     capture = await capturePageContext();
   }
   const host = hostLabel(webTabOrigin(tab) ?? (capture.ok ? capture.source.url : ''));
@@ -8877,7 +8876,7 @@ async function offerPageSelection(): Promise<void> {
   let tab: chrome.tabs.Tab | undefined;
   let selection: PageSelection | null = null;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query(await activePageQuery());
     if (!tab?.id || !tab.url || (await isUserBlockedSite(tab.url))) return;
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -9114,12 +9113,14 @@ function setBlockedState(blocked: boolean): void {
 
 function refreshPageHostname(): void {
   try {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (chrome.runtime.lastError) return;
-      const tab = tabs[0];
-      const url = tab?.url ?? '';
-      updateActivePage(url, tab?.id);
-    });
+    void activePageQuery().then((query) =>
+      chrome.tabs.query(query, (tabs) => {
+        if (chrome.runtime.lastError) return;
+        const tab = tabs[0];
+        const url = tab?.url ?? '';
+        updateActivePage(url, tab?.id);
+      }),
+    );
   } catch {
     /* noop */
   }
@@ -11832,7 +11833,7 @@ function buildUI(): void {
     const generation = ++computerUseSiteGeneration;
     let tab: chrome.tabs.Tab | undefined;
     try {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      [tab] = await chrome.tabs.query(await activePageQuery());
     } catch {
       tab = undefined;
     }
@@ -11882,7 +11883,7 @@ function buildUI(): void {
 
   cuPanel.onStartTask((goal) => {
     void (async () => {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [activeTab] = await chrome.tabs.query(await activePageQuery());
       if (!activeTab?.id) {
         cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
         return;
@@ -11894,7 +11895,7 @@ function buildUI(): void {
 
   cuPanel.onRunAutofill(() => {
     void (async () => {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [activeTab] = await chrome.tabs.query(await activePageQuery());
       const activeTabId = activeTab?.id;
       if (!activeTabId) {
         cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
@@ -12101,14 +12102,8 @@ function buildUI(): void {
     }
   });
 
-  function approveSiteForReading(url: string): Promise<boolean> {
-    const origin = normalizeApprovedSiteOrigin(url);
-    if (!origin) return Promise.resolve(false);
-    return requestApprovedSiteHostPermission(origin).then(async (granted) => {
-      if (!granted) return false;
-      await writeApprovedSite(origin);
-      return true;
-    });
+  function approveSiteForReading(url: string): Promise<ReadGrant> {
+    return requestReadGrant([url]);
   }
 
   function attachPageCapture(capture: PageContextCapture): void {
@@ -12123,15 +12118,23 @@ function buildUI(): void {
     updateContextButton();
   }
 
-  async function attachChosenTab(tab: chrome.tabs.Tab, approval: Promise<boolean>): Promise<void> {
-    if (!(await approval)) {
-      attachPageCapture({
-        ok: false,
-        reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
-      });
-      return;
+  async function attachChosenTab(
+    tab: chrome.tabs.Tab,
+    approval: Promise<ReadGrant>,
+  ): Promise<void> {
+    const grant = await approval;
+    try {
+      if (!grant.granted) {
+        attachPageCapture({
+          ok: false,
+          reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
+        });
+        return;
+      }
+      attachPageCapture(await readTabText(tab, true));
+    } finally {
+      await grant.release();
     }
-    attachPageCapture(await readTabText(tab, true));
   }
 
   const mentionMenu = el('div', {
@@ -12247,13 +12250,17 @@ function buildUI(): void {
       return;
     }
     const generation = ++mentionGeneration;
-    chrome.tabs.query({ currentWindow: true }, (tabs) => {
-      if (generation !== mentionGeneration) return;
-      mentionTabs = chrome.runtime.lastError
-        ? []
-        : tabs.filter((tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url));
-      recomputeMentionOptions();
-    });
+    void pageWindowQuery().then((query) =>
+      chrome.tabs.query(query, (tabs) => {
+        if (generation !== mentionGeneration) return;
+        mentionTabs = chrome.runtime.lastError
+          ? []
+          : tabs.filter(
+              (tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url),
+            );
+        recomputeMentionOptions();
+      }),
+    );
     void listChromeProjects().then((result) => {
       if (generation !== mentionGeneration) return;
       mentionProjects =
@@ -12271,7 +12278,7 @@ function buildUI(): void {
     const approval =
       option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
         ? approveSiteForReading(option.tab.url ?? '')
-        : Promise.resolve(true);
+        : Promise.resolve<ReadGrant>({ granted: true, release: async () => {} });
     closeMentionMenu();
     replaceComposerRange(inputEl, mention.start, mention.end, '');
     autoResizeInput(inputEl);
@@ -12457,7 +12464,7 @@ function buildUI(): void {
     let capture = await capturePageContext();
     if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
       const [tab] = await chrome.tabs
-        .query({ active: true, currentWindow: true })
+        .query(await activePageQuery())
         .catch((): chrome.tabs.Tab[] => []);
       const origin = webTabOrigin(tab);
       if (origin) {
@@ -12565,18 +12572,22 @@ function buildUI(): void {
     linkSubmit.disabled = true;
     linkError.textContent = t('spLinkReading');
     void approval
-      .then(async (granted) => {
-        if (!granted) {
-          linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
-          return;
+      .then(async (grant) => {
+        try {
+          if (!grant.granted) {
+            linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
+            return;
+          }
+          const capture = await readLinkedPage(url);
+          if (!capture.ok) {
+            linkError.textContent = capture.reason;
+            return;
+          }
+          attachPageCapture(capture);
+          closeLinkForm();
+        } finally {
+          await grant.release();
         }
-        const capture = await readLinkedPage(url);
-        if (!capture.ok) {
-          linkError.textContent = capture.reason;
-          return;
-        }
-        attachPageCapture(capture);
-        closeLinkForm();
       })
       .finally(() => {
         linkSubmit.disabled = false;
@@ -12640,10 +12651,15 @@ function buildUI(): void {
       generation === _ctx.conversationGeneration &&
       !_ctx.isStreaming;
     updateAttachmentPreview();
+    let readGrant: ReadGrant | null = null;
     try {
       const selection = await chooseBrowserContextTabs(
         isCurrent,
         MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachments.length,
+        async (urls) => {
+          readGrant = await requestReadGrant(urls);
+          return readGrant.granted;
+        },
         intake.signal,
       );
       if (!selection || !isCurrent()) return;
@@ -12674,6 +12690,7 @@ function buildUI(): void {
       if (isCurrent())
         composerContextNotice = error instanceof Error ? error.message : t('spAttachTabsFailed');
     } finally {
+      await (readGrant as ReadGrant | null)?.release();
       if (tabContextIntakeAbort === intake) tabContextIntakeAbort = null;
       finishComposerAttachmentIntake(attachmentIntake);
       updateAttachmentPreview();
@@ -13622,8 +13639,8 @@ function announceSidePanelPresence(): void {
   try {
     const port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
     port.onDisconnect.addListener(() => setTimeout(announceSidePanelPresence, 1_000));
-    void chrome.windows.getCurrent().then((current) => {
-      if (current.id !== undefined) port.postMessage({ windowId: current.id });
+    void assistantHostWindowId().then((windowId) => {
+      if (windowId !== undefined) port.postMessage({ windowId });
     });
   } catch {
     setTimeout(announceSidePanelPresence, 5_000);

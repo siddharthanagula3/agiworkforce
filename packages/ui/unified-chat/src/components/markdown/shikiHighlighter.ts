@@ -114,14 +114,54 @@ const LANGUAGE_ALIASES: Readonly<Record<string, LanguageId>> = {
   zsh: 'bash',
 } as const;
 
-export const THEME_LOADERS = {
-  light: () => import('@shikijs/themes/github-light-high-contrast'),
-  dark: () => import('@shikijs/themes/github-dark-default'),
+export const LIGHT_THEME_LOADER = () => import('@shikijs/themes/github-light-high-contrast');
+
+export const CODE_THEMES = {
+  github: { label: 'GitHub', dark: () => import('@shikijs/themes/github-dark-default') },
+  'github-dimmed': {
+    label: 'GitHub dimmed',
+    dark: () => import('@shikijs/themes/github-dark-dimmed'),
+  },
+  'github-high-contrast': {
+    label: 'GitHub high contrast',
+    dark: () => import('@shikijs/themes/github-dark-high-contrast'),
+  },
+  catppuccin: { label: 'Catppuccin', dark: () => import('@shikijs/themes/catppuccin-mocha') },
+  'dracula-soft': { label: 'Dracula soft', dark: () => import('@shikijs/themes/dracula-soft') },
+  everforest: { label: 'Everforest', dark: () => import('@shikijs/themes/everforest-dark') },
 } as const;
 
-type ThemeName = keyof typeof THEME_LOADERS;
-type ThemeRegistration = Awaited<ReturnType<(typeof THEME_LOADERS)[ThemeName]>>['default'];
+export type CodeThemeId = keyof typeof CODE_THEMES;
+
+export const DEFAULT_CODE_THEME: CodeThemeId = 'github';
+
+export function isCodeThemeId(value: unknown): value is CodeThemeId {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(CODE_THEMES, value);
+}
+
+type ThemeName = 'light' | 'dark';
+type ThemeRegistration = Awaited<ReturnType<typeof LIGHT_THEME_LOADER>>['default'];
 type LoadedThemes = Readonly<Record<ThemeName, ThemeRegistration>>;
+
+let activeCodeTheme: CodeThemeId = DEFAULT_CODE_THEME;
+const codeThemeListeners = new Set<() => void>();
+
+export function getCodeTheme(): CodeThemeId {
+  return activeCodeTheme;
+}
+
+export function setCodeTheme(theme: CodeThemeId): void {
+  if (theme === activeCodeTheme) return;
+  activeCodeTheme = theme;
+  for (const listener of codeThemeListeners) listener();
+}
+
+export function subscribeCodeTheme(listener: () => void): () => void {
+  codeThemeListeners.add(listener);
+  return () => {
+    codeThemeListeners.delete(listener);
+  };
+}
 
 const CSS_VARIABLE_PREFIX = '--shiki-';
 
@@ -146,11 +186,6 @@ export interface HighlightedToken {
 
 export type HighlightedLine = readonly HighlightedToken[];
 
-interface ResolvedHighlighter {
-  readonly highlighter: HighlighterCore;
-  readonly themes: LoadedThemes;
-}
-
 interface HighlightCacheEntry {
   readonly code: string;
   readonly lines: readonly HighlightedLine[];
@@ -158,7 +193,8 @@ interface HighlightCacheEntry {
 
 const lineCache = new Map<string, readonly HighlightCacheEntry[]>();
 const loadedLanguages = new Map<LanguageId, Promise<void>>();
-let resolvedHighlighter: Promise<ResolvedHighlighter> | null = null;
+const loadedThemes = new Map<CodeThemeId, Promise<LoadedThemes>>();
+let resolvedHighlighter: Promise<HighlighterCore> | null = null;
 
 function hashText(seed: number, text: string): number {
   let hash = seed;
@@ -169,12 +205,12 @@ function hashText(seed: number, text: string): number {
   return hash >>> 0;
 }
 
-function cacheKey(code: string, language: LanguageId): string {
+function cacheKey(code: string, language: LanguageId, theme: CodeThemeId): string {
   const languageHashA = hashText(hashText(HASH_SEED_A, language), CACHE_KEY_SEPARATOR);
   const languageHashB = hashText(hashText(HASH_SEED_B, language), CACHE_KEY_SEPARATOR);
   const hashA = hashText(languageHashA, code).toString(36);
   const hashB = hashText(languageHashB, code).toString(36);
-  return `${language}:${code.length.toString(36)}:${hashA}:${hashB}`;
+  return `${theme}:${language}:${code.length.toString(36)}:${hashA}:${hashB}`;
 }
 
 function readCached(key: string, code: string): readonly HighlightedLine[] | null {
@@ -217,28 +253,34 @@ function toReactStyle(htmlStyle: Record<string, string> | undefined): CSSPropert
   return style as CSSProperties;
 }
 
-async function loadThemes(): Promise<LoadedThemes> {
-  const entries = await Promise.all(
-    Object.entries(THEME_LOADERS).map(
-      async ([name, load]) => [name, (await load()).default] as const,
-    ),
-  );
-  return Object.fromEntries(entries) as LoadedThemes;
-}
-
-function resolveHighlighter(): Promise<ResolvedHighlighter> {
+async function resolveHighlighter(): Promise<HighlighterCore> {
   resolvedHighlighter ??= (async () => {
-    const themes = await loadThemes();
-    const highlighter = await createHighlighterCore({
-      themes: Object.values(themes),
+    const light = (await LIGHT_THEME_LOADER()).default;
+    return createHighlighterCore({
+      themes: [light],
       engine: createJavaScriptRegexEngine(),
     });
-    return { highlighter, themes };
   })().catch((error: unknown) => {
     resolvedHighlighter = null;
     throw error;
   });
   return resolvedHighlighter;
+}
+
+function loadThemes(highlighter: HighlighterCore, theme: CodeThemeId): Promise<LoadedThemes> {
+  let pending = loadedThemes.get(theme);
+  if (!pending) {
+    pending = (async () => {
+      const [light, dark] = await Promise.all([LIGHT_THEME_LOADER(), CODE_THEMES[theme].dark()]);
+      await highlighter.loadTheme(dark.default);
+      return { light: light.default, dark: dark.default };
+    })().catch((error: unknown) => {
+      loadedThemes.delete(theme);
+      throw error;
+    });
+    loadedThemes.set(theme, pending);
+  }
+  return pending;
 }
 
 function loadLanguage(highlighter: HighlighterCore, language: LanguageId): Promise<void> {
@@ -259,7 +301,7 @@ export function readHighlightCache(
 ): readonly HighlightedLine[] | null {
   const resolved = resolveHighlightLanguage(language);
   if (!resolved) return null;
-  return readCached(cacheKey(code, resolved), code);
+  return readCached(cacheKey(code, resolved, activeCodeTheme), code);
 }
 
 export async function highlightToLines(
@@ -269,12 +311,16 @@ export async function highlightToLines(
   const resolved = resolveHighlightLanguage(language);
   if (!resolved || code.length > MAX_HIGHLIGHT_LENGTH) return null;
 
-  const key = cacheKey(code, resolved);
+  const theme = activeCodeTheme;
+  const key = cacheKey(code, resolved, theme);
   const cached = readCached(key, code);
   if (cached) return cached;
 
-  const { highlighter, themes } = await resolveHighlighter();
-  await loadLanguage(highlighter, resolved);
+  const highlighter = await resolveHighlighter();
+  const [themes] = await Promise.all([
+    loadThemes(highlighter, theme),
+    loadLanguage(highlighter, resolved),
+  ]);
 
   const { tokens } = highlighter.codeToTokens(code, {
     lang: resolved,

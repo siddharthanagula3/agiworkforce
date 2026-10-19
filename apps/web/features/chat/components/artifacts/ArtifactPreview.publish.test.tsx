@@ -35,13 +35,11 @@ describe('publishing from an older artifact version', () => {
   });
 
   it('hands the viewed version to the publisher instead of the latest content', async () => {
-    const publishArtifact = vi.fn(
-      async (): Promise<PublishResult> => ({
-        kind: 'cloud',
-        shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
-        publishedAt: '2026-09-07T00:00:00.000Z',
-      }),
-    );
+    const publishArtifact = vi.fn(async (): Promise<PublishResult> => ({
+      kind: 'cloud',
+      shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
+      publishedAt: '2026-09-07T00:00:00.000Z',
+    }));
     const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
     render(
       <ArtifactPreview
@@ -60,13 +58,11 @@ describe('publishing from an older artifact version', () => {
   });
 
   it('publishes the latest content when no older version is selected', async () => {
-    const publishArtifact = vi.fn(
-      async (): Promise<PublishResult> => ({
-        kind: 'cloud',
-        shareUrl: 'https://agiworkforce.com/shared-artifact/dddddddddddddddddddddddd',
-        publishedAt: '2026-09-07T00:00:00.000Z',
-      }),
-    );
+    const publishArtifact = vi.fn(async (): Promise<PublishResult> => ({
+      kind: 'cloud',
+      shareUrl: 'https://agiworkforce.com/shared-artifact/dddddddddddddddddddddddd',
+      publishedAt: '2026-09-07T00:00:00.000Z',
+    }));
     const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
     render(
       <ArtifactPreview

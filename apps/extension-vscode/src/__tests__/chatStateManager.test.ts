@@ -4082,6 +4082,79 @@ describe('ChatStateManager session compaction', () => {
   });
 });
 
+describe('ChatStateManager side questions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    setContextPanelInstance({ getContextFiles: () => [] } as unknown as ContextPanelProvider);
+  });
+
+  it('streams the answer from the open session without starting a turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    const askSideQuestion = vi.fn(async (_params: unknown, onDelta: (delta: string) => void) => {
+      onDelta('It returns ');
+      return { answer: 'It returns NaN.' };
+    });
+    Object.assign(harness.runtime, { askSideQuestion });
+
+    await harness.manager.handleMessage({
+      type: 'sideQuestion',
+      payload: { question: 'What does average return for []?', requestId: 'side-1' },
+    });
+
+    expect(askSideQuestion).toHaveBeenCalledWith(
+      { threadId: 'thread-1', question: 'What does average return for []?', requestId: 'side-1' },
+      expect.any(Function),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionDelta',
+      payload: { requestId: 'side-1', delta: 'It returns ' },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionAnswer',
+      payload: { requestId: 'side-1', answer: 'It returns NaN.' },
+    });
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+  });
+
+  it('explains that a side question needs a session first', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({
+      type: 'sideQuestion',
+      payload: { question: 'Anything?', requestId: 'side-2' },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionAnswer',
+      payload: {
+        requestId: 'side-2',
+        error:
+          'A side question is answered from this session, so send a first message before asking one.',
+      },
+    });
+  });
+});
+
 describe('ChatStateManager slash commands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -4127,7 +4200,7 @@ describe('ChatStateManager slash commands', () => {
     const listed = harness.posted.find((message) => message.type === 'slashCommands');
     const names = (listed?.payload as { items: { name: string }[] }).items.map((item) => item.name);
     expect(names).not.toContain('/init');
-    expect(names).not.toContain('/btw');
+    expect(names).toContain('/btw');
     expect(names).toContain('/compact');
     expect(names).toContain('/permissions');
     expect(names).toContain('/review');

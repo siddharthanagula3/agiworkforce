@@ -173,6 +173,26 @@ describe('the desktop settings section', () => {
     expect(screen.queryByText(/electron-darwin/u)).not.toBeInTheDocument();
   });
 
+  it('offers dictation into other apps only where the shell reports it, and writes the switch', async () => {
+    const { writePreferences } = installHost({
+      preferences: { ...DEFAULT_STATE.preferences, dictateIntoFocusedApp: false },
+    });
+    render(<DesktopSettingsSection />);
+
+    const toggle = await screen.findByLabelText('Dictate into the app you are using');
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    expect(writePreferences).toHaveBeenCalledWith({ dictateIntoFocusedApp: true });
+  });
+
+  it('shows no dictation-into-apps switch to a shell that does not report it', async () => {
+    installHost();
+    render(<DesktopSettingsSection />);
+
+    await screen.findByLabelText('Menu bar');
+    expect(screen.queryByLabelText('Dictate into the app you are using')).not.toBeInTheDocument();
+  });
+
   it('offers no shortcut beside the presets, and no literal of its own', async () => {
     installHost();
     render(<DesktopSettingsSection />);
