@@ -1,11 +1,9 @@
 import { DICTATION_LANGUAGE_KEY } from '../side-panel/dictation-language';
-import { ASK_BEFORE_ACTING_KEY } from '../computer-use/askBeforeActing';
 
 export const SYNCED_PREFERENCE_KEYS = [
   'agi_task_notifications',
   'agi_thinking_enabled',
   'agi_quick_mode',
-  ASK_BEFORE_ACTING_KEY,
   'in_page_panel_enabled',
   DICTATION_LANGUAGE_KEY,
 ] as const;
