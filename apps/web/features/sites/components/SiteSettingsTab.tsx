@@ -18,6 +18,7 @@ import {
   type SiteVisibility,
 } from '../services/sites-service';
 import { SiteSharingOptions } from './SiteSharingOptions';
+import { SiteViewersEditor } from './SiteViewersEditor';
 
 function SettingsSection({
   title,
@@ -126,7 +127,11 @@ function SharingSetting({
     try {
       await onChange(site, next);
       toast.success(
-        next === 'public' ? 'Anyone with the link can open it' : 'Shared with your workspace',
+        next === 'public'
+          ? 'Anyone with the link can open it'
+          : next === 'invited'
+            ? 'Only the people you invite can open it'
+            : 'Shared with your workspace',
       );
     } catch (caught) {
       setError(toUserMessage(caught, 'Failed to change who can open this site'));
@@ -144,6 +149,7 @@ function SharingSetting({
         disabled={saving}
         onChange={(next) => void change(next)}
       />
+      {site.visibility === 'invited' ? <SiteViewersEditor token={site.token} /> : null}
       {error ? (
         <p role="alert" className="text-sm text-[var(--chat-destructive-text)]">
           {error}

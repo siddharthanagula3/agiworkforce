@@ -81,7 +81,15 @@ describe('the three file-carrying contracts speak one FileReference', () => {
   });
 
   it('hides an artifact whose visibility this reader does not understand', () => {
-    expect(publishedArtifact('team-of-the-future').visibility).toBe('private');
+    expect(publishedArtifact('team-of-the-future').visibility).toBe('invited');
     expect(publishedArtifact('public').visibility).toBe('public');
+  });
+
+  it('files an invited-only artifact as private on its file reference', () => {
+    const reference = publishedArtifactFileReference(publishedArtifact('invited'), {
+      mediaType: 'text/html',
+      byteCount: 10,
+    });
+    expect(reference.visibility).toBe('private');
   });
 });

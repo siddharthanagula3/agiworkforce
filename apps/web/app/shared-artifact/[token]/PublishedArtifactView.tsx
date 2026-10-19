@@ -27,7 +27,7 @@ export interface PublishedArtifactViewProps {
   content: string;
   publishedAt: string;
   /** Who the publication is for. Drives the line under the title, nothing else. */
-  audience?: 'public' | 'organization';
+  audience?: 'public' | 'organization' | 'invited';
   token?: string;
 }
 
@@ -133,12 +133,14 @@ export function PublishedArtifactView({
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
             : ''}
           <Link
-            href={audience === 'organization' ? '/chat' : '/'}
+            href={audience === 'public' ? '/' : '/chat'}
             className="underline-offset-2 hover:underline"
           >
             {audience === 'organization'
               ? t('artifactPublish.sharedWithWorkspace')
-              : t('artifactPublish.sharedFrom', 'Shared from AGI')}
+              : audience === 'invited'
+                ? t('artifactPublish.sharedWithYou', 'Shared with you')
+                : t('artifactPublish.sharedFrom', 'Shared from AGI')}
           </Link>
         </p>
       </header>
