@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { BookOpen, Trash2 } from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
@@ -25,6 +27,7 @@ import {
   normalizeStudyTopic,
   sortStudySessions,
   studyConversationTitle,
+  studyPlanRequest,
   type StudyLevel,
   type StudyMode,
   type StudySession,
@@ -35,7 +38,7 @@ import { resumeStudySession } from '../hooks/use-conversation-study-session';
 export interface StudyPageProps {
   api?: StudyApi;
   /** Creates the conversation a session runs in. Injected so the page can be driven in a test. */
-  createConversation?: (title: string) => Promise<string>;
+  createConversation?: (title: string, options?: { projectId: string }) => Promise<string>;
 }
 
 const ROW_ACTION_CLASS =
@@ -44,12 +47,15 @@ const ROW_ACTION_CLASS =
 const SELECT_CLASS =
   'w-full cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring';
 
-async function createConversationForStudy(title: string): Promise<string> {
+async function createConversationForStudy(
+  title: string,
+  options?: { projectId: string },
+): Promise<string> {
   const response = await fetch('/api/chat/conversations', {
     method: 'POST',
     credentials: 'include',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, ...(options ? { projectId: options.projectId } : {}) }),
   });
   const body: unknown = await response.json().catch(() => null);
   const id =
@@ -73,6 +79,9 @@ export function StudyPage({
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<StudyMode>('learn');
   const [level, setLevel] = useState<StudyLevel>('beginner');
+  const projects = useChatProjectStore((s) => s.projects);
+  const [projectId, setProjectId] = useState('');
+  const [withPlan, setWithPlan] = useState(false);
   const [sessions, setSessions] = useState<StudySession[] | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,10 +106,19 @@ export function StudyPage({
     setStarting(true);
     setError(null);
     try {
-      const conversationId = await createConversation(
-        studyConversationTitle(normalizedTopic, mode),
-      );
+      const title = studyConversationTitle(normalizedTopic, mode);
+      const conversationId = projectId
+        ? await createConversation(title, { projectId })
+        : await createConversation(title);
       const session = await api.start({ conversationId, topic: normalizedTopic, mode, level });
+      if (withPlan) {
+        useChatStore
+          .getState()
+          .setDraftContent(
+            studyPlanRequest({ topic: normalizedTopic, level }),
+            session.conversationId,
+          );
+      }
       router.push(`/chat/${session.conversationId}`);
     } catch (cause) {
       setError(toUserMessage(cause, 'The study session could not be started.'));
@@ -218,6 +236,41 @@ export function StudyPage({
               </option>
             ))}
           </select>
+        </label>
+
+        {projects.length > 0 && (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-foreground">Course material</span>
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              disabled={starting}
+              className={SELECT_CLASS}
+              data-testid="study-course-material"
+            >
+              <option value="">None</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  From project: {project.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">
+              Add notes, a syllabus or slides to a project, and the session teaches from them.
+            </span>
+          </label>
+        )}
+
+        <label className="flex min-h-11 items-center gap-2 text-[13px] text-foreground">
+          <input
+            type="checkbox"
+            checked={withPlan}
+            onChange={(e) => setWithPlan(e.target.checked)}
+            disabled={starting}
+            className="h-4 w-4"
+            data-testid="study-with-plan"
+          />
+          Start with a personal study plan
         </label>
 
         {normalizedTopic !== null && (

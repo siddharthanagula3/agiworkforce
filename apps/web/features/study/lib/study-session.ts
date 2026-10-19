@@ -61,6 +61,16 @@ const LEVEL_INSTRUCTIONS: Readonly<Record<StudyLevel, string>> = {
 const STUDY_RULE =
   'Do not give the answer to a question you have just asked until the user has attempted it.';
 
+const TEACHING_PRACTICES = [
+  'Open with a short numbered outline of the steps the session will follow, and say which step you are on as you go.',
+  'When the user is stuck, give one hint at a time, each more specific than the last, before revealing the answer.',
+  'When you introduce a method, show one worked example step by step, then give the user a similar problem to try.',
+  'When an idea is visual, spatial or quantitative, show it with a diagram, or build a small interactive explanation as an HTML artifact with controls the user can change.',
+  'For practice questions, write an interactive quiz: one ```markdown block whose first line is <!-- @artifact --> holding a ~~~quiz block of JSON {"title", "questions": [{"type": "multiple_choice", "question", "options", "answer": <index>, "explanation", "hints"}, {"type": "short_answer", "question", "answer", "accept", "explanation"}]}.',
+  'For memorising terms, write flashcards the same way with a ~~~flashcards block of JSON {"title", "cards": [{"front", "back"}]}.',
+  'When the user has attached course material or is studying inside a project, teach from that material and say where in it each point comes from.',
+].join(' ');
+
 export function isStudyMode(value: unknown): value is StudyMode {
   return typeof value === 'string' && (STUDY_MODES as readonly string[]).includes(value);
 }
@@ -89,6 +99,7 @@ export function composeStudyInstruction(session: {
     MODE_INSTRUCTIONS[session.mode],
     LEVEL_INSTRUCTIONS[session.level],
     STUDY_RULE,
+    TEACHING_PRACTICES,
   ].join(' ');
 }
 
@@ -141,4 +152,13 @@ export function isStudySessionActive(session: Pick<StudySession, 'endedAt'>): bo
 
 export function sortStudySessions(sessions: readonly StudySession[]): StudySession[] {
   return [...sessions].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+export function studyPlanRequest(session: { topic: string; level: StudyLevel }): string {
+  return [
+    `Before we start, build me a personal study plan for ${session.topic}.`,
+    `My level: ${STUDY_LEVEL_LABELS[session.level].toLowerCase()}.`,
+    'List what to cover in order, roughly how long each part takes, how you will check I understood each part, and where my course material covers it if I have attached any.',
+    'Then ask me how much time I have each week and adjust the plan to fit.',
+  ].join(' ');
 }
