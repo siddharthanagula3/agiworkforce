@@ -31,6 +31,7 @@ const TOOLBAR_HALF_WIDTH_PX = 160;
 
 interface Anchor {
   text: string;
+  origin: Node;
   left: number;
   top: number;
   below: boolean;
@@ -51,6 +52,7 @@ function readAnchor(container: HTMLElement): Anchor | null {
   const below = rect.top - box.top < TOOLBAR_HEIGHT_PX + EDGE_GAP_PX;
   return {
     text,
+    origin: range.commonAncestorContainer,
     left: rect.left - box.left + rect.width / 2,
     top: below ? rect.bottom - box.top + EDGE_GAP_PX : rect.top - box.top - EDGE_GAP_PX,
     below,
@@ -143,7 +145,7 @@ export function ArtifactSelectionToolbar({
   onComment,
 }: {
   containerRef: RefObject<HTMLElement | null>;
-  onRequest: (selectedText: string, instruction: string) => boolean;
+  onRequest: (selectedText: string, instruction: string, origin: Node) => boolean;
   onComment?: (selectedText: string) => void;
 }) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
@@ -204,7 +206,7 @@ export function ArtifactSelectionToolbar({
       if (!anchor) return;
       const normalized = normalizeEditInstruction(text);
       if (!normalized) return;
-      if (onRequest(anchor.text, normalized)) dismiss();
+      if (onRequest(anchor.text, normalized, anchor.origin)) dismiss();
     },
     [anchor, dismiss, onRequest],
   );

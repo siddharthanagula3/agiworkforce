@@ -69,6 +69,7 @@ import { TypeIcon } from './artifact-labels';
 import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
+import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { buildArtifactEditRequest } from './artifact-edit-request';
 import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
 import {
@@ -820,6 +821,15 @@ export function ArtifactPreview({
     endSourceEdit();
   }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
 
+  const savePresentation = useCallback(
+    (next: string) => {
+      const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+      if (!stored || next === stored.content) return;
+      upsertArtifact({ ...stored, content: next, createdAt: new Date() });
+    },
+    [artifact.id, upsertArtifact],
+  );
+
   const handleTaskToggle = useCallback(
     (index: number) => {
       setSourceDraft((current) => toggleMarkdownTask(current ?? activeContent, index));
@@ -1052,6 +1062,18 @@ export function ArtifactPreview({
   );
 
   const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
+
+  const handleExportDeckPdf = async () => {
+    const title = artifact.title || 'Presentation';
+    const pending = toast.loading('Preparing the PDF…');
+    try {
+      const { downloadDeckPdf } = await import('./presentation/deck-pdf');
+      await downloadDeckPdf(title, activeContent);
+      toast.success('PDF downloaded', { id: pending });
+    } catch (error) {
+      toast.error(toUserMessage(error, 'The PDF could not be made'), { id: pending });
+    }
+  };
 
   const handleExportDocument = async (format: 'docx' | 'pdf') => {
     const title = artifact.title || 'Artifact';
@@ -1288,6 +1310,15 @@ export function ArtifactPreview({
           artifact={sharedArtifactView}
           className="h-full rounded-none border-0"
         />
+      ) : isPresentation && variant === 'panel' ? (
+        <PresentationWorkspace
+          title={artifact.title || 'Presentation'}
+          content={activeContent}
+          editable={canEditSource && sourceDraft === null}
+          handEdited={versionCount > 1}
+          onSave={savePresentation}
+          {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+        />
       ) : isPresentation ? (
         <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
       ) : isChart ? (
@@ -1465,8 +1496,10 @@ export function ArtifactPreview({
     activeContent.trim().length > 0;
 
   const requestSelectionEdit = useCallback(
-    (selectedText: string, instruction: string) => {
+    (selectedText: string, instruction: string, origin: Node) => {
       if (!onRequestEdits) return false;
+      const element = origin instanceof Element ? origin : origin.parentElement;
+      const slideIndex = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
       const current = sourceDraft ?? activeContent;
       const handEdited = sourceDraft !== null || versionCount > 1;
       if (sourceDraft !== null) saveSourceEdit();
@@ -1475,6 +1508,9 @@ export function ArtifactPreview({
           title: artifact.title || 'Artifact',
           selection: captureSelectionContext(current, selectedText),
           instruction,
+          ...(slideIndex !== null && slideIndex !== undefined
+            ? { scope: `slide ${Number(slideIndex) + 1}` }
+            : {}),
           ...(handEdited ? { currentContent: current } : {}),
           ...(artifact.language ? { language: artifact.language } : {}),
         }),
@@ -1612,6 +1648,13 @@ export function ArtifactPreview({
         },
         { id: 'md', label: 'Download as Markdown', run: () => handleDownload('md') },
       );
+      if (isPresentation) {
+        downloads.push({
+          id: 'deck-pdf',
+          label: 'Download as PDF',
+          run: () => void handleExportDeckPdf(),
+        });
+      }
       if (isTextDocument) {
         downloads.push(
           {
