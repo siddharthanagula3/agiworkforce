@@ -122,11 +122,8 @@ pub struct BrowserStateWrapper {
 
 impl BrowserStateWrapper {
     /// Creates a new browser state wrapper with full functionality.
-    /// Requires an `AppHandle` so the underlying `ExtensionBridge`
-    /// can prompt the user before executing arbitrary JS, navigating, or
-    /// reading/writing cookies and localStorage. Tests may pass `None`.
-    pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self, String> {
-        match BrowserState::new(app_handle).await {
+    pub async fn new() -> Result<Self, String> {
+        match BrowserState::new().await {
             Ok(state) => {
                 tracing::info!("BrowserState initialized successfully");
                 Ok(Self {
@@ -236,21 +233,6 @@ impl BrowserStateWrapper {
         } else {
             Err("No active browser tab found. Please open a tab first.".to_string())
         }
-    }
-
-    /// Gets the extension bridge, returning an error if browser state is unavailable.
-    ///
-    /// The `ExtensionBridge` communicates with the browser extension through the
-    /// realtime WebSocket transport. Use this when CDP is unavailable or when
-    /// you need to dispatch actions through the installed extension content script
-    /// rather than a remote-debugging port.
-    pub fn get_extension_bridge(
-        &self,
-    ) -> Result<
-        &std::sync::Arc<tokio::sync::Mutex<crate::automation::browser::ExtensionBridge>>,
-        String,
-    > {
-        self.get().map(|state| &state.extension)
     }
 
     async fn get_cdp_endpoint(&self) -> Result<CdpEndpoint, String> {

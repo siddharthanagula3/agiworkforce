@@ -68,9 +68,7 @@ pub use crate::sys::commands::chat::pending::{
 use crate::sys::commands::chat::persistence::{
     compute_or_skip_stats, save_or_skip_assistant_message,
 };
-use crate::sys::commands::chat::prompt_context::{
-    build_os_context, build_project_context_message, sanitize_multiline_for_prompt,
-};
+use crate::sys::commands::chat::prompt_context::{build_os_context, build_project_context_message};
 use crate::sys::commands::chat::provider_access::{
     ensure_llamacpp_provider, ensure_lmstudio_provider, ensure_managed_cloud_provider,
     ensure_ollama_provider, ensure_vllm_provider,

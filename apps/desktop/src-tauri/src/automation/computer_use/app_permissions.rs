@@ -209,8 +209,8 @@ pub const BLANK_DOCUMENT_URL: &str = "about:blank";
 
 /// Reject a navigation URL that automated browsing must never open.
 ///
-/// The single guard behind `CdpClient::navigate`, `PlaywrightBridge::navigate`,
-/// `ExtensionBridge::navigate` and the `browser_navigate` command, so the policy
+/// The single guard behind `CdpClient::navigate`, `PlaywrightBridge::navigate`
+/// and the `browser_navigate` command, so the policy
 /// holds no matter which caller reaches the page.
 ///
 /// It refuses the always-blocked broker, bank, and wallet hosts, and every

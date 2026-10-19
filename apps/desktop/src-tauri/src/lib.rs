@@ -561,12 +561,7 @@ pub fn run() {
             ));
 
             // Initialize browser automation with graceful degradation.
-            // SEV-DESK-02: pass the Tauri AppHandle so ExtensionBridge can
-            // surface confirmation prompts before any execute_script, navigate,
-            // cookie, or localStorage operation reaches the active browser tab.
-            let browser_state = match tauri::async_runtime::block_on(
-                BrowserStateWrapper::new(Some(app.handle().clone())),
-            ) {
+            let browser_state = match tauri::async_runtime::block_on(BrowserStateWrapper::new()) {
                 Ok(state) => {
                     tracing::info!("Browser automation initialized successfully");
                     state
