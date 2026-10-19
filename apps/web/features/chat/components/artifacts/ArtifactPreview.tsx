@@ -39,6 +39,7 @@ import {
   History,
   MousePointerClick,
   MessageSquare,
+  PenTool,
   Sparkles,
   TextCursorInput,
 } from 'lucide-react';
@@ -72,6 +73,14 @@ import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { StudyDocument } from './study/StudyDocument';
+import { replaceImageInHtml } from './design/design-edits';
+import { DesignBriefDialog } from './design/DesignBriefDialog';
+import { buildBriefRevisionRequest, readDesignBrief } from './design/design-brief';
+import {
+  IMAGE_EMBED_FAILURE_COPY,
+  ImageEmbedError,
+  embedImageFile,
+} from './presentation/image-embed';
 import { hasStudyBlocks } from './study/study-set';
 import { ArtifactCommentsPanel, COMMENTS_LABEL } from './comments/ArtifactCommentsPanel';
 import {
@@ -445,6 +454,7 @@ export function ArtifactPreview({
   const renameArtifact = useArtifactsStore((s) => s.renameArtifact);
   const [renaming, setRenaming] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
   const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
@@ -527,6 +537,8 @@ export function ArtifactPreview({
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const imageReplaceInputRef = useRef<HTMLInputElement>(null);
+  const [imageReplaceTarget, setImageReplaceTarget] = useState<string | null>(null);
 
   // Leaving native fullscreen through Escape or browser UI fires
   // fullscreenchange without going through the button.
@@ -1509,6 +1521,32 @@ export function ArtifactPreview({
     [pickerSelection, onRequestEdits, artifact.title, cancelEditRequest],
   );
 
+  const replaceImage = useCallback(
+    async (selector: string, file: File) => {
+      try {
+        const dataUrl = await embedImageFile(file);
+        const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+        const next = stored ? replaceImageInHtml(stored.content, selector, dataUrl) : null;
+        if (!stored || next === null) {
+          toast.error('That image could not be found in the source. Ask for the change instead.');
+          return;
+        }
+        upsertArtifact({ ...stored, content: next, createdAt: new Date() });
+        cancelEditRequest();
+        toast.success('Image replaced. The previous version is in the history.');
+      } catch (error) {
+        toast.error(
+          error instanceof ImageEmbedError
+            ? IMAGE_EMBED_FAILURE_COPY[error.failure]
+            : 'That image could not be placed.',
+        );
+      } finally {
+        setImageReplaceTarget(null);
+      }
+    },
+    [artifact.id, upsertArtifact, cancelEditRequest],
+  );
+
   const startDocumentEdit = useCallback(() => {
     setSourceDraft(activeContent);
     setDraftOrigin('editor');
@@ -1564,6 +1602,10 @@ export function ArtifactPreview({
   );
 
   const canComment = variant === 'panel' && isStoredArtifact && canCommentOn(artifact.id);
+  const designBrief = useMemo(
+    () => (artifact.type === 'html' && variant === 'panel' ? readDesignBrief(activeContent) : null),
+    [artifact.type, variant, activeContent],
+  );
   const openCommentAnchors = useMemo(
     () =>
       artifactComments
@@ -1743,6 +1785,15 @@ export function ArtifactPreview({
           onSelect: download.run,
         }),
       );
+    }
+    if (designBrief && onRequestEdits && isLatestVersion) {
+      moreMenuItems.push({
+        id: 'design-brief',
+        label: 'Design brief',
+        icon: PenTool,
+        testId: 'artifact-design-brief',
+        onSelect: () => setBriefOpen(true),
+      });
     }
     if (variant === 'panel' && isStoredArtifact) {
       moreMenuItems.push(
@@ -2252,6 +2303,18 @@ export function ArtifactPreview({
             commentStyles['highlightScope'],
           )}
         >
+          <input
+            ref={imageReplaceInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            data-testid="artifact-replace-image-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file && imageReplaceTarget) void replaceImage(imageReplaceTarget, file);
+            }}
+          />
           {canComment && commentsOpen && (
             <ArtifactCommentsPanel
               artifactId={artifact.id}
@@ -2283,6 +2346,14 @@ export function ArtifactPreview({
               selection={pickerSelection}
               onSubmit={submitEditRequest}
               onCancel={cancelEditRequest}
+              {...(artifact.type === 'html' && canEditSource
+                ? {
+                    onReplaceImage: (selection: ArtifactPickerSelection) => {
+                      setImageReplaceTarget(selection.selector);
+                      imageReplaceInputRef.current?.click();
+                    },
+                  }
+                : {})}
               {...(canComment
                 ? {
                     onComment: ({
@@ -2446,6 +2517,22 @@ export function ArtifactPreview({
               </ScrollArea>
             ))}
         </div>
+        {designBrief && onRequestEdits ? (
+          <DesignBriefDialog
+            open={briefOpen}
+            onOpenChange={setBriefOpen}
+            initial={designBrief}
+            heading="Design brief"
+            submitLabel="Update design"
+            onSubmit={(brief) => {
+              const sent = onRequestEdits(
+                buildBriefRevisionRequest(artifact.title || 'Design', brief),
+              );
+              if (!sent) toast.error('The change request was not sent. Try again.');
+              return sent;
+            }}
+          />
+        ) : null}
         {confirmDialog}
       </div>
     );

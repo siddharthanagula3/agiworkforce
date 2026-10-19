@@ -1,6 +1,10 @@
 'use client';
 
-import { FilePlus2, FileText, Presentation } from 'lucide-react';
+import { useState } from 'react';
+import { FilePlus2, FileText, PenTool, Presentation } from 'lucide-react';
+import { toast } from 'sonner';
+import { DesignBriefDialog } from '../design/DesignBriefDialog';
+import { buildDesignFromBriefRequest } from '../design/design-brief';
 import { DeckMenu, type DeckMenuItem } from '../presentation/DeckMenu';
 import { useArtifactsStore } from '../../../stores/artifacts-store';
 import { fillTemplate, templatesOfKind, type ArtifactTemplate } from './artifact-templates';
@@ -29,11 +33,14 @@ export function useCreateFromTemplate(conversationId: string | null) {
 export function NewArtifactMenu({
   conversationId,
   savedTemplates = [],
+  onRequestEdits,
 }: {
   conversationId: string | null;
   savedTemplates?: readonly ArtifactTemplate[];
+  onRequestEdits?: (prompt: string) => boolean;
 }) {
   const create = useCreateFromTemplate(conversationId);
+  const [briefOpen, setBriefOpen] = useState(false);
   if (!conversationId) return null;
   const toItem =
     (group: string) =>
@@ -50,15 +57,41 @@ export function NewArtifactMenu({
     ...templatesOfKind('document').map(toItem('Documents')),
     ...templatesOfKind('presentation').map(toItem('Presentations')),
     ...savedTemplates.map(toItem('Your templates')),
+    ...(onRequestEdits
+      ? [
+          {
+            id: 'design-brief',
+            label: 'Design from a brief',
+            group: 'Designs',
+            icon: PenTool,
+            onSelect: () => setBriefOpen(true),
+          },
+        ]
+      : []),
   ];
   return (
-    <DeckMenu
-      label={NEW_ARTIFACT_LABEL}
-      icon={FilePlus2}
-      items={items}
-      testId="artifact-new-menu"
-      align="end"
-      compact
-    />
+    <>
+      <DeckMenu
+        label={NEW_ARTIFACT_LABEL}
+        icon={FilePlus2}
+        items={items}
+        testId="artifact-new-menu"
+        align="end"
+        compact
+      />
+      {onRequestEdits ? (
+        <DesignBriefDialog
+          open={briefOpen}
+          onOpenChange={setBriefOpen}
+          heading="Design from a brief"
+          submitLabel="Create design"
+          onSubmit={(brief) => {
+            const sent = onRequestEdits(buildDesignFromBriefRequest(brief));
+            if (!sent) toast.error('The design request was not sent. Try again.');
+            return sent;
+          }}
+        />
+      ) : null}
+    </>
   );
 }
