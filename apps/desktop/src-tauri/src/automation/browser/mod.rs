@@ -1,7 +1,6 @@
 pub mod advanced;
 pub mod cdp_client;
 pub mod dom_operations;
-pub mod extension_bridge;
 pub mod playwright_bridge;
 pub mod semantic;
 pub mod tab_manager;
@@ -9,7 +8,6 @@ pub mod tab_manager;
 pub use advanced::*;
 pub use cdp_client::CdpClient;
 pub use dom_operations::*;
-pub use extension_bridge::ExtensionBridge;
 pub use playwright_bridge::*;
 pub use semantic::*;
 pub use tab_manager::*;
@@ -22,22 +20,14 @@ use crate::sys::error::Result;
 pub struct BrowserState {
     pub playwright: Arc<Mutex<PlaywrightBridge>>,
     pub tab_manager: Arc<Mutex<TabManager>>,
-    pub extension: Arc<Mutex<ExtensionBridge>>,
     pub cdp_clients: Arc<Mutex<std::collections::HashMap<String, Arc<CdpClient>>>>,
 }
 
 impl BrowserState {
-    /// Production constructor, threads the Tauri `AppHandle`
-    /// through to `ExtensionBridge` so dangerous browser-mutating actions.
-    pub async fn new(app_handle: Option<tauri::AppHandle>) -> Result<Self> {
-        let extension = match app_handle {
-            Some(handle) => ExtensionBridge::with_app_handle(handle),
-            None => ExtensionBridge::new(),
-        };
+    pub async fn new() -> Result<Self> {
         Ok(Self {
             playwright: Arc::new(Mutex::new(PlaywrightBridge::new().await?)),
             tab_manager: Arc::new(Mutex::new(TabManager::new())),
-            extension: Arc::new(Mutex::new(extension)),
             cdp_clients: Arc::new(Mutex::new(std::collections::HashMap::new())),
         })
     }

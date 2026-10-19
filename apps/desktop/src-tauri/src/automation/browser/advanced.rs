@@ -46,14 +46,6 @@ pub struct ComputedStyles {
     pub pointer_events: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FrameContext {
-    pub frame_id: String,
-    pub parent_frame_id: Option<String>,
-    pub name: String,
-    pub url: String,
-}
-
 /// Escape special characters in a string intended for insertion into a
 /// JavaScript single-quoted string literal.
 fn escape_js_string(s: &str) -> String {
@@ -207,43 +199,6 @@ impl AdvancedBrowserOps {
             }
 
             tokio::time::sleep(check_interval).await;
-        }
-    }
-
-    fn extract_frames(
-        frame_tree: &Value,
-        frames: &mut Vec<FrameContext>,
-        parent_id: Option<String>,
-    ) {
-        if let Some(frame) = frame_tree.get("frame") {
-            let frame_id = frame
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let name = frame
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let url = frame
-                .get("url")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-
-            frames.push(FrameContext {
-                frame_id: frame_id.clone(),
-                parent_frame_id: parent_id.clone(),
-                name,
-                url,
-            });
-
-            if let Some(child_frames) = frame_tree.get("childFrames").and_then(|v| v.as_array()) {
-                for child in child_frames {
-                    Self::extract_frames(child, frames, Some(frame_id.clone()));
-                }
-            }
         }
     }
 

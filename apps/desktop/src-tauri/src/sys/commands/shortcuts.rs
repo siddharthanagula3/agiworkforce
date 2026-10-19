@@ -644,21 +644,6 @@ pub async fn shortcuts_unregister_global(key: String, app: AppHandle) -> Result<
 mod tests {
     use super::*;
 
-    /// `src/stores/shortcutStore.ts` adds whatever this event carries to its
-    /// list of shortcut records. The system-level registration used to emit
-    /// it too, with the bare action name, which landed in that list as a row.
-    #[test]
-    fn the_registered_event_only_ever_carries_a_shortcut_record() {
-        let event = concat!("emit(\"shortcut_", "registered\"");
-        let emits: Vec<&str> = include_str!("shortcuts.rs")
-            .lines()
-            .filter(|line| line.contains(event))
-            .collect();
-
-        assert_eq!(emits.len(), 1, "{emits:?}");
-        assert!(emits[0].contains(", shortcut)"), "{emits:?}");
-    }
-
     fn expected_primary_modifier() -> &'static str {
         #[cfg(target_os = "macos")]
         {

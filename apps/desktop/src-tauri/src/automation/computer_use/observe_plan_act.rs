@@ -36,6 +36,7 @@ const COMPUTER_USE_CAPABILITY: &str = "automation";
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
+use tokio_util::sync::CancellationToken;
 
 use super::confirmation::{self, ConfirmationOutcome};
 use super::control::{self, ObservationStamp};
@@ -366,6 +367,7 @@ pub struct ComputerUseAgent {
     window_coordinator: WindowCoordinator,
     app_handle: Option<AppHandle>,
     audit_identity: AuditIdentity,
+    cancellation: CancellationToken,
 }
 
 impl ComputerUseAgent {
@@ -388,6 +390,7 @@ impl ComputerUseAgent {
             window_coordinator,
             app_handle: None,
             audit_identity: AuditIdentity::default(),
+            cancellation: CancellationToken::new(),
         })
     }
 
@@ -417,6 +420,7 @@ impl ComputerUseAgent {
             window_coordinator,
             app_handle: None,
             audit_identity: AuditIdentity::default(),
+            cancellation: CancellationToken::new(),
         })
     }
 
@@ -464,6 +468,12 @@ impl ComputerUseAgent {
                 now: chrono::Utc::now(),
             },
         )
+    }
+
+    /// Stops the run at its next step once the token is cancelled.
+    pub fn with_cancellation(mut self, cancellation: CancellationToken) -> Self {
+        self.cancellation = cancellation;
+        self
     }
 
     /// Sets the app handle for event emission.
@@ -717,7 +727,7 @@ impl ComputerUseAgent {
                 );
             }
 
-            if session.is_cancelled() {
+            if self.cancellation.is_cancelled() {
                 return self.complete_task(&mut session, state, CompletionReason::UserCancelled);
             }
 
@@ -875,7 +885,7 @@ impl ComputerUseAgent {
                     safety = Some(decision);
                 }
 
-                if session.is_cancelled() {
+                if self.cancellation.is_cancelled() {
                     return self.complete_task(
                         &mut session,
                         state,
@@ -2109,6 +2119,30 @@ mod tests {
             agent.visual_reasoner.trust_mode(),
             Some(agiworkforce_model_registry::TrustMode::Byok)
         );
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_run_stops_before_its_first_step() {
+        let cancellation = CancellationToken::new();
+        let agent = ComputerUseAgent::new(
+            Arc::new(RwLock::new(LLMRouter::new())),
+            ComputerUseConfig::default(),
+        )
+        .unwrap()
+        .with_cancellation(cancellation.clone());
+        cancellation.cancel();
+
+        let result = agent
+            .execute_task(ComputerUseTask {
+                description: "Open the settings window".to_string(),
+                ..ComputerUseTask::default()
+            })
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(matches!(result.reason, CompletionReason::UserCancelled));
+        assert_eq!(result.state.actions_executed, 0);
     }
 
     #[test]

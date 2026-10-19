@@ -803,10 +803,10 @@ mod lsp_document_tests {
     fn credential_files_and_missing_files_are_refused() {
         let (_tmp, root) = workspace();
         std::fs::create_dir(root.join("config")).expect("create config");
-        std::fs::write(root.join("config").join("credentials.py"), "TOKEN = 1\n")
+        std::fs::write(root.join("config").join("credentials.json"), "{\"token\": 1}\n")
             .expect("seed file");
 
-        let refusal = resolve_lsp_document("config/credentials.py", &root)
+        let refusal = resolve_lsp_document("config/credentials.json", &root)
             .expect_err("a credential file never reaches a language server");
 
         assert!(refusal.contains("credential-file policy"), "{refusal}");
