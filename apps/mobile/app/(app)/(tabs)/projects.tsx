@@ -21,6 +21,7 @@ import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/src/features/projects';
+import { SharedWithYouSection } from '@/src/features/projects/components/SharedWithYouSection';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -480,6 +481,11 @@ export default function ProjectsTabScreen() {
               </Pressable>
             </View>
           )}
+          {isCloud ? (
+            <View style={{ alignSelf: 'stretch' }}>
+              <SharedWithYouSection />
+            </View>
+          ) : null}
         </ScrollView>
       ) : (
         <FlatList
@@ -528,6 +534,7 @@ export default function ProjectsTabScreen() {
           )}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
+          ListFooterComponent={isCloud && !query.trim() ? <SharedWithYouSection /> : null}
           ListEmptyComponent={
             <View className="items-center px-8" style={{ paddingTop: 48, gap: 8 }}>
               <Text

@@ -36,6 +36,9 @@ export type ProjectSharingOverview = z.infer<typeof OverviewSchema>;
 export type SharedProject = z.infer<typeof SharedProjectSchema>;
 export type SharingMember = z.infer<typeof MemberSchema>;
 
+export const PROJECT_SHARED_CONTEXT_COPY =
+  'Shared with your workspace. Members see this project’s instructions and files. Each person’s chats in it stay private, and project memories stay with the person who saved them.';
+
 export const ACCESS_LABELS: Readonly<Record<ProjectMemberAccess, string>> = {
   read: 'Can view',
   write: 'Can edit',
@@ -90,4 +93,30 @@ export function memberAccess(project: SharedProject, member: SharingMember): Pro
 
 export function memberName(member: SharingMember): string {
   return member.displayName || member.email || member.userId;
+}
+
+export interface SharedWithMeProject {
+  projectId: string;
+  name: string;
+  ownerName: string;
+  access: Exclude<ProjectMemberAccess, 'none'>;
+}
+
+export function projectsSharedWithMe(overview: ProjectSharingOverview): SharedWithMeProject[] {
+  const me = overview.members.find((member) => member.userId === overview.currentUserId);
+  if (!me) return [];
+  return overview.sharedProjects.flatMap((project) => {
+    if (project.ownerUserId === overview.currentUserId) return [];
+    const access = memberAccess(project, me);
+    if (access === 'none') return [];
+    const owner = overview.members.find((member) => member.userId === project.ownerUserId);
+    return [
+      {
+        projectId: project.projectId,
+        name: project.name,
+        ownerName: owner ? memberName(owner) : 'A workspace member',
+        access,
+      },
+    ];
+  });
 }

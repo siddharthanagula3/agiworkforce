@@ -58,6 +58,7 @@ export default function AppLayout() {
 
         <Drawer.Screen name="projects/[id]" options={HIDDEN} />
         <Drawer.Screen name="projects/settings/[id]" options={HIDDEN} />
+        <Drawer.Screen name="projects/shared/[id]" options={HIDDEN} />
 
         <Drawer.Screen name="tasks" options={HIDDEN} />
 

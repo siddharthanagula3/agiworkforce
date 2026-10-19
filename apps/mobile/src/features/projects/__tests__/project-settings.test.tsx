@@ -42,9 +42,9 @@ import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloud
 import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
 import {
   PROJECT_MEMORY_SCOPE_COPY,
-  PROJECT_SHARED_CONTEXT_COPY,
   ProjectSettingsScreen,
 } from '@/src/features/projects/components/ProjectSettingsScreen';
+import { PROJECT_SHARED_CONTEXT_COPY } from '@/src/features/projects/projectSharing';
 import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 
 const PROJECT_ID = '0190a000-0000-7000-8000-000000000001';

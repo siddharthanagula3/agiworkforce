@@ -19,6 +19,7 @@ import {
   projectMemoryEntries,
 } from '@/src/features/projects/projectMemory';
 import { ProjectMembersSection } from '@/src/features/projects/components/ProjectMembersSection';
+import { PROJECT_SHARED_CONTEXT_COPY } from '@/src/features/projects/projectSharing';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -33,9 +34,6 @@ export const PROJECT_MEMORY_SCOPE_COPY = {
   projectOnly:
     'Chats here use only this project’s memories. Nothing from your other chats is included.',
 } as const;
-
-export const PROJECT_SHARED_CONTEXT_COPY =
-  'Shared with your workspace. Members see this project’s instructions and files. Each person’s chats in it stay private, and project memories stay with the person who saved them.';
 
 function SectionLabel({ children }: { children: string }) {
   const colors = useThemeColors();
