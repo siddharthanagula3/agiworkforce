@@ -1576,6 +1576,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     billingPolicyReady,
     openSettings,
   });
+  useEffect(
+    () => onAppCommand('open-upgrade', () => handleOpenUpgradeDialog()),
+    [handleOpenUpgradeDialog],
+  );
 
   const handlePaywallRecovery = useCallback(
     (_messageId: string, requiredTier: string, recoveryAction: MediaPaywallRecoveryAction) => {
