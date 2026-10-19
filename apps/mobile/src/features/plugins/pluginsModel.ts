@@ -167,3 +167,13 @@ export function versionSwitchSummary(offer: PluginUpdateOfferWire): string {
   }
   return parts.join(' ');
 }
+
+export const PLUGIN_REPAIR_MISSING_SKILLS_COPY = 'These skills did not load:';
+
+export function missingPluginSkills(
+  enabledSkills: readonly string[],
+  loadedSkillNames: ReadonlySet<string> | null,
+): string[] {
+  if (!loadedSkillNames) return [];
+  return enabledSkills.filter((name) => !loadedSkillNames.has(name));
+}

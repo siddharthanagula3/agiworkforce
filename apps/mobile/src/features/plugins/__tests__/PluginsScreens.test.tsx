@@ -13,6 +13,7 @@ const mockInstall = jest.fn();
 const mockUninstall = jest.fn();
 const mockEnabled = jest.fn();
 const mockMove = jest.fn();
+const mockManagedSkills = jest.fn();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -48,6 +49,9 @@ jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: jest.fn(async () => ({
     connectors: [{ connectorId: 'gmail', toolConnectorId: 'gmail' }],
   })),
+}));
+jest.mock('@/src/features/skills/service', () => ({
+  fetchManagedSkills: (...args: unknown[]) => mockManagedSkills(...args),
 }));
 jest.mock('../service', () => ({
   ...jest.requireActual('../service'),
@@ -141,6 +145,7 @@ describe('mobile plugins', () => {
     mockDirectory.mockResolvedValue({ entries: [MAIL, DOCS], total: 2, nextCursor: null });
     mockInstallations.mockResolvedValue([]);
     mockUpdates.mockResolvedValue([]);
+    mockManagedSkills.mockResolvedValue([{ name: 'triage' }]);
   });
 
   it('shows featured and recommended sections and filters by category', async () => {
@@ -240,5 +245,25 @@ describe('mobile plugins', () => {
 
     await waitFor(() => expect(mockMove).toHaveBeenCalledWith('mail', '1.1.0', ['send mail']));
     alert.mockRestore();
+  });
+
+  it('offers to reinstall an installed plugin whose skills did not load', async () => {
+    mockParams.id = 'mail';
+    mockPlugin.mockResolvedValue(MAIL);
+    mockInstallations.mockResolvedValue([
+      {
+        pluginId: 'mail',
+        installedVersion: '1.0.0',
+        enabled: true,
+        installedAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    mockManagedSkills.mockResolvedValue([]);
+    mockInstall.mockResolvedValue({ installation: {}, dependencies: [] });
+    const { findByText, getByLabelText } = render(<PluginDetailScreen />);
+    expect(await findByText('These skills did not load: triage')).toBeTruthy();
+    fireEvent.press(getByLabelText('Reinstall Mail helper'));
+    await waitFor(() => expect(mockInstall).toHaveBeenCalledWith('mail'));
   });
 });
