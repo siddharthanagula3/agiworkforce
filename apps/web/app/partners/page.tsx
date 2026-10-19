@@ -22,6 +22,7 @@ import {
   SURFACE_STATUS,
 } from '@/lib/marketing-constants';
 import '@/features/marketing/components/pages/company/company.css';
+import { PartnerApplicationForm } from './PartnerApplicationForm';
 
 export const metadata = buildMetadata({
   title: 'Partners',
@@ -68,7 +69,7 @@ export default function PartnersPage() {
           em="Two open doors."
           lede={`There is no partner program yet: no reseller agreement, no tiers, no certification. What exists is the AGI CLI, which implements MCP so that a server built on that protocol works with it, and a community directory where a plugin you build can be listed once it is reviewed. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
-            { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
+            { href: '#apply', label: 'Apply to partner' },
             { href: '/plugins', label: 'Browse the plugin catalogue', variant: 'secondary' },
           ]}
         />
@@ -122,19 +123,22 @@ export default function PartnersPage() {
           </Stack>
         </Section>
 
-        <Section id="partners-close" labelledBy="agi-partners-close-title" rule>
+        <Section id="apply" labelledBy="agi-partners-close-title" rule>
           <Stack gap="loose">
             <div>
-              <Eyebrow>Talk to us</Eyebrow>
+              <Eyebrow>Apply</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-partners-close-title">
                 Tell us what you are trying to build.
               </h2>
               <Prose>
-                {`Email ${CONTACT_EMAIL} with what you have in mind. Concrete proposals get a real answer; we would rather say no clearly than leave you waiting on a program that does not exist.`}
+                {`Concrete proposals get a real answer; we would rather say no clearly than leave you waiting on a program that does not exist. You can also email ${CONTACT_EMAIL}.`}
               </Prose>
             </div>
+            <PartnerApplicationForm />
             <ButtonRow>
-              <Button href={contactMailto('Partnership enquiry')}>Email partnerships</Button>
+              <Button href={contactMailto('Partnership enquiry')} variant="secondary">
+                Email partnerships
+              </Button>
               <Button href="/contact-sales" variant="secondary">
                 Contact sales
               </Button>

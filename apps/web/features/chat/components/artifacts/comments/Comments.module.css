@@ -1,0 +1,7 @@
+.highlightScope::highlight(artifact-comment),
+.highlightScope ::highlight(artifact-comment) {
+  background-color: var(--chat-warning-bg);
+  text-decoration: underline;
+  text-decoration-color: var(--chat-warning-border);
+  text-decoration-thickness: 2px;
+}

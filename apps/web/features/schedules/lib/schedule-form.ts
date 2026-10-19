@@ -52,6 +52,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   maxExecutions: '',
   creditCap: '',
   projectId: null,
+  agentId: null,
   recurrenceRule: '',
   daypartPreset: 'any',
   retryMaxAttempts: '0',
@@ -245,6 +246,7 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     creditCap:
       task.creditCap === null || task.creditCap === undefined ? '' : String(task.creditCap),
     projectId: task.projectId ?? null,
+    agentId: task.agentId ?? null,
     recurrenceRule: task.recurrenceRule ?? '',
     daypartPreset: presetForDayparts(task.dayparts),
     retryMaxAttempts: String(task.retryMaxAttempts ?? 0),
@@ -286,7 +288,11 @@ export function scheduleShareTask(
 
 export function scheduleShareToDraft(snapshot: ManagedCloudScheduleShareSnapshot): ScheduleDraft {
   const { timezone } = createInitialScheduleDraft();
-  return { ...scheduleToDraft(scheduleShareTask(snapshot, timezone)), projectId: null };
+  return {
+    ...scheduleToDraft(scheduleShareTask(snapshot, timezone)),
+    projectId: null,
+    agentId: null,
+  };
 }
 
 export interface RoutineGoal {
@@ -553,6 +559,7 @@ export function validateAndBuildScheduleRequest(
       maxExecutions,
       creditCap,
       projectId: draft.projectId,
+      agentId: draft.agentId,
       recurrenceRule,
       dayparts,
       retryMaxAttempts,

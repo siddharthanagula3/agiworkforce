@@ -9,6 +9,7 @@ import {
   CloudSchedulesGate,
   ScheduleForm,
   getScheduleTemplate,
+  scheduleDraftFromPrompt,
   useScheduleStore,
   type CreateScheduleInput,
 } from '@/src/features/schedules';
@@ -24,7 +25,12 @@ import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 export default function CreateScheduleScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; template?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    template?: string;
+    prompt?: string;
+    model?: string;
+  }>();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
@@ -50,6 +56,13 @@ export default function CreateScheduleScreen() {
   const selectedTemplate = useMemo(
     () => (params.id ? undefined : getScheduleTemplate(params.template)),
     [params.id, params.template],
+  );
+  const fromConversation = useMemo(
+    () =>
+      params.id || !params.prompt
+        ? undefined
+        : scheduleDraftFromPrompt(params.prompt, params.model),
+    [params.id, params.prompt, params.model],
   );
 
   const isEditing = Boolean(existingSchedule);
@@ -235,7 +248,7 @@ export default function CreateScheduleScreen() {
       </View>
 
       <ScheduleForm
-        initialData={existingSchedule ?? selectedTemplate?.initialData}
+        initialData={existingSchedule ?? fromConversation ?? selectedTemplate?.initialData}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
         onDelete={isEditing ? handleDelete : undefined}

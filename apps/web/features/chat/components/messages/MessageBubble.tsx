@@ -82,6 +82,10 @@ import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
+import {
+  SAVE_ANSWER_AS_DOCUMENT_LABEL,
+  useSaveAnswerAsDocument,
+} from '../artifacts/save-answer-as-document';
 import { useSaveAsSkill } from '@/features/skills/components/save-as-skill';
 import { useScheduleFromTurn } from '@/features/schedules/components/schedule-from-turn';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
@@ -1068,6 +1072,7 @@ const MessageBubbleComponent = function MessageBubble({
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const projectAnswerSave = useProjectAnswerSave();
   const saveAsSkill = useSaveAsSkill();
+  const saveAnswerAsDocument = useSaveAnswerAsDocument();
   const scheduleFromTurn = useScheduleFromTurn();
   const [savingToProject, setSavingToProject] = useState(false);
   const saveToProject = useCallback(async () => {
@@ -3583,6 +3588,21 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <FolderOpen className="me-2 h-4 w-4" aria-hidden="true" />
                             {savingToProject ? 'Saving to project…' : 'Save to project'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && hasReadableTurn && !message.isStreaming && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              saveAnswerAsDocument({
+                                messageId: message.id,
+                                content: message.content ?? '',
+                                conversationId: message.sessionId ?? activeConversationId,
+                              })
+                            }
+                            data-testid="message-save-as-document"
+                          >
+                            <FileText className="me-2 h-4 w-4" aria-hidden="true" />
+                            {SAVE_ANSWER_AS_DOCUMENT_LABEL}
                           </DropdownMenuItem>
                         )}
                         {!isUser && hasReadableTurn && !message.isStreaming && scheduleFromTurn && (

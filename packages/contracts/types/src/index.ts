@@ -137,6 +137,7 @@ export * from './memory-wire';
 export * from './memory-import';
 
 export * from './research';
+export * from './study';
 
 export * from './plugins';
 

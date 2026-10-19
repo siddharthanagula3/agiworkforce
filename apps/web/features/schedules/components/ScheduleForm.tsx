@@ -15,6 +15,11 @@ import type { IntervalUnit, ScheduleDraft, ScheduleFormErrors } from '../types';
 import { DAYPART_PRESETS, DAYS_OF_WEEK } from '../types';
 import { ScheduleAccessFields } from './ScheduleAccessFields';
 
+export interface ScheduleAgentOption {
+  id: string;
+  name: string;
+}
+
 interface ScheduleFormProps {
   draft: ScheduleDraft;
   errors: ScheduleFormErrors;
@@ -23,6 +28,7 @@ interface ScheduleFormProps {
   isEdit: boolean;
   creditsUsed: number | null;
   modelOptions: readonly ScheduleModelOption[];
+  agentOptions?: readonly ScheduleAgentOption[];
   onChange: (patch: Partial<ScheduleDraft>) => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -48,6 +54,7 @@ const FIELD_ORDER: (keyof ScheduleDraft)[] = [
 ];
 
 const fieldId = (field: keyof ScheduleDraft) => `schedule-${field}`;
+const NO_AGENT_OPTIONS: readonly ScheduleAgentOption[] = [];
 
 const TIME_ZONE_OPTIONS_ID = 'schedule-timezone-options';
 const NO_TIME_ZONES: readonly string[] = [];
@@ -106,6 +113,7 @@ export function ScheduleForm({
   isEdit,
   creditsUsed,
   modelOptions,
+  agentOptions = NO_AGENT_OPTIONS,
   onChange,
   onSubmit,
   onCancel,
@@ -246,6 +254,37 @@ export function ScheduleForm({
             </p>
             <FieldError field="model" errors={errors} />
           </div>
+
+          {agentOptions.length > 0 || draft.agentId ? (
+            <div className="space-y-2">
+              <Label htmlFor={fieldId('agentId')}>Run as agent</Label>
+              <select
+                id={fieldId('agentId')}
+                name="agentId"
+                autoComplete="off"
+                className={nativeSelectClass}
+                value={draft.agentId ?? ''}
+                onChange={(event) => set({ agentId: event.target.value || null })}
+                aria-describedby="schedule-agent-helper"
+              >
+                <option value="">No agent</option>
+                {agentOptions.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+                {draft.agentId && !agentOptions.some((agent) => agent.id === draft.agentId) ? (
+                  <option value={draft.agentId} disabled>
+                    An agent you can no longer use
+                  </option>
+                ) : null}
+              </select>
+              <p id="schedule-agent-helper" className="text-xs text-muted-foreground">
+                Each run follows the agent&rsquo;s instructions and files and uses only the tools
+                and connectors it allows.
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor={fieldId('recurrence')}>Frequency</Label>

@@ -2760,6 +2760,13 @@ export function getWebviewContent(
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="terminal" role="menuitem">
+        <span class="pm-icon codicon codicon-terminal" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Terminal output</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
       <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
         <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
         <span class="plus-menu-copy">
@@ -6914,9 +6921,22 @@ export function getWebviewContent(
         title.textContent = 'Plan';
         var count = document.createElement('span');
         count.className = 'plan-card__count';
+        var openDocument = document.createElement('button');
+        openDocument.type = 'button';
+        openDocument.className = 'message-action plan-card__open';
+        openDocument.title = 'Open the plan as a document';
+        openDocument.setAttribute('aria-label', 'Open the plan as a document');
+        var openDocumentIcon = document.createElement('span');
+        openDocumentIcon.className = 'codicon codicon-go-to-file';
+        openDocumentIcon.setAttribute('aria-hidden', 'true');
+        openDocument.appendChild(openDocumentIcon);
+        openDocument.addEventListener('click', function() {
+          vscode.postMessage({ type: 'openPlanDocument' });
+        });
         header.appendChild(icon);
         header.appendChild(title);
         header.appendChild(count);
+        header.appendChild(openDocument);
 
         var explanation = document.createElement('p');
         explanation.className = 'plan-card__explanation';

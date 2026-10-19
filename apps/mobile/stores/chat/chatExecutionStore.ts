@@ -154,9 +154,15 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
   isTerminalToolStatus,
+  type ResearchDeliverableSpec,
+  type ResearchSourceRequest,
   type ResearchStep,
   type RoutingProfileChoice,
 } from '@agiworkforce/types';
+import {
+  hasResearchSourceChoice,
+  type ResearchPlanChoices,
+} from '@/src/features/chat/utils/researchPlanChoices';
 import {
   isResearchRunResumable,
   readResearchRunState,
@@ -259,7 +265,9 @@ export interface SendMessageOptions {
     sources: ToolSearchResult[];
     steps: ResearchStep[];
     approvedSteps: ResearchStep[];
+    deliverable?: ResearchDeliverableSpec;
   };
+  researchSources?: ResearchSourceRequest;
   research?: boolean;
 }
 
@@ -299,6 +307,7 @@ interface ExecutionState {
     assistantMessageId: string,
     decision: 'start' | 'cancel' | 'retry',
     steps?: ResearchStep[],
+    choices?: ResearchPlanChoices,
   ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
@@ -2374,6 +2383,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       ...(options.researchResume.approvedSteps.length > 0
                         ? { approved_steps: options.researchResume.approvedSteps }
                         : {}),
+                      ...(options.researchResume.deliverable
+                        ? { deliverable: options.researchResume.deliverable }
+                        : {}),
+                    },
+                  }
+                : {}),
+              ...(researchEnabled && options?.researchSources
+                ? {
+                    research_sources: {
+                      ...(options.researchSources.files ? { files: true } : {}),
+                      ...(options.researchSources.allowDomains.length > 0
+                        ? { allow_domains: options.researchSources.allowDomains }
+                        : {}),
+                      ...(options.researchSources.denyDomains.length > 0
+                        ? { deny_domains: options.researchSources.denyDomains }
+                        : {}),
+                      ...(options.researchSources.connectors.length > 0
+                        ? { connectors: options.researchSources.connectors }
+                        : {}),
                     },
                   }
                 : {}),
@@ -2394,6 +2422,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             },
         {
           onReconnecting: () => markReconnecting(set, assistantMessageId, true),
+          onMemoryCitations: (citations) => {
+            if (!isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, metadata: { ...m.metadata, memoryCitations: citations } }
+                    : m,
+                ),
+              },
+            }));
+          },
           onAttachmentsTruncated: (fileNames) => {
             const sentMessageId = userMessage?.id;
             if (!sentMessageId || !isTurnAccountCurrent()) return;
@@ -3882,7 +3923,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
   },
 
-  resumeResearch: async (conversationId, assistantMessageId, decision, steps) => {
+  resumeResearch: async (conversationId, assistantMessageId, decision, steps, choices) => {
     if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getConversationMessageStore(conversationId);
@@ -3939,7 +3980,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return;
     }
 
-    const resume = researchResumePayload(steps ? { ...research, steps } : research);
+    const resume = {
+      ...researchResumePayload(steps ? { ...research, steps } : research),
+      ...(choices ? { deliverable: choices.deliverable } : {}),
+    };
+    const researchSources =
+      choices && hasResearchSourceChoice(choices.sources) ? choices.sources : undefined;
     if (decision === 'start') {
       if (research.phase !== 'awaiting_approval' || resume.approvedSteps.length === 0) return;
     } else if (!isResearchRunResumable(research)) {
@@ -3961,7 +4007,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (branches) {
       await get().sendMessage(conversationId, userMsg.content, userModel, undefined, {
         regenerateParentMessageId: userMsg.id,
+        research: true,
         researchResume: resume,
+        ...(researchSources ? { researchSources } : {}),
       });
       return;
     }
@@ -3998,7 +4046,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }));
 
     await get().sendMessage(conversationId, userMsg.content, userModel, undefined, {
+      research: true,
       researchResume: resume,
+      ...(researchSources ? { researchSources } : {}),
     });
   },
 

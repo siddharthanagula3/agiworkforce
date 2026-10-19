@@ -92,6 +92,31 @@ describe('what @ offers in the composer', () => {
     ]);
   });
 
+  it('offers a folder whose name matches, alongside its files', async () => {
+    await fs.mkdir(path.join(root, 'src/components'));
+    await fs.writeFile(path.join(root, 'src/components/button.ts'), 'ordinary code');
+    vi.mocked(vscode.workspace.findFiles).mockImplementation(async (include: unknown) =>
+      String(include).endsWith('*/**')
+        ? [vscode.Uri.file(path.join(root, 'src/components/button.ts'))]
+        : [],
+    );
+
+    const targets = await searchMentionTargets('comp');
+
+    expect(targets).toEqual([{ path: 'src/components/', label: 'src/components/ · folder' }]);
+  });
+
+  it('withholds a folder whose files git ignores', async () => {
+    await fs.mkdir(path.join(root, 'build'));
+    await fs.writeFile(path.join(root, 'build/out.js'), 'generated');
+    await fs.writeFile(path.join(root, '.gitignore'), 'build/\n');
+    vi.mocked(vscode.workspace.findFiles).mockImplementation(async (include: unknown) =>
+      String(include).endsWith('*/**') ? [vscode.Uri.file(path.join(root, 'build/out.js'))] : [],
+    );
+
+    expect(await searchMentionTargets('build')).toEqual([]);
+  });
+
   it('puts symbols above plain file matches', async () => {
     vi.mocked(vscode.commands.executeCommand).mockResolvedValue([
       symbol('Tier', vscode.SymbolKind.Class, path.join(root, 'src/tier.ts'), [3, 0], [8, 1]),

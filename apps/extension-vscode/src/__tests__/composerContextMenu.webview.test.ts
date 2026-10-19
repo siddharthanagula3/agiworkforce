@@ -193,6 +193,11 @@ describe('composer context menu', () => {
       { kind: 'open-files', available: true, detail: '3 open editors' },
       { kind: 'problems', available: true, detail: '2 problems' },
       { kind: 'git-diff', available: false, detail: 'No uncommitted changes' },
+      {
+        kind: 'terminal',
+        available: false,
+        detail: 'Run a command in a terminal with shell integration first',
+      },
     ]);
 
     const reachable = document.querySelectorAll('#plusMenu [role="menuitem"]:not([disabled])');

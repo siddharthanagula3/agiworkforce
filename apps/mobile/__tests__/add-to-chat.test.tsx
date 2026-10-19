@@ -297,6 +297,14 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Chat (default)')).toBeNull();
     });
 
+    it('offers Study and learn in Cloud mode', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+
+      const { getByText } = renderSheet();
+
+      expect(getByText('Study and learn')).toBeTruthy();
+    });
+
     it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'max' });
@@ -528,6 +536,7 @@ describe('AddToChatSheet', () => {
       expect(getByText('Choose style')).toBeTruthy();
       expect(queryByText('Connectors')).toBeNull();
       expect(queryByText('Tool access')).toBeNull();
+      expect(queryByText('Study and learn')).toBeNull();
     });
 
     it('shows current values on config links', () => {

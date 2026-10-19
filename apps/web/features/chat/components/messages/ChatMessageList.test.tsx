@@ -706,6 +706,38 @@ describe('ChatMessageList actions', () => {
     expect(screen.queryByText('Your Max 20x usage for this billing period is used up.')).toBeNull();
   });
 
+  it('draws no empty reply with regenerate, branch or delete under an account-wide block', () => {
+    const messages = [
+      makeMessage({ id: 'refused-question', role: 'user', content: 'Hello' }),
+      makeMessage({
+        id: 'refused-reply',
+        role: 'assistant',
+        content: '',
+        metadata: {
+          paywall: {
+            feature: 'token_cap',
+            requiredTier: 'max_15x',
+            reason: 'Usage budget exhausted for this billing period.',
+            recoveryAction: 'top_up',
+          },
+        },
+      }),
+    ];
+
+    render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="max_15x"
+        onRegenerate={vi.fn()}
+        onBranch={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('bubble-refused-question')).toBeInTheDocument();
+    expect(screen.queryByTestId('bubble-refused-reply')).toBeNull();
+  });
+
   // The other half of the same rule: a refusal a different request can answer
   // still belongs to the turn that caused it.
   it('still cards a refusal the next request could answer, with its own recovery', () => {

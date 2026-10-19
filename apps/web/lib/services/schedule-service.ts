@@ -66,6 +66,7 @@ import { enqueueJob } from '@/lib/jobs/job-service';
 import { buildPage, keysetSql, type KeysetCursor } from '@/lib/identity/pagination';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
+import { loadAgentTurnConfig } from '@/lib/agents/agent-turn-config';
 import { runWithinScheduleRun } from '@/lib/schedules/schedule-run-scope';
 import { evaluateScheduleCondition } from './schedule-condition-service';
 
@@ -153,6 +154,7 @@ export interface ScheduleInput {
   creditCap?: number | null;
   notificationSettings?: unknown;
   projectId?: string | null;
+  agentId?: string | null;
   recurrenceRule?: string | null;
   dayparts?: unknown;
   retryMaxAttempts?: number;
@@ -228,6 +230,7 @@ interface TaskRow extends Record<string, unknown> {
   user_id: string;
   organization_id: string | null;
   project_id: string | null;
+  agent_id?: string | null;
   name: string;
   description: string | null;
   schedule_type: string;
@@ -330,6 +333,7 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
     id: row.id,
     userId: row.user_id,
     projectId: row.project_id,
+    agentId: row.agent_id ?? null,
     name: row.name,
     description: row.description,
     scheduleType: scheduleType as ScheduleTask['scheduleType'],
@@ -526,6 +530,7 @@ interface ValidatedScheduleDefinition {
   prompt: string;
   model: string;
   projectId: string | null;
+  agentId: string | null;
   scheduleType: ScheduleTask['scheduleType'];
   cronExpression: string | null;
   executeAt: string | null;
@@ -559,6 +564,7 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'creditCap',
   'notificationSettings',
   'projectId',
+  'agentId',
   'recurrenceRule',
   'dayparts',
   'retryMaxAttempts',
@@ -638,6 +644,7 @@ function validateScheduleInput(
       throw new ScheduleValidationError('Description must be 2,000 characters or less');
     }
     const projectId = input.projectId?.trim() || null;
+    const agentId = input.agentId?.trim() || null;
     const notificationSettings = ManagedCloudScheduleNotificationSettingsSchema.parse(
       input.notificationSettings === undefined ? {} : input.notificationSettings,
     );
@@ -775,6 +782,7 @@ function validateScheduleInput(
       prompt,
       model: normalizeModel(input.model, options.planTier, options.existingModel),
       projectId,
+      agentId,
       scheduleType,
       cronExpression,
       executeAt,
@@ -848,6 +856,15 @@ export async function assertProjectOwnership(
   if (!row) {
     throw new ScheduleValidationError('Project not found or not owned by this account');
   }
+}
+
+export async function assertScheduleAgent(
+  db: DatabaseAdapter,
+  userId: string,
+  agentId: string,
+): Promise<void> {
+  const loaded = await loadAgentTurnConfig(db, userId, agentId, { countTurns: false });
+  if (!loaded.ok) throw new ScheduleValidationError(loaded.message);
 }
 
 export async function listSchedules(
@@ -926,19 +943,20 @@ export async function createSchedule(
     planTier: options.planTier,
   });
   if (definition.projectId) await assertProjectOwnership(db, userId, definition.projectId);
+  if (definition.agentId) await assertScheduleAgent(db, userId, definition.agentId);
   const [row] = await db.query<TaskRow>(
     `insert into scheduled_tasks (
        user_id, name, description, schedule_type, cron_expression, execute_at,
        interval_ms, timezone, is_enabled, expires_at, max_executions,
        action_type, action_config, prompt, model, status, next_execution_at, metadata,
        project_id, recurrence_rule, dayparts, retry_max_attempts, retry_backoff_seconds,
-       missed_execution_policy, condition, credit_cap_microusd
+       missed_execution_policy, condition, credit_cap_microusd, agent_id
      ) values (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10, $11,
        'agent', null, $12, $13, $14, $15, $16::jsonb,
        $17, $18, $19::jsonb, $20, $21,
-       $22, $23::jsonb, $24
+       $22, $23::jsonb, $24, $25
      ) returning *`,
     [
       userId,
@@ -965,6 +983,7 @@ export async function createSchedule(
       definition.missedExecutionPolicy,
       definition.condition ? JSON.stringify(definition.condition) : null,
       definition.creditCapMicrousd,
+      definition.agentId,
     ],
   );
   if (!row) throw new Error('Schedule insert returned no row');
@@ -1006,6 +1025,7 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     maxExecutions: task.maxExecutions,
     creditCap: task.creditCap ?? null,
     projectId: task.projectId ?? null,
+    agentId: task.agentId ?? null,
     recurrenceRule: task.recurrenceRule ?? null,
     dayparts: task.dayparts ?? null,
     retryMaxAttempts: task.retryMaxAttempts ?? 0,
@@ -1081,6 +1101,9 @@ export async function updateSchedule(
     if (definition.projectId && definition.projectId !== (current.projectId ?? null)) {
       await assertProjectOwnership(tx, userId, definition.projectId);
     }
+    if (definition.agentId && definition.agentId !== (current.agentId ?? null)) {
+      await assertScheduleAgent(tx, userId, definition.agentId);
+    }
     const capReached = isCreditCapReached(definition.creditCapMicrousd, creditsUsedMicrousd);
     if (definition.isEnabled && capReached && definition.creditCapMicrousd !== null) {
       throw new ScheduleConflictError(
@@ -1104,7 +1127,7 @@ export async function updateSchedule(
            retry_attempt = case when $25::boolean then 0 else least(retry_attempt, $21) end,
            retry_scheduled_for = case when $25::boolean then null else retry_scheduled_for end,
            condition_state = case when $26::boolean then null else condition_state end,
-           credit_cap_microusd = $27, paused_reason = $28,
+           credit_cap_microusd = $27, paused_reason = $28, agent_id = $29,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
@@ -1137,6 +1160,7 @@ export async function updateSchedule(
         conditionChanged,
         definition.creditCapMicrousd,
         pausedReason,
+        definition.agentId,
       ],
     );
     if (!row) throw new ScheduleNotFoundError();

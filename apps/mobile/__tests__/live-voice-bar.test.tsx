@@ -1,5 +1,11 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+jest.mock('@/services/fileCreation', () => ({
+  downloadGeneratedFile: jest.fn(),
+  shareFile: jest.fn().mockResolvedValue(undefined),
+}));
+
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { LiveVoiceBar } from '@/src/features/voice/components/LiveVoiceBar';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
@@ -184,12 +190,14 @@ describe('LiveVoiceBar', () => {
           label: 'Checking your calendar',
           output: 'Two meetings today',
           isError: false,
+          files: [],
         },
         {
           callId: 'b',
           label: 'Sending the email',
           output: 'The mailbox refused it',
           isError: true,
+          files: [],
         },
       ],
     });
@@ -197,6 +205,31 @@ describe('LiveVoiceBar', () => {
     getByText('What the actions returned');
     getByText('Two meetings today');
     getByText('Sending the email · Did not complete');
+  });
+
+  it('opens a document the voice turn created, and only files the API serves', async () => {
+    (downloadGeneratedFile as jest.Mock).mockResolvedValue('file:///exports/plan.docx');
+    const { getAllByTestId, getByLabelText } = renderLiveBar({
+      toolOutcomes: [
+        {
+          callId: 'doc',
+          label: 'Creating a document',
+          output: 'Saved',
+          isError: false,
+          files: [
+            { name: 'plan.docx', uri: '/api/files/gf_plan' },
+            { name: 'elsewhere.pdf', uri: 'https://example.com/elsewhere.pdf' },
+          ],
+        },
+      ],
+    });
+    expect(getAllByTestId('live-voice-tool-file')).toHaveLength(1);
+    fireEvent.press(getByLabelText('Open plan.docx'));
+    await waitFor(() => expect(shareFile).toHaveBeenCalledWith('file:///exports/plan.docx'));
+    expect(downloadGeneratedFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/files\/gf_plan$/),
+      'plan.docx',
+    );
   });
 
   it('sends the on-screen approval decision for that call', () => {

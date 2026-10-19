@@ -181,6 +181,7 @@ export function toWebConversation(
     isTemporary: conversation.isTemporary,
     ...(conversation.workMode ? { workMode: conversation.workMode } : {}),
     ...(conversation.needsYou ? { needsYou: true } : {}),
+    ...(wire.instructions ? { instructions: wire.instructions } : {}),
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };
@@ -229,6 +230,7 @@ interface UseConversationsReturn {
       starred?: boolean;
       archived?: boolean;
       isTemporary?: boolean;
+      instructions?: string | null;
     },
   ) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
@@ -694,6 +696,7 @@ export function useConversations(): UseConversationsReturn {
         starred?: boolean;
         archived?: boolean;
         isTemporary?: boolean;
+        instructions?: string | null;
       },
     ): Promise<boolean> => {
       try {
@@ -722,6 +725,7 @@ export function useConversations(): UseConversationsReturn {
           isStarred: data.conversation.starred ?? false,
           isArchived: data.conversation.archived ?? false,
           isTemporary: data.conversation.is_temporary ?? false,
+          instructions: data.conversation.instructions ?? null,
           updatedAt: data.conversation.updated_at,
         });
         if (Object.prototype.hasOwnProperty.call(updates, 'projectId')) {

@@ -93,7 +93,9 @@ pub fn build_heartbeat(
 }
 
 fn install_id_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".agiworkforce").join(INSTALL_ID_FILE))
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join(INSTALL_ID_FILE))
 }
 
 fn install_id() -> Option<String> {

@@ -39,16 +39,32 @@ interface ModelsPayload {
   error?: { message?: string };
 }
 
+interface CompletionToolCall {
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
 interface CompletionPayload {
   model?: string;
-  choices?: Array<{ message?: { content?: string | null } }>;
+  choices?: Array<{
+    message?: { content?: string | null; tool_calls?: CompletionToolCall[] };
+    finish_reason?: string | null;
+  }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   x_agi_workforce?: { routing?: { resolved_model?: string } };
   error?: { message?: string };
 }
 
+interface PlaygroundToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 interface PlaygroundResult {
   content: string;
+  toolCalls: PlaygroundToolCall[];
+  finishReason: string | null;
   model: string;
   latencyMs: number;
   promptTokens: number | null;
@@ -69,10 +85,40 @@ interface RequestDraft {
   message: string;
   maxTokens: string;
   temperature: string;
+  tools: string;
+}
+
+export function parseTools(text: string): { tools: unknown[] | null; error: string | null } {
+  const trimmed = text.trim();
+  if (!trimmed) return { tools: null, error: null };
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) return { tools: null, error: 'Tools must be a JSON array.' };
+    return { tools: parsed, error: null };
+  } catch {
+    return { tools: null, error: 'Tools are not valid JSON.' };
+  }
+}
+
+function prettyArguments(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
+}
+
+export function toolCallsOf(payload: CompletionPayload | null): PlaygroundToolCall[] {
+  return (payload?.choices?.[0]?.message?.tool_calls ?? []).map((call, index) => ({
+    id: call.id ?? `call-${index + 1}`,
+    name: call.function?.name ?? 'unknown',
+    arguments: prettyArguments(call.function?.arguments ?? ''),
+  }));
 }
 
 function buildRequestBody(draft: RequestDraft): Record<string, unknown> {
   const system = draft.system.trim();
+  const { tools } = parseTools(draft.tools);
   const maxTokens = Number.parseInt(draft.maxTokens, 10);
   const temperature = Number.parseFloat(draft.temperature);
   return {
@@ -84,6 +130,7 @@ function buildRequestBody(draft: RequestDraft): Record<string, unknown> {
     stream: false,
     ...(Number.isFinite(maxTokens) && maxTokens > 0 ? { max_tokens: maxTokens } : {}),
     ...(draft.temperature.trim() !== '' && Number.isFinite(temperature) ? { temperature } : {}),
+    ...(tools ? { tools } : {}),
   };
 }
 
@@ -187,6 +234,7 @@ export function RequestPlayground() {
     message: '',
     maxTokens: '',
     temperature: '',
+    tools: '',
   });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<PlaygroundResult | null>(null);
@@ -197,7 +245,8 @@ export function RequestPlayground() {
   const update = (field: keyof RequestDraft) => (value: string) =>
     setDraft((previous) => ({ ...previous, [field]: value }));
 
-  const canSend = draft.message.trim().length > 0 && !sending;
+  const toolsProblem = parseTools(draft.tools).error;
+  const canSend = draft.message.trim().length > 0 && !sending && toolsProblem === null;
 
   const send = async () => {
     if (!canSend) return;
@@ -228,6 +277,8 @@ export function RequestPlayground() {
       }
       setResult({
         content: payload?.choices?.[0]?.message?.content ?? '',
+        toolCalls: toolCallsOf(payload),
+        finishReason: payload?.choices?.[0]?.finish_reason ?? null,
         model: payload?.x_agi_workforce?.routing?.resolved_model ?? payload?.model ?? draft.model,
         latencyMs,
         promptTokens: payload?.usage?.prompt_tokens ?? null,
@@ -361,6 +412,23 @@ export function RequestPlayground() {
               />
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${fieldId}-tools`}>Tools</Label>
+            <Textarea
+              id={`${fieldId}-tools`}
+              value={draft.tools}
+              onChange={(event) => update('tools')(event.target.value)}
+              rows={3}
+              className="font-mono text-xs"
+              aria-describedby={`${fieldId}-tools-help`}
+              aria-invalid={toolsProblem !== null}
+              placeholder='[{"type":"function","function":{"name":"get_weather","parameters":{"type":"object","properties":{"city":{"type":"string"}}}}}]'
+            />
+            <p id={`${fieldId}-tools-help`} className="text-xs text-muted-foreground">
+              {toolsProblem ??
+                'Optional. A JSON array of function tools; the calls the model makes are shown with their arguments.'}
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={!canSend} aria-busy={sending}>
               {sending ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
@@ -412,9 +480,29 @@ export function RequestPlayground() {
                   ? `, ${result.promptTokens.toLocaleString()} tokens in and ${result.completionTokens.toLocaleString()} out`
                   : ''}
               </p>
-              <div className="whitespace-pre-wrap rounded-lg border border-border p-3 text-sm text-foreground">
-                {result.content || 'The model returned no text.'}
-              </div>
+              {result.content || result.toolCalls.length === 0 ? (
+                <div className="whitespace-pre-wrap rounded-lg border border-border p-3 text-sm text-foreground">
+                  {result.content || 'The model returned no text.'}
+                </div>
+              ) : null}
+              {result.toolCalls.length > 0 ? (
+                <section aria-label="Tool calls" className="flex flex-col gap-2">
+                  <h3 className="text-xs font-medium text-muted-foreground">
+                    Tool calls{result.finishReason ? ` · finish reason ${result.finishReason}` : ''}
+                  </h3>
+                  {result.toolCalls.map((call) => (
+                    <div key={call.id} className="rounded-lg border border-border">
+                      <p className="border-b border-border px-3 py-1.5 font-mono text-xs text-foreground">
+                        {call.name}
+                        <span className="text-muted-foreground"> · {call.id}</span>
+                      </p>
+                      <pre className="max-h-60 overflow-auto p-3 font-mono text-xs text-foreground">
+                        {call.arguments}
+                      </pre>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
               {result.remaining !== null && result.limit !== null ? (
                 <p className="text-xs text-muted-foreground">
                   {result.remaining} of {result.limit} chat completion requests left in this window

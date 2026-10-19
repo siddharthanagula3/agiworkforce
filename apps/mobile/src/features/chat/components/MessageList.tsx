@@ -30,6 +30,7 @@ interface MessageListProps {
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
+  onScheduleMessage?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
   onDeleteImageConversation?: () => void;
   variantInfoByMessageId?: VariantInfoByMessageId;
@@ -71,6 +72,7 @@ export function MessageList({
   onRetryMessage,
   onRetryWithModel,
   onBranch,
+  onScheduleMessage,
   onEditImageArea,
   onDeleteImageConversation,
   variantInfoByMessageId,
@@ -140,6 +142,7 @@ export function MessageList({
             onRetryMessage={onRetryMessage}
             onRetryWithModel={onRetryWithModel}
             onBranch={onBranch}
+            onScheduleMessage={onScheduleMessage}
             onEditImageArea={onEditImageArea}
             onDeleteImageConversation={onDeleteImageConversation}
             variant={variantInfoByMessageId?.[item.id]}
@@ -165,6 +168,7 @@ export function MessageList({
       onRetryMessage,
       onRetryWithModel,
       onBranch,
+      onScheduleMessage,
       onEditImageArea,
       onDeleteImageConversation,
       variantInfoByMessageId,

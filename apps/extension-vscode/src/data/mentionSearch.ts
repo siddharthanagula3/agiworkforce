@@ -1,6 +1,6 @@
 /**
- * What `@` offers in the composer: the workspace's files, and the symbols the
- * language servers already know about in them.
+ * What `@` offers in the composer: the workspace's files and folders, and the
+ * symbols the language servers already know about in them.
  *
  * A symbol resolves to the file and the lines it occupies, so it travels as an
  * ordinary workspace reference and the turn carries the declaration rather
@@ -22,6 +22,7 @@ interface MentionCandidate {
 }
 
 const FILE_RESULT_LIMIT = 15;
+const FOLDER_RESULT_LIMIT = 5;
 const SYMBOL_RESULT_LIMIT = 8;
 const CANDIDATES_PER_RESULT = 4;
 
@@ -63,6 +64,33 @@ async function fileMatches(query: string): Promise<MentionCandidate[]> {
       },
     };
   });
+}
+
+async function folderMatches(query: string): Promise<MentionCandidate[]> {
+  const needle = query.toLowerCase();
+  const files = await vscode.workspace.findFiles(
+    `**/*${query}*/**`,
+    '**/node_modules/**',
+    FOLDER_RESULT_LIMIT * CANDIDATES_PER_RESULT * 4,
+  );
+  const folders = new Map<string, MentionCandidate>();
+  for (const uri of files) {
+    const segments = vscode.workspace.asRelativePath(uri).split('/');
+    for (let depth = 1; depth < segments.length; depth++) {
+      const folderPath = `${segments.slice(0, depth).join('/')}/`;
+      if (!folderPath.toLowerCase().includes(needle)) continue;
+      if (!folders.has(folderPath)) {
+        folders.set(folderPath, {
+          uri,
+          target: { path: folderPath, label: `${folderPath} · folder` },
+        });
+      }
+      break;
+    }
+  }
+  return [...folders.values()].sort(
+    (left, right) => left.target.path.length - right.target.path.length,
+  );
 }
 
 function symbolKindLabel(kind: unknown): string {
@@ -108,12 +136,13 @@ async function symbolMatches(query: string): Promise<MentionCandidate[]> {
 }
 
 export async function searchMentionTargets(query: string): Promise<MentionTarget[]> {
-  const [symbols, files] = await Promise.all([
+  const [symbols, files, folders] = await Promise.all([
     symbolMatches(query).catch(() => [] as MentionCandidate[]),
     fileMatches(query).catch(() => [] as MentionCandidate[]),
+    folderMatches(query).catch(() => [] as MentionCandidate[]),
   ]);
   const checked = new Map<string, boolean>();
-  for (const candidate of [...symbols, ...files]) {
+  for (const candidate of [...symbols, ...files, ...folders.slice(0, FOLDER_RESULT_LIMIT * 2)]) {
     if (!checked.has(candidate.uri.fsPath)) {
       checked.set(candidate.uri.fsPath, (await resolveContextFile(candidate.uri.fsPath)).ok);
     }
@@ -127,6 +156,7 @@ export async function searchMentionTargets(query: string): Promise<MentionTarget
   const targets: MentionTarget[] = [];
   for (const target of [
     ...offered(symbols, SYMBOL_RESULT_LIMIT),
+    ...offered(folders, FOLDER_RESULT_LIMIT),
     ...offered(files, FILE_RESULT_LIMIT),
   ]) {
     const key = `${target.path}#${target.range?.startLine ?? ''}:${target.range?.endLine ?? ''}`;

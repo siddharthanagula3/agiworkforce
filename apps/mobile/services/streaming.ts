@@ -27,6 +27,8 @@ import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
+import type { ManagedMemoryCitations, ResearchDeliverableSpec } from '@agiworkforce/types';
+import { readMemoryCitationsHeader } from '@/src/features/memory/services/memoryCitations';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudAgentRunClient,
@@ -144,6 +146,7 @@ export interface StreamCallbacks {
   onActivity?: () => void;
   onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
   onAttachmentsTruncated?: (fileNames: string[]) => void;
+  onMemoryCitations?: (citations: ManagedMemoryCitations) => void;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -275,6 +278,13 @@ interface InitialStreamRequest {
     sources?: Array<Omit<AgentEventSource, 'title'> & { title?: string }>;
     steps?: ResearchStep[];
     approved_steps?: ResearchStep[];
+    deliverable?: ResearchDeliverableSpec;
+  };
+  research_sources?: {
+    files?: true;
+    allow_domains?: string[];
+    deny_domains?: string[];
+    connectors?: string[];
   };
   code_execution?: boolean;
   office_creation?: boolean;
@@ -442,6 +452,8 @@ async function attemptStream(
       response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
     );
     if (truncated.length > 0) callbacks.onAttachmentsTruncated?.(truncated);
+    const memoryCitations = readMemoryCitationsHeader(response.headers);
+    if (memoryCitations) callbacks.onMemoryCitations?.(memoryCitations);
     surfaceTermsNotice(response.headers);
   }
 

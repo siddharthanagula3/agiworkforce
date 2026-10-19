@@ -1,4 +1,5 @@
 import 'server-only';
+import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 
 import { createHash } from 'node:crypto';
 import { NextResponse, after, type NextRequest } from 'next/server';
@@ -878,8 +879,9 @@ export async function serveFreeQuotaTurn(
     data_region: string | null;
     project_id: string | null;
     is_temporary: boolean | null;
+    instructions: string | null;
   }>(
-    'select c.id, o.data_region, c.project_id, c.is_temporary from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
+    'select c.id, o.data_region, c.project_id, c.is_temporary, c.instructions from web_conversations c left join organizations o on o.id = c.organization_id where c.id = $1 and c.user_id = $2 and c.organization_id is not distinct from $3 and c.deleted_at is null',
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return policyRefusal('Conversation not found.', 'conversation_not_found', 404);
@@ -1082,6 +1084,10 @@ export async function serveFreeQuotaTurn(
       { layer: 'developer', text: memoryCommandNote ?? '' },
       ...personalContext.projectBlocks,
       ...personalContext.blocks,
+      {
+        layer: 'personalized',
+        text: conversationInstructionBlock(conversation.instructions) ?? '',
+      },
     ];
     const contextTexts = [studyInstruction ?? '', ...contextBlocks.map((block) => block.text)];
     const contextSecrets = await applySecretHandlingToTurnTexts(

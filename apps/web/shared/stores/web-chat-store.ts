@@ -177,6 +177,8 @@ export interface MessageResearchState {
    */
   sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
   runConfig?: ResearchRunConfig;
+  /** Clarifying questions the plan asked; answered before the run searches. */
+  questions?: string[];
 }
 
 // Types
@@ -618,6 +620,8 @@ export interface Conversation {
   isStarred?: boolean;
   /** Archived (hidden from default list). Client-side only (no DB column in v1). */
   isArchived?: boolean;
+  /** Standing instructions for this conversation only. */
+  instructions?: string | null;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';

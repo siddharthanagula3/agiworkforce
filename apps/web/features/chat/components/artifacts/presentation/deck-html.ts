@@ -175,7 +175,7 @@ async function slideHtml(slide: string, index: number, theme: DeckTheme): Promis
 function styles(theme: DeckTheme): string {
   const heading = DECK_FONT_STACKS[theme.headingFont].replace(/var\([^)]*\),\s*/g, '');
   const bodyFont = DECK_FONT_STACKS[theme.bodyFont].replace(/var\([^)]*\),\s*/g, '');
-  return `*{box-sizing:border-box}html,body{margin:0;height:100%;background:#111;color:${theme.text}}
+  return `*{box-sizing:border-box}html,body{margin:0;height:100%;background:black;color:${theme.text}}
 body{display:flex;flex-direction:column;font-family:${bodyFont}}
 main{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-height:0}
 .stage{width:min(100%,calc((100vh - 96px)*16/9));container-type:inline-size}
@@ -194,9 +194,9 @@ img{display:block;max-width:100%;max-height:34cqw;margin:0 auto;border-radius:.8
 .visual{margin:0;min-height:0}.visual svg{display:block;width:100%;max-height:30cqw;fill:${theme.text};font-size:14px}
 .chart-title{font-weight:600}.note{color:${theme.muted};font-size:1.4cqw}
 .shapes{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-nav{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;color:#f5f5f5;font:14px system-ui,sans-serif}
-nav button{min-width:44px;min-height:44px;border:1px solid #555;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}
-nav button:disabled{opacity:.35;cursor:default}nav button:focus-visible{outline:2px solid #fff;outline-offset:2px}`;
+nav{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;color:white;font:14px system-ui,sans-serif}
+nav button{min-width:44px;min-height:44px;border:1px solid gray;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+nav button:disabled{opacity:.35;cursor:default}nav button:focus-visible{outline:2px solid white;outline-offset:2px}`;
 }
 
 const SCRIPT = `(()=>{const s=[...document.querySelectorAll('.slide')];let i=0;const c=document.getElementById('count');const p=document.getElementById('prev');const n=document.getElementById('next');

@@ -7,7 +7,7 @@ import { ChartArtifact, MermaidDiagram } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import { slideSegments } from './deck-model';
 import { parseShapes, type DeckShape } from './deck-shapes';
-import { DECK_FONT_STACKS, readableOn, type DeckTheme } from './deck-themes';
+import { DECK_FONT_STACKS, isDarkBackground, type DeckTheme } from './deck-themes';
 import { SlideShapes } from './SlideShapes';
 import styles from './Deck.module.css';
 
@@ -138,7 +138,7 @@ export function SlideView({
                     type: 'chart',
                     content: segment.source,
                   }}
-                  isDark={readableOn(theme.background) === '#ffffff'}
+                  isDark={isDarkBackground(theme.background)}
                 />
               </div>
             );
