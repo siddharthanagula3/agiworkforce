@@ -160,6 +160,8 @@ import {
   X as XIcon,
   ChevronUp,
   EyeOff,
+  ExternalLink,
+  SquarePen,
 } from '@agiworkforce/icons';
 import {
   Button,
@@ -6475,6 +6477,32 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           tabIndex={-1}
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
         >
+          {compact && (
+            <header
+              data-quick-ask-header=""
+              className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3"
+            >
+              {urlConversationId ? (
+                <a
+                  href={conversationHref(urlConversationId)}
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  {t('chat:quickAsk.openFullChat', 'Open full chat')}
+                </a>
+              ) : (
+                <span />
+              )}
+              <a
+                href={QUICK_ASK_PATH}
+                aria-label={t('chat:quickAsk.newChat', 'New chat')}
+                title={t('chat:quickAsk.newChat', 'New chat')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <SquarePen className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </header>
+          )}
           {!compact && (
             <header
               data-app-header=""
