@@ -35,7 +35,7 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<stri
   return shareUrl;
 }
 
-export type PublishedArtifactAudience = 'public' | 'organization';
+export type PublishedArtifactAudience = 'public' | 'organization' | 'invited';
 
 export interface ArtifactPublication {
   shareUrl: string;
@@ -48,7 +48,7 @@ export interface ArtifactPublicationState {
 }
 
 function readAudience(value: unknown): PublishedArtifactAudience {
-  return value === 'organization' ? 'organization' : 'public';
+  return value === 'public' || value === 'organization' ? value : 'invited';
 }
 
 function readWorkspaceMemberCount(value: unknown): number | null {
