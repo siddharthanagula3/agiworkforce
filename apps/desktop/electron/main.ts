@@ -178,6 +178,7 @@ import {
   warmUpQuickAsk,
 } from './quickAsk';
 import { deliverBrowserHandoff } from './browserHandoff';
+import { focusComposerWhenReady } from './composerFocus';
 import { captureToChat, captureWindowToChat } from './screenshot';
 import { frontWindowIdOutside } from './runtime/computerUseService';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
@@ -992,6 +993,31 @@ function openNewChat(): void {
   void mainWindow?.loadURL(windowUrlFor(null));
 }
 
+const NEW_CHAT_COMPOSER_WAIT_MS = 5000;
+
+/**
+ * The global New Chat Window shortcut: the main window, in front, on a new
+ * chat with the cursor in the composer. A window already on an untouched new
+ * chat is only raised, so a draft typed there survives a second press.
+ */
+async function newChatFromShortcut(): Promise<void> {
+  showMainWindow();
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  const entry = shellWindows.get(win.id);
+  const onNewChat =
+    entry?.route === NEW_CHAT_ROUTE &&
+    showsTrustedPage(win.webContents) &&
+    !win.webContents.isLoading();
+  if (!onNewChat) {
+    if (entry) entry.route = NEW_CHAT_ROUTE;
+    await win.loadURL(windowUrlFor(null)).catch(() => undefined);
+  }
+  if (win.isDestroyed()) return;
+  win.webContents.focus();
+  await focusComposerWhenReady(win, NEW_CHAT_COMPOSER_WAIT_MS);
+}
+
 function openNewWindow(): void {
   createShellWindow({ primary: false, route: null });
 }
@@ -1274,6 +1300,7 @@ function takeOverScreen(): void {
 const garnishHandlers = {
   onOpen: showMainWindow,
   onNewChat: openNewChat,
+  onNewChatWindow: () => void newChatFromShortcut(),
   onQuickAsk: () => toggleQuickAsk(),
   onScreenshot: () => void captureToChat(mainWindow),
   onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
@@ -1291,6 +1318,7 @@ function applyGarnishShortcuts(): void {
   unregisterGarnishShortcuts();
   registerGarnishShortcuts({
     onQuickAsk: garnishHandlers.onQuickAsk,
+    onNewChat: garnishHandlers.onNewChatWindow,
     onScreenshot: garnishHandlers.onScreenshot,
     onWindowShot: garnishHandlers.onWindowShot,
     onVoice: garnishHandlers.onVoice,
@@ -1318,6 +1346,7 @@ function hostPreferencesState(): HostPreferencesState {
       sessionCompletionAlerts: preferences.sessionCompletionAlerts,
       sessionApprovalAlerts: preferences.sessionApprovalAlerts,
       quickAskShortcut: shortcuts.quickAskShortcut,
+      newChatShortcut: shortcuts.newChatShortcut,
       screenshotShortcut: shortcuts.screenshotShortcut,
       windowShotShortcut: shortcuts.windowShotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,

@@ -14,6 +14,7 @@ import {
 
 export interface GarnishShortcutHandlers {
   onQuickAsk: () => void;
+  onNewChat: () => void;
   onScreenshot: () => void;
   onWindowShot: () => void;
   onVoice: () => void;
@@ -91,6 +92,7 @@ export function registerGarnishShortcuts(
   const duplicates = duplicateShortcutKeys(shortcuts);
   const handlerFor: Record<ShortcutKey, () => void> = {
     quickAskShortcut: handlers.onQuickAsk,
+    newChatShortcut: handlers.onNewChat,
     screenshotShortcut: handlers.onScreenshot,
     windowShotShortcut: handlers.onWindowShot,
     voiceShortcut: handlers.onVoice,
