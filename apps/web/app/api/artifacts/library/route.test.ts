@@ -65,17 +65,15 @@ describe('/api/artifacts/library', () => {
   });
 
   it('saves a deck template behind the CSRF check', async () => {
-    mocks.query
-      .mockResolvedValueOnce([{ total: 0 }])
-      .mockResolvedValueOnce([
-        {
-          id: ITEM,
-          kind: 'deck_template',
-          name: 'Board',
-          payload: { title: 'B', content: '# B' },
-          created_at: '2026-10-19T00:00:00Z',
-        },
-      ]);
+    mocks.query.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([
+      {
+        id: ITEM,
+        kind: 'deck_template',
+        name: 'Board',
+        payload: { title: 'B', content: '# B' },
+        created_at: '2026-10-19T00:00:00Z',
+      },
+    ]);
     const response = await POST(
       request('POST', {
         kind: 'deck_template',

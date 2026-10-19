@@ -1,4 +1,5 @@
 import 'server-only';
+import { resolveUsageCreditsNotice } from '@/lib/server/usage-credits-notice';
 import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 import {
   agentAllowsImageGeneration,
@@ -5830,12 +5831,22 @@ async function processAdmittedRequest(
     }
 
     quotaWarningHeader =
+      (await resolveUsageCreditsNotice({
+        db: (await scopedDbPromise).db,
+        userId,
+        plan: subscription.plan_tier,
+        reservationFundedByCredits: managedUsage?.fundedByUsageCredits === true,
+        creditsUsedMicrousd: existingBalance?.credits_used_microusd ?? 0,
+        creditsRemainingMicrousd: existingBalance?.credits_remaining_microusd ?? 0,
+        estimatedCostMicrousd,
+      })) ??
       buildQuotaWarningHeader({
         planTier: subscription.plan_tier,
         creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
         creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
         estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
-      }) ?? computerUseSoftCapWarning;
+      }) ??
+      computerUseSoftCapWarning;
   }
 
   const dynamicSystemBlocks: InstructionBlock[] = [];

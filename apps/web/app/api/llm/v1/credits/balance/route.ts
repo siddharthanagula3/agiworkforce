@@ -103,7 +103,9 @@ async function handleGetBalance(request: NextRequest) {
         entitlement.revenueContext,
       );
   const monthlyCredits = planAllowance
-    ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
+    ? allocated > 0
+      ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
+      : { ...creditWindow(planAllowance.monthly, 0, resetAt), remaining: 0 }
     : null;
 
   const responseBody: ManagedUsageBalanceResponse = {
