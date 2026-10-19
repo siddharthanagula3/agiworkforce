@@ -6721,6 +6721,8 @@ mod tests {
         let mut stored = ManagedSession::new("steered", chrono::Utc::now());
         stored.permission_mode = Some(PermissionMode::Default);
         agent.managed_session = Some(stored);
+        agent.managed_session_path = Some(workspace.path().join("steered.json"));
+        agent.set_session_persistence(true);
         agent.bypass_permissions_available = true;
         apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None)
             .expect("authorized controls");

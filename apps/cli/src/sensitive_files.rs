@@ -152,26 +152,25 @@ mod parity {
     use std::path::Path;
 
     /// The TypeScript surfaces gate on `packages/contracts/local-runtime/src/filesystem.ts`.
-    /// Two lists that drift leave one surface reading what the other refuses, so the
-    /// count is pinned here and the file is named for whoever changes either side.
+    /// Two lists that drift leave one surface reading what the other refuses, so every
+    /// regex literal there must equal the rule at the same position here.
     #[test]
     fn matches_the_typescript_policy_pattern_for_pattern() {
         let ts = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../packages/contracts/local-runtime/src/filesystem.ts");
         let source =
             std::fs::read_to_string(&ts).unwrap_or_else(|e| panic!("read {}: {e}", ts.display()));
-        let ts_count = source
-            .lines()
-            .filter(|line| {
-                line.trim_start().starts_with("/(^|\\/)") || line.trim_start().starts_with("/\\.")
-            })
-            .count();
+        let literal = regex::Regex::new(
+            r"/((?:\(\^\|\\/\)|\\\.)(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n\[])*)/i[,\]]",
+        )
+        .expect("regex literal pattern compiles");
+        let ts_patterns: Vec<String> = literal
+            .captures_iter(&source)
+            .map(|found| format!("(?i){}", found[1].replace(r"\/", "/")))
+            .collect();
         assert_eq!(
-            ts_count,
-            SENSITIVE_FILE_PATTERNS.len(),
-            "filesystem.ts has {} patterns, this module has {}; add the missing rule to both",
-            ts_count,
-            SENSITIVE_FILE_PATTERNS.len()
+            ts_patterns, SENSITIVE_FILE_PATTERNS,
+            "filesystem.ts and this module list different credential-file rules; change both"
         );
     }
 }
