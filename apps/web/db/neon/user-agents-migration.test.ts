@@ -13,8 +13,8 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0376_user_agents.sql');
-const down = read('down/0376_user_agents.down.sql');
+const up = read('0370_user_agents.sql');
+const down = read('down/0370_user_agents.down.sql');
 
 function policy(name: string): string {
   const match = up.match(new RegExp(`create policy ${name}[\\s\\S]*?;\\n`, 'i'));
@@ -28,7 +28,7 @@ function enumValues(column: string): string[] {
   return [...match![1]!.matchAll(/'([^']+)'/gu)].map((entry) => entry[1]!).sort();
 }
 
-describe('0376 user agents schema contract', () => {
+describe('0370 user agents schema contract', () => {
   it('keeps the stored vocabularies and limits aligned with the wire contract', () => {
     expect(enumValues('status')).toEqual([...AGENT_STATUSES].sort());
     expect(enumValues('visibility')).toEqual([...AGENT_VISIBILITIES].sort());
@@ -101,7 +101,7 @@ describe('0376 user agents schema contract', () => {
       'alter table public.web_conversations drop column if exists agent_id;',
       'alter table public.scheduled_tasks drop column if exists agent_id;',
       'drop function if exists public.app_owns_user_agent(uuid);',
-      "where filename = '0376_user_agents.sql';",
+      "where filename = '0370_user_agents.sql';",
     ]) {
       expect(down).toContain(object);
     }

@@ -12,6 +12,6 @@ drop table if exists public.user_agent_versions;
 drop table if exists public.user_agents;
 drop function if exists public.app_owns_user_agent(uuid);
 delete from public.schema_migrations
- where filename = '0376_user_agents.sql';
+ where filename = '0370_user_agents.sql';
 
 commit;

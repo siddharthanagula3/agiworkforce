@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0376: agents a person builds, shares and runs
+-- Migration 0370: agents a person builds, shares and runs
 --
 -- Why    : nothing in the product could hold a reusable assistant. ChatGPT
 --          lists workspace agents in an Agents sidebar and builds each one
