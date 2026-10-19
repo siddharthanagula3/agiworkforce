@@ -32,6 +32,7 @@ import {
 } from '@/src/features/chat/components/TaskChips';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
+import { readClipboardImageAttachment } from '@/src/features/media/clipboard-image';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -704,6 +705,16 @@ export default function ChatTabScreen() {
     }
   }, []);
 
+  const handleSheetPasteImage = useCallback(async () => {
+    try {
+      const attachment = await readClipboardImageAttachment();
+      if (attachment) chatInputAttachRef.current?.addAttachments([attachment]);
+      else Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
+    } catch {
+      Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
+    }
+  }, []);
+
   const handleSheetPhotos = useCallback(async () => {
     try {
       const assets = await pickImageAssetsFromLibrary({
@@ -1085,6 +1096,7 @@ export default function ChatTabScreen() {
         ref={addToChatRef}
         onCamera={handleSheetCamera}
         onPhotos={handleSheetPhotos}
+        onPasteImage={handleSheetPasteImage}
         onFile={handleSheetFile}
         onOpenCloudAccess={handleOpenCloudAccess}
         onOpenStyleSelector={handleOpenStyleSelector}

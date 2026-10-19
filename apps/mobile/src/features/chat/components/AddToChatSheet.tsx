@@ -21,6 +21,7 @@ import {
   Sparkles,
   BookOpen,
   Globe,
+  ClipboardPaste,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -47,6 +48,7 @@ import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
+import { clipboardHasImage } from '@/src/features/media/clipboard-image';
 import { useChatConnectorOptions } from '@/src/features/chat/hooks/useChatConnectorOptions';
 import {
   enterMediaMode,
@@ -77,6 +79,7 @@ import type { Attachment } from './AttachmentPreview';
 interface AddToChatSheetProps {
   onCamera: () => void;
   onPhotos: () => void;
+  onPasteImage?: () => void;
   onFile: () => void;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
@@ -112,6 +115,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   {
     onCamera,
     onPhotos,
+    onPasteImage,
     onFile,
     onOpenCloudAccess,
     onOpenStyleSelector,
@@ -348,6 +352,24 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onPhotos();
   }, [haptic, closeSheet, onPhotos]);
 
+  const [clipboardImage, setClipboardImage] = useState(false);
+  useEffect(() => {
+    if (!onPasteImage) return;
+    let cancelled = false;
+    void clipboardHasImage().then((has) => {
+      if (!cancelled) setClipboardImage(has);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onPasteImage]);
+
+  const handlePasteImage = useCallback(() => {
+    haptic();
+    closeSheet();
+    onPasteImage?.();
+  }, [haptic, closeSheet, onPasteImage]);
+
   const handleFile = useCallback(() => {
     haptic();
     closeSheet();
@@ -454,6 +476,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           setHandoff(null);
           return;
         }
+        if (onPasteImage) void clipboardHasImage().then(setClipboardImage);
         if (appMode === 'cloud' && cloudLibrary.status !== 'loading') loadCloudLibrary();
       }}
       snapPoints={SNAP_POINTS}
@@ -531,6 +554,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             bg={cardBg}
             textColor={themeColors.textPrimary}
           />
+          {onPasteImage && clipboardImage ? (
+            <AttachmentCard
+              icon={<ClipboardPaste size={22} color={themeColors.teal} />}
+              label="Paste image"
+              onPress={handlePasteImage}
+              bg={cardBg}
+              textColor={themeColors.textPrimary}
+            />
+          ) : null}
           {appMode === 'cloud' ? (
             <AttachmentCard
               icon={<FileText size={22} color={themeColors.teal} />}

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockFetchConnectorDirectory = jest.fn();
 jest.mock('@/services/connectors', () => ({
@@ -116,6 +116,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
+import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
@@ -300,6 +301,15 @@ describe('AddToChatSheet', () => {
       expect(queryByLabelText('Research mode')).toBeNull();
       expect(queryByLabelText('Create mode')).toBeNull();
       expect(queryByText('Chat (default)')).toBeNull();
+    });
+
+    it('offers Paste image when the clipboard holds one', async () => {
+      (Clipboard.hasImageAsync as jest.Mock).mockResolvedValueOnce(true);
+      const onPasteImage = jest.fn();
+      const { findByText } = renderSheet({ onPasteImage });
+
+      fireEvent.press(await findByText('Paste image'));
+      expect(onPasteImage).toHaveBeenCalled();
     });
 
     it('offers Study and learn in Cloud mode', () => {

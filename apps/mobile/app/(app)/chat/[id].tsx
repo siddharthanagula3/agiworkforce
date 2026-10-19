@@ -46,6 +46,7 @@ import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/Mo
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
+import { readClipboardImageAttachment } from '@/src/features/media/clipboard-image';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StudyModeBanner } from '@/src/features/study/StudyModeBanner';
 import { FollowUpSuggestions } from '@/src/features/chat/components/FollowUpSuggestions';
@@ -1112,6 +1113,16 @@ export default function ChatScreen() {
     }
   }, []);
 
+  const handleSheetPasteImage = useCallback(async () => {
+    try {
+      const attachment = await readClipboardImageAttachment();
+      if (attachment) chatInputAttachRef.current?.addAttachments([attachment]);
+      else Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
+    } catch {
+      Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
+    }
+  }, []);
+
   const handleSheetPhotos = useCallback(async () => {
     try {
       const assets = await pickImageAssetsFromLibrary({
@@ -2086,6 +2097,7 @@ export default function ChatScreen() {
           ref={addToChatRef}
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
+          onPasteImage={handleSheetPasteImage}
           onFile={handleSheetFile}
           onOpenCloudAccess={handleOpenCloudSignIn}
           onOpenStyleSelector={handleOpenStyleSelector}
