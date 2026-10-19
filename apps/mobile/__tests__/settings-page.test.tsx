@@ -384,7 +384,9 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Appearance. System'));
     fireEvent.press(getByLabelText('Capabilities'));
     fireEvent.press(getByLabelText('Data Controls'));
+    fireEvent.press(getByLabelText('Quick Access'));
 
+    expect(mockPush).toHaveBeenCalledWith('/(app)/widget-setup');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/appearance');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/capabilities');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');

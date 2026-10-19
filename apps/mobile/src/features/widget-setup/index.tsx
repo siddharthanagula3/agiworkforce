@@ -18,6 +18,7 @@ import {
   ScanLine,
   Bell,
   TextCursorInput,
+  LayoutGrid,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -173,8 +174,8 @@ export default function WidgetSetupScreen() {
           </Text>
           <Text className="text-sm text-fg-muted text-center px-4">
             {isIOS
-              ? 'Trigger AGI Workforce with Siri, share text or links from other apps, and open agiworkforce.com links directly in the app.'
-              : 'Share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
+              ? 'Trigger AGI Workforce with Siri, add the widget, share text or links from other apps, and open agiworkforce.com links directly in the app.'
+              : 'Add the widget or app shortcuts, share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
           </Text>
         </View>
 
@@ -243,6 +244,18 @@ export default function WidgetSetupScreen() {
                 </Text>
               </View>
             </Card>
+
+            <Card>
+              <SectionHeader icon={LayoutGrid} title="Home Screen Widget" step={3} />
+              <Text className="text-xs text-fg-muted">
+                Touch and hold the Home Screen, tap{' '}
+                <Text className="text-xs text-fg-secondary font-medium">Edit</Text>, then{' '}
+                <Text className="text-xs text-fg-secondary font-medium">Add Widget</Text> and choose
+                AGI Workforce. It starts a new chat, opens the camera or starts voice mode. On iOS
+                18 you can also add Open AGI Workforce to Control Center, the Lock Screen or the
+                Action Button.
+              </Text>
+            </Card>
           </>
         ) : (
           <>
@@ -286,11 +299,31 @@ export default function WidgetSetupScreen() {
                 selection opens in the same review screen as a share.
               </Text>
             </Card>
+
+            <Card>
+              <SectionHeader icon={LayoutGrid} title="Home Screen Widget" step={3} />
+              <Text className="text-xs text-fg-muted">
+                Touch and hold your home screen, tap{' '}
+                <Text className="text-xs text-fg-secondary font-medium">Widgets</Text> and drag AGI
+                Workforce onto it. It starts a new chat, opens the camera or starts voice mode.
+              </Text>
+            </Card>
+
+            <Card>
+              <SectionHeader icon={Zap} title="App Shortcuts" step={4} />
+              <Text className="text-xs text-fg-muted">
+                Touch and hold the AGI Workforce icon for{' '}
+                <Text className="text-xs text-fg-secondary font-medium">New chat</Text>,{' '}
+                <Text className="text-xs text-fg-secondary font-medium">Voice</Text> and{' '}
+                <Text className="text-xs text-fg-secondary font-medium">Camera</Text>. Drag one to
+                your home screen to keep it there.
+              </Text>
+            </Card>
           </>
         )}
 
         <Card>
-          <SectionHeader icon={Link2} title="Links Open In The App" step={3} />
+          <SectionHeader icon={Link2} title="Links Open In The App" step={isIOS ? 4 : 5} />
           <Text className="text-xs text-fg-muted">
             Links to <Text className="text-xs text-fg-secondary font-medium">agiworkforce.com</Text>{' '}
             open directly in the app when it is installed

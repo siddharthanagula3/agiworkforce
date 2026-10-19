@@ -528,6 +528,12 @@ export default function SettingsTabScreen() {
               ]
             : []),
           {
+            key: 'quick-access',
+            label: 'Quick Access',
+            icon: Zap,
+            onPress: push('/(app)/widget-setup'),
+          },
+          {
             key: 'voice',
             label: 'Voice',
             icon: Mic,

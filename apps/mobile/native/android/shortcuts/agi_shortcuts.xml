@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="new_chat"
+    android:enabled="true"
+    android:icon="@drawable/agi_shortcut_new_chat"
+    android:shortcutShortLabel="@string/agi_shortcut_new_chat"
+    android:shortcutLongLabel="@string/agi_shortcut_new_chat_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="__PACKAGE__"
+      android:targetClass="__PACKAGE__.MainActivity"
+      android:data="agiworkforce://intent/chat" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="voice"
+    android:enabled="true"
+    android:icon="@drawable/agi_shortcut_voice"
+    android:shortcutShortLabel="@string/agi_shortcut_voice"
+    android:shortcutLongLabel="@string/agi_shortcut_voice_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="__PACKAGE__"
+      android:targetClass="__PACKAGE__.MainActivity"
+      android:data="agiworkforce://intent/voice" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="camera"
+    android:enabled="true"
+    android:icon="@drawable/agi_shortcut_camera"
+    android:shortcutShortLabel="@string/agi_shortcut_camera"
+    android:shortcutLongLabel="@string/agi_shortcut_camera_long">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="__PACKAGE__"
+      android:targetClass="__PACKAGE__.MainActivity"
+      android:data="agiworkforce://intent/camera" />
+  </shortcut>
+</shortcuts>
