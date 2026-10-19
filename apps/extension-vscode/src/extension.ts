@@ -478,7 +478,10 @@ export function activate(context: vscode.ExtensionContext): void {
         sidebarProvider?.pushEditorContext();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.composer.followUpBehavior')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.composer.followUpBehavior') ||
+        e.affectsConfiguration('agiWorkforce.composer.enterBehavior')
+      ) {
         sidebarProvider?.pushFollowUpBehavior();
         ChatEditorPanel.pushFollowUpBehavior();
       }

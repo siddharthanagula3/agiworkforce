@@ -397,7 +397,10 @@ export default function AccountSecurityScreen() {
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
-      <SettingsScreenShell title="Account Security">
+      <SettingsScreenShell
+        title="Account Security"
+        help={{ docId: 'account-security', label: 'How account security works' }}
+      >
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
           onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-account-security'))}
@@ -407,7 +410,10 @@ export default function AccountSecurityScreen() {
   }
 
   return (
-    <SettingsScreenShell title="Account Security">
+    <SettingsScreenShell
+      title="Account Security"
+      help={{ docId: 'account-security', label: 'How account security works' }}
+    >
       {passwordModalOpen ? null : stepUpModal}
       <ChangePasswordModal
         visible={passwordModalOpen}

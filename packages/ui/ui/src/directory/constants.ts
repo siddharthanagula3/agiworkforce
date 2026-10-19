@@ -28,7 +28,11 @@ export const DIRECTORY_CATALOG_HEADINGS: Record<DirectorySectionKey, string> = {
   plugins: 'All plugins',
 };
 
-export const CONNECTOR_POPULAR_HEADING = 'Top connectors';
+export const DIRECTORY_POPULAR_HEADINGS: Record<DirectorySectionKey, string> = {
+  skills: 'Popular skills',
+  connectors: 'Top connectors',
+  plugins: 'Popular plugins',
+};
 
 export const DIRECTORY_SEARCH_PLACEHOLDERS: Record<DirectorySectionKey, string> = {
   skills: 'Search skills',

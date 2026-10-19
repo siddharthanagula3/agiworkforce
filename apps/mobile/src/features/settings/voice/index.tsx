@@ -355,7 +355,7 @@ export default function VoiceSettingsScreen() {
   }, [selectedPresetId, selectedVoiceId]);
 
   return (
-    <SettingsScreenShell title="Voice">
+    <SettingsScreenShell title="Voice" help={{ docId: 'voice', label: 'How voice works' }}>
       <SettingsInfo
         title="Voice on this device"
         body="Choose how AGI listens and speaks on this device."

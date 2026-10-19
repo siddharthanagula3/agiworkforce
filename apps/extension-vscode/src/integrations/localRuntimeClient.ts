@@ -46,6 +46,7 @@ import type {
   SkillListResponse,
   SlashCommandListResponse,
   SlashCommandRunResponse,
+  ThreadCompactResponse,
   ThreadRewindParams,
 } from '@agiworkforce/types/protocol';
 import type {
@@ -396,6 +397,7 @@ const threadSearchResponseSchema = z.object({
 export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
 
 const PULL_REQUEST_TIMEOUT_MS = 240_000;
+const THREAD_COMPACT_TIMEOUT_MS = 240_000;
 
 const savedPermissionsResponseSchema = z.object({
   permissions: z
@@ -510,6 +512,14 @@ const threadRewindResponseSchema = z.object({
 });
 
 export type ThreadRewindOutcome = z.infer<typeof threadRewindResponseSchema>;
+
+const threadCompactResponseSchema = z.object({
+  threadId: z.string().min(1),
+  compacted: z.boolean(),
+  messagesSummarized: z.number().int().nonnegative(),
+  tokensBefore: z.number().int().nonnegative(),
+  tokensAfter: z.number().int().nonnegative(),
+});
 
 const hostModelSummarySchema = z.object({
   id: z.string().min(1),
@@ -1643,6 +1653,18 @@ export class LocalRuntimeClient {
       throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
     }
     return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
+  }
+
+  async compactThread(threadId: string): Promise<ThreadCompactResponse> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('threadCompact'))) {
+      throw new Error(
+        'The installed AGI CLI cannot summarize a session. Update the AGI CLI to compact it.',
+      );
+    }
+    return threadCompactResponseSchema.parse(
+      await connection.request('thread/compact', { threadId }, THREAD_COMPACT_TIMEOUT_MS),
+    );
   }
 
   async startTurn(params: TurnStartParams): Promise<TurnSummary> {

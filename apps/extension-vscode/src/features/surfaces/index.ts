@@ -39,8 +39,14 @@ export {
   BUILT_IN_SLASH_COMMANDS,
   SURFACE_MENU_ITEMS,
   commandForSurface,
+  slashMenuEntries,
 } from './surfaceMenu';
-export type { SlashCommandItem, SurfaceMenuItem } from './surfaceMenu';
+export type {
+  SlashCommandItem,
+  SlashMenuAction,
+  SlashMenuEntry,
+  SurfaceMenuItem,
+} from './surfaceMenu';
 export { formatSessionAge, mergeSessionRows } from './sessionRows';
 export {
   chooseSessionTools,

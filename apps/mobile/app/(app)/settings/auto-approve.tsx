@@ -39,7 +39,10 @@ export default function AutoApproveScreen() {
   const selectedLabel = toolApprovalPolicyOption(policy).label;
 
   return (
-    <SettingsScreenShell title="Action approvals">
+    <SettingsScreenShell
+      title="Action approvals"
+      help={{ docId: 'tool-approvals', label: 'How action approvals work' }}
+    >
       <SettingsInfo
         title="Review before AGI acts"
         body="Local chat stays private. Approvals only apply when a workflow can use tools, files, connected services, or paired desktop sessions."

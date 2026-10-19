@@ -52,6 +52,7 @@ import { createUsageAccumulator, ingestUsageChunk, type UsageAccumulator } from 
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
 import { servedOnIsolatedPromotionCredential } from '@/lib/server/free-model-promotion';
+import { sseDataFrames } from './sse-frames';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   collectGeneratedFileRefs,
@@ -520,8 +521,7 @@ export async function buildAdapterStreamResponse(
           for (const event of wireEvents) sourceCollector.ingestWireEvent(event);
           if (wireEvents.length === 0) continue;
 
-          const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
-          controller.enqueue(encoder.encode(lines + '\n\n'));
+          controller.enqueue(encoder.encode(sseDataFrames(wireEvents)));
 
           if (firstTokenTimestampMs === null) {
             for (const event of wireEvents) {

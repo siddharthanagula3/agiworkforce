@@ -32,6 +32,7 @@ export interface TrayActivity {
 export interface TrayHandlers {
   onOpen: () => void;
   onNewChat: () => void;
+  onNewChatWindow: () => void;
   onQuickAsk: () => void;
   onScreenshot: () => void;
   onWindowShot: () => void;
@@ -76,6 +77,7 @@ function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers):
   unregisterGarnishShortcuts();
   registerGarnishShortcuts({
     onQuickAsk: handlers.onQuickAsk,
+    onNewChat: handlers.onNewChatWindow,
     onScreenshot: handlers.onScreenshot,
     onWindowShot: handlers.onWindowShot,
     onVoice: handlers.onVoice,

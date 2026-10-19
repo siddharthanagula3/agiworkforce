@@ -83,4 +83,70 @@ describe('Quick Ask panel', () => {
 
     expect(panel.loadURL).toHaveBeenCalledOnce();
   });
+
+  it('names the main-window route for a destination outside Quick Ask', () => {
+    const origin = 'http://localhost:3100';
+
+    expect(quickAsk.routeLeavingQuickAsk(`${origin}/quick-ask`, origin)).toBeNull();
+    expect(quickAsk.routeLeavingQuickAsk(`${origin}/quick-ask/abc`, origin)).toBeNull();
+    expect(quickAsk.routeLeavingQuickAsk('https://example.com/chat/abc', origin)).toBeNull();
+    expect(quickAsk.routeLeavingQuickAsk('not a url', origin)).toBeNull();
+    expect(quickAsk.routeLeavingQuickAsk(`${origin}/quick-askew`, origin)).toBe('/quick-askew');
+    expect(quickAsk.routeLeavingQuickAsk(`${origin}/chat/abc?x=1#m`, origin)).toBe(
+      '/chat/abc?x=1#m',
+    );
+  });
+
+  it('moves a navigation away from Quick Ask into the main window and resets the panel', () => {
+    const opened: string[] = [];
+    quickAsk.configureQuickAskHandoff((route) => opened.push(route));
+    const panel = quickAsk.surfaceQuickAsk() as unknown as MockBrowserWindow;
+    panel.isVisible.mockReturnValue(true);
+    const willNavigate = panel.webContents.on.mock.calls.find(
+      ([name]) => name === 'will-navigate',
+    )?.[1];
+    const event = { preventDefault: vi.fn() };
+
+    willNavigate?.(event, 'http://localhost:3100/chat/abc');
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(panel.hide).toHaveBeenCalledOnce();
+    expect(opened).toEqual(['/chat/abc']);
+
+    quickAsk.surfaceQuickAsk();
+    expect(panel.loadURL).toHaveBeenLastCalledWith('http://localhost:3100/quick-ask');
+    expect(panel.loadURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('follows an in-page route change out of Quick Ask, and leaves its own routes alone', () => {
+    const opened: string[] = [];
+    quickAsk.configureQuickAskHandoff((route) => opened.push(route));
+    const panel = quickAsk.surfaceQuickAsk() as unknown as MockBrowserWindow;
+    panel.isVisible.mockReturnValue(true);
+    const inPage = panel.webContents.on.mock.calls.find(
+      ([name]) => name === 'did-navigate-in-page',
+    )?.[1];
+
+    inPage?.({}, 'http://localhost:3100/quick-ask/abc', true);
+    inPage?.({}, 'http://localhost:3100/settings', false);
+    expect(opened).toEqual([]);
+
+    inPage?.({}, 'http://localhost:3100/pricing', true);
+    expect(opened).toEqual(['/pricing']);
+  });
+
+  it('does not raise the main window for a panel nobody is looking at', () => {
+    const opened: string[] = [];
+    quickAsk.configureQuickAskHandoff((route) => opened.push(route));
+    quickAsk.warmUpQuickAsk();
+    const panel = windows[0]!;
+    const navigated = panel.webContents.on.mock.calls.find(([name]) => name === 'did-navigate')?.[1];
+
+    navigated?.({}, 'http://localhost:3100/login?redirectTo=%2Fquick-ask');
+
+    expect(opened).toEqual([]);
+    expect(panel.hide).not.toHaveBeenCalled();
+    quickAsk.surfaceQuickAsk();
+    expect(panel.loadURL).toHaveBeenCalledTimes(2);
+  });
 });

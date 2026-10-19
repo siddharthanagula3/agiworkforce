@@ -16,6 +16,7 @@ export function PageHero({
   ctas,
   visual,
   minimal = false,
+  children,
 }: {
   id: string;
   eyebrow: string;
@@ -25,6 +26,7 @@ export function PageHero({
   ctas: readonly PageCta[];
   visual?: ReactNode;
   minimal?: boolean;
+  children?: ReactNode;
 }) {
   const copy = (
     <Stack className="agi-ds-pagehead-copy">
@@ -43,6 +45,7 @@ export function PageHero({
         </h1>
       </div>
       {!minimal ? <Prose className="agi-ds-pagehead-lede">{lede}</Prose> : null}
+      {children}
       {ctas.length > 0 ? (
         <ButtonRow>
           {ctas.map((cta) => (
