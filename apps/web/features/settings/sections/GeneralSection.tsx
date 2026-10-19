@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@agiworkforce/ui';
-import type { CloudWorkMode } from '@agiworkforce/types';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -60,6 +59,7 @@ import {
   MAX_AVATAR_BYTES,
   PLAN_LABEL,
   getMinimumRequiredTier,
+  isCloudWorkMode,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -1432,7 +1432,9 @@ function DefaultWorkModeRow() {
     <Row label="New chats start in" hint={planCapabilityEntitlementHint('agi_work')}>
       <select
         value={defaultWorkMode}
-        onChange={(event) => setDefaultWorkMode(event.target.value as CloudWorkMode)}
+        onChange={(event) => {
+          if (isCloudWorkMode(event.target.value)) setDefaultWorkMode(event.target.value);
+        }}
         aria-label="New chats start in"
         className={SELECT_CLASS}
       >
