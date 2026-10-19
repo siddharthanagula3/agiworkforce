@@ -35,7 +35,7 @@ import {
   parseJsonBody,
   rateLimitErrorFrom,
 } from './apiErrors';
-import { platformRequestHeaders } from '../lib/platformHeaders';
+import { platformRequestHeaders } from '../src/platform/platformHeaders';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';

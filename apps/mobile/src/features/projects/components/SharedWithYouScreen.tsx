@@ -16,6 +16,7 @@ import {
   type SharedWithMeResources,
 } from '@/src/features/projects/projectSharing';
 import {
+  SHARED_CHAT_UNAVAILABLE_COPY,
   SharedChatUnavailableError,
   copySharedChatInto,
   fetchSharedChat,
@@ -137,7 +138,7 @@ export function SharedWithYouScreen() {
       Alert.alert(
         'Could not continue this chat',
         error instanceof SharedChatUnavailableError
-          ? error.message
+          ? SHARED_CHAT_UNAVAILABLE_COPY[error.reason]
           : createdId
             ? 'The shared messages could not be copied, so no new conversation was kept.'
             : toUserMessage(error, 'This shared conversation could not be opened.'),

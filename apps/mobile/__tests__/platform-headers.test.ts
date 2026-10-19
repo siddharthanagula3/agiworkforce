@@ -16,7 +16,7 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-import { platformRequestHeaders } from '../lib/platformHeaders';
+import { platformRequestHeaders } from '../src/platform/platformHeaders';
 
 describe('what every call from the app tells the platform', () => {
   afterEach(() => {

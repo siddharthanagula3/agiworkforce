@@ -30,7 +30,7 @@ jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
   clearLocalCloudAccountState: jest.fn(),
 }));
 
-jest.mock('../lib/platformHeaders', () => ({
+jest.mock('../src/platform/platformHeaders', () => ({
   platformRequestHeaders: () => ({}),
 }));
 

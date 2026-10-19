@@ -21,7 +21,7 @@ jest.mock('@/services/authSession', () => ({
 jest.mock('@/lib/egressGuard', () => ({
   guardedFetch: (...args: unknown[]) => mockGuardedFetch(...args),
 }));
-jest.mock('@/lib/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));
+jest.mock('@/src/platform/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));
 
 import { NEW_AGENT_DRAFT } from '@agiworkforce/cloud-contracts';
 import {

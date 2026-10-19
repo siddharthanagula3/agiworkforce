@@ -1,6 +1,6 @@
 import { API_URL } from '@/lib/constants';
 import { guardedFetch } from '@/lib/egressGuard';
-import { platformRequestHeaders } from '@/lib/platformHeaders';
+import { platformRequestHeaders } from '@/src/platform/platformHeaders';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { ApiHttpError, api, apiFetch } from '@/services/api';
 import { getAuthHeaders } from '@/services/authSession';

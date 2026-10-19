@@ -173,7 +173,7 @@ describe('what this repository hands a store reviewer', () => {
 describe('a failure can be traced back to the build it happened on', () => {
   const API = readFileSync(join(MOBILE_ROOT, 'services', 'api.ts'), 'utf8');
   const STREAMING = readFileSync(join(MOBILE_ROOT, 'services', 'streaming.ts'), 'utf8');
-  const HEADERS = readFileSync(join(MOBILE_ROOT, 'lib', 'platformHeaders.ts'), 'utf8');
+  const HEADERS = readFileSync(join(MOBILE_ROOT, 'src', 'platform', 'platformHeaders.ts'), 'utf8');
 
   it('stamps the installed version on the request, not the one in the repository', () => {
     expect(HEADERS).toContain('Constants.expoConfig?.version');

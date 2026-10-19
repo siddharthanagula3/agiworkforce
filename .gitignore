@@ -19,6 +19,7 @@ lerna-debug.log*
 
 # --- Logs ---
 logs/
+!/apps/web/app/**/logs/
 *.log
 report.*.json
 
