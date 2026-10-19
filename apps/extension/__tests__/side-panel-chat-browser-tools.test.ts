@@ -194,6 +194,7 @@ function harness(
     ),
     readUserSiteBlocklist: vi.fn(async () => [...(options.blocked ?? [])]),
     hostLabel: (origin: string) => new URL(origin).host,
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     searchBrowsingHistory,
     describeHistoryResults,
     CHAT_SEARCH_HISTORY_TOOL,
