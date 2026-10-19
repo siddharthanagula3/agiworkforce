@@ -13,7 +13,18 @@ export interface SharedChatCopy {
   messages: Array<{ role: SharedChatRole; content: string }>;
 }
 
-export class SharedChatUnavailableError extends Error {}
+export type SharedChatUnavailableReason = 'expired' | 'not-found';
+
+export const SHARED_CHAT_UNAVAILABLE_COPY: Record<SharedChatUnavailableReason, string> = {
+  expired: 'This shared conversation has expired.',
+  'not-found': 'This shared conversation could not be found.',
+};
+
+export class SharedChatUnavailableError extends Error {
+  constructor(readonly reason: SharedChatUnavailableReason) {
+    super(SHARED_CHAT_UNAVAILABLE_COPY[reason]);
+  }
+}
 
 export function readSharedChat(body: unknown): SharedChatCopy {
   const record = (body ?? {}) as { title?: unknown; messages?: unknown };
@@ -38,11 +49,7 @@ export async function fetchSharedChat(token: string): Promise<SharedChatCopy> {
     return readSharedChat(await api.get<unknown>(`${SHARE_PATH}/${encodeURIComponent(token)}`));
   } catch (error) {
     if (error instanceof ApiHttpError && (error.status === 404 || error.status === 410)) {
-      throw new SharedChatUnavailableError(
-        error.status === 410
-          ? 'This shared conversation has expired.'
-          : 'This shared conversation could not be found.',
-      );
+      throw new SharedChatUnavailableError(error.status === 410 ? 'expired' : 'not-found');
     }
     throw error;
   }

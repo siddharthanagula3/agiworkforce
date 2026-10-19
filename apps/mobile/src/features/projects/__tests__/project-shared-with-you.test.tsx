@@ -37,6 +37,7 @@ import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { useRouter } from 'expo-router';
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import { SharedWithYouSection } from '@/src/features/projects/components/SharedWithYouSection';
 import { SharedProjectScreen } from '@/src/features/projects/components/SharedProjectScreen';
@@ -249,5 +250,27 @@ describe('projects shared with the member', () => {
       ?.onPress?.();
 
     await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-2'));
+  });
+
+  it('says an expired shared chat has expired and creates nothing', async () => {
+    (api.get as jest.Mock).mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/share/')) throw new ApiHttpError('Gone: share row 41 revoked', 410);
+      return overview();
+    });
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    (alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>)
+      .find((button) => button.text === 'Continue in a new chat')
+      ?.onPress?.();
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenLastCalledWith(
+        'Could not continue this chat',
+        'This shared conversation has expired.',
+      ),
+    );
+    expect(mockCreateConversation).not.toHaveBeenCalled();
   });
 });
