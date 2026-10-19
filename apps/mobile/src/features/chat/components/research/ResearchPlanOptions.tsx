@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import {
@@ -16,12 +16,45 @@ import {
   type ResearchPlanChoices,
 } from '@/src/features/chat/utils/researchPlanChoices';
 import { PressableBox } from '@/components/ui/pressable-box';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { fetchConnectorDirectory } from '@/services/connectors';
+import { formatConnectorName } from '@/src/features/settings/cloud-connectors/connectorStatus';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const MAX_DOMAINS = 32;
+
+interface ResearchConnectorOption {
+  connectorId: string;
+  label: string;
+}
+
+function useResearchConnectorOptions(): ResearchConnectorOption[] {
+  const [options, setOptions] = useState<ResearchConnectorOption[]>([]);
+  useEffect(() => {
+    if (!FEATURES.connectors) return;
+    let cancelled = false;
+    void fetchConnectorDirectory()
+      .then((directory) => {
+        if (cancelled) return;
+        setOptions(
+          directory.connectors
+            .filter((connection) => connection.needsReauthorization !== true)
+            .map((connection) => ({
+              connectorId: connection.toolConnectorId ?? connection.connectorId,
+              label: connection.name ?? formatConnectorName(connection.connectorId),
+            })),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return options;
+}
 
 const DEPTH_LABEL: Record<ResearchDeliverableDepth, string> = {
   'executive-summary': 'Executive summary',
@@ -196,6 +229,7 @@ export function ResearchPlanOptions({
   onChange: (choices: ResearchPlanChoices) => void;
 }) {
   const colors = useThemeColors();
+  const connectorOptions = useResearchConnectorOptions();
   const { deliverable, sources } = choices;
   const setDeliverable = (patch: Partial<ResearchDeliverableSpec>) =>
     onChange({ ...choices, deliverable: { ...deliverable, ...patch } });
@@ -279,6 +313,54 @@ export function ResearchPlanOptions({
           excluded
           onChange={(denyDomains) => setSources({ denyDomains })}
         />
+        {connectorOptions.length > 0 ? (
+          <View style={{ gap: 6 }} accessibilityLabel="Connected apps">
+            <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+              Connected apps
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {connectorOptions.map((option) => {
+                const selected = sources.connectors.includes(option.connectorId);
+                return (
+                  <PressableBox
+                    key={option.connectorId}
+                    testID={`research-source-connector-${option.connectorId}`}
+                    onPress={() =>
+                      setSources({
+                        connectors: selected
+                          ? sources.connectors.filter((id) => id !== option.connectorId)
+                          : [...sources.connectors, option.connectorId],
+                      })
+                    }
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={option.label}
+                    accessibilityState={{ checked: selected }}
+                    style={{
+                      minHeight: 36,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: selected ? colors.textPrimary : colors.border,
+                      backgroundColor: selected ? colors.surfaceOverlay : colors.transparent,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: selected ? '600' : '500',
+                        color: selected ? colors.textPrimary : colors.textSecondary,
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                  </PressableBox>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
