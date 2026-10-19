@@ -718,6 +718,12 @@ export interface ModelMetadata {
      * and an omitted choice are unaffected.
      */
     forcedToolChoice?: boolean;
+    /**
+     * False when the provider serves the model with implicit caching only and
+     * does not support an explicitly created cache. A gateway that turns
+     * `cache_control` breakpoints into an explicit cache must then send none.
+     */
+    explicitPromptCache?: boolean;
   };
   availability?: ModelAvailability;
   unavailableReason?: string;

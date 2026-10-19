@@ -43,7 +43,6 @@ function registerDiffCommands(): {
       memoryTreeProvider: stub,
       diffDecorationProvider: provider,
       diagnosticsProvider: stub,
-      nativeChatAvailable: false,
     } as unknown as CommandDeps,
   );
 

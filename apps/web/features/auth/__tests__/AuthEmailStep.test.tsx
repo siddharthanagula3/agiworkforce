@@ -1138,3 +1138,25 @@ describe('the optional marketing email box on sign up', () => {
     expect(screen.queryByText(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE)).toBeNull();
   });
 });
+
+describe('a host-provided way in', () => {
+  it('sits with the provider buttons, above the switch line, so it is not below the fold', () => {
+    renderStep({
+      hostWayIn: (
+        <button type="button" data-testid="host-way-in">
+          Continue in your browser
+        </button>
+      ),
+    });
+
+    const hostWayIn = screen.getByTestId('host-way-in');
+    const google = screen.getByRole('button', { name: /Google/ });
+    const switchLink = screen.getByRole('link', { name: /sign up|create/i });
+    expect(
+      hostWayIn.compareDocumentPosition(google) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      hostWayIn.compareDocumentPosition(switchLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});

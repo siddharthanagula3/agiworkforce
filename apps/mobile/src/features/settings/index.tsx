@@ -380,6 +380,7 @@ export default function SettingsTabScreen() {
   const signOut = useAuthStore((s) => s.signOut);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const hasClerkSession = clerkUser != null;
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const push = useCallback(
@@ -527,6 +528,12 @@ export default function SettingsTabScreen() {
               ]
             : []),
           {
+            key: 'quick-access',
+            label: 'Quick Access',
+            icon: Zap,
+            onPress: push('/(app)/widget-setup'),
+          },
+          {
             key: 'voice',
             label: 'Voice',
             icon: Mic,
@@ -666,7 +673,7 @@ export default function SettingsTabScreen() {
           },
         ],
       },
-      ...(isClerkSignedIn
+      ...(isClerkSignedIn || hasClerkSession
         ? [
             {
               rows: [
@@ -690,6 +697,7 @@ export default function SettingsTabScreen() {
       cloudAccessTag,
       handleExportDiagnostics,
       handleSignOut,
+      hasClerkSession,
       isClerkLoaded,
       isClerkSignedIn,
       openCloudRoute,

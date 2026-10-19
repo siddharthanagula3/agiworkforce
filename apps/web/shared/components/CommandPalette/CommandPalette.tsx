@@ -60,6 +60,7 @@ import {
   type SearchResult,
 } from '@/features/chat/services/global-search-service';
 import { useSession } from '@/lib/identity/client';
+import { openUpgrade } from '@shared/lib/app-commands';
 
 export interface CommandOption {
   id: string;
@@ -231,7 +232,7 @@ function useCommands(
       title: 'View Pricing',
       group: 'Actions',
       icon: DollarSign,
-      action: () => router.push('/pricing'),
+      action: () => openUpgrade((href) => router.push(href)),
     },
     {
       id: 'search-conversations',

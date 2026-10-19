@@ -165,13 +165,22 @@ export default async function PluginDetailPage({ params }: Props) {
                 </div>
                 <div className="agi-lp-console-body">
                   <Ledger
-                    caption={`${entry.name} record preview`}
+                    caption={`What ${entry.name} contains`}
                     rows={[
                       {
-                        label: 'Publisher',
-                        value: `${entry.publisher.name}${entry.publisher.kind === 'first-party' ? ' (first-party)' : ' (third-party)'}`,
+                        label: 'Skills',
+                        value:
+                          entry.declaredSkills.length === 0
+                            ? 'None declared'
+                            : `${entry.declaredSkills.length} declared`,
                       },
-                      { label: 'Version', value: `v${entry.version}` },
+                      {
+                        label: 'Capabilities',
+                        value:
+                          entry.capabilities.length === 0
+                            ? 'None declared'
+                            : `${entry.capabilities.length} declared`,
+                      },
                       {
                         label: 'Status',
                         value: pluginStatusLabel(entry, { cliCommand: installCommand }),
@@ -179,13 +188,6 @@ export default async function PluginDetailPage({ params }: Props) {
                     ]}
                   />
                 </div>
-                <p className="agi-lp-receipt">
-                  <span className="agi-lp-receipt-part">{entry.category}</span>
-                  <span className="agi-lp-receipt-part">{sourceLabel(entry.source)}</span>
-                  <span className="agi-lp-receipt-part">
-                    {entry.integrity.sha256 ? 'checksum on file' : 'no checksum yet'}
-                  </span>
-                </p>
               </div>
             </div>
           </div>
@@ -194,9 +196,8 @@ export default async function PluginDetailPage({ params }: Props) {
         <section className="agi-lp-section" aria-labelledby="agi-plugin-facts-title">
           <div className="agi-ds-container">
             <div className="agi-lp-heading">
-              <Eyebrow>The record</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-plugin-facts-title">
-                The facts, plainly stated.
+                Details
               </h2>
             </div>
             <Ledger
@@ -209,10 +210,6 @@ export default async function PluginDetailPage({ params }: Props) {
                 { label: 'Version', value: `v${entry.version}` },
                 { label: 'Category', value: entry.category },
                 { label: 'Source', value: sourceLabel(entry.source) },
-                {
-                  label: 'Status',
-                  value: pluginStatusLabel(entry, { cliCommand: installCommand }),
-                },
                 {
                   label: 'Integrity',
                   value: entry.integrity.sha256

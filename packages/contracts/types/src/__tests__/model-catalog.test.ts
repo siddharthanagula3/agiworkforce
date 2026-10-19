@@ -501,18 +501,36 @@ describe('resolveEffectiveModelPricing', () => {
     );
   });
 
+  it('keeps every Google input-length tier on the exclusive boundary Google documents', () => {
+    for (const candidate of getModelsForProvider('google')) {
+      for (const tier of candidate.inputTokenPricingTiers ?? []) {
+        expect(tier.thresholdBoundary ?? 'exclusive').toBe('exclusive');
+      }
+    }
+  });
+
   it('matches the Google-documented exclusive boundary at exactly 200,000 input tokens', () => {
-    const model = getModelsForProvider('google').find(
-      (candidate) => candidate.inputTokenPricingTiers !== undefined,
+    const catalogModel = getModelsForProvider('google').find(
+      (candidate) => candidate.promo_expires_at === undefined && candidate.inputCost > 0,
     );
-    const tier = model?.inputTokenPricingTiers?.[0];
-    expect(tier?.thresholdTokens).toBe(200_000);
+    expect(catalogModel).toBeDefined();
+    const model = {
+      ...catalogModel!,
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 200_000,
+          inputCost: catalogModel!.inputCost * 2,
+          outputCost: catalogModel!.outputCost * 1.5,
+        },
+      ],
+    };
+    const tier = model.inputTokenPricingTiers[0];
     const asOf = new Date('2030-01-01T00:00:00Z');
 
-    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 200_000).inputCost).toBe(
-      model!.inputCost,
+    expect(resolveEffectiveModelPricingForInputTokens(model, asOf, 200_000).inputCost).toBe(
+      model.inputCost,
     );
-    expect(resolveEffectiveModelPricingForInputTokens(model!, asOf, 200_001).inputCost).toBe(
+    expect(resolveEffectiveModelPricingForInputTokens(model, asOf, 200_001).inputCost).toBe(
       tier!.inputCost,
     );
   });

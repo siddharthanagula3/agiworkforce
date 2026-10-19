@@ -4,21 +4,19 @@ import { Keyboard, Platform } from 'react-native';
 export type ComposerSurfaceKind = 'screen' | 'modal';
 
 export interface KeyboardSafeComposer {
-  behavior: 'padding' | 'height' | undefined;
+  behavior: 'padding' | 'height';
   keyboardVerticalOffset: number;
   keyboardVisible: boolean;
 }
 
 /**
- * Android's adjustResize already resizes a screen, so stacking a behavior on
- * top double-handles the keyboard. A Modal renders into its own native window
- * that adjustResize never reaches, so there the view has to do the work.
+ * The Android build is edge-to-edge, so adjustResize never resizes the window
+ * and a screen has to pad itself. A Modal renders into its own native window,
+ * where shrinking the view's height is what keeps it on screen.
  */
-export function keyboardAvoidingBehavior(
-  kind: ComposerSurfaceKind,
-): 'padding' | 'height' | undefined {
+export function keyboardAvoidingBehavior(kind: ComposerSurfaceKind): 'padding' | 'height' {
   if (Platform.OS === 'ios') return 'padding';
-  return kind === 'modal' ? 'height' : undefined;
+  return kind === 'modal' ? 'height' : 'padding';
 }
 
 export function useKeyboardVisible(): boolean {

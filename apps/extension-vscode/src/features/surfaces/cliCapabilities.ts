@@ -355,6 +355,10 @@ export class CliCapabilityAdapter {
     };
   }
 
+  async logout(): Promise<CliCapabilityResult<void>> {
+    return this.call<void>('accountLogout');
+  }
+
   async loginWait(loginId: string): Promise<CliCapabilityResult<CliLoginGrant>> {
     const result = await this.call<unknown>('accountLoginWait', loginId);
     if (result.status !== 'ok') return result;

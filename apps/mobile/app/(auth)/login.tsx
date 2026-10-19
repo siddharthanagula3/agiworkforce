@@ -32,6 +32,7 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { MobileSignUp } from '@/src/features/auth/components/MobileSignUp';
 import { MobileSignIn } from '@/src/features/auth/components/MobileSignIn';
@@ -108,6 +109,11 @@ export default function LoginScreen() {
     clearPostAuthIntent();
     resetPostAuthDestinationToLocal();
     router.replace('/(app)');
+  };
+
+  const handleSignOut = () => {
+    handleDismiss();
+    void useAuthStore.getState().signOut();
   };
 
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
@@ -215,6 +221,16 @@ export default function LoginScreen() {
             <Pressable accessibilityRole="button" onPress={handleDismiss}>
               <Text style={{ color: colors.textSecondary }}>Continue in Local Mode</Text>
             </Pressable>
+            {termsStatus === 'error' ? (
+              <Pressable
+                testID="mobile-terms-sign-out"
+                accessibilityRole="button"
+                onPress={handleSignOut}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.textSecondary }}>Log out</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
       );

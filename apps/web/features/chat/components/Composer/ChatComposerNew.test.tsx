@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
 import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
@@ -487,6 +488,24 @@ describe('ChatComposerNew', () => {
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.keyDown(textarea, { key: 'Enter' });
     expect(onSendMock).not.toHaveBeenCalled();
+  });
+
+  it('starts a new line on Enter and sends on Cmd/Ctrl+Enter when Send with Enter is off', async () => {
+    useSettingsStore.getState().setSendWithEnter(false);
+    try {
+      const onSendMock = vi.fn();
+      render(<ChatComposerNew onSend={onSendMock} />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'first line');
+
+      expect(fireEvent.keyDown(textarea, { key: 'Enter' })).toBe(true);
+      expect(onSendMock).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+      await waitFor(() => expect(onSendMock).toHaveBeenCalledTimes(1));
+    } finally {
+      useSettingsStore.getState().setSendWithEnter(true);
+    }
   });
 
   it('does not send on Shift+Enter', async () => {
@@ -2399,6 +2418,37 @@ describe('ChatComposerNew', () => {
         await Promise.resolve();
       });
       expect(onSendMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('narrow composer', () => {
+    it('gives the textbox its own row when the card is narrower than the chips need', () => {
+      let report: ResizeObserverCallback = () => undefined;
+      const original = globalThis.ResizeObserver;
+      globalThis.ResizeObserver = class {
+        constructor(callback: ResizeObserverCallback) {
+          report = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver;
+      const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+      const row = container.querySelector('.chat-composer-row') as HTMLElement;
+      const field = container.querySelector('.chat-composer-field') as HTMLElement;
+      expect(row).toHaveClass('flex-nowrap');
+
+      act(() => {
+        report([{ contentRect: { width: 450 } } as ResizeObserverEntry], {} as ResizeObserver);
+      });
+      expect(row).toHaveClass('flex-wrap');
+      expect(field).toHaveClass('basis-full');
+
+      act(() => {
+        report([{ contentRect: { width: 760 } } as ResizeObserverEntry], {} as ResizeObserver);
+      });
+      expect(row).toHaveClass('flex-nowrap');
+      globalThis.ResizeObserver = original;
     });
   });
 

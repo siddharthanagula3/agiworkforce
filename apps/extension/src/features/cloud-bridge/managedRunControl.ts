@@ -337,3 +337,26 @@ export async function cancelAndConfirmChromeManagedRun(
     return errorResult(error, signal);
   }
 }
+
+export type ChromeManagedRunListResult =
+  { status: 'success'; runs: CloudAgentRun[] } | ChromeManagedRunControlError;
+
+export async function listChromeManagedRuns(
+  limit: number,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+  signal?: AbortSignal,
+): Promise<ChromeManagedRunListResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return { status: 'error', code: 'auth_required', message: 'Sign in to see your tasks.' };
+  }
+  try {
+    const page = await resolvedDependencies
+      .createClient(token)
+      .listRuns({ limit, ...(signal ? { signal } : {}) });
+    return { status: 'success', runs: page.runs };
+  } catch (error) {
+    return errorResult(error, signal, 'Your tasks could not be loaded.');
+  }
+}

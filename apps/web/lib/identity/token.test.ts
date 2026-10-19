@@ -83,3 +83,44 @@ describe('getIdentityToken', () => {
     await expect(getIdentityToken()).resolves.toBeNull();
   });
 });
+
+describe('fetchRefreshingSession', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    setClient(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setClient(undefined);
+  });
+
+  it('refreshes the session once and retries a request that met an expired cookie', async () => {
+    const getToken = vi.fn(async () => 'fresh-token');
+    setClient({ loaded: true, session: { getToken } });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchRefreshingSession } = await loadTokenModule();
+
+    const response = await fetchRefreshingSession('/api/projects');
+
+    expect(response.status).toBe(200);
+    expect(getToken).toHaveBeenCalledWith({ skipCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns the 401 when there is no session to refresh', async () => {
+    setClient({ loaded: true, session: null });
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { fetchRefreshingSession } = await loadTokenModule();
+
+    const response = await fetchRefreshingSession('/api/projects');
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

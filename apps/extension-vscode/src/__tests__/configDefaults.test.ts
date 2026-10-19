@@ -174,12 +174,15 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     ).toBe(false);
   });
 
-  it('presents the legacy invite command id as sign-in, not a private-beta gate', () => {
-    const command = readPackageJson().contributes?.commands?.find(
-      (entry) => entry.command === 'agi-workforce.openInviteCodeModal',
-    );
+  it('contributes one sign-in command and one title prefix', () => {
+    const commands = readPackageJson().contributes?.commands ?? [];
 
-    expect(command?.title).toBe('AGI Workforce: Sign In to AGI Cloud');
+    expect(commands.filter((entry) => /Sign In to AGI Cloud/u.test(entry.title ?? ''))).toEqual([
+      expect.objectContaining({ command: 'agi-workforce.signIn' }),
+    ]);
+    expect(commands.filter((entry) => !(entry.title ?? '').startsWith('AGI Workforce: '))).toEqual(
+      [],
+    );
   });
 
   it('treats agent.mode = plan as active plan mode', () => {

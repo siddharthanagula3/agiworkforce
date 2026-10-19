@@ -232,6 +232,26 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     return (await this.resolveThread(threadId))?.response;
   }
 
+  /**
+   * A conversation started on the web has no thread here until the CLI imports
+   * it into this folder, which it does when the id is first read. From then on it
+   * resumes like a local session and later turns sync back under the same id.
+   */
+  async adoptAccountConversation(conversationId: string, cwd: string): Promise<boolean> {
+    const runtime = this.runtimes.forWorkspace(cwd);
+    let response: Awaited<ReturnType<LocalRuntimeClient['readThread']>>;
+    try {
+      response = await runtime.readThread(conversationId);
+    } catch {
+      return false;
+    }
+    if (response.thread.id !== conversationId || !isSameWorkspacePath(cwd, response.thread.cwd)) {
+      return false;
+    }
+    this.runtimeByThread.set(conversationId, { runtime, cwd });
+    return true;
+  }
+
   async resolveThread(threadId: string): Promise<ResolvedDeveloperSession | undefined> {
     let owner = this.runtimeByThread.get(threadId);
     if (owner === undefined) {

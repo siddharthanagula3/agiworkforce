@@ -20,6 +20,7 @@ export interface AppearanceSettings {
   motion: MotionPreference;
   highContrast: boolean;
   codeBlockWrap: boolean;
+  sendWithEnter: boolean;
   followUpSuggestionsEnabled: boolean;
   followUpBehavior: FollowUpBehavior;
   dictationEnabled: boolean;
@@ -35,6 +36,7 @@ export interface AppearanceNamespace {
   motion?: MotionPreference;
   highContrast?: boolean;
   codeBlockWrap?: boolean;
+  sendWithEnter?: boolean;
   followUpSuggestions?: boolean;
   followUpBehavior?: FollowUpBehavior;
   dictationEnabled?: boolean;
@@ -107,6 +109,7 @@ export function toAppearanceNamespace(settings: AppearanceSettings): Required<Ap
     motion: settings.motion,
     highContrast: settings.highContrast,
     codeBlockWrap: settings.codeBlockWrap,
+    sendWithEnter: settings.sendWithEnter,
     followUpSuggestions: settings.followUpSuggestionsEnabled,
     followUpBehavior: settings.followUpBehavior,
     dictationEnabled: settings.dictationEnabled,
@@ -140,6 +143,9 @@ export function fromAppearanceNamespace(stored: unknown): Partial<AppearanceSett
 
   const codeBlockWrap = boolean(source['codeBlockWrap']);
   if (codeBlockWrap !== undefined) patch.codeBlockWrap = codeBlockWrap;
+
+  const sendWithEnter = boolean(source['sendWithEnter']);
+  if (sendWithEnter !== undefined) patch.sendWithEnter = sendWithEnter;
 
   const followUpSuggestions = boolean(source['followUpSuggestions']);
   if (followUpSuggestions !== undefined) patch.followUpSuggestionsEnabled = followUpSuggestions;

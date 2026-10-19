@@ -27,6 +27,7 @@ export const metadata = buildMetadata({
   title: 'Customers',
   description: `We print no customer name without written permission, so this page carries none. It works through three situations instead, each naming the surface it runs on, the mechanics behind it, the plan limit it meets, and the work it leaves to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE}`,
   path: '/customers',
+  robots: { index: false, follow: true },
 });
 
 const BASIC_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.basic.maxScheduledTasks;
@@ -204,7 +205,7 @@ export default function CustomersPage() {
             <div>
               <Eyebrow>Worked scenarios</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-customers-scenarios-title">
-                A scenario that only lists benefits would be an advertisement.
+                Example workflows
               </h2>
               <Prose>
                 {`None of these is a customer. Each is a configuration we have built, named down to the command that proves it: the surface it runs on, the mechanics underneath, the plan limit it meets, and the work it hands back to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE} The link under each scenario goes to the page that describes the behaviour in full.`}

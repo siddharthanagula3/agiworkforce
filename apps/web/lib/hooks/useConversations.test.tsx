@@ -652,6 +652,69 @@ describe('useConversations.loadConversation pagination races', () => {
           .messagesByConversation[DEEP_LINK_CONVERSATION.id]?.map(({ content }) => content),
       ).toEqual(['cached locally']);
     });
+
+    it('quietly takes a turn added on another surface into the open conversation', async () => {
+      useChatStore.getState().setActiveConversation(DEEP_LINK_CONVERSATION.id);
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        expect(await result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+      });
+
+      const state = useChatStore.getState();
+      expect(state.messages.map(({ content }) => content)).toEqual([
+        'cached locally',
+        'persisted elsewhere',
+      ]);
+      expect(result.current.isLoading).toBe(false);
+      expect(state.error).toBeNull();
+    });
+
+    it('does not refresh a conversation that is not open or has a turn in flight', async () => {
+      const { result } = renderHook(() => useConversations());
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+      vi.mocked(fetch).mockClear();
+
+      await act(async () => {
+        expect(await result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)).toBe(false);
+      });
+      useChatStore.getState().setActiveConversation(DEEP_LINK_CONVERSATION.id);
+      useChatStore.setState({ streamingConversationIds: [DEEP_LINK_CONVERSATION.id] });
+      await act(async () => {
+        expect(await result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)).toBe(false);
+      });
+
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([input]) => String(input).includes(DEEP_LINK_CONVERSATION.id)),
+      ).toHaveLength(0);
+    });
+
+    it('keeps a failed refresh silent', async () => {
+      useChatStore.getState().setActiveConversation(DEEP_LINK_CONVERSATION.id);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: RequestInfo | URL) =>
+          String(input).includes(DEEP_LINK_CONVERSATION.id)
+            ? new Response(JSON.stringify({ error: 'unavailable' }), { status: 503 })
+            : conversationListResponse([WIRE_CONVERSATION]),
+        ),
+      );
+      const { result } = renderHook(() => useConversations());
+
+      await act(async () => {
+        expect(await result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)).toBe(false);
+      });
+
+      expect(useChatStore.getState().error).toBeNull();
+      expect(result.current.getConversationLoadError()).toBeNull();
+      expect(
+        useChatStore
+          .getState()
+          .messagesByConversation[DEEP_LINK_CONVERSATION.id]?.map(({ content }) => content),
+      ).toEqual(['cached locally']);
+    });
   });
 
   it('preserves a deep-linked detail when the first sidebar page resolves later', async () => {

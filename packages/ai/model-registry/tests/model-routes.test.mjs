@@ -8,6 +8,7 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const REGISTRY_JSON = path.join(PACKAGE_ROOT, 'generated', 'registry.json');
 const MODEL_ROUTES_JSON = path.join(PACKAGE_ROOT, 'catalog', 'model-routes.json');
 const HARNESSES_JSON = path.join(PACKAGE_ROOT, 'catalog', 'harnesses.json');
+const CURATION_JSON = path.join(PACKAGE_ROOT, 'catalog', 'models.curation.json');
 
 const CACHE_CLASSES = new Set([
   'provider_implicit_prompt_cache',
@@ -36,10 +37,43 @@ const CACHE_TOKEN_BILLING_CLASSES = new Set([
 const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
 const declarations = JSON.parse(fs.readFileSync(MODEL_ROUTES_JSON, 'utf8'));
 const harnesses = JSON.parse(fs.readFileSync(HARNESSES_JSON, 'utf8')).harnesses;
+const catalogDay = JSON.parse(fs.readFileSync(CURATION_JSON, 'utf8')).lastUpdated;
 
 function routesForModel(modelKey) {
   return Object.entries(registry.routes).filter(([, route]) => route.modelKey === modelKey);
 }
+
+const POST_PROMOTION_RATES = [
+  ['inputPerMillion', 'input'],
+  ['outputPerMillion', 'output'],
+  ['cacheReadPerMillion', 'cached_input'],
+];
+
+test('no route of a running promotion bills below the price that applies once it ends', () => {
+  const running = Object.entries(registry.pricing).filter(
+    ([, pricing]) =>
+      pricing.postPromoPrices &&
+      pricing.promoExpiresAt &&
+      Date.parse(pricing.promoExpiresAt) > Date.parse(catalogDay),
+  );
+  assert.ok(running.length > 0, 'the catalog runs no promotion, so this check reads nothing');
+  for (const [modelKey, pricing] of running) {
+    for (const [routeId, route] of routesForModel(modelKey)) {
+      const afterPromotion = route.pricing.promoExpiresAt
+        ? (route.pricing.postPromoPrices ?? {})
+        : {};
+      for (const [field, postField] of POST_PROMOTION_RATES) {
+        const floor = pricing.postPromoPrices[postField];
+        if (floor === undefined) continue;
+        const rate = afterPromotion[postField] ?? route.pricing[field];
+        assert.ok(
+          typeof rate === 'number' && rate >= floor,
+          `${routeId} bills ${field} at ${rate} after ${pricing.promoExpiresAt}, below the provider's ${floor}`,
+        );
+      }
+    }
+  }
+});
 
 test('every canonical model keeps exactly one default route at its historic id', () => {
   for (const modelKey of Object.keys(registry.models)) {

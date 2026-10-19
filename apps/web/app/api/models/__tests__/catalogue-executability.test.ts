@@ -27,6 +27,23 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
+const mockAnnouncedModelIds = new Set<string>();
+vi.mock('@agiworkforce/unified-chat/model-picker', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat/model-picker')>();
+  return {
+    ...actual,
+    listPickerChatModels: (...args: Parameters<typeof actual.listPickerChatModels>) =>
+      actual
+        .listPickerChatModels(...args)
+        .map((model) =>
+          mockAnnouncedModelIds.has(model.id)
+            ? { ...model, availability: 'coming_soon' as const }
+            : model,
+        ),
+  };
+});
+
+const { listPickerChatModels } = await import('@agiworkforce/unified-chat/model-picker');
 const { GET } = await import('@/app/api/models/catalogue/route');
 const { buildCatalogueEntries } = await import('@/lib/server/model-catalogue');
 
@@ -114,17 +131,30 @@ describe('model catalogue · executability gates selection', () => {
 
   it('lists an announced model as coming soon and never admits it', async () => {
     mockConfiguredProviders.mockReturnValue(new Set<string>());
+    const [fixture] = listPickerChatModels();
+    expect(fixture).toBeDefined();
+    if (!fixture) return;
+    mockAnnouncedModelIds.add(fixture.id);
 
-    const body = await fetchCatalogue();
-    const announced = listCanonicalModels().filter((model) => model.availability === 'coming_soon');
-    const listed = body.models.filter((model) => model.availability === 'coming_soon');
+    try {
+      const body = await fetchCatalogue();
+      const announced = new Set([
+        ...listCanonicalModels()
+          .filter((model) => model.availability === 'coming_soon')
+          .map((model) => model.id),
+        fixture.id,
+      ]);
+      const listed = body.models.filter((model) => model.availability === 'coming_soon');
 
-    expect(listed.length).toBeGreaterThan(0);
-    for (const model of listed) {
-      expect(announced.some((candidate) => candidate.id === model.id)).toBe(true);
-      expect(model.admitted).toBe(false);
-      expect(model.routeCount).toBe(0);
-      expect(model.minimumPlan).toBeNull();
+      expect(listed.map((model) => model.id)).toContain(fixture.id);
+      for (const model of listed) {
+        expect(announced.has(model.id)).toBe(true);
+        expect(model.admitted).toBe(false);
+        expect(model.routeCount).toBe(0);
+        expect(model.minimumPlan).toBeNull();
+      }
+    } finally {
+      mockAnnouncedModelIds.clear();
     }
   });
 

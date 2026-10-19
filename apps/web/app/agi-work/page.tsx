@@ -44,8 +44,8 @@ const INSIDE_A_RUN = [
   },
   {
     meta: 'Plan',
-    title: 'The plan lands before the first tool call',
-    body: 'AGI Work asks the model for three to six concrete steps and shows them before any tool runs. The first step is marked in progress as the run starts; the rest settle when it ends. A planning turn that comes back unreadable leaves the run with no plan rather than stopping it.',
+    title: 'A plan before the first tool call, when the model returns one',
+    body: 'AGI Work asks the model for three to six concrete steps and shows them before any tool runs. The first step is marked in progress as the run starts; the rest settle when it ends. If the planning turn comes back unreadable, the run continues without a plan instead of stopping.',
   },
   {
     meta: 'Approval',
@@ -64,8 +64,8 @@ export default function AgiWorkPage() {
             <div className="agi-lp-hero-copy">
               <p className="agi-lp-eyebrow">AGI Work</p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">AGI Work writes a plan first,</span>{' '}
-                <em className="agi-lp-accent">then asks before it acts.</em>
+                <span className="agi-lp-line">AGI Work plans the steps,</span>{' '}
+                <em className="agi-lp-accent">then asks before destructive or unknown actions.</em>
               </h1>
               <ButtonRow>
                 <Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>

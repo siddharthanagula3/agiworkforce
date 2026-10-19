@@ -6,6 +6,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface AddMemorySheetProps {
   editingMemory: MemoryEntry | null;
@@ -95,7 +96,7 @@ export function AddMemorySheet({
       visible={open}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('modal')}
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
         <Pressable

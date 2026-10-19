@@ -578,5 +578,5 @@ const TOPIC_SUBJECTS = SENSITIVE_MEMORY_TOPICS.map((topic) => TOPIC_SUBJECT[topi
 export const SENSITIVE_MEMORY_SUBJECTS = `${TOPIC_SUBJECTS.slice(0, -1).join(', ')} and ${TOPIC_SUBJECTS[TOPIC_SUBJECTS.length - 1]}`;
 
 export function sensitiveMemoryMessage(topic: SensitiveMemoryTopic): string {
-  return `Not saved, because it is about ${TOPIC_SUBJECT[topic]}. Memory keeps sensitive topics only when you say "Remember that" followed by the detail in a chat on the web, desktop, mobile or Chrome, or when Include sensitive topics in memory is on in Settings > Memory on the web or in the desktop or mobile app.`;
+  return `It is about ${TOPIC_SUBJECT[topic]}. Memory keeps sensitive topics only when you say "Remember that" followed by the detail in a chat on the web, desktop, mobile or Chrome, or when Include sensitive topics in memory is on in Settings > Memory on the web or in the desktop or mobile app.`;
 }

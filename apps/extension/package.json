@@ -55,11 +55,13 @@
     "dompurify": "^3.4.16",
     "katex": "^0.18.9",
     "markdown-it": "^15.0.2",
-    "markdown-it-footnote": "^4.0.0"
+    "markdown-it-footnote": "^4.0.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.1",
     "@types/markdown-it": "^14.2.0",
+    "@types/qrcode": "^1.5.6",
     "jsdom": "^27.4.0",
     "terser": "^5.51.2",
     "typescript": "5.9.3",

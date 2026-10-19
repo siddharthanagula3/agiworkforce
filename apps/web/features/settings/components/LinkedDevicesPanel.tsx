@@ -78,6 +78,12 @@ function describe(device: LinkedDevice): string {
   return device.name?.trim() || platform || SURFACE_LABELS[device.kind] || 'Linked app';
 }
 
+function describeTarget(device: LinkedDevice): string {
+  const surface = SURFACE_LABELS[device.kind] ?? 'Linked app';
+  const name = describe(device);
+  return name === surface ? surface : `the ${surface} on ${name}`;
+}
+
 function describeSystem(device: LinkedDevice): string {
   const parts = [SURFACE_LABELS[device.kind] ?? device.kind];
   if (device.version) parts.push(device.version);
@@ -94,13 +100,10 @@ function describeSystem(device: LinkedDevice): string {
 }
 
 function describeState(device: LinkedDevice): string {
-  const signedIn =
-    device.hasLiveCredential === null
-      ? 'Signed in unknown'
-      : device.hasLiveCredential
-        ? 'Signed in'
-        : 'Signed out';
-  const parts = device.presence ? [PRESENCE_LABELS[device.presence], signedIn] : [signedIn];
+  const parts = device.presence ? [PRESENCE_LABELS[device.presence]] : [];
+  if (device.hasLiveCredential !== null) {
+    parts.push(device.hasLiveCredential ? 'Signed in' : 'Signed out');
+  }
   if (device.lastSeenAt) parts.push(`Last seen ${formatDateTime(device.lastSeenAt)}`);
   if (device.registeredAt) parts.push(`Linked ${formatDateTime(device.registeredAt)}`);
   return parts.join(' · ');
@@ -233,6 +236,129 @@ export function LinkedDevicesPanel() {
     whiteSpace: 'nowrap' as const,
   };
 
+  const signedIn = devices.filter((device) => device.hasLiveCredential !== false);
+  const signedOut = devices.filter((device) => device.hasLiveCredential === false);
+
+  const renderDevice = (device: LinkedDevice, index: number) => (
+    <div
+      key={device.id}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) 0',
+        borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+        {renamingId === device.id ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRename(device);
+            }}
+            style={{
+              display: 'flex',
+              gap: 'var(--space-2)',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <input
+              aria-label={`New name for ${describe(device)}`}
+              value={draftName}
+              maxLength={DEVICE_NAME_MAX_LENGTH}
+              autoFocus
+              onChange={(event) => setDraftName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setRenamingId(null);
+              }}
+              style={{
+                flex: '1 1 160px',
+                minWidth: 0,
+                minHeight: 32,
+                padding: 'var(--space-2) var(--space-2)',
+                fontSize: 14,
+                color: 'var(--text-1)',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            />
+            <button type="submit" disabled={savingName} style={secondaryButtonStyle}>
+              {savingName ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenamingId(null)}
+              disabled={savingName}
+              style={secondaryButtonStyle}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{describe(device)}</div>
+        )}
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+          {describeSystem(device)}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+          {describeState(device)}
+        </div>
+        {describeCapabilities(device) ? (
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            {describeCapabilities(device)}
+          </div>
+        ) : null}
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
+        {renamingId === device.id ? null : (
+          <button
+            type="button"
+            onClick={() => startRename(device)}
+            disabled={unlinkingId !== null}
+            aria-label={`Rename ${describeTarget(device)}`}
+            style={secondaryButtonStyle}
+          >
+            Rename
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() =>
+            confirm({
+              title: `Unlink ${describeTarget(device)}?`,
+              description:
+                'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
+              confirmLabel: 'Unlink device',
+              onConfirm: () => handleUnlink(device),
+            })
+          }
+          disabled={unlinkingId !== null}
+          aria-label={`Unlink ${describeTarget(device)}`}
+          style={{
+            flexShrink: 0,
+            padding: 'var(--space-2) var(--space-3)',
+            fontSize: 12,
+            fontWeight: 500,
+            color: 'var(--settings-destructive-text)',
+            background: 'transparent',
+            border: '1px solid var(--settings-border)',
+            borderRadius: 'var(--radius-md)',
+            cursor: unlinkingId !== null ? 'default' : 'pointer',
+            opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {confirmDialog}
@@ -299,127 +425,32 @@ export function LinkedDevicesPanel() {
             No app is linked to this account.
           </p>
         ) : (
-          devices.map((device, index) => (
-            <div
-              key={device.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-4)',
-                padding: 'var(--space-4) 0',
-                borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ minWidth: 0, flex: '1 1 240px' }}>
-                {renamingId === device.id ? (
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleRename(device);
-                    }}
-                    style={{
-                      display: 'flex',
-                      gap: 'var(--space-2)',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <input
-                      aria-label={`New name for ${describe(device)}`}
-                      value={draftName}
-                      maxLength={DEVICE_NAME_MAX_LENGTH}
-                      autoFocus
-                      onChange={(event) => setDraftName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') setRenamingId(null);
-                      }}
-                      style={{
-                        flex: '1 1 160px',
-                        minWidth: 0,
-                        minHeight: 32,
-                        padding: 'var(--space-2) var(--space-2)',
-                        fontSize: 14,
-                        color: 'var(--text-1)',
-                        background: 'transparent',
-                        border: '1px solid var(--settings-border)',
-                        borderRadius: 'var(--radius-md)',
-                      }}
-                    />
-                    <button type="submit" disabled={savingName} style={secondaryButtonStyle}>
-                      {savingName ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRenamingId(null)}
-                      disabled={savingName}
-                      style={secondaryButtonStyle}
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{describe(device)}</div>
-                )}
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-                  {describeSystem(device)}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-                  {describeState(device)}
-                </div>
-                {describeCapabilities(device) ? (
-                  <div
-                    style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
-                  >
-                    {describeCapabilities(device)}
-                  </div>
-                ) : null}
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                {renamingId === device.id ? null : (
-                  <button
-                    type="button"
-                    onClick={() => startRename(device)}
-                    disabled={unlinkingId !== null}
-                    aria-label={`Rename ${describe(device)}`}
-                    style={secondaryButtonStyle}
-                  >
-                    Rename
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    confirm({
-                      title: `Unlink ${describe(device)}?`,
-                      description:
-                        'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
-                      confirmLabel: 'Unlink device',
-                      onConfirm: () => handleUnlink(device),
-                    })
-                  }
-                  disabled={unlinkingId !== null}
-                  aria-label={`Unlink ${describe(device)}`}
+          <>
+            {signedIn.map(renderDevice)}
+            {signedOut.length > 0 ? (
+              <details
+                data-signed-out-devices=""
+                style={{
+                  borderTop: signedIn.length > 0 ? '1px solid var(--settings-border)' : 'none',
+                  paddingTop: 'var(--space-3)',
+                }}
+              >
+                <summary
                   style={{
-                    flexShrink: 0,
-                    padding: 'var(--space-2) var(--space-3)',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: 'var(--settings-destructive-text)',
-                    background: 'transparent',
-                    border: '1px solid var(--settings-border)',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: unlinkingId !== null ? 'default' : 'pointer',
-                    opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
-                    whiteSpace: 'nowrap',
+                    minHeight: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontSize: 13,
+                    color: 'var(--text-2)',
+                    cursor: 'pointer',
                   }}
                 >
-                  {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
-                </button>
-              </div>
-            </div>
-          ))
+                  Signed out ({signedOut.length})
+                </summary>
+                {signedOut.map(renderDevice)}
+              </details>
+            ) : null}
+          </>
         )}
 
         {actionError ? (

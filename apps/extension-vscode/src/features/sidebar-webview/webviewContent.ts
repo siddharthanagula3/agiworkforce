@@ -19,6 +19,7 @@ import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 import type { SessionBinding } from '../../protocol/webviewMessages';
 import { webviewStringsScript } from './webviewStrings';
 import { t } from '../../l10n';
+import { FILE_WRITE_TOOL_NAMES } from './turnChanges';
 
 export function escapeHtml(value: string): string {
   return value
@@ -1776,6 +1777,30 @@ export function getWebviewContent(
       line-height: var(--type-label-height);
     }
     .tool-call__open-diff:hover { background: var(--hover); }
+
+    .turn-changes {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      color: var(--text-secondary);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    .turn-changes__review,
+    .turn-changes__undo {
+      min-height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+    }
+    .turn-changes__review:hover,
+    .turn-changes__undo:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -3610,7 +3635,7 @@ export function getWebviewContent(
           ? 'Choose a folder to establish the developer-session scope.'
           : workspaceUntrusted
             ? 'Project context and tools stay disabled until you trust this workspace.'
-            : 'No workspace prompt will be sent until the protocol-7 runtime connects.';
+            : 'AGI starts the AGI CLI in this folder to read files and run commands. Chat is ready once it connects.';
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
         if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
@@ -6261,6 +6286,9 @@ export function getWebviewContent(
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
+          if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
+            appendTurnChanges(currentAssistantEl, msg.payload.turnId, msg.payload.changedFiles);
+          }
         }
         turnSources = [];
         finalizeToolCallStack();
@@ -6274,6 +6302,16 @@ export function getWebviewContent(
         }
         currentAssistantEl = null;
         accumulatedContent = '';
+      }
+
+      else if (msg.type === 'turnChangesUndone') {
+        var undoneRow = messagesEl.querySelector(
+          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
+        );
+        if (undoneRow) {
+          undoneRow.textContent = 'Changes undone';
+          undoneRow.classList.add('turn-changes--undone');
+        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -7035,11 +7073,39 @@ export function getWebviewContent(
 
     var TOOL_COMMAND_NAMES = { run_command: 1, powershell: 1, bash: 1, shell: 1, terminal: 1 };
     var TOOL_READ_NAMES = { read_file: 1, read: 1, file_read: 1, view_file: 1 };
-    var TOOL_WRITE_NAMES = {
-      write_file: 1, write: 1, create_file: 1,
-      edit_file: 1, edit: 1, apply_patch: 1, notebook_edit: 1,
-    };
+    var TOOL_WRITE_NAMES = ${JSON.stringify(Object.fromEntries(FILE_WRITE_TOOL_NAMES.map((name) => [name, 1])))};
     var TOOL_SNIPPET_LINES = 40;
+
+    function appendTurnChanges(container, turnId, count) {
+      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
+      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
+      var row = document.createElement('div');
+      row.className = 'turn-changes';
+      row.dataset.turnId = turnId;
+      var summary = document.createElement('span');
+      summary.className = 'turn-changes__summary';
+      summary.textContent = count === 1 ? '1 file changed' : count + ' files changed';
+      row.appendChild(summary);
+      var review = document.createElement('button');
+      review.type = 'button';
+      review.className = 'turn-changes__review';
+      review.textContent = 'Review changes';
+      review.title = 'Open every file this reply changed in a diff, where each change can be kept or reverted.';
+      review.addEventListener('click', function () {
+        vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
+      });
+      row.appendChild(review);
+      var undo = document.createElement('button');
+      undo.type = 'button';
+      undo.className = 'turn-changes__undo';
+      undo.textContent = 'Undo';
+      undo.title = 'Put the files this reply changed back to how they were before it.';
+      undo.addEventListener('click', function () {
+        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
+      });
+      row.appendChild(undo);
+      container.appendChild(row);
+    }
 
     function toolKind(name, category) {
       var key = String(name || '').toLowerCase().replace(/[- ]/g, '_');

@@ -232,7 +232,7 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#runtimeSettingsBtn')?.textContent).toContain('Open setup');
     expect(scriptBody).toContain("msg.type === 'runtimeStatus'");
     expect(scriptBody).toContain(
-      'No workspace prompt will be sent until the protocol-7 runtime connects.',
+      'AGI starts the AGI CLI in this folder to read files and run commands. Chat is ready once it connects.',
     );
     expect(scriptBody).toContain("runtimeSettingsBtn.addEventListener('click'");
     expect(scriptBody).toContain("runtimeBlock === 'workspace-required'");

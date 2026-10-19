@@ -76,6 +76,9 @@ const MCP_PROBE_TIMEOUT_MS = 90_000;
 const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
+// stdout closes a moment before the process reports its exit; waiting for the
+// exit keeps the CLI's own stderr explanation instead of a bare stream error.
+const STDOUT_END_EXIT_GRACE_MS = 1_500;
 const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
 
 export const CLI_NOT_FOUND_MARKER = 'AGI_CLI_NOT_FOUND';
@@ -865,6 +868,14 @@ const turnTerminalEventSchema = z.object({
   failure: turnFailureSchema.nullable().optional().catch(null),
   managedRequestIds: z.array(z.string().min(1).max(200)).max(500).optional().catch(undefined),
 });
+const turnModelEventSchema = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1),
+  model: z.string().min(1).max(200),
+  provider: z.string().max(100),
+  autoSelection: z.string().max(100).optional().catch(undefined),
+  fallbackFrom: z.string().max(200).optional().catch(undefined),
+});
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
@@ -995,6 +1006,7 @@ export type LocalRuntimeEvent =
   | ({ type: 'turn_completed' } & z.infer<typeof turnTerminalEventSchema>)
   | ({ type: 'turn_failed' } & z.infer<typeof turnTerminalEventSchema>)
   | ({ type: 'turn_interrupted' } & z.infer<typeof turnInterruptedEventSchema>)
+  | ({ type: 'turn_model' } & z.infer<typeof turnModelEventSchema>)
   | ({ type: 'approval_requested' } & z.infer<typeof approvalRequestedEventSchema>)
   | ({
       type: 'tool_execution_start';
@@ -1045,6 +1057,10 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
       type: notification.method === 'turn/completed' ? 'turn_completed' : 'turn_failed',
       ...parsed.data,
     };
+  }
+  if (notification.method === 'turn/model') {
+    const parsed = turnModelEventSchema.safeParse(notification.params);
+    return parsed.success ? { type: 'turn_model', ...parsed.data } : undefined;
   }
   if (notification.method === 'approval/requested') {
     const parsed = approvalRequestedEventSchema.safeParse(notification.params);
@@ -1186,11 +1202,15 @@ class JsonlConnection {
     input: Readable,
     private readonly output: Writable,
     private readonly onClose?: (error: Error) => void,
+    describeInputEnd: () => Promise<Error> = () =>
+      Promise.resolve(new Error('AGI local runtime closed stdout')),
   ) {
     input.setEncoding('utf8');
     input.on('data', (chunk: string) => this.acceptChunk(chunk));
     input.on('error', (error) => this.close(error));
-    input.on('end', () => this.close(new Error('AGI local runtime closed stdout')));
+    input.on('end', () => {
+      void describeInputEnd().then((error) => this.close(error));
+    });
     output.on('error', (error) => this.close(error));
   }
 
@@ -1339,6 +1359,8 @@ export interface LocalRuntimeClientOptions {
   cliPath: string | (() => string);
   memoryEnabled?: () => boolean;
   bypassPermissionsAvailable?: () => boolean;
+  /** When the user consented to AGI working in `cwd`; undefined withholds consent. */
+  workspaceConsentAtMs?: () => number | undefined;
   cwd: string;
   clientVersion: string;
   environmentLabel?: string;
@@ -2075,13 +2097,27 @@ export class LocalRuntimeClient {
       const permissionArgs = bypassPermissionsAvailable
         ? ['--allow-dangerously-skip-permissions']
         : [];
-      child = spawnRuntime(cliPath, [...permissionArgs, 'app-server', ...memoryArgs], {
-        cwd: this.options.cwd,
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-        detached: process.platform !== 'win32',
-      });
+      const consentAtMs = this.options.workspaceConsentAtMs?.();
+      const consentArgs =
+        consentAtMs === undefined
+          ? []
+          : [
+              '--workspace-consent',
+              this.options.cwd,
+              '--workspace-consent-at-ms',
+              String(consentAtMs),
+            ];
+      child = spawnRuntime(
+        cliPath,
+        [...permissionArgs, 'app-server', ...consentArgs, ...memoryArgs],
+        {
+          cwd: this.options.cwd,
+          env: process.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          detached: process.platform !== 'win32',
+        },
+      );
     } catch (error) {
       throw describeSpawnFailure(
         cliPath,
@@ -2098,9 +2134,24 @@ export class LocalRuntimeClient {
       resolveChildExit = resolve;
     });
     this.childExitPromise = childExitPromise;
-    const connection = new JsonlConnection(child.stdout, child.stdin, (error) => {
-      if (this.child === child) this.resetProcess(error, !this.disposed);
-    });
+    const connection = new JsonlConnection(
+      child.stdout,
+      child.stdin,
+      (error) => {
+        if (this.child === child) this.resetProcess(error, !this.disposed);
+      },
+      async () => {
+        await waitWithTimeout(childExitPromise, STDOUT_END_EXIT_GRACE_MS, 'exit').catch(
+          () => undefined,
+        );
+        const detail = this.stderrTail.trim();
+        return new Error(
+          detail === ''
+            ? 'AGI local runtime closed stdout'
+            : `AGI local runtime closed stdout: ${detail}`,
+        );
+      },
+    );
     this.connection = connection;
     connection.onNotification((notification) => {
       for (const listener of this.notificationListeners) listener(notification);

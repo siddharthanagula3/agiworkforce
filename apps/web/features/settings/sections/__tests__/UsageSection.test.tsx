@@ -179,7 +179,7 @@ describe('UsageSection', () => {
     expect(
       await screen.findByRole('heading', { name: 'Upgrade for higher capacity' }),
     ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/pricing');
+    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeTruthy();
     expect(screen.queryAllByTestId('progress')).toHaveLength(0);
     expect(screen.queryByText('Plan usage limits')).toBeNull();
     expect(screen.queryByText(/credits\/month/)).toBeNull();

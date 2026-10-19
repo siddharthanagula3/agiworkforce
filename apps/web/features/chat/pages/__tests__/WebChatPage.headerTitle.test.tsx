@@ -387,6 +387,22 @@ describe('WebChatPage conversation title slot', () => {
     expect(screen.queryByTestId('research-panel')).toBeNull();
     expect(screen.queryByTestId('artifacts-panel')).toBeNull();
   });
+
+  it('gives Quick Ask a way to the full conversation and to a new chat', async () => {
+    openConversation();
+
+    render(<WebChatPage compact />);
+    await screen.findByTestId('message-list');
+
+    expect(screen.getByRole('link', { name: /openFullChat|Open full chat/ })).toHaveAttribute(
+      'href',
+      `/chat/${CONVERSATION_ID}`,
+    );
+    expect(screen.getByRole('link', { name: /quickAsk.newChat|New chat/ })).toHaveAttribute(
+      'href',
+      '/quick-ask',
+    );
+  });
 });
 
 function studyFetch(): ReturnType<typeof vi.fn> {

@@ -573,6 +573,39 @@ describe('submitPairingCode, the code the user read off Desktop', () => {
     expect(sessionStore['agi_pair_request']).toBeUndefined();
   });
 
+  it('stays paired after a browser restart clears session storage', async () => {
+    await startAwaitingCode();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairResponse()));
+    expect((await submitPairingCode('abcd-2345')).phase).toBe('paired');
+    localStore['connectedToDesktop'] = true;
+
+    for (const k of Object.keys(sessionStore)) delete sessionStore[k];
+    _resetStateForTesting();
+    const restarted = await loadPairingState();
+
+    expect(restarted.phase).toBe('paired');
+    expect(restarted.fingerprint).toBe(DESKTOP_PAIR_TOKEN.slice(0, 8));
+    expect(JSON.stringify(localStore)).not.toContain(DESKTOP_PAIR_TOKEN);
+  });
+
+  it('forgets the restart record on unpair and when the host is gone for good', async () => {
+    await startAwaitingCode();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairResponse()));
+    await submitPairingCode('abcd-2345');
+    localStore['connectedToDesktop'] = true;
+
+    delete localStore['connectedToDesktop'];
+    for (const k of Object.keys(sessionStore)) delete sessionStore[k];
+    _resetStateForTesting();
+    expect((await loadPairingState()).phase).toBe('idle');
+
+    localStore['connectedToDesktop'] = true;
+    await unpair();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
+    _resetStateForTesting();
+    expect((await loadPairingState()).phase).toBe('idle');
+  });
+
   it('refuses to confirm before a request was opened', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

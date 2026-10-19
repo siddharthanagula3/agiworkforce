@@ -256,6 +256,29 @@ describe('useChatStream', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('names an account-wide limit once, in the composer, with no retry row', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'rolling_weekly_limit_reached',
+            message: 'Your rolling weekly usage limit is reached.',
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    expect(useChatStore.getState().accountUsageBlock).toMatchObject({
+      feature: 'rolling_capacity',
+    });
+    expect(useChatStore.getState().error).toBeNull();
+  });
+
   it('saves a reached free limit with its card, so a reload keeps the reply and the resend guard', async () => {
     const conversation = { ...TEMP_CONVERSATION, id: 'conv-free-limit', isTemporary: false };
     useChatStore.setState({ activeConversationId: conversation.id, conversations: [conversation] });

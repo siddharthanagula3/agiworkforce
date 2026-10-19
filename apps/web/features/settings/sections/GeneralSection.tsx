@@ -965,6 +965,7 @@ export function GeneralSection() {
 
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
+          <SendWithEnterRow />
           <FollowUpSuggestionsRow />
           <FollowUpBehaviorRow />
           <CodeFollowUpModeRow />
@@ -1382,6 +1383,22 @@ function CodeBlockWrapRow() {
         checked={codeBlockWrap}
         aria-label="Wrap long code lines"
         onCheckedChange={setCodeBlockWrap}
+      />
+    </Row>
+  );
+}
+
+function SendWithEnterRow() {
+  const sendWithEnter = useSettingsStore((state) => state.sendWithEnter);
+  const setSendWithEnter = useSettingsStore((state) => state.setSendWithEnter);
+  const sendKeys = safePlatform.isMac() ? 'Cmd + Enter' : 'Ctrl + Enter';
+
+  return (
+    <Row label="Send with Enter" hint={`Off: Enter starts a new line and ${sendKeys} sends.`}>
+      <Switch
+        checked={sendWithEnter}
+        aria-label="Send with Enter"
+        onCheckedChange={setSendWithEnter}
       />
     </Row>
   );

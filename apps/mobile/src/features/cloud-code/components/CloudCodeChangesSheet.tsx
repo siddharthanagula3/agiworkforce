@@ -41,6 +41,7 @@ import {
   cloudCodeDiffLineKind,
 } from '../presentation';
 import type { CloudCodeChangesView } from '../useCloudCodeChanges';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const ICON_SIZE = 16;
 const EXIT_CODE_OK = 0;
@@ -381,10 +382,7 @@ export function CloudCodeChangesSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
         <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
             <GitBranch size={ICON_SIZE} color={colors.textSecondary} />

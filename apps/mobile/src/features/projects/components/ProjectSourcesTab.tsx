@@ -27,6 +27,7 @@ import {
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface ProjectSourcesTabProps {
   projectId: string;
@@ -464,7 +465,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       >
         <KeyboardAvoidingView
           accessibilityViewIsModal
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={keyboardAvoidingBehavior('modal')}
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         >
           <View

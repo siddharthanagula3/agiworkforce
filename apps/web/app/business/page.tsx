@@ -105,7 +105,7 @@ export default function BusinessPage() {
             },
             {
               k: 'Cost shape',
-              v: `AGI managed cloud is ${MANAGED_CLOUD_STATUS}, open by default: a new account starts on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Web. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK carry no AGI charge and run in the CLI. ${CLI_AVAILABILITY_NOTE} Ledgering, abuse, and refund controls keep pace with usage.`,
+              v: `AGI managed cloud is ${MANAGED_CLOUD_STATUS}, open by default: a new account starts on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Web. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK carry no AGI charge and run in the CLI. ${CLI_AVAILABILITY_NOTE}`,
             },
             {
               k: 'Data boundary',

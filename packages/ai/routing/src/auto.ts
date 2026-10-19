@@ -2154,6 +2154,18 @@ export interface AutoRoutePreview {
   excluded: readonly RoutePreviewExcluded[];
 }
 
+export function runtimeProfileImplementsTask(
+  runtimeProfileId: string,
+  taskType: RoutingTaskType,
+): boolean {
+  const task = registry.policies.auto.tasks[taskType];
+  const runtimeProfile = registry.runtimeProfiles[runtimeProfileId];
+  if (!task || !runtimeProfile) return false;
+  return task.requiredHarnessFeatures.every(
+    (feature) => runtimeProfile.features[feature]?.implementation === IMPLEMENTED_FEATURE,
+  );
+}
+
 export function resolveTierMaximumProfile(tier: string | null | undefined): RoutingProfile {
   const policy = registry.policies.auto;
   const normalized = normalizeTier(tier);

@@ -342,6 +342,7 @@ const config = {
     './native/android/withAGIShareIntent.cjs',
     './native/android/withAGITabletOrientation.cjs',
     './native/android/withAGIWidget.cjs',
+    './native/android/withAGIShortcuts.cjs',
     // Emits the iOS NSPinnedDomains and Android network_security_config pin-sets
     // derived from lib/pinning.ts. It emits nothing until that file provisions
     // every required host AND sets PINNING_ROLLOUT to 'enforced', so it is inert

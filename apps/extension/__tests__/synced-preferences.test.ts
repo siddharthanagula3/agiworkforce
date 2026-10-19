@@ -124,10 +124,25 @@ describe('cross-device Chrome preferences', () => {
     expect(fixture.sync.values['agi_thinking_enabled']).toBe(true);
     expect(fixture.sync.values).not.toHaveProperty('agi_dev_bearer_token');
     expect(fixture.sync.values).not.toHaveProperty('agi_quick_mode');
+  });
+
+  it('never lets another device or a stale sync value switch this browser to Full access', async () => {
+    const fixture = storageFixture(
+      { agi_cu_ask_before_acting: true },
+      { agi_cu_ask_before_acting: false },
+    );
+    await initializeSyncedPreferences(fixture.storage);
+    expect(fixture.local.values['agi_cu_ask_before_acting']).toBe(true);
 
     fixture.emit({ agi_cu_ask_before_acting: { newValue: false } }, 'sync');
     await flushMirrors();
-    expect(fixture.local.values['agi_cu_ask_before_acting']).toBe(false);
+    expect(fixture.local.values['agi_cu_ask_before_acting']).toBe(true);
+
+    const local = storageFixture({ agi_cu_ask_before_acting: false });
+    await initializeSyncedPreferences(local.storage);
+    local.emit({ agi_cu_ask_before_acting: { newValue: false } }, 'local');
+    await flushMirrors();
+    expect(local.sync.values).not.toHaveProperty('agi_cu_ask_before_acting');
   });
 
   it('keeps the allowlist limited to non-sensitive preferences', () => {
@@ -135,7 +150,6 @@ describe('cross-device Chrome preferences', () => {
       'agi_task_notifications',
       'agi_thinking_enabled',
       'agi_quick_mode',
-      'agi_cu_ask_before_acting',
       'in_page_panel_enabled',
       'agi_dictation_language',
     ]);

@@ -159,6 +159,23 @@ export async function ensureCloudConversation(
     : null;
 }
 
+// The completions route saves the answer under the bound conversation the
+// moment it finishes and expects the question to be saved already; a debounced
+// flush landed the question after a short answer, so web showed them reversed.
+export async function flushQuestionBeforeTurn(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<void> {
+  const key = flushKey(owner, conversationId);
+  const scheduled = scheduledFlushes.get(key);
+  if (scheduled) {
+    clearTimeout(scheduled.timer);
+    scheduledFlushes.delete(key);
+  }
+  await inFlightFlushes.get(key)?.done;
+  await flushConversation(owner, conversationId, true);
+}
+
 function combineTimeoutSignal(controller: AbortController): AbortSignal {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });

@@ -96,7 +96,6 @@ function registerHandlers(context: ExtensionContext): Map<string, Handler> {
       memoryTreeProvider: unused,
       diffDecorationProvider: unused,
       diagnosticsProvider: unused,
-      nativeChatAvailable: false,
     } as unknown as CommandDeps,
   );
   return handlers;
@@ -190,6 +189,30 @@ describe('account usage in the editor', () => {
     await handlers.get('agi-workforce.showAccountUsage')?.();
 
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.comparePlans');
+  });
+
+  it('offers a Free account only the upgrade, with no meters, credits or history', async () => {
+    vi.mocked(fetchAccountIdentity).mockResolvedValue({
+      ...IDENTITY,
+      planName: 'Free',
+      tier: 'free',
+      subscriptionSource: 'none',
+    });
+    vi.mocked(fetchTierInfo).mockResolvedValue({ ...TIER_INFO, tier: 'free' });
+    const handlers = registerHandlers(new ExtensionContext());
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce((async (items: Item[]) =>
+      items.find((item) => item.action === 'upgrade')) as never);
+
+    await handlers.get('agi-workforce.showAccountUsage')?.();
+
+    const labels = lastQuickPickItems().map((item) => item.label);
+    expect(labels).toContain('$(rocket) Upgrade for higher capacity');
+    for (const label of labels) {
+      expect(label).not.toMatch(/credits|Credits|tokens|Requests this session|plan usage/u);
+    }
+    expect(labels).not.toContain('$(add) Add credits');
+    expect(labels).not.toContain('$(list-unordered) Compare plans');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.openUpgrade');
   });
 });
 

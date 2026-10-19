@@ -915,10 +915,11 @@ export function ResearchReportPreview() {
   );
 }
 
-const APPROVAL_SIDEBAR_CHATS = ['Project report notes', 'Weekly plan', 'Release notes'];
+const APPROVAL_SIDEBAR_CHATS = ['Q3 launch summary', 'Weekly plan', 'Release notes'];
 export const APPROVAL_SCENE_REQUEST = {
-  path: 'report.txt',
-  content: 'Notes for the project report.',
+  path: 'q3-launch-summary.md',
+  content:
+    '# Q3 launch summary\n\nShipped: project sharing, voice in five languages.\nSlipped: offline mode, now planned for Q4.\nOpen risk: support volume is up 40% since launch.',
 } as const;
 const APPROVAL_ACTIONS = [
   TOOL_APPROVAL_ACTION_LABELS.allow,
@@ -936,9 +937,11 @@ export function ApprovalScenePreview({ className }: { className?: string }) {
     >
       <div className="agi-app-main">
         <div className="agi-app-thread">
-          <p className="agi-app-user">Save these notes as report.txt.</p>
+          <p className="agi-app-user">
+            Save the launch summary we drafted as q3-launch-summary.md.
+          </p>
           <div className="agi-app-reply">
-            <p>I will write the notes to report.txt once you approve the step below.</p>
+            <p>I will write the summary to q3-launch-summary.md once you approve the step below.</p>
             <div className="agi-scene-tool">
               <div className="agi-scene-tool-bar">
                 <span className="agi-scene-tool-badge">F</span>

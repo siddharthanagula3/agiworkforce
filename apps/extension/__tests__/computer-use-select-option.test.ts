@@ -229,6 +229,29 @@ describe('approved DOM dropdown selection', () => {
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
 
+  it('refuses the same-looking dropdown after a single-page route change during approval', async () => {
+    const tabsGet = (
+      chrome.tabs.get as unknown as ReturnType<typeof vi.fn>
+    ).getMockImplementation();
+    try {
+      const { text } = await select(
+        { index: 3, value: 'b' },
+        {
+          onBeforeAction: async () => {
+            (chrome.tabs.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+              async () => ({ id: 7, url: 'https://example.com/settings/delete-account' }),
+            );
+            return true;
+          },
+        },
+      );
+      expect(text).toContain('target changed while approval was pending');
+      expect(harness.selectOption).not.toHaveBeenCalled();
+    } finally {
+      (chrome.tabs.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(tabsGet!);
+    }
+  });
+
   it('refuses a target whose live signature cannot be read', async () => {
     harness.signature = null;
     const { text } = await select({ index: 3, value: 'b' }, { onBeforeAction: async () => true });

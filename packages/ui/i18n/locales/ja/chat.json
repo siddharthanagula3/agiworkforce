@@ -533,5 +533,9 @@
     "searchedWeb": "ウェブを検索",
     "thinking": "思考",
     "usedTools": "使用したツール"
+  },
+  "quickAsk": {
+    "openFullChat": "チャット全体を開く",
+    "newChat": "新しいチャット"
   }
 }

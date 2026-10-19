@@ -533,5 +533,9 @@
     "searchedWeb": "웹을 검색함",
     "thinking": "사고",
     "usedTools": "사용한 도구"
+  },
+  "quickAsk": {
+    "openFullChat": "전체 채팅 열기",
+    "newChat": "새 채팅"
   }
 }

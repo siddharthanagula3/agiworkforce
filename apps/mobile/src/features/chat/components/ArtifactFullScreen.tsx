@@ -58,6 +58,7 @@ import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview
 import { ArtifactChangesView } from './ArtifactChangesView';
 import { ArtifactVersionHistorySheet } from './ArtifactVersionHistorySheet';
 import { PublishedArtifactControls } from './PublishedArtifactControls';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface ArtifactFullScreenProps {
   artifact: Artifact | null;
@@ -1038,10 +1039,7 @@ export function ArtifactFullScreen({
         animationType="slide"
         onRequestClose={() => setEditDraft(null)}
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
           <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top + 8 }}>
             <View
               style={{

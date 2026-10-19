@@ -84,6 +84,67 @@ describe('ConversationTreeProvider', () => {
     expect(b.readThread).not.toHaveBeenCalled();
   });
 
+  it('continues a web conversation here once the CLI imports it into this folder', async () => {
+    const imported = thread(
+      '5f1c0d2e-0000-4000-8000-000000000001',
+      '2026-10-18T00:00:00Z',
+      '/workspace/a',
+    );
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({ threads: [] }),
+      readThread: vi.fn().mockResolvedValue({
+        thread: imported,
+        messages: [{ role: 'user', text: 'Started on the web' }],
+        transcriptTruncated: false,
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+
+    await expect(provider.adoptAccountConversation(imported.id, '/workspace/a')).resolves.toBe(
+      true,
+    );
+    await expect(provider.resolveThread(imported.id)).resolves.toMatchObject({
+      cwd: '/workspace/a',
+    });
+    expect(runtime.listThreads).not.toHaveBeenCalled();
+  });
+
+  it('declines a web conversation the CLI cannot import into this folder', async () => {
+    const elsewhere = thread(
+      '5f1c0d2e-0000-4000-8000-000000000002',
+      '2026-10-18T00:00:00Z',
+      '/other',
+    );
+    const refusing = { readThread: vi.fn().mockRejectedValue(new Error('session not found')) };
+    const misplaced = {
+      readThread: vi
+        .fn()
+        .mockResolvedValue({ thread: elsewhere, messages: [], transcriptTruncated: false }),
+    };
+    const refusingPool = {
+      forWorkspace: vi.fn(() => refusing as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const misplacedPool = {
+      forWorkspace: vi.fn(() => misplaced as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+
+    await expect(
+      new ConversationTreeProvider(refusingPool).adoptAccountConversation(
+        elsewhere.id,
+        '/workspace/a',
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      new ConversationTreeProvider(misplacedPool).adoptAccountConversation(
+        elsewhere.id,
+        '/workspace/a',
+      ),
+    ).resolves.toBe(false);
+  });
+
   it('asks for cloud sessions and lists them as read-only cloud rows', async () => {
     const cloud: ThreadSummary = {
       ...thread('cloud:5f1c', '2026-07-15T00:00:00Z', ''),
