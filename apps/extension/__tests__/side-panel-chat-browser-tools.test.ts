@@ -22,8 +22,14 @@ import {
   parseChatBrowserToolCall,
 } from '../src/features/computer-use/chatBrowserTools';
 import {
+  CHAT_SEARCH_HISTORY_TOOL,
+  describeHistoryResults,
+  searchBrowsingHistory,
+} from '../src/features/computer-use/historySearch';
+import {
   buildBrowserTaskStartCard,
   buildBrowserTurnControls,
+  buildHistorySearchCard,
   buildSiteGrantCard,
 } from '../src/features/side-panel/bubbles';
 import type { SidePanelChatMessage } from '../src/features/side-panel/chat-state';
@@ -71,6 +77,9 @@ function harness(
     pageText?: string;
     deferHostRequest?: boolean;
     admin?: { version: number; blocklist: { pattern: string }[]; allowlist: { pattern: string }[] };
+    history?: boolean;
+    historyItems?: chrome.history.HistoryItem[];
+    blocked?: string[];
   } = {},
 ) {
   const assistant: SidePanelChatMessage = {
@@ -127,6 +136,10 @@ function harness(
     hostPermission = false;
   });
   const grantConsent = vi.fn(async () => undefined);
+  const hasHistoryPermission = vi.fn(async () => options.history === true);
+  const chromeHistorySearch = vi.fn(
+    async (_query: chrome.history.HistoryQuery) => options.historyItems ?? [],
+  );
   const startComposerBrowserTask = vi.fn(async () => ({
     status: 'completed' as const,
     message: 'Changed the quantity to 3.',
@@ -173,6 +186,17 @@ function harness(
     releaseBrowserTurnControls: vi.fn(),
     buildSiteGrantCard,
     buildBrowserTaskStartCard,
+    buildHistorySearchCard,
+    hasHistoryPermission,
+    chromeHistorySearch,
+    isUserBlockedSite: vi.fn(async (url: string) =>
+      (options.blocked ?? []).includes(new URL(url).origin),
+    ),
+    readUserSiteBlocklist: vi.fn(async () => [...(options.blocked ?? [])]),
+    hostLabel: (origin: string) => new URL(origin).host,
+    searchBrowsingHistory,
+    describeHistoryResults,
+    CHAT_SEARCH_HISTORY_TOOL,
     recordTransientHostPermission,
     forgetTransientHostPermissions,
     composerBrowserRun: null,
@@ -214,7 +238,11 @@ function harness(
   ) as Harness;
   const resolved = () =>
     runtimeMessages.find((message) => message['type'] === 'RESOLVE_CHAT_TOOLS') as
-      | { results: Array<{ toolCallId: string; content: string }>; browserToolTier?: string }
+      | {
+          results: Array<{ toolCallId: string; content: string }>;
+          browserToolTier?: string;
+          browserHistory?: boolean;
+        }
       | undefined;
   return {
     api,
@@ -234,6 +262,8 @@ function harness(
     storageSet,
     startComposerBrowserTask,
     allowlist,
+    hasHistoryPermission,
+    chromeHistorySearch,
   };
 }
 
@@ -512,5 +542,130 @@ describe('chat turns run browser tools the model chose', () => {
     expect(h.resolved()!.results).toEqual([
       { toolCallId: 'call_1', content: 'This browser tool call was malformed.' },
     ]);
+  });
+});
+
+describe('chat turns search browsing history only when the user allows each search', () => {
+  beforeEach(() => {
+    vi.stubGlobal('chrome', { i18n: { getMessage, getUILanguage: () => 'en' } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const visits: chrome.history.HistoryItem[] = [
+    {
+      id: '1',
+      url: 'https://airline.example/booking?ref=AB12&token=s3cret#seat',
+      title: 'Flight confirmation AB12',
+      lastVisitTime: Date.UTC(2026, 9, 17),
+    },
+    {
+      id: '2',
+      url: 'https://blocked.example/inbox',
+      title: 'Flight mail',
+      lastVisitTime: Date.UTC(2026, 9, 18),
+    },
+  ];
+
+  it('runs nothing and asks nothing while browsing history is turned off', async () => {
+    const h = harness({ hostPermission: true, historyItems: visits });
+    await h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'flight' }));
+    expect(h.controls.cards.querySelector('button')).toBeNull();
+    expect(h.chromeHistorySearch).not.toHaveBeenCalled();
+    expect(h.resolved()!.results[0]!.content).toContain('turned off in the extension settings');
+    expect(h.runtimeMessages.at(-1)).not.toHaveProperty('browserHistory');
+  });
+
+  it('asks before the search and returns nothing when the user declines', async () => {
+    const h = harness({ hostPermission: true, history: true, historyItems: visits });
+    const done = h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'flight', days: 7 }));
+    await flush();
+    expect(h.controls.cards.textContent).toContain('AGI wants to search your browsing history');
+    expect(h.controls.cards.textContent).toContain('Looking for "flight" in the last 7 days');
+    grantButton(h.controls, 'Decline').click();
+    await done;
+    expect(h.chromeHistorySearch).not.toHaveBeenCalled();
+    expect(h.resolved()!.results[0]!.content).toContain('declined this browsing-history search');
+  });
+
+  it('returns fenced, redacted matches outside blocked sites once the user allows this search', async () => {
+    const h = harness({
+      hostPermission: true,
+      history: true,
+      historyItems: visits,
+      admin: { version: 1, blocklist: [{ pattern: 'https://blocked.example' }], allowlist: [] },
+    });
+    const done = h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'flight', days: 7 }));
+    await flush();
+    grantButton(h.controls, 'Allow this search').click();
+    await done;
+    expect(h.chromeHistorySearch).toHaveBeenCalledOnce();
+    const query = h.chromeHistorySearch.mock.calls[0]![0];
+    expect(query.text).toBe('flight');
+    expect(query.startTime).toBeGreaterThan(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const content = h.resolved()!.results[0]!.content;
+    expect(content).toMatch(/<history_[0-9a-f]{24}/);
+    expect(content).toContain('Flight confirmation AB12');
+    expect(content).toContain('https://airline.example/booking?ref=AB12&token=redacted');
+    expect(content).not.toContain('s3cret');
+    expect(content).not.toContain('#seat');
+    expect(content).not.toContain('blocked.example');
+    expect(h.resolved()!.browserHistory).toBe(true);
+    expect(h.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool-execution-start',
+          summary: 'Searching browsing history',
+        }),
+        expect.objectContaining({ type: 'tool-execution-end', isError: false }),
+      ]),
+    );
+  });
+
+  it('asks again for a second search in the same answer', async () => {
+    const h = harness({ hostPermission: true, history: true, historyItems: visits });
+    const first = h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'flight' }));
+    await flush();
+    grantButton(h.controls, 'Allow this search').click();
+    await first;
+    const second = h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'hotel' }));
+    await flush();
+    expect(h.controls.cards.textContent).toContain('Looking for "hotel" in the last 30 days');
+    grantButton(h.controls, 'Decline').click();
+    await second;
+    expect(h.chromeHistorySearch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('a site the user blocked', () => {
+  beforeEach(() => {
+    vi.stubGlobal('chrome', { i18n: { getMessage, getUILanguage: () => 'en' } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('gets no page tools and no access card, and the refusal names the setting', async () => {
+    const h = harness({ blocked: [ORIGIN] });
+    expect(await h.api.activeBrowserToolTier('stream-1')).toBeUndefined();
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.controls.cards.querySelector('button')).toBeNull();
+    expect(h.requestHost).not.toHaveBeenCalled();
+    expect(h.resolved()!.results[0]!.content).toContain('You blocked AGI on example.com');
+  });
+
+  it('is left out of history results', async () => {
+    const h = harness({
+      history: true,
+      blocked: [ORIGIN],
+      historyItems: [
+        { id: '1', url: `${ORIGIN}/report`, title: 'Blocked report', lastVisitTime: 2 },
+        { id: '2', url: 'https://open.example/a', title: 'Open page', lastVisitTime: 1 },
+      ],
+    });
+    const done = h.api.handle(handoff(CHAT_SEARCH_HISTORY_TOOL, { query: 'page' }));
+    await flush();
+    grantButton(h.controls, 'Allow this search').click();
+    await done;
+    const content = h.resolved()!.results[0]!.content;
+    expect(content).toContain('Open page');
+    expect(content).not.toContain('Blocked report');
   });
 });

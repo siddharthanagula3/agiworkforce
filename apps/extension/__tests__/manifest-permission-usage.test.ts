@@ -95,6 +95,7 @@ const NAMESPACE_BY_PERMISSION: Readonly<Record<string, string>> = {
   tabGroups: 'tabGroups',
   debugger: 'debugger',
   downloads: 'downloads',
+  history: 'history',
 };
 
 function usesApi(api: string): boolean {
@@ -154,7 +155,7 @@ describe('every permission the manifest declares is spent', () => {
 describe('every API the source reaches for is declared', () => {
   it('names no chrome namespace the manifest has not paid for', () => {
     const declared = new Set(
-      manifest.permissions
+      [...manifest.permissions, ...(manifest.optional_permissions ?? [])]
         .map((permission) => NAMESPACE_BY_PERMISSION[permission])
         .filter((namespace): namespace is string => Boolean(namespace)),
     );
@@ -167,17 +168,27 @@ describe('every API the source reaches for is declared', () => {
   });
 });
 
-describe('browsing history stays out of reach', () => {
-  it('declares no history permission, so Chrome refuses the API', () => {
+describe('browsing history is reachable only through one approved search', () => {
+  it('keeps history out of the install grant and behind an optional permission', () => {
     expect(manifest.permissions).not.toContain('history');
-    expect(manifest.optional_permissions ?? []).not.toContain('history');
+    expect(manifest.optional_permissions ?? []).toEqual(['history']);
   });
 
-  it('calls no history or bookmarks API, so page context can only come from a live tab', () => {
+  it('calls the history API from the search module alone, and never bookmarks or top sites', () => {
     for (const source of SOURCES) {
+      expect(source.text, `${source.path} reaches for bookmarks or top sites`).not.toMatch(
+        /\bchrome\.(bookmarks|topSites)\b/u,
+      );
+      if (source.path === join('src', 'features', 'computer-use', 'historySearch.ts')) continue;
       expect(source.text, `${source.path} reaches for browsing history`).not.toMatch(
-        /\bchrome\.(history|bookmarks|topSites)\b/u,
+        /\bchrome\.history\b/u,
       );
     }
+    const module = SOURCES.find(
+      (source) => source.path === join('src', 'features', 'computer-use', 'historySearch.ts'),
+    );
+    expect(module?.text.match(/\bchrome\.history\.[a-z][a-zA-Z]*(?=\()/gu)).toEqual([
+      'chrome.history.search',
+    ]);
   });
 });
