@@ -48,8 +48,7 @@ import { tokenCache } from '@clerk/expo/token-cache';
 import {
   CLERK_NATIVE_AUTH_OPTIONS,
   CLERK_PUBLISHABLE_KEY,
-  setClerkTokenGetter,
-  getSurfaceToken,
+  setClerkTokenMinter,
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
@@ -144,11 +143,7 @@ function ClerkTokenBridge() {
       if (!userId) {
         return;
       }
-      setClerkTokenGetter(
-        () => getSurfaceToken(getToken),
-        () => userId ?? null,
-        () => getSurfaceToken(getToken, { skipCache: true }),
-      );
+      setClerkTokenMinter(getToken, () => userId ?? null);
       setClerkUserId(userId);
       if (termsUserId !== userId) {
         void useTermsAcceptanceStore.getState().verify(userId);
@@ -183,7 +178,7 @@ function ClerkTokenBridge() {
     } else {
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
-      setClerkTokenGetter(null, null, null);
+      setClerkTokenMinter(null, null);
       useTermsAcceptanceStore.getState().reset();
       setClerkUserId(null);
       setClerkSignedIn(false);
@@ -208,7 +203,7 @@ function ClerkTokenBridge() {
   useEffect(() => {
     return () => {
       clearPostAuthIntent();
-      setClerkTokenGetter(null, null, null);
+      setClerkTokenMinter(null, null);
       useAuthStore.getState().setClerkUserId(null);
       useAuthStore.getState().setClerkSignedIn(false);
       useWaitlistStore.getState().setCloudAccess(false);

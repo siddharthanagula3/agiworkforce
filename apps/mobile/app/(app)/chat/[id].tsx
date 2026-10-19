@@ -22,6 +22,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import type { ResearchPlanDecision } from '@/src/features/chat/components/research/ResearchRunCard';
+import type { ResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
 import type { ResearchStep } from '@agiworkforce/types';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import {
@@ -729,7 +730,12 @@ export default function ChatScreen() {
   const [resumingResearchMessageId, setResumingResearchMessageId] = useState<string | null>(null);
 
   const runResearchDecision = useCallback(
-    async (messageId: string, decision: 'start' | 'cancel' | 'retry', steps?: ResearchStep[]) => {
+    async (
+      messageId: string,
+      decision: 'start' | 'cancel' | 'retry',
+      steps?: ResearchStep[],
+      choices?: ResearchPlanChoices,
+    ) => {
       if (!id) return;
       if (decision === 'cancel') {
         await resumeResearch(id, messageId, decision);
@@ -737,7 +743,7 @@ export default function ChatScreen() {
       }
       setResumingResearchMessageId(messageId);
       try {
-        await resumeResearch(id, messageId, decision, steps);
+        await resumeResearch(id, messageId, decision, steps, choices);
       } finally {
         setResumingResearchMessageId(null);
       }
@@ -748,13 +754,7 @@ export default function ChatScreen() {
   const handleResearchPlanDecision = useCallback(
     (messageId: string, decision: ResearchPlanDecision) => {
       if (decision === 'cancel') void runResearchDecision(messageId, 'cancel');
-      else {
-        void runResearchDecision(
-          messageId,
-          'start',
-          typeof decision === 'object' ? decision.steps : undefined,
-        );
-      }
+      else void runResearchDecision(messageId, 'start', decision.steps, decision.choices);
     },
     [runResearchDecision],
   );
@@ -949,6 +949,21 @@ export default function ChatScreen() {
       }
     },
     [forkConversation, id, router, title],
+  );
+
+  const handleScheduleMessage = useCallback(
+    (messageId: string) => {
+      const source = conversationMessages.find((message) => message.id === messageId);
+      if (!source?.content.trim()) return;
+      router.push({
+        pathname: '/(app)/schedules/create',
+        params: {
+          prompt: source.content,
+          ...(source.model ? { model: source.model } : {}),
+        },
+      });
+    },
+    [conversationMessages, router],
   );
 
   const handleModelSelect = useCallback(
@@ -1882,6 +1897,11 @@ export default function ChatScreen() {
             onRetryMessage={handleRetryMessage}
             onRetryWithModel={handleRetryWithModel}
             onBranch={conversation?.temporary ? undefined : handleBranchFromMessage}
+            onScheduleMessage={
+              conversationExecutionMode === 'cloud' && !conversation?.temporary
+                ? handleScheduleMessage
+                : undefined
+            }
             onEditImageArea={canEditImages ? handleEditImageArea : undefined}
             onDeleteImageConversation={handleDeleteImageConversation}
             variantInfoByMessageId={variantInfo}

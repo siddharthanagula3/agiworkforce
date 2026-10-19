@@ -11,6 +11,14 @@ export const SURFACE_TOKEN_CLAIM = 'surface';
 
 export const MOBILE_SESSION_TOKEN_TEMPLATE = 'agi-mobile';
 
+/**
+ * Clerk leaves `sid` out of every JWT-template token, so the template token
+ * cannot be the credential: the native app sends its session token as the
+ * bearer, which carries `sid`, and the template token in this header as proof
+ * of the surface.
+ */
+export const SURFACE_TOKEN_HEADER = 'x-agi-surface-token';
+
 export const TEMPLATE_BOUND_SURFACES = ['mobile'] as const;
 
 export type TemplateBoundSurface = (typeof TEMPLATE_BOUND_SURFACES)[number];

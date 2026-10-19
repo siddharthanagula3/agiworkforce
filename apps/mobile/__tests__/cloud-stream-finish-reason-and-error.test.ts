@@ -878,3 +878,18 @@ describe('cloud send: the connection drops mid-answer', () => {
     expect(state.error).toBeTruthy();
   });
 });
+
+describe('cloud send: memories the answer used', () => {
+  it('keeps the memory citations the gateway reported on the answer', async () => {
+    const citations = { count: 3, memories: [{ id: 'mem-1', excerpt: 'Prefers metric units' }] };
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onMemoryCitations?.(citations);
+      callbacks.onDelta({ content: 'About 5 km.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'How far is it?', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.memoryCitations).toEqual(citations);
+  });
+});

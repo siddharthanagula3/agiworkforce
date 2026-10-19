@@ -6,7 +6,7 @@ const mockBack = jest.fn();
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockScheduleForm = jest.fn(() => null);
-let mockSearchParams: { id?: string; template?: string } = {};
+let mockSearchParams: { id?: string; template?: string; prompt?: string; model?: string } = {};
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -73,6 +73,22 @@ describe('Create schedule template handoff', () => {
           name: 'Monday kickoff',
           recurrence: 'weekly',
           daysOfWeek: [1],
+        }),
+      }),
+    );
+  });
+
+  it('prefills the form from a chat prompt saved as a task', () => {
+    mockSearchParams = { prompt: 'Summarise overnight sales', model: DEFAULT_AUTO_MODE_ID };
+
+    render(<CreateScheduleScreen />);
+
+    expect(mockScheduleForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialData: expect.objectContaining({
+          name: 'Summarise overnight sales',
+          prompt: 'Summarise overnight sales',
+          model: DEFAULT_AUTO_MODE_ID,
         }),
       }),
     );

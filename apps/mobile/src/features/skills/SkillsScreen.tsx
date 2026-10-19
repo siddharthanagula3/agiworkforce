@@ -26,6 +26,7 @@ import {
   installSkill,
   isAuthoredSkill,
   isPluginOwnedSkill,
+  pluginOwnedNote,
   isSkillInstalled,
   skillActionFailureMessage,
   uninstallSkill,
@@ -43,8 +44,6 @@ const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   workspace: 'Workspace',
   extra: 'Added',
 };
-
-const PLUGIN_OWNED_NOTE = 'Controlled by its plugin installation.';
 
 export function skillRequirementNote(tools: readonly string[] | undefined): string {
   return tools?.length ? `Needs ${tools.join(', ')}` : '';
@@ -320,7 +319,7 @@ function SkillRow({
           ) : null}
           {included && pluginOwned ? (
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 17 }}>
-              {PLUGIN_OWNED_NOTE}
+              {pluginOwnedNote(skill)}
             </Text>
           ) : null}
           <View

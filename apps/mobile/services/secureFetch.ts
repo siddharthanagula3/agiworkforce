@@ -8,6 +8,7 @@ import {
   type PinningStage,
 } from '@/lib/pinning';
 import { isReleaseRuntime } from '@/src/lib/runtimeMode';
+import { withSurfaceProof } from '@/services/surfaceProof';
 
 export type PinningRefusalReason =
   | 'insecure-scheme'
@@ -355,13 +356,14 @@ function normalizeRequestUrl(input: RequestInfo | URL): string {
 
 export async function secureFetch(
   input: RequestInfo | URL,
-  init?: RequestInit,
+  requestInit?: RequestInit,
   opts?: SecureFetchOptions,
 ): Promise<Response> {
   const url = normalizeRequestUrl(input);
   const facts = pinTransportFacts(url);
   const verdict = pinTransportVerdict(facts);
   if ('refuse' in verdict) throw new PinningError(url, verdict.refuse);
+  const init = await withSurfaceProof(url, requestInit);
 
   const host = canonicalHostOf(url);
   if (facts.isRelease && host !== undefined) {

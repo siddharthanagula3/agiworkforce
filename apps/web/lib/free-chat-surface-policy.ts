@@ -36,16 +36,25 @@ export type AuthenticatedSurfaceClass = 'developer';
  */
 export type BoundSurface = 'web' | 'chrome' | TemplateBoundSurface;
 
+export function bindTemplateSurfaceFromClaims(
+  claims: Readonly<Record<string, unknown>>,
+): TemplateBoundSurface | null {
+  const claimed = claims[SURFACE_TOKEN_CLAIM];
+  return typeof claimed === 'string' &&
+    (TEMPLATE_BOUND_SURFACES as readonly string[]).includes(claimed)
+    ? (claimed as TemplateBoundSurface)
+    : null;
+}
+
+export function carriesSurfaceClaim(claims: Readonly<Record<string, unknown>>): boolean {
+  return claims[SURFACE_TOKEN_CLAIM] !== undefined;
+}
+
 export function bindSurfaceFromClaims(
   claims: Readonly<Record<string, unknown>>,
 ): BoundSurface | null {
-  const claimed = claims[SURFACE_TOKEN_CLAIM];
-  if (
-    typeof claimed === 'string' &&
-    (TEMPLATE_BOUND_SURFACES as readonly string[]).includes(claimed)
-  ) {
-    return claimed as TemplateBoundSurface;
-  }
+  const templateSurface = bindTemplateSurfaceFromClaims(claims);
+  if (templateSurface) return templateSurface;
   const azp = typeof claims['azp'] === 'string' ? claims['azp'].trim().toLowerCase() : '';
   if (!azp) return null;
   return azp.startsWith('chrome-extension://') ? 'chrome' : 'web';

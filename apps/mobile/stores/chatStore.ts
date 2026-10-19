@@ -25,6 +25,7 @@ import type { ProviderConsentErrorState } from '@/src/features/chat/utils/provid
 import type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode, ResearchStep } from '@agiworkforce/types';
+import type { ResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
 
 export interface CombinedChatState {
   conversations: ConversationSummary[];
@@ -157,6 +158,7 @@ export interface CombinedChatState {
     assistantMessageId: string,
     decision: 'start' | 'cancel' | 'retry',
     steps?: ResearchStep[],
+    choices?: ResearchPlanChoices,
   ) => Promise<void>;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   resolveToolApproval: (

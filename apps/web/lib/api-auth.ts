@@ -30,8 +30,14 @@ import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
-import { bindSurfaceFromClaims, type BoundSurface } from '@/lib/free-chat-surface-policy';
+import {
+  bindSurfaceFromClaims,
+  bindTemplateSurfaceFromClaims,
+  carriesSurfaceClaim,
+  type BoundSurface,
+} from '@/lib/free-chat-surface-policy';
 import { noteSessionSighting } from '@/lib/server/session-sightings';
+import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 import {
   assertAccountSecurity,
   isPasskeyRequiredError,
@@ -307,9 +313,27 @@ async function verifyBearerToken(
 
   const claims = await identity.verifySessionToken(token, { authorizedParties });
   if (claims) {
+    if (carriesSurfaceClaim(claims.raw)) {
+      await logAuthFailure(request, 'surface_token_as_bearer');
+      return null;
+    }
+    const surfaceProof = request.headers.get(SURFACE_TOKEN_HEADER);
+    let boundSurface: BoundSurface | null;
+    if (surfaceProof === null) {
+      boundSurface = bindSurfaceFromClaims(claims.raw);
+    } else {
+      const proofClaims = await identity.verifySessionToken(surfaceProof, { authorizedParties });
+      boundSurface =
+        proofClaims && proofClaims.subject === claims.subject
+          ? bindTemplateSurfaceFromClaims(proofClaims.raw)
+          : null;
+      if (!boundSurface) {
+        await logAuthFailure(request, 'invalid_surface_token');
+        return null;
+      }
+    }
     const account = await accountForSubject(claims.subject, request);
     if (!account) return null;
-    const boundSurface = bindSurfaceFromClaims(claims.raw);
     return {
       auth: {
         ...authResultFor(account, claims.email),
