@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { SLACK_REQUEST_TIMEOUT_MS } from '@/lib/slack/slack-api';
 import {
   decideSlackApprovalFromSlack,
   interactionReply,
@@ -24,6 +25,7 @@ async function replyInSlack(responseUrl: string | null, text: string): Promise<v
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ replace_original: true, text }),
+    signal: AbortSignal.timeout(SLACK_REQUEST_TIMEOUT_MS),
   }).catch((error: unknown) => {
     logger.warn({ error }, 'Slack interaction reply was not delivered');
   });
