@@ -182,6 +182,15 @@ describe('managed Skill catalog service', () => {
     await expect(findManagedSkillByName('unreleased-fixture')).resolves.toBeNull();
   });
 
+  it('offers the lab-results and appointment-prep skills to every account', async () => {
+    const catalog = await getManagedSkillCatalog();
+    for (const name of ['lab-results', 'appointment-prep']) {
+      const skill = catalog.find((entry) => entry.name === name);
+      expect(skill, name).toBeDefined();
+      expect(skill?.body).toMatch(/do not diagnose|not translate them into a\s+diagnosis/);
+    }
+  });
+
   it('offers the promoted skill-creator for execution and download', async () => {
     const skill = await findManagedSkillByName('skill-creator');
     expect(skill).toMatchObject({ name: 'skill-creator' });

@@ -86,6 +86,7 @@ const cloudModules = [
   'localized-pricing',
   'workspaces',
   'agents',
+  'developer-console',
 ];
 
 const cloudMovedFiles = [
