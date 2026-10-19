@@ -55,6 +55,7 @@ export {
   unpairBrowser,
   clipboardAttachments,
   listLocalModels,
+  findWorkspaceFilesByName,
   listWorkspaceFiles,
   listWorkspaceRoots,
   onWorkspaceChanged,

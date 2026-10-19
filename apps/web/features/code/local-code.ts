@@ -108,6 +108,16 @@ export const LOCAL_CODE_COPY = {
   fileChangedOnDisk: 'This file changed on disk since you opened it.',
   fileDeletedOnDisk:
     'This file was deleted since you opened it. Overwrite to create it again with your version.',
+  files: 'Files',
+  filesShortcut: 'Files (⌘P)',
+  closeFiles: 'Close files',
+  searchFiles: 'Search files by name',
+  filesLoading: 'Listing files',
+  filesEmpty: 'This folder is empty.',
+  filesNoMatch: 'No file names match.',
+  filesFailed: 'The files in this folder could not be listed.',
+  openFiles: 'Open files',
+  closeTab: (name: string): string => `Close ${name}`,
   discardEditsTitle: 'Discard your edits?',
   discardEditsDescription: (path: string): string =>
     `Your unsaved edits to ${path} cannot be recovered.`,
@@ -1361,6 +1371,21 @@ export function localCleanupFailureRow(failure: { worktreeId: string; reason: st
 }
 
 /** Ctrl+Shift+G, or Cmd+Shift+G on a Mac, as ChatGPT binds its review pane. */
+export function isLocalFilesShortcut(event: {
+  key: string;
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+}): boolean {
+  return (
+    event.key.toLowerCase() === 'p' &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    !event.altKey
+  );
+}
+
 export function isLocalReviewShortcut(event: {
   key: string;
   shiftKey: boolean;
