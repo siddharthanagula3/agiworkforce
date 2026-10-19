@@ -32,6 +32,7 @@ export const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
 ]);
 
 export const CHROME_MANAGED_RUNTIME_PROFILE = 'chrome/managed-chat';
+export const CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE = 'chrome/managed-browser-task';
 
 export function resolveChromeManagedChatRoute(
   request: ChromeManagedChatRoutingRequest,
@@ -43,7 +44,10 @@ export function resolveChromeManagedChatRoute(
     taskType: classifier.type,
     subscriptionTier: request.subscriptionTier,
     trustMode: 'managed_cloud',
-    runtimeProfileId: CHROME_MANAGED_RUNTIME_PROFILE,
+    runtimeProfileId:
+      classifier.type === 'computer-use'
+        ? CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE
+        : CHROME_MANAGED_RUNTIME_PROFILE,
     currentModelKey: request.currentModelKey,
     previousTaskType: request.previousTaskType,
     fallbackToAutoForCapabilityMismatch: true,

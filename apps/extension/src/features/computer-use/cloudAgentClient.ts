@@ -13,6 +13,7 @@ import {
   MANAGED_CHAT_DEFAULT_TIMEOUT_MS,
 } from '../cloud-bridge/freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE } from '../cloud-bridge/managedChatRouting';
 import { ThinkingTagSplitter } from '@agiworkforce/provider-protocol/thinking-tag-splitter';
 import { configuredAgiWebOrigin } from '../../lib/webOrigin';
 import {
@@ -59,7 +60,7 @@ export function resolveManagedComputerUseModel(
       taskType: 'computer-use',
       subscriptionTier: access.subscriptionTier,
       trustMode: 'managed_cloud',
-      runtimeProfileId: 'chrome/managed-browser-task',
+      runtimeProfileId: CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE,
       requiredCapabilities: ['imageInput', 'functionCalling', 'streaming'],
       organizationPolicy: {
         allowedProviders: [],

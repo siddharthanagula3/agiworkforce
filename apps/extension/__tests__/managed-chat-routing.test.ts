@@ -53,6 +53,18 @@ describe('Chrome Managed Cloud routing', () => {
     if (decision.status === 'selected') expect(decision.taskType).toBe('multimodal');
   });
 
+  it('routes a browser-task prompt in chat to a model that can drive the browser', () => {
+    const decision = resolveChromeManagedChatRoute({
+      selection: 'auto',
+      text: 'On this page, scroll to the Climate section and tell me the record high temperature.',
+      subscriptionTier: 'max_15x',
+      history: [],
+    });
+
+    expect(decision.status).toBe('selected');
+    if (decision.status === 'selected') expect(decision.taskType).toBe('computer-use');
+  });
+
   it('fails closed for an unknown selection instead of crossing to Local or BYOK', () => {
     const decision = resolveChromeManagedChatRoute({
       selection: 'invented-provider/model',
