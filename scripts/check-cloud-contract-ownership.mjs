@@ -19,6 +19,7 @@ const cloudModules = [
   'finance',
   'health-space',
   'library',
+  'memory-summary',
   'managed-media',
   'me',
   'client-handshake',
