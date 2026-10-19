@@ -57,10 +57,16 @@ const chromeHarness = vi.hoisted(() => {
         set: storageSet,
         remove: () => Promise.resolve(),
       },
+      onChanged: { addListener: () => undefined },
       sync: {
         get: () => Promise.resolve({}),
         set: () => Promise.resolve(),
       },
+    },
+    permissions: {
+      contains: () => Promise.resolve(false),
+      request: () => Promise.resolve(false),
+      remove: () => Promise.resolve(true),
     },
     tabs: {
       query: (_q: unknown, cb?: (tabs: unknown[]) => void) => {

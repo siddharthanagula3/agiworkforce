@@ -164,7 +164,7 @@ export async function resumeChromeManagedRun(
     await resolvedDependencies.onRunReference?.({ ...latestRun });
   };
 
-  const toolUseJournal = createToolUseJournal(chatBrowserToolDefinitions('act'));
+  const toolUseJournal = createToolUseJournal(chatBrowserToolDefinitions('act', true));
   let askedForBrowserTool = false;
 
   try {

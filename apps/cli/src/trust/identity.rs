@@ -160,7 +160,9 @@ fn device_id_file() -> Option<PathBuf> {
     if let Some(path) = crate::native_process_test_fixture::device_id_file() {
         return Some(path);
     }
-    dirs::home_dir().map(|home| home.join(".agiworkforce").join("device-id"))
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join("device-id"))
 }
 
 fn hostname() -> Option<String> {

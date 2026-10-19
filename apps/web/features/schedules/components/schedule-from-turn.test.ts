@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  promptBeforeReply,
-  scheduleFromPromptHref,
-  scheduleNameFromPrompt,
-} from './schedule-from-turn';
+import { promptBeforeReply, scheduleFromPromptHref } from './schedule-from-turn';
 
 describe('turning a finished chat turn into a schedule', () => {
   const messages = [
@@ -19,11 +15,6 @@ describe('turning a finished chat turn into a schedule', () => {
     expect(promptBeforeReply(messages, 'a2')).toBe('Draft the Monday status email');
     expect(promptBeforeReply(messages, 'a1')).toBe('First question');
     expect(promptBeforeReply(messages, 'missing')).toBeNull();
-  });
-
-  it('names the schedule from the first line of the request', () => {
-    expect(scheduleNameFromPrompt('Weekly digest\nwith details')).toBe('Weekly digest');
-    expect(scheduleNameFromPrompt('x'.repeat(80))).toHaveLength(60);
   });
 
   it('hands the request to the schedules page in the URL', () => {

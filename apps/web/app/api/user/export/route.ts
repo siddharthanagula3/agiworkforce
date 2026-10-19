@@ -304,6 +304,7 @@ const conversationExportSchema = z.object({
   // their row, so an export that omitted it would show every message they sent
   // and none of the one they were still writing.
   draft: z.string().nullable(),
+  instructions: z.string().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
   deleted_at: nullableTimestampSchema,
@@ -2416,7 +2417,7 @@ async function collectUserData(
   const conversations = await queryExportRowsAcrossWorkspaces({
     scopedDbFor,
     workspaces,
-    sql: `select id, title, model, project_id, pinned, draft, created_at, updated_at, deleted_at
+    sql: `select id, title, model, project_id, pinned, draft, instructions, created_at, updated_at, deleted_at
           from web_conversations
           where user_id = $1 and is_temporary = false
           order by created_at asc`,

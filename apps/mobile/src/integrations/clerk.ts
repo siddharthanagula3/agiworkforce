@@ -19,21 +19,18 @@ export const CLERK_NATIVE_AUTH_OPTIONS = {
   treatPendingAsSignedOut: false,
 } as const;
 
-let tokenGetter: (() => Promise<string | null>) | null = null;
-let userIdGetter: (() => string | null) | null = null;
-let tokenRefreshGetter: (() => Promise<string | null>) | null = null;
-
-export function setClerkTokenGetter(
-  getToken: (() => Promise<string | null>) | null,
-  getUserId: (() => string | null) | null = null,
-  getTokenFresh: (() => Promise<string | null>) | null = null,
-): void {
-  tokenGetter = getToken;
-  userIdGetter = getUserId;
-  tokenRefreshGetter = getTokenFresh;
-}
-
 type TokenMinter = (options?: { template?: string; skipCache?: boolean }) => Promise<string | null>;
+
+let tokenMinter: TokenMinter | null = null;
+let userIdGetter: (() => string | null) | null = null;
+
+export function setClerkTokenMinter(
+  mint: TokenMinter | null,
+  getUserId: (() => string | null) | null = null,
+): void {
+  tokenMinter = mint;
+  userIdGetter = getUserId;
+}
 
 let templateMissingWarned = false;
 
@@ -56,42 +53,52 @@ export async function getSurfaceToken(
   }
 }
 
-export async function getClerkToken(): Promise<string | null> {
-  if (tokenGetter) {
-    try {
-      return await tokenGetter();
-    } catch (err) {
-      console.warn('[clerk] token bridge error:', err);
-      return null;
-    }
-  }
+/**
+ * Clerk leaves `sid` out of template tokens, so the bearer is the session token
+ * and the template token travels beside it as the surface proof. Without that
+ * proof the server cannot bind the phone, so no bearer is handed out either.
+ */
+export async function getSessionToken(
+  mint: TokenMinter,
+  options: { skipCache?: boolean } = {},
+): Promise<string | null> {
+  if (!(await getSurfaceToken(mint, options))) return null;
+  return mint(options.skipCache ? { skipCache: true } : undefined);
+}
+
+function currentMinter(): TokenMinter | null {
+  if (tokenMinter) return tokenMinter;
   try {
-    const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
-    const session = clerk.session;
-    if (!session) return null;
-    return getSurfaceToken((options) => session.getToken(options));
+    const session = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).session;
+    return session ? (options) => session.getToken(options) : null;
   } catch {
     return null;
   }
 }
 
-export async function getClerkTokenFresh(): Promise<string | null> {
-  if (tokenRefreshGetter) {
-    try {
-      return await tokenRefreshGetter();
-    } catch (err) {
-      console.warn('[clerk] force-refresh token error:', err);
-      return null;
-    }
-  }
+async function mintWith(
+  read: (mint: TokenMinter) => Promise<string | null>,
+): Promise<string | null> {
+  const mint = currentMinter();
+  if (!mint) return null;
   try {
-    const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
-    const session = clerk.session;
-    if (!session) return null;
-    return getSurfaceToken((options) => session.getToken(options), { skipCache: true });
-  } catch {
+    return await read(mint);
+  } catch (err) {
+    console.warn('[clerk] token bridge error:', err);
     return null;
   }
+}
+
+export function getClerkToken(): Promise<string | null> {
+  return mintWith((mint) => getSessionToken(mint));
+}
+
+export function getClerkTokenFresh(): Promise<string | null> {
+  return mintWith((mint) => getSessionToken(mint, { skipCache: true }));
+}
+
+export function getClerkSurfaceToken(): Promise<string | null> {
+  return mintWith((mint) => getSurfaceToken(mint));
 }
 
 export function getClerkUserId(): string | null {

@@ -319,7 +319,7 @@ fn infer_title(messages: &[Message]) -> String {
         .iter()
         .find(|message| message.role == "user")
         .map(|message| {
-            let text = message.text_content();
+            let text = crate::agent::user_words(&message.text_content()).to_string();
             let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
             let truncated: String = normalized.chars().take(50).collect();
             if normalized.chars().count() > 50 {

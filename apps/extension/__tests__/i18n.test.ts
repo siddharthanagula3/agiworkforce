@@ -42,6 +42,8 @@ const LOCALIZED_SOURCES = [
   'src/features/options/destinations.ts',
   'src/features/options/desktop-pairing-rows.ts',
   'src/features/options/keyboard-shortcut-rows.ts',
+  'src/features/options/history-access-row.ts',
+  'src/features/options/blocked-sites-section.ts',
   'src/features/options/microphone-section.ts',
   'src/features/options/notifications-row.ts',
   'src/features/options/preference-rows.ts',

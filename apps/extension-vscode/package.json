@@ -217,6 +217,19 @@
         "title": "AGI Workforce: Session Status"
       },
       {
+        "command": "agi-workforce.exportConversation",
+        "title": "AGI Workforce: Export Conversation"
+      },
+      {
+        "command": "agi-workforce.addTerminalOutputToChat",
+        "title": "AGI Workforce: Add Terminal Output to Chat"
+      },
+      {
+        "command": "agi-workforce.revisePlanFromDocument",
+        "title": "AGI Workforce: Revise the Plan with My Notes",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "agi-workforce.showSavedApprovals",
         "title": "AGI Workforce: Permissions",
         "icon": "$(shield)"
@@ -1000,7 +1013,24 @@
           "group": "agi-workforce@11"
         }
       ],
+      "editor/title": [
+        {
+          "command": "agi-workforce.revisePlanFromDocument",
+          "when": "agi-workforce.planDocumentOpen && resourceScheme == untitled && editorLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "agi-workforce.addTerminalOutputToChat",
+          "group": "agi-workforce@1"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "agi-workforce.revisePlanFromDocument",
+          "when": "agi-workforce.planDocumentOpen"
+        },
         {
           "command": "agi-workforce.explain",
           "when": "editorHasSelection"

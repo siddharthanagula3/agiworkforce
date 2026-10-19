@@ -1,5 +1,5 @@
 import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n/languages';
-import { normalizeEditInstruction } from './artifact-edit-request';
+import { artifactReplyFormat, normalizeEditInstruction } from './artifact-edit-request';
 
 const MAX_SELECTION_CHARS = 4_000;
 const CONTEXT_CHARS = 400;
@@ -92,6 +92,7 @@ export function buildArtifactSelectionRequest(input: {
   scope?: string;
   currentContent?: string;
   language?: string;
+  type?: string;
 }): string {
   const scope = input.scope ? ` in ${input.scope}` : '';
   const lines = [
@@ -120,7 +121,7 @@ export function buildArtifactSelectionRequest(input: {
     '',
     `Requested change: ${normalizeEditInstruction(input.instruction)}`,
     '',
-    'Reply with the complete updated artifact in one fenced block with the artifact marker on its first line.',
+    artifactReplyFormat(input.type),
   );
   return lines.join('\n');
 }

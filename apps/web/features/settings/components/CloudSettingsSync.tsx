@@ -68,6 +68,7 @@ export function CloudSettingsSync() {
   const motion = useSettingsStore((state) => state.motion);
   const highContrast = useSettingsStore((state) => state.highContrast);
   const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
+  const codeTheme = useSettingsStore((state) => state.codeTheme);
   const sendWithEnter = useSettingsStore((state) => state.sendWithEnter);
   const defaultWorkMode = useSettingsStore((state) => state.defaultWorkMode);
   const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
@@ -105,6 +106,7 @@ export function CloudSettingsSync() {
       motion,
       highContrast,
       codeBlockWrap,
+      codeTheme,
       sendWithEnter,
       defaultWorkMode,
       followUpSuggestionsEnabled,
@@ -125,6 +127,7 @@ export function CloudSettingsSync() {
     chatFont,
     chatTextSize,
     codeBlockWrap,
+    codeTheme,
     sendWithEnter,
     defaultWorkMode,
     dictationEnabled,
@@ -239,6 +242,7 @@ export function CloudSettingsSync() {
       motion,
       highContrast,
       codeBlockWrap,
+      codeTheme,
       sendWithEnter,
       defaultWorkMode,
       followUpSuggestionsEnabled,
@@ -266,6 +270,7 @@ export function CloudSettingsSync() {
     chatFont,
     chatTextSize,
     codeBlockWrap,
+    codeTheme,
     sendWithEnter,
     defaultWorkMode,
     dictationEnabled,

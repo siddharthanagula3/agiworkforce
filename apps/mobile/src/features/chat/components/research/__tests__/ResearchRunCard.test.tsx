@@ -1,3 +1,8 @@
+const mockFetchConnectorDirectory = jest.fn();
+jest.mock('@/services/connectors', () => ({
+  fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
+}));
+
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { StreamDelta } from '@/services/streaming';
@@ -6,6 +11,7 @@ import {
   settleResearchRun,
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
+import { defaultResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
 import { ResearchRunCard } from '../ResearchRunCard';
 
 const RUN: StreamDelta[] = [
@@ -121,7 +127,110 @@ function replay(deltas: StreamDelta[], seed?: ResearchRunState): ResearchRunStat
   return state;
 }
 
+beforeEach(() => {
+  mockFetchConnectorDirectory.mockResolvedValue({
+    connectors: [],
+    available: [],
+    entries: [],
+    policy: null,
+  });
+});
+
 describe('ResearchRunCard over a recorded run', () => {
+  it('lets the run read a connected app the user picks', async () => {
+    mockFetchConnectorDirectory.mockResolvedValue({
+      connectors: [
+        {
+          id: 'conn-1',
+          connectorId: 'gmail',
+          toolConnectorId: 'gmail',
+          authType: 'oauth',
+          connectedAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          source: 'oauth',
+        },
+        {
+          id: 'conn-2',
+          connectorId: 'slack',
+          authType: 'oauth',
+          connectedAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          source: 'oauth',
+          needsReauthorization: true,
+        },
+      ],
+      available: [],
+      entries: [],
+      policy: null,
+    });
+    const onPlanDecision = jest.fn();
+    render(
+      <ResearchRunCard
+        research={replay(RUN)}
+        isStreaming={false}
+        onPlanDecision={onPlanDecision}
+      />,
+    );
+
+    fireEvent.press(await screen.findByLabelText('Gmail'));
+    expect(screen.queryByLabelText('Slack')).toBeNull();
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+    expect(onPlanDecision).toHaveBeenCalledWith({
+      choices: expect.objectContaining({
+        sources: expect.objectContaining({ connectors: ['gmail'] }),
+      }),
+    });
+  });
+
+  it('starts the run with the deliverable and sources chosen on the plan', () => {
+    const onPlanDecision = jest.fn();
+    render(
+      <ResearchRunCard
+        research={replay(RUN)}
+        isStreaming={false}
+        onPlanDecision={onPlanDecision}
+      />,
+    );
+
+    expect(screen.getByText('Searching the whole web. Add a source to narrow it.')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('research-deliverable-executive-summary'));
+    fireEvent.press(screen.getByTestId('research-format-bullet-brief'));
+    fireEvent(screen.getByTestId('research-source-files'), 'valueChange', true);
+    fireEvent.changeText(
+      screen.getByTestId('research-source-allow'),
+      'https://www.iea.org/reports, nature.com',
+    );
+    fireEvent(screen.getByTestId('research-source-allow'), 'submitEditing');
+    fireEvent.changeText(screen.getByTestId('research-source-deny'), 'example-blog.com');
+    fireEvent(screen.getByTestId('research-source-deny'), 'submitEditing');
+    expect(screen.getByText('Never example-blog.com')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+    expect(onPlanDecision).toHaveBeenCalledWith({
+      choices: {
+        deliverable: expect.objectContaining({
+          depth: 'executive-summary',
+          format: 'bullet-brief',
+        }),
+        sources: {
+          files: true,
+          allowDomains: ['iea.org', 'nature.com'],
+          denyDomains: ['example-blog.com'],
+          connectors: [],
+        },
+      },
+    });
+  });
+
+  it('refuses a source that is not a site address', () => {
+    render(
+      <ResearchRunCard research={replay(RUN)} isStreaming={false} onPlanDecision={jest.fn()} />,
+    );
+    fireEvent.changeText(screen.getByTestId('research-source-allow'), 'not a site');
+    fireEvent(screen.getByTestId('research-source-allow'), 'submitEditing');
+    expect(screen.getByText('Enter site addresses such as example.com.')).toBeTruthy();
+  });
+
   it('offers approve and cancel on the paused plan', () => {
     const onPlanDecision = jest.fn();
     render(
@@ -137,7 +246,7 @@ describe('ResearchRunCard over a recorded run', () => {
     expect(screen.getByDisplayValue('Sodium-ion cost per kilowatt hour')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('research-plan-approve'));
-    expect(onPlanDecision).toHaveBeenCalledWith('start');
+    expect(onPlanDecision).toHaveBeenCalledWith({ choices: defaultResearchPlanChoices() });
     fireEvent.press(screen.getByTestId('research-plan-cancel'));
     expect(onPlanDecision).toHaveBeenCalledWith('cancel');
   });

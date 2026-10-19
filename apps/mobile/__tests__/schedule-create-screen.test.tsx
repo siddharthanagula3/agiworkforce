@@ -6,7 +6,13 @@ const mockBack = jest.fn();
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockScheduleForm = jest.fn(() => null);
-let mockSearchParams: { id?: string; template?: string } = {};
+let mockSearchParams: {
+  id?: string;
+  template?: string;
+  prompt?: string;
+  model?: string;
+  projectId?: string;
+} = {};
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -75,6 +81,40 @@ describe('Create schedule template handoff', () => {
           daysOfWeek: [1],
         }),
       }),
+    );
+  });
+
+  it('prefills the form from a chat prompt saved as a task', () => {
+    mockSearchParams = { prompt: 'Summarise overnight sales', model: DEFAULT_AUTO_MODE_ID };
+
+    render(<CreateScheduleScreen />);
+
+    expect(mockScheduleForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialData: expect.objectContaining({
+          name: 'Summarise overnight sales',
+          prompt: 'Summarise overnight sales',
+          model: DEFAULT_AUTO_MODE_ID,
+        }),
+      }),
+    );
+  });
+
+  it('creates a routine inside the project it was started from', async () => {
+    mockSearchParams = { projectId: 'project-9' };
+    const createSchedule = jest.fn().mockResolvedValue(true);
+    useScheduleStore.setState({ createSchedule });
+
+    render(<CreateScheduleScreen />);
+    const props = (
+      mockScheduleForm.mock.calls.at(-1) as unknown as [
+        { onSubmit: (data: unknown) => Promise<void> },
+      ]
+    )[0];
+    await props.onSubmit({ name: 'Digest', prompt: 'Summarise', model: DEFAULT_AUTO_MODE_ID });
+
+    expect(createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Digest', projectId: 'project-9' }),
     );
   });
 

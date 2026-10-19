@@ -40,6 +40,11 @@ import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settin
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
+import {
+  CODE_THEMES,
+  isCodeThemeId,
+  type CodeThemeId,
+} from '@agiworkforce/unified-chat/shiki-highlighter';
 import { useDesktopHost } from '@/features/desktop-host';
 import { safePlatform } from '@shared/utils/browser-utils';
 import {
@@ -967,6 +972,7 @@ export function GeneralSection() {
 
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
+          <CodeThemeRow />
           <SendWithEnterRow />
           <DefaultWorkModeRow />
           <FollowUpSuggestionsRow />
@@ -1387,6 +1393,33 @@ function CodeBlockWrapRow() {
         aria-label="Wrap long code lines"
         onCheckedChange={setCodeBlockWrap}
       />
+    </Row>
+  );
+}
+
+function CodeThemeRow() {
+  const codeTheme = useSettingsStore((state) => state.codeTheme);
+  const setCodeTheme = useSettingsStore((state) => state.setCodeTheme);
+
+  return (
+    <Row
+      label="Code theme"
+      hint="Colours code blocks in dark mode. Light mode keeps the high-contrast palette, the one light theme whose every colour stays readable on the code background."
+    >
+      <select
+        value={codeTheme}
+        onChange={(event) => {
+          if (isCodeThemeId(event.target.value)) setCodeTheme(event.target.value);
+        }}
+        aria-label="Code theme"
+        className={SELECT_CLASS}
+      >
+        {(Object.keys(CODE_THEMES) as CodeThemeId[]).map((id) => (
+          <option key={id} value={id}>
+            {CODE_THEMES[id].label}
+          </option>
+        ))}
+      </select>
     </Row>
   );
 }

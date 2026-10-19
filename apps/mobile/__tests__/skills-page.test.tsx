@@ -312,7 +312,11 @@ describe('Mobile Skills screen', () => {
     mockFetchInstalledSkillNames.mockResolvedValueOnce(new Set(['Slides']));
     const screen = render(<SkillsScreen />);
 
-    expect(await screen.findByText('Controlled by its plugin installation.')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Included with the Office plugin. Controlled by its plugin installation.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByLabelText('Uninstall Slides')).toBeNull();
     expect(screen.getByLabelText('Use Slides in chat')).toBeTruthy();
   });

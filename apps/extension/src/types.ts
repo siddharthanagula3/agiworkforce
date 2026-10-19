@@ -462,6 +462,7 @@ export interface ChatMessageMessage extends BaseMessage {
   memoryCommand?: ManagedMemoryCommandTurn;
   skillName?: string;
   browserToolTier?: ChatBrowserToolTier;
+  browserHistory?: boolean;
 }
 
 export interface ChatToolHandoffMessage {
@@ -482,6 +483,7 @@ export interface ResolveChatToolsMessage extends BaseMessage {
   cancelled?: boolean;
   results?: Array<{ toolCallId: string; content: string }>;
   browserToolTier?: ChatBrowserToolTier;
+  browserHistory?: boolean;
 }
 
 export interface GrantSiteOnceMessage extends BaseMessage {

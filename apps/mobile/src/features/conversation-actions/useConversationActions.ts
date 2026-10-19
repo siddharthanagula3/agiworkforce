@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { archiveConversation, restoreArchivedConversation } from '@/src/features/archived-chats';
+import { useRouter } from 'expo-router';
 import { showToast } from '@/src/shared/components/Toast';
+import { toUserMessage } from '@/services/userMessage';
 import {
   captureAccountScopedUiState,
   isAccountScopedUiStateOwned,
@@ -84,6 +86,8 @@ export function useConversationActions(): ConversationActions {
   const markConversationRead = useChatStore((s) => s.markConversationRead);
   const markConversationUnread = useChatStore((s) => s.markConversationUnread);
   const moveConversationToProject = useChatStore((s) => s.moveConversationToProject);
+  const forkConversation = useChatStore((s) => s.forkConversation);
+  const router = useRouter();
   const loadMessages = useChatStore((s) => s.loadMessages);
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
@@ -203,6 +207,25 @@ export function useConversationActions(): ConversationActions {
         });
       });
 
+      const duplicate = guard(() => {
+        void (async () => {
+          try {
+            await loadMessages(conversationId);
+            if (!isAccountScopedUiStateOwned(ownership)) return;
+            const copyId = await forkConversation(conversationId);
+            if (!isAccountScopedUiStateOwned(ownership)) return;
+            showToast('Chat duplicated');
+            router.push({ pathname: '/(app)/chat/[id]', params: { id: copyId } });
+          } catch (error) {
+            if (!isAccountScopedUiStateOwned(ownership)) return;
+            Alert.alert(
+              'Could not duplicate chat',
+              toUserMessage(error, 'Check your connection and try again.'),
+            );
+          }
+        })();
+      });
+
       const canMove =
         projects.some((p) => p.id !== conversation.projectId) || !!conversation.projectId;
       const unread = conversation.unread === true;
@@ -225,6 +248,9 @@ export function useConversationActions(): ConversationActions {
           run: guard(() => void pinConversation(conversationId)),
         },
         ...(canMove ? [{ key: 'move', label: 'Move to project', run: move }] : []),
+        ...(conversation.temporary
+          ? []
+          : [{ key: 'duplicate', label: 'Duplicate', run: duplicate }]),
         {
           key: 'unread',
           label: unread ? 'Mark as read' : 'Mark as unread',
@@ -268,6 +294,8 @@ export function useConversationActions(): ConversationActions {
       markConversationRead,
       markConversationUnread,
       moveConversationToProject,
+      forkConversation,
+      router,
       pinConversation,
     ],
   );

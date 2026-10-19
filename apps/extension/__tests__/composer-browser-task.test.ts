@@ -154,6 +154,8 @@ function harness() {
     isAutoModeModelId,
     getModelMetadataById,
     activeBrowserToolTier: vi.fn(async () => 'read'),
+    hasHistoryPermission: vi.fn(async () => false),
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     activePageSource: { tabId: 7, url: 'https://example.com/form' },
     sameManagedCloudOwner,
     pageContextStillDescribes,
@@ -806,6 +808,19 @@ describe('browser tasks from the real composer functions', () => {
       }),
       expect.any(Function),
     );
+    expect(h.send.mock.calls.at(-1)?.[0]).not.toHaveProperty('browserHistory');
     expect(h.dependencies.capturePageContext).not.toHaveBeenCalled();
+  });
+
+  it('offers history search with the turn once the user has turned it on', async () => {
+    const h = harness();
+    h.context.selectedModel = 'auto';
+    vi.mocked(h.dependencies.hasHistoryPermission).mockResolvedValue(true);
+    h.api.sendMessage('Find the flight page I looked at yesterday');
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'CHAT_MESSAGE', browserHistory: true }),
+      expect.any(Function),
+    );
   });
 });

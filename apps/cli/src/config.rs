@@ -395,13 +395,13 @@ impl CliConfig {
     /// default remains `~/.agiworkforce/`.
     /// Creates the directory with mode 0o700 (owner-only) if it doesn't exist.
     pub fn config_dir() -> Result<PathBuf> {
-        let dir = resolve_config_dir(std::env::var_os("AGIWORKFORCE_HOME"), dirs::home_dir())?;
+        let dir = resolve_config_dir(std::env::var_os("AGIWORKFORCE_HOME"), system_home())?;
         ensure_config_dir(&dir)?;
         Ok(dir)
     }
 
     pub fn default_config_dir() -> Result<PathBuf> {
-        resolve_config_dir(None, dirs::home_dir())
+        resolve_config_dir(None, system_home())
     }
 
     /// Returns `config.toml` inside the resolved config root.
@@ -1313,6 +1313,29 @@ impl CliConfig {
     }
 }
 
+/// A test build never resolves the real home: tests that leave
+/// `AGIWORKFORCE_HOME` unset read and wrote the user's own credentials,
+/// approvals and sessions.
+#[cfg(not(test))]
+fn system_home() -> Option<PathBuf> {
+    dirs::home_dir()
+}
+
+#[cfg(test)]
+fn system_home() -> Option<PathBuf> {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    Some(
+        HOME.get_or_init(|| {
+            tempfile::Builder::new()
+                .prefix("agi-test-home-")
+                .tempdir()
+                .expect("a private home for this test run")
+                .keep()
+        })
+        .clone(),
+    )
+}
+
 fn resolve_config_dir(
     configured_home: Option<std::ffi::OsString>,
     system_home: Option<PathBuf>,
@@ -1379,6 +1402,14 @@ fn is_valid_privacy_mode(mode: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_test_build_never_resolves_the_real_home() {
+        let real = dirs::home_dir().expect("home");
+        let isolated = system_home().expect("test home");
+        assert_ne!(isolated, real);
+        assert!(!crate::secure_store::uses_keychain());
+    }
 
     #[test]
     fn a_model_is_a_choice_only_when_something_names_it() {

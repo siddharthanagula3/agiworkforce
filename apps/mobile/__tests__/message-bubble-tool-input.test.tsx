@@ -247,3 +247,46 @@ describe('MessageBubble tool input request', () => {
     expect(local.queryByTestId('chat.tool-input-request')).toBeNull();
   });
 });
+
+describe('MessageBubble: schedule a prompt as a task', () => {
+  function userMessage(): ChatMessage {
+    return {
+      id: 'm-user',
+      role: 'user',
+      conversationId: 'c-cloud',
+      content: 'Summarise the overnight sales numbers',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function actionHost(root: ReturnType<typeof render>['UNSAFE_root']) {
+    return root.findAll(
+      (node) =>
+        Array.isArray(node.props.accessibilityActions) &&
+        typeof node.props.onAccessibilityAction === 'function',
+    )[0];
+  }
+
+  it('offers Schedule as task on a cloud prompt and hands the message over', () => {
+    const onScheduleMessage = jest.fn();
+    const { UNSAFE_root } = render(
+      <MessageBubble message={userMessage()} onScheduleMessage={onScheduleMessage} />,
+    );
+    const host = actionHost(UNSAFE_root);
+    expect(host?.props.accessibilityActions).toContainEqual({
+      name: 'schedule',
+      label: 'Schedule as task',
+    });
+    fireEvent(host!, 'accessibilityAction', { nativeEvent: { actionName: 'schedule' } });
+    expect(onScheduleMessage).toHaveBeenCalledWith('m-user');
+  });
+
+  it('leaves the action out where scheduling is not offered', () => {
+    const { UNSAFE_root } = render(<MessageBubble message={userMessage()} />);
+    expect(
+      actionHost(UNSAFE_root)?.props.accessibilityActions.map(
+        (action: { name: string }) => action.name,
+      ),
+    ).not.toContain('schedule');
+  });
+});

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Alert, Modal } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -14,6 +14,8 @@ const mockSearchConversations = jest.fn();
 const mockPinConversation = jest.fn();
 const mockDeleteConversation = jest.fn();
 const mockRenameConversation = jest.fn();
+const mockForkConversation = jest.fn();
+const mockLoadMessages = jest.fn().mockResolvedValue(undefined);
 
 const mockConversations = Array.from({ length: 10 }, (_, index) => ({
   id: `chat-${index + 1}`,
@@ -56,6 +58,8 @@ const mockChatState = {
   pinConversation: mockPinConversation,
   deleteConversation: mockDeleteConversation,
   renameConversation: mockRenameConversation,
+  forkConversation: mockForkConversation,
+  loadMessages: mockLoadMessages,
 };
 const mockViewState = {
   searchConversations: mockSearchConversations,
@@ -369,7 +373,15 @@ describe('ChatsListScreen', () => {
     fireEvent(getByLabelText('Open chat: Launch checklist'), 'longPress');
 
     expect(getAllByTestId(/^conversation-action-/).map((node) => node.props.accessibilityLabel)) //
-      .toEqual(['Rename', 'Pin', 'Move to project', 'Mark as unread', 'Delete', 'Cancel']);
+      .toEqual([
+        'Rename',
+        'Pin',
+        'Move to project',
+        'Duplicate',
+        'Mark as unread',
+        'Delete',
+        'Cancel',
+      ]);
 
     fireEvent.press(getByTestId('conversation-action-pin'));
     dismissSheet();
@@ -384,6 +396,25 @@ describe('ChatsListScreen', () => {
 
     expect(mockRenameConversation).toHaveBeenCalledWith('chat-1', 'Launch checklist v2');
     expect(getByText('Launch checklist')).toBeTruthy();
+  });
+
+  it('duplicates a chat into a new one and opens it', async () => {
+    mockForkConversation.mockResolvedValueOnce('chat-copy');
+    const screen = render(<ChatsListScreen />);
+    const sheet = () => screen.UNSAFE_getAllByType(Modal).find((node) => node.props.onDismiss);
+
+    fireEvent(screen.getByLabelText('Open chat: Launch checklist'), 'longPress');
+    fireEvent.press(screen.getByTestId('conversation-action-duplicate'));
+    act(() => (sheet()?.props.onDismiss as () => void)());
+
+    await waitFor(() => expect(mockForkConversation).toHaveBeenCalledWith('chat-1'));
+    expect(mockLoadMessages).toHaveBeenCalledWith('chat-1');
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'chat-copy' },
+      }),
+    );
   });
 
   it('does not offer chat actions on a non-chat search result', () => {

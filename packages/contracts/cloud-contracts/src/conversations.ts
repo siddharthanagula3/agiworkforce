@@ -8,6 +8,8 @@ import { CloudAgentWorkModeSchema, type CloudAgentWorkMode } from './cloud-agent
 
 export const CONVERSATION_TITLE_MAX_LENGTH = 500;
 
+export const CONVERSATION_INSTRUCTIONS_MAX_LENGTH = 4_000;
+
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
@@ -86,6 +88,8 @@ export const ManagedCloudConversationWireSchema = z.object({
   /** The unsent composer text, so another device finds the message in progress. */
   draft: z.string().nullable().optional(),
   draft_updated_at: z.string().nullable().optional(),
+  /** Standing instructions the owner gave this conversation only. */
+  instructions: z.string().nullable().optional(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
@@ -154,6 +158,8 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   // and an explicit null returns the conversation to its linear reading, the
   // only honest answer once the path that leaf named has been deleted.
   activeLeafMessageId: z.string().uuid().nullable().optional(),
+  /** Written on its own statement, like the draft; null or blank clears it. */
+  instructions: z.string().max(CONVERSATION_INSTRUCTIONS_MAX_LENGTH).nullable().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
   typeof ManagedCloudUpdateConversationRequestSchema

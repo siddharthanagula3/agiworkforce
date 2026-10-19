@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-18
+Last updated: 2026-10-19
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -126,6 +126,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `device_move`                  | asks                   | asks                           | write, reversible                                                                |
 | `device_scroll`                | asks                   | asks                           | write, reversible                                                                |
 | `device_wait`                  | asks                   | asks                           | write, reversible                                                                |
+| `device_open_app`              | asks                   | asks                           | write, reversible                                                                |
 | `device_click`                 | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_drag`                  | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `device_type`                  | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |

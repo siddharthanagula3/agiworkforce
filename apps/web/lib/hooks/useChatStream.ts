@@ -177,6 +177,7 @@ import type {
 } from '@agiworkforce/types';
 import {
   parseResearchPlanEvent,
+  parseResearchPlanQuestions,
   parseResearchRunConfig,
   rendersResearchPlan,
   researchTurnHistoryContent,
@@ -3178,6 +3179,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (researchPlan) {
             const planSteps = parseResearchPlanEvent(researchPlan);
             const runConfig = parseResearchRunConfig(researchPlan);
+            const planQuestions = parseResearchPlanQuestions(researchPlan);
             if (planSteps) {
               if (!currentResearch) {
                 applyLocalAgentEvent({
@@ -3194,6 +3196,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 }),
                 steps: planSteps,
                 ...(runConfig ? { runConfig } : {}),
+                ...(planQuestions.length > 0 ? { questions: planQuestions } : {}),
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }
@@ -5611,11 +5614,18 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     }
     const refusalMetadata: MessageMetadata =
       paywall.freeLimit && errorCode ? { paywall, errorCode } : { paywall };
-    updateMessage(
-      assistantMessageId,
-      { isStreaming: false, content: '', error: false, metadata: refusalMetadata },
-      conversationId,
-    );
+    // The composer carries an account-wide block, so an empty reply row would
+    // only sit under it with Regenerate, Branch and More actions for a turn
+    // that never ran.
+    if (accountWide && !currentMessage?.content && !paywall.freeLimit) {
+      useChatStore.getState().deleteMessage(assistantMessageId, conversationId);
+    } else {
+      updateMessage(
+        assistantMessageId,
+        { isStreaming: false, content: '', error: false, metadata: refusalMetadata },
+        conversationId,
+      );
+    }
     if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
       trackMessageSave(
         assistantMessageId,
