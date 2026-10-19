@@ -5630,6 +5630,7 @@ async function processAdmittedRequest(
     if (
       !hasCredits &&
       !existingBalance?.account_id &&
+      subscription.current_period_end != null &&
       new Date(subscription.current_period_end).getTime() <= Date.now()
     ) {
       return { ok: false, response: billingPeriodNotRenewedResponse(subscription) };

@@ -173,6 +173,27 @@ describe('budget admission control runs before any provider work', () => {
     expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
   });
 
+  it('does not call a period ended when the plan stores no period end', async () => {
+    vi.spyOn(CreditService, 'getBalance').mockResolvedValue(null);
+    vi.spyOn(SubscriptionService, 'allocateCreditsForPeriod').mockResolvedValue('');
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
+
+    const result = await processRequest(chatRequest('admission-no-period-end'), {
+      ok: true,
+      userId: 'user-pro',
+      token: 'session-token',
+      subscription: {
+        ...proSubscription,
+        current_period_end: null as unknown as Date,
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const body = (await result.response.json()) as { error: { code: string } };
+    expect(body.error.code).not.toBe('billing_period_not_renewed');
+  });
+
   it('keeps the spent-budget refusal while the stored period is still running', async () => {
     vi.spyOn(CreditService, 'getBalance').mockResolvedValue({
       account_id: '',
