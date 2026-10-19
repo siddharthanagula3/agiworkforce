@@ -78,6 +78,12 @@ function describe(device: LinkedDevice): string {
   return device.name?.trim() || platform || SURFACE_LABELS[device.kind] || 'Linked app';
 }
 
+function describeTarget(device: LinkedDevice): string {
+  const surface = SURFACE_LABELS[device.kind] ?? 'Linked app';
+  const name = describe(device);
+  return name === surface ? surface : `the ${surface} on ${name}`;
+}
+
 function describeSystem(device: LinkedDevice): string {
   const parts = [SURFACE_LABELS[device.kind] ?? device.kind];
   if (device.version) parts.push(device.version);
@@ -94,13 +100,10 @@ function describeSystem(device: LinkedDevice): string {
 }
 
 function describeState(device: LinkedDevice): string {
-  const signedIn =
-    device.hasLiveCredential === null
-      ? 'Signed in unknown'
-      : device.hasLiveCredential
-        ? 'Signed in'
-        : 'Signed out';
-  const parts = device.presence ? [PRESENCE_LABELS[device.presence], signedIn] : [signedIn];
+  const parts = device.presence ? [PRESENCE_LABELS[device.presence]] : [];
+  if (device.hasLiveCredential !== null) {
+    parts.push(device.hasLiveCredential ? 'Signed in' : 'Signed out');
+  }
   if (device.lastSeenAt) parts.push(`Last seen ${formatDateTime(device.lastSeenAt)}`);
   if (device.registeredAt) parts.push(`Linked ${formatDateTime(device.registeredAt)}`);
   return parts.join(' · ');
@@ -382,7 +385,7 @@ export function LinkedDevicesPanel() {
                     type="button"
                     onClick={() => startRename(device)}
                     disabled={unlinkingId !== null}
-                    aria-label={`Rename ${describe(device)}`}
+                    aria-label={`Rename ${describeTarget(device)}`}
                     style={secondaryButtonStyle}
                   >
                     Rename
@@ -392,7 +395,7 @@ export function LinkedDevicesPanel() {
                   type="button"
                   onClick={() =>
                     confirm({
-                      title: `Unlink ${describe(device)}?`,
+                      title: `Unlink ${describeTarget(device)}?`,
                       description:
                         'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
                       confirmLabel: 'Unlink device',
@@ -400,7 +403,7 @@ export function LinkedDevicesPanel() {
                     })
                   }
                   disabled={unlinkingId !== null}
-                  aria-label={`Unlink ${describe(device)}`}
+                  aria-label={`Unlink ${describeTarget(device)}`}
                   style={{
                     flexShrink: 0,
                     padding: 'var(--space-2) var(--space-3)',

@@ -12,7 +12,7 @@ export interface DraftConflict {
   theirsRevision: string | null;
 }
 
-export type DraftSaveResult = 'saved' | 'failed' | DraftConflict;
+export type DraftSaveResult = 'saved' | 'failed' | 'not_saved_yet' | DraftConflict;
 
 const observedDraftRevisions = new Map<string, string | null>();
 
@@ -65,6 +65,7 @@ export async function saveConversationDraft(
       }),
     });
     if (response.status === 409) return readDraftConflict(await response.json());
+    if (response.status === 404) return 'not_saved_yet';
     if (!response.ok) return 'failed';
     const payload: unknown = await response.json();
     if (!payload || typeof payload !== 'object' || !('saved' in payload) || !payload.saved) {

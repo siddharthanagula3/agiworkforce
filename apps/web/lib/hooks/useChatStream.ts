@@ -5605,7 +5605,8 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     // this conversation, so it is raised to the composer instead of being left
     // behind as one card in one transcript. Anything a different request could
     // satisfy stays inline.
-    if (isAccountWideUsageBlock(paywall)) {
+    const accountWide = isAccountWideUsageBlock(paywall);
+    if (accountWide) {
       useChatStore.getState().setAccountUsageBlock(paywall);
     }
     const refusalMetadata: MessageMetadata =
@@ -5642,7 +5643,9 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
           }),
       );
     }
-    setError(errorMessage, conversationId);
+    // The composer already names an account-wide block with its reset and
+    // upgrade; a second error row with Retry would only resend into it.
+    if (!accountWide) setError(errorMessage, conversationId);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;

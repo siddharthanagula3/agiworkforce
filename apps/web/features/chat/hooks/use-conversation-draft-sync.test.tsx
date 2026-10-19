@@ -270,6 +270,34 @@ describe('carrying a composer draft to the server', () => {
     );
   });
 
+  it('stays quiet for a chat the server does not hold yet, then syncs once it exists', async () => {
+    mockSaveConversationDraft.mockResolvedValueOnce('not_saved_yet');
+    render(<Harness />);
+
+    for (const draft of ['half a thought', 'half a thought, more']) {
+      await act(async () => {
+        useChatStore.getState().setDraftContent(draft, CONVERSATION);
+        await vi.runAllTimersAsync();
+      });
+    }
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      seedConversation();
+      useChatStore.getState().setDraftContent('the whole thought', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([
+      CONVERSATION,
+      'the whole thought',
+    ]);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
   it('does not retry after the draft-sync component unmounts', async () => {
     mockSaveConversationDraft.mockResolvedValueOnce('failed');
     seedConversation();

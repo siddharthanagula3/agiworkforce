@@ -227,6 +227,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       stopShortcuts();
     };
   }, [openAfterMobileNavClose]);
+  useEffect(() => onAppCommand('open-upgrade', () => openUpgradeDialog()), [openUpgradeDialog]);
 
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
   const {

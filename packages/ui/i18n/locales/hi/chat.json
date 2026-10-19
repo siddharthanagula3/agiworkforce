@@ -533,5 +533,9 @@
     "searchedWeb": "वेब पर खोजा",
     "thinking": "थिंकिंग",
     "usedTools": "इस्तेमाल किए गए टूल"
+  },
+  "quickAsk": {
+    "openFullChat": "पूरी चैट खोलें",
+    "newChat": "नई चैट"
   }
 }

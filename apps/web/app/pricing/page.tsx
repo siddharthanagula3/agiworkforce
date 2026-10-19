@@ -836,7 +836,7 @@ export default function PricingPage() {
       id: 'tools',
       label: t('compareGroupTools'),
       rows: [
-        capabilityRow('skills_connectors', connectorFeatureNote()),
+        capabilityRow('skills_connectors'),
         comparisonRow(
           'customMcp',
           t('compareRowCustomMcp'),

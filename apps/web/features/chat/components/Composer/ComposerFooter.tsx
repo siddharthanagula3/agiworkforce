@@ -101,6 +101,7 @@ import { ProviderLogo } from './ProviderLogo';
 import { ModelCatalogue } from './ModelCatalogue';
 import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';
 import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { useOverlayLayout } from '@features/chat/hooks/use-overlay-dialog';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
 import { useChatModelStore } from '@agiworkforce/unified-chat';
@@ -181,7 +182,6 @@ const LOCAL_GRANT_LABEL = 'Use models on this device';
 const LOCAL_GRANT_GUIDANCE = 'Asks once, then lists what Ollama and LM Studio have loaded';
 const LOCAL_EMPTY_TEXT = 'No models loaded on this device yet.';
 
-const PLAN_PAGE_HREF = '/pricing';
 const PLAN_PAGE_LINK_TEXT = 'What each plan includes';
 const AUTO_GUIDANCE = 'Picks the best model for each message';
 const PICKER_TITLE = 'Models';
@@ -1650,13 +1650,17 @@ export function ComposerFooter({
                   )}
                   {!catalogueOpen && !shortList.plan.admitsEveryModel && (
                     <div className="shrink-0 border-t border-[var(--chat-border)] p-1">
-                      <a
+                      <button
+                        type="button"
                         {...{ [PICKER_ROW_ATTR]: '' }}
-                        href={PLAN_PAGE_HREF}
-                        className={`${PICKER_ROW_CLASS} h-9 text-xs font-medium text-primary hover:bg-muted/60 focus-visible:bg-muted/60`}
+                        onClick={() => {
+                          setOpen(false);
+                          openUpgrade((href) => window.location.assign(href));
+                        }}
+                        className={`${PICKER_ROW_CLASS} h-9 w-full text-xs font-medium text-primary hover:bg-muted/60 focus-visible:bg-muted/60`}
                       >
                         {PLAN_PAGE_LINK_TEXT}
-                      </a>
+                      </button>
                     </div>
                   )}
                 </TooltipProvider>

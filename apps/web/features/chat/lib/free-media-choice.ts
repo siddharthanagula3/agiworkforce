@@ -1,9 +1,11 @@
 import {
   FREE_QUOTA_CATALOGUE_PATH,
+  chooseLimitedFreeMedia,
   type FreeQuotaCatalogue,
   type FreeQuotaMediaCategory,
 } from '@agiworkforce/cloud-contracts';
-import { limitedFreeMedia, orderedReadyFreeMedia } from '@/features/models/lib/free-media-offer';
+
+export { chooseLimitedFreeMedia };
 
 const LOOKUP_TIMEOUT_MS = 4_000;
 const NOT_OFFERED_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
@@ -13,14 +15,6 @@ export type LimitedFreeMediaLookup =
 
 const NOT_OFFERED: LimitedFreeMediaLookup = { status: 'not_offered' };
 const UNKNOWN: LimitedFreeMediaLookup = { status: 'unknown' };
-
-export function chooseLimitedFreeMedia(
-  catalogue: FreeQuotaCatalogue | null,
-  category: FreeQuotaMediaCategory,
-): string | null {
-  if (!catalogue || !limitedFreeMedia(catalogue, category)) return null;
-  return orderedReadyFreeMedia(catalogue, category)[0]?.key ?? null;
-}
 
 export async function resolveLimitedFreeMedia(
   category: FreeQuotaMediaCategory,

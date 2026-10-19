@@ -11,7 +11,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@agiworkforce/ui/dialog';
-import { AuthDivider } from '@/features/auth/AuthDivider';
 import {
   AUTH_HINT_CLASS,
   AUTH_PROVIDER_BUTTON_CLASS,
@@ -51,8 +50,7 @@ export function DesktopBrowserSignIn() {
   const title = state.kind === 'failed' ? 'Sign-in needs attention' : 'Continue in your browser';
 
   return (
-    <div data-testid="desktop-browser-sign-in">
-      <AuthDivider />
+    <div data-testid="desktop-browser-sign-in" className="mb-3">
       <Dialog
         open={state.kind !== 'idle'}
         onOpenChange={(open) => {

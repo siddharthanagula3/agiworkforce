@@ -10,6 +10,7 @@ import type { ManagedCloudChatAttachmentUploadPhase } from '@agiworkforce/cloud-
 export interface AttachmentUploadVisualStatus {
   phase: ManagedCloudChatAttachmentUploadPhase | 'ready';
   error?: string;
+  retryable?: boolean;
 }
 
 interface AttachmentPreviewProps {
@@ -106,9 +107,9 @@ function UploadStatus({
     return (
       <div className="mt-1 flex min-w-0 items-center gap-1" role="alert">
         <span className="truncate text-caption text-destructive" title={status.error}>
-          Upload failed
+          {status.retryable === false && status.error ? status.error : 'Upload failed'}
         </span>
-        {onRetry ? (
+        {onRetry && status.retryable !== false ? (
           <button
             type="button"
             onClick={(event) => {
