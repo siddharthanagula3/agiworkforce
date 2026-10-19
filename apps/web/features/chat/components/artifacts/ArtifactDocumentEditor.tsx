@@ -5,6 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { Markdown } from '@tiptap/markdown';
 
 import { ArtifactCodeEditor, type CodeEditorWrap } from './ArtifactCodeEditor';
+import { DocumentFormattingToolbar } from './DocumentFormattingToolbar';
 import {
   createDocumentMarkdownManager,
   documentEditorExtensions,
@@ -40,11 +41,11 @@ function RichDocumentEditor({ value, onChange }: Omit<ArtifactDocumentEditorProp
   });
 
   return (
-    <div
-      className="artifact-document-editor h-full w-full overflow-auto bg-background px-6 py-5"
-      data-testid="artifact-document-editor"
-    >
-      <EditorContent editor={editor} className="mx-auto max-w-3xl" />
+    <div className="flex h-full w-full flex-col" data-testid="artifact-document-editor">
+      {editor ? <DocumentFormattingToolbar editor={editor} /> : null}
+      <div className="artifact-document-editor min-h-0 flex-1 overflow-auto bg-background px-6 py-5">
+        <EditorContent editor={editor} className="mx-auto max-w-3xl" />
+      </div>
     </div>
   );
 }
