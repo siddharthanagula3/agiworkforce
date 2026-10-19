@@ -1,4 +1,5 @@
 export const PRODUCT_LINK_TARGETS = [
+  'chat',
   'file',
   'artifact',
   'work',

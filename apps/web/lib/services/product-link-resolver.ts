@@ -12,9 +12,15 @@ const MAX_LIBRARY_QUERY_CHARS = 80;
 const CHROME_ORIGIN_SURFACE = 'chrome';
 const EXPIRED_SCHEDULE_STATUS = 'expired';
 
-type OwnedTable = 'cloud_agent_runs' | 'research_reports' | 'scheduled_tasks' | 'media_assets';
+type OwnedTable =
+  | 'web_conversations'
+  | 'cloud_agent_runs'
+  | 'research_reports'
+  | 'scheduled_tasks'
+  | 'media_assets';
 
 const TABLE_BY_TARGET: Record<ProductLink['target'], OwnedTable> = {
+  chat: 'web_conversations',
   work: 'cloud_agent_runs',
   'browser-task': 'cloud_agent_runs',
   research: 'research_reports',
@@ -57,6 +63,28 @@ async function resolveRun(
     return { status: 'not_found' };
   }
   return { status: 'ready', href: tasksHref(run.id) };
+}
+
+async function resolveChat(
+  db: DatabaseAdapter,
+  userId: string,
+  link: ProductLink,
+): Promise<ProductLinkResolution> {
+  const [conversation] = await db.query<{
+    id: string;
+    is_temporary: boolean;
+    deleted_at: string | Date | null;
+  }>(
+    `select id, is_temporary, deleted_at
+       from public.web_conversations
+      where id = $1::uuid and user_id = $2
+      limit 1`,
+    [link.id, userId],
+  );
+  if (!conversation) return missing(link);
+  if (conversation.is_temporary) return { status: 'not_found' };
+  if (conversation.deleted_at) return { status: 'deleted' };
+  return { status: 'ready', href: `/chat/${encodeURIComponent(conversation.id)}` };
 }
 
 async function resolveResearch(
@@ -160,6 +188,8 @@ export async function resolveProductLink(
 ): Promise<ProductLinkResolution> {
   if (!UUID_RE.test(link.id)) return { status: 'not_found' };
   switch (link.target) {
+    case 'chat':
+      return resolveChat(db, userId, link);
     case 'work':
     case 'browser-task':
       return resolveRun(db, userId, link);

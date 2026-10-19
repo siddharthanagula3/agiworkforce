@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ProductLinkTarget, ProductLinkUnavailableState } from '@agiworkforce/types';
 
 const NOUN: Record<ProductLinkTarget, string> = {
+  chat: 'chat',
   file: 'file',
   artifact: 'artifact',
   work: 'Work session',
@@ -11,6 +12,7 @@ const NOUN: Record<ProductLinkTarget, string> = {
 };
 
 const RETURN: Record<ProductLinkTarget, { href: string; label: string }> = {
+  chat: { href: '/chat', label: 'Back to chats' },
   file: { href: '/chat/library', label: 'Open Library' },
   artifact: { href: '/chat/library?surface=artifact', label: 'Open Library' },
   work: { href: '/tasks', label: 'Open Work history' },

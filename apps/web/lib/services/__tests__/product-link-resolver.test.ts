@@ -24,6 +24,36 @@ beforeEach(() => {
 });
 
 describe('resolveProductLink', () => {
+  it('opens a saved chat in that conversation', async () => {
+    scopedRows([{ id: ID, is_temporary: false, deleted_at: null }]);
+    await expect(resolveProductLink(db, 'user-1', { target: 'chat', id: ID })).resolves.toEqual({
+      status: 'ready',
+      href: `/chat/${ID}`,
+    });
+    expect(mocks.scopedQuery.mock.calls[0]![1]).toEqual([ID, 'user-1']);
+  });
+
+  it('never opens a temporary chat and reports a deleted one as deleted', async () => {
+    scopedRows([{ id: ID, is_temporary: true, deleted_at: null }]);
+    await expect(resolveProductLink(db, 'user-1', { target: 'chat', id: ID })).resolves.toEqual({
+      status: 'not_found',
+    });
+
+    scopedRows([{ id: ID, is_temporary: false, deleted_at: '2026-09-01T00:00:00.000Z' }]);
+    await expect(resolveProductLink(db, 'user-1', { target: 'chat', id: ID })).resolves.toEqual({
+      status: 'deleted',
+    });
+  });
+
+  it("answers unauthorized for another account's chat without revealing it", async () => {
+    scopedRows([]);
+    mocks.privilegedQuery.mockResolvedValue([{ found: 1 }]);
+    await expect(resolveProductLink(db, 'user-1', { target: 'chat', id: ID })).resolves.toEqual({
+      status: 'unauthorized',
+    });
+    expect(String(mocks.privilegedQuery.mock.calls[0]![0])).toContain('public.web_conversations');
+  });
+
   it('opens a Work run in Work history', async () => {
     scopedRows([{ id: ID, origin_surface: 'web' }]);
     await expect(resolveProductLink(db, 'user-1', { target: 'work', id: ID })).resolves.toEqual({
