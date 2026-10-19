@@ -1210,6 +1210,10 @@ export class ChatStateManager {
           await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, msg.payload.id);
           break;
         }
+        if (await this._continueAccountConversationHere(msg.payload.id)) break;
+        void vscode.window.showInformationMessage(
+          'AGI Workforce: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.',
+        );
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
         );
@@ -2407,6 +2411,18 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
+  private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
+    const workspace = await getActiveWorkspaceFolder();
+    if (workspace === undefined || !vscode.workspace.isTrusted) return false;
+    const provider = this._conversationTreeProvider;
+    if (provider === undefined) return false;
+    if (!(await provider.adoptAccountConversation(conversationId, workspace.uri.fsPath))) {
+      return false;
+    }
+    await vscode.commands.executeCommand('agi-workforce.openConversation', conversationId);
+    return true;
+  }
+
   /**
    * The tier check reads a cached plan, which outlives a revoked or expired
    * session. Without an account the remedy is signing in, never an upgrade.

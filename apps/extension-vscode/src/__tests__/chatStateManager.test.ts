@@ -2859,6 +2859,37 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('continues a web chat in this workspace when the CLI can import it, else opens it on the web', async () => {
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    const harness = makeHarness({
+      resolvedConversation: { thread: threadSummary(), messages: [], transcriptTruncated: false },
+    });
+    const adopt = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    Object.assign(harness.conversationTreeProvider!, { adoptAccountConversation: adopt });
+
+    await harness.manager.handleMessage({
+      type: 'openSessionRow',
+      payload: { id: 'web-conversation-1', source: 'cloud' },
+    });
+    expect(adopt).toHaveBeenCalledWith('web-conversation-1', '/workspace');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.openConversation',
+      'web-conversation-1',
+    );
+    expect(vscode.env.openExternal).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'openSessionRow',
+      payload: { id: 'web-conversation-2', source: 'cloud' },
+    });
+    expect(vscode.env.openExternal).toHaveBeenCalledOnce();
+    expect(String(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0])).toContain(
+      '/chat/web-conversation-2',
+    );
+  });
+
   it('forwards dropped image attachments as image turn input', async () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({
