@@ -12,6 +12,7 @@ import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 import { type ChatTurn } from '../chat/retry';
 import { AttentionState } from './attentionBadge';
+import { setChatFocus } from './chatFocus';
 import { alertSessionActivity } from './sessionActivityAlert';
 import { markInUse } from '../../core/startupWork';
 
@@ -21,10 +22,6 @@ export type {
   ExtToWebviewMessage,
   UsageMeterWebviewPayload,
 } from './ChatStateManager';
-
-function setChatFocused(focused: boolean): void {
-  void vscode.commands.executeCommand('setContext', 'agi-workforce.chatFocused', focused);
-}
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'agi-workforce.sidebar';
@@ -106,7 +103,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (parsed.type === 'viewFocused' || parsed.type === 'viewBlurred') {
-        setChatFocused(parsed.type === 'viewFocused');
+        setChatFocus(this, parsed.type === 'viewFocused');
       }
       await this._stateManager.handleMessage(
         parsed as unknown as Parameters<typeof this._stateManager.handleMessage>[0],
@@ -126,11 +123,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._visibilityListener = webviewView.onDidChangeVisibility?.(() => {
       this._refreshBadge();
       if (webviewView.visible) void this._stateManager.syncStoredTranscript();
-      else setChatFocused(false);
+      else setChatFocus(this, false);
     });
 
     webviewView.onDidDispose(() => {
-      setChatFocused(false);
+      setChatFocus(this, false);
       this._messageListener?.dispose();
       delete this._messageListener;
       this._conversationTreeListener?.dispose();

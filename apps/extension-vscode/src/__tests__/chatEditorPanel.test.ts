@@ -228,6 +228,31 @@ describe('agi-workforce.openChatInEditor', () => {
     expect(panels[1]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
 
+  it('starts a new chat in the editor tab that has focus, not in the sidebar', async () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    open();
+    open();
+    const focusContext = () =>
+      vi
+        .mocked(vscode.commands.executeCommand)
+        .mock.calls.filter(
+          ([command, key]) => command === 'setContext' && key === 'agi-workforce.chatFocused',
+        )
+        .map(([, , value]) => value)
+        .at(-1);
+
+    await post(panels[1]!, { type: 'viewFocused' });
+    expect(focusContext()).toBe(true);
+    await post(panels[1]!, { type: 'viewBlurred' });
+    expect(focusContext()).toBe(false);
+
+    await post(panels[1]!, { type: 'viewFocused' });
+    await handlers.get('agi-workforce.newConversation')!();
+
+    expect(panels[1]!.postMessage).toHaveBeenCalledWith({ type: 'conversationCleared' });
+    expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
+  });
+
   it('drops a message the webview wrote against a conversation that has been replaced', async () => {
     handlers.get('agi-workforce.openChatInEditor')!();
     const stale = bindingOf(panels[0]!);

@@ -48,6 +48,8 @@ import type {
   SlashCommandRunResponse,
   ThreadCompactResponse,
   ThreadRewindParams,
+  ThreadSideQuestionParams,
+  ThreadSideQuestionResponse,
 } from '@agiworkforce/types/protocol';
 import type {
   DeveloperSessionHandoff,
@@ -176,6 +178,7 @@ const capabilitiesSchema = z.object({
   pullRequests: z.boolean().optional(),
   forkThroughTurn: z.boolean().optional(),
   threadCompact: z.boolean().optional(),
+  sideQuestion: z.boolean().optional(),
   bypassPerTurn: z.boolean().optional(),
   revertRestore: z.boolean().optional(),
   mcpApproval: z.boolean().optional(),
@@ -398,6 +401,7 @@ export type ThreadSearchResults = z.infer<typeof threadSearchResponseSchema>;
 
 const PULL_REQUEST_TIMEOUT_MS = 240_000;
 const THREAD_COMPACT_TIMEOUT_MS = 240_000;
+const SIDE_QUESTION_TIMEOUT_MS = 240_000;
 
 const savedPermissionsResponseSchema = z.object({
   permissions: z
@@ -512,6 +516,13 @@ const threadRewindResponseSchema = z.object({
 });
 
 export type ThreadRewindOutcome = z.infer<typeof threadRewindResponseSchema>;
+
+const threadSideQuestionResponseSchema = z.object({ answer: z.string().max(1_000_000) });
+const threadSideQuestionDeltaSchema = z.object({
+  threadId: z.string().min(1),
+  requestId: z.string().optional(),
+  delta: z.string(),
+});
 
 const threadCompactResponseSchema = z.object({
   threadId: z.string().min(1),
@@ -1653,6 +1664,36 @@ export class LocalRuntimeClient {
       throw new Error('The installed AGI CLI keeps no checkpoints. Update the AGI CLI to rewind.');
     }
     return threadRewindResponseSchema.parse(await connection.request('thread/rewind', params));
+  }
+
+  async askSideQuestion(
+    params: ThreadSideQuestionParams,
+    onDelta: (delta: string) => void,
+  ): Promise<ThreadSideQuestionResponse> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('sideQuestion'))) {
+      throw new Error(
+        'The installed AGI CLI cannot answer a side question. Update the AGI CLI to ask one.',
+      );
+    }
+    const subscription = this.onNotification((notification) => {
+      if (notification.method !== 'thread/sideQuestion/delta') return;
+      const parsed = threadSideQuestionDeltaSchema.safeParse(notification.params);
+      if (
+        parsed.success &&
+        parsed.data.threadId === params.threadId &&
+        parsed.data.requestId === params.requestId
+      ) {
+        onDelta(parsed.data.delta);
+      }
+    });
+    try {
+      return threadSideQuestionResponseSchema.parse(
+        await connection.request('thread/sideQuestion', params, SIDE_QUESTION_TIMEOUT_MS),
+      );
+    } finally {
+      subscription.dispose();
+    }
   }
 
   async compactThread(threadId: string): Promise<ThreadCompactResponse> {

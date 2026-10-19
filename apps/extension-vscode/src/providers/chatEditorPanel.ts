@@ -11,6 +11,7 @@ import {
   webviewResourceRoots,
 } from '../features/sidebar-webview/webviewContent';
 import { alertSessionActivity } from '../features/sidebar-webview/sessionActivityAlert';
+import { setChatFocus } from '../features/sidebar-webview/chatFocus';
 import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
@@ -184,6 +185,9 @@ export class ChatEditorPanel {
           );
           return;
         }
+        if (parsed.type === 'viewFocused' || parsed.type === 'viewBlurred') {
+          setChatFocus(this, parsed.type === 'viewFocused');
+        }
         await this.stateManager.handleMessage(
           parsed as unknown as Parameters<ChatStateManager['handleMessage']>[0],
         );
@@ -196,7 +200,12 @@ export class ChatEditorPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
   }
 
+  resetConversation(): void {
+    this.stateManager.resetConversation();
+  }
+
   private dispose(): void {
+    setChatFocus(this, false);
     ChatEditorPanel.instances.delete(this);
     if (ChatEditorPanel.instances.size === 0) {
       ChatEditorPanel.mostRecent = undefined;
