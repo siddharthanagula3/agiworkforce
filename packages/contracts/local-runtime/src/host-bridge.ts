@@ -99,6 +99,7 @@ export function isHostCommand(value: unknown): value is HostCommand {
  */
 export const HOST_SHORTCUT_KEYS = [
   'quickAsk',
+  'newChat',
   'screenshot',
   'windowShot',
   'voice',
@@ -119,6 +120,7 @@ export const NO_HOST_SHORTCUT = '';
  */
 export const HOST_SHORTCUT_CHOICES: Record<HostShortcutKey, readonly string[]> = {
   quickAsk: ['Alt+Shift+Space', 'CommandOrControl+Shift+Space', 'CommandOrControl+Alt+A'],
+  newChat: ['Alt+Shift+N', 'CommandOrControl+Alt+N', 'Alt+Space'],
   screenshot: ['CommandOrControl+Shift+2', 'CommandOrControl+Shift+4', 'CommandOrControl+Alt+S'],
   windowShot: ['CommandOrControl+Shift+1', 'CommandOrControl+Alt+W', 'Alt+Shift+W'],
   voice: ['Alt+Shift+V', 'CommandOrControl+Alt+V', 'CommandOrControl+Alt+D'],
@@ -278,11 +280,13 @@ export interface HostPreferences {
    * no control the shell would ignore.
    */
   stopShortcut?: string;
+  newChatShortcut?: string;
   agentNotifications?: HostAgentNotificationPreferences;
 }
 
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {
   quickAsk: 'quickAskShortcut',
+  newChat: 'newChatShortcut',
   screenshot: 'screenshotShortcut',
   windowShot: 'windowShotShortcut',
   voice: 'voiceShortcut',

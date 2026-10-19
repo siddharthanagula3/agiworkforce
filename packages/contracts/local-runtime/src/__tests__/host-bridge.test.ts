@@ -28,6 +28,7 @@ describe('host shortcuts', () => {
     expect(new Set(fields).size).toBe(fields.length);
     expect(fields).toEqual([
       'quickAskShortcut',
+      'newChatShortcut',
       'screenshotShortcut',
       'windowShotShortcut',
       'voiceShortcut',
