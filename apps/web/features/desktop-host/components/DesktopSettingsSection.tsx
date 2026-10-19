@@ -47,6 +47,9 @@ const STARTUP_LABEL = 'Run on startup';
 const STARTUP_HINT = 'Start AGI Cloud when you log in to this computer.';
 const MENU_BAR_LABEL = 'Menu bar';
 const MENU_BAR_HINT = 'Show AGI Cloud in the menu bar.';
+const DICTATE_ELSEWHERE_LABEL = 'Dictate into the app you are using';
+const DICTATE_ELSEWHERE_HINT =
+  'With another app in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again.';
 const COMPLETION_ALERTS_LABEL = 'Task finished alerts';
 const COMPLETION_ALERTS_HINT =
   'Show a notification when a coding session on this computer finishes or stops.';
@@ -305,6 +308,16 @@ export function DesktopSettingsSection() {
             />
           </Row>
 
+          {preferences?.dictateIntoFocusedApp !== undefined && (
+            <Row label={DICTATE_ELSEWHERE_LABEL} hint={DICTATE_ELSEWHERE_HINT}>
+              <Switch
+                checked={preferences.dictateIntoFocusedApp}
+                onCheckedChange={(checked) => write({ dictateIntoFocusedApp: checked })}
+                aria-label={DICTATE_ELSEWHERE_LABEL}
+              />
+            </Row>
+          )}
+
           {preferences?.agentNotifications === undefined ? (
             <>
               <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
@@ -313,7 +326,9 @@ export function DesktopSettingsSection() {
                   disabled={!preferences}
                   aria-label={COMPLETION_ALERTS_LABEL}
                   onChange={(event) =>
-                    write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
+                    write({
+                      sessionCompletionAlerts: event.target.value as SessionCompletionAlerts,
+                    })
                   }
                   className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
                 >

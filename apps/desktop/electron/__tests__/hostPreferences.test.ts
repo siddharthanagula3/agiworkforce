@@ -41,6 +41,7 @@ vi.mock('electron', () => {
 
   return {
     powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
+    systemPreferences: { isTrustedAccessibilityClient: vi.fn(() => true) },
     powerSaveBlocker: { start: vi.fn(() => 1), stop: vi.fn(), isStarted: vi.fn(() => false) },
     BrowserWindow,
     Notification: Object.assign(
@@ -111,6 +112,7 @@ vi.mock('../settingsStore', () => ({
       muted: [],
       sound: true,
     },
+    dictateIntoFocusedApp: storedSettings['dictateIntoFocusedApp'] === true,
   }),
   saveSettings: vi.fn((patch: Record<string, unknown>) => {
     storedSettings = { ...storedSettings, ...patch };
@@ -324,6 +326,31 @@ describe('the host preferences channel', () => {
     const off = (await invoke({ launchAtLogin: false })) as State;
     expect(off.preferences['launchAtLogin']).toBe(false);
     expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('turns dictation into other apps on once the user says yes here, and off without asking', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    await invoke({ dictateIntoFocusedApp: true });
+    expect(storedSettings['dictateIntoFocusedApp']).toBe(true);
+    const options = (showMessageBox.mock.calls[0] as unknown[]).at(-1) as {
+      buttons: string[];
+      defaultId: number;
+      cancelId: number;
+    };
+    expect(options.buttons).toEqual(['Cancel', 'Type into other apps']);
+    expect(options.defaultId).toBe(0);
+    expect(options.cancelId).toBe(0);
+
+    showMessageBox.mockClear();
+    await invoke({ dictateIntoFocusedApp: false });
+    expect(storedSettings['dictateIntoFocusedApp']).toBe(false);
+    expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('does not turn dictation into other apps on for a page alone', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    await invoke({ dictateIntoFocusedApp: true });
+    expect(storedSettings['dictateIntoFocusedApp']).not.toBe(true);
   });
 
   it('re-registers the global shortcuts when one changes', async () => {

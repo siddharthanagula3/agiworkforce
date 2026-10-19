@@ -118,6 +118,21 @@ async function answerFor(
   );
 }
 
+/**
+ * Asks about one app before a step reaches it. Nothing that touches the app may
+ * run unless this returns, so a refusal, a closed prompt or a run stopped while
+ * the prompt was open all leave the app untouched.
+ */
+export async function gateApplication(
+  window: BrowserWindow | null,
+  command: string,
+  app: ScreenApplication,
+): Promise<void> {
+  const state = await answerFor(window, app, scopeFor(app));
+  await confirmScreenStepStillWanted(command);
+  if (state !== 'granted') throw new ComputerUseRefused('permission', refusal(app));
+}
+
 export async function gateApplications(
   window: BrowserWindow | null,
   command: string,
@@ -132,12 +147,9 @@ export async function gateApplications(
         KEYBOARD_STEPS.has(command) ? OWN_FRONT_REFUSED : OWN_WINDOW_REFUSED,
       );
     }
-    const scope = scopeFor(app);
-    const key = scope.target ?? app.name;
+    const key = scopeFor(app).target ?? app.name;
     if (asked.has(key)) continue;
     asked.add(key);
-    const state = await answerFor(window, app, scope);
-    await confirmScreenStepStillWanted(command);
-    if (state !== 'granted') throw new ComputerUseRefused('permission', refusal(app));
+    await gateApplication(window, command, app);
   }
 }

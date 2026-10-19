@@ -17,6 +17,18 @@ describe('reading a CLI session hand-off link', () => {
     });
   });
 
+  it('reads the link exactly as the CLI writes it for /desktop', () => {
+    expect(
+      readLocalThreadLink(
+        'agiworkforce-cloud://code/local/3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f?folder=%2FUsers%2Fme%2FMy%20Project',
+      ),
+    ).toEqual({
+      kind: 'open',
+      threadId: '3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f',
+      folder: '/Users/me/My Project',
+    });
+  });
+
   it('leaves every other link to the page', () => {
     for (const other of [
       'agiworkforce-cloud://code/home',

@@ -6,6 +6,7 @@ import {
 } from '@agiworkforce/types';
 import {
   DEVICE_STEP_DEFINITIONS,
+  MAX_DEVICE_APPLICATION_LENGTH,
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,
@@ -486,6 +487,19 @@ function parametersFor(
           },
         },
         required: ['ms'],
+      };
+    case 'device_open_app':
+      return {
+        type: 'object',
+        properties: {
+          application: {
+            type: 'string',
+            maxLength: MAX_DEVICE_APPLICATION_LENGTH,
+            description:
+              'The app to open: its name as shown in Applications, such as Notes, or its bundle id, such as com.apple.Notes.',
+          },
+        },
+        required: ['application'],
       };
   }
 }
