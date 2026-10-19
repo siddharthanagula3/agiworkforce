@@ -87,3 +87,4 @@ export * from './plugin-directory';
 export * from './trigger-sources';
 export * from './project-studio';
 export * from './artifact-library';
+export * from './connector-trust-copy';
