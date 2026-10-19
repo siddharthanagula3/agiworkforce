@@ -38,6 +38,8 @@ import { SendButton } from './SendButton';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
+import { FileMentionPalette } from './FileMentionPalette';
+import { trailingMention, withoutTrailingMention } from '@/src/features/chat/utils/fileMention';
 import { MediaModeChip } from './MediaModeChip';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
@@ -265,6 +267,38 @@ export function ChatInput({
     inputRef.current?.focus();
   }, []);
 
+  const addAttachments = useCallback(
+    (items: Attachment[]) => {
+      const { accepted, rejected } = validateAttachments(items, appMode);
+      const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
+      const fresh: Attachment[] = [];
+      const duplicates: string[] = [];
+      for (const item of accepted) {
+        const identity = attachmentIdentity(item);
+        if (seen.has(identity)) {
+          duplicates.push(item.fileName);
+          continue;
+        }
+        seen.add(identity);
+        fresh.push(item);
+      }
+      if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
+      if (duplicates.length > 0) {
+        Alert.alert(
+          duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
+          `${duplicates.join('\n')}\n\nEach file is attached once.`,
+        );
+      }
+      if (rejected.length > 0) {
+        Alert.alert(
+          rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
+          rejected.map((r) => r.reason).join('\n'),
+        );
+      }
+    },
+    [appMode],
+  );
+
   useImperativeHandle(
     attachRef,
     () => ({
@@ -274,36 +308,9 @@ export function ChatInput({
       prefillText: (starter: string) => {
         setText((current) => (current.trim() ? current : starter));
       },
-      addAttachments: (items: Attachment[]) => {
-        const { accepted, rejected } = validateAttachments(items, appMode);
-        const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
-        const fresh: Attachment[] = [];
-        const duplicates: string[] = [];
-        for (const item of accepted) {
-          const identity = attachmentIdentity(item);
-          if (seen.has(identity)) {
-            duplicates.push(item.fileName);
-            continue;
-          }
-          seen.add(identity);
-          fresh.push(item);
-        }
-        if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
-        if (duplicates.length > 0) {
-          Alert.alert(
-            duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
-            `${duplicates.join('\n')}\n\nEach file is attached once.`,
-          );
-        }
-        if (rejected.length > 0) {
-          Alert.alert(
-            rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
-            rejected.map((r) => r.reason).join('\n'),
-          );
-        }
-      },
+      addAttachments,
     }),
-    [appMode],
+    [addAttachments],
   );
 
   useLayoutEffect(() => {
@@ -704,6 +711,7 @@ ${current}`
   const stacked = isMultiline && !isRecording && !isTranscribing;
 
   const showCommandPalette = text.startsWith('/') && !isStreaming;
+  const mentionQuery = appMode === 'cloud' && isClerkSignedIn ? trailingMention(text) : null;
 
   const availableCommands: ChatCommand[] = [
     ...(FEATURES.imageGen ? (['/image'] as const) : []),
@@ -882,6 +890,16 @@ ${current}`
         >
           {`${selectedModelMetadata?.name ?? modelName} cannot read images. Choose a model that can, or remove the images before sending.`}
         </Text>
+      ) : null}
+
+      {mentionQuery !== null ? (
+        <FileMentionPalette
+          query={mentionQuery}
+          onSelect={(attachment) => {
+            setText((current) => withoutTrailingMention(current));
+            addAttachments([attachment]);
+          }}
+        />
       ) : null}
 
       <CommandPalette
