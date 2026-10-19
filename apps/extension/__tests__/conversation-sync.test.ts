@@ -64,7 +64,9 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
 
 import {
   flushConversation,
+  flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
+  scheduleConversationSync,
   sweepConversationSync,
   CLOUD_SYNC_TOMBSTONE_KEY,
 } from '../src/features/cloud-bridge/conversationSync';
@@ -284,6 +286,22 @@ describe('conversation cloud sync', () => {
     await flushConversation(OWNER, 'conv-stream', false);
     expect(messagePosts()).toHaveLength(2);
     expect(messagePosts()[1]!.body['content']).toBe('part11');
+  });
+
+  it('saves the question of a bound chat before its turn starts, without the live answer', async () => {
+    await upsertConversation(OWNER, 'conv-bound', cloudMessages(4_000));
+    await flushConversation(OWNER, 'conv-bound');
+    requests.length = 0;
+    await upsertConversation(OWNER, 'conv-bound', [
+      ...cloudMessages(4_000),
+      { role: 'user', content: 'next question', timestamp: 5_000, runtime: 'managed-cloud' },
+      { role: 'assistant', content: '', timestamp: 5_001, runtime: 'managed-cloud' },
+    ]);
+    scheduleConversationSync(OWNER, 'conv-bound', true);
+
+    await flushQuestionBeforeTurn(OWNER, 'conv-bound');
+
+    expect(messagePosts().map((post) => post.body['content'])).toEqual(['next question']);
   });
 
   it('persists the create response workspace and pins every later write to it', async () => {

@@ -4,6 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { actionNeedsApproval } from '../src/features/computer-use/askBeforeActing';
+import { readsWithoutActing } from '../src/features/computer-use/approvalPolicy';
+import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
 import { APPROVAL_TIMEOUT_MS } from '../src/features/computer-use/agentLoop';
 import {
@@ -77,6 +80,12 @@ function harness() {
     chrome: chromeMock,
     APPROVAL_TIMEOUT_MS,
     askBeforeActing: false,
+    siteTools: [],
+    allowedForTask: new Set<string>(),
+    readsWithoutActing,
+    actionNeedsApproval,
+    normalizeApprovedSiteOrigin,
+    originApprovedForBrowserControl: async () => false,
     computerUseRuns: { isCurrent: () => state.current },
     assertComputerUseOwnership: async () => {
       if (!state.current) throw new Error('Run ownership changed.');

@@ -91,7 +91,10 @@ import {
   type MemoryWriteResult,
 } from './background/memory-bridge';
 import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agentLoop';
-import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
+import {
+  ASK_BEFORE_ACTING_KEY,
+  actionNeedsApproval,
+} from './features/computer-use/askBeforeActing';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -115,10 +118,12 @@ import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
+  originApprovedForBrowserControl,
   readBrowserControlConsent,
   removeBrowserControlHostPermission,
   sanitizeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
+import { normalizeApprovedSiteOrigin } from './features/options/site-allowlist';
 import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
@@ -219,6 +224,7 @@ import {
 import {
   abortConversationSyncForOwnerChange,
   ensureCloudConversation,
+  flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
   scheduleConversationSync,
   sweepConversationSync,
@@ -5117,11 +5123,18 @@ async function handleMessageAsync(
         signal: AbortSignal | undefined,
         requirement: ActionApprovalRequirement,
       ): Promise<boolean> => {
-        if (!requirement.alwaysAsk) {
-          if (!askBeforeActing || allowedForTask.has(toolName)) return true;
-          const siteTool = siteTools.find((tool) => tool.name === toolName);
-          if (readsWithoutActing(toolName, siteTool?.effect)) return true;
-        }
+        const siteTool = siteTools.find((tool) => tool.name === toolName);
+        const needsApproval = await actionNeedsApproval({
+          alwaysAsk: requirement.alwaysAsk,
+          askBeforeActing,
+          allowedForTask: allowedForTask.has(toolName),
+          readsOnly: readsWithoutActing(toolName, siteTool?.effect),
+          siteApproved: async () => {
+            const origin = normalizeApprovedSiteOrigin((await chrome.tabs.get(lease.tabId)).url);
+            return origin !== null && originApprovedForBrowserControl(origin);
+          },
+        });
+        if (!needsApproval) return true;
         {
           const requestId = `cu_approve_${crypto.randomUUID()}`;
           let uploadBinding: BrowserUploadBinding | null = null;
@@ -6117,6 +6130,9 @@ async function handleChatMessage(
     return result;
   }
   const owner = credential.owner;
+  if (message.conversationId && message.historyConversationId) {
+    await flushQuestionBeforeTurn(owner, message.historyConversationId);
+  }
   const broadcastChunk = (
     text: string,
     done: boolean,

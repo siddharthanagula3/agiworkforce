@@ -161,6 +161,7 @@ function harness() {
     describeCancellationReason: (reason: unknown) =>
       reason === 'user_stopped' ? 'Browser task stopped.' : null,
     saveMessages,
+    saveMessagesNow: vi.fn(async () => saveMessages()),
     renderMessages: vi.fn(),
     updateSendButton: vi.fn(),
     updateContextButton: vi.fn(),

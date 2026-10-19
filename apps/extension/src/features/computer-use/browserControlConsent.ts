@@ -1,5 +1,6 @@
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
 import { hasOneTimeSiteGrant } from './oneTimeSiteGrants';
+import { readUserSiteAllowlist } from '../site-policy/store';
 
 export const BROWSER_CONTROL_CONSENT_STORAGE_KEY = 'agi_cu_browser_control_consent';
 
@@ -131,6 +132,18 @@ export async function hasBrowserControlConsent(
     if (!granted.includes(normalized)) return false;
   }
   return hasBrowserControlHostPermission(normalized, permissions);
+}
+
+export async function originApprovedForBrowserControl(
+  origin: string,
+  readAllowlist: () => Promise<string[]> = readUserSiteAllowlist,
+  consent: (origin: string) => Promise<boolean> = hasBrowserControlConsent,
+): Promise<boolean> {
+  const [allowlist, controlled] = await Promise.all([
+    readAllowlist(),
+    consent(origin).catch(() => false),
+  ]);
+  return allowlist.includes(origin) && controlled;
 }
 
 export async function grantBrowserControlConsent(

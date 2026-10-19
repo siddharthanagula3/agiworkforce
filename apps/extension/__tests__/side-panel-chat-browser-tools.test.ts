@@ -11,6 +11,7 @@ import {
   sameManagedCloudOwner,
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
+import { originApprovedForBrowserControl } from '../src/features/computer-use/browserControlConsent';
 import {
   CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
@@ -149,6 +150,12 @@ function harness(
     hasBrowserControlHostPermission: vi.fn(async () => hostPermission),
     hasBrowserControlConsent: vi.fn(async () => options.approved === true),
     readUserSiteAllowlist: vi.fn(async () => [...allowlist]),
+    originApprovedForBrowserControl: (origin: string) =>
+      originApprovedForBrowserControl(
+        origin,
+        async () => [...allowlist],
+        async () => options.approved === true,
+      ),
     loadSitePolicyInput: vi.fn(async () => ({
       admin: options.admin ?? null,
       userAllowlist: [...allowlist],

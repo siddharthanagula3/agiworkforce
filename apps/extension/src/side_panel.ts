@@ -135,8 +135,8 @@ import {
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   grantBrowserControlConsent,
-  hasBrowserControlConsent,
   hasBrowserControlHostPermission,
+  originApprovedForBrowserControl,
   removeBrowserControlHostPermission,
   requestBrowserControlHostPermission,
 } from './features/computer-use/browserControlConsent';
@@ -1163,15 +1163,19 @@ function persistMessages(): Promise<void> {
   });
 }
 
-function saveMessages(): void {
-  if (_ctx.temporaryChat) return;
-  void persistMessages()
+function saveMessagesNow(): Promise<void> {
+  if (_ctx.temporaryChat) return Promise.resolve();
+  return persistMessages()
     .then(() => {
       requestCloudConversationSync();
     })
     .catch((err) => {
       console.warn('[SidePanel] Failed to persist messages:', err);
     });
+}
+
+function saveMessages(): void {
+  void saveMessagesNow();
 }
 
 function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
@@ -6967,14 +6971,6 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
   return hasBrowserControlHostPermission(origin).catch(() => false);
 }
 
-async function originApprovedForBrowserControl(origin: string): Promise<boolean> {
-  const [allowlist, controlled] = await Promise.all([
-    readUserSiteAllowlist(),
-    hasBrowserControlConsent(origin).catch(() => false),
-  ]);
-  return allowlist.includes(origin) && controlled;
-}
-
 async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
   let tab: chrome.tabs.Tab | undefined;
   try {
@@ -7850,11 +7846,10 @@ function postTurn(
     });
   }
   lastStreamPersistAtMs = Date.now();
-  saveMessages();
-
-  void (
-    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined)
-  ).then((browserToolTier) => {
+  void Promise.all([
+    saveMessagesNow(),
+    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined),
+  ]).then(([, browserToolTier]) => {
     if (_ctx.currentStreamId !== streamId) return;
     sendChatTurn(streamId, owner, payload, history, quickMode, memoryCommand, browserToolTier);
   });
@@ -11739,13 +11734,10 @@ function buildUI(): void {
       }
       return;
     }
-    const [allowlist, controlled] = await Promise.all([
-      readUserSiteAllowlist(),
-      hasBrowserControlConsent(origin).catch(() => false),
-    ]);
+    const approved = await originApprovedForBrowserControl(origin);
     if (generation !== computerUseSiteGeneration) return;
     cuPanel.setTaskSite({
-      kind: allowlist.includes(origin) && controlled ? 'ready' : 'needs-approval',
+      kind: approved ? 'ready' : 'needs-approval',
       origin,
     });
   }
