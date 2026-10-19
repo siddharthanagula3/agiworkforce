@@ -1149,6 +1149,12 @@ const ChatComposerNewComponent = ({
     }
   }, [billingPolicyReady, canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
 
+  const defaultWorkMode = useSettingsStore((s) => s.defaultWorkMode);
+  useEffect(() => {
+    if (!emptyState || storedComposerToggles !== undefined || !canUseAgiWork) return;
+    if (defaultWorkMode !== 'chat') setWorkMode(defaultWorkMode);
+  }, [emptyState, storedComposerToggles, canUseAgiWork, defaultWorkMode, setWorkMode]);
+
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
 
   // Image generation mode state (imageMode itself is per-conversation, above)

@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { FollowUpQueueMode } from '@agiworkforce/unified-chat';
+import type { CloudWorkMode } from '@agiworkforce/types';
 
 export type ChatTextSize = 'small' | 'default' | 'large';
 
@@ -59,6 +60,7 @@ interface SettingsState {
   codeFollowUpQueueMode: FollowUpQueueMode;
   codeBlockWrap: boolean;
   sendWithEnter: boolean;
+  defaultWorkMode: CloudWorkMode;
   followUpSuggestionsEnabled: boolean;
   /**
    * A follow-up sent while a cloud chat reply runs. Steer stops the reply, so
@@ -81,6 +83,7 @@ interface SettingsState {
   setCodeFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
   setSendWithEnter: (enabled: boolean) => void;
+  setDefaultWorkMode: (mode: CloudWorkMode) => void;
   setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
   setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
   setAccentColor: (accent: AccentColor) => void;
@@ -104,6 +107,7 @@ export const useSettingsStore = create<SettingsState>()(
       codeFollowUpQueueMode: 'steer',
       codeBlockWrap: false,
       sendWithEnter: true,
+      defaultWorkMode: 'chat',
       followUpSuggestionsEnabled: true,
       followUpBehavior: 'queue',
       accentColor: 'default',
@@ -136,6 +140,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
       setSendWithEnter: (sendWithEnter) => set({ sendWithEnter }),
+      setDefaultWorkMode: (defaultWorkMode) => set({ defaultWorkMode }),
       setFollowUpSuggestionsEnabled: (enabled) => set({ followUpSuggestionsEnabled: enabled }),
       setFollowUpBehavior: (followUpBehavior) => set({ followUpBehavior }),
       setAccentColor: (accent) => set({ accentColor: accent }),

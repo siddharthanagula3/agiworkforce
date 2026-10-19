@@ -517,6 +517,36 @@ describe('ChatComposerNew', () => {
     expect(onSendMock).not.toHaveBeenCalled();
   });
 
+  it('starts a new chat in the mode chosen in settings, and leaves an open chat alone', () => {
+    useSettingsStore.getState().setDefaultWorkMode('agiwork');
+    try {
+      const { unmount } = render(
+        <ChatComposerNew
+          onSend={vi.fn()}
+          emptyState
+          projectPicker={{
+            projects: [{ id: 'proj-2', name: 'Mobile App' }],
+            activeProjectId: null,
+            onSelectProject: vi.fn(),
+            onCreateProject: vi.fn(),
+          }}
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      unmount();
+
+      render(<ChatComposerNew onSend={vi.fn()} conversationId="default-mode-open-chat" />);
+      expect(useChatStore.getState().getComposerToggles('default-mode-open-chat').workMode).toBe(
+        'chat',
+      );
+    } finally {
+      useSettingsStore.getState().setDefaultWorkMode('chat');
+    }
+  });
+
   it('AGI Work send carries workMode + the selected projectId in meta (connected payload)', async () => {
     const onSendMock = vi.fn();
     render(

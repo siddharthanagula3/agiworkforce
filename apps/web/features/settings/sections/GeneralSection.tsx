@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Switch } from '@agiworkforce/ui';
+import type { CloudWorkMode } from '@agiworkforce/types';
+import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
@@ -966,6 +968,7 @@ export function GeneralSection() {
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
           <SendWithEnterRow />
+          <DefaultWorkModeRow />
           <FollowUpSuggestionsRow />
           <FollowUpBehaviorRow />
           <CodeFollowUpModeRow />
@@ -1384,6 +1387,25 @@ function CodeBlockWrapRow() {
         aria-label="Wrap long code lines"
         onCheckedChange={setCodeBlockWrap}
       />
+    </Row>
+  );
+}
+
+function DefaultWorkModeRow() {
+  const defaultWorkMode = useSettingsStore((state) => state.defaultWorkMode);
+  const setDefaultWorkMode = useSettingsStore((state) => state.setDefaultWorkMode);
+
+  return (
+    <Row label="New chats start in" hint={planCapabilityEntitlementHint('agi_work')}>
+      <select
+        value={defaultWorkMode}
+        onChange={(event) => setDefaultWorkMode(event.target.value as CloudWorkMode)}
+        aria-label="New chats start in"
+        className={SELECT_CLASS}
+      >
+        <option value="chat">Chat</option>
+        <option value="agiwork">AGI Work</option>
+      </select>
     </Row>
   );
 }
