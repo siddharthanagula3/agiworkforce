@@ -352,6 +352,32 @@ pub async fn run_repl(
                                         }
                                     }
                                 }
+                                ("recommend" | "suggest", Ok(_home)) => {
+                                    let privacy = crate::account_privacy_mode();
+                                    let signals = crate::context::project_signals(
+                                        &std::env::current_dir()
+                                            .unwrap_or_default()
+                                            .to_string_lossy(),
+                                    );
+                                    let found = match crate::cloud::CloudClient::connect(privacy) {
+                                        Ok(client) => {
+                                            crate::cloud::marketplaces::recommend_catalogue(
+                                                &client,
+                                                &signals,
+                                                &crate::installed_plugin_names(),
+                                            )
+                                            .await
+                                        }
+                                        Err(error) => Err(error),
+                                    };
+                                    match found {
+                                        Ok(text) => eprintln!("{text}"),
+                                        Err(e) => output::print_error(&format!(
+                                            "Plugin suggestions failed: {}",
+                                            e
+                                        )),
+                                    }
+                                }
                                 ("list", Ok(home)) => {
                                     let registry =
                                         crate::marketplace::Marketplace::list_installed(&home);
@@ -367,7 +393,7 @@ pub async fn run_repl(
                                 }
                                 _ => {
                                     output::print_info(
-                                        "Usage: /marketplace search <query> | /marketplace list",
+                                        "Usage: /marketplace search <query> | /marketplace recommend | /marketplace list",
                                     );
                                 }
                             }

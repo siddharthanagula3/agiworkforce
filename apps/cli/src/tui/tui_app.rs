@@ -5106,7 +5106,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/plugin" | "/plugins" if crate::installs::is_plugin_action(arg) =>
         {
             SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
-                "Usage: /plugins enable|disable|update|remove <name>".to_string()
+                "Usage: /plugins enable|disable|update|remove <name>, or /plugins configure <name> [KEY=VALUE ...]".to_string()
             }))
         }
 
