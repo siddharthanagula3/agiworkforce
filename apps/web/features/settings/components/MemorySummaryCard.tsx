@@ -8,6 +8,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { apiErrorMessage } from '@/lib/client/api-error-message';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const LOAD_FAILED = 'Your memory summary could not be loaded.';
@@ -20,13 +21,7 @@ type CardState =
 
 async function readResponse(response: Response, fallback: string): Promise<MemorySummaryResponse> {
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message =
-      body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
-        ? (body as { error: string }).error
-        : fallback;
-    throw new Error(message);
-  }
+  if (!response.ok) throw new Error(apiErrorMessage(body, fallback));
   return MemorySummaryResponseSchema.parse(body);
 }
 

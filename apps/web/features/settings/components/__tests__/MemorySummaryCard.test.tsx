@@ -83,7 +83,9 @@ describe('MemorySummaryCard', () => {
           generatedAt: null,
         }),
       )
-      .mockResolvedValueOnce(jsonResponse({ error: 'Busy, try later.' }, 503));
+      .mockResolvedValueOnce(
+        jsonResponse({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Busy, try later.' } }, 503),
+      );
     const user = userEvent.setup();
 
     render(<MemorySummaryCard memoryCount={2} />);

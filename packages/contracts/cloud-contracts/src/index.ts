@@ -15,6 +15,7 @@ export * from './finance';
 export * from './health-space';
 export * from './library';
 export * from './memory-summary';
+export * from './partner-applications';
 export * from './managed-media';
 export * from './me';
 export * from './client-handshake';
