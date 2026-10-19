@@ -4473,6 +4473,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
         "/team" | "/teams" => SlashResult::RunTeam(arg.to_string()),
         "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
+        "/desktop" | "/app" => SlashResult::SystemMessage(crate::cloud::open_in_desktop(&app.session)),
         "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
@@ -8916,6 +8917,9 @@ mod tests {
                 .copied(),
         );
         names.extend([
+            "upgrade",
+            "desktop",
+            "app",
             "exit",
             "quit",
             "q",

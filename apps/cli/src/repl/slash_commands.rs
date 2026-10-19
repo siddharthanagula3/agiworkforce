@@ -74,6 +74,11 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    if cmd == "/desktop" || cmd == "/app" {
+        eprintln!("{}", crate::cloud::open_in_desktop(session));
+        return SlashResult::Handled;
+    }
+
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
             persist_shared_ui_config(cmd.as_str(), arg, session, config);
@@ -672,6 +677,9 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
     names.extend([
         "agents",
         "agent",
+        "upgrade",
+        "desktop",
+        "app",
         "exit",
         "quit",
         "q",
@@ -763,6 +771,17 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
             if let Some(choice) = crate::tui::widgets::theme_picker::ThemeChoice::from_arg(arg) {
                 if let Err(err) = config.persist_theme_project(choice.slug()) {
                     output::print_warn(&format!("Failed to persist theme: {err}"));
+                }
+            }
+        }
+        "/effort" => {
+            if let Some(effort) = session.effort.filter(|effort| {
+                crate::design_system::Effort::from_config_value(arg) == Some(*effort)
+            }) {
+                if let Err(err) =
+                    config.persist_effort_project(&effort.label().to_ascii_lowercase())
+                {
+                    output::print_warn(&format!("Failed to persist effort: {err}"));
                 }
             }
         }

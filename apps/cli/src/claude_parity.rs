@@ -92,15 +92,12 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "keys",
         "effort",
         "statusline",
-        "desktop",
-        "app",
         "mobile",
         "ios",
         "android",
         "install-github-app",
         "install-slack-app",
         "tag",
-        "upgrade",
         "vim",
         "color",
         "heapdump",
@@ -278,14 +275,9 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(render_release_notes())
         }
         "/keybindings" | "/keys" => ParityCommandResult::SystemMessage(render_keybindings()),
-        "/effort" => ParityCommandResult::SystemMessage(render_effort(arg)),
+        "/effort" => ParityCommandResult::SystemMessage(set_effort(session, arg)),
         "/statusline" => ParityCommandResult::SystemMessage(render_statusline()),
-        "/desktop" | "/app" => {
-            ParityCommandResult::SystemMessage(render_companion("Desktop"))
-        }
-        "/mobile" | "/ios" | "/android" => {
-            ParityCommandResult::SystemMessage(render_companion("Mobile"))
-        }
+        "/mobile" | "/ios" | "/android" => ParityCommandResult::SystemMessage(render_mobile()),
         "/connectors" => ParityCommandResult::SystemMessage(
             match crate::tier_cache::capability_refusal(
                 crate::tier_cache::CONNECTORS_CAPABILITY,
@@ -304,7 +296,6 @@ pub fn handle_shared_command(
         }
         "/install-slack-app" => ParityCommandResult::SystemMessage(render_install_app("Slack")),
         "/tag" => ParityCommandResult::SystemMessage(handle_tag(session, arg)),
-        "/upgrade" => ParityCommandResult::SystemMessage(render_upgrade()),
         "/vim" => ParityCommandResult::SystemMessage(render_vim(arg)),
         "/color" => ParityCommandResult::SystemMessage(
             "Color command recognized. Theme color is controlled by /theme; prompt accent persistence is coming through shared settings.".into(),
@@ -796,12 +787,6 @@ pub fn render_install_app(app_name: &str) -> String {
     }
 }
 
-pub fn render_companion(surface: &str) -> String {
-    format!(
-        "{surface} companion\n  AGI CLI is the source of truth for tools, sessions, MCP, skills, and permissions.\n  Companion surfaces should reuse the CLI engine contracts exposed by this crate."
-    )
-}
-
 fn pricing_url() -> String {
     format!(
         "{}/pricing",
@@ -829,10 +814,6 @@ pub fn open_upgrade_page() -> String {
         },
         &url,
     )
-}
-
-pub fn render_upgrade() -> String {
-    "Upgrade options\n  Local/BYOK: use your own provider keys.\n  Managed cloud: authenticate with /login.\n  Extra usage: /extra-usage".to_string()
 }
 
 pub fn render_vim(arg: &str) -> String {
@@ -1647,14 +1628,32 @@ pub fn render_remote_env() -> String {
     lines.join("\n")
 }
 
-pub fn render_effort(arg: &str) -> String {
+/// `/effort` in the line-based REPL: the same levels the full-screen view's
+/// picker sets, applied from the next turn.
+pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
+    let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
-        return "Effort: use /effort low | medium | high | max in TUI mode, or pass the model-specific reasoning option through config when available.".to_string();
+        return format!(
+            "Effort is {}. Change it with /effort low | medium | high | max.",
+            current.label()
+        );
     }
-    format!(
-        "Effort level `{}` recognized. The REPL will use the configured model defaults; TUI mode applies effort interactively.",
-        arg.trim()
-    )
+    let Some(effort) = crate::design_system::Effort::from_config_value(arg) else {
+        return format!(
+            "Unknown effort level '{}'. Use: low | medium | high | max",
+            arg.trim()
+        );
+    };
+    session.effort = Some(effort);
+    let note = if matches!(
+        crate::model_catalog::effort_support(&session.model),
+        crate::model_catalog::EffortSupport::Unsupported
+    ) {
+        ". This model has no effort control, so it applies once you switch to one that does"
+    } else {
+        ""
+    };
+    format!("Effort set to {}{note}", effort.label())
 }
 
 pub fn render_statusline() -> String {
@@ -1734,13 +1733,33 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
 }
 
 pub fn render_ide() -> String {
-    [
-        "IDE integration",
-        "  Use the VS Code extension for editor context, selections, diagnostics, and chat.",
-        "  CLI engine compatibility: slash commands, tools, permissions, and session state should stay shared.",
-        "  Start from the extension package in apps/extension-vscode.",
-    ]
-    .join("\n")
+    format!(
+        "AGI Workforce for VS Code runs on this CLI: it signs in with the same account, and the sessions you start in a folder here are listed in its history for that folder.\nGet it at {}",
+        product_page(VSCODE_PAGE)
+    )
+}
+
+const VSCODE_PAGE: &str = "/vscode-extension";
+const MOBILE_PAGE: &str = "/mobile";
+
+fn product_page(path: &str) -> String {
+    format!(
+        "{}{path}",
+        crate::tier_cache::default_api_base().trim_end_matches('/')
+    )
+}
+
+/// `/mobile`: the phone app's page as a code to scan, as Claude Code's
+/// `/mobile` does. Drawn without colour, so it reads in the full-screen view
+/// too, which shows text but not terminal colours.
+pub fn render_mobile() -> String {
+    let url = product_page(MOBILE_PAGE);
+    let scan = crate::remote_control::render_qr(&url, false)
+        .map(|qr| format!("Scan this with your phone's camera, or open {url}\n{qr}"))
+        .unwrap_or_else(|| format!("Open {url} on your phone."));
+    format!(
+        "AGI Workforce for iPhone and Android.\n{scan}\nOnce it is installed and signed in, run `agi remote-control` in this folder to let it follow, steer and approve the sessions here."
+    )
 }
 
 pub fn render_doctor(session: &AgentSession) -> String {
@@ -2761,6 +2780,57 @@ mod tests {
     }
 
     #[test]
+    fn effort_in_the_repl_changes_the_next_turn() {
+        let mut session = test_session();
+        session.effort = None;
+
+        let reply = set_effort(&mut session, "high");
+
+        assert_eq!(session.effort, Some(crate::design_system::Effort::High));
+        assert!(reply.starts_with("Effort set to High"), "{reply}");
+        assert!(set_effort(&mut session, "").contains("Effort is High"));
+        assert!(set_effort(&mut session, "extreme").starts_with("Unknown effort level"));
+        assert_eq!(session.effort, Some(crate::design_system::Effort::High));
+    }
+
+    #[test]
+    fn companion_commands_speak_to_users_not_developers() {
+        let ide = render_ide();
+        assert!(ide.contains("/vscode-extension"), "{ide}");
+        let mobile = render_mobile();
+        assert!(mobile.contains("/mobile"), "{mobile}");
+        assert!(mobile.contains('\u{2588}'), "{mobile}");
+        for text in [ide, mobile] {
+            assert!(!text.contains("apps/"), "{text}");
+            assert!(!text.contains("contracts"), "{text}");
+        }
+        let mut session = test_session();
+        assert_eq!(
+            handle_shared_command("/upgrade", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+    }
+
+    #[test]
+    fn desktop_handoff_keeps_a_local_conversation_on_this_device() {
+        let _guard = crate::oauth::external_open_spy::lock();
+        crate::oauth::external_open_spy::enable_and_reset();
+        let mut session = test_session();
+        session.privacy_mode = PrivacyMode::Local;
+
+        let reply = crate::cloud::open_in_desktop(&session);
+        let opens = crate::oauth::external_open_spy::open_count();
+        crate::oauth::external_open_spy::disable();
+
+        assert!(reply.contains("stays on this device"), "{reply}");
+        assert_eq!(opens, 0);
+        assert_eq!(
+            handle_shared_command("/desktop", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+    }
+
+    #[test]
     fn shared_runtime_command_names_are_handled() {
         for command in shared_runtime_command_names() {
             let mut session = test_session();
@@ -2834,7 +2904,7 @@ mod tests {
         for (command, expected) in [
             ("/agents", "Agents"),
             ("/chrome", "Chrome integration"),
-            ("/ide", "IDE integration"),
+            ("/ide", "AGI Workforce for VS Code"),
             ("/diagnose", "Diagnostics"),
             ("/changelog", "Release notes"),
             ("/keys", "Keybindings"),
