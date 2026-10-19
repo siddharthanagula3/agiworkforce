@@ -21,7 +21,7 @@ import {
   LOCAL_CODE_SESSION_ACTIVITY_PATH,
   type LocalCodeSessionActivity,
 } from '@agiworkforce/cloud-contracts';
-import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import { CLOUD_CODE_PAGE_ROUTE, REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 import {
   checkDesktopCloudUpdate,
   desktopCloudInstallerDownloadUrl,
@@ -84,7 +84,7 @@ import {
   remoteControlState,
   stopRemoteControl,
 } from './remote/remoteControlService';
-import { getRoot } from './runtime/workspaceStore';
+import { getRoot, listRoots } from './runtime/workspaceStore';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
@@ -134,6 +134,7 @@ import {
 } from './quitGuard';
 import { installAppMenu, installDockMenu } from './appMenu';
 import { readBrowserSignInLink } from './browserSignIn';
+import { approvedRootFor, readLocalThreadLink, type LocalThreadLink } from './localThreadLink';
 import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
 import {
@@ -522,6 +523,12 @@ function deliverDeepLink(url: string): void {
     return;
   }
 
+  const localThread = readLocalThreadLink(url);
+  if (localThread.kind !== 'not-local') {
+    if (localThread.kind === 'open') openLocalThreadFromLink(localThread);
+    return;
+  }
+
   deepLinkQueue = enqueueDeepLink(deepLinkQueue, url, Date.now());
   if (rendererReady()) {
     focusMainWindow();
@@ -530,6 +537,25 @@ function deliverDeepLink(url: string): void {
   }
   saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
   if (appReady) showMainWindow();
+}
+
+const FOLDER_SHOWN = { head: 200, tail: 120 };
+
+function openLocalThreadFromLink(link: Extract<LocalThreadLink, { kind: 'open' }>): void {
+  const rootId = approvedRootFor(link.folder, listRoots());
+  if (rootId !== null) {
+    openLocalSession(rootId, link.threadId);
+    return;
+  }
+  openRoute(CLOUD_CODE_PAGE_ROUTE);
+  void showNativeMessage(mainWindow, {
+    type: 'info',
+    buttons: ['OK'],
+    title: 'Folder not added',
+    message: 'Add this folder in AGI Code first, then open the session again.',
+    detail: `The session runs in ${shownValue(link.folder, FOLDER_SHOWN)}, which this app has not been allowed to open. Choose Add a folder in AGI Code.`,
+    noLink: true,
+  }).catch(() => undefined);
 }
 
 function deepLinkQueuePath(): string {
