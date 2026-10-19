@@ -29,8 +29,14 @@ import {
   researchCountsSummary,
   type ResearchRunState,
 } from '@/src/features/chat/utils/researchRunState';
+import { ResearchPlanOptions } from './ResearchPlanOptions';
+import {
+  defaultResearchPlanChoices,
+  type ResearchPlanChoices,
+} from '@/src/features/chat/utils/researchPlanChoices';
 
-export type ResearchPlanDecision = 'start' | 'cancel' | { steps: ResearchStep[] };
+export type ResearchPlanDecision =
+  'cancel' | { steps?: ResearchStep[]; choices: ResearchPlanChoices };
 
 const MAX_PLAN_STEPS = 6;
 const MAX_STEP_CHARS = 300;
@@ -282,6 +288,7 @@ export function ResearchRunCard({
   const active = isStreaming && isResearchRunActive(research);
   const [pauseRequested, setPauseRequested] = useState(false);
   const [draftSteps, setDraftSteps] = useState<ResearchStep[] | null>(null);
+  const [choices, setChoices] = useState<ResearchPlanChoices>(defaultResearchPlanChoices);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -412,6 +419,7 @@ export function ResearchRunCard({
       ) : null}
 
       {canDecide ? <PlanEditor steps={editedSteps} onChange={setDraftSteps} /> : null}
+      {canDecide ? <ResearchPlanOptions choices={choices} onChange={setChoices} /> : null}
 
       {gaps.length > 0 ? (
         <View
@@ -469,15 +477,16 @@ export function ResearchRunCard({
                 emphasis
                 disabled={isResuming || !planReady}
                 onPress={() =>
-                  onPlanDecision?.(
-                    draftSteps === null
-                      ? 'start'
+                  onPlanDecision?.({
+                    choices,
+                    ...(draftSteps === null
+                      ? {}
                       : {
                           steps: draftSteps
                             .map((step) => ({ ...step, description: step.description.trim() }))
                             .filter((step) => step.description !== ''),
-                        },
-                  )
+                        }),
+                  })
                 }
                 testID="research-plan-approve"
               />
