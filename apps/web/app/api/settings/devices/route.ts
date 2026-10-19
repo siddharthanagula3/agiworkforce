@@ -5,6 +5,7 @@ import {
   devicePresence,
   type DeviceCapabilities,
   type DevicePresence,
+  DEVICE_SURFACES,
   type DeviceSurface,
 } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -147,6 +148,44 @@ const WITH_CREDENTIALS = `with live as (
   .replace('%JOIN_DESKTOP%', 'left join live l on l.device_id = d.id::text')
   .replace('%JOIN_MOBILE%', 'left join live l on l.device_id = m.id::text');
 
+/**
+ * A device-code sign-in (CLI, VS Code) holds a refresh family from the moment it
+ * is redeemed, whether or not the client ever registers or heartbeats. Listing
+ * only registrations left such a credential live and out of the user's reach.
+ */
+const SIGN_IN_GRANTS = `
+  select t.device_id, coalesce(c.device_type, 'cli') as kind, t.device_name as name,
+         min(t.created_at) as registered_at, max(t.created_at) as last_seen_at
+    from device_refresh_tokens t
+    left join device_authorization_codes c on c.device_id = t.device_id
+   where t.user_id = $1
+     and t.device_id is not null
+     and t.revoked_at is null
+     and t.used_at is null
+     and t.expires_at > now()
+     and not exists (
+       select 1 from device_registrations r
+        where r.user_id = $1
+          and (r.id::text = t.device_id or r.credential_family_id = t.family_id::text)
+     )
+     and not exists (select 1 from desktop_devices d where d.user_id = $1 and d.id::text = t.device_id)
+     and not exists (select 1 from mobile_devices m where m.user_id = $1 and m.id::text = t.device_id)
+   group by t.device_id, c.device_type, t.device_name
+   order by max(t.created_at) desc
+   limit ${MAX_DEVICES}`;
+
+interface SignInGrantRow {
+  device_id: string;
+  kind: string;
+  name: string | null;
+  registered_at: string;
+  last_seen_at: string;
+}
+
+function grantKind(kind: string): DeviceSurface {
+  return (DEVICE_SURFACES as readonly string[]).includes(kind) ? (kind as DeviceSurface) : 'cli';
+}
+
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-sessions-list');
   if (rateLimitResponse) return rateLimitResponse;
@@ -157,8 +196,25 @@ async function handleList(request: NextRequest) {
 
   const now = Date.now();
   const registry = await readRegistry(db, userId);
+  const grants = await db.query<SignInGrantRow>(SIGN_IN_GRANTS, [userId]);
   const devices: ListedDevice[] = [
     ...registry.map((row) => fromRegistration(row, now)),
+    ...grants.map((row) => ({
+      id: row.device_id,
+      kind: grantKind(row.kind),
+      name: row.name,
+      platform: null,
+      version: null,
+      lastSeenAt: row.last_seen_at,
+      registeredAt: row.registered_at,
+      hasLiveCredential: true,
+      osVersion: null,
+      architecture: null,
+      shell: null,
+      workspaceId: null,
+      presence: null,
+      capabilities: null,
+    })),
     ...rows.map((row) => ({
       id: row.device_id,
       kind: row.kind,

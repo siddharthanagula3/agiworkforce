@@ -142,6 +142,62 @@ describe('listing linked devices', () => {
   });
 });
 
+describe('device-code sign-ins', () => {
+  const GRANT_ID = '74e6c589-0e63-4b6e-8dca-4504086a728d';
+
+  it('lists a live CLI or VS Code sign-in that never registered as a device', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('device_authorization_codes')
+        ? [
+            {
+              device_id: GRANT_ID,
+              kind: 'vscode',
+              name: 'AGI for VS Code',
+              registered_at: '2026-10-19T00:40:00.000Z',
+              last_seen_at: '2026-10-19T00:50:00.000Z',
+            },
+          ]
+        : [],
+    );
+
+    const response = await GET(req());
+    const body = (await response.json()) as { devices: Array<Record<string, unknown>> };
+
+    expect(body.devices).toContainEqual(
+      expect.objectContaining({
+        id: GRANT_ID,
+        kind: 'vscode',
+        name: 'AGI for VS Code',
+        hasLiveCredential: true,
+      }),
+    );
+  });
+
+  it('revokes such a sign-in by its device id', async () => {
+    const txQuery = vi.fn(async (sql: string) => {
+      if (sql.includes('device_registrations')) return [];
+      if (sql.includes('from desktop_devices where id')) return [{ kind: 'cli', name: 'AGI CLI' }];
+      if (sql.includes('update device_refresh_tokens')) return [{ id: 'row-1' }];
+      return [];
+    });
+    mockQuery.mockResolvedValue([]);
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ query: txQuery, execute: mockExecute }),
+    );
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/devices/x', { method: 'DELETE' }) as never,
+      params(GRANT_ID),
+    );
+
+    expect(response.status).toBe(200);
+    const ownership = txQuery.mock.calls.find(([sql]) => String(sql).includes('from desktop_devices where id'));
+    expect(String(ownership?.[0])).toContain('from device_refresh_tokens t');
+    const revoke = txQuery.mock.calls.find(([sql]) => String(sql).includes('update device_refresh_tokens'));
+    expect(revoke?.[1]).toEqual([GRANT_ID, 'user-1', null]);
+  });
+});
+
 describe('a missing credential link is an error, not a degraded panel', () => {
   it('fails the listing instead of reporting unknown sign-in state', async () => {
     mockQuery.mockRejectedValue(
