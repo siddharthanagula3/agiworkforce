@@ -48,6 +48,7 @@ import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAtt
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StudyModeBanner } from '@/src/features/study/StudyModeBanner';
+import { FollowUpSuggestions } from '@/src/features/chat/components/FollowUpSuggestions';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
@@ -951,6 +952,18 @@ export default function ChatScreen() {
     },
     [forkConversation, id, router, title],
   );
+
+  const lastMessage = conversationMessages[conversationMessages.length - 1];
+  const followUpTarget =
+    conversationExecutionMode === 'cloud' &&
+    !conversation?.temporary &&
+    !isStreaming &&
+    lastMessage?.role === 'assistant' &&
+    !lastMessage.isStreaming &&
+    lastMessage.content.trim().length > 0 &&
+    !lastMessage.metadata?.research
+      ? lastMessage.id
+      : null;
 
   const handleScheduleMessage = useCallback(
     (messageId: string) => {
@@ -1906,6 +1919,15 @@ export default function ChatScreen() {
               conversationExecutionMode === 'cloud' && !conversation?.temporary
                 ? handleScheduleMessage
                 : undefined
+            }
+            footer={
+              followUpTarget && id ? (
+                <FollowUpSuggestions
+                  conversationId={id}
+                  messageId={followUpTarget}
+                  onSelect={(prompt) => void handleSend(prompt)}
+                />
+              ) : null
             }
             onEditImageArea={canEditImages ? handleEditImageArea : undefined}
             onDeleteImageConversation={handleDeleteImageConversation}
