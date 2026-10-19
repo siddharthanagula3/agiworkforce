@@ -22,6 +22,7 @@ import {
   shellQuoteForCurrentPlatform,
 } from '../platform/workspaceFolders';
 import { Config } from '../platform/config';
+import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
 
 const TERMINAL_NAME = 'AGI Workforce';
 
@@ -146,6 +147,15 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
       return false;
     }
     return true;
+  }
+
+  latestOutput(): TerminalOutput | undefined {
+    const terminal = vscode.window.activeTerminal;
+    if (terminal === undefined) return undefined;
+    const captured = this._lastExecutions.get(terminal);
+    if (captured === undefined) return undefined;
+    const transcript = formatTerminalCapture(withCommandLine(captured));
+    return transcript.trim() === '' ? undefined : { terminalName: terminal.name, transcript };
   }
 
   async captureOutput(): Promise<string> {
@@ -310,6 +320,8 @@ export function activateTerminal(
 ): void {
   const provider = new TerminalProvider(secrets);
   context.subscriptions.push(provider);
+  setTerminalOutputSource(provider);
+  context.subscriptions.push({ dispose: () => setTerminalOutputSource(undefined) });
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.runCommand', async () => {

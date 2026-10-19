@@ -2,11 +2,13 @@
 
 import { useEffect } from 'react';
 
+import { setCodeTheme } from '@agiworkforce/unified-chat/shiki-highlighter';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 export function AppearancePreferences() {
   const chatTextSize = useSettingsStore((state) => state.chatTextSize);
   const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
+  const codeTheme = useSettingsStore((state) => state.codeTheme);
   const accentColor = useSettingsStore((state) => state.accentColor);
   const highContrast = useSettingsStore((state) => state.highContrast);
   const motion = useSettingsStore((state) => state.motion);
@@ -23,6 +25,10 @@ export function AppearancePreferences() {
     if (codeBlockWrap) root.setAttribute('data-code-block-wrap', 'on');
     else root.removeAttribute('data-code-block-wrap');
   }, [codeBlockWrap]);
+
+  useEffect(() => {
+    setCodeTheme(codeTheme);
+  }, [codeTheme]);
 
   useEffect(() => {
     const root = document.documentElement;

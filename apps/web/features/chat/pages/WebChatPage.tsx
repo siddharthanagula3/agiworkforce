@@ -16,8 +16,12 @@ import {
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
-import { completionNotificationTitle } from '../lib/completion-notification';
+import {
+  completionNotificationBody,
+  completionNotificationTitle,
+} from '../lib/completion-notification';
 import { scheduleFromPromptHref } from '@/features/schedules/components/schedule-from-turn';
+import { ConversationInstructionsDialog } from '../components/dialogs/ConversationInstructionsDialog';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import {
   freeModelAttachmentKind,
@@ -407,6 +411,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { requestUsageResetReminder } from '@/features/chat/lib/usage-reset-reminder';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
@@ -1613,6 +1618,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     return {
       reason: accountUsageBlock.reason || paywallLimitHeadline(accountUsageBlock.feature),
       ...(resetAt ? { resetAt } : {}),
+      ...(resetAt && !isDesktopHost()
+        ? { onRemindAtReset: () => requestUsageResetReminder(resetAt) }
+        : {}),
       ...(accountUsageBlock.showUpgradeCta === false
         ? {}
         : {
@@ -1982,6 +1990,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
   const studyModeIndicator = <StudyModeIndicator {...studySession} />;
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [instructionsDialogOpen, setInstructionsDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
   // Notification banner: never on an empty conversation (hasMessages gates
@@ -2461,15 +2470,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           // `ensureConversationId` renamed to the server's id.
           const finishedIn = resolvedFreshConvId ?? convId;
           const state = useChatStore.getState();
+          const reply = (state.messagesByConversation[finishedIn] ?? []).at(-1);
           const heading = completionNotificationTitle({
             workMode: options.meta?.workMode,
             research: options.meta?.researchEnabled,
-            reply: (state.messagesByConversation[finishedIn] ?? []).at(-1),
+            reply,
             conversationTitle: state.conversations.find((c) => c.id === finishedIn)?.title,
             untitled: NEW_CHAT_TITLE,
           });
           if (!heading) return;
-          void notifyJobComplete({ title: heading, body: content, conversationId: finishedIn });
+          const body =
+            reply?.role === 'assistant' ? completionNotificationBody(reply.content) : null;
+          void notifyJobComplete({
+            title: heading,
+            ...(body ? { body } : {}),
+            conversationId: finishedIn,
+          });
         };
 
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
@@ -4356,6 +4372,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [updateConversation],
   );
 
+  const handleSaveConversationInstructions = useCallback(
+    (instructions: string) =>
+      displayedConversationId
+        ? updateConversation(displayedConversationId, { instructions: instructions || null })
+        : Promise.resolve(false),
+    [displayedConversationId, updateConversation],
+  );
+
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => {
       void updateConversation(sessionId, { projectId });
@@ -5695,6 +5719,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               steps: completedResearchSteps(research.steps),
               approvedSteps: approved,
               ...(options?.deliverable ? { deliverable: options.deliverable } : {}),
+              ...(options?.answers ? { guidance: options.answers } : {}),
             },
             ...(options &&
             (options.files ||
@@ -6642,6 +6667,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       onPrint={() => void printConversation()}
                       onExport={() => setExportDialogOpen(true)}
                       onShare={() => setShareDialogOpen(true)}
+                      onEditInstructions={
+                        temporaryChatActive ? undefined : () => setInstructionsDialogOpen(true)
+                      }
+                      hasInstructions={Boolean(displayedConversation?.instructions)}
                       // Conversation-level fork. The branch API and its hook were
                       // already live for per-message branching; only this entry
                       // point was missing. Branching from the LAST message
@@ -7119,6 +7148,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ? conversationLoadFailure.message
             : null
         }
+      />
+      <ConversationInstructionsDialog
+        open={instructionsDialogOpen}
+        instructions={displayedConversation?.instructions ?? ''}
+        onOpenChange={setInstructionsDialogOpen}
+        onSave={handleSaveConversationInstructions}
       />
       <EnhancedExportDialog
         open={exportDialogOpen}

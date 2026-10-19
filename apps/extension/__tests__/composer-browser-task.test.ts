@@ -7,7 +7,7 @@ import { classifyTaskLocally } from '@agiworkforce/routing';
 import type { ComputerUseCommandResponse } from '../src/types';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
-import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
+import { getModelMetadataById, isAutoModeModelId, modelsCatalog } from '@agiworkforce/types';
 import {
   applyBrowserActivityEvent,
   pageContextStillDescribes,
@@ -154,6 +154,8 @@ function harness() {
     isAutoModeModelId,
     getModelMetadataById,
     activeBrowserToolTier: vi.fn(async () => 'read'),
+    hasHistoryPermission: vi.fn(async () => false),
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     activePageSource: { tabId: 7, url: 'https://example.com/form' },
     sameManagedCloudOwner,
     pageContextStillDescribes,
@@ -806,6 +808,42 @@ describe('browser tasks from the real composer functions', () => {
       }),
       expect.any(Function),
     );
+    expect(h.send.mock.calls.at(-1)?.[0]).not.toHaveProperty('browserHistory');
     expect(h.dependencies.capturePageContext).not.toHaveBeenCalled();
+  });
+
+  it('offers browser tools to a tool-capable model from another provider, gated on the catalog', async () => {
+    const otherProvider = Object.values(modelsCatalog.models).find(
+      (model) =>
+        model.provider !== 'anthropic' &&
+        model.capabilities.tools === true &&
+        model.capabilities.vision === true &&
+        getModelMetadataById(model.id) !== null,
+    );
+    expect(otherProvider).toBeDefined();
+    const h = harness();
+    h.context.selectedModel = otherProvider!.id;
+    h.api.sendMessage('Click the Update preview button');
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'CHAT_MESSAGE',
+        modelSelection: otherProvider!.id,
+        browserToolTier: 'read',
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it('offers history search with the turn once the user has turned it on', async () => {
+    const h = harness();
+    h.context.selectedModel = 'auto';
+    vi.mocked(h.dependencies.hasHistoryPermission).mockResolvedValue(true);
+    h.api.sendMessage('Find the flight page I looked at yesterday');
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'CHAT_MESSAGE', browserHistory: true }),
+      expect.any(Function),
+    );
   });
 });

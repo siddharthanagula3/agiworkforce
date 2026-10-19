@@ -341,6 +341,99 @@ pub fn detect_ci_providers(cwd: &str) -> Vec<String> {
         .collect()
 }
 
+/// Words that describe what a project is built with: its language, tools,
+/// CI and the packages its manifests depend on, all lowercase.
+pub fn project_signals(cwd: &str) -> BTreeSet<String> {
+    let dir = Path::new(cwd);
+    let mut signals = BTreeSet::new();
+    signals.extend(detect_project_type(cwd).filter(|kind| kind != "make"));
+    signals.extend(detect_project_language(cwd).map(|language| language.to_lowercase()));
+    signals.extend(
+        detect_ci_providers(cwd)
+            .into_iter()
+            .map(|provider| provider.to_lowercase()),
+    );
+    if dir.join("Dockerfile").exists() || COMPOSE_FILES.iter().any(|file| dir.join(file).exists()) {
+        signals.insert("docker".to_string());
+    }
+    for (pattern, signal) in [
+        ("*.tf", "terraform"),
+        ("Chart.yaml", "helm"),
+        ("k8s", "kubernetes"),
+        ("kubernetes", "kubernetes"),
+        ("supabase", "supabase"),
+        ("prisma", "prisma"),
+        ("vercel.json", "vercel"),
+        ("netlify.toml", "netlify"),
+        ("fly.toml", "fly"),
+        ("wrangler.toml", "cloudflare"),
+        ("firebase.json", "firebase"),
+    ] {
+        let found = glob::glob(&dir.join(pattern).display().to_string())
+            .map(|mut paths| paths.next().is_some())
+            .unwrap_or(false);
+        if found {
+            signals.insert(signal.to_string());
+        }
+    }
+    signals.extend(
+        manifest_dependencies(dir)
+            .into_iter()
+            .filter(|name| name.len() >= 3 && !GENERIC_PACKAGE_NAMES.contains(&name.as_str()))
+            .map(|name| match name.as_str() {
+                "next" => "next.js".to_string(),
+                _ => name,
+            }),
+    );
+    signals
+}
+
+const GENERIC_PACKAGE_NAMES: &[&str] = &[
+    "api", "app", "build", "cli", "client", "common", "config", "core", "dev", "lib", "log",
+    "node", "server", "test", "tests", "tools", "types", "ui", "utils", "util",
+];
+
+fn manifest_dependencies(dir: &Path) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    if let Some(package) = std::fs::read_to_string(dir.join("package.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+    {
+        for field in ["dependencies", "devDependencies"] {
+            if let Some(deps) = package.get(field).and_then(serde_json::Value::as_object) {
+                names.extend(deps.keys().map(|name| {
+                    name.rsplit('/')
+                        .next()
+                        .unwrap_or(name)
+                        .trim_start_matches('@')
+                        .to_lowercase()
+                }));
+            }
+        }
+    }
+    if let Some(manifest) = std::fs::read_to_string(dir.join("Cargo.toml"))
+        .ok()
+        .and_then(|raw| raw.parse::<toml::Table>().ok())
+    {
+        for field in ["dependencies", "dev-dependencies"] {
+            if let Some(deps) = manifest.get(field).and_then(toml::Value::as_table) {
+                names.extend(deps.keys().map(|name| name.to_lowercase()));
+            }
+        }
+    }
+    if let Ok(requirements) = std::fs::read_to_string(dir.join("requirements.txt")) {
+        names.extend(requirements.lines().filter_map(|line| {
+            let name: String = line
+                .trim()
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                .collect();
+            (!name.is_empty()).then(|| name.to_lowercase())
+        }));
+    }
+    names
+}
+
 /// Detect monorepo orchestration tool from well-known config files.
 pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
     let dir = Path::new(cwd);
@@ -990,6 +1083,33 @@ impl fmt::Display for SystemContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_project_is_described_by_its_tools_and_packages_without_generic_names() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("package.json"),
+            r#"{"dependencies": {"next": "16", "@prisma/client": "6", "@types/node": "24"}}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("tsconfig.json"), "{}").unwrap();
+        std::fs::write(dir.path().join("main.tf"), "").unwrap();
+        std::fs::create_dir_all(dir.path().join(".github/workflows")).unwrap();
+        let signals = project_signals(&dir.path().to_string_lossy());
+        for expected in [
+            "node",
+            "typescript",
+            "github actions",
+            "terraform",
+            "next.js",
+        ] {
+            assert!(
+                signals.contains(expected),
+                "{expected} missing from {signals:?}"
+            );
+        }
+        assert!(!signals.contains("client"));
+    }
     use std::fs;
 
     /// Helper: create a temp dir, returning its canonical path as a String.

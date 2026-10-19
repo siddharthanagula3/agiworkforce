@@ -83,12 +83,12 @@ impl MemoryManager {
     /// - **Local**: `<cwd>/CLAUDE.md` only when cwd differs from the project
     ///   root (avoids double-loading).
     pub fn new(cwd: &Path) -> Self {
-        // Global, documented home directory is `~/.agiworkforce/`, matching
-        // every other subsystem (config, rules, prompts, etc.).
         let home_dir = dirs::home_dir()
             .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("."));
-        let global_path = home_dir.join(".agiworkforce").join("CLAUDE.md");
+        let global_path = crate::config::CliConfig::config_dir()
+            .unwrap_or_else(|_| home_dir.join(".agiworkforce"))
+            .join("CLAUDE.md");
         let legacy_global_path = home_dir.join(".agi").join("CLAUDE.md");
 
         // Project, reuse the existing project-root discovery
@@ -386,8 +386,8 @@ pub fn load_rules(cwd: &Path) -> Vec<Rule> {
     }
 
     // Global rules (only .md files, skip .rules which are exec-policy files)
-    if let Some(home) = dirs::home_dir() {
-        load_rules_from_dir(&home.join(".agiworkforce").join("rules"), None, &mut rules);
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        load_rules_from_dir(&config_dir.join("rules"), None, &mut rules);
     }
 
     rules

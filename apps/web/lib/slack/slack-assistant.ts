@@ -177,7 +177,7 @@ async function publishOutcome(input: {
     const subject = run.mode === 'task' ? 'task' : 'answer';
     await sendPrivately(
       destination,
-      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject),
+      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject, run.id),
     );
     await recordNotification(scopedDb, {
       userId: run.userId,

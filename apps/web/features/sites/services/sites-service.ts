@@ -191,3 +191,43 @@ export async function clearPublishedSiteSharedData(token: string): Promise<numbe
   }
   return ManagedCloudPublishedArtifactDataClearResponseSchema.parse(await response.json()).cleared;
 }
+
+export interface SiteViewer {
+  email: string;
+  invitedAt: string;
+}
+
+function siteViewersPath(token: string): string {
+  return `${managedCloudPublishedArtifactPath(token)}/viewers`;
+}
+
+async function readViewers(response: Response, fallback: string): Promise<SiteViewer[]> {
+  if (!response.ok) throw await responseError(response, fallback);
+  const body = (await response.json()) as { viewers?: SiteViewer[] };
+  return Array.isArray(body.viewers) ? body.viewers : [];
+}
+
+export async function listSiteViewers(token: string, signal?: AbortSignal): Promise<SiteViewer[]> {
+  const response = await fetch(siteViewersPath(token), {
+    credentials: 'include',
+    ...(signal ? { signal } : {}),
+  });
+  return readViewers(response, 'Failed to load who this site is shared with');
+}
+
+export async function changeSiteViewer(
+  token: string,
+  email: string,
+  action: 'add' | 'remove',
+): Promise<SiteViewer[]> {
+  const response = await fetch(siteViewersPath(token), {
+    method: action === 'add' ? 'POST' : 'DELETE',
+    credentials: 'include',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ email }),
+  });
+  return readViewers(
+    response,
+    action === 'add' ? 'Failed to share with that person' : 'Failed to remove that person',
+  );
+}

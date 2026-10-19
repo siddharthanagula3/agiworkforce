@@ -1,4 +1,12 @@
 import 'server-only';
+import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
+import {
+  agentAllowsImageGeneration,
+  agentAllowsSkill,
+  applyAgentTurnConfig,
+  loadAgentTurnConfig,
+  type AgentTurnConfig,
+} from '@/lib/agents/agent-turn-config';
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -1338,6 +1346,8 @@ export type ProcessedRequest = {
   toolApprovalPolicy?: ToolApprovalPolicy;
   toolLockdown?: boolean;
   connectorsAllowed?: boolean;
+  /** The custom agent this conversation runs as, already checked usable for this turn. */
+  agentTurn?: AgentTurnConfig | null;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   /** Persisted as the turn's requested model only; billing and routing keep `requestedModel`. */
@@ -1707,6 +1717,7 @@ export function composeManagedSystemPreamble(input: {
   customInstructionsPreamble: string | null | undefined;
   projectInstruction?: string | null;
   studyInstruction?: string | null;
+  conversationInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1719,6 +1730,7 @@ export function composeManagedSystemPreamble(input: {
     { layer: 'developer', text: input.studyInstruction ?? '' },
     { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
+    { layer: 'personalized', text: input.conversationInstruction ?? '' },
   ])
     .map((block) => block.text)
     .filter((text) => text.length > 0)
@@ -2798,6 +2810,43 @@ async function planLimitContext(input: {
   }
 }
 
+export const BILLING_PERIOD_NOT_RENEWED_CODE = 'billing_period_not_renewed';
+
+/** True when the plan's paid period has ended and no credit account covers now. */
+export function billingPeriodLapsed(
+  subscription: { current_period_end?: string | Date | null } | undefined,
+  balance: { account_id?: string | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (balance?.account_id) return false;
+  const end = subscription?.current_period_end;
+  if (!end) return false;
+  const endMs = new Date(end).getTime();
+  return Number.isFinite(endMs) && endMs <= now.getTime();
+}
+
+export function handleBillingPeriodLapsed(subscription?: SubscriptionInfo): NextResponse {
+  const ended = subscription?.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString('en-US', {
+        dateStyle: 'medium',
+        timeZone: 'UTC',
+      })
+    : null;
+  const error = new ManagedUsageRequestError(
+    `Your plan's billing period ended${ended ? ` on ${ended}` : ''} and has not renewed yet, so there are no credits to use. If you just renewed, try again in a few minutes; otherwise check Settings > Billing.`,
+    402,
+    BILLING_PERIOD_NOT_RENEWED_CODE,
+  );
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      'insufficient_quota',
+      quotaRecoveryFor(error.code, subscription),
+    ),
+    { status: error.status },
+  );
+}
+
 export function handleCreditError(
   _deductResult: {
     code?: string;
@@ -3457,6 +3506,8 @@ async function processAdmittedRequest(
         projectSources?: ProjectFileCitation[];
         projectHasKnowledgeFiles: boolean;
         studyInstruction: string | null;
+        conversationInstruction: string | null;
+        agentTurn: AgentTurnConfig | null;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
@@ -3489,8 +3540,10 @@ async function processAdmittedRequest(
               project_id: string | null;
               is_temporary: boolean;
               selected_route_id: string | null;
+              instructions: string | null;
+              agent_id: string | null;
             }>(
-              `select c.id, c.project_id, c.is_temporary, c.selected_route_id
+              `select c.id, c.project_id, c.is_temporary, c.selected_route_id, c.instructions, c.agent_id
                    from web_conversations c
                   where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                   limit 1`,
@@ -3557,6 +3610,27 @@ async function processAdmittedRequest(
             }
           }
 
+          let agentTurn: AgentTurnConfig | null = null;
+          if (ownedRows[0].agent_id) {
+            const agentLoad = await loadAgentTurnConfig(scoped.db, userId, ownedRows[0].agent_id);
+            if (!agentLoad.ok) {
+              return {
+                ok: false,
+                response: NextResponse.json(
+                  {
+                    error: {
+                      message: agentLoad.message,
+                      type: 'invalid_request_error',
+                      code: agentLoad.code,
+                    },
+                  },
+                  { status: agentLoad.code === 'agent_turn_limit' ? 429 : 409 },
+                ),
+              };
+            }
+            agentTurn = agentLoad.turn;
+          }
+
           return {
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
@@ -3567,6 +3641,8 @@ async function processAdmittedRequest(
             ...(projectSources.length > 0 ? { projectSources } : {}),
             projectHasKnowledgeFiles,
             studyInstruction,
+            conversationInstruction: conversationInstructionBlock(ownedRows[0].instructions),
+            agentTurn,
           };
         } catch (error) {
           logger.error(
@@ -3597,6 +3673,8 @@ async function processAdmittedRequest(
         projectBlocks: [],
         projectHasKnowledgeFiles: false,
         studyInstruction: null,
+        conversationInstruction: null,
+        agentTurn: null,
       });
 
   const customInstructionsPromise: Promise<CustomInstructionsRead> | null =
@@ -3686,6 +3764,7 @@ async function processAdmittedRequest(
   );
   if (!ownership.ok) return ownership;
   if (!safety.ok) return safety;
+  if (ownership.agentTurn) applyAgentTurnConfig(chatRequest, ownership.agentTurn);
 
   const conversationIsTemporary = ownership.isTemporary;
   const conversationProjectId = ownership.projectId;
@@ -4935,14 +5014,16 @@ async function processAdmittedRequest(
   const loadSkillCatalog = async (
     options: { includeNetworkBackedDirectorySkills?: boolean } = {},
   ): Promise<Skill[]> =>
-    loadSelectableSkillCatalog({
-      db: (await scopedDbPromise).db,
-      userId,
-      loadEnabledPluginIds,
-      loadInstallOverrides: loadSkillInstallOverrides,
-      pluginsAllowed,
-      ...options,
-    });
+    (
+      await loadSelectableSkillCatalog({
+        db: (await scopedDbPromise).db,
+        userId,
+        loadEnabledPluginIds,
+        loadInstallOverrides: loadSkillInstallOverrides,
+        pluginsAllowed,
+        ...options,
+      })
+    ).filter((skill) => agentAllowsSkill(ownership.agentTurn?.config ?? null, skill.name));
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
@@ -5579,6 +5660,10 @@ async function processAdmittedRequest(
       }
     }
 
+    if (billingPeriodLapsed(subscription, existingBalance)) {
+      return { ok: false, response: handleBillingPeriodLapsed(subscription) };
+    }
+
     const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, async () =>
       CreditService.checkAvailableMicrousd(
         (await scopedDbPromise).db,
@@ -5845,13 +5930,14 @@ async function processAdmittedRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
-  const imageTools = imagesSwitchedOff
-    ? []
-    : imageToolsForTurn(chatRequest, {
-        surface: chatSurface,
-        toolsCapable: resolvedModelCaps?.tools ?? true,
-        planTier: subscription.plan_tier,
-      });
+  const imageTools =
+    imagesSwitchedOff || !agentAllowsImageGeneration(ownership.agentTurn)
+      ? []
+      : imageToolsForTurn(chatRequest, {
+          surface: chatSurface,
+          toolsCapable: resolvedModelCaps?.tools ?? true,
+          planTier: subscription.plan_tier,
+        });
   if (imageTools.length > 0) {
     resolvedTools = [...(resolvedTools ?? []), ...imageTools];
   }
@@ -6029,6 +6115,7 @@ async function processAdmittedRequest(
       customInstructionsPreamble,
       projectInstruction: projectInstructionBlock,
       studyInstruction: ownership.studyInstruction,
+      conversationInstruction: ownership.conversationInstruction,
       dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
@@ -6065,6 +6152,15 @@ async function processAdmittedRequest(
       internalMessages.unshift({
         role: 'system',
         content: dynamicTurnInstruction,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
+    if (ownership.conversationInstruction) {
+      internalMessages.unshift({
+        role: 'system',
+        content: ownership.conversationInstruction,
         multimodal_content: undefined,
         tool_calls: undefined,
         tool_call_id: undefined,
@@ -6356,6 +6452,7 @@ async function processAdmittedRequest(
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
     ...(toolLockdown ? { toolLockdown: true } : {}),
     ...(connectorsAllowed === undefined ? {} : { connectorsAllowed }),
+    ...(ownership.agentTurn ? { agentTurn: ownership.agentTurn } : {}),
     requestedModel,
     ...(selectedModel ? { selectedModel } : {}),
     provider,

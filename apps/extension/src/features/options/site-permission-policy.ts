@@ -1,26 +1,31 @@
-import { ASK_BEFORE_ACTING_KEY } from '../computer-use/askBeforeActing';
+import {
+  ASK_BEFORE_ACTING_KEY,
+  browserPermissionModeToStored,
+  readBrowserPermissionMode,
+  type BrowserPermissionMode,
+} from '../computer-use/askBeforeActing';
 
-export type ApprovedSiteDefault = 'ask' | 'run';
+export type ApprovedSiteDefault = BrowserPermissionMode;
 
 export const UNAPPROVED_SITE_DEFAULT_HINT =
-  'Sites you have not approved are blocked: AGI runs no browser automation, in-page assistant or page tools there. Approving a site below is the only way to override that default. Attaching a page to a side-panel message is a separate, explicit action that works on any ordinary site.';
+  'Auto is the default: AGI acts on the sites a task needs and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads. Sites you have not approved are blocked until you allow one for a task, and the in-page assistant and page tools run on approved sites only. Full access runs every action on approved sites without asking.';
 
 export function readApprovedSiteDefault(stored: unknown): ApprovedSiteDefault {
-  return stored === false ? 'run' : 'ask';
+  return readBrowserPermissionMode(stored);
 }
 
-export function approvedSiteDefaultToStored(value: ApprovedSiteDefault): boolean {
-  return value !== 'run';
+export function approvedSiteDefaultToStored(value: ApprovedSiteDefault): boolean | string {
+  return browserPermissionModeToStored(value);
 }
 
 export function parseApprovedSiteDefault(value: unknown): ApprovedSiteDefault {
-  return value === 'run' ? 'run' : 'ask';
+  return value === 'ask' || value === 'full' ? value : 'auto';
 }
 
 export function describeApprovedSiteDefault(value: ApprovedSiteDefault): string {
-  return value === 'run'
-    ? 'Approved sites run without asking.'
-    : 'Approved sites ask before each action.';
+  if (value === 'ask') return 'AGI asks before each action.';
+  if (value === 'full') return 'Approved sites run without asking.';
+  return 'AGI acts and asks only before crucial actions.';
 }
 
 export interface SitePermissionPolicyStorage {
@@ -45,7 +50,7 @@ export function createSitePermissionPolicySection(
   const label = document.createElement('div');
   label.className = 'opt-row-label';
   label.id = 'opt-site-policy-label';
-  label.textContent = 'Default site permission';
+  label.textContent = 'Browser control';
 
   const hint = document.createElement('div');
   hint.className = 'opt-row-hint';
@@ -66,20 +71,21 @@ export function createSitePermissionPolicySection(
   select.setAttribute('aria-labelledby', 'opt-site-policy-label');
   select.setAttribute('aria-describedby', 'opt-site-policy-description');
   for (const [value, optionLabel] of [
-    ['ask', 'Approved sites: ask before each action'],
-    ['run', 'Approved sites: run without asking'],
+    ['auto', 'Auto: ask only before crucial actions'],
+    ['ask', 'Ask before each action'],
+    ['full', 'Approved sites: run without asking'],
   ] as const) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = optionLabel;
     select.appendChild(option);
   }
-  select.value = 'ask';
+  select.value = 'auto';
   select.disabled = true;
 
   element.append(text, select);
 
-  let current: ApprovedSiteDefault = 'ask';
+  let current: ApprovedSiteDefault = 'auto';
 
   const loaded = storage
     .get(ASK_BEFORE_ACTING_KEY)

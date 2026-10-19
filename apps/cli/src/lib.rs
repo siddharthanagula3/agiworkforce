@@ -1900,6 +1900,25 @@ pub fn resolve_destructive_decision(force: bool, interactive: bool) -> Destructi
     }
 }
 
+/// Names of the plugins installed for this folder and account, by directory
+/// and manifest name.
+pub(crate) fn installed_plugin_names() -> Vec<String> {
+    let mut manager = plugins::PluginsManager::new();
+    if manager
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_err()
+    {
+        return Vec::new();
+    }
+    manager
+        .plugins()
+        .iter()
+        .flat_map(|plugin| {
+            std::iter::once(plugin.config_name.clone()).chain(plugin.manifest_name.clone())
+        })
+        .collect()
+}
+
 #[derive(Subcommand, Debug)]
 enum PluginSubcommand {
     /// List installed plugins.
@@ -1930,6 +1949,17 @@ enum PluginSubcommand {
     Info { name: String },
     /// Sign in to the remote connections an installed plugin bundles.
     Login { name: String },
+    /// Show or change an installed plugin's settings. With no KEY=VALUE pairs
+    /// at a terminal, asks for each setting in turn.
+    Configure {
+        name: String,
+        /// Settings to save, as KEY=VALUE.
+        #[arg(value_name = "KEY=VALUE")]
+        values: Vec<String>,
+        /// Settings to clear back to the plugin's default.
+        #[arg(long, value_name = "KEY")]
+        unset: Vec<String>,
+    },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -2227,6 +2257,13 @@ enum MarketplaceSubcommand {
     },
     /// Install a plugin from a marketplace on your account, as `plugin@marketplace`.
     Get { reference: String },
+    /// Show one marketplace plugin before installing it: what it adds, the
+    /// connections it needs and the permissions it asks for.
+    Show { reference: String },
+    /// Suggest plugins from your account's marketplaces that fit the project in
+    /// this folder: its language, tools and the packages it depends on.
+    #[command(alias = "suggest")]
+    Recommend,
     /// Search the plugins on the marketplaces added to your account.
     Search {
         /// Search query.
@@ -2530,6 +2567,55 @@ async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
         .and_then(|index| sessions.get(index))
         .ok_or_else(|| anyhow::anyhow!("No session picked."))?;
     Ok(choice.id.clone())
+}
+
+/// A marketplace plugin on the account, named `plugin@marketplace`.
+async fn marketplace_entry(
+    reference: &str,
+) -> Result<(
+    cloud::CloudClient,
+    cloud::marketplaces::MarketplaceSource,
+    cloud::marketplaces::MarketplaceEntry,
+)> {
+    if let Some(refusal) =
+        tier_cache::capability_refusal(tier_cache::MARKETPLACE_CAPABILITY, "The plugin marketplace")
+    {
+        anyhow::bail!(refusal);
+    }
+    let (plugin, marketplace_name) = reference.rsplit_once('@').ok_or_else(|| {
+        anyhow::anyhow!(
+            "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
+        )
+    })?;
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let sources = cloud::marketplaces::list(&client)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let source = sources
+        .into_iter()
+        .find(|candidate| cloud::marketplaces::source_matches(candidate, marketplace_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                terminal_text::sanitize_terminal_text(marketplace_name)
+            )
+        })?;
+    let entries = cloud::marketplaces::entries(&client)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let entry = entries
+        .into_iter()
+        .find(|entry| entry.source_id == source.id && entry.name.eq_ignore_ascii_case(plugin))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
+                terminal_text::sanitize_terminal_text(&source.name),
+                terminal_text::sanitize_terminal_text(plugin),
+                terminal_text::sanitize_terminal_text(&source.name)
+            )
+        })?;
+    Ok((client, source, entry))
 }
 
 async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
@@ -6432,11 +6518,38 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     fmt_tag,
                                     terminal_text::sanitize_terminal_text(&signature.label())
                                 );
+                                if let Some((manifest, _)) = plugins::load_manifest_for(&path) {
+                                    for (label, value) in plugins::plugin_contents(&manifest) {
+                                        println!(
+                                            "  {label:<10} {}",
+                                            terminal_text::sanitize_terminal_text(&value)
+                                        );
+                                    }
+                                }
                                 let root = path
                                     .file_name()
                                     .and_then(|name| name.to_str())
                                     .unwrap_or_default()
                                     .to_string();
+                                let settings = plugins::load_manifest_for(&path)
+                                    .map(|(manifest, _)| manifest.user_config)
+                                    .unwrap_or_default();
+                                if !settings.is_empty() {
+                                    use std::io::IsTerminal;
+                                    if std::io::stdin().is_terminal()
+                                        && std::io::stdout().is_terminal()
+                                    {
+                                        features::plugins::settings::prompt_all(&root, &settings)?;
+                                    }
+                                    println!(
+                                        "{}",
+                                        terminal_text::sanitize_terminal_text(
+                                            &installs::describe_plugin_settings(
+                                                &root, &settings, false
+                                            )
+                                        )
+                                    );
+                                }
                                 for notice in
                                     installs::install_dependencies(&root).await.notices(&root)
                                 {
@@ -6515,6 +6628,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         }
                         println!(
                             "Every connection in plugin '{shown}' is signed in. The tokens are stored in the OS credential store."
+                        );
+                        Ok(())
+                    }
+                    PluginSubcommand::Configure {
+                        name,
+                        values,
+                        unset,
+                    } => {
+                        use std::io::IsTerminal;
+                        let interactive = values.is_empty()
+                            && unset.is_empty()
+                            && std::io::stdin().is_terminal()
+                            && std::io::stdout().is_terminal();
+                        if interactive {
+                            let (plugin, settings) = installs::plugin_settings(name)?;
+                            if !settings.is_empty() {
+                                features::plugins::settings::prompt_all(&plugin, &settings)?;
+                                println!(
+                                    "{}",
+                                    terminal_text::sanitize_terminal_text(
+                                        &installs::describe_plugin_settings(
+                                            &plugin, &settings, true
+                                        )
+                                    )
+                                );
+                                return Ok(());
+                            }
+                        }
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(&installs::configure_plugin(
+                                name, values, unset
+                            )?)
                         );
                         Ok(())
                     }
@@ -7022,6 +7168,29 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         println!("Removed that marketplace from your account.");
                         Ok(())
                     }
+                    MarketplaceSubcommand::Recommend => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "{}",
+                            cloud::marketplaces::recommend_catalogue(
+                                &client,
+                                &context::project_signals(
+                                    &std::env::current_dir()?.to_string_lossy()
+                                ),
+                                &installed_plugin_names(),
+                            )
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?
+                        );
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Browse { source } => {
                         if let Some(refusal) = tier_cache::capability_refusal(
                             tier_cache::MARKETPLACE_CAPABILITY,
@@ -7066,52 +7235,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         println!("{}", blocks.join("\n\n"));
                         Ok(())
                     }
+                    MarketplaceSubcommand::Show { reference } => {
+                        let (_, source, entry) = marketplace_entry(reference).await?;
+                        println!(
+                            "{}",
+                            cloud::marketplaces::render_entry_detail(&source, &entry)
+                        );
+                        Ok(())
+                    }
                     MarketplaceSubcommand::Get { reference } => {
-                        if let Some(refusal) = tier_cache::capability_refusal(
-                            tier_cache::MARKETPLACE_CAPABILITY,
-                            "The plugin marketplace",
-                        ) {
-                            anyhow::bail!(refusal);
-                        }
-                        let (plugin, marketplace_name) =
-                            reference.rsplit_once('@').ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "Name the plugin as plugin@marketplace; `agi marketplace browse` lists them."
-                                )
-                            })?;
-                        let client = cloud::CloudClient::connect(account_privacy_mode())
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let sources = cloud::marketplaces::list(&client)
-                            .await
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let source = sources
-                            .iter()
-                            .find(|candidate| {
-                                cloud::marketplaces::source_matches(candidate, marketplace_name)
-                            })
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
-                                    terminal_text::sanitize_terminal_text(marketplace_name)
-                                )
-                            })?;
-                        let entries = cloud::marketplaces::entries(&client)
-                            .await
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let entry = entries
-                            .iter()
-                            .find(|entry| {
-                                entry.source_id == source.id
-                                    && entry.name.eq_ignore_ascii_case(plugin)
-                            })
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "{} does not list a plugin named {}. `agi marketplace browse {}` lists them.",
-                                    terminal_text::sanitize_terminal_text(&source.name),
-                                    terminal_text::sanitize_terminal_text(plugin),
-                                    terminal_text::sanitize_terminal_text(&source.name)
-                                )
-                            })?;
+                        let (client, source, entry) = marketplace_entry(reference).await?;
                         let installation = cloud::marketplaces::install(&client, &entry.id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;

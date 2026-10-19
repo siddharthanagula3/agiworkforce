@@ -38,6 +38,11 @@ import {
   GitFork,
   History,
   MousePointerClick,
+  LayoutTemplate,
+  ListChecks,
+  MessageSquare,
+  Palette,
+  PenTool,
   Sparkles,
   TextCursorInput,
 } from 'lucide-react';
@@ -70,6 +75,29 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
+import { StudyDocument } from './study/StudyDocument';
+import { replaceImageInHtml } from './design/design-edits';
+import { ArtifactChangesReview } from './review/ArtifactChangesReview';
+import { BrandKitDialog, SaveTemplateDialog } from './library/LibraryDialogs';
+import { useStudioLibrary, type BrandPayload } from './library/studio-library-client';
+import { buildApplyBrandRequest } from './library/brand-request';
+import { brandThemeMeta } from './presentation/deck-themes';
+import { DesignBriefDialog } from './design/DesignBriefDialog';
+import { buildBriefRevisionRequest, readDesignBrief } from './design/design-brief';
+import {
+  IMAGE_EMBED_FAILURE_COPY,
+  ImageEmbedError,
+  embedImageFile,
+} from './presentation/image-embed';
+import { hasStudyBlocks } from './study/study-set';
+import { ArtifactCommentsPanel, COMMENTS_LABEL } from './comments/ArtifactCommentsPanel';
+import {
+  canCommentOn,
+  useArtifactComments,
+  type ArtifactCommentAnchor,
+} from './comments/artifact-comments-client';
+import { scrollToAnchor, useCommentHighlights } from './comments/use-comment-highlights';
+import commentStyles from './comments/Comments.module.css';
 import { buildArtifactEditRequest } from './artifact-edit-request';
 import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
 import {
@@ -402,6 +430,12 @@ function resolveArtifactImageSource(raw: string): string | null {
 const pendingVersionIndexByArtifactId = new Map<string, number>();
 
 const REQUEST_EDITS_LABEL = 'Request edits';
+const GOOGLE_DOCS_CONNECTION_COPY: Readonly<Record<string, string>> = {
+  google_drive_not_connected: 'Connect Google Drive to save documents to it.',
+  google_drive_reconnect_required: 'Reconnect Google Drive to save documents to it.',
+  google_drive_write_not_granted:
+    'Google Drive is connected for reading only. Reconnect it and allow it to create files.',
+};
 const NARROW_ONLY_ITEM_CLASS = '@[26rem]:hidden';
 
 export function ArtifactPreview({
@@ -433,6 +467,38 @@ export function ArtifactPreview({
   const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
   const renameArtifact = useArtifactsStore((s) => s.renameArtifact);
   const [renaming, setRenaming] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [reviewingKey, setReviewingKey] = useState<string | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [brandApply, setBrandApply] = useState<((meta: Record<string, string>) => void) | null>(
+    null,
+  );
+  const studioLibrary = useStudioLibrary();
+  const savedBrands = useMemo(
+    () =>
+      studioLibrary.items.flatMap((item) =>
+        item.kind === 'brand' ? [{ id: item.id, name: item.name, brand: item.payload }] : [],
+      ),
+    [studioLibrary.items],
+  );
+  const brandThemes = useMemo(
+    () =>
+      savedBrands.map(({ id, name, brand }) => ({
+        id,
+        name,
+        meta: brandThemeMeta({ name, ...brand }),
+      })),
+    [savedBrands],
+  );
+  const loadStudioLibrary = studioLibrary.load;
+  const wantsLibrary =
+    variant === 'panel' && (artifact.type === 'presentation' || artifact.type === 'document');
+  useEffect(() => {
+    if (wantsLibrary) void loadStudioLibrary();
+  }, [wantsLibrary, loadStudioLibrary]);
+  const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
+  const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const editRequested = useArtifactsStore((s) => s.editRequestedArtifactId === artifact.id);
@@ -513,6 +579,8 @@ export function ArtifactPreview({
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const imageReplaceInputRef = useRef<HTMLInputElement>(null);
+  const [imageReplaceTarget, setImageReplaceTarget] = useState<string | null>(null);
 
   // Leaving native fullscreen through Escape or browser UI fires
   // fullscreenchange without going through the button.
@@ -667,6 +735,7 @@ export function ArtifactPreview({
     setEditRequestMode(false);
     setPickerSelection(null);
     setRenaming(false);
+    setCommentDraft(null);
     setRenderError(null);
     setPdfError(false);
     setImageError(false);
@@ -821,7 +890,7 @@ export function ArtifactPreview({
     endSourceEdit();
   }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
 
-  const savePresentation = useCallback(
+  const saveArtifactContent = useCallback(
     (next: string) => {
       const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
       if (!stored || next === stored.content) return;
@@ -1063,6 +1132,50 @@ export function ArtifactPreview({
 
   const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
 
+  const [savingToGoogleDocs, setSavingToGoogleDocs] = useState(false);
+  const handleSaveToGoogleDocs = async () => {
+    if (savingToGoogleDocs) return;
+    setSavingToGoogleDocs(true);
+    try {
+      const response = await fetch('/api/artifacts/export/google-docs', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title: artifact.title || 'Document', content: activeContent }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: { code?: string; message?: string };
+      };
+      if (!response.ok || !body.url) {
+        const code = body.error?.code ?? '';
+        const needsConnection = code in GOOGLE_DOCS_CONNECTION_COPY;
+        toast.error(
+          GOOGLE_DOCS_CONNECTION_COPY[code] ?? 'The document was not saved to Google Docs.',
+          {
+            ...(needsConnection
+              ? {
+                  action: {
+                    label: 'Open connectors',
+                    onClick: () => window.open('/connectors', '_self'),
+                  },
+                }
+              : {}),
+          },
+        );
+        return;
+      }
+      const url = body.url;
+      toast.success('Saved to Google Docs', {
+        action: { label: 'Open', onClick: () => window.open(url, '_blank', 'noopener,noreferrer') },
+      });
+    } catch (error) {
+      toast.error(toUserMessage(error, 'The document was not saved to Google Docs.'));
+    } finally {
+      setSavingToGoogleDocs(false);
+    }
+  };
+
   const handleExportDeckPdf = async () => {
     const title = artifact.title || 'Presentation';
     const pending = toast.loading('Preparing the PDF…');
@@ -1294,14 +1407,23 @@ export function ArtifactPreview({
     </div>
   );
 
-  const renderMarkdownPreview = (containerClassName: string) => (
-    <MarkdownDocumentPreview
-      content={sourceDraft ?? activeContent}
-      className={containerClassName}
-      {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
-      pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
-    />
-  );
+  const renderMarkdownPreview = (containerClassName: string) =>
+    hasStudyBlocks(activeContent) && sourceDraft === null ? (
+      <StudyDocument
+        content={activeContent}
+        className={containerClassName}
+        editable={canEditSource}
+        onSave={saveArtifactContent}
+        {...(onRequestEdits && variant === 'panel' ? { onAsk: onRequestEdits } : {})}
+      />
+    ) : (
+      <MarkdownDocumentPreview
+        content={sourceDraft ?? activeContent}
+        className={containerClassName}
+        {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
+        pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
+      />
+    );
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
@@ -1316,8 +1438,23 @@ export function ArtifactPreview({
           content={activeContent}
           editable={canEditSource && sourceDraft === null}
           handEdited={versionCount > 1}
-          onSave={savePresentation}
+          onSave={saveArtifactContent}
           {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+          brandThemes={brandThemes}
+          {...(canEditSource
+            ? {
+                onCreateBrand: (apply: (meta: Record<string, string>) => void) =>
+                  setBrandApply(() => apply),
+              }
+            : {})}
+          {...(canComment
+            ? {
+                onCommentSlide: (slide: number) => {
+                  setCommentDraft({ kind: 'slide', slide });
+                  setCommentsOpen(true);
+                },
+              }
+            : {})}
         />
       ) : isPresentation ? (
         <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
@@ -1477,6 +1614,32 @@ export function ArtifactPreview({
     [pickerSelection, onRequestEdits, artifact.title, cancelEditRequest],
   );
 
+  const replaceImage = useCallback(
+    async (selector: string, file: File) => {
+      try {
+        const dataUrl = await embedImageFile(file);
+        const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+        const next = stored ? replaceImageInHtml(stored.content, selector, dataUrl) : null;
+        if (!stored || next === null) {
+          toast.error('That image could not be found in the source. Ask for the change instead.');
+          return;
+        }
+        upsertArtifact({ ...stored, content: next, createdAt: new Date() });
+        cancelEditRequest();
+        toast.success('Image replaced. The previous version is in the history.');
+      } catch (error) {
+        toast.error(
+          error instanceof ImageEmbedError
+            ? IMAGE_EMBED_FAILURE_COPY[error.failure]
+            : 'That image could not be placed.',
+        );
+      } finally {
+        setImageReplaceTarget(null);
+      }
+    },
+    [artifact.id, upsertArtifact, cancelEditRequest],
+  );
+
   const startDocumentEdit = useCallback(() => {
     setSourceDraft(activeContent);
     setDraftOrigin('editor');
@@ -1513,6 +1676,7 @@ export function ArtifactPreview({
             : {}),
           ...(handEdited ? { currentContent: current } : {}),
           ...(artifact.language ? { language: artifact.language } : {}),
+          type: artifact.type,
         }),
       );
       if (!sent) toast.error('The change request was not sent. Try again.');
@@ -1526,7 +1690,40 @@ export function ArtifactPreview({
       saveSourceEdit,
       artifact.title,
       artifact.language,
+      artifact.type,
     ],
+  );
+
+  const canComment = variant === 'panel' && isStoredArtifact && canCommentOn(artifact.id);
+  const designBrief = useMemo(
+    () => (artifact.type === 'html' && variant === 'panel' ? readDesignBrief(activeContent) : null),
+    [artifact.type, variant, activeContent],
+  );
+  const openCommentAnchors = useMemo(
+    () =>
+      artifactComments
+        .filter((comment) => !comment.parentId && comment.resolvedAt === null)
+        .map((comment) => comment.anchor),
+    [artifactComments],
+  );
+  const highlightRevision = `${activeContent.length}:${activeTab}:${sourceDraft === null}:${commentsOpen}`;
+  useCommentHighlights(contentAreaRef, canComment ? openCommentAnchors : [], highlightRevision);
+
+  const startComment = useCallback(
+    (selectedText: string, origin: Node) => {
+      const element = origin instanceof Element ? origin : origin.parentElement;
+      const slide = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
+      const context = captureSelectionContext(activeContent, selectedText);
+      setCommentDraft({
+        kind: 'text',
+        quote: context.text,
+        prefix: context.before.slice(-200),
+        suffix: context.after.slice(0, 200),
+        ...(slide !== null && slide !== undefined ? { slide: Number(slide) } : {}),
+      });
+      setCommentsOpen(true);
+    },
+    [activeContent],
   );
 
   const editRequestPicker = useMemo(
@@ -1583,6 +1780,15 @@ export function ArtifactPreview({
         onSelect: startDocumentEdit,
         ariaLabel: 'Edit artifact source',
         testId: 'artifact-edit-source',
+      });
+    }
+    if (canShowChanges && isTextDocument && isLatestVersion && canEditSource) {
+      moreMenuItems.push({
+        id: 'review-changes',
+        label: 'Review changes',
+        icon: ListChecks,
+        onSelect: () => setReviewingKey(changesKey),
+        testId: 'artifact-review-changes',
       });
     }
     if (canShowChanges) {
@@ -1679,6 +1885,54 @@ export function ArtifactPreview({
           icon: Download,
           group: 'Download',
           onSelect: download.run,
+        }),
+      );
+    }
+    if (designBrief && onRequestEdits && isLatestVersion) {
+      moreMenuItems.push({
+        id: 'design-brief',
+        label: 'Design brief',
+        icon: PenTool,
+        testId: 'artifact-design-brief',
+        onSelect: () => setBriefOpen(true),
+      });
+    }
+    if (variant === 'panel' && isStoredArtifact && (isMarkdownDoc || isPresentation)) {
+      moreMenuItems.push({
+        id: 'save-template',
+        label: 'Save as template',
+        icon: LayoutTemplate,
+        group: 'Keep',
+        testId: 'artifact-save-template',
+        onSelect: () => setTemplateDialogOpen(true),
+      });
+    }
+    if (isTextDocument && isMarkdownDoc && variant === 'panel') {
+      moreMenuItems.push({
+        id: 'save-google-docs',
+        label: savingToGoogleDocs ? 'Saving to Google Docs…' : 'Save to Google Docs',
+        icon: FileText,
+        group: 'Keep',
+        disabled: savingToGoogleDocs,
+        testId: 'artifact-save-google-docs',
+        onSelect: () => void handleSaveToGoogleDocs(),
+      });
+    }
+    if (isTextDocument && onRequestEdits && isLatestVersion) {
+      savedBrands.forEach(({ id, name, brand }) =>
+        moreMenuItems.push({
+          id: `apply-brand-${id}`,
+          label: name,
+          icon: Palette,
+          group: 'Apply brand voice',
+          testId: 'artifact-apply-brand',
+          onSelect: () => {
+            if (
+              !onRequestEdits(buildApplyBrandRequest(artifact.title || 'Document', name, brand))
+            ) {
+              toast.error('The change request was not sent. Try again.');
+            }
+          },
         }),
       );
     }
@@ -1944,6 +2198,28 @@ export function ArtifactPreview({
               </Button>
             )}
 
+            {canComment && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCommentsOpen((open) => !open)}
+                className={cn('h-7 px-2', commentsOpen && 'bg-muted text-foreground')}
+                aria-pressed={commentsOpen}
+                aria-label={
+                  openCommentAnchors.length > 0
+                    ? `${COMMENTS_LABEL}, ${openCommentAnchors.length} open`
+                    : COMMENTS_LABEL
+                }
+                title={COMMENTS_LABEL}
+                data-testid="artifact-comments-toggle"
+              >
+                <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                {openCommentAnchors.length > 0 ? (
+                  <span className="ms-1 text-xs tabular-nums">{openCommentAnchors.length}</span>
+                ) : null}
+              </Button>
+            )}
+
             {canRequestEdits && (
               <Button
                 variant="ghost"
@@ -2161,11 +2437,65 @@ export function ArtifactPreview({
 
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
-        <div ref={contentAreaRef} className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
+        <div
+          ref={contentAreaRef}
+          className={cn(
+            'relative flex flex-1 min-h-0 flex-col overflow-hidden',
+            commentStyles['highlightScope'],
+          )}
+        >
+          <input
+            ref={imageReplaceInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            data-testid="artifact-replace-image-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file && imageReplaceTarget) void replaceImage(imageReplaceTarget, file);
+            }}
+          />
+          {reviewingKey === changesKey && previousVersionContent !== undefined && (
+            <div className="absolute inset-0 z-[var(--z-content-raised)] bg-background">
+              <ArtifactChangesReview
+                previous={previousVersionContent}
+                next={activeContent}
+                fromVersion={shownVersionIndex}
+                toVersion={shownVersionIndex + 1}
+                onClose={() => setReviewingKey(null)}
+                onApply={(text) => {
+                  saveArtifactContent(text);
+                  setReviewingKey(null);
+                  toast.success('Saved your choices as a new version');
+                }}
+              />
+            </div>
+          )}
+          {canComment && commentsOpen && (
+            <ArtifactCommentsPanel
+              artifactId={artifact.id}
+              title={artifact.title || 'Artifact'}
+              artifactType={artifact.type}
+              draftAnchor={commentDraft}
+              onDraftDone={() => setCommentDraft(null)}
+              onClose={() => {
+                setCommentsOpen(false);
+                setCommentDraft(null);
+              }}
+              {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+              onLocate={(anchor) => {
+                if (!scrollToAnchor(contentAreaRef.current, anchor)) {
+                  toast.message('That passage is not on screen in this view.');
+                }
+              }}
+            />
+          )}
           {canRequestSelectionEdits && (
             <ArtifactSelectionToolbar
               containerRef={contentAreaRef}
               onRequest={requestSelectionEdit}
+              {...(canComment ? { onComment: startComment } : {})}
             />
           )}
           {editRequestMode && (
@@ -2173,6 +2503,37 @@ export function ArtifactPreview({
               selection={pickerSelection}
               onSubmit={submitEditRequest}
               onCancel={cancelEditRequest}
+              {...(artifact.type === 'html' && canEditSource
+                ? {
+                    onReplaceImage: (selection: ArtifactPickerSelection) => {
+                      setImageReplaceTarget(selection.selector);
+                      imageReplaceInputRef.current?.click();
+                    },
+                  }
+                : {})}
+              {...(canComment
+                ? {
+                    onComment: ({
+                      selection,
+                      x,
+                      y,
+                    }: {
+                      selection: ArtifactPickerSelection;
+                      x: number;
+                      y: number;
+                    }) => {
+                      setCommentDraft({
+                        kind: 'element',
+                        selector: selection.selector.slice(0, 1_000),
+                        text: (selection.text ?? '').slice(0, 2_000),
+                        x,
+                        y,
+                      });
+                      cancelEditRequest();
+                      setCommentsOpen(true);
+                    },
+                  }
+                : {})}
             />
           )}
           {showChanges && previousVersionContent !== undefined && (
@@ -2313,6 +2674,40 @@ export function ArtifactPreview({
               </ScrollArea>
             ))}
         </div>
+        <SaveTemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          kind={isPresentation ? 'deck_template' : 'document_template'}
+          defaultName={artifact.title || 'Template'}
+          title={artifact.title || 'Untitled'}
+          content={activeContent}
+        />
+        <BrandKitDialog
+          open={brandApply !== null}
+          onOpenChange={(open) => {
+            if (!open) setBrandApply(null);
+          }}
+          onSaved={(item) => {
+            if (item.kind === 'brand')
+              brandApply?.(brandThemeMeta({ name: item.name, ...(item.payload as BrandPayload) }));
+          }}
+        />
+        {designBrief && onRequestEdits ? (
+          <DesignBriefDialog
+            open={briefOpen}
+            onOpenChange={setBriefOpen}
+            initial={designBrief}
+            heading="Design brief"
+            submitLabel="Update design"
+            onSubmit={(brief) => {
+              const sent = onRequestEdits(
+                buildBriefRevisionRequest(artifact.title || 'Design', brief),
+              );
+              if (!sent) toast.error('The change request was not sent. Try again.');
+              return sent;
+            }}
+          />
+        ) : null}
         {confirmDialog}
       </div>
     );

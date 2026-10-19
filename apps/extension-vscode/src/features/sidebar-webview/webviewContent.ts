@@ -1817,12 +1817,50 @@ export function getWebviewContent(
     }
 
     /* ── Structured plan visualization ── */
+    .side-question {
+      border: 1px solid var(--border);
+      border-radius: var(--corner-field);
+      background: var(--bg-elevated);
+      margin: 0 0 8px;
+      max-height: 40vh;
+      overflow-y: auto;
+    }
+    .side-question[hidden] { display: none; }
+    .side-question__header {
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 7px;
+      min-height: 34px;
+      padding: 0 4px 0 10px;
+    }
+    .side-question__title {
+      color: var(--text-primary);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      font-weight: 600;
+      margin: 0;
+    }
+    .side-question__note {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      margin-left: auto;
+    }
+    .side-question__question {
+      color: var(--text-secondary);
+      margin: 8px 10px 0;
+      white-space: pre-wrap;
+    }
+    .side-question__answer { padding: 0 10px 8px; }
+    .side-question__answer.is-error { color: var(--error); }
     .plan-card {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
       background: var(--bg-elevated);
       margin: 8px 0;
       overflow: hidden;
+      flex-shrink: 0;
     }
     .plan-card__header {
       align-items: center;
@@ -2682,6 +2720,18 @@ export function getWebviewContent(
 
   <!-- ── Input ── -->
   <div class="input-area">
+    <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
+      <div class="side-question__header">
+        <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
+        <h3 class="side-question__title">Side question</h3>
+        <span class="side-question__note">Not added to this chat</span>
+        <button type="button" class="message-action" id="sideQuestionClose" title="Close the side question" aria-label="Close the side question">
+          <span class="codicon codicon-close" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="side-question__question" id="sideQuestionText"></p>
+      <div class="side-question__answer" id="sideQuestionAnswer" aria-live="polite"></div>
+    </section>
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
       ${modelOptionsHtml}
@@ -2757,6 +2807,13 @@ export function getWebviewContent(
         <span class="pm-icon codicon codicon-git-compare" aria-hidden="true"></span>
         <span class="plus-menu-copy">
           <span class="plus-menu-title">Git changes</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
+      <button type="button" class="plus-menu-item" data-context-kind="terminal" role="menuitem">
+        <span class="pm-icon codicon codicon-terminal" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Terminal output</span>
           <span class="plus-menu-description"></span>
         </span>
       </button>
@@ -4756,10 +4813,52 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    var sideQuestionEl = document.getElementById('sideQuestion');
+    var sideQuestionTextEl = document.getElementById('sideQuestionText');
+    var sideQuestionAnswerEl = document.getElementById('sideQuestionAnswer');
+    var sideQuestionCloseEl = document.getElementById('sideQuestionClose');
+    var sideQuestionRequestId = null;
+    var sideQuestionContent = '';
+    var sideQuestionSeq = 0;
+
+    function closeSideQuestion() {
+      sideQuestionRequestId = null;
+      if (sideQuestionEl) sideQuestionEl.hidden = true;
+    }
+    if (sideQuestionCloseEl) {
+      sideQuestionCloseEl.addEventListener('click', function() {
+        closeSideQuestion();
+        userInput.focus();
+      });
+    }
+
+    function askSideQuestion(question) {
+      if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
+      sideQuestionContent = '';
+      sideQuestionTextEl.textContent = question;
+      sideQuestionAnswerEl.classList.remove('is-error');
+      sideQuestionAnswerEl.textContent = 'Thinking…';
+      sideQuestionEl.hidden = false;
+      userInput.value = '';
+      userInput.style.height = 'auto';
+      saveComposerDraft();
+      closeSlashMenu();
+      vscode.postMessage({
+        type: 'sideQuestion',
+        payload: { question: question, requestId: sideQuestionRequestId },
+      });
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
       const typedText = userInput.value.trim();
+      var sideMatch = typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
+      if (sideMatch) {
+        askSideQuestion(sideMatch[1].trim());
+        return;
+      }
       const text = typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
         : pendingAttachmentCount > 1
@@ -6563,6 +6662,24 @@ export function getWebviewContent(
         setOnboardingVisible(false);
       }
 
+      else if (msg.type === 'sideQuestionDelta') {
+        if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
+          sideQuestionContent += msg.payload.delta;
+          sideQuestionAnswerEl.innerHTML = renderAssistant(sideQuestionContent);
+        }
+      }
+
+      else if (msg.type === 'sideQuestionAnswer') {
+        if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
+          if (msg.payload.error) {
+            sideQuestionAnswerEl.classList.add('is-error');
+            sideQuestionAnswerEl.textContent = msg.payload.error;
+          } else {
+            sideQuestionAnswerEl.innerHTML = renderAssistant(msg.payload.answer || sideQuestionContent);
+          }
+        }
+      }
+
       else if (msg.type === 'fileSearchResults') {
         showMentionResults(msg.payload.files);
       }
@@ -6584,6 +6701,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationLoaded') {
+        closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
@@ -6641,6 +6759,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        closeSideQuestion();
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
@@ -6914,9 +7033,22 @@ export function getWebviewContent(
         title.textContent = 'Plan';
         var count = document.createElement('span');
         count.className = 'plan-card__count';
+        var openDocument = document.createElement('button');
+        openDocument.type = 'button';
+        openDocument.className = 'message-action plan-card__open';
+        openDocument.title = 'Open the plan as a document';
+        openDocument.setAttribute('aria-label', 'Open the plan as a document');
+        var openDocumentIcon = document.createElement('span');
+        openDocumentIcon.className = 'codicon codicon-go-to-file';
+        openDocumentIcon.setAttribute('aria-hidden', 'true');
+        openDocument.appendChild(openDocumentIcon);
+        openDocument.addEventListener('click', function() {
+          vscode.postMessage({ type: 'openPlanDocument' });
+        });
         header.appendChild(icon);
         header.appendChild(title);
         header.appendChild(count);
+        header.appendChild(openDocument);
 
         var explanation = document.createElement('p');
         explanation.className = 'plan-card__explanation';

@@ -614,6 +614,10 @@ export const env = {
   isTelemetryEnabled: true,
   createTelemetryLogger: vi.fn((_sender: unknown, _options?: unknown) => new MockTelemetryLogger()),
   openExternal: vi.fn().mockResolvedValue(true),
+  clipboard: {
+    readText: vi.fn().mockResolvedValue(''),
+    writeText: vi.fn().mockResolvedValue(undefined),
+  },
 };
 
 export const lm = {
@@ -757,6 +761,13 @@ export const TerminalShellExecutionCommandLineConfidence = {
   Medium: 1,
   High: 2,
 } as const;
+
+export class RelativePattern {
+  constructor(
+    public readonly base: Uri | string,
+    public readonly pattern: string,
+  ) {}
+}
 
 export const version = '1.95.0';
 

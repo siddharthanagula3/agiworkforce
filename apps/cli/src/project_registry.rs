@@ -79,12 +79,17 @@ impl ProjectRegistry {
         }
         let contents =
             serde_json::to_string_pretty(self).context("Failed to serialize projects.json")?;
-        // Write to a sibling temp file and atomically rename it into place so a
-        // crash or concurrent invocation mid-write cannot leave projects.json
-        // truncated/corrupted (which would lose all registered trust levels).
-        let tmp_path = path.with_extension("json.tmp");
-        std::fs::write(&tmp_path, contents).context("Failed to write temp projects.json")?;
-        std::fs::rename(&tmp_path, &path).context("Failed to persist projects.json")?;
+        // A temp file of its own per write: with one shared temp name, two
+        // processes saving at once renamed each other's file away and one
+        // failed with "No such file or directory".
+        let parent = path.parent().unwrap_or(config_dir);
+        let mut temp = tempfile::NamedTempFile::new_in(parent)
+            .context("Failed to create temp projects.json")?;
+        std::io::Write::write_all(&mut temp, contents.as_bytes())
+            .context("Failed to write temp projects.json")?;
+        temp.persist(&path)
+            .map_err(|error| error.error)
+            .context("Failed to persist projects.json")?;
         Ok(())
     }
 
@@ -288,6 +293,25 @@ impl ProjectRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn processes_saving_the_registry_at_once_all_succeed() {
+        let dir = tempfile::tempdir().unwrap();
+        let writers: Vec<_> = (0..8)
+            .map(|_| {
+                let dir = dir.path().to_path_buf();
+                std::thread::spawn(move || {
+                    for _ in 0..25 {
+                        ProjectRegistry::default().save(&dir).expect("save");
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        assert!(ProjectRegistry::registry_path(dir.path()).exists());
+    }
     use std::fs;
 
     #[test]

@@ -28,6 +28,7 @@ import {
 } from './ArtifactPreview';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import { StreamingArtifactView } from './StreamingArtifactView';
+import { NewArtifactMenu } from './templates/NewArtifactMenu';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import {
   createWebCloudPublisher,
@@ -517,6 +518,10 @@ export function ArtifactsPanel({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <NewArtifactMenu
+              conversationId={activeConversationId ?? null}
+              {...(onRequestEdits ? { onRequestEdits: requestEdits } : {})}
+            />
             {artifacts.length > 1 && (
               <Button
                 variant="ghost"

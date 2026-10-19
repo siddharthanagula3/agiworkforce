@@ -332,10 +332,16 @@ pub struct HostedMessage {
 }
 
 pub fn record_hosted(conversation: &HostedConversation, state: &mut SyncState) {
-    state
-        .conversations
-        .record(&conversation.id, &conversation.server_version);
-    for message in &conversation.messages {
+    if !conversation.server_version.is_empty() {
+        state
+            .conversations
+            .record(&conversation.id, &conversation.server_version);
+    }
+    for message in conversation
+        .messages
+        .iter()
+        .filter(|message| !message.server_version.is_empty())
+    {
         state.messages.record(&message.id, &message.server_version);
     }
 }
@@ -391,6 +397,89 @@ pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
 
     conversations.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     conversations
+}
+
+pub const CONVERSATIONS_PATH: &str = "/api/chat/conversations";
+const CONVERSATION_PAGE: usize = 500;
+
+#[derive(Debug, Deserialize)]
+struct ConversationRow {
+    id: String,
+    title: String,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    archived: bool,
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConversationMessageRow {
+    id: String,
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationPage {
+    conversation: ConversationRow,
+    #[serde(default)]
+    messages: Vec<ConversationMessageRow>,
+    #[serde(default)]
+    has_more: bool,
+}
+
+/// One conversation read by id. Reading it out of a full pull fetched the
+/// whole account's history to open a single chat. These rows carry no server
+/// versions, so none are recorded; a first push of a row is answered as a
+/// conflict that records it.
+pub async fn fetch_conversation(
+    client: &CloudClient,
+    conversation_id: &str,
+) -> Result<Option<HostedConversation>, CloudError> {
+    let path = format!(
+        "{CONVERSATIONS_PATH}/{}",
+        urlencoding::encode(conversation_id)
+    );
+    let mut found: Option<HostedConversation> = None;
+    let mut offset = 0usize;
+    loop {
+        let query = [
+            ("limit", CONVERSATION_PAGE.to_string()),
+            ("offset", offset.to_string()),
+        ];
+        let page: ConversationPage = match client.get(&path, &query).await {
+            Ok(page) => page,
+            Err(CloudError::Api { status: 404, .. }) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let read = page.messages.len();
+        let conversation = found.get_or_insert_with(|| HostedConversation {
+            id: page.conversation.id,
+            title: page.conversation.title,
+            model: page.conversation.model,
+            project_id: page.conversation.project_id,
+            updated_at: page.conversation.updated_at,
+            archived: page.conversation.archived,
+            server_version: String::new(),
+            messages: Vec::new(),
+        });
+        conversation
+            .messages
+            .extend(page.messages.into_iter().map(|message| HostedMessage {
+                id: message.id,
+                role: message.role,
+                content: message.content,
+                server_version: String::new(),
+            }));
+        offset += read;
+        if !page.has_more || read == 0 {
+            return Ok(found);
+        }
+    }
 }
 
 pub struct ChatSync<'a> {
@@ -456,6 +545,54 @@ pub fn section_for_conversations(state: &SyncState) -> &SyncSection {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn a_conversation_page_reads_the_shape_the_server_sends() {
+        let page: ConversationPage = serde_json::from_value(serde_json::json!({
+            "conversation": {
+                "id": "65df4496-5071-4d69-a0a9-c1bb380a4baf",
+                "organization_id": null,
+                "title": "Started on the web",
+                "model": "claude-haiku-5-5",
+                "project_id": null,
+                "archived": false,
+                "created_at": "2026-10-19T08:05:22.133Z",
+                "updated_at": "2026-10-19T08:08:18.898Z",
+                "work_mode": "chat"
+            },
+            "messages": [{
+                "id": "8cedd90e-df0f-4a84-b671-1e648659d6a9",
+                "parent_id": null,
+                "role": "user",
+                "content": "name two planets",
+                "created_at": "2026-10-19T08:05:22.353Z",
+                "metadata": {}
+            }],
+            "total": 1,
+            "hasMore": false
+        }))
+        .expect("parses");
+        assert_eq!(page.conversation.title, "Started on the web");
+        assert_eq!(page.messages[0].content, "name two planets");
+        assert!(!page.has_more);
+
+        let mut state = SyncState::default();
+        record_hosted(
+            &HostedConversation {
+                id: "c1".to_string(),
+                title: String::new(),
+                model: None,
+                project_id: None,
+                updated_at: String::new(),
+                archived: false,
+                server_version: String::new(),
+                messages: vec![hosted("m1", "user", "q", "")],
+            },
+            &mut state,
+        );
+        assert_eq!(state.conversations.base_version("c1"), INITIAL_CURSOR);
+        assert_eq!(state.messages.base_version("m1"), INITIAL_CURSOR);
+    }
 
     fn snapshot() -> SessionSnapshot {
         SessionSnapshot {

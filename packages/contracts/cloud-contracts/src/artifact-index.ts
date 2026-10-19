@@ -49,7 +49,11 @@ export const ResourceVisibilitySchema = z
   .enum(RESOURCE_VISIBILITIES)
   .catch(DEFAULT_RESOURCE_VISIBILITY);
 
-export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES = ['public', 'organization'] as const;
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES = [
+  'public',
+  'organization',
+  'invited',
+] as const;
 export type ManagedCloudPublishedArtifactVisibility =
   (typeof MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES)[number];
 
@@ -64,7 +68,7 @@ export const ManagedCloudPublishedArtifactSchema = z.object({
   language: z.string().nullable(),
   contentChars: z.number().int().nonnegative(),
   version: z.number().int().nonnegative().default(0),
-  visibility: ResourceVisibilitySchema,
+  visibility: z.enum(MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES).catch('invited'),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   shareUrl: z.string().min(1),
@@ -100,7 +104,9 @@ export function publishedArtifactFileReference(
     byteCount: materialized.byteCount,
     uri: artifact.shareUrl,
     origin: 'generated',
-    visibility: artifact.visibility satisfies ResourceVisibility,
+    visibility: (artifact.visibility === 'invited'
+      ? 'private'
+      : artifact.visibility) satisfies ResourceVisibility,
   });
 }
 

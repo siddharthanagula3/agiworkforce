@@ -7,11 +7,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const background = readFileSync(resolve(here, '..', 'src/background.ts'), 'utf8');
 
 describe('OPEN_SIDE_PANEL opens synchronously to preserve the user gesture', () => {
-  it('has a synchronous sidePanel.open fast-path in the onMessage listener', () => {
+  it('has a synchronous open fast-path in the onMessage listener', () => {
     expect(background).toMatch(
-      /msg\.type === 'OPEN_SIDE_PANEL'.*sender\.tab\?\.id.*chrome\.sidePanel/s,
+      /msg\.type === 'OPEN_SIDE_PANEL' && sender\.tab\?\.id != null\) \{\s*openAssistantPanel\(\{ tabId: sender\.tab\.id, windowId: sender\.tab\.windowId \}\)/,
     );
-    expect(background).toMatch(/chrome\.sidePanel\.open\(\{ tabId: sender\.tab\.id \}\)/);
   });
 
   it('runs the fast-path after the allowlist gate and before the async dispatch', () => {

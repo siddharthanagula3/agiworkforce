@@ -1,4 +1,5 @@
 import { test, type Page, type Request } from '@playwright/test';
+import { findDevAccountUserId } from '../scripts/dev-accounts/clerk';
 
 export const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 
@@ -176,6 +177,21 @@ export async function signInAs(page: Page, identity: QaIdentity): Promise<void> 
   const userId = await resolveIdentityUserId(identity, secret);
   if (await reuseHarnessSession(page, userId)) return;
   await signInWithTicket(page, await mintSignInTicketFor(userId));
+}
+
+/**
+ * Signs in as one of the local test accounts `pnpm dev:accounts seed` makes,
+ * each with its own plan and usage, so a spec never shares the QA account.
+ */
+export async function signInAsDevAccount(page: Page, name: string): Promise<string> {
+  const userId = await findDevAccountUserId(requireClerkSecret(), name);
+  if (!userId) {
+    throw new Error(`No test account "${name}"; run \`pnpm dev:accounts seed ${name}\` first`);
+  }
+  if (!(await reuseHarnessSession(page, userId))) {
+    await signInWithTicket(page, await mintSignInTicketFor(userId));
+  }
+  return userId;
 }
 
 export async function resolveIdentityId(identity: QaIdentity): Promise<string> {

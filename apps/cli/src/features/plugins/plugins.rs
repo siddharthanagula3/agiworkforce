@@ -215,6 +215,8 @@ pub struct PluginManifest {
     pub engines: HashMap<String, String>,
     #[serde(default)]
     pub publisher: Option<String>,
+    #[serde(default)]
+    pub user_config: super::settings::PluginSettings,
     /// Catch-all for unknown fields from Claude/Codex-format manifests.
     /// Logged at debug level; ignored otherwise so unknown fields don't
     /// fail load.
@@ -437,6 +439,15 @@ pub fn describe_plugin(plugin: &LoadedPlugin, policy: &PluginSignaturePolicy) ->
         }
         .to_string(),
     ));
+    if let Some(manifest) = manifest.as_ref() {
+        rows.extend(plugin_contents(manifest));
+        let values = super::settings::current_values(&plugin.config_name, &manifest.user_config);
+        rows.extend(
+            super::settings::describe(&manifest.user_config, &values)
+                .into_iter()
+                .map(|line| ("Setting", line)),
+        );
+    }
     rows.into_iter()
         .map(|(label, value)| {
             format!(
@@ -446,6 +457,70 @@ pub fn describe_plugin(plugin: &LoadedPlugin, policy: &PluginSignaturePolicy) ->
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// What a plugin adds and may run, as Claude Code's details pane lists it
+/// before and after install. Hooks and MCP servers run commands on this
+/// computer, so they are named one by one.
+pub fn plugin_contents(manifest: &PluginManifest) -> Vec<(&'static str, String)> {
+    let mut rows = Vec::new();
+    for (label, count) in [
+        ("Skills", manifest.skills.len()),
+        ("Commands", manifest.commands.len()),
+        ("Agents", manifest.agents.len()),
+    ] {
+        if count > 0 {
+            rows.push((label, count.to_string()));
+        }
+    }
+    let mut hook_events: Vec<String> = manifest
+        .hooks
+        .as_ref()
+        .map(|hooks| hooks.get("hooks").unwrap_or(hooks))
+        .and_then(serde_json::Value::as_object)
+        .map(|events| events.keys().cloned().collect())
+        .unwrap_or_default();
+    hook_events.sort();
+    if !hook_events.is_empty() {
+        rows.push((
+            "Hooks",
+            format!("runs commands on {}", hook_events.join(", ")),
+        ));
+    }
+    let mut servers: Vec<String> = manifest
+        .mcp_servers
+        .iter()
+        .map(|(name, server)| {
+            let target = if server.command.is_empty() {
+                server
+                    .extra
+                    .get("url")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("remote")
+                    .to_string()
+            } else {
+                std::iter::once(server.command.as_str())
+                    .chain(server.args.iter().map(String::as_str))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            format!("{name} ({target})")
+        })
+        .collect();
+    servers.sort();
+    if !servers.is_empty() {
+        rows.push(("MCP", servers.join("; ")));
+    }
+    if !manifest.apps.is_empty() {
+        rows.push(("Connects", manifest.apps.join(", ")));
+    }
+    if !hook_events.is_empty() || !servers.is_empty() {
+        rows.push((
+            "Trust",
+            "its hooks and MCP servers run on this computer with your permissions".to_string(),
+        ));
+    }
+    rows
 }
 
 pub fn evaluate_plugin_signature(
@@ -673,6 +748,7 @@ impl PluginsManager {
             let Some((mut m, fmt)) = load_manifest_for(&path) else {
                 continue;
             };
+            resolve_server_settings(&mut m, &path, &name);
             // Validate MCP server commands in stdio entries, reject shell
             // metacharacters that could enable command injection. HTTP/SSE
             // entries (no command, url in `extra`) are passed through
@@ -1559,6 +1635,54 @@ pub fn set_plugin_enabled(id: &str, enabled: bool) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Fill each MCP server's `${...}` references from the plugin's root and
+/// settings. A server that names a setting with no value is left out until
+/// the user sets it.
+fn resolve_server_settings(manifest: &mut PluginManifest, root: &Path, plugin: &str) {
+    let values = super::settings::current_values(plugin, &manifest.user_config);
+    manifest
+        .mcp_servers
+        .retain(|server, cfg| match substitute_server(cfg, root, &values) {
+            Ok(()) => true,
+            Err(key) => {
+                eprintln!(
+                    "[plugins] MCP server '{server}' in plugin '{plugin}' needs the setting \
+                     '{key}': run `agi plugin configure {plugin}`"
+                );
+                false
+            }
+        });
+}
+
+fn substitute_server(
+    cfg: &mut McpServerConfig,
+    root: &Path,
+    values: &HashMap<String, String>,
+) -> Result<(), String> {
+    let fill = |text: &mut String| -> Result<(), String> {
+        *text = super::settings::substitute(text, root, values)?;
+        Ok(())
+    };
+    fill(&mut cfg.command)?;
+    for arg in &mut cfg.args {
+        fill(arg)?;
+    }
+    for value in cfg.env.values_mut() {
+        fill(value)?;
+    }
+    if let Some(serde_json::Value::String(url)) = cfg.extra.get_mut("url") {
+        fill(url)?;
+    }
+    if let Some(serde_json::Value::Object(headers)) = cfg.extra.get_mut("headers") {
+        for value in headers.values_mut() {
+            if let serde_json::Value::String(text) = value {
+                fill(text)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn plugin_path_stays_within_root(plugin_root: &Path, candidate: &Path) -> bool {
     let root = match plugin_root.canonicalize() {
         Ok(path) => path,
@@ -1696,6 +1820,42 @@ pub fn build_discoverable_tools(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plugin_names_what_it_adds_and_what_runs_on_this_computer() {
+        let manifest: PluginManifest = serde_json::from_value(serde_json::json!({
+            "name": "release-tools",
+            "skills": ["skills/release"],
+            "commands": ["commands/ship.md", "commands/tag.md"],
+            "hooks": { "hooks": { "PreToolUse": [], "Stop": [] } },
+            "mcpServers": {
+                "github": { "command": "npx", "args": ["-y", "github-mcp"] },
+                "docs": { "url": "https://docs.example/mcp" }
+            },
+            "apps": ["slack"]
+        }))
+        .expect("manifest");
+        let rows = plugin_contents(&manifest);
+        let text = rows
+            .iter()
+            .map(|(label, value)| format!("{label}: {value}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Skills: 1"), "{text}");
+        assert!(text.contains("Commands: 2"), "{text}");
+        assert!(
+            text.contains("Hooks: runs commands on PreToolUse, Stop"),
+            "{text}"
+        );
+        assert!(text.contains("docs (https://docs.example/mcp)"), "{text}");
+        assert!(text.contains("github (npx -y github-mcp)"), "{text}");
+        assert!(text.contains("Connects: slack"), "{text}");
+        assert!(text.contains("Trust:"), "{text}");
+
+        let plain: PluginManifest =
+            serde_json::from_value(serde_json::json!({ "name": "plain" })).expect("manifest");
+        assert!(plugin_contents(&plain).is_empty());
+    }
 
     fn write_test_plugin(root: &Path) {
         let manifest = root.join(".agiworkforce-plugin").join("plugin.json");
@@ -1902,6 +2062,66 @@ mod tests {
             manager.agent_paths(),
             vec![plugin_root.join("agents").join("agent.md")]
         );
+    }
+
+    #[test]
+    fn a_plugin_server_waits_for_its_settings_and_then_runs_with_them() {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        let plugin_root = plugins_dir.join("settings-wait-plugin");
+        write_test_manifest(
+            &plugin_root,
+            r#"{
+              "name": "settings-wait-plugin",
+              "userConfig": {
+                "endpoint": {"type": "string", "title": "Endpoint", "description": "API endpoint", "required": true},
+                "token": {"type": "string", "title": "Token", "description": "API token", "sensitive": true},
+                "region": {"type": "string", "title": "Region", "description": "Region", "options": ["us", "eu"], "default": "us"}
+              },
+              "mcpServers": {
+                "deploy": {
+                  "command": "${CLAUDE_PLUGIN_ROOT}/server",
+                  "args": ["--endpoint", "${user_config.endpoint}", "--region", "${user_config.region}"],
+                  "env": {"TOKEN": "${user_config.token}"}
+                }
+              }
+            }"#,
+        );
+        let load = || {
+            let mut manager = PluginsManager {
+                global_dir: plugins_dir.clone(),
+                plugins: Vec::new(),
+            };
+            manager.load_all(None).unwrap();
+            manager.plugins()[0].mcp_servers.clone()
+        };
+        assert!(load().is_empty());
+
+        let settings = load_manifest_for(&plugin_root).unwrap().0.user_config;
+        for (key, raw) in [("endpoint", "https://deploy.example"), ("token", "s3cret")] {
+            let value = super::super::settings::parse_value(&settings[key], raw).unwrap();
+            super::super::settings::save_value("settings-wait-plugin", key, &settings[key], &value)
+                .unwrap();
+        }
+        let saved = std::fs::read_to_string(
+            crate::config::CliConfig::config_dir()
+                .unwrap()
+                .join("plugin-settings.json"),
+        )
+        .unwrap();
+        assert!(!saved.contains("s3cret"));
+
+        let servers = load();
+        let server = &servers["deploy"];
+        assert_eq!(
+            server.command,
+            format!("{}/server", plugin_root.to_string_lossy())
+        );
+        assert_eq!(
+            server.args,
+            vec!["--endpoint", "https://deploy.example", "--region", "us"]
+        );
+        assert_eq!(server.env["TOKEN"], "s3cret");
     }
 
     #[test]

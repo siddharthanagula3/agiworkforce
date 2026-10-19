@@ -48,6 +48,7 @@ export const DEVICE_STEP_TOOLS = [
   'device_type',
   'device_key',
   'device_wait',
+  'device_open_app',
   'device_browser_read_page',
   'device_browser_navigate',
   'device_browser_click',
@@ -254,6 +255,13 @@ export const DEVICE_STEP_DEFINITIONS: Readonly<Record<DeviceStepTool, DeviceStep
     description:
       'Pause before the next step, to let a window open, a page load or an animation settle. Follow it with a fresh screenshot.',
   },
+  device_open_app: {
+    command: 'computer_open_app',
+    capability: 'computer.use',
+    scope: 'screen',
+    description:
+      'Open an app installed on this computer and bring it to the front, by its name as it appears in Applications (such as Notes or Visual Studio Code) or by its bundle id (such as com.apple.Notes). The user is asked before AGI controls an app it has not used yet. Follow it with a fresh screenshot.',
+  },
   device_browser_read_page: browserStep(
     'browser_read_page',
     "Read the address, title and visible text of the tab open in the user's paired Chrome browser, to summarize it or answer questions about it.",
@@ -381,6 +389,8 @@ export const MAX_DEVICE_TYPE_LENGTH = 4_000;
 export const MAX_DEVICE_WAIT_MS = 10_000;
 export const MAX_DEVICE_CLICK_COUNT = 3;
 export const MAX_DEVICE_DISPLAY_ID = 2 ** 32 - 1;
+export const MAX_DEVICE_APPLICATION_LENGTH = 100;
+const DEVICE_APPLICATION_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._&+()-]*$/u;
 
 /**
  * A granted folder as the model sees it. The path is included because a user
@@ -611,6 +621,7 @@ export interface DeviceStepRequest {
   key?: string;
   modifiers?: DeviceKeyModifier[];
   ms?: number;
+  application?: string;
   region?: DeviceStepRegion;
   display?: number;
   review?: string;
@@ -696,6 +707,15 @@ function readKey(value: unknown): string {
   if (key.length === 1) return key;
   if ((DEVICE_NAMED_KEYS as readonly string[]).includes(key)) return key;
   refuse(`"${value}" is not a key this device can press.`);
+}
+
+function readApplication(value: unknown): string {
+  const application = readBoundedString(value, MAX_DEVICE_APPLICATION_LENGTH);
+  if (!application) refuse('An open-app step needs the "application" to open.');
+  if (!DEVICE_APPLICATION_PATTERN.test(application)) {
+    refuse(`"${application}" is not the name or bundle id of an app.`);
+  }
+  return application.endsWith('.app') ? application.slice(0, -'.app'.length) : application;
 }
 
 function readRegion(value: unknown): DeviceStepRegion {
@@ -807,6 +827,8 @@ function planScreenStepFields(
       return { tool, key: readKey(args['key']), modifiers: readModifiers(args['modifiers']) };
     case 'device_wait':
       return { tool, ms: readNumber(args['ms'] ?? 500, 'ms', 0, MAX_DEVICE_WAIT_MS) };
+    case 'device_open_app':
+      return { tool, application: readApplication(args['application']) };
     default:
       refuse(`"${tool}" is not a screen step.`);
   }
@@ -1078,6 +1100,8 @@ export function describeDeviceStep(
       return `Press ${[...(request.modifiers ?? []), request.key].join('+')}`;
     case 'device_wait':
       return `Wait ${request.ms}ms`;
+    case 'device_open_app':
+      return `Open ${request.application}`;
     case 'device_browser_read_page':
       return 'Read the page open in Chrome';
     case 'device_browser_navigate':

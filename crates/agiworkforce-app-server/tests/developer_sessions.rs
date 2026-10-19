@@ -26,12 +26,12 @@ use agiworkforce_protocol::developer_session::{
     SlashCommandRunResponse, SlashCommandSummary, ThreadDeleteParams, ThreadDeleteResponse,
     ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
     ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, ThreadWriterConflictData,
-    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
-    TurnSummary, WorktreeCreateResponse, DEVELOPER_SESSION_PROTOCOL_VERSION,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-    THREAD_WRITER_CONFLICT_ERROR_CODE,
+    ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams, ThreadStartResponse,
+    ThreadStatus, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams, TurnStartParams,
+    TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateResponse,
+    DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -429,6 +429,8 @@ fn capabilities() -> AppServerCapabilities {
         revert_restore: false,
         mcp_approval: false,
         managed_worktrees: true,
+        side_question: true,
+        thread_rename: true,
     }
 }
 
@@ -1214,6 +1216,15 @@ impl SurfaceHost {
 
 #[async_trait]
 impl DeveloperSessionHost for SurfaceHost {
+    async fn side_question(
+        &self,
+        params: ThreadSideQuestionParams,
+    ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
+        Ok(ThreadSideQuestionResponse {
+            answer: format!("{}: {}", params.thread_id, params.question),
+        })
+    }
+
     async fn start_thread(
         &self,
         _params: ThreadStartParams,
@@ -1533,6 +1544,22 @@ impl DeveloperSessionHost for SurfaceHost {
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.notifications.subscribe()
     }
+}
+
+#[tokio::test]
+async fn a_side_question_reaches_the_host_and_answers_without_a_turn() {
+    let mut processor = surface_processor().await;
+    let answer = result_of(
+        processor
+            .process(request(
+                2,
+                method::THREAD_SIDE_QUESTION,
+                serde_json::json!({ "threadId": "thread-1", "question": "what did we decide?" }),
+            ))
+            .await,
+    );
+    let answer: ThreadSideQuestionResponse = serde_json::from_value(answer).expect("typed");
+    assert_eq!(answer.answer, "thread-1: what did we decide?");
 }
 
 async fn surface_processor() -> DeveloperSessionProcessor {

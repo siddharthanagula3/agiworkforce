@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
   setAccentColor: vi.fn(),
   setHighContrast: vi.fn(),
+  setCodeTheme: vi.fn(),
   setMotion: vi.fn(),
   settings: {
     accentColor: 'default' as string,
@@ -71,6 +72,8 @@ vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
         setChatTextSize: vi.fn(),
         codeBlockWrap: false,
         setCodeBlockWrap: vi.fn(),
+        codeTheme: 'github',
+        setCodeTheme: mocks.setCodeTheme,
         motion: mocks.settings.motion,
         hiddenNavIds: [],
         setNavItemVisible: vi.fn(),
@@ -285,6 +288,27 @@ describe('GeneralSection appearance controls', () => {
     await userEvent.click(contrast);
 
     expect(mocks.setHighContrast).toHaveBeenCalledWith(true);
+  });
+
+  it('offers only code themes that stay readable and saves the one picked', async () => {
+    render(<GeneralSection />);
+
+    const select = screen.getByRole('combobox', { name: 'Code theme' });
+    expect(select).toHaveValue('github');
+    expect(
+      Array.from(select.querySelectorAll('option')).map((option) => option.textContent),
+    ).toEqual([
+      'GitHub',
+      'GitHub dimmed',
+      'GitHub high contrast',
+      'Catppuccin',
+      'Dracula soft',
+      'Everforest',
+    ]);
+
+    await userEvent.selectOptions(select, 'catppuccin');
+
+    expect(mocks.setCodeTheme).toHaveBeenCalledWith('catppuccin');
   });
 
   it('draws every on/off switch as the shared switch, whose off state keeps a visible edge', () => {

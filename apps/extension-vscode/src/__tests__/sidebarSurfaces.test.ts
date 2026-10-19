@@ -254,6 +254,21 @@ describe('the CLI capability adapter', () => {
         source: 'builtin',
         aliases: [],
         runnable: false,
+        prompt: true,
+      },
+      {
+        name: 'vim',
+        description: 'Toggle Vim keybindings',
+        source: 'builtin',
+        aliases: [],
+        runnable: false,
+      },
+      {
+        name: 'btw',
+        description: 'Side question',
+        source: 'builtin',
+        aliases: [],
+        runnable: false,
       },
       {
         name: 'perms',
@@ -269,18 +284,30 @@ describe('the CLI capability adapter', () => {
         aliases: ['perms', 'approvals'],
         runnable: false,
       },
-      { name: 'deploy', description: 'Ship it', source: 'skill', aliases: [], runnable: false },
+      {
+        name: 'deploy',
+        description: 'Ship it',
+        source: 'skill',
+        aliases: [],
+        runnable: false,
+        prompt: true,
+      },
+      { name: 'lint', description: 'Not runnable', source: 'skill', aliases: [], runnable: false },
       { name: 'doctor-x', description: 'Runs here', source: 'plugin', aliases: [], runnable: true },
     ]);
     const byName = new Map(entries.map((entry) => [entry.name, entry.action]));
 
-    expect(byName.has('/init')).toBe(false);
+    expect(byName.get('/init')).toEqual({ kind: 'prompt' });
+    expect(byName.has('/vim')).toBe(false);
+    expect(byName.has('/lint')).toBe(false);
+    expect(byName.get('/btw')).toEqual({ kind: 'prompt' });
+    expect(entries.filter((entry) => entry.name === '/btw')).toHaveLength(1);
     expect(byName.has('/perms')).toBe(false);
     expect(byName.get('/permissions')).toEqual({
       kind: 'command',
       command: 'agi-workforce.showSavedApprovals',
     });
-    expect(byName.get('/deploy')).toEqual({ kind: 'skill' });
+    expect(byName.get('/deploy')).toEqual({ kind: 'prompt' });
     expect(byName.get('/doctor-x')).toEqual({ kind: 'cli' });
     expect(byName.get('/compact')).toEqual({
       kind: 'command',

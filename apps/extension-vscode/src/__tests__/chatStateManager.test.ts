@@ -3944,6 +3944,97 @@ describe('ChatStateManager session compaction', () => {
     expect(row('Model')?.description).toBeTruthy();
   });
 
+  it('exports the open session as Markdown to the clipboard', async () => {
+    const harness = await startedHarness();
+    harness.runtime.readThread.mockResolvedValueOnce({
+      thread: threadSummary({ id: 'thread-1', title: 'Inspect this project' }),
+      messages: [
+        { role: 'user', text: 'Inspect this project', index: 0 },
+        { role: 'assistant', text: 'done', index: 1 },
+      ],
+      transcriptTruncated: false,
+    });
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items: unknown) =>
+        (items as Array<{ action: string }>).find((item) => item.action === 'copy') as never,
+    );
+
+    await harness.manager.exportConversation();
+
+    expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+      '# Inspect this project\n\n## You\n\nInspect this project\n\n## AGI\n\ndone\n',
+    );
+  });
+
+  it('revises the plan with only the notes written into the plan document', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Plan the fix' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-plan',
+      name: 'update_plan',
+      category: 'other',
+      summary: 'Plan',
+      input: { plan: [{ step: 'Change the loop bound', status: 'pending' }] },
+    } as never);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Here is the plan.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    const planUri = vscode.Uri.parse('untitled:Untitled-1');
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValueOnce({ uri: planUri } as never);
+    await harness.manager.openPlanDocument();
+    const original = vi.mocked(vscode.workspace.openTextDocument).mock.calls.at(-1)?.[0] as {
+      content: string;
+    };
+    expect(original.content).toBe('# Plan\n\n- [ ] Change the loop bound\n');
+
+    const decidePlan = vi.fn().mockResolvedValue(undefined);
+    Object.assign(harness.runtime, { decidePlan, offers: vi.fn().mockResolvedValue(true) });
+    vscode.window.activeTextEditor = {
+      document: {
+        uri: planUri,
+        getText: () => `${original.content}Keep the empty-array guard.\n`,
+      },
+    } as never;
+
+    const revise = harness.manager.revisePlanFromDocument();
+
+    await vi.waitFor(() =>
+      expect(decidePlan).toHaveBeenCalledWith(
+        'thread-1',
+        'reject',
+        'On "- [ ] Change the loop bound":\nKeep the empty-array guard.',
+      ),
+    );
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Revised.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await revise;
+    vscode.window.activeTextEditor = undefined;
+  });
+
   it('changes nothing when the user does not confirm', async () => {
     const harness = await startedHarness();
     const compactThread = vi.fn();
@@ -3988,6 +4079,79 @@ describe('ChatStateManager session compaction', () => {
       'AGI Workforce: nothing in this session is old enough to summarize yet.',
     );
     expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
+  });
+});
+
+describe('ChatStateManager side questions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    setContextPanelInstance({ getContextFiles: () => [] } as unknown as ContextPanelProvider);
+  });
+
+  it('streams the answer from the open session without starting a turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    const askSideQuestion = vi.fn(async (_params: unknown, onDelta: (delta: string) => void) => {
+      onDelta('It returns ');
+      return { answer: 'It returns NaN.' };
+    });
+    Object.assign(harness.runtime, { askSideQuestion });
+
+    await harness.manager.handleMessage({
+      type: 'sideQuestion',
+      payload: { question: 'What does average return for []?', requestId: 'side-1' },
+    });
+
+    expect(askSideQuestion).toHaveBeenCalledWith(
+      { threadId: 'thread-1', question: 'What does average return for []?', requestId: 'side-1' },
+      expect.any(Function),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionDelta',
+      payload: { requestId: 'side-1', delta: 'It returns ' },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionAnswer',
+      payload: { requestId: 'side-1', answer: 'It returns NaN.' },
+    });
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+  });
+
+  it('explains that a side question needs a session first', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({
+      type: 'sideQuestion',
+      payload: { question: 'Anything?', requestId: 'side-2' },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'sideQuestionAnswer',
+      payload: {
+        requestId: 'side-2',
+        error:
+          'A side question is answered from this session, so send a first message before asking one.',
+      },
+    });
   });
 });
 
@@ -4036,7 +4200,7 @@ describe('ChatStateManager slash commands', () => {
     const listed = harness.posted.find((message) => message.type === 'slashCommands');
     const names = (listed?.payload as { items: { name: string }[] }).items.map((item) => item.name);
     expect(names).not.toContain('/init');
-    expect(names).not.toContain('/btw');
+    expect(names).toContain('/btw');
     expect(names).toContain('/compact');
     expect(names).toContain('/permissions');
     expect(names).toContain('/review');

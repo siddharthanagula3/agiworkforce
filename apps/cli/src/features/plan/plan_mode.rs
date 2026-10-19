@@ -316,8 +316,7 @@ impl TodoList {
 }
 
 fn plans_dir() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("no home dir"))?;
-    let plans_dir = home.join(".agiworkforce").join("plans");
+    let plans_dir = crate::config::CliConfig::config_dir()?.join("plans");
     std::fs::create_dir_all(&plans_dir)?;
     Ok(plans_dir)
 }

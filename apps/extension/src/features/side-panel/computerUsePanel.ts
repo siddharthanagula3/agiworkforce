@@ -5,7 +5,11 @@ import type {
 } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS, DEFAULT_MAX_AGENT_STEPS } from '../computer-use/agentLoop';
-import { ASK_BEFORE_ACTING_KEY } from '../computer-use/askBeforeActing';
+import {
+  ASK_BEFORE_ACTING_KEY,
+  browserPermissionModeToStored,
+  readBrowserPermissionMode,
+} from '../computer-use/askBeforeActing';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
@@ -1028,24 +1032,25 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const askLabel = document.createElement('label');
   askLabel.className = 'sp-cu-ask-toggle';
   askLabel.title =
-    'When on, the agent asks before it clicks, types, opens a page or downloads. Reading the page never waits for you.';
+    'When on, the agent asks before every click, typed text or page change. When off, it works in Auto and asks only before buying, sending, deleting, signing in, granting access or downloading.';
 
   const askCheckbox = document.createElement('input');
   askCheckbox.type = 'checkbox';
   askCheckbox.id = 'sp-cu-ask-checkbox';
-  askCheckbox.checked = true;
+  askCheckbox.checked = false;
 
   let askPreferenceMutation = 0;
   chrome.storage?.local?.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime?.lastError) return;
     if (askPreferenceMutation !== 0) return;
-    askCheckbox.checked = items?.[ASK_BEFORE_ACTING_KEY] !== false;
+    askCheckbox.checked = readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]) === 'ask';
   });
 
   chrome.storage?.onChanged?.addListener((changes, area) => {
     if (area !== 'local' || !(ASK_BEFORE_ACTING_KEY in changes)) return;
     if (askCheckbox.disabled) return;
-    askCheckbox.checked = changes[ASK_BEFORE_ACTING_KEY]?.newValue !== false;
+    askCheckbox.checked =
+      readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue) === 'ask';
   });
 
   askCheckbox.addEventListener('change', () => {
@@ -1054,7 +1059,9 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     askCheckbox.disabled = true;
     void (async () => {
       try {
-        await chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: next });
+        await chrome.storage.local.set({
+          [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next ? 'ask' : 'auto'),
+        });
       } catch {
         if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
         showHandoffBanner(

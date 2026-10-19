@@ -1,8 +1,8 @@
 import type {
   ManagedCloudArtifactIndexEntry,
   ManagedCloudPublishedArtifact,
+  ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
-import type { ResourceVisibility } from '@agiworkforce/types';
 import { accountRefusalMessage } from '../../utils/accountRefusal';
 import { formatTimestamp } from '../../utils/format';
 
@@ -105,16 +105,16 @@ export function artifactFileName(artifact: ManagedCloudArtifactIndexEntry): stri
   return `${base === '' ? 'artifact' : base}.${artifactFileExtension(artifact)}`;
 }
 
-const PUBLISHED_LABELS: Record<ResourceVisibility, string> = {
+const PUBLISHED_LABELS: Record<ManagedCloudPublishedArtifactVisibility, string> = {
   public: 'published publicly',
   organization: 'shared with your workspace',
-  private: 'published, only you',
+  invited: 'shared with invited people',
 };
 
-const PUBLISHED_EXPLANATIONS: Record<ResourceVisibility, string> = {
+const PUBLISHED_EXPLANATIONS: Record<ManagedCloudPublishedArtifactVisibility, string> = {
   public: 'A published copy of this artifact has a public link anyone can open.',
   organization: 'A published copy of this artifact opens only for people in your workspace.',
-  private: 'A published copy of this artifact opens only for you.',
+  invited: 'A published copy of this artifact opens only for the people it was shared with.',
 };
 
 export function artifactDescription(

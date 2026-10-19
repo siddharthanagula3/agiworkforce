@@ -19,6 +19,10 @@
     "message": "Translate this",
     "description": "Context menu on a text selection"
   },
+  "menuAskAboutPage": {
+    "message": "Ask AGI Workforce about this page",
+    "description": "Context menu on the page background that opens the side panel with the page attached"
+  },
   "menuSummarizePage": {
     "message": "Summarize this page",
     "description": "Context menu on the page background"
@@ -218,11 +222,11 @@
     "description": "Autonomy chip while the agent may act without asking"
   },
   "spAutonomyAskFirstTooltip": {
-    "message": "Every browser action is confirmed before it runs. Click to allow the agent to act without asking.",
+    "message": "Every browser action is confirmed before it runs.",
     "description": "Autonomy chip tooltip while every browser action is confirmed first"
   },
   "spAutonomyFullAccessTooltip": {
-    "message": "The agent can act in your browser without asking. Click to require confirmation for each action.",
+    "message": "AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
     "description": "Autonomy chip tooltip while the agent may act without asking"
   },
   "spAutonomyAskFirstAria": {
@@ -4427,5 +4431,157 @@
   "spPhoneCodeFailed": {
     "message": "Couldn't draw the code. Copy the link instead.",
     "description": "Status when the code image for the chat link could not be made"
+  },
+  "spHistorySearchTitle": {
+    "message": "AGI wants to search your browsing history",
+    "description": "Heading of the inline card that asks before one browsing-history search runs"
+  },
+  "spHistorySearchScope_one": {
+    "message": "Looking for \"$QUERY$\" in the last day",
+    "description": "What one browsing-history search looks for and how far back, one plural form",
+    "placeholders": {
+      "days": {
+        "content": "$1",
+        "example": "30"
+      },
+      "query": {
+        "content": "$2",
+        "example": "flight confirmation"
+      }
+    }
+  },
+  "spHistorySearchScope_other": {
+    "message": "Looking for \"$QUERY$\" in the last $DAYS$ days",
+    "description": "What one browsing-history search looks for and how far back, other plural form",
+    "placeholders": {
+      "days": {
+        "content": "$1",
+        "example": "30"
+      },
+      "query": {
+        "content": "$2",
+        "example": "flight confirmation"
+      }
+    }
+  },
+  "spHistorySearchBody": {
+    "message": "Titles and addresses of matching pages are sent to AGI Cloud for this answer only. AGI asks again for every search.",
+    "description": "Body of the browsing-history search card"
+  },
+  "spHistorySearchAllow": {
+    "message": "Allow this search",
+    "description": "Button that lets one browsing-history search run"
+  },
+  "spHistorySearching": {
+    "message": "Searching browsing history",
+    "description": "Progress line while a browsing-history search runs"
+  },
+  "spHistorySearchDeclined": {
+    "message": "The user declined this browsing-history search. Do not ask for it again in this answer; answer without it.",
+    "description": "Tool result sent to the model when the user declines a history search"
+  },
+  "spHistorySearchOff": {
+    "message": "Browsing-history search is turned off in the extension settings, so nothing was searched. Tell the user they can turn it on under Extension settings, Permissions.",
+    "description": "Tool result sent to the model when the history permission is not granted"
+  },
+  "optHistoryTitle": {
+    "message": "Browsing history",
+    "description": "Options row label for the browsing-history permission"
+  },
+  "optHistoryHint": {
+    "message": "Let AGI ask to search your Chrome history when a question needs a page you visited before. It asks before every search, and only matching titles and addresses are sent.",
+    "description": "Options row hint for the browsing-history permission"
+  },
+  "optHistoryOn": {
+    "message": "On. AGI can ask to search your history.",
+    "description": "Status when the history permission is granted"
+  },
+  "optHistoryOff": {
+    "message": "Off. AGI cannot search your history.",
+    "description": "Status when the history permission is not granted"
+  },
+  "optHistoryRefused": {
+    "message": "Chrome did not grant history access.",
+    "description": "Status when the user refuses Chrome's permission prompt"
+  },
+  "spSiteBlockedByYou": {
+    "message": "You blocked AGI on $HOST$, so it does not read or act there. Remove it from Blocked sites under Extension settings, Permissions, to use it here.",
+    "description": "Shown when a page read or browser action is refused because the user blocked the site",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "bank.example"
+      }
+    }
+  },
+  "optBlockedSitesTitle": {
+    "message": "Blocked sites",
+    "description": "Options row label for the user's own site blocklist"
+  },
+  "optBlockedSitesHint": {
+    "message": "AGI never reads, acts on or asks about these sites, and never lists them from your history. Blocking a site also removes it from approved sites.",
+    "description": "Options row hint for the user's own site blocklist"
+  },
+  "optBlockedSitesAdd": {
+    "message": "Block",
+    "description": "Button that adds the typed site to the blocklist"
+  },
+  "optBlockedSitesRemove": {
+    "message": "Remove",
+    "description": "Button that removes a site from the blocklist"
+  },
+  "optBlockedSitesRemoveLabel": {
+    "message": "Remove $ORIGIN$ from blocked sites",
+    "description": "Accessible name of the remove button for one blocked site",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://bank.example"
+      }
+    }
+  },
+  "optBlockedSitesEmpty": {
+    "message": "No blocked sites.",
+    "description": "Shown when the blocklist is empty"
+  },
+  "optBlockedSitesInvalid": {
+    "message": "Enter a website address, for example bank.example.",
+    "description": "Shown when the typed blocklist entry is not a website"
+  },
+  "optBlockedSitesAdded": {
+    "message": "Blocked $ORIGIN$.",
+    "description": "Status after blocking a site",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://bank.example"
+      }
+    }
+  },
+  "optBlockedSitesRemoved": {
+    "message": "$ORIGIN$ is no longer blocked.",
+    "description": "Status after unblocking a site",
+    "placeholders": {
+      "origin": {
+        "content": "$1",
+        "example": "https://bank.example"
+      }
+    }
+  },
+  "spAutonomyAuto": {
+    "message": "Auto",
+    "description": "Autonomy chip while the agent acts on the task's sites and asks only before crucial actions"
+  },
+  "spAutonomyAutoDescription": {
+    "message": "Act on this task's sites, ask before buying, sending, deleting, signing in or downloading",
+    "description": "One-line description of the Auto permission mode"
+  },
+  "spAutonomyAutoTooltip": {
+    "message": "AGI acts on the sites of this task without asking. It stops and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads a file.",
+    "description": "Autonomy chip tooltip in Auto mode"
+  },
+  "spAutonomyAutoAria": {
+    "message": "Permission mode: auto, asks before crucial actions",
+    "description": "Autonomy chip accessible name in Auto mode"
   }
 }

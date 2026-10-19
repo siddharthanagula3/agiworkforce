@@ -40,6 +40,8 @@ the process, not the rules.
 - [`connectors-setup.md`](./connectors-setup.md), what each directory
   connector needs from the deployment: vendor consoles, the redirect URI,
   permitted scopes, and the exact environment variable names.
+- [`local-test-accounts.md`](./local-test-accounts.md), `pnpm dev:accounts`:
+  seed, reset and list one local test account per plan and per lane.
 - [`plugins-directory.md`](./plugins-directory.md), how the plugin directory
   is ingested from the official marketplace and the public listing, refreshed,
   queried, and installed from into the composer.

@@ -252,6 +252,11 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
     description:
       'Pauses before the next step so a window can open or a page can load. It does nothing on its own.',
   },
+  device_open_app: {
+    label: 'Open an app on your computer',
+    description:
+      'Opens an installed app through the desktop app. AGI asks before it controls an app it has not used yet.',
+  },
   device_click: {
     label: 'Click on your computer',
     description:

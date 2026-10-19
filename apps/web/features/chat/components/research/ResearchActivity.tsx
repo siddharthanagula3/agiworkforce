@@ -42,7 +42,7 @@ import { ResearchPlan } from './ResearchPlan';
 import { useResearchRunControls } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { useUiTranslation } from '@agiworkforce/ui';
-import { isResearchGuidanceStep } from '../../utils/research-plan';
+import { isResearchGuidanceStep, researchAnswersGuidance } from '../../utils/research-plan';
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -154,7 +154,17 @@ export type ResearchPlanOptions = ResearchSourceRequest & {
   /** The plan as the reader edited it, absent when they started it unchanged. */
   steps?: ResearchStep[];
   deliverable?: ResearchDeliverableSpec;
+  /** The plan's clarifying questions with the reader's answers, as guidance for the run. */
+  answers?: string;
 };
+
+function answersOption(
+  questions: readonly string[] | undefined,
+  answers: readonly string[],
+): { answers?: string } {
+  const guidance = researchAnswersGuidance(questions ?? [], answers);
+  return guidance ? { answers: guidance } : {};
+}
 
 const DOMAIN_SEPARATOR = /[\s,;]+/;
 
@@ -740,6 +750,7 @@ export function ResearchActivity({
           <ResearchPlan
             steps={steps}
             gaps={research.gaps}
+            questions={research.questions}
             editable
             busy={isRetrying}
             costEstimate={costEstimate}
@@ -748,6 +759,7 @@ export function ResearchActivity({
                 ...researchSourceRequest(sources),
                 steps: submission.steps,
                 deliverable: submission.deliverable,
+                ...answersOption(research.questions, submission.answers),
               })
             }
             onCancel={() => onPlanDecision?.('cancel')}

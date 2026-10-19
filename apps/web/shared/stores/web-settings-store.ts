@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { FollowUpQueueMode } from '@agiworkforce/unified-chat';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import { DEFAULT_CODE_THEME, type CodeThemeId } from '@agiworkforce/unified-chat/shiki-highlighter';
 
 export type ChatTextSize = 'small' | 'default' | 'large';
 
@@ -59,6 +60,7 @@ interface SettingsState {
   /** A follow-up sent while a local coding agent works; steer joins the running turn. */
   codeFollowUpQueueMode: FollowUpQueueMode;
   codeBlockWrap: boolean;
+  codeTheme: CodeThemeId;
   sendWithEnter: boolean;
   defaultWorkMode: CloudWorkMode;
   followUpSuggestionsEnabled: boolean;
@@ -82,6 +84,7 @@ interface SettingsState {
   setDictationEnabled: (enabled: boolean) => void;
   setCodeFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
+  setCodeTheme: (theme: CodeThemeId) => void;
   setSendWithEnter: (enabled: boolean) => void;
   setDefaultWorkMode: (mode: CloudWorkMode) => void;
   setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
@@ -106,6 +109,7 @@ export const useSettingsStore = create<SettingsState>()(
       dictationEnabled: true,
       codeFollowUpQueueMode: 'steer',
       codeBlockWrap: false,
+      codeTheme: DEFAULT_CODE_THEME,
       sendWithEnter: true,
       defaultWorkMode: 'chat',
       followUpSuggestionsEnabled: true,
@@ -139,6 +143,7 @@ export const useSettingsStore = create<SettingsState>()(
               : [...s.hiddenNavIds, id],
         })),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
+      setCodeTheme: (codeTheme) => set({ codeTheme }),
       setSendWithEnter: (sendWithEnter) => set({ sendWithEnter }),
       setDefaultWorkMode: (defaultWorkMode) => set({ defaultWorkMode }),
       setFollowUpSuggestionsEnabled: (enabled) => set({ followUpSuggestionsEnabled: enabled }),

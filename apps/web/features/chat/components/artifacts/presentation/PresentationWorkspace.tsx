@@ -12,6 +12,7 @@ import {
   Diamond,
   Image as ImageIcon,
   LayoutTemplate,
+  MessageSquarePlus,
   Minus,
   MoveRight,
   Palette,
@@ -66,7 +67,12 @@ import {
   type ShapeKind,
 } from './deck-shapes';
 import { DECK_THEMES, resolveDeckTheme, themeMeta, type DeckTheme } from './deck-themes';
-import { ImageEmbedError, embedImageFile, imageMarkdown } from './image-embed';
+import {
+  IMAGE_EMBED_FAILURE_COPY,
+  ImageEmbedError,
+  embedImageFile,
+  imageMarkdown,
+} from './image-embed';
 
 export const DECK_TABLE_TEMPLATE = [
   '| Item | Detail | Owner |',
@@ -100,6 +106,8 @@ export interface PresentationWorkspaceProps {
   handEdited: boolean;
   onSave: (content: string) => void;
   onRequestEdits?: (prompt: string) => boolean;
+  onCommentSlide?: (slideIndex: number) => void;
+  onCreateBrand?: (apply: (meta: Record<string, string>) => void) => void;
   brandThemes?: readonly { id: string; name: string; meta: Record<string, string> }[];
 }
 
@@ -122,6 +130,8 @@ export function PresentationWorkspace({
   handEdited,
   onSave,
   onRequestEdits,
+  onCommentSlide,
+  onCreateBrand,
   brandThemes = [],
 }: PresentationWorkspaceProps) {
   const deck = useMemo(() => parseDeck(content), [content]);
@@ -217,7 +227,9 @@ export function PresentationWorkspace({
       toast.success('Image placed on the slide');
     } catch (error) {
       toast.error(
-        error instanceof ImageEmbedError ? error.message : 'That image could not be placed.',
+        error instanceof ImageEmbedError
+          ? IMAGE_EMBED_FAILURE_COPY[error.failure]
+          : 'That image could not be placed.',
       );
     }
   };
@@ -287,6 +299,20 @@ export function PresentationWorkspace({
           commit({ ...deck, meta: { ...themeMeta(deck.meta, 'custom'), ...brand.meta } }),
       };
     }),
+    ...(onCreateBrand
+      ? [
+          {
+            id: 'brand-new',
+            label: 'New brand',
+            group: 'Your brands',
+            icon: Plus,
+            onSelect: () =>
+              onCreateBrand((meta) =>
+                commit({ ...deck, meta: { ...themeMeta(deck.meta, 'custom'), ...meta } }),
+              ),
+          },
+        ]
+      : []),
   ];
 
   const insertItems: DeckMenuItem[] = [
@@ -404,84 +430,108 @@ export function PresentationWorkspace({
       className="flex h-full min-h-0 flex-col bg-background"
       data-testid="presentation-workspace"
     >
-      {editable ? (
-        <div
-          role="toolbar"
-          aria-label="Presentation"
-          className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/30 px-2 py-1 scrollbar-none"
-        >
-          {editing ? (
-            <>
-              <DeckMenu
-                label="Shape"
-                icon={Square}
-                items={insertItems.filter((item) => item.group === 'Shapes')}
-                testId="deck-shapes-menu"
-              />
-              <span className="flex-1" />
-              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={cancelEditing}>
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 text-xs">Cancel</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                onClick={finishEditing}
-                data-testid="deck-finish-editing"
-              >
-                <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 text-xs">Done</span>
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => startEditing()}
-                data-testid="deck-edit-slide"
-              >
-                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ms-1 text-xs">Edit slide</span>
-              </Button>
-              <DeckMenu label="Theme" icon={Palette} items={themeItems} testId="deck-theme-menu" />
-              <DeckMenu label="Insert" icon={Plus} items={insertItems} testId="deck-insert-menu" />
-              <DeckMenu
-                label="Slide"
-                icon={LayoutTemplate}
-                items={slideItems}
-                testId="deck-slide-menu"
-              />
-              {onRequestEdits ? (
+      <div
+        role="toolbar"
+        aria-label="Presentation"
+        className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/30 px-2 py-1 scrollbar-none"
+      >
+        {editing ? (
+          <>
+            <DeckMenu
+              label="Shape"
+              icon={Square}
+              items={insertItems.filter((item) => item.group === 'Shapes')}
+              testId="deck-shapes-menu"
+            />
+            <span className="flex-1" />
+            <Button variant="ghost" size="sm" className="h-8 px-2" onClick={cancelEditing}>
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="ms-1 text-xs">Cancel</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={finishEditing}
+              data-testid="deck-finish-editing"
+            >
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="ms-1 text-xs">Done</span>
+            </Button>
+          </>
+        ) : (
+          <>
+            {editable ? (
+              <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn('h-8 px-2', asking && 'bg-muted')}
-                  onClick={() => setAsking((value) => !value)}
-                  aria-pressed={asking}
-                  data-testid="deck-ask-slide"
+                  className="h-8 px-2"
+                  onClick={() => startEditing()}
+                  data-testid="deck-edit-slide"
                 >
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="ms-1 text-xs">Ask about slide</span>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="ms-1 text-xs">Edit slide</span>
                 </Button>
-              ) : null}
-              <span className="flex-1" />
+                <DeckMenu
+                  label="Theme"
+                  icon={Palette}
+                  items={themeItems}
+                  testId="deck-theme-menu"
+                />
+                <DeckMenu
+                  label="Insert"
+                  icon={Plus}
+                  items={insertItems}
+                  testId="deck-insert-menu"
+                />
+                <DeckMenu
+                  label="Slide"
+                  icon={LayoutTemplate}
+                  items={slideItems}
+                  testId="deck-slide-menu"
+                />
+                {onRequestEdits ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn('h-8 px-2', asking && 'bg-muted')}
+                    onClick={() => setAsking((value) => !value)}
+                    aria-pressed={asking}
+                    data-testid="deck-ask-slide"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="ms-1 text-xs">Ask about slide</span>
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            {onCommentSlide ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2"
-                onClick={() => setPresenting(true)}
-                aria-label="Present"
-                data-testid="deck-present"
+                onClick={() => onCommentSlide(current)}
+                aria-label={`Comment on slide ${current + 1}`}
+                data-testid="deck-comment-slide"
               >
-                <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
-            </>
-          )}
-        </div>
-      ) : null}
+            ) : null}
+            <span className="flex-1" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setPresenting(true)}
+              aria-label="Present"
+              data-testid="deck-present"
+            >
+              <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          </>
+        )}
+      </div>
 
       <input
         ref={fileInputRef}

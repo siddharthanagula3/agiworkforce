@@ -239,6 +239,10 @@ import {
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { useSoftKeyboardInset } from './soft-keyboard-inset';
+import {
+  USAGE_RESET_REMINDER_COPY,
+  type UsageResetReminderOutcome,
+} from '@/features/chat/lib/usage-reset-reminder';
 
 /**
  * The operations a composer offers for an attached image. `outpaint` is not
@@ -523,6 +527,7 @@ interface ChatComposerProps {
     resetAt?: string;
     actionLabel?: string;
     onRecover?: () => void;
+    onRemindAtReset?: () => Promise<UsageResetReminderOutcome>;
   };
   onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
   /**
@@ -630,11 +635,12 @@ const COMPOSER_RESTING_HEIGHT_EMPTY_PX = 40;
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
 /**
- * Below this card width the model and effort chips leave the textbox a few
- * characters ("Messa" in a 480 px Quick Ask window), so the field takes its own
- * row above the controls.
+ * Narrower than this, the chips beside the textbox leave it a few characters
+ * ("Messa" in a 480 px Quick Ask window, "Message A" beside a long model name),
+ * so the field takes its own row above the controls until the card grows past
+ * the width it stacked at.
  */
-const COMPOSER_STACK_BELOW_PX = 560;
+const COMPOSER_MIN_INLINE_FIELD_PX = 240;
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
@@ -1782,6 +1788,7 @@ const ChatComposerNewComponent = ({
   const [composerExpandable, setComposerExpandable] = useState(false);
   const [composerWrapsLines, setComposerWrapsLines] = useState(false);
   const [composerNarrow, setComposerNarrow] = useState(false);
+  const narrowStackedAtRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is not a DOM
@@ -2284,11 +2291,30 @@ const ChatComposerNewComponent = ({
 
   useEffect(() => {
     const card = composerCardRef.current;
-    if (!card || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setComposerNarrow(entry.contentRect.width < COMPOSER_STACK_BELOW_PX);
-    });
+    const field = composerRowRef.current;
+    if (!card || !field || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const cardWidth = card.getBoundingClientRect().width;
+      const fieldWidth = field.getBoundingClientRect().width;
+      setComposerNarrow((narrow) => {
+        if (narrow) {
+          const stackedAt = narrowStackedAtRef.current;
+          if (stackedAt !== null && cardWidth > stackedAt) {
+            narrowStackedAtRef.current = null;
+            return false;
+          }
+          return true;
+        }
+        if (fieldWidth > 0 && fieldWidth < COMPOSER_MIN_INLINE_FIELD_PX) {
+          narrowStackedAtRef.current = cardWidth;
+          return true;
+        }
+        return false;
+      });
+    };
+    const observer = new ResizeObserver(measure);
     observer.observe(card);
+    observer.observe(field);
     return () => observer.disconnect();
   }, []);
 
@@ -4278,6 +4304,18 @@ const ChatComposerNewComponent = ({
   const usageBlockResetLabel = usageBlockResetAt
     ? formatUsageResetIn(usageBlockResetAt, usageBlockNowMs)
     : null;
+  const [usageResetReminder, setUsageResetReminder] = useState<
+    UsageResetReminderOutcome | 'pending' | null
+  >(null);
+  useEffect(() => {
+    setUsageResetReminder(null);
+  }, [usageBlockResetAt]);
+  const onRemindAtReset = usageBlockResetAt ? usageBlock?.onRemindAtReset : undefined;
+  const handleRemindAtReset = useCallback(() => {
+    if (!onRemindAtReset) return;
+    setUsageResetReminder('pending');
+    void onRemindAtReset().then(setUsageResetReminder);
+  }, [onRemindAtReset]);
 
   const composerDisabled = disabled || trialExhausted || Boolean(usageBlock);
   const selectedMediaModelUnavailable =
@@ -4613,15 +4651,34 @@ const ChatComposerNewComponent = ({
               <span className="opacity-80"> {usageBlockResetLabel}.</span>
             ) : null}
           </span>
-          {usageBlock.onRecover && usageBlock.actionLabel && (
-            <button
-              type="button"
-              onClick={usageBlock.onRecover}
-              className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
-            >
-              {usageBlock.actionLabel}
-            </button>
-          )}
+          <span className="flex shrink-0 items-center gap-3">
+            {onRemindAtReset &&
+              (usageResetReminder && usageResetReminder !== 'pending' ? (
+                <span role="status" data-testid="composer-usage-reminder-status">
+                  {USAGE_RESET_REMINDER_COPY[usageResetReminder]}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRemindAtReset}
+                  disabled={usageResetReminder === 'pending'}
+                  aria-busy={usageResetReminder === 'pending'}
+                  className="inline-flex min-h-6 items-center gap-1.5 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill disabled:cursor-wait"
+                >
+                  {usageResetReminder === 'pending' ? <Spinner size="sm" aria-hidden /> : null}
+                  Notify me when it resets
+                </button>
+              ))}
+            {usageBlock.onRecover && usageBlock.actionLabel && (
+              <button
+                type="button"
+                onClick={usageBlock.onRecover}
+                className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
+              >
+                {usageBlock.actionLabel}
+              </button>
+            )}
+          </span>
         </div>
       )}
 

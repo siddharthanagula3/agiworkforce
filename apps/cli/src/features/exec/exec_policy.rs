@@ -54,10 +54,10 @@ pub fn load_policy() -> Result<Policy> {
     if let Some(rules_dir) = crate::native_process_test_fixture::rules_dir() {
         return load_policy_from_dir(&rules_dir);
     }
-    let Some(home) = dirs::home_dir() else {
+    let Ok(config_dir) = crate::config::CliConfig::config_dir() else {
         return Ok(default_policy());
     };
-    load_policy_from_dir(&home.join(".agiworkforce").join("rules"))
+    load_policy_from_dir(&config_dir.join("rules"))
 }
 
 fn load_policy_from_dir(rules_dir: &Path) -> Result<Policy> {
@@ -243,10 +243,8 @@ fn is_literal_policy_token(value: &str) -> bool {
 }
 
 fn user_approved_policy_path() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("cannot persist exec policy: home directory unavailable"))?;
-    Ok(home
-        .join(".agiworkforce")
+    Ok(crate::config::CliConfig::config_dir()
+        .context("cannot persist exec policy")?
         .join("rules")
         .join("user-approved.rules"))
 }

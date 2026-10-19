@@ -377,6 +377,7 @@ export interface GarnishPreferences {
    */
   windowFrame: WindowFrame | null;
   agentNotifications: HostAgentNotificationPreferences;
+  dictateIntoFocusedApp: boolean;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -390,6 +391,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   appearance: 'system',
   windowFrame: null,
   agentNotifications: DEFAULT_HOST_AGENT_NOTIFICATIONS,
+  dictateIntoFocusedApp: false,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -441,6 +443,7 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       : DEFAULT_PREFERENCES.appearance,
     windowFrame: normalizeWindowFrame(source['windowFrame']),
     agentNotifications: normalizeAgentNotifications(source['agentNotifications']),
+    dictateIntoFocusedApp: source['dictateIntoFocusedApp'] === true,
   };
 }
 

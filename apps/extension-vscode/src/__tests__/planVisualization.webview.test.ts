@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { vscodeApiStub } from './vscodeApiStub';
 
-function boot(): void {
+function boot(postMessage = vi.fn()): void {
   const html = getWebviewContent(
     {
       cspSource: 'vscode-webview://mock',
@@ -24,7 +24,7 @@ function boot(): void {
   document.body.innerHTML = parsed.body.innerHTML;
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => vscodeApiStub({ postMessage: vi.fn() }),
+    value: () => vscodeApiStub({ postMessage }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),
@@ -85,5 +85,17 @@ describe('VS Code sidebar plan visualization', () => {
     expect(document.querySelector('.plan-card__step--in-progress')?.textContent).toContain(
       'Run tests',
     );
+  });
+
+  it('opens the plan as a document from the plan card', () => {
+    const postMessage = vi.fn();
+    boot(postMessage);
+    sendPlan({ plan: [{ step: 'Run tests', status: 'pending' }] });
+
+    const open = document.querySelector<HTMLButtonElement>('.plan-card__open');
+    expect(open?.getAttribute('aria-label')).toBe('Open the plan as a document');
+    open?.click();
+
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'openPlanDocument' }));
   });
 });

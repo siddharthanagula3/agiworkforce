@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  RefreshControl,
-  TextInput,
-  View,
-  type ListRenderItemInfo,
-} from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,6 +24,7 @@ import {
   fetchInstalledSkillNames,
   fetchSkillCatalog,
   fetchCanAuthorSkills,
+  importSkillFile,
   installSkill,
   isAuthoredSkill,
   isPluginOwnedSkill,
@@ -38,21 +32,11 @@ import {
   isSkillInstalled,
   skillActionFailureMessage,
   uninstallSkill,
-  uploadPersonalSkill,
   type ManagedSkillSource,
   type ManagedSkillSummary,
 } from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
 import { NewSkillSheet } from './NewSkillSheet';
-import { showToast } from '@/src/shared/components/Toast';
-import { toUserMessage } from '@/services/userMessage';
-
-const SKILL_UPLOAD_TYPES = [
-  'text/markdown',
-  'text/plain',
-  'application/zip',
-  'application/octet-stream',
-];
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -249,6 +233,7 @@ function SkillRow({
   actionError,
   onUse,
   onToggleInstall,
+  onOpen,
 }: {
   skill: ManagedSkillSummary;
   installed: boolean;
@@ -256,6 +241,7 @@ function SkillRow({
   actionError: string | null;
   onUse: (skill: ManagedSkillSummary) => void;
   onToggleInstall: (skill: ManagedSkillSummary, install: boolean) => void;
+  onOpen: (skill: ManagedSkillSummary) => void;
 }) {
   const colors = useThemeColors();
   const included = skill.lifecycle === 'included';
@@ -370,6 +356,14 @@ function SkillRow({
                 onPress={() => onToggleInstall(skill, !installed)}
               />
             ) : null}
+            <Button
+              title="Details"
+              accessibilityLabel={`Open ${skill.name} details`}
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onPress={() => onOpen(skill)}
+            />
             {installed ? (
               <Button
                 title="Use in chat"
@@ -618,11 +612,12 @@ export function SkillsScreen() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [canAuthor, setCanAuthor] = useState(false);
   const [newSkillOpen, setNewSkillOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const cloudActive = appMode === 'cloud';
   const canLoad = FEATURES.skills && isClerkLoaded && isClerkSignedIn && cloudActive;
@@ -679,6 +674,36 @@ export function SkillsScreen() {
     [clearSkill, clerkUserId, pendingSkill, selectedSkill],
   );
 
+  const handleOpenSkill = useCallback(
+    (skill: ManagedSkillSummary) =>
+      router.push({ pathname: '/(app)/skills/[name]' as const, params: { name: skill.name } }),
+    [router],
+  );
+
+  const handleImport = useCallback(async () => {
+    setImportError(null);
+    const picked = await DocumentPicker.getDocumentAsync({
+      type: ['text/markdown', 'text/x-markdown', 'text/plain', 'application/zip'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    const asset = picked.canceled ? null : picked.assets[0];
+    if (!asset) return;
+    setImporting(true);
+    try {
+      await importSkillFile({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType ?? 'text/markdown',
+      });
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      setImportError(skillActionFailureMessage(error, true));
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
   const load = useCallback(
     async (reason: 'initial' | 'refresh', signal?: AbortSignal) => {
       const account = captureCloudAccountEpoch();
@@ -715,33 +740,6 @@ export function SkillsScreen() {
     },
     [clerkUserId],
   );
-
-  const uploadSkill = useCallback(async () => {
-    const picked = await DocumentPicker.getDocumentAsync({
-      type: SKILL_UPLOAD_TYPES,
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    const asset = picked.canceled ? undefined : picked.assets[0];
-    if (!asset) return;
-    setUploading(true);
-    try {
-      await uploadPersonalSkill({
-        uri: asset.uri,
-        name: asset.name,
-        mimeType: asset.mimeType ?? null,
-      });
-      showToast(`Added ${asset.name}`);
-      void load('refresh');
-    } catch (cause) {
-      Alert.alert(
-        'Could not add this skill',
-        toUserMessage(cause, 'This skill could not be added. Check the file and try again.'),
-      );
-    } finally {
-      setUploading(false);
-    }
-  }, [load]);
 
   useEffect(() => {
     if (!canLoad) {
@@ -784,9 +782,10 @@ export function SkillsScreen() {
         actionError={actionError?.name === item.name ? actionError.message : null}
         onUse={handleUseSkill}
         onToggleInstall={(skill, install) => void handleToggleInstall(skill, install)}
+        onOpen={handleOpenSkill}
       />
     ),
-    [actionError, handleToggleInstall, handleUseSkill, installed, pendingSkill],
+    [actionError, handleOpenSkill, handleToggleInstall, handleUseSkill, installed, pendingSkill],
   );
 
   if (!FEATURES.skills) return <FeatureUnavailable feature="Skills" />;
@@ -825,20 +824,25 @@ export function SkillsScreen() {
             <View style={{ gap: 10 }}>
               <CatalogIntro count={installedSkillCount} />
               {canAuthor ? (
-                <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Button
                     title="New skill"
                     variant="outline"
+                    style={{ flex: 1 }}
                     onPress={() => setNewSkillOpen(true)}
                   />
                   <Button
-                    title={uploading ? 'Adding skill…' : 'Upload a skill'}
+                    title="Import"
                     variant="outline"
-                    accessibilityLabel="Upload a skill file (SKILL.md or a .zip of the skill folder)"
-                    disabled={uploading}
-                    onPress={() => void uploadSkill()}
+                    style={{ flex: 1 }}
+                    loading={importing}
+                    accessibilityLabel="Import a skill from a SKILL.md or zip file"
+                    onPress={() => void handleImport()}
                   />
                 </View>
+              ) : null}
+              {importError ? (
+                <CatalogRefreshError message={importError} onRetry={() => void handleImport()} />
               ) : null}
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />

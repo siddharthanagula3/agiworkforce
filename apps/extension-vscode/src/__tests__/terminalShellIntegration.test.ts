@@ -239,4 +239,23 @@ describe('terminal shell-integration capture (SIX-15)', () => {
       message: 'No terminal output to explain.',
     });
   });
+
+  it("offers the active terminal's last command and output to the chat, and nothing before one runs", async () => {
+    const provider = new TerminalProvider({} as vscode.SecretStorage);
+    const terminal = makeTerminal(true);
+    vscode.window.activeTerminal = terminal;
+    expect(provider.latestOutput()).toBeUndefined();
+
+    const { start, end } = listeners();
+    const execution = makeExecution('npm test', ['FAIL src/math.test.ts\n']);
+    start({ terminal, execution });
+    await flush();
+    end({ terminal, execution, exitCode: 1 });
+
+    expect(provider.latestOutput()).toEqual({
+      terminalName: 'zsh',
+      transcript: '$ npm test\nFAIL src/math.test.ts\n[exit code 1]',
+    });
+    expect(vscode.window.showInputBox).not.toHaveBeenCalled();
+  });
 });

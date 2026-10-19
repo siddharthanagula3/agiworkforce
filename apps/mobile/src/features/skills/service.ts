@@ -1,6 +1,9 @@
+import { API_URL } from '@/lib/constants';
+import { guardedFetch } from '@/lib/egressGuard';
+import { platformRequestHeaders } from '@/lib/platformHeaders';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { ApiHttpError, api, apiFetch } from '@/services/api';
-import { ApiHttpError as HttpError } from '@/services/apiErrors';
+import { getAuthHeaders } from '@/services/authSession';
 import {
   ManagedSkillsResponseSchema,
   type ManagedSkillSource,
@@ -123,44 +126,110 @@ export async function createPersonalSkill(draft: SkillDraftInput): Promise<void>
   });
 }
 
-export interface SkillUploadFile {
+export interface SkillFileEntry {
+  path: string;
+  size: number;
+}
+
+export const SKILL_ENTRY_FILE = 'SKILL.md';
+
+function skillPath(name: string, leaf = ''): string {
+  return `${SKILLS_PATH}/${encodeURIComponent(name)}${leaf ? `/${leaf}` : ''}`;
+}
+
+export function skillFilePath(name: string, path: string): string {
+  return skillPath(name, `files/${path.split('/').map(encodeURIComponent).join('/')}`);
+}
+
+export async function fetchSkillBody(name: string, signal?: AbortSignal): Promise<string> {
+  assertSkillsAvailable();
+  const response = await api.get<{ body?: unknown }>(skillPath(name), { signal });
+  if (typeof response?.body !== 'string') throw new Error('Skills returned an invalid response.');
+  return response.body;
+}
+
+export async function fetchSkillFiles(
+  name: string,
+  signal?: AbortSignal,
+): Promise<SkillFileEntry[]> {
+  assertSkillsAvailable();
+  const response = await api.get<{ files?: unknown }>(skillPath(name, 'files'), { signal });
+  const files = response?.files;
+  if (
+    !Array.isArray(files) ||
+    !files.every(
+      (file): file is SkillFileEntry =>
+        typeof file === 'object' &&
+        file !== null &&
+        typeof (file as SkillFileEntry).path === 'string' &&
+        typeof (file as SkillFileEntry).size === 'number',
+    )
+  ) {
+    throw new Error('Skills returned an invalid response.');
+  }
+  return files;
+}
+
+export async function fetchSkillFileText(name: string, path: string): Promise<string> {
+  assertSkillsAvailable();
+  const response = await apiFetch(skillFilePath(name, path), { method: 'GET' });
+  if (!response.ok) throw new ApiHttpError(`Could not open ${path}.`, response.status);
+  return response.text();
+}
+
+export async function updatePersonalSkill(name: string, draft: SkillDraftInput): Promise<void> {
+  assertSkillsAvailable();
+  await api.put<unknown>(skillPath(name), {
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    body: draft.body.trim(),
+  });
+}
+
+export async function deletePersonalSkill(name: string): Promise<void> {
+  assertSkillsAvailable();
+  const response = await apiFetch(skillPath(name), { method: 'DELETE' });
+  if (!response.ok) throw new ApiHttpError(`Could not delete ${name}.`, response.status);
+}
+
+export interface SkillUploadAsset {
   uri: string;
   name: string;
-  mimeType: string | null;
+  mimeType: string;
 }
 
-const SKILL_UPLOAD_FIELD = 'file';
-
-const SKILL_UPLOAD_FAILED = 'This skill could not be added. Check the file and try again.';
-
-function uploadError(status: number, body: unknown): HttpError {
-  const error = (body as { error?: unknown } | null)?.error;
-  const record =
-    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
-  const message =
-    typeof error === 'string' && error.trim()
-      ? error
-      : typeof record['message'] === 'string' && record['message'].trim()
-        ? record['message']
-        : SKILL_UPLOAD_FAILED;
-  const code = typeof record['code'] === 'string' ? record['code'] : 'skill_upload_failed';
-  return new HttpError(message, status, code);
-}
-
-export async function uploadPersonalSkill(file: SkillUploadFile): Promise<void> {
+export async function importSkillFile(asset: SkillUploadAsset): Promise<void> {
   assertSkillsAvailable();
   const form = new FormData();
-  form.append(SKILL_UPLOAD_FIELD, {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType ?? 'application/octet-stream',
+  form.append('file', {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType,
   } as unknown as Blob);
-  const response = await apiFetch(SKILLS_PATH, {
+  const response = await guardedFetch(`${API_URL}${SKILLS_PATH}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      ...platformRequestHeaders(),
+      ...(await getAuthHeaders()),
+    },
     body: form,
   });
   if (response.ok) return;
-  const body = await response.json().catch(() => null);
-  throw uploadError(response.status, body);
+  const text = await response.text();
+  let message = 'Could not import this skill.';
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: unknown } | string };
+    if (typeof parsed.error === 'string') message = parsed.error;
+    else if (typeof parsed.error?.message === 'string') message = parsed.error.message;
+  } catch {
+    message = 'Could not import this skill.';
+  }
+  throw new ApiHttpError(message, response.status);
+}
+
+export function isTextSkillFile(path: string): boolean {
+  return /\.(md|markdown|txt|json|ya?ml|toml|csv|tsv|py|js|ts|sh|rb|go|rs|html|css|xml|sql)$/i.test(
+    path,
+  );
 }

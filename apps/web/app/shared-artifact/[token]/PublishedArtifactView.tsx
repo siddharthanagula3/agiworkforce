@@ -27,7 +27,7 @@ export interface PublishedArtifactViewProps {
   content: string;
   publishedAt: string;
   /** Who the publication is for. Drives the line under the title, nothing else. */
-  audience?: 'public' | 'organization';
+  audience?: 'public' | 'organization' | 'invited';
   token?: string;
 }
 
@@ -66,6 +66,7 @@ export function PublishedArtifactView({
   const router = useRouter();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [dataRefresh, setDataRefresh] = useState(0);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
   const fallbackSrcDoc = useMemo(
@@ -133,12 +134,14 @@ export function PublishedArtifactView({
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `
             : ''}
           <Link
-            href={audience === 'organization' ? '/chat' : '/'}
+            href={audience === 'public' ? '/' : '/chat'}
             className="underline-offset-2 hover:underline"
           >
             {audience === 'organization'
               ? t('artifactPublish.sharedWithWorkspace')
-              : t('artifactPublish.sharedFrom', 'Shared from AGI')}
+              : audience === 'invited'
+                ? t('artifactPublish.sharedWithYou', 'Shared with you')
+                : t('artifactPublish.sharedFrom', 'Shared from AGI')}
           </Link>
         </p>
       </header>
@@ -186,7 +189,15 @@ export function PublishedArtifactView({
           onAnswer={runtime.answerAiRequest}
         />
       ) : runtime.grantedConnectorSets.length > 0 ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDataRefresh((count) => count + 1)}
+            data-testid="artifact-runtime-refresh-data"
+          >
+            {t('artifactPublish.runtimeRefreshData', 'Refresh data')}
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -209,6 +220,7 @@ export function PublishedArtifactView({
           className="h-[70vh] w-full rounded-lg border border-border/40 bg-white"
           onRenderError={setRenderError}
           runtime={runtime.host}
+          refreshKey={dataRefresh}
         />
       ) : kind === 'svg' ? (
         svgSrc ? (

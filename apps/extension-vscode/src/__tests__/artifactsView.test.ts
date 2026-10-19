@@ -11,8 +11,10 @@ import {
   readArtifactCommandArgument,
 } from '../features/artifacts/artifactsTree';
 import {
+  artifactDescription,
   artifactEditorLanguage,
   artifactFileName,
+  artifactTooltipLines,
   describeArtifactFailure,
 } from '../features/artifacts/artifactPresentation';
 import { readArtifactContent } from '../features/artifacts/artifactActions';
@@ -219,6 +221,16 @@ describe('artifact content and language', () => {
     expect(artifactFileName(makeArtifact())).toBe('invoice-page.html');
     expect(artifactFileName(makeArtifact({ title: null, type: 'code', language: 'ts' }))).toBe(
       'untitled-code.ts',
+    );
+  });
+});
+
+describe('published audience', () => {
+  it('names an artifact shared with invited people', () => {
+    const published = { visibility: 'invited' as const };
+    expect(artifactDescription(makeArtifact(), published)).toContain('shared with invited people');
+    expect(artifactTooltipLines(makeArtifact(), published)).toContain(
+      'A published copy of this artifact opens only for the people it was shared with.',
     );
   });
 });

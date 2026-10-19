@@ -139,7 +139,7 @@ function isRowLevelSecurityDenial(error: unknown): boolean {
   return false;
 }
 
-interface PublishedArtifactRow {
+export interface PublishedArtifactRow {
   id: string;
   token: string;
   user_id: string;
@@ -206,7 +206,7 @@ function rowVisibility(value: string | null | undefined): PublishedArtifactVisib
   return isPublishedArtifactVisibility(value) ? value : 'public';
 }
 
-function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
+export function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
   return {
     id: row.id,
     token: row.token,
@@ -663,4 +663,16 @@ export async function readPublishedArtifactVersion(
     language: row.language,
     content: row.content,
   };
+}
+
+export async function isInviteOnlyPublication(
+  db: DatabaseAdapter,
+  token: string,
+): Promise<boolean> {
+  if (!PUBLISHED_TOKEN_REGEX.test(token)) return false;
+  const rows = await db.query<{ token: string }>(
+    `select token from public.published_artifacts where token = $1 and visibility = 'invited' limit 1`,
+    [token],
+  );
+  return rows.length > 0;
 }

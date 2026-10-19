@@ -1,52 +1,27 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   GOOGLE_DRIVE_KNOWLEDGE_IMPORT_MAX_FILES,
   GoogleDriveKnowledgeImportRequestSchema,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
-import {
-  admitAttachmentUpload,
-  attachmentLimitBytes,
-  attachmentSizeRefusal,
-} from '@/lib/server/attachment-allowance';
-import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
-import { secureFilenameSegment } from '@/lib/secure-random';
-import {
-  connectorUnreachableMessage,
-  resolveConnectorAccessToken,
-} from '@/lib/connectors/oauth-access';
-import {
-  GOOGLE_DRIVE_CONNECTOR_ID,
-  GoogleDriveFileError,
-  downloadGoogleDriveFile,
-} from '@/lib/connectors/google-drive-files';
+import { GoogleDriveFileError } from '@/lib/connectors/google-drive-files';
 import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
-import { registerProjectKnowledgeFile } from '@/lib/server/project-knowledge-files';
-import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import {
+  assertDriveImportableProject,
+  driveImportLimits,
+  importDriveFileIntoProject,
+  resolveDriveAccess,
+} from '@/lib/server/project-drive-import';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  const ext =
-    dot >= 0
-      ? name
-          .slice(dot + 1)
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '')
-      : '';
-  return ext || 'bin';
-}
 
 type ImportOutcome =
   | { fileId: string; status: 'added'; file: unknown; notice?: string }
@@ -78,129 +53,25 @@ async function handleImport(request: NextRequest, context: RouteContext): Promis
     );
   }
 
-  const [shared] = await db.query<{ project_id: string }>(
-    `select project_id
-       from public.organization_shared_projects
-      where project_id = $1
-        and organization_id is not distinct from $2::uuid
-      limit 1`,
-    [projectId, organizationId],
-  );
-  if (shared) {
-    throw createError.conflict(
-      'Google Drive files can be added only to a project that is not shared, so each person reads Drive with their own access.',
-    );
-  }
+  const scope = { db, userId, organizationId, projectId };
+  await assertDriveImportableProject(scope);
 
-  const [owned] = await db.query<{ id: string }>(
-    `select id
-       from user_projects
-      where id = $1
-        and user_id = $2
-        and organization_id is not distinct from $3::uuid
-        and is_archived = false
-        and deleted_at is null
-      limit 1`,
-    [projectId, userId, organizationId],
-  );
-  if (!owned) throw createError.notFound('Project not found');
+  const access = await resolveDriveAccess(userId, 'add');
+  if (access instanceof NextResponse) return access;
 
-  if (!isPrivateObjectStorageConfigured()) {
-    throw createError.capabilityUnavailable('Project sources need cloud file storage.');
-  }
-
-  const access = await resolveConnectorAccessToken(userId, GOOGLE_DRIVE_CONNECTOR_ID);
-  if (access.status === 'unreachable') {
-    throw createError.serviceUnavailable(connectorUnreachableMessage('Google Drive')).asUserSafe();
-  }
-  if (access.status !== 'ready') {
-    return NextResponse.json(
-      {
-        error: {
-          code:
-            access.status === 'reauthorization-required'
-              ? 'google_drive_reconnect_required'
-              : 'google_drive_not_connected',
-          message:
-            access.status === 'reauthorization-required'
-              ? 'Reconnect Google Drive to add files from it.'
-              : 'Connect Google Drive to add files from it.',
-        },
-      },
-      { status: 409 },
-    );
-  }
-
-  const planTier = await resolveEntitledPlanTier(db, userId, {
-    workspaceOrganizationId: organizationId,
-  });
-  const maxBytes = attachmentLimitBytes(planTier, 'knowledge-file');
-  const tooLarge = attachmentSizeRefusal(planTier, 'knowledge-file', maxBytes + 1);
+  const limits = await driveImportLimits(scope);
   const outcomes: ImportOutcome[] = [];
   for (const fileId of parsed.data.fileIds) {
-    let writtenKey: string | null = null;
     try {
-      const drive = await downloadGoogleDriveFile(
-        access.accessToken,
-        fileId,
-        maxBytes,
-        tooLarge ? `is too large. ${tooLarge.message}` : undefined,
-      );
-      await admitAttachmentUpload({
-        db,
-        userId,
-        organizationId,
-        kind: 'knowledge-file',
-        byteCount: drive.data.byteLength,
-      });
-      const key = `knowledge-files/projects/${projectId}/${Date.now()}_${secureFilenameSegment(13)}.${extensionOf(drive.fileName)}`;
-      await putPrivateObject({
-        key,
-        data: drive.data,
-        contentType: drive.mimeType,
-        contentLength: drive.data.byteLength,
-      });
-      writtenKey = key;
-      const registration = await registerProjectKnowledgeFile(
-        { db, userId, organizationId, projectId },
-        {
-          fileName: drive.fileName.slice(0, 255),
-          mimeType: drive.mimeType,
-          byteCount: drive.data.byteLength,
-          checksumSha256: createHash('sha256').update(drive.data).digest('hex'),
-          sourceSurface: 'web',
-          storageUri: key,
-        },
-        {
-          kind: 'connector_item',
-          provider: 'google_drive',
-          uri:
-            drive.webViewLink ??
-            `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`,
-          externalId: fileId,
-          title: drive.fileName,
-          version: drive.version ? { kind: 'revision', value: drive.version } : null,
-          access: 'connector',
-          connectorId: GOOGLE_DRIVE_CONNECTOR_ID,
-          accountKey: access.accountKey,
-        },
-      );
-      writtenKey = null;
+      const imported = await importDriveFileIntoProject(scope, access, limits, fileId);
+      if (imported.status !== 'added') continue;
       outcomes.push({
         fileId,
         status: 'added',
-        file: registration.file,
-        ...(registration.notice ? { notice: registration.notice } : {}),
+        file: imported.registration.file,
+        ...(imported.registration.notice ? { notice: imported.registration.notice } : {}),
       });
     } catch (error) {
-      if (writtenKey) {
-        await deleteProjectKnowledgeObject(writtenKey).catch((deleteError: unknown) =>
-          logger.error(
-            { error: deleteError, projectId, objectKey: writtenKey },
-            '[knowledge-files] could not remove a Google Drive file that was not added',
-          ),
-        );
-      }
       const message =
         error instanceof GoogleDriveFileError || isAppError(error)
           ? error.message

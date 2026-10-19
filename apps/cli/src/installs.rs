@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::features::plugins::plugins;
+use crate::features::plugins::settings::{self as plugin_settings_store, PluginSettings};
 use crate::mcp::registry::{self, McpRegistry, TransportKind};
 
 pub(crate) enum McpServerTarget {
@@ -457,11 +458,85 @@ pub(crate) fn set_plugin_enabled(name: &str, enabled: bool) -> Result<String> {
     ))
 }
 
+/// An installed plugin's directory name and its declared settings.
+pub(crate) fn plugin_settings(name: &str) -> Result<(String, PluginSettings)> {
+    let mut manager = plugins::PluginsManager::new();
+    manager.load_all(std::env::current_dir().ok().as_deref())?;
+    let plugin = manager
+        .plugins()
+        .iter()
+        .find(|plugin| plugin.config_name == name || plugin.manifest_name.as_deref() == Some(name))
+        .with_context(|| format!("no plugin named '{name}' is installed"))?;
+    let settings = plugins::load_manifest_for(&plugin.root)
+        .map(|(manifest, _)| manifest.user_config)
+        .unwrap_or_default();
+    Ok((plugin.config_name.clone(), settings))
+}
+
+/// Set `KEY=VALUE` pairs and clear `unset` keys of an installed plugin's
+/// settings, then describe every setting.
+pub(crate) fn configure_plugin(name: &str, pairs: &[String], unset: &[String]) -> Result<String> {
+    let (plugin, settings) = plugin_settings(name)?;
+    if settings.is_empty() {
+        return Ok(format!("Plugin '{name}' has no settings."));
+    }
+    let setting_for = |key: &str| {
+        settings.get(key).with_context(|| {
+            format!(
+                "plugin '{name}' has no setting '{key}'; its settings are {}",
+                settings.keys().cloned().collect::<Vec<_>>().join(", ")
+            )
+        })
+    };
+    for key in unset {
+        plugin_settings_store::clear_value(&plugin, key, setting_for(key)?)?;
+    }
+    for pair in pairs {
+        let (key, raw) = pair
+            .split_once('=')
+            .with_context(|| format!("'{pair}' is not KEY=VALUE"))?;
+        let key = key.trim();
+        let setting = setting_for(key)?;
+        let value = plugin_settings_store::parse_value(setting, raw).map_err(anyhow::Error::msg)?;
+        plugin_settings_store::save_value(&plugin, key, setting, &value)?;
+    }
+    Ok(describe_plugin_settings(
+        &plugin,
+        &settings,
+        !(pairs.is_empty() && unset.is_empty()),
+    ))
+}
+
+pub(crate) fn describe_plugin_settings(
+    plugin: &str,
+    settings: &PluginSettings,
+    changed: bool,
+) -> String {
+    let values = plugin_settings_store::current_values(plugin, settings);
+    let mut lines = vec![format!("Settings for plugin '{plugin}':")];
+    lines.extend(
+        plugin_settings_store::describe(settings, &values)
+            .into_iter()
+            .map(|line| format!("  {line}")),
+    );
+    let missing = plugin_settings_store::missing_required(settings, &values);
+    if !missing.is_empty() {
+        lines.push(format!(
+            "Still needed: {}. Set them with `agi plugin configure {plugin} KEY=VALUE`.",
+            missing.join(", ")
+        ));
+    }
+    if changed {
+        lines.push("Saved. New sessions start the plugin's servers with these values.".to_string());
+    }
+    lines.join("\n")
+}
+
 pub(crate) fn is_plugin_action(args: &str) -> bool {
     let mut words = args.split_whitespace();
     match words.next() {
         Some("enable" | "disable" | "remove" | "uninstall") => true,
-        Some("update" | "upgrade") => words.next().is_some(),
+        Some("update" | "upgrade" | "configure" | "config") => words.next().is_some(),
         _ => false,
     }
 }
@@ -469,6 +544,14 @@ pub(crate) fn is_plugin_action(args: &str) -> bool {
 pub(crate) fn plugin_command(args: &str) -> Option<String> {
     let (action, name) = args.trim().split_once(char::is_whitespace)?;
     let name = name.trim();
+    if matches!(action, "configure" | "config") {
+        let mut words = name.split_whitespace();
+        let plugin = words.next()?;
+        let pairs: Vec<String> = words.map(str::to_string).collect();
+        return Some(
+            configure_plugin(plugin, &pairs, &[]).unwrap_or_else(|error| format!("{error:#}")),
+        );
+    }
     let outcome = match action {
         "enable" => set_plugin_enabled(name, true),
         "disable" => set_plugin_enabled(name, false),

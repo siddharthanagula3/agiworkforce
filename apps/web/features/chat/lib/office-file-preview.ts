@@ -1,6 +1,15 @@
 import JSZip from 'jszip';
 
 const SLIDE_PATH = /^ppt\/slides\/slide(\d+)\.xml$/;
+const MAX_SLIDE_IMAGE_BYTES = 450_000;
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const SHEET_PATH = 'xl/worksheets/sheet1.xml';
 
 function parseXml(source: string): Document {
@@ -16,6 +25,65 @@ function paragraphText(paragraph: Element): string {
     .map((node) => node.textContent ?? '')
     .join('')
     .trim();
+}
+
+function markdownCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+}
+
+function tableMarkdown(table: Element): string {
+  const rows = elementsByLocalName(table, 'tr').map((row) =>
+    elementsByLocalName(row, 'tc').map((cell) =>
+      markdownCell(elementsByLocalName(cell, 'p').map(paragraphText).filter(Boolean).join(' ')),
+    ),
+  );
+  const width = Math.max(0, ...rows.map((row) => row.length));
+  if (rows.length === 0 || width === 0) return '';
+  const line = (row: string[]) =>
+    `| ${Array.from({ length: width }, (_, index) => row[index] ?? '').join(' | ')} |`;
+  return [
+    line(rows[0]!),
+    `| ${Array(width).fill('---').join(' | ')} |`,
+    ...rows.slice(1).map(line),
+  ].join('\n');
+}
+
+function resolveTarget(slidePath: string, target: string): string {
+  const parts = slidePath.split('/').slice(0, -1);
+  for (const segment of target.split('/')) {
+    if (segment === '..') parts.pop();
+    else if (segment && segment !== '.') parts.push(segment);
+  }
+  return parts.join('/');
+}
+
+async function slideImages(zip: JSZip, slidePath: string, slide: Document): Promise<string[]> {
+  const relsPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+  const relsXml = await zip.file(relsPath)?.async('string');
+  if (!relsXml) return [];
+  const targets = new Map(
+    elementsByLocalName(parseXml(relsXml), 'Relationship').map((relation) => [
+      relation.getAttribute('Id') ?? '',
+      relation.getAttribute('Target') ?? '',
+    ]),
+  );
+  const out: string[] = [];
+  for (const picture of elementsByLocalName(slide, 'pic')) {
+    const blip = elementsByLocalName(picture, 'blip')[0];
+    const id =
+      blip?.getAttributeNS(RELATIONSHIP_NS, 'embed') ?? blip?.getAttribute('r:embed') ?? '';
+    const target = targets.get(id);
+    if (!target) continue;
+    const path = resolveTarget(slidePath, target);
+    const type = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? ''];
+    const file = zip.file(path);
+    if (!type || !file) continue;
+    const bytes = await file.async('base64');
+    if ((bytes.length * 3) / 4 > MAX_SLIDE_IMAGE_BYTES) continue;
+    const name = elementsByLocalName(picture, 'cNvPr')[0]?.getAttribute('descr')?.trim() || 'Image';
+    out.push(`![${name.replace(/[[\]]/g, '')}](data:${type};base64,${bytes})`);
+  }
+  return out;
 }
 
 export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
@@ -39,14 +107,19 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
       else if (placeholder === 'ftr') footers.push(...lines);
       else if (placeholder !== 'dt' && placeholder !== 'sldNum') body.push(...lines);
     }
+    const document = parseXml(xml);
     const [firstBody, ...restBody] = body;
     const title = titles.length > 0 ? titles.join(' ') : firstBody;
     const bullets = titles.length > 0 ? body : restBody;
+    const tables = elementsByLocalName(document, 'tbl').map(tableMarkdown).filter(Boolean);
+    const images = await slideImages(zip, slide.path, document);
     rendered.push(
       [
         `# ${title ?? `Slide ${slide.match[1]}`}`,
         ...bullets.map((line) => `- ${line}`),
         ...footers.map((line) => `_${line}_`),
+        ...tables.map((table) => `\n${table}`),
+        ...images.map((image) => `\n${image}`),
       ].join('\n'),
     );
   }

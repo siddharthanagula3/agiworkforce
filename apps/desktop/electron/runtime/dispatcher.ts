@@ -34,6 +34,7 @@ import {
   isDeveloperWorktreeStart,
   isPermissionScope,
   isSystemPermissionKind,
+  localPreviewUrl,
   isWorkspaceRootKind,
   normalizeShellPolicy,
   permissionScopeKey,
@@ -92,7 +93,10 @@ import {
   planBrowserCommand,
   type BrowserCommandPlan,
 } from '../browser/commandGate';
+import { gateApplication } from './applicationControl';
+import { findInstalledApplication, launchApplication } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
+import { openLocalPreview } from '../previewWindow';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
@@ -922,6 +926,7 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_type: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_open_app: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   remote_control_start: {
     capability: 'host.remote',
     reason:
@@ -1981,6 +1986,11 @@ async function execute(
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
+    case 'app_open_preview': {
+      const url = localPreviewUrl(args['url']);
+      if (!url) throw new InvalidArguments('Only a page served on this computer can be previewed.');
+      return openLocalPreview(url);
+    }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2023,6 +2033,15 @@ async function execute(
     }
     case 'computer_wait':
       return waitFor(optionalNumberOr(args, 'ms', 500));
+    case 'computer_open_app': {
+      const target = await findInstalledApplication(requireString(args, 'application'));
+      await gateApplication(window, command, {
+        name: target.name,
+        bundleId: target.bundleId,
+        pid: null,
+      });
+      return runScreenAction(window, command, args, () => launchApplication(target));
+    }
     case 'computer_stop':
       return stopScreenControl();
     case 'computer_take_over':
@@ -2520,6 +2539,7 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  * read. A command is here because someone decided that, never by omission.
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
+  'app_open_preview',
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,

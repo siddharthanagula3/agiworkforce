@@ -23,6 +23,9 @@ export type ElectronNotifyRequest = HostNotifyRequest;
  */
 export const ELECTRON_HOST_SHELL: HostShell = 'electron';
 
+/** Passed only to the dictation bar's window, whose bridge alone can hand back text. */
+export const DICTATION_BAR_ARGUMENT = '--agi-dictation-bar';
+
 export const ELECTRON_IPC_CHANNELS = {
   invokeRuntime: 'agi:desktop-runtime',
   openExternal: 'agi:open-external',
@@ -36,4 +39,6 @@ export const ELECTRON_IPC_CHANNELS = {
   rendererTheme: 'agi:renderer-theme',
   openUpdateInstaller: 'agi:open-update-installer',
   restartToUpdate: 'agi:restart-to-update',
+  dictationFinish: 'agi:dictation-finish',
+  dictationCancel: 'agi:dictation-cancel',
 } as const;

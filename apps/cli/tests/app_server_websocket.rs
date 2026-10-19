@@ -23,6 +23,11 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
         .arg(token)
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -92,6 +97,11 @@ async fn cli_websocket_requires_an_explicit_token_instead_of_printing_one() {
         .arg(format!("127.0.0.1:{}", available_loopback_port()))
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .env_remove("AGI_APP_SERVER_TOKEN")
         .output()
         .await
@@ -141,6 +151,11 @@ async fn every_connected_client_sees_a_thread_another_client_deleted() {
         .arg(token)
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -213,6 +228,11 @@ async fn trust_workspace(workspace: &std::path::Path, home: &std::path::Path) {
         .arg("init")
         .current_dir(workspace)
         .env("HOME", home)
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .output()
         .await
         .expect("initialize trusted WebSocket test project");

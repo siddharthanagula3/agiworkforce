@@ -1474,7 +1474,9 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     }
 }
 
-const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 9] = [
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 11] = [
+    ("init", crate::claude_parity::init_prompt),
+    ("create-skill", crate::claude_parity::create_skill_prompt),
     ("review", crate::claude_parity::review_prompt),
     (
         "security-review",
@@ -1577,6 +1579,22 @@ pub fn add_memory(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn init_over_the_app_server_asks_the_agent_to_write_agents_md() {
+        let expanded = expand_prompt_command("/init the release scripts")
+            .expect("expands")
+            .expect("init is a prompt command");
+        assert!(expanded.contains("AGENTS.md"), "{expanded}");
+        assert!(expanded.contains("the release scripts"), "{expanded}");
+        let listed = list_commands(&std::env::temp_dir());
+        let init = listed
+            .commands
+            .iter()
+            .find(|command| command.name == "init")
+            .expect("init is listed");
+        assert!(init.prompt && !init.runnable);
+    }
     use tempfile::tempdir;
 
     #[test]

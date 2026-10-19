@@ -4419,7 +4419,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.model_picker.open(&all, &current);
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
-                match app.session.switch_model(arg) {
+                match app.session.switch_model_by_name(arg) {
                     Ok(()) => {
                         app.sync_stats();
                         let provider = crate::models::provider_name(&app.session.provider);
@@ -5106,7 +5106,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/plugin" | "/plugins" if crate::installs::is_plugin_action(arg) =>
         {
             SlashResult::SystemMessage(crate::installs::plugin_command(arg).unwrap_or_else(|| {
-                "Usage: /plugins enable|disable|update|remove <name>".to_string()
+                "Usage: /plugins enable|disable|update|remove <name>, or /plugins configure <name> [KEY=VALUE ...]".to_string()
             }))
         }
 

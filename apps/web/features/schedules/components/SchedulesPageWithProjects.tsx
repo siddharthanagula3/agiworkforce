@@ -5,11 +5,13 @@ import { Skeleton } from '@agiworkforce/ui';
 import { useManagedCloudProjects } from '@/features/projects';
 import { useBillingStore } from '@/shared/stores/web-auth-store';
 import { SchedulesPage } from './SchedulesPage';
+import { useAgentOptions } from '@/features/agents/hooks/use-agent-options';
 import { SCHEDULE_PROMPT_QUERY_PARAM } from './schedule-from-turn';
 import type { ScheduleTask } from '../types';
 
 export const SCHEDULE_FOCUS_QUERY_PARAM = 'schedule';
 export const SCHEDULE_SHARE_QUERY_PARAM = 'fromShare';
+export const SCHEDULE_AGENT_QUERY_PARAM = 'agent';
 
 export function SchedulesEntitlementLoading() {
   return (
@@ -32,6 +34,8 @@ export function SchedulesPageWithProjects() {
   const focusScheduleId = searchParams?.get(SCHEDULE_FOCUS_QUERY_PARAM) ?? null;
   const sharedScheduleToken = searchParams?.get(SCHEDULE_SHARE_QUERY_PARAM) ?? null;
   const draftPrompt = searchParams?.get(SCHEDULE_PROMPT_QUERY_PARAM) ?? null;
+  const draftAgentId = searchParams?.get(SCHEDULE_AGENT_QUERY_PARAM) ?? null;
+  const agents = useAgentOptions();
   const { projects } = useManagedCloudProjects();
   const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
   const billingIsLoading = useBillingStore((state) => state.isLoading);
@@ -44,6 +48,8 @@ export function SchedulesPageWithProjects() {
       focusScheduleId={focusScheduleId}
       sharedScheduleToken={sharedScheduleToken}
       draftPrompt={draftPrompt}
+      draftAgentId={draftAgentId}
+      agents={agents}
       projects={projects.map((project) => ({ id: project.id, name: project.name }))}
       subscriptionTier={subscriptionTier}
       onOpenChat={(schedule: ScheduleTask) =>

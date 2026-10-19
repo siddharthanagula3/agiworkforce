@@ -1259,7 +1259,7 @@ message -- revise and call `update_plan` again.\n\n",
         let effective_input = if prefix.is_empty() {
             user_input.to_string()
         } else {
-            let expanded = format!("{prefix}{user_input}");
+            let expanded = super::with_turn_context(prefix.trim_end(), user_input);
             hooks::run_hooks(
                 &self.hooks_config,
                 hooks::HookEvent::UserPromptExpansion,

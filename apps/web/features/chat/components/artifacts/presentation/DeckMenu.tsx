@@ -32,6 +32,7 @@ export function DeckMenu({
   testId,
   align = 'start',
   compact = false,
+  onOpenChange,
 }: {
   label: string;
   icon: ComponentType<{ className?: string }>;
@@ -39,6 +40,7 @@ export function DeckMenu({
   testId?: string;
   align?: 'start' | 'end';
   compact?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -70,7 +72,10 @@ export function DeckMenu({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          onOpenChange?.(!open);
+          setOpen(!open);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

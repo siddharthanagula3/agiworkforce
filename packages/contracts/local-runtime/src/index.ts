@@ -194,7 +194,7 @@ export type {
   FilesystemCommand,
 } from './filesystem';
 
-export { APPLICATION_COMMANDS } from './apps';
+export { APPLICATION_COMMANDS, findLocalPreviewUrl, localPreviewUrl } from './apps';
 export type { ApplicationCommand, ApplicationOpenResult } from './apps';
 
 export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH } from './clipboard';
@@ -294,6 +294,7 @@ export {
   HOST_AGENT_NOTIFICATION_KINDS,
   HOST_AGENT_NOTIFICATION_MODES,
   HOST_IN_WINDOW_SIGN_IN_HOSTS,
+  MAX_DICTATION_TEXT_LENGTH,
   WINDOW_LAYOUT_COMMANDS,
   hostKeepsSignInInWindow,
   hostShortcutMayBeOff,
@@ -304,6 +305,7 @@ export type {
   DesktopDeepLinkTarget,
   HostBridge,
   HostCommand,
+  HostDictationOutcome,
   HostMenuShortcut,
   HostNotifyRequest,
   HostPreferences,
@@ -343,6 +345,7 @@ export {
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
   PHONE_STEP_COMMAND,
+  MAX_DEVICE_APPLICATION_LENGTH,
   MAX_DEVICE_CLICK_COUNT,
   MAX_DEVICE_COORDINATE,
   MAX_DEVICE_DISPLAY_ID,

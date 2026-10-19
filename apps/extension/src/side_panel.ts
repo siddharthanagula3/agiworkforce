@@ -100,7 +100,13 @@ import {
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
 import { ROUTING_TASK_TYPES } from './features/cloud-bridge/managedChatRouting';
-import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
+import {
+  ASK_BEFORE_ACTING_KEY,
+  browserPermissionModeToStored,
+  DEFAULT_BROWSER_PERMISSION_MODE,
+  readBrowserPermissionMode,
+  type BrowserPermissionMode,
+} from './features/computer-use/askBeforeActing';
 import { UUID_PATTERN } from './lib/uuid';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import { fetchOwnSkills, type AccountSkill } from './features/cloud-bridge/skillsClient';
@@ -128,10 +134,7 @@ import {
   replaceConversationOwner,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
-import {
-  normalizeApprovedSiteOrigin,
-  requestApprovedSiteHostPermission,
-} from './features/options/site-allowlist';
+import { normalizeApprovedSiteOrigin } from './features/options/site-allowlist';
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   grantBrowserControlConsent,
@@ -141,6 +144,13 @@ import {
   requestBrowserControlHostPermission,
 } from './features/computer-use/browserControlConsent';
 import { loadSitePolicyInput, readUserSiteAllowlist } from './features/site-policy/store';
+import { isUserBlockedSite, readUserSiteBlocklist } from './features/site-policy/userBlocklist';
+import { requestReadGrant, type ReadGrant } from './features/side-panel/readGrant';
+import {
+  activePageQuery,
+  assistantHostWindowId,
+  pageWindowQuery,
+} from './features/surface/assistantPanel';
 import {
   forgetTransientHostPermissions,
   recordTransientHostPermission,
@@ -154,6 +164,14 @@ import {
   parseChatBrowserToolCall,
   type ChatBrowserToolTier,
 } from './features/computer-use/chatBrowserTools';
+import {
+  CHAT_SEARCH_HISTORY_TOOL,
+  chromeHistorySearch,
+  describeHistoryResults,
+  hasHistoryPermission,
+  searchBrowsingHistory,
+  type HistorySearchRequest,
+} from './features/computer-use/historySearch';
 import {
   BrowserRunActivityTranslator,
   browserActivityEnvelope,
@@ -170,6 +188,7 @@ import {
   buildBrowserTurnControls,
   buildBubbleWithTools,
   buildBrowserTaskStartCard,
+  buildHistorySearchCard,
   buildSiteGrantCard,
   fillAnswerBubble,
   type BrowserTurnControls,
@@ -5919,11 +5938,13 @@ async function capturePageContext(
     if (limit <= 0) return { ok: false, reason: 'The attached pages exceed the context budget.' };
     const tab = selected
       ? await chrome.tabs.get(selected.tabId)
-      : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+      : (await chrome.tabs.query(await activePageQuery()))[0];
     if (!tab?.id || !tab.url) return { ok: false, reason: 'No readable website tab is open.' };
     const url = new URL(tab.url);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
       return { ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON };
+    if (await isUserBlockedSite(tab.url))
+      return { ok: false, reason: t('spSiteBlockedByYou', [url.host]) };
     if (tab.status === 'loading')
       return {
         ok: false,
@@ -6028,6 +6049,8 @@ function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextC
 }
 
 async function readLinkedPage(url: string): Promise<PageContextCapture> {
+  if (await isUserBlockedSite(url))
+    return { ok: false, reason: t('spSiteBlockedByYou', [pageChipLabel(url)]) };
   let response: Response;
   try {
     response = await fetch(url, { credentials: 'omit', redirect: 'follow' });
@@ -6637,7 +6660,7 @@ function startComposerBrowserTask(
 
   void (async () => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query(await activePageQuery());
       if (!ownsComposerBrowserConversation(run) || run.cancelling) return;
       if (typeof tab?.id !== 'number') {
         throw new Error('Could not determine the active tab. Please try again.');
@@ -6951,6 +6974,15 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
     });
 }
 
+async function currentPermissionMode(): Promise<BrowserPermissionMode> {
+  try {
+    const stored = await chrome.storage.local.get(ASK_BEFORE_ACTING_KEY);
+    return readBrowserPermissionMode(stored[ASK_BEFORE_ACTING_KEY]);
+  } catch {
+    return 'ask';
+  }
+}
+
 interface BrowserSiteAccess {
   status: 'granted' | 'declined' | 'unavailable';
   origin?: string;
@@ -6974,12 +7006,12 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
 async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
   let tab: chrome.tabs.Tab | undefined;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query(await activePageQuery());
   } catch {
     return undefined;
   }
   const origin = webTabOrigin(tab);
-  if (!origin) return undefined;
+  if (!origin || (await isUserBlockedSite(origin))) return undefined;
   if (turnGrantedOrigins.get(streamId)?.has(origin)) return 'act';
   if (await originApprovedForBrowserControl(origin)) return 'act';
   const policy = await loadSitePolicyInput();
@@ -7014,13 +7046,16 @@ async function requestBrowserSiteAccess(
 ): Promise<BrowserSiteAccess> {
   let tab: chrome.tabs.Tab | undefined;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [tab] = await chrome.tabs.query(await activePageQuery());
   } catch {
     tab = undefined;
   }
   const origin = webTabOrigin(tab);
   if (!origin || typeof tab?.id !== 'number') {
     return { status: 'unavailable', reason: PAGE_CONTEXT_BLOCKED_REASON };
+  }
+  if (await isUserBlockedSite(origin)) {
+    return { status: 'unavailable', reason: t('spSiteBlockedByYou', [hostLabel(origin)]) };
   }
   const tabId = tab.id;
   if (scope === 'act') {
@@ -7188,17 +7223,13 @@ function siteAccessRefusal(access: BrowserSiteAccess): string {
 }
 
 async function runReadPageTool(streamId: string, toolCallId: string): Promise<string> {
-  let [tab] = await chrome.tabs
-    .query({ active: true, currentWindow: true })
-    .catch((): chrome.tabs.Tab[] => []);
+  let [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
   let access: BrowserSiteAccess = { status: 'granted' };
   let capture = await capturePageContext();
   if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
     access = await requestBrowserSiteAccess(streamId, 'read');
     if (access.status !== 'granted') return siteAccessRefusal(access);
-    [tab] = await chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .catch((): chrome.tabs.Tab[] => []);
+    [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
     capture = await capturePageContext();
   }
   const host = hostLabel(webTabOrigin(tab) ?? (capture.ok ? capture.source.url : ''));
@@ -7268,8 +7299,84 @@ async function confirmBrowserTaskStart(streamId: string, goal: string): Promise<
   return approved;
 }
 
+async function confirmHistorySearch(
+  streamId: string,
+  request: HistorySearchRequest,
+): Promise<boolean> {
+  if (!browserTurnMessage(streamId)) return false;
+  const controls = browserTurnControlsFor(streamId);
+  const approved = await new Promise<boolean>((resolve) => {
+    let card: HTMLElement | null = null;
+    const finish = (allow: boolean): void => {
+      pendingSiteGrants.delete(dismiss);
+      card?.remove();
+      resolve(allow);
+    };
+    const dismiss = (): void => finish(false);
+    pendingSiteGrants.add(dismiss);
+    card = buildHistorySearchCard({ query: request.query, days: request.days, onDecide: finish });
+    controls.cards.prepend(card);
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    card.querySelector('button')?.focus();
+  });
+  releaseBrowserTurnControls(streamId);
+  return approved;
+}
+
+async function runHistorySearchTool(
+  streamId: string,
+  toolCallId: string,
+  request: HistorySearchRequest,
+): Promise<string> {
+  if (!(await hasHistoryPermission())) return t('spHistorySearchOff');
+  if (!(await confirmHistorySearch(streamId, request))) return t('spHistorySearchDeclined');
+  recordBrowserActivity(streamId, [
+    {
+      type: 'tool-execution-start',
+      toolCallId,
+      name: CHAT_SEARCH_HISTORY_TOOL,
+      category: 'computer-use',
+      summary: t('spHistorySearching'),
+      input: null,
+    },
+  ]);
+  try {
+    const entries = await searchBrowsingHistory(request, {
+      search: chromeHistorySearch,
+      sitePolicy: loadSitePolicyInput,
+      blockedOrigins: readUserSiteBlocklist,
+      now: () => Date.now(),
+    });
+    recordBrowserActivity(streamId, [
+      {
+        type: 'tool-execution-end',
+        toolCallId,
+        name: CHAT_SEARCH_HISTORY_TOOL,
+        output: t('spBrowserStepDone'),
+        isError: false,
+      },
+    ]);
+    return fencedToolResult('history', describeHistoryResults(request, entries));
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : 'Browsing history could not be searched.';
+    recordBrowserActivity(streamId, [
+      {
+        type: 'tool-execution-end',
+        toolCallId,
+        name: CHAT_SEARCH_HISTORY_TOOL,
+        output: reason,
+        isError: true,
+      },
+    ]);
+    return reason;
+  }
+}
+
 async function runBrowserTaskTool(streamId: string, goal: string): Promise<string> {
-  if (!(await confirmBrowserTaskStart(streamId, goal))) return t('spBrowserTaskStartDeclined');
+  if ((await currentPermissionMode()) === 'ask' && !(await confirmBrowserTaskStart(streamId, goal)))
+    return t('spBrowserTaskStartDeclined');
   const access = await requestBrowserSiteAccess(streamId, 'act');
   if (access.status !== 'granted') return siteAccessRefusal(access);
   try {
@@ -7338,7 +7445,9 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
         content:
           parsed.kind === 'read_page'
             ? await runReadPageTool(streamId, parsed.toolCallId)
-            : await runBrowserTaskTool(streamId, parsed.goal),
+            : parsed.kind === 'search_history'
+              ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
+              : await runBrowserTaskTool(streamId, parsed.goal),
       });
     } catch (error) {
       results.push({
@@ -7349,7 +7458,10 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   }
   clearTimeout(deadline);
   if (!stillCurrent()) return;
-  const browserToolTier = await activeBrowserToolTier(streamId);
+  const [browserToolTier, browserHistory] = await Promise.all([
+    activeBrowserToolTier(streamId),
+    hasHistoryPermission(),
+  ]);
   if (!stillCurrent()) return;
   armManagedStreamInactivityWatchdog(streamId);
   showThinking();
@@ -7364,6 +7476,7 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
       content: result.content.slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
     })),
     ...(browserToolTier ? { browserToolTier } : {}),
+    ...(browserHistory ? { browserHistory: true } : {}),
   };
   void chrome.runtime.sendMessage(response).catch(() => {
     if (stillCurrent())
@@ -7849,9 +7962,19 @@ function postTurn(
   void Promise.all([
     saveMessagesNow(),
     selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined),
-  ]).then(([, browserToolTier]) => {
+    selectedModelSupportsChatTools() ? hasHistoryPermission() : Promise.resolve(false),
+  ]).then(([, browserToolTier, browserHistory]) => {
     if (_ctx.currentStreamId !== streamId) return;
-    sendChatTurn(streamId, owner, payload, history, quickMode, memoryCommand, browserToolTier);
+    sendChatTurn(
+      streamId,
+      owner,
+      payload,
+      history,
+      quickMode,
+      memoryCommand,
+      browserToolTier,
+      browserHistory,
+    );
   });
 }
 
@@ -7863,6 +7986,7 @@ function sendChatTurn(
   quickMode: boolean,
   memoryCommand: ManagedMemoryCommandTurn | undefined,
   browserToolTier: ChatBrowserToolTier | undefined,
+  browserHistory: boolean,
 ): void {
   chrome.runtime.sendMessage(
     {
@@ -7891,6 +8015,7 @@ function sendChatTurn(
       ...managedTurnPersistencePayload(streamId),
       ...(_ctx.temporaryChat ? {} : { historyConversationId: _ctx.conversationId }),
       ...(browserToolTier ? { browserToolTier } : {}),
+      ...(browserHistory ? { browserHistory: true } : {}),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {
@@ -8767,8 +8892,8 @@ async function offerPageSelection(): Promise<void> {
   let tab: chrome.tabs.Tab | undefined;
   let selection: PageSelection | null = null;
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !tab.url) return;
+    [tab] = await chrome.tabs.query(await activePageQuery());
+    if (!tab?.id || !tab.url || (await isUserBlockedSite(tab.url))) return;
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: readVisibleSelection,
@@ -9004,12 +9129,14 @@ function setBlockedState(blocked: boolean): void {
 
 function refreshPageHostname(): void {
   try {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (chrome.runtime.lastError) return;
-      const tab = tabs[0];
-      const url = tab?.url ?? '';
-      updateActivePage(url, tab?.id);
-    });
+    void activePageQuery().then((query) =>
+      chrome.tabs.query(query, (tabs) => {
+        if (chrome.runtime.lastError) return;
+        const tab = tabs[0];
+        const url = tab?.url ?? '';
+        updateActivePage(url, tab?.id);
+      }),
+    );
   } catch {
     /* noop */
   }
@@ -11722,7 +11849,7 @@ function buildUI(): void {
     const generation = ++computerUseSiteGeneration;
     let tab: chrome.tabs.Tab | undefined;
     try {
-      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      [tab] = await chrome.tabs.query(await activePageQuery());
     } catch {
       tab = undefined;
     }
@@ -11772,7 +11899,7 @@ function buildUI(): void {
 
   cuPanel.onStartTask((goal) => {
     void (async () => {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [activeTab] = await chrome.tabs.query(await activePageQuery());
       if (!activeTab?.id) {
         cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
         return;
@@ -11784,7 +11911,7 @@ function buildUI(): void {
 
   cuPanel.onRunAutofill(() => {
     void (async () => {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [activeTab] = await chrome.tabs.query(await activePageQuery());
       const activeTabId = activeTab?.id;
       if (!activeTabId) {
         cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
@@ -11991,14 +12118,8 @@ function buildUI(): void {
     }
   });
 
-  function approveSiteForReading(url: string): Promise<boolean> {
-    const origin = normalizeApprovedSiteOrigin(url);
-    if (!origin) return Promise.resolve(false);
-    return requestApprovedSiteHostPermission(origin).then(async (granted) => {
-      if (!granted) return false;
-      await writeApprovedSite(origin);
-      return true;
-    });
+  function approveSiteForReading(url: string): Promise<ReadGrant> {
+    return requestReadGrant([url]);
   }
 
   function attachPageCapture(capture: PageContextCapture): void {
@@ -12013,15 +12134,23 @@ function buildUI(): void {
     updateContextButton();
   }
 
-  async function attachChosenTab(tab: chrome.tabs.Tab, approval: Promise<boolean>): Promise<void> {
-    if (!(await approval)) {
-      attachPageCapture({
-        ok: false,
-        reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
-      });
-      return;
+  async function attachChosenTab(
+    tab: chrome.tabs.Tab,
+    approval: Promise<ReadGrant>,
+  ): Promise<void> {
+    const grant = await approval;
+    try {
+      if (!grant.granted) {
+        attachPageCapture({
+          ok: false,
+          reason: t('spSiteAccessRefused', [pageChipLabel(tab.url ?? '')]),
+        });
+        return;
+      }
+      attachPageCapture(await readTabText(tab, true));
+    } finally {
+      await grant.release();
     }
-    attachPageCapture(await readTabText(tab, true));
   }
 
   const mentionMenu = el('div', {
@@ -12137,13 +12266,17 @@ function buildUI(): void {
       return;
     }
     const generation = ++mentionGeneration;
-    chrome.tabs.query({ currentWindow: true }, (tabs) => {
-      if (generation !== mentionGeneration) return;
-      mentionTabs = chrome.runtime.lastError
-        ? []
-        : tabs.filter((tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url));
-      recomputeMentionOptions();
-    });
+    void pageWindowQuery().then((query) =>
+      chrome.tabs.query(query, (tabs) => {
+        if (generation !== mentionGeneration) return;
+        mentionTabs = chrome.runtime.lastError
+          ? []
+          : tabs.filter(
+              (tab) => tab.id !== undefined && !!tab.url && !isRestrictedPageUrl(tab.url),
+            );
+        recomputeMentionOptions();
+      }),
+    );
     void listChromeProjects().then((result) => {
       if (generation !== mentionGeneration) return;
       mentionProjects =
@@ -12161,7 +12294,7 @@ function buildUI(): void {
     const approval =
       option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
         ? approveSiteForReading(option.tab.url ?? '')
-        : Promise.resolve(true);
+        : Promise.resolve<ReadGrant>({ granted: true, release: async () => {} });
     closeMentionMenu();
     replaceComposerRange(inputEl, mention.start, mention.end, '');
     autoResizeInput(inputEl);
@@ -12347,7 +12480,7 @@ function buildUI(): void {
     let capture = await capturePageContext();
     if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
       const [tab] = await chrome.tabs
-        .query({ active: true, currentWindow: true })
+        .query(await activePageQuery())
         .catch((): chrome.tabs.Tab[] => []);
       const origin = webTabOrigin(tab);
       if (origin) {
@@ -12455,18 +12588,22 @@ function buildUI(): void {
     linkSubmit.disabled = true;
     linkError.textContent = t('spLinkReading');
     void approval
-      .then(async (granted) => {
-        if (!granted) {
-          linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
-          return;
+      .then(async (grant) => {
+        try {
+          if (!grant.granted) {
+            linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
+            return;
+          }
+          const capture = await readLinkedPage(url);
+          if (!capture.ok) {
+            linkError.textContent = capture.reason;
+            return;
+          }
+          attachPageCapture(capture);
+          closeLinkForm();
+        } finally {
+          await grant.release();
         }
-        const capture = await readLinkedPage(url);
-        if (!capture.ok) {
-          linkError.textContent = capture.reason;
-          return;
-        }
-        attachPageCapture(capture);
-        closeLinkForm();
       })
       .finally(() => {
         linkSubmit.disabled = false;
@@ -12530,10 +12667,15 @@ function buildUI(): void {
       generation === _ctx.conversationGeneration &&
       !_ctx.isStreaming;
     updateAttachmentPreview();
+    let readGrant: ReadGrant | null = null;
     try {
       const selection = await chooseBrowserContextTabs(
         isCurrent,
         MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachments.length,
+        async (urls) => {
+          readGrant = await requestReadGrant(urls);
+          return readGrant.granted;
+        },
         intake.signal,
       );
       if (!selection || !isCurrent()) return;
@@ -12564,6 +12706,7 @@ function buildUI(): void {
       if (isCurrent())
         composerContextNotice = error instanceof Error ? error.message : t('spAttachTabsFailed');
     } finally {
+      await (readGrant as ReadGrant | null)?.release();
       if (tabContextIntakeAbort === intake) tabContextIntakeAbort = null;
       finishComposerAttachmentIntake(attachmentIntake);
       updateAttachmentPreview();
@@ -12879,6 +13022,18 @@ function buildUI(): void {
   askFirstOption.appendChild(askFirstCopy);
   const askFirstCheck = el('span', { class: 'sp-autonomy-option-check' });
   askFirstOption.appendChild(askFirstCheck);
+  const autoOption = el('button', {
+    class: 'sp-autonomy-option',
+    type: 'button',
+    role: 'menuitemradio',
+  }) as HTMLButtonElement;
+  autoOption.appendChild(renderIcon(Sparkles, 15));
+  const autoCopy = el('span', { class: 'sp-autonomy-option-copy' });
+  autoCopy.appendChild(el('strong', {}, t('spAutonomyAuto')));
+  autoCopy.appendChild(el('small', {}, t('spAutonomyAutoDescription')));
+  autoOption.appendChild(autoCopy);
+  const autoCheck = el('span', { class: 'sp-autonomy-option-check' });
+  autoOption.appendChild(autoCheck);
   const fullAccessOption = el('button', {
     class: 'sp-autonomy-option sp-autonomy-option-warning',
     type: 'button',
@@ -12892,6 +13047,7 @@ function buildUI(): void {
   const fullAccessCheck = el('span', { class: 'sp-autonomy-option-check' });
   fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
+  autonomyPopover.appendChild(autoOption);
   autonomyPopover.appendChild(fullAccessOption);
   const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
   autonomyLearnMore.classList.add('sp-autonomy-learn-more');
@@ -12910,29 +13066,70 @@ function buildUI(): void {
     if (returnFocus) autonomyChip.focus();
   }
 
-  function renderAutonomyChip(askFirst: boolean): void {
-    autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
-    clearChildren(askFirstCheck);
-    clearChildren(fullAccessCheck);
-    (askFirst ? askFirstCheck : fullAccessCheck).appendChild(renderIcon(Check, 12));
-    autonomyChip.title = askFirst
-      ? t('spAutonomyAskFirstTooltip')
-      : t('spAutonomyFullAccessTooltip');
-    autonomyChip.setAttribute('aria-pressed', String(!askFirst));
-    autonomyChip.setAttribute(
-      'aria-label',
-      askFirst ? t('spAutonomyAskFirstAria') : t('spAutonomyFullAccessAria'),
-    );
-    askFirstOption.setAttribute('aria-checked', String(askFirst));
-    fullAccessOption.setAttribute('aria-checked', String(!askFirst));
-    askFirstOption.classList.toggle('selected', askFirst);
-    fullAccessOption.classList.toggle('selected', !askFirst);
+  const autonomyModes: ReadonlyArray<{
+    mode: BrowserPermissionMode;
+    option: HTMLButtonElement;
+    check: HTMLElement;
+    icon: typeof Shield;
+    tooltip: string;
+    aria: string;
+  }> = [
+    {
+      mode: 'ask',
+      option: askFirstOption,
+      check: askFirstCheck,
+      icon: Shield,
+      tooltip: t('spAutonomyAskFirstTooltip'),
+      aria: t('spAutonomyAskFirstAria'),
+    },
+    {
+      mode: 'auto',
+      option: autoOption,
+      check: autoCheck,
+      icon: Sparkles,
+      tooltip: t('spAutonomyAutoTooltip'),
+      aria: t('spAutonomyAutoAria'),
+    },
+    {
+      mode: 'full',
+      option: fullAccessOption,
+      check: fullAccessCheck,
+      icon: Zap,
+      tooltip: t('spAutonomyFullAccessTooltip'),
+      aria: t('spAutonomyFullAccessAria'),
+    },
+  ];
+
+  function renderAutonomyChip(mode: BrowserPermissionMode): void {
+    autonomyChip.setAttribute('data-mode', mode);
+    for (const entry of autonomyModes) {
+      const selected = entry.mode === mode;
+      clearChildren(entry.check);
+      if (selected) {
+        entry.check.appendChild(renderIcon(Check, 12));
+        clearChildren(autonomyIcon);
+        autonomyIcon.appendChild(renderIcon(entry.icon, 15));
+        autonomyChip.title = entry.tooltip;
+        autonomyChip.setAttribute('aria-label', entry.aria);
+      }
+      entry.option.setAttribute('aria-checked', String(selected));
+      entry.option.classList.toggle('selected', selected);
+    }
+    autonomyChip.setAttribute('aria-pressed', String(mode !== 'ask'));
   }
 
-  renderAutonomyChip(true);
+  function chooseAutonomyMode(mode: BrowserPermissionMode): void {
+    renderAutonomyChip(mode);
+    if (mode !== 'full') fullAccessNotice.classList.remove('visible');
+    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(mode) });
+    closeAutonomyPopover(true);
+    if (mode === 'full') void discloseFullAccess();
+  }
+
+  renderAutonomyChip(DEFAULT_BROWSER_PERMISSION_MODE);
   chrome.storage.local.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime.lastError) return;
-    renderAutonomyChip(items[ASK_BEFORE_ACTING_KEY] !== false);
+    renderAutonomyChip(readBrowserPermissionMode(items[ASK_BEFORE_ACTING_KEY]));
   });
 
   autonomyChip.addEventListener('click', (event) => {
@@ -12950,8 +13147,8 @@ function buildUI(): void {
             ? window.innerWidth - viewportPadding - bounds.right
             : 0;
       if (shift !== 0) autonomyPopover.style.transform = `translateX(${shift}px)`;
-      const askFirst = autonomyChip.getAttribute('data-mode') === 'ask';
-      (askFirst ? askFirstOption : fullAccessOption).focus();
+      const current = autonomyChip.getAttribute('data-mode');
+      (autonomyModes.find((entry) => entry.mode === current)?.option ?? autoOption).focus();
     }
   });
 
@@ -12987,18 +13184,9 @@ function buildUI(): void {
     fullAccessNotice.classList.toggle('visible', !dismissed);
   }
 
-  askFirstOption.addEventListener('click', () => {
-    renderAutonomyChip(true);
-    fullAccessNotice.classList.remove('visible');
-    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: true });
-    closeAutonomyPopover(true);
-  });
-  fullAccessOption.addEventListener('click', () => {
-    renderAutonomyChip(false);
-    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: false });
-    closeAutonomyPopover(true);
-    void discloseFullAccess();
-  });
+  for (const entry of autonomyModes) {
+    entry.option.addEventListener('click', () => chooseAutonomyMode(entry.mode));
+  }
   autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -13016,8 +13204,9 @@ function buildUI(): void {
     if (area !== 'local') return;
     const change = changes[ASK_BEFORE_ACTING_KEY];
     if (!change) return;
-    renderAutonomyChip(change.newValue !== false);
-    if (change.newValue !== false) fullAccessNotice.classList.remove('visible');
+    const mode = readBrowserPermissionMode(change.newValue);
+    renderAutonomyChip(mode);
+    if (mode !== 'full') fullAccessNotice.classList.remove('visible');
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -13288,7 +13477,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       if (existing) existing.cloudAgentRun = { ...chunk.cloudRun };
     }
     quotaWarnedStreamIds.delete(chunk.id);
-    if (chunk.errorCode === 'quota_exceeded' || chunk.errorCode === 'account_suspended') {
+    if (
+      chunk.errorCode === 'quota_exceeded' ||
+      chunk.errorCode === 'account_suspended' ||
+      chunk.errorCode === 'plan_required'
+    ) {
       void refreshCloudAccountUI();
     }
     if (chunk.error === '__AUTH_REQUIRED__') {
@@ -13512,8 +13705,8 @@ function announceSidePanelPresence(): void {
   try {
     const port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
     port.onDisconnect.addListener(() => setTimeout(announceSidePanelPresence, 1_000));
-    void chrome.windows.getCurrent().then((current) => {
-      if (current.id !== undefined) port.postMessage({ windowId: current.id });
+    void assistantHostWindowId().then((windowId) => {
+      if (windowId !== undefined) port.postMessage({ windowId });
     });
   } catch {
     setTimeout(announceSidePanelPresence, 5_000);
@@ -13529,6 +13722,7 @@ chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
 const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+const ACCOUNT_REFRESH_WHILE_OPEN_MS = 3 * 60_000;
 const OPEN_CHAT_REFRESH_ON_RETURN_MS = 10_000;
 let lastAccountRefreshOnReturn = Date.now();
 let lastOpenChatRefreshOnReturn = Date.now();
@@ -13554,13 +13748,19 @@ function refreshAccountOnReturn(): void {
   if (document.visibilityState !== 'visible') return;
   refreshOpenAccountChatOnReturn();
   if (
-    managedCloudChatState !== 'signed_out' &&
+    managedCloudChatState === 'ready' &&
     Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS
   )
     return;
   lastAccountRefreshOnReturn = Date.now();
   void refreshCloudAccountUI();
 }
+function refreshAccountWhileOpen(): void {
+  if (document.visibilityState !== 'visible' || _ctx.isStreaming) return;
+  lastAccountRefreshOnReturn = Date.now();
+  void refreshCloudAccountUI();
+}
+setInterval(refreshAccountWhileOpen, ACCOUNT_REFRESH_WHILE_OPEN_MS);
 document.addEventListener('visibilitychange', refreshAccountOnReturn);
 window.addEventListener('pagehide', () => void flushProductEvents());
 window.addEventListener('focus', refreshAccountOnReturn);
@@ -13652,6 +13852,20 @@ function pendingChatPrompt(pending: { type: string; text: string }): string {
   }
 }
 
+async function attachPageForQuestion(): Promise<void> {
+  const capture = await capturePageContext();
+  if (capture.ok) {
+    _ctx.pendingPageContext = capture.text;
+    _ctx.pendingPageContextSource = capture.source;
+    composerContextNotice = null;
+  } else {
+    composerContextNotice = capture.reason;
+  }
+  updateAttachmentPreview();
+  updateContextButton();
+  document.getElementById('sp-input')?.focus();
+}
+
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
@@ -13659,6 +13873,12 @@ function checkPendingChat(): void {
       { type: string; text: string; url: string; timestamp: number } | undefined;
     if (!pending || Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) {
       if (pending) chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      return;
+    }
+
+    if (pending.type === 'ask-page') {
+      chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      void attachPageForQuestion();
       return;
     }
 
