@@ -5,8 +5,6 @@ import { createContext, useContext } from 'react';
 export const SCHEDULES_PATH = '/chat/schedules';
 export const SCHEDULE_PROMPT_QUERY_PARAM = 'fromPrompt';
 
-const SCHEDULE_NAME_MAX_CHARS = 60;
-
 export interface ScheduleFromTurn {
   schedule: (assistantMessageId: string) => void;
 }
@@ -21,13 +19,6 @@ export function useScheduleFromTurn(): ScheduleFromTurn | null {
 
 export function scheduleFromPromptHref(prompt: string): string {
   return `${SCHEDULES_PATH}?${SCHEDULE_PROMPT_QUERY_PARAM}=${encodeURIComponent(prompt)}`;
-}
-
-export function scheduleNameFromPrompt(prompt: string): string {
-  const firstLine = prompt.trim().split('\n', 1)[0]?.trim() ?? '';
-  return firstLine.length > SCHEDULE_NAME_MAX_CHARS
-    ? `${firstLine.slice(0, SCHEDULE_NAME_MAX_CHARS - 1).trimEnd()}…`
-    : firstLine;
 }
 
 export function promptBeforeReply(

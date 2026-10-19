@@ -10,6 +10,10 @@ import {
   RESEARCH_SYSTEM_PROMPT,
 } from './request-processor';
 import { JSON_OBJECT_DIRECTIVE } from './json-object-mode';
+import {
+  CONVERSATION_INSTRUCTION_HEADING,
+  conversationInstructionBlock,
+} from '@/lib/prompts/conversation-instructions';
 
 function splitStaticDynamic(
   messages: Parameters<typeof applyJsonObjectMode>[0]['messages'],
@@ -22,6 +26,28 @@ function splitStaticDynamic(
 }
 
 describe('composeManagedSystemPreamble', () => {
+  it("puts a conversation's own instructions on the stable side, after the account's", () => {
+    const preamble = composeManagedSystemPreamble({
+      capabilityPreamble: buildCapabilityPreamble({
+        servingModel: null,
+        surface: 'web',
+        now: new Date('2026-07-25T12:03:00.000Z'),
+        tools: [],
+      }),
+      customInstructionsPreamble: 'Account: answer in British English.',
+      conversationInstruction: conversationInstructionBlock('  Reply only in bullet points.  '),
+      dynamicSystemAddition: 'Recalled memory for this turn.',
+    });
+    const [stable] = preamble.split(SYSTEM_PROMPT_CACHE_BOUNDARY);
+
+    expect(stable).toContain(`${CONVERSATION_INSTRUCTION_HEADING}\nReply only in bullet points.`);
+    expect(stable!.indexOf('Account: answer in British English.')).toBeLessThan(
+      stable!.indexOf(CONVERSATION_INSTRUCTION_HEADING),
+    );
+    expect(conversationInstructionBlock('   ')).toBeNull();
+    expect(conversationInstructionBlock(null)).toBeNull();
+  });
+
   it('keeps the stable prefix byte-identical across two turns even when the timestamp, skills, and memories all differ', () => {
     const turnOnePreamble = buildCapabilityPreamble({
       servingModel: null,

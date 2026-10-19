@@ -28,6 +28,7 @@ export type ChatConversationRow = {
   needs_you?: boolean;
   draft?: string | null;
   draft_updated_at?: string | null;
+  instructions?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

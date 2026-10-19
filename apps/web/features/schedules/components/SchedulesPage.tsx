@@ -39,11 +39,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
-import { ScheduleForm } from './ScheduleForm';
+import { ScheduleForm, type ScheduleAgentOption } from './ScheduleForm';
 import { RecentScheduleResults } from './RecentScheduleResults';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
+  deriveScheduleName,
   createInitialScheduleDraft,
   scheduleShareToDraft,
   scheduleToDraft,
@@ -67,7 +68,6 @@ import {
   type ScheduleRun,
   type ScheduleTask,
 } from '../types';
-import { scheduleNameFromPrompt } from './schedule-from-turn';
 
 /**
  * Kept as prose in the create dialog, where someone is about to rely on an
@@ -134,6 +134,8 @@ interface SchedulesPageProps {
   focusScheduleId?: string | null;
   sharedScheduleToken?: string | null;
   draftPrompt?: string | null;
+  draftAgentId?: string | null;
+  agents?: readonly ScheduleAgentOption[];
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
@@ -142,6 +144,8 @@ interface SchedulesPageProps {
   subscriptionTier: BillingPlanTier;
   onOpenChat: (schedule: ScheduleTask) => void;
 }
+
+const NO_AGENTS: readonly ScheduleAgentOption[] = [];
 
 function errorMessage(error: unknown, fallback: string): string {
   return toUserMessageWithStatus(error, fallback);
@@ -202,6 +206,8 @@ export function SchedulesPage({
   focusScheduleId = null,
   sharedScheduleToken = null,
   draftPrompt = null,
+  draftAgentId = null,
+  agents = NO_AGENTS,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -722,15 +728,18 @@ export function SchedulesPage({
 
   const draftPromptRef = useRef<string | null>(null);
   useEffect(() => {
-    const prompt = draftPrompt?.trim();
-    if (!prompt || !canCreateSchedules || listStatus !== 'success') return;
-    if (draftPromptRef.current === prompt) return;
-    draftPromptRef.current = prompt;
+    const prompt = draftPrompt?.trim() ?? '';
+    const seedAgent = draftAgentId ? agents.find((agent) => agent.id === draftAgentId) : undefined;
+    if ((!prompt && !seedAgent) || !canCreateSchedules || listStatus !== 'success') return;
+    const seedKey = `${seedAgent?.id ?? ''}:${prompt}`;
+    if (draftPromptRef.current === seedKey) return;
+    draftPromptRef.current = seedKey;
     const nextDraft = {
       ...createInitialScheduleDraft(),
-      name: scheduleNameFromPrompt(prompt),
+      name: prompt ? deriveScheduleName(prompt) : (seedAgent?.name ?? ''),
       prompt,
       projectId: scope?.projectId ?? null,
+      agentId: seedAgent?.id ?? null,
     };
     setEditing(null);
     setDraft(nextDraft);
@@ -738,7 +747,7 @@ export function SchedulesPage({
     setFormErrors({});
     setSubmitError(null);
     setDialogOpen(true);
-  }, [canCreateSchedules, draftPrompt, listStatus, scope?.projectId]);
+  }, [agents, canCreateSchedules, draftAgentId, draftPrompt, listStatus, scope?.projectId]);
 
   const openNotificationSettings = (schedule: ScheduleTask) => {
     openEdit(schedule);
@@ -1183,6 +1192,7 @@ export function SchedulesPage({
             isEdit={Boolean(editing)}
             creditsUsed={editing?.creditsUsed ?? null}
             modelOptions={modelOptions}
+            agentOptions={agents}
             onChange={(patch) => {
               setDraft((current) => ({ ...current, ...patch }));
               setFormErrors((current) => {

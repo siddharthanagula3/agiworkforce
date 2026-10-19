@@ -104,7 +104,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
   const [versionedConversation] = await db.query<VersionedConversationRow>(
     `
-      select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, draft, draft_updated_at, created_at, updated_at,
+      select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, draft, draft_updated_at, instructions, created_at, updated_at,
         server_version::text as server_version,
         ${CONVERSATION_WORK_MODE_SELECT}
       from web_conversations
@@ -266,6 +266,20 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'instructions')) {
+    const [written] = await db.query<{ id: string }>(
+      `update web_conversations
+          set instructions = nullif(btrim($3::text), '')
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $4
+          and deleted_at is null
+        returning id`,
+      [id, userId, body.instructions ?? null, organizationId],
+    );
+    if (!written) throw createError.notFound('Conversation not found');
+  }
+
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
   if (body['model']) updates['model'] = body['model'];
@@ -375,7 +389,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
             and coalesce(case when $13::boolean then $14::boolean else is_temporary end, false)
           )
         )
-      returning id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+      returning id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, instructions, created_at, updated_at,
         server_version::text as server_version
     `,
     [

@@ -137,6 +137,12 @@ import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
+  agentConnectorSelection,
+  agentModelFor,
+  agentSystemPrompt,
+  loadAgentTurnConfig,
+} from '@/lib/agents/agent-turn-config';
+import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   type ManagedCloudScheduleRunApprovalToolCall,
 } from '@agiworkforce/cloud-contracts';
@@ -158,6 +164,10 @@ const SCHEDULED_TASK_DIRECTIVE =
   'No one is watching this run, so never ask a question or wait for input: use the tools ' +
   'you have, and if a step is impossible say so in the result. ' +
   'Do not claim to have performed external actions unless a tool result proves it.';
+
+export class ScheduledAgentUnavailableError extends Error {
+  override readonly name = 'ScheduledAgentUnavailableError';
+}
 
 /**
  * A run bound to a project its owner can no longer read: archived, deleted, or
@@ -226,6 +236,7 @@ export async function buildScheduledToolPlan(input: {
   provider: string;
   model: string;
   webAllowed: boolean;
+  codeAllowed?: boolean;
   connectors: readonly string[] | null;
 }): Promise<ScheduledToolPlan> {
   const capabilities = getModelMetadataById(input.model)?.capabilities;
@@ -296,9 +307,10 @@ export async function buildScheduledToolPlan(input: {
     codeExecutionCapable: capabilities.codeExecution === true,
   });
   const codeAsks = asks(EXECUTE_CODE_TOOL);
-  const codeTools = codeExecution.tools.filter(
-    (tool) => functionToolName(tool) !== '' || !codeAsks,
-  );
+  const codeTools =
+    input.codeAllowed === false
+      ? []
+      : codeExecution.tools.filter((tool) => functionToolName(tool) !== '' || !codeAsks);
   if (codeTools.length < codeExecution.tools.length) withheldTools.push(EXECUTE_CODE_TOOL);
   tools = [...tools, ...codeTools];
 
@@ -860,6 +872,13 @@ async function runScheduledAgent(
     };
   }
 
+  const agentLoad = task.agentId
+    ? await loadAgentTurnConfig(scope.db, scope.userId, task.agentId)
+    : null;
+  if (agentLoad && !agentLoad.ok) throw new ScheduledAgentUnavailableError(agentLoad.message);
+  const agentTurn = agentLoad?.ok ? agentLoad.turn : null;
+  if (agentTurn) task = { ...task, model: agentModelFor(task.model, agentTurn.config) ?? null };
+
   const taskType = classifyTaskLocally(prompt, []).type;
   const sources = task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES;
   const googleUserData =
@@ -890,8 +909,11 @@ async function runScheduledAgent(
     planTier: subscriptionTier,
     provider: dispatchProvider,
     model: route.modelKey,
-    webAllowed: sources.web,
-    connectors: task.connectors ?? null,
+    webAllowed: sources.web && (agentTurn?.config.webSearch ?? true),
+    codeAllowed: agentTurn?.config.codeExecution ?? true,
+    connectors: agentTurn
+      ? agentConnectorSelection(agentTurn.config, task.connectors ?? null)
+      : (task.connectors ?? null),
   });
   if (
     !modelKeepsInputsOutOfTraining(route.modelKey) &&
@@ -932,6 +954,7 @@ async function runScheduledAgent(
       includeRecentChats: sources.recentChats === true,
     });
     const systemPrompt = [
+      agentTurn ? agentSystemPrompt(agentTurn) : null,
       resolved.projectPrompt,
       resolved.memoryPrompt,
       resolved.recentChatsPrompt,

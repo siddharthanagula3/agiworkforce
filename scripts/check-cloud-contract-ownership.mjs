@@ -19,6 +19,8 @@ const cloudModules = [
   'finance',
   'health-space',
   'library',
+  'memory-summary',
+  'partner-applications',
   'managed-media',
   'me',
   'client-handshake',
@@ -83,6 +85,7 @@ const cloudModules = [
   'waitlist',
   'localized-pricing',
   'workspaces',
+  'agents',
 ];
 
 const cloudMovedFiles = [

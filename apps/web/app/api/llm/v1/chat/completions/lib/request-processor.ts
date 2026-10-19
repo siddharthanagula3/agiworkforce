@@ -1,4 +1,5 @@
 import 'server-only';
+import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -1707,6 +1708,7 @@ export function composeManagedSystemPreamble(input: {
   customInstructionsPreamble: string | null | undefined;
   projectInstruction?: string | null;
   studyInstruction?: string | null;
+  conversationInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1719,6 +1721,7 @@ export function composeManagedSystemPreamble(input: {
     { layer: 'developer', text: input.studyInstruction ?? '' },
     { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
+    { layer: 'personalized', text: input.conversationInstruction ?? '' },
   ])
     .map((block) => block.text)
     .filter((text) => text.length > 0)
@@ -3457,6 +3460,7 @@ async function processAdmittedRequest(
         projectSources?: ProjectFileCitation[];
         projectHasKnowledgeFiles: boolean;
         studyInstruction: string | null;
+        conversationInstruction: string | null;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
@@ -3489,8 +3493,9 @@ async function processAdmittedRequest(
               project_id: string | null;
               is_temporary: boolean;
               selected_route_id: string | null;
+              instructions: string | null;
             }>(
-              `select c.id, c.project_id, c.is_temporary, c.selected_route_id
+              `select c.id, c.project_id, c.is_temporary, c.selected_route_id, c.instructions
                    from web_conversations c
                   where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                   limit 1`,
@@ -3567,6 +3572,7 @@ async function processAdmittedRequest(
             ...(projectSources.length > 0 ? { projectSources } : {}),
             projectHasKnowledgeFiles,
             studyInstruction,
+            conversationInstruction: conversationInstructionBlock(ownedRows[0].instructions),
           };
         } catch (error) {
           logger.error(
@@ -3597,6 +3603,7 @@ async function processAdmittedRequest(
         projectBlocks: [],
         projectHasKnowledgeFiles: false,
         studyInstruction: null,
+        conversationInstruction: null,
       });
 
   const customInstructionsPromise: Promise<CustomInstructionsRead> | null =
@@ -6029,6 +6036,7 @@ async function processAdmittedRequest(
       customInstructionsPreamble,
       projectInstruction: projectInstructionBlock,
       studyInstruction: ownership.studyInstruction,
+      conversationInstruction: ownership.conversationInstruction,
       dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
@@ -6065,6 +6073,15 @@ async function processAdmittedRequest(
       internalMessages.unshift({
         role: 'system',
         content: dynamicTurnInstruction,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
+    if (ownership.conversationInstruction) {
+      internalMessages.unshift({
+        role: 'system',
+        content: ownership.conversationInstruction,
         multimodal_content: undefined,
         tool_calls: undefined,
         tool_call_id: undefined,

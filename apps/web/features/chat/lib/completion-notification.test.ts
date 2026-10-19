@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AGI_WORK_DONE_TITLE,
+  completionNotificationBody,
   REPLY_DONE_TITLE,
   RESEARCH_DONE_TITLE,
   completionNotificationTitle,
@@ -53,5 +54,22 @@ describe('completionNotificationTitle', () => {
     expect(completionNotificationTitle({ research: true, untitled: UNTITLED })).toBe(
       RESEARCH_DONE_TITLE,
     );
+  });
+});
+
+describe('completionNotificationBody', () => {
+  it('shows the start of the reply as plain text, capped at 100 characters', () => {
+    expect(completionNotificationBody('**Saturn** has the most moons.')).toBe(
+      'Saturn has the most moons.',
+    );
+    const long = completionNotificationBody(`Answer ${'x'.repeat(200)}`);
+    expect(long).toHaveLength(100);
+    expect(long?.endsWith('…')).toBe(true);
+  });
+
+  it('drops code blocks and gives no body for an empty reply', () => {
+    expect(completionNotificationBody('Run this:\n```sh\nnpm test\n```')).toBe('Run this:');
+    expect(completionNotificationBody('   ')).toBeNull();
+    expect(completionNotificationBody(undefined)).toBeNull();
   });
 });

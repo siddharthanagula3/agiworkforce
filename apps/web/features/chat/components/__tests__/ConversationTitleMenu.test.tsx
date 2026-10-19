@@ -46,6 +46,37 @@ describe('ConversationTitleMenu', () => {
     expect(wrapper).not.toHaveClass('absolute');
   });
 
+  it('opens the chat instructions and names whether some are set', async () => {
+    const user = userEvent.setup();
+    const onEditInstructions = vi.fn();
+    const { unmount } = render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onEditInstructions={onEditInstructions}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Add chat instructions' }));
+    expect(onEditInstructions).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onEditInstructions={onEditInstructions}
+        hasInstructions
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    expect(await screen.findByRole('menuitem', { name: 'Edit chat instructions' })).toBeTruthy();
+  });
+
   it('offers Archive, and Unarchive once the conversation is archived', async () => {
     // The sidebar hides an archived row behind its archive filter, so without
     // these the conversation's own header had no way to bring it back.

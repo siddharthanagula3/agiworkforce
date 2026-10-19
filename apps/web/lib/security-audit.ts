@@ -260,6 +260,8 @@ export type AuditEventType =
   | 'scim_group_role_mapping_changed'
   | 'workspace_group_changed'
   | 'project_shared'
+  | 'agent_shared'
+  | 'agent_ownership_transferred'
   | 'project_unshared'
   | 'project_member_access_changed'
   | 'plugin_installed'
@@ -812,6 +814,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'project_unshared':
     case 'project_member_access_changed':
       return 'project';
+    case 'agent_shared':
+    case 'agent_ownership_transferred':
+      return 'agent';
     case 'plugin_installed':
     case 'plugin_removed':
     case 'plugin_setting_changed':

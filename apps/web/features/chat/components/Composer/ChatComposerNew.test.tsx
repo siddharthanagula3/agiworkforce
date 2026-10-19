@@ -2452,9 +2452,11 @@ describe('ChatComposerNew', () => {
   });
 
   describe('narrow composer', () => {
-    it('gives the textbox its own row when the card is narrower than the chips need', () => {
+    it('gives the textbox its own row when the chips leave it too little room, and back once the card grows', () => {
       let report: ResizeObserverCallback = () => undefined;
       const original = globalThis.ResizeObserver;
+      const originalRect = HTMLElement.prototype.getBoundingClientRect;
+      const widths = { card: 736, field: 120 };
       globalThis.ResizeObserver = class {
         constructor(callback: ResizeObserverCallback) {
           report = callback;
@@ -2463,22 +2465,46 @@ describe('ChatComposerNew', () => {
         unobserve() {}
         disconnect() {}
       } as unknown as typeof ResizeObserver;
-      const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
-      const row = container.querySelector('.chat-composer-row') as HTMLElement;
-      const field = container.querySelector('.chat-composer-field') as HTMLElement;
-      expect(row).toHaveClass('flex-nowrap');
+      HTMLElement.prototype.getBoundingClientRect = function rect(this: HTMLElement) {
+        const width =
+          this.id === 'chat-composer'
+            ? widths.card
+            : this.classList.contains('chat-composer-field')
+              ? widths.field
+              : 0;
+        return {
+          width,
+          height: 0,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      };
+      try {
+        const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+        const row = container.querySelector('.chat-composer-row') as HTMLElement;
+        const field = container.querySelector('.chat-composer-field') as HTMLElement;
+        expect(row).toHaveClass('flex-nowrap');
 
-      act(() => {
-        report([{ contentRect: { width: 450 } } as ResizeObserverEntry], {} as ResizeObserver);
-      });
-      expect(row).toHaveClass('flex-wrap');
-      expect(field).toHaveClass('basis-full');
+        act(() => report([], {} as ResizeObserver));
+        expect(row).toHaveClass('flex-wrap');
+        expect(field).toHaveClass('basis-full');
 
-      act(() => {
-        report([{ contentRect: { width: 760 } } as ResizeObserverEntry], {} as ResizeObserver);
-      });
-      expect(row).toHaveClass('flex-nowrap');
-      globalThis.ResizeObserver = original;
+        widths.field = 736;
+        act(() => report([], {} as ResizeObserver));
+        expect(row).toHaveClass('flex-wrap');
+
+        widths.card = 900;
+        act(() => report([], {} as ResizeObserver));
+        expect(row).toHaveClass('flex-nowrap');
+      } finally {
+        globalThis.ResizeObserver = original;
+        HTMLElement.prototype.getBoundingClientRect = originalRect;
+      }
     });
   });
 

@@ -7,6 +7,7 @@ import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/u
 import { Switch, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 
 import { MemoryConflicts } from '@/features/settings/components/MemoryConflicts';
+import { MemorySummaryCard } from '@/features/settings/components/MemorySummaryCard';
 import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
 import {
   ImportMemoryDialog,
@@ -384,6 +385,8 @@ export function MemorySection() {
           {MEMORY_DISABLED_CONTRACT}
         </p>
       </section>
+
+      <MemorySummaryCard memoryCount={memoryCount} />
 
       {/* Exclusions sit ABOVE the memory list: the rule that governs what gets
           saved is more useful before you read what was. */}

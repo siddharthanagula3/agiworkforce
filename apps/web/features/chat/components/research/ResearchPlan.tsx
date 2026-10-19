@@ -26,6 +26,8 @@ const EXPLANATION =
 const ADD_STEP_LABEL = 'Add a step';
 const REMOVE_STEP_LABEL = 'Remove this step';
 const START_LABEL = 'Start research';
+const QUESTIONS_HEADING = 'Before I search';
+const QUESTIONS_HINT = 'Answer what you can; anything left blank is skipped.';
 const CANCEL_LABEL = 'Cancel';
 const EMPTY_PLAN_COPY = 'Add at least one step, or cancel.';
 const GAPS_HEADING = 'Gaps';
@@ -53,11 +55,13 @@ const MIN_SOURCE_CHOICES = [0, 5, 10, 20] as const;
 export interface ResearchPlanSubmission {
   steps: ResearchStep[];
   deliverable: ResearchDeliverableSpec;
+  answers: string[];
 }
 
 export interface ResearchPlanProps {
   steps: readonly ResearchStep[];
   gaps?: readonly ResearchGap[];
+  questions?: readonly string[];
   editable: boolean;
   busy?: boolean;
   onStart?: (submission: ResearchPlanSubmission) => void;
@@ -84,6 +88,7 @@ function editableSteps(steps: readonly ResearchStep[]): ResearchStep[] {
 export function ResearchPlan({
   steps,
   gaps,
+  questions = [],
   editable,
   busy = false,
   onStart,
@@ -95,6 +100,7 @@ export function ResearchPlan({
   const [deliverable, setDeliverable] = useState<ResearchDeliverableSpec>({
     ...DEFAULT_RESEARCH_DELIVERABLE,
   });
+  const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''));
 
   useEffect(() => {
     setDraft(editableSteps(steps));
@@ -139,6 +145,31 @@ export function ResearchPlan({
         </h3>
         {editable ? <p className="mt-0.5 text-xs text-muted-foreground">{EXPLANATION}</p> : null}
       </div>
+
+      {editable && questions.length > 0 ? (
+        <fieldset className="space-y-2 rounded-md border border-border/40 p-2">
+          <legend className="px-1 text-xs font-medium text-foreground">{QUESTIONS_HEADING}</legend>
+          <p className="text-xs text-muted-foreground">{QUESTIONS_HINT}</p>
+          {questions.map((question, index) => (
+            <label key={question} className="block space-y-1">
+              <span className="block text-xs text-foreground">{question}</span>
+              <input
+                type="text"
+                value={answers[index] ?? ''}
+                maxLength={MAX_STEP_CHARS}
+                onChange={(event) =>
+                  setAnswers((current) => {
+                    const next = questions.map((_, position) => current[position] ?? '');
+                    next[index] = event.target.value;
+                    return next;
+                  })
+                }
+                className="min-h-8 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+              />
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
 
       <ul className="space-y-1.5">
         {draft.map((step, index) => (
@@ -300,6 +331,7 @@ export function ResearchPlan({
                   .filter((step) => step.description.trim().length > 0)
                   .map((step) => ({ ...step, description: step.description.trim() })),
                 deliverable,
+                answers: questions.map((_, index) => answers[index]?.trim() ?? ''),
               })
             }
             className="inline-flex min-h-8 items-center rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"

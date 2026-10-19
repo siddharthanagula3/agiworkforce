@@ -148,6 +148,7 @@ export const ManagedCloudScheduleMutationSchema = z.object({
     .nullable()
     .optional(),
   projectId: z.string().trim().min(1).nullable().optional(),
+  agentId: z.string().uuid().nullable().optional(),
   recurrenceRule: z.string().trim().min(1).max(512).nullable().optional(),
   dayparts: z.array(ManagedCloudScheduleDaypartSchema).max(7).nullable().optional(),
   retryMaxAttempts: z.number().int().min(0).max(5).optional(),
@@ -186,6 +187,7 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   projectId: z.string().nullable().optional(),
+  agentId: z.string().nullable().optional(),
   recurrenceRule: z.string().nullable().optional(),
   dayparts: z.array(ManagedCloudScheduleDaypartSchema).nullable().optional(),
   retryMaxAttempts: z.number().int().nonnegative().optional(),
