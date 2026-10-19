@@ -150,9 +150,16 @@ describe('inline completions, real cursor filtering', () => {
   });
 
   it('stays quiet when the cursor sits in the middle of code', async () => {
-    expect(await askAt('const total = sum()', 18)).toEqual([]);
+    expect(await askAt('const total = sum(values)', 18)).toEqual([]);
     expect(await askAt('const total = sum', 13)).toEqual([]);
     expect(chatCompletion).not.toHaveBeenCalled();
+  });
+
+  it('completes inside brackets and quotes the editor closed on its own', async () => {
+    expect(await askAt('for (const value of )', 20)).toHaveLength(1);
+    expect(await askAt("const label = '';", 15)).toHaveLength(1);
+    expect(await askAt('items.push({ })', 13)).toHaveLength(1);
+    expect(chatCompletion).toHaveBeenCalledTimes(3);
   });
 
   it('still completes when only whitespace follows the cursor', async () => {
