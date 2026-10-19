@@ -86,3 +86,4 @@ export * from './agent-drafts';
 export * from './plugin-directory';
 export * from './trigger-sources';
 export * from './project-studio';
+export * from './artifact-library';
