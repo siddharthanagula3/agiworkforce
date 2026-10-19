@@ -47,6 +47,7 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { StudyModeBanner } from '@/src/features/study/StudyModeBanner';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
@@ -1878,6 +1879,10 @@ export default function ChatScreen() {
         )}
 
         <TemporaryChatBanner />
+
+        {id && conversationExecutionMode === 'cloud' && !conversation?.temporary ? (
+          <StudyModeBanner conversationId={id} />
+        ) : null}
 
         <SendErrorBanner
           error={messageLoadFailed ? MESSAGE_LOAD_FAILED : null}
