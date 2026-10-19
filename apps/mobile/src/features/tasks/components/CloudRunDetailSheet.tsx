@@ -76,6 +76,9 @@ export function CloudRunDetailSheet({
   onStop,
   onOpenConversation,
   onMakeRoutine,
+  onRerun,
+  onShare,
+  rerunning = false,
 }: {
   detail: CloudRunDetail | null;
   title: string;
@@ -84,6 +87,9 @@ export function CloudRunDetailSheet({
   onStop: () => void;
   onOpenConversation: (conversationId: string) => void;
   onMakeRoutine?: () => void;
+  onRerun?: () => void;
+  onShare?: () => void;
+  rerunning?: boolean;
 }) {
   const colors = useThemeColors();
   const answerInput = useCloudTaskStore((state) => state.answerInput);
@@ -438,6 +444,25 @@ export function CloudRunDetailSheet({
                 variant="outline"
                 accessibilityLabel="Open the conversation this task belongs to"
                 onPress={() => onOpenConversation(conversationId)}
+              />
+            ) : null}
+
+            {onRerun ? (
+              <Button
+                title="Run again"
+                variant="outline"
+                loading={rerunning}
+                accessibilityHint="Starts a new task with the same goal"
+                onPress={onRerun}
+              />
+            ) : null}
+
+            {onShare ? (
+              <Button
+                title="Share task"
+                variant="outline"
+                accessibilityHint="Creates a link anyone can open to read this task's chat"
+                onPress={onShare}
               />
             ) : null}
 

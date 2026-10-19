@@ -9,6 +9,7 @@ const mockListRuns = jest.fn();
 const mockFollowRun = jest.fn();
 const mockResumeRun = jest.fn();
 const mockCancelRun = jest.fn();
+const mockStartCloudWorkRun = jest.fn();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -53,6 +54,11 @@ jest.mock('@/services/streaming', () => ({
     resumeRun: mockResumeRun,
     cancelRun: mockCancelRun,
   }),
+}));
+
+jest.mock('../startWork', () => ({
+  ...jest.requireActual('../startWork'),
+  startCloudWorkRun: (...args: unknown[]) => mockStartCloudWorkRun(...args),
 }));
 
 jest.mock('@/lib/mmkv', () => ({
@@ -190,6 +196,40 @@ describe('Cloud tasks screen', () => {
         [{ toolCallId: 'call_1', decision: 'approved' }],
         expect.anything(),
       ),
+    );
+  });
+
+  it('runs a finished task again and offers it as a routine', async () => {
+    const FINISHED = {
+      ...RUN,
+      state: 'completed',
+      pendingApproval: null,
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      conversationPreview: 'Summarise overnight support tickets',
+    };
+    mockListRuns.mockResolvedValue({ runs: [FINISHED], nextCursor: null });
+    mockFollowRun.mockImplementation(
+      async (_runId: string, options: { onSnapshot?: (page: unknown) => void }) => {
+        await options.onSnapshot?.({ run: FINISHED, events: [], nextAfterSequence: -1 });
+        return { run: FINISHED, lastSequence: -1 };
+      },
+    );
+    mockStartCloudWorkRun.mockResolvedValue({ conversationId: 'conv-new', goal: {} });
+    const { findByText, getByText } = render(<CloudTasksScreen />);
+
+    fireEvent.press(await findByText('Summarise overnight support tickets'));
+    expect(await findByText('Make it a routine')).toBeTruthy();
+    fireEvent.press(getByText('Run again'));
+    await waitFor(() =>
+      expect(mockStartCloudWorkRun).toHaveBeenCalledWith({
+        goal: 'Summarise overnight support tickets',
+      }),
+    );
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'conv-new' },
+      }),
     );
   });
 });
