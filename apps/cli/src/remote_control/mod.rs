@@ -557,10 +557,6 @@ impl<H: DeveloperSessionHost> Relay<H> {
     }
 }
 
-/// What the account is told about a session while Remote Control is on: a
-/// turn waiting on an approval, or one that finished. The account pushes it to
-/// the paired phone, so a decision this terminal waits on reaches someone who
-/// is not looking at it, as it does for the desktop app.
 fn activity_of(
     root_id: &str,
     notification: &agiworkforce_protocol::developer_session::AppServerNotification,
@@ -632,10 +628,8 @@ async fn report_activity(
     }
 }
 
-/// The pairing line as a QR code the phone's Remote scanner reads, in
-/// half-height blocks so it fits a terminal. With colour it is drawn black on
-/// white whatever the terminal's theme; without, dark modules are left as the
-/// background, which reads correctly on the usual dark terminal.
+/// Without colour the dark modules are left as the background, which only
+/// reads on a dark terminal.
 pub fn pairing_qr(pairing_line: &str) -> Option<String> {
     render_qr(
         pairing_line,

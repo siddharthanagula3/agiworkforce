@@ -496,9 +496,7 @@ pub struct ManagedSession {
     /// reads both the same way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcript: Option<ManagedSessionTranscript>,
-    /// The account's ids for this conversation's messages, in order, when the
-    /// conversation came from the account. Sync updates those rows rather than
-    /// sending the same history again under new ids.
+    /// Sync updates these rows; new ids would duplicate the account's history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hosted_message_ids: Vec<String>,
 }

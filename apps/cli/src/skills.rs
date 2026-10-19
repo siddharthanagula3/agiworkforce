@@ -189,7 +189,6 @@ struct SkillSources {
     project: Vec<Skill>,
     /// From the user's skills folder.
     user: Vec<Skill>,
-    /// The account's skills, synced down from the web.
     account: Vec<Skill>,
     /// From plugins the user installed.
     plugin: Vec<Skill>,
@@ -502,7 +501,6 @@ pub fn revoke_project_skills_consent(project_root: &Path) -> std::io::Result<()>
 pub enum SkillOrigin {
     Project,
     User,
-    /// Synced down from the account; the web is where it is added or removed.
     Account,
     Plugin,
 }

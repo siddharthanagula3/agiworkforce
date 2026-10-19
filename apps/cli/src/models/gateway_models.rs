@@ -269,10 +269,8 @@ pub fn store_live_catalog(catalog: GatewayCatalog) {
     }
 }
 
-/// Read the account's managed models once per process, so a managed session
-/// can switch to one the plan runs. The terminal reads them when it starts;
-/// an app-server had never read them, and refused every managed model a
-/// client picked as unavailable on the plan.
+/// A managed model switch is checked against this list, so it must be read
+/// before a turn names a model.
 pub async fn ensure_live_catalog() {
     if LIVE_CATALOG.lock().is_ok_and(|slot| slot.is_some()) {
         return;

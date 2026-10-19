@@ -31,10 +31,8 @@ pub struct SessionSnapshot {
     pub provider: Option<String>,
     pub project_id: Option<String>,
     pub messages: Vec<TurnMessage>,
-    /// Ids the account holds for this session's history, in order, when the
-    /// history came from the account. The account's copy is already there, so
-    /// these messages update their own rows instead of being sent again under
-    /// new ids.
+    /// The account already holds these rows; pushing them under new ids would
+    /// duplicate the history.
     pub hosted_message_ids: Vec<String>,
 }
 
@@ -188,9 +186,7 @@ pub fn message_id_for(conversation_id: &str, index: usize) -> String {
     .to_string()
 }
 
-/// The hosted id for a message added after a conversation came from the
-/// account. Keyed on the last message the account held, so a turn added after
-/// a later import never reuses an id an earlier one wrote.
+/// Keyed on the last account message, so ids from separate imports never collide.
 fn continued_message_id_for(conversation_id: &str, last_hosted_id: &str, ordinal: usize) -> String {
     Uuid::new_v5(
         &Uuid::NAMESPACE_URL,
@@ -335,8 +331,6 @@ pub struct HostedMessage {
     pub server_version: String,
 }
 
-/// Record the versions of a conversation read from the account, so the next
-/// push of it updates the account's rows rather than racing them as inserts.
 pub fn record_hosted(conversation: &HostedConversation, state: &mut SyncState) {
     state
         .conversations
@@ -346,10 +340,7 @@ pub fn record_hosted(conversation: &HostedConversation, state: &mut SyncState) {
     }
 }
 
-/// Where a message sits in its conversation: when it was first written, which
-/// every client reads as turn order. The server version only says when a row
-/// last changed, so an answer edited or re-synced after a later question would
-/// otherwise move below it. A row without a time keeps the version order.
+/// The server version changes on every edit, so only creation time keeps turn order.
 fn turn_position(message: &MessageDelta) -> (Option<chrono::DateTime<chrono::Utc>>, u128) {
     (
         message
@@ -361,8 +352,7 @@ fn turn_position(message: &MessageDelta) -> (Option<chrono::DateTime<chrono::Utc
     )
 }
 
-/// Assemble whole conversations out of a delta pull, dropping tombstoned rows,
-/// with each conversation's messages in turn order.
+/// Assemble whole conversations out of a delta pull, dropping tombstoned rows.
 pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
     let mut conversations: Vec<HostedConversation> = response
         .conversations

@@ -1607,8 +1607,6 @@ pub fn render_remote_env() -> String {
     lines.join("\n")
 }
 
-/// `/effort` in the line-based REPL: the same levels the full-screen view's
-/// picker sets, applied from the next turn.
 pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
     let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
@@ -1728,9 +1726,7 @@ fn product_page(path: &str) -> String {
     )
 }
 
-/// `/mobile`: the phone app's page as a code to scan, as Claude Code's
-/// `/mobile` does. Drawn without colour, so it reads in the full-screen view
-/// too, which shows text but not terminal colours.
+/// Drawn without colour: the full-screen view shows text, not terminal colours.
 pub fn render_mobile() -> String {
     let url = product_page(MOBILE_PAGE);
     let scan = crate::remote_control::render_qr(&url, false)

@@ -14,8 +14,6 @@ struct DeviceCodeResponse {
     device_code: String,
     user_code: String,
     verification_uri: Option<String>,
-    /// The approval page with the code already in it, so the person signing in
-    /// confirms it instead of typing it.
     verification_uri_complete: Option<String>,
     #[serde(default = "default_interval")]
     interval: u64,
@@ -62,8 +60,8 @@ pub enum DeviceCodePoll {
 
 /// Request a device code. The caller decides how to present the user code and
 /// verification URL; nothing is printed here.
-/// `surface` is the app the approval page names: `cli`, `vscode` or
-/// `desktop`, as the device-code endpoint accepts them.
+/// `surface` must be one the device-code endpoint accepts: `cli`, `vscode` or
+/// `desktop`.
 pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<DeviceCodeStart> {
     let client = reqwest::Client::new();
     let resp = client

@@ -661,10 +661,8 @@ async fn run_spec_observing(
     }
 }
 
-/// The managed gateway writes the model's reasoning summary into the answer
-/// text between `<thinking>` and `</thinking>`, the way the web reads it. This
-/// CLI shows no reasoning, so that span is cut from what is printed, kept in
-/// the session and synced to the account, where it read as the answer.
+/// The managed gateway inlines the reasoning summary between these tags in the
+/// answer text, where it would be printed, kept and synced as the answer.
 #[derive(Debug, Default)]
 struct InlineThinking {
     held: String,
@@ -674,8 +672,7 @@ struct InlineThinking {
 const THINKING_OPEN: &str = "<thinking>";
 const THINKING_CLOSE: &str = "</thinking>";
 
-/// How much of the end of `text` could be the start of `tag`, so a tag split
-/// across two chunks is held back until the next one says what it is.
+/// A tag can arrive split across two chunks.
 fn partial_tag_len(text: &str, tag: &str) -> usize {
     (1..tag.len().min(text.len() + 1))
         .rev()
@@ -686,7 +683,6 @@ fn partial_tag_len(text: &str, tag: &str) -> usize {
 }
 
 impl InlineThinking {
-    /// The visible part of `chunk`, holding back what may be half a tag.
     fn push(&mut self, chunk: &str) -> String {
         self.held.push_str(chunk);
         let mut visible = String::new();
@@ -714,7 +710,6 @@ impl InlineThinking {
         }
     }
 
-    /// What is left once the stream ends: held text that never became a tag.
     fn finish(&mut self) -> String {
         let rest = if self.inside {
             String::new()

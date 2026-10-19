@@ -641,15 +641,11 @@ fn managed_cloud_authority() -> crate::platform::runtime::session::ManagedSessio
     }
 }
 
-/// What continuing an account conversation on this device did to the local copy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostedAdoption {
-    /// There was no local copy; the account's is here now.
     Created,
-    /// The account had turns this device did not, and they were added.
     Updated,
-    /// The local copy already holds everything the account does, or has turns
-    /// of its own the account has not seen, so it was left as it is.
+    /// Local turns the account has not seen are never replaced.
     Kept,
 }
 
@@ -662,26 +658,17 @@ fn synced_turns(messages: &[Message]) -> Vec<(&str, String)> {
         .collect()
 }
 
-/// How a first local copy of an account conversation starts.
 pub struct HostedCopy {
-    /// The model the copy runs on; the account's choice is often a web-only
-    /// routing mode this CLI cannot run.
+    /// The account's own model is often a web-only routing mode.
     pub model: String,
     pub auto_routing: Option<crate::runtime::session::ManagedSessionAutoRouting>,
-    /// What a session started here opens with ahead of its first turn, the
-    /// system prompt; the account's history carries none.
+    /// The account's history carries no system prompt.
     pub preamble: Vec<Message>,
-    /// The folder an editor's app-server serves. The copy belongs to it.
     pub workspace_root: Option<PathBuf>,
 }
 
-/// Continue an account conversation on this device under its own id, so turns
-/// taken here sync back into the same conversation.
-///
-/// A conversation seen here before is brought up to date only when the
-/// account's history extends the local one: local turns the account has not
-/// seen yet are never replaced. An existing copy keeps the workspace it has,
-/// and takes `copy.workspace_root` only when it has none.
+/// The copy keeps the conversation's id, or turns taken here would sync into a
+/// new conversation. Local turns the account has not seen are never replaced.
 pub fn adopt_hosted_conversation(
     conn: &Connection,
     conversation: &crate::cloud::chat::HostedConversation,

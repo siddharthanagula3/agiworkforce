@@ -1,10 +1,6 @@
-//! Account skills: the skills the account has on, whether added from the
-//! catalog, written on the web or brought by an enabled plugin, synced down so
-//! terminal and editor sessions offer the same skills the web does.
-//!
-//! The account's skills live in their own folder, which this module owns: a
-//! skill turned off on the web is gone from it after the next sync, and the
-//! user's own `skills/` folder is never written.
+//! The account-skills folder belongs to the sync: whatever the account no
+//! longer lists is removed from it, so the user's own `skills/` folder must
+//! never be written here.
 
 use std::path::{Path, PathBuf};
 
@@ -51,7 +47,6 @@ struct SkillFileEntry {
     size: u64,
 }
 
-/// One skill as it is written to disk: its SKILL.md and the files it carries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncedSkill {
     pub name: String,
@@ -63,8 +58,7 @@ pub fn account_skills_dir(config_dir: &Path) -> PathBuf {
     config_dir.join(ACCOUNT_SKILLS_DIR)
 }
 
-/// A name the account sends becomes a folder name here, so it must be one
-/// plain path component.
+/// The name becomes a folder name, so it must be one plain path component.
 fn safe_skill_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
@@ -74,8 +68,6 @@ fn safe_skill_name(name: &str) -> bool {
         && !name.starts_with('.')
 }
 
-/// The SKILL.md for a skill the account serves as a name, a description and a
-/// body.
 pub fn skill_document(skill: &AccountSkill, body: &str) -> String {
     let description = skill
         .description
@@ -138,8 +130,7 @@ async fn fetch_skill(
     })
 }
 
-/// Read every skill the account has on. A draft is the author's work in
-/// progress on the web and is not offered to sessions.
+/// A draft is its author's work in progress and is not offered to sessions.
 pub async fn fetch_account_skills(client: &CloudClient) -> Result<Vec<SyncedSkill>, CloudError> {
     let list: SkillList = client.get(SKILLS_PATH, &[]).await?;
     let mut synced = Vec::new();
@@ -158,8 +149,7 @@ pub async fn fetch_account_skills(client: &CloudClient) -> Result<Vec<SyncedSkil
     Ok(synced)
 }
 
-/// Make `dir` hold exactly `skills`. Each skill is written beside its final
-/// place and moved in whole, so a session never reads half of one.
+/// Each skill is staged and moved in whole, so a session never reads half of one.
 pub fn write_account_skills(dir: &Path, skills: &[SyncedSkill]) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     for skill in skills {

@@ -161,8 +161,6 @@ pub(crate) fn bound_conversation() -> Option<String> {
     BOUND_CONVERSATION.try_with(Clone::clone).ok()
 }
 
-/// Whether this device has seen the account hold `conversation_id`, from its
-/// own sync records and without asking the account.
 pub fn account_holds_conversation(privacy: PrivacyMode, conversation_id: &str) -> bool {
     CloudSession::open(privacy).is_ok_and(|session| {
         session
@@ -189,8 +187,6 @@ pub async fn ensure_hosted_conversation(
     Ok(conversation_id)
 }
 
-/// This session's conversation in the account, with the account's address,
-/// or the sentence that says why it is not there.
 fn account_conversation(session: &crate::agent::AgentSession) -> Result<(String, String), String> {
     if session.privacy_mode != PrivacyMode::Managed {
         return Err(format!(
@@ -240,9 +236,7 @@ pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> St
 /// `DESKTOP_DEEP_LINK_SCHEME` in packages/contracts/local-runtime, which owns it.
 const DESKTOP_LINK_SCHEME: &str = "agiworkforce-cloud";
 
-/// `/desktop`: open this conversation in the desktop app, where it continues
-/// in the same account conversation. Only a person typing the command reaches
-/// this, so it opens the app without asking again.
+/// Opens the app without asking: only a typed command reaches this.
 pub fn open_in_desktop(session: &crate::agent::AgentSession) -> String {
     let (conversation_id, base) = match account_conversation(session) {
         Ok(found) => found,
@@ -337,9 +331,8 @@ pub async fn hosted_conversations(
 }
 
 /// One hosted conversation by id, or `None` when the account has no such
-/// conversation. A caller reads one to continue it on this device, so its
-/// versions are recorded: the next push then updates the account's rows
-/// instead of offering the same history as new ones.
+/// conversation. Its versions are recorded, or the next push would insert the
+/// history again.
 pub async fn hosted_conversation(
     privacy: PrivacyMode,
     conversation_id: &str,
@@ -583,9 +576,7 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     Ok(cache)
 }
 
-/// Bring the account's skills down to this device, at most once per
-/// `ACCOUNT_SKILLS_REFRESH` unless `force`. A plan without skills leaves the
-/// folder as it was, and so does any failure: the skills already here stand.
+/// Any failure keeps the skills already on this device.
 pub async fn refresh_account_skills(
     privacy: PrivacyMode,
     force: bool,
