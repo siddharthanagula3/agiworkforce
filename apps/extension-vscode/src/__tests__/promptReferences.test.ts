@@ -124,6 +124,34 @@ describe('native chat prompt references', () => {
     expect((inputs[0] as { text: string }).text).toContain('lines="8-10"');
   });
 
+  it('sends a mentioned folder as a listing of the files the context policy allows', async () => {
+    await fs.writeFile(path.join(root, 'src/util.ts'), 'controlled ordinary code');
+    await fs.writeFile(path.join(root, 'src/.env'), 'controlled credential');
+    vi.mocked(vscode.workspace.fs.stat).mockResolvedValue({
+      type: vscode.FileType.Directory,
+      ctime: 0,
+      mtime: 0,
+      size: 0,
+    });
+    vi.mocked(vscode.workspace.findFiles).mockResolvedValue([
+      vscode.Uri.file(path.join(root, 'src/util.ts')),
+      vscode.Uri.file(path.join(root, 'src/app.ts')),
+      vscode.Uri.file(path.join(root, 'src/.env')),
+    ]);
+    vi.mocked(vscode.workspace.asRelativePath).mockImplementation((target: unknown) =>
+      String((target as { fsPath?: string }).fsPath ?? target).replace(`${root}${path.sep}`, ''),
+    );
+
+    const inputs = await buildWorkspaceReferenceInputs(vscode.Uri.file(root), [{ path: 'src/' }]);
+
+    expect(inputs).toHaveLength(1);
+    const text = (inputs[0] as { text: string }).text;
+    expect(text).toContain('<untrusted_folder_reference path="src/">');
+    expect(text).toContain('src/app.ts\nsrc/util.ts\n</untrusted_folder_reference>');
+    expect(text).not.toContain('.env');
+    expect(vi.mocked(vscode.workspace.openTextDocument)).not.toHaveBeenCalled();
+  });
+
   it('rejects traversal and malformed sidebar ranges', async () => {
     const inputs = await buildWorkspaceReferenceInputs(vscode.Uri.file(root), [
       { path: '../../outside.ts' },

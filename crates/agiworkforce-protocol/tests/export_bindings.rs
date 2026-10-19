@@ -160,6 +160,12 @@ fn export_typescript_bindings() {
         .expect("export developer-session command run graph");
     agiworkforce_protocol::developer_session::ThreadSearchParams::export_all_to(dir)
         .expect("export developer-session thread search params graph");
+    agiworkforce_protocol::developer_session::ThreadSideQuestionParams::export_all_to(dir)
+        .expect("export developer-session side question params graph");
+    agiworkforce_protocol::developer_session::ThreadSideQuestionResponse::export_all_to(dir)
+        .expect("export developer-session side question graph");
+    agiworkforce_protocol::developer_session::ThreadSideQuestionDelta::export_all_to(dir)
+        .expect("export developer-session side question delta graph");
     agiworkforce_protocol::developer_session::ThreadSearchResponse::export_all_to(dir)
         .expect("export developer-session thread search graph");
     agiworkforce_protocol::developer_session::MemoryAddParams::export_all_to(dir)

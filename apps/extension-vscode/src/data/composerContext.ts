@@ -4,6 +4,7 @@ import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protoco
 import { Config } from '../platform/config';
 import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
+import { latestTerminalOutput } from './terminalOutput';
 import {
   isGitIgnored,
   settingsWithholdReason,
@@ -158,6 +159,19 @@ function gitDetail(trusted: boolean, changes: { name: string } | undefined): str
   return changes === undefined ? 'No uncommitted changes' : 'Status and diff of the working tree';
 }
 
+function terminalOutput(): ContextAttachment | undefined {
+  const latest = latestTerminalOutput();
+  if (latest === undefined) return undefined;
+  const transcript =
+    latest.transcript.length > MAX_TOTAL_REFERENCE_CHARS
+      ? `... (earlier output left out)\n${latest.transcript.slice(-MAX_TOTAL_REFERENCE_CHARS)}`
+      : latest.transcript;
+  return {
+    name: `Terminal: ${latest.terminalName}`,
+    text: `The last command in the "${latest.terminalName}" terminal and its output:\n${transcript}`,
+  };
+}
+
 const HTML_BLOCK_TAGS = /<\/(?:p|div|li|h[1-6]|tr|section|article|header|footer)>|<br\s*\/?>/giu;
 const HTML_DROPPED = /<(script|style|noscript|svg)[\s\S]*?<\/\1>/giu;
 
@@ -221,6 +235,7 @@ export async function resolveContextMenuState(): Promise<ContextMenuItemState[]>
   const reported = await shareableProblems();
   const trusted = vscode.workspace.isTrusted;
   const changes = await gitChanges();
+  const terminal = latestTerminalOutput();
 
   const details: Record<ContextAttachmentKind, ContextMenuItemState> = {
     selection: {
@@ -247,6 +262,14 @@ export async function resolveContextMenuState(): Promise<ContextMenuItemState[]>
       kind: 'git-diff',
       available: trusted && changes !== undefined,
       detail: gitDetail(trusted, changes),
+    },
+    terminal: {
+      kind: 'terminal',
+      available: terminal !== undefined,
+      detail:
+        terminal === undefined
+          ? 'Run a command in a terminal with shell integration first'
+          : `Last command in ${terminal.terminalName}`,
     },
     url: {
       kind: 'url',
@@ -278,6 +301,8 @@ export async function buildContextAttachment(
     }
     case 'git-diff':
       return gitChanges();
+    case 'terminal':
+      return terminalOutput();
     case 'url':
       return webPage();
   }
