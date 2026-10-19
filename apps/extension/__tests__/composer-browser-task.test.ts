@@ -201,6 +201,7 @@ function harness() {
     composerDocumentsSettled: () => true,
     pendingAttachmentCount: () => pendingAttachments.length,
     composerVideoMode: false,
+    composerSkill: null as string | null,
     canCreateVideos: () => false,
     startVideoTurn: vi.fn(),
     pendingAttachments,

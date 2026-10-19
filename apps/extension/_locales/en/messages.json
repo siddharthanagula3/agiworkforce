@@ -2557,29 +2557,9 @@
     "message": "Chat unpinned.",
     "description": "Confirms a chat was unpinned"
   },
-  "spHistoryStar": {
-    "message": "Star",
-    "description": "Recent chat menu action that stars the chat"
-  },
-  "spHistoryUnstar": {
-    "message": "Unstar",
-    "description": "Recent chat menu action that removes the chat's star"
-  },
-  "spHistoryStarred": {
-    "message": "Chat starred.",
-    "description": "Confirms a chat was starred"
-  },
-  "spHistoryUnstarred": {
-    "message": "Chat unstarred.",
-    "description": "Confirms a chat's star was removed"
-  },
   "spHistoryPinnedMarker": {
     "message": "Pinned",
     "description": "Marks a pinned chat in the recents list"
-  },
-  "spHistoryStarredMarker": {
-    "message": "Starred",
-    "description": "Marks a starred chat in the recents list"
   },
   "spHistoryMove": {
     "message": "Move to project",
@@ -4131,5 +4111,321 @@
   "spAccountLogOutFailed": {
     "message": "Log out did not finish. Try again.",
     "description": "Status after signing out failed"
+  },
+  "spSkills": {
+    "message": "Skills",
+    "description": "Composer menu entry that lists the account's own skills"
+  },
+  "spSkillsLoading": {
+    "message": "Loading your skills…",
+    "description": "Skills menu status while the list loads"
+  },
+  "spSkillsEmpty": {
+    "message": "No skills of your own yet.",
+    "description": "Skills menu when the account has no skills of its own"
+  },
+  "spSkillsManage": {
+    "message": "Manage skills",
+    "description": "Skills menu entry that opens skill settings on the web"
+  },
+  "spSkillsLoadFailed": {
+    "message": "Your skills could not be loaded. Try again.",
+    "description": "Skills menu when the list request failed"
+  },
+  "spSkillChipHint": {
+    "message": "Skill for this message",
+    "description": "Composer chip hint under the selected skill name"
+  },
+  "spSkillRemove": {
+    "message": "Remove the $SKILL$ skill",
+    "description": "Accessible name of the button that clears the selected skill",
+    "placeholders": {
+      "skill": {
+        "content": "$1",
+        "example": "release-notes"
+      }
+    }
+  },
+  "spQuotaUpgradeTo": {
+    "message": "Upgrade to $PLAN$",
+    "description": "Limit action naming the next plan when its price is not listed; matches the web paywall",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Basic"
+      }
+    }
+  },
+  "spQuotaUpgradeToMonthly": {
+    "message": "Upgrade to $PLAN$, $PRICE$/mo",
+    "description": "Limit action naming the next plan and its monthly price; matches the web paywall",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Basic"
+      },
+      "price": {
+        "content": "$2",
+        "example": "$7"
+      }
+    }
+  },
+  "spQuotaUpgradeToPerSeat": {
+    "message": "Upgrade to $PLAN$, $PRICE$/seat/mo",
+    "description": "Limit action for a per-seat plan; matches the web paywall",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Team"
+      },
+      "price": {
+        "content": "$2",
+        "example": "$30"
+      }
+    }
+  },
+  "spMemoryTitle": {
+    "message": "Memory",
+    "description": "Title of the memory sheet opened from the More menu"
+  },
+  "spMemoryClose": {
+    "message": "Close memory",
+    "description": "Accessible name of the memory sheet close button"
+  },
+  "spMemoryIntro": {
+    "message": "What AGI remembers about you in every app. Changes here apply to web, desktop and mobile too.",
+    "description": "Memory sheet introduction"
+  },
+  "spMemoryAddPlaceholder": {
+    "message": "Add something for AGI to remember",
+    "description": "Memory sheet add field placeholder"
+  },
+  "spMemoryAddLabel": {
+    "message": "New memory",
+    "description": "Accessible name of the memory add field"
+  },
+  "spMemoryAdd": {
+    "message": "Add",
+    "description": "Memory sheet add button"
+  },
+  "spMemoryManage": {
+    "message": "Memory settings on the web",
+    "description": "Memory sheet link to web memory settings"
+  },
+  "spMemorySignedOut": {
+    "message": "Sign in to see your memory.",
+    "description": "Memory sheet status when signed out"
+  },
+  "spMemoryFailed": {
+    "message": "Your memory could not be loaded. Try again.",
+    "description": "Memory sheet status when a request failed"
+  },
+  "spMemoryEdit": {
+    "message": "Edit",
+    "description": "Memory row edit action"
+  },
+  "spMemoryDelete": {
+    "message": "Delete",
+    "description": "Memory row delete action"
+  },
+  "spMemoryEditLabel": {
+    "message": "Edit memory",
+    "description": "Accessible name of the memory edit field"
+  },
+  "spMemorySave": {
+    "message": "Save",
+    "description": "Memory edit save button"
+  },
+  "spMemoryCancel": {
+    "message": "Cancel",
+    "description": "Memory edit cancel button"
+  },
+  "spMemoryUpdated": {
+    "message": "Memory updated.",
+    "description": "Memory sheet status after an edit"
+  },
+  "spMemoryDeleteConfirm": {
+    "message": "Delete this memory? AGI stops using it in every app, and it cannot be recovered.",
+    "description": "Memory delete confirmation naming the consequence"
+  },
+  "spMemoryKeep": {
+    "message": "Keep",
+    "description": "Memory delete confirmation cancel"
+  },
+  "spMemoryDeleted": {
+    "message": "Memory deleted.",
+    "description": "Memory sheet status after a delete"
+  },
+  "spMemoryEmpty": {
+    "message": "AGI has not saved anything about you yet.",
+    "description": "Memory sheet empty state"
+  },
+  "spMemoryMoreOnWeb": {
+    "message": "More memories are in your web settings.",
+    "description": "Memory sheet note when the list has more pages"
+  },
+  "spMemoryAdded": {
+    "message": "Memory saved.",
+    "description": "Memory sheet status after adding"
+  },
+  "spMemoryLoading": {
+    "message": "Loading your memory…",
+    "description": "Memory sheet loading state"
+  },
+  "spMemorySourceChrome": {
+    "message": "Saved in Chrome",
+    "description": "Memory provenance label for a memory saved from the Chrome extension"
+  },
+  "spAccountMemory": {
+    "message": "Memory",
+    "description": "More menu entry that opens the memory sheet"
+  },
+  "spMemorySourceChat": {
+    "message": "From a chat: $TITLE$",
+    "description": "Memory provenance label naming the chat it came from",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Trip planning"
+      }
+    }
+  },
+  "spMemoryEditNamed": {
+    "message": "Edit memory: $TEXT$",
+    "description": "Accessible name of a memory edit button",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Prefers metric units"
+      }
+    }
+  },
+  "spMemoryDeleteNamed": {
+    "message": "Delete memory: $TEXT$",
+    "description": "Accessible name of a memory delete button",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Prefers metric units"
+      }
+    }
+  },
+  "spAccountUsageUsed": {
+    "message": "$PERCENT$% of token budget used",
+    "description": "Accessible name of the More menu usage row; matches the web sidebar meter",
+    "placeholders": {
+      "percent": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "spAccountTasks": {
+    "message": "Tasks",
+    "description": "More menu entry that opens the tasks sheet"
+  },
+  "spTasksTitle": {
+    "message": "Tasks",
+    "description": "Title of the tasks sheet"
+  },
+  "spTasksClose": {
+    "message": "Close tasks",
+    "description": "Accessible name of the tasks sheet close button"
+  },
+  "spTasksIntro": {
+    "message": "Tasks AGI is running or has run for you, from every app.",
+    "description": "Tasks sheet introduction"
+  },
+  "spTasksAllOnWeb": {
+    "message": "All tasks on the web",
+    "description": "Tasks sheet link to the web tasks page"
+  },
+  "spTasksUntitled": {
+    "message": "Untitled task",
+    "description": "Task row title when the run has no chat title"
+  },
+  "spTasksOpen": {
+    "message": "Open",
+    "description": "Task row action that opens the task's chat on the web"
+  },
+  "spTasksStop": {
+    "message": "Stop",
+    "description": "Task row action that stops a running task"
+  },
+  "spTasksStopConfirm": {
+    "message": "Stop this task? It ends now and cannot be resumed; anything it already did stays done.",
+    "description": "Stop confirmation naming the consequence"
+  },
+  "spTasksKeepRunning": {
+    "message": "Keep running",
+    "description": "Stop confirmation cancel"
+  },
+  "spTasksStopped": {
+    "message": "Task stopped.",
+    "description": "Status after a task was stopped"
+  },
+  "spTasksEmpty": {
+    "message": "No tasks yet.",
+    "description": "Tasks sheet empty state"
+  },
+  "spTasksLoading": {
+    "message": "Loading your tasks…",
+    "description": "Tasks sheet loading state"
+  },
+  "spTasksOpenNamed": {
+    "message": "Open task: $TITLE$",
+    "description": "Accessible name of a task open button",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Weekly report"
+      }
+    }
+  },
+  "spTasksStopNamed": {
+    "message": "Stop task: $TITLE$",
+    "description": "Accessible name of a task stop button",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Weekly report"
+      }
+    }
+  },
+  "spTitleContinueOnPhone": {
+    "message": "Continue on phone",
+    "description": "Chat title menu action that shows a code to open the current account chat on a phone"
+  },
+  "spPhoneTitle": {
+    "message": "Continue on your phone",
+    "description": "Title of the sheet with a code that opens the current chat on a phone"
+  },
+  "spPhoneClose": {
+    "message": "Close",
+    "description": "Accessible label of the button that closes the continue-on-phone sheet"
+  },
+  "spPhoneIntro": {
+    "message": "Scan this code with your phone's camera to open this chat in AGI. Sign in with the same account to see it.",
+    "description": "Explains how to use the code that opens the current chat on a phone"
+  },
+  "spPhoneCodeAlt": {
+    "message": "Code that opens this chat on your phone",
+    "description": "Alternative text of the code image that opens the current chat on a phone"
+  },
+  "spPhoneCopy": {
+    "message": "Copy link",
+    "description": "Button that copies the link that opens the current chat on another device"
+  },
+  "spPhoneCopied": {
+    "message": "Link copied",
+    "description": "Status after the chat link was copied"
+  },
+  "spPhoneCopyFailed": {
+    "message": "Couldn't copy the link. Select it and copy it instead.",
+    "description": "Status when copying the chat link failed"
+  },
+  "spPhoneCodeFailed": {
+    "message": "Couldn't draw the code. Copy the link instead.",
+    "description": "Status when the code image for the chat link could not be made"
   }
 }

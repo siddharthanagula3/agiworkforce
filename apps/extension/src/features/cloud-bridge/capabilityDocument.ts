@@ -26,17 +26,22 @@ export interface AccountSummary {
 
 async function nameOptedOut(token: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    const response = await fetch(`${FREE_TRIAL_GATEWAY}${MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-Requested-With': 'XMLHttpRequest',
-        ...platformRequestHeaders(),
+    const response = await fetch(
+      `${FREE_TRIAL_GATEWAY}${MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-Requested-With': 'XMLHttpRequest',
+          ...platformRequestHeaders(),
+        },
+        ...(signal ? { signal } : {}),
       },
-      ...(signal ? { signal } : {}),
-    });
+    );
     if (!response.ok) return false;
-    const body = (await response.json()) as { settings?: { general?: { preferredName?: unknown } } };
+    const body = (await response.json()) as {
+      settings?: { general?: { preferredName?: unknown } };
+    };
     const preferredName = body.settings?.general?.preferredName;
     return typeof preferredName === 'string' && preferredName.trim() === '';
   } catch {
