@@ -219,7 +219,7 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(render_terminal_setup())
         }
         "/reload-plugins" => ParityCommandResult::SystemMessage(render_reload_plugins()),
-        "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(open_upgrade_page()),
+        "/extra-usage" | "/pricing" => ParityCommandResult::SystemMessage(render_pricing()),
         "/remote-env" => ParityCommandResult::SystemMessage(render_remote_env()),
         "/add-dir" => ParityCommandResult::SystemMessage(handle_add_dir(session, arg)),
         "/remove-dir" => ParityCommandResult::SystemMessage(handle_remove_dir(session, arg)),
@@ -802,20 +802,32 @@ pub fn render_companion(surface: &str) -> String {
     )
 }
 
-pub fn open_upgrade_page() -> String {
-    let url = format!(
+fn pricing_url() -> String {
+    format!(
         "{}/pricing",
         crate::tier_cache::default_api_base().trim_end_matches('/')
-    );
+    )
+}
+
+fn pricing_message(lead: &str, url: &str) -> String {
+    format!("{lead} {url}\n`agi plans` compares plans and their credits here in the terminal.")
+}
+
+pub fn render_pricing() -> String {
+    pricing_message("Plans and upgrades:", &pricing_url())
+}
+
+pub fn open_upgrade_page() -> String {
+    let url = pricing_url();
     let opened =
         crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
-    format!(
-        "{} {url}\n`agi plans` compares plans and their credits here in the terminal.",
+    pricing_message(
         if opened {
             "Opened plans and upgrades in your browser:"
         } else {
             "Plans and upgrades:"
-        }
+        },
+        &url,
     )
 }
 

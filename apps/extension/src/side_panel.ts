@@ -62,10 +62,12 @@ import {
   TERMINAL_AGENT_TASK_STATES,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
+  getNextUpgradeTier,
   normalizeModelId,
   getProviderDisplayLabel,
   messageKindForAgentEvent,
   PROVIDERS_IN_ORDER,
+  productLinkPath,
   resolveModelEffort,
   type ClarifyState,
   type Effort,
@@ -91,7 +93,6 @@ import {
   recordCloudSyncState,
   upsertConversation,
   updateConversationEntry,
-  updateConversationMetadata,
   startNewConversation,
   BROWSER_STORE_KEY,
   type ConversationEntry,
@@ -102,6 +103,10 @@ import { ROUTING_TASK_TYPES } from './features/cloud-bridge/managedChatRouting';
 import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
 import { UUID_PATTERN } from './lib/uuid';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
+import { fetchOwnSkills, type AccountSkill } from './features/cloud-bridge/skillsClient';
+import { buildMemorySheet } from './features/side-panel/memorySheet';
+import { buildTasksSheet } from './features/side-panel/tasksSheet';
+import { buildPhoneSheet } from './features/side-panel/phoneSheet';
 import { SIDE_PANEL_PORT_NAME } from './features/side-panel/panelPresence';
 import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
 import { scheduleDraftFromChat, stageScheduleDraft } from './features/side-panel/schedulesSection';
@@ -130,8 +135,8 @@ import {
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   grantBrowserControlConsent,
-  hasBrowserControlConsent,
   hasBrowserControlHostPermission,
+  originApprovedForBrowserControl,
   removeBrowserControlHostPermission,
   requestBrowserControlHostPermission,
 } from './features/computer-use/browserControlConsent';
@@ -155,6 +160,7 @@ import {
 } from './features/computer-use/browserTurnActivity';
 import type { AgentLoopStep } from './features/computer-use/agentLoop';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import {
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
@@ -255,6 +261,7 @@ import {
   ChevronRight,
   Check,
   Plug,
+  Sparkles,
   Ellipsis,
   ChevronDown,
   renderIcon,
@@ -304,6 +311,7 @@ import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimi
 import {
   capabilityAllowed,
   fetchAccountSummary,
+  type AccountSummary,
   type CapabilityDocument,
 } from './features/cloud-bridge/capabilityDocument';
 import {
@@ -326,6 +334,7 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
+  signOutOfAccount,
   type ManagedChatSourcesDelta,
   type ManagedCodeExecution,
   type ManagedMemoryCommandTurn,
@@ -344,12 +353,14 @@ import {
   usageLimitNotice,
   usageWarning,
   usageWindowViews,
+  upgradeToPlanLabel,
 } from './features/side-panel/usageWindows';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   getFreshClerkAuthContext,
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
+  watchSyncHostSession,
   openClerkSignIn,
 } from './features/cloud-bridge/clerkAuth';
 import {
@@ -374,7 +385,11 @@ import {
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
 import { logger, withTimeout } from './utils';
-import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from './features/cloud-bridge/managedRunControl';
+import {
+  cancelChromeManagedRun,
+  listChromeManagedRuns,
+  MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
+} from './features/cloud-bridge/managedRunControl';
 import { platformRequestHeaders } from './platformHeaders';
 import { installSidePanelErrorReporting } from './features/observability/errorReporting';
 import { flushProductEvents, trackProductEvent } from './features/observability/productAnalytics';
@@ -386,6 +401,7 @@ const extensionSendQueue = getExtensionSendQueue();
 const SP_SITE_ALLOWLIST_KEY = SITE_ALLOWLIST_STORAGE_KEY;
 
 let capabilityDocument: CapabilityDocument | null = null;
+let accountIdentity: Omit<AccountSummary, 'capabilityDocument'> | null = null;
 let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
@@ -597,6 +613,12 @@ function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
   }
 }
 
+function inlineQuotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
+  if (recovery.action !== 'upgrade' || !managedModelAccess) return quotaRecoveryLabel(recovery);
+  const nextTier = getNextUpgradeTier(managedPlanTier(managedModelAccess));
+  return nextTier ? upgradeToPlanLabel(nextTier) : quotaRecoveryLabel(recovery);
+}
+
 function openQuotaRecovery(recovery: ManagedQuotaRecovery): void {
   chrome.tabs.create({ url: agiWebUrl(recovery.href) }).catch(() => {});
 }
@@ -641,9 +663,8 @@ function setManagedCloudChatState(
   }
   if (input) {
     input.disabled = state !== 'ready';
-    if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
-    else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
-    else input.placeholder = t('spComposerPlaceholder');
+    input.placeholder =
+      state === 'signed_out' ? t('spComposerPlaceholderSignedOut') : t('spComposerPlaceholder');
   }
   updateSendButton();
   updateEmptyStateActions();
@@ -989,6 +1010,7 @@ interface TurnPayload {
   images: ComposerImage[];
   files: ComposerFile[];
   agiWorkPlan?: string[];
+  skillName?: string;
 }
 
 const pendingAttachments: ComposerImage[] = [];
@@ -1141,15 +1163,19 @@ function persistMessages(): Promise<void> {
   });
 }
 
-function saveMessages(): void {
-  if (_ctx.temporaryChat) return;
-  void persistMessages()
+function saveMessagesNow(): Promise<void> {
+  if (_ctx.temporaryChat) return Promise.resolve();
+  return persistMessages()
     .then(() => {
       requestCloudConversationSync();
     })
     .catch((err) => {
       console.warn('[SidePanel] Failed to persist messages:', err);
     });
+}
+
+function saveMessages(): void {
+  void saveMessagesNow();
 }
 
 function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
@@ -1536,6 +1562,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   capabilityDocument = null;
+  accountIdentity = null;
+  renderEmptyGreeting();
   applyCapabilityGates();
   if (nextOwner) {
     setManagedCloudChatState('loading', { message: t('spGateChecking') });
@@ -2420,6 +2448,34 @@ function injectStyles(): void {
       justify-content: flex-end;
       gap: 6px;
       min-height: 24px;
+    }
+    .sp-code-block__lang {
+      margin-right: auto;
+      color: var(--agi-ext-text-muted);
+      font-family: var(--type-code-family);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-transform: lowercase;
+    }
+    .shiki-token {
+      color: var(--shiki-dark);
+      font-style: var(--shiki-dark-font-style, normal);
+      font-weight: var(--shiki-dark-font-weight, normal);
+      text-decoration: var(--shiki-dark-text-decoration, none);
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme='dark']) .shiki-token {
+        color: var(--shiki-light);
+        font-style: var(--shiki-light-font-style, normal);
+        font-weight: var(--shiki-light-font-weight, normal);
+        text-decoration: var(--shiki-light-text-decoration, none);
+      }
+    }
+    :root[data-theme='light'] .shiki-token {
+      color: var(--shiki-light);
+      font-style: var(--shiki-light-font-style, normal);
+      font-weight: var(--shiki-light-font-weight, normal);
+      text-decoration: var(--shiki-light-text-decoration, none);
     }
     .sp-code-block__status {
       color: var(--agi-ext-text-muted);
@@ -3610,6 +3666,29 @@ function injectStyles(): void {
       box-shadow: var(--agi-ext-elevation-2);
     }
     #sp-attach-menu.open { display: block; }
+    #sp-skill-menu {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      min-width: 224px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: var(--corner-surface);
+      padding: 6px;
+      z-index: var(--z-dropdown);
+      box-shadow: var(--agi-ext-elevation-3);
+    }
+    #sp-skill-menu.open { display: block; }
+    #sp-skill-menu .sp-attach-menu-item[aria-checked='true'] { color: var(--agi-ext-accent-text); }
+    .sp-skill-menu-note {
+      padding: 6px 10px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
     .sp-attach-menu-item[hidden],
     .sp-tool-btn[hidden] { display: none; }
     .sp-attach-menu-item {
@@ -4443,6 +4522,16 @@ function injectStyles(): void {
       opacity: 0.55;
     }
     #sp-empty-icon svg { width: 110px; height: 110px; }
+    #sp-empty-icon.sp-empty-icon-hidden { display: none; }
+    #sp-empty-greeting {
+      margin: 0 0 12px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-h1-size);
+      font-weight: 600;
+      line-height: var(--type-h1-height);
+      text-wrap: balance;
+    }
+    #sp-empty-greeting[hidden] { display: none; }
 
     #sp-blocked {
       align-items: center;
@@ -4690,6 +4779,107 @@ function injectStyles(): void {
       box-shadow: var(--agi-ext-elevation-3);
     }
     #sp-recents[hidden] { display: none; }
+    .sp-sheet {
+      position: fixed;
+      inset: 8px;
+      z-index: var(--z-sheet);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 6px 12px 12px;
+      overflow-y: auto;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-elevation-3);
+    }
+    .sp-sheet[hidden] { display: none; }
+    .sp-sheet-header { display: flex; align-items: center; gap: 8px; padding: 10px 2px 0; }
+    .sp-sheet-title {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      color: var(--agi-ext-text);
+      font-size: var(--type-h1-size);
+      font-weight: 600;
+      line-height: var(--type-h1-height);
+    }
+    .sp-sheet-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+    }
+    .sp-sheet-close:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-sheet-intro { margin: 0; color: var(--agi-ext-text-muted); font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-memory-add, .sp-memory-edit { display: flex; gap: 6px; }
+    .sp-memory-add input, .sp-memory-edit input {
+      flex: 1;
+      min-width: 0;
+      min-height: var(--control-md);
+      padding: 0 10px;
+      border: 1px solid var(--agi-ext-border-control);
+      border-radius: var(--corner-field);
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: inherit;
+    }
+    .sp-memory-status { min-height: 1em; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
+    .sp-memory-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .sp-memory-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-field);
+    }
+    .sp-memory-text { margin: 0; color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); overflow-wrap: anywhere; }
+    .sp-memory-source { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
+    .sp-memory-actions, .sp-memory-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .sp-memory-confirm p { flex-basis: 100%; margin: 0; color: var(--agi-ext-text); font-size: var(--type-body-size); }
+    .sp-memory-item button, .sp-memory-add button, .sp-memory-manage {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      cursor: pointer;
+    }
+    .sp-memory-item button.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-memory-item button:hover, .sp-memory-add button:hover, .sp-memory-manage:hover { background: var(--agi-ext-hover); }
+    .sp-memory-empty { color: var(--agi-ext-text-muted); font-size: var(--type-body-size); }
+    .sp-memory-manage { align-self: flex-start; }
+    .sp-phone-code {
+      align-self: center;
+      width: 200px;
+      height: 200px;
+      border-radius: var(--corner-field);
+    }
+    .sp-phone-code[hidden] { display: none; }
+    .sp-phone-link { margin: 0; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); overflow-wrap: anywhere; text-align: center; }
+    .sp-phone-copy {
+      align-self: center;
+      min-height: var(--control-md);
+      padding: 0 14px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--agi-ext-text);
+      font: inherit;
+      font-size: var(--type-label-size);
+      cursor: pointer;
+    }
+    .sp-phone-copy:hover { background: var(--agi-ext-hover); }
     #sp-recents-header {
       display: flex;
       align-items: center;
@@ -4758,7 +4948,60 @@ function injectStyles(): void {
     /* ── Panel chrome: More popover and conversation title row ── */
     :where(#sp-recents-title, #sp-title-text) { margin: 0; }
     #sp-more-wrap { position: relative; }
-    .sp-more-menu { min-width: 208px; }
+    .sp-more-menu { min-width: 240px; }
+    .sp-more-account {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 4px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--agi-ext-border);
+    }
+    .sp-more-account[hidden] { display: none; }
+    .sp-more-usage { display: flex; align-items: center; gap: 8px; }
+    .sp-more-usage-meter {
+      flex: 1;
+      height: 4px;
+      overflow: hidden;
+      border-radius: var(--corner-pill);
+      background: var(--agi-ext-border-strong);
+    }
+    .sp-more-usage-fill { display: block; height: 100%; background: var(--agi-ext-text-muted); }
+    .sp-more-usage-percent { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
+    .sp-more-account-header {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 10px 8px;
+      min-width: 0;
+    }
+    .sp-more-account-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sp-more-account-name {
+      overflow: hidden;
+      color: var(--agi-ext-text);
+      font-size: var(--type-body-size);
+      font-weight: 600;
+      line-height: var(--type-body-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-more-account-plan {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-transform: uppercase;
+    }
+    .sp-more-account-email {
+      overflow: hidden;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .sp-more-footer {
       margin-top: 4px;
       padding: 8px 10px 4px;
@@ -5161,6 +5404,18 @@ let recentProjects: ActiveProjectSelection[] = [];
 let recentProjectsGeneration = 0;
 let chooseChatProject: (project: ActiveProjectSelection | null) => void = () => {};
 
+function renderEmptyGreeting(): void {
+  const greeting = document.getElementById('sp-empty-greeting');
+  const icon = document.getElementById('sp-empty-icon');
+  if (!greeting) return;
+  const signedIn = accountIdentity !== null && managedCloudChatState !== 'signed_out';
+  greeting.textContent = signedIn
+    ? resolveGreetingHeadline(new Date(), accountIdentity?.greetingName)
+    : '';
+  greeting.hidden = !signedIn;
+  icon?.classList.toggle('sp-empty-icon-hidden', signedIn);
+}
+
 function updateEmptyStateActions(): void {
   const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
   const pageBlocked = document.getElementById('sp-blocked')?.classList.contains('visible') === true;
@@ -5285,7 +5540,7 @@ function renderMessages(): void {
                 ? (messageId) => retryVideoTurn(messageId)
                 : (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
-          quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
+          quotaRecovery: { label: inlineQuotaRecoveryLabel, open: openQuotaRecovery },
           ...(regenerable
             ? {
                 onRegenerate: (messageId: string, modelSelection?: string) => {
@@ -5394,6 +5649,7 @@ const artifactOutputs = createArtifactOutputs({
 });
 
 let composerVideoMode = false;
+let composerSkill: string | null = null;
 const videoTurnIds = new Set<string>();
 const videoPolls = new Set<string>();
 const VIDEO_POLL_MAX_FAILURES = 3;
@@ -5621,8 +5877,8 @@ function updateStreamingBubble(id: string, fullText: string): void {
 }
 
 const PAGE_CONTEXT_DENIED_REASON =
-  'Chrome would not let the extension read this page. Approve this site under Settings, Site ' +
-  'Allowlist in this panel, reload the page, and try again.';
+  'AGI does not have access to this site yet. Allow it when AGI asks, or approve it under ' +
+  'Extension settings, Permissions, and try again.';
 
 const PAGE_CONTEXT_BLOCKED_REASON =
   "Chrome does not let extensions read this page at all. That covers Chrome's own pages, the " +
@@ -5696,6 +5952,26 @@ async function capturePageContext(
         error instanceof Error ? error.message : 'Page access is unavailable.',
       ),
     };
+  }
+}
+
+async function capturePageContextWithSiteAccess(
+  streamId: string,
+  quickMode: boolean,
+): Promise<PageContextCapture> {
+  const capture = await capturePageContext();
+  if (capture.ok || capture.reason !== PAGE_CONTEXT_DENIED_REASON) return capture;
+  if (_ctx.currentStreamId !== streamId) return capture;
+  ensureStreamingAssistant(streamId, quickMode);
+  renderMessages();
+  const access = await requestBrowserSiteAccess(streamId, 'read');
+  if (access.status !== 'granted') {
+    return { ok: false, reason: access.reason ?? PAGE_CONTEXT_DENIED_REASON };
+  }
+  try {
+    return await capturePageContext();
+  } finally {
+    await access.release?.();
   }
 }
 
@@ -6695,14 +6971,6 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
   return hasBrowserControlHostPermission(origin).catch(() => false);
 }
 
-async function originApprovedForBrowserControl(origin: string): Promise<boolean> {
-  const [allowlist, controlled] = await Promise.all([
-    readUserSiteAllowlist(),
-    hasBrowserControlConsent(origin).catch(() => false),
-  ]);
-  return allowlist.includes(origin) && controlled;
-}
-
 async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
   let tab: chrome.tabs.Tab | undefined;
   try {
@@ -6713,7 +6981,15 @@ async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolT
   const origin = webTabOrigin(tab);
   if (!origin) return undefined;
   if (turnGrantedOrigins.get(streamId)?.has(origin)) return 'act';
-  return (await originApprovedForBrowserControl(origin)) ? 'act' : 'read';
+  if (await originApprovedForBrowserControl(origin)) return 'act';
+  const policy = await loadSitePolicyInput();
+  return evaluateSitePolicy(
+    { ...policy, userAllowlist: [...policy.userAllowlist, origin] },
+    tab?.url ?? origin,
+    'automation',
+  ).allowed
+    ? 'act'
+    : 'read';
 }
 
 async function writeApprovedSite(origin: string): Promise<void> {
@@ -7258,7 +7534,9 @@ function sendMessage(text: string, displayText?: string): void {
     capturePage,
     images: pendingAttachments.splice(0),
     files: takeComposerDocuments(),
+    ...(composerSkill ? { skillName: composerSkill } : {}),
   };
+  composerSkill = null;
   clearPendingPageContext();
   composerAttachmentNotices = [];
   composerContextNotice = null;
@@ -7510,7 +7788,7 @@ function continueTurn(
   }
   const pageAtAdmission = activePageSource;
   setThinkingLabel(t('spThinkingReadingPage'));
-  capturePageContext()
+  capturePageContextWithSiteAccess(streamId, quickMode)
     .then((capture) => {
       if (_ctx.currentStreamId !== streamId) return;
       if (
@@ -7553,21 +7831,25 @@ function postTurn(
   quickMode: boolean,
   memoryCommand?: ManagedMemoryCommandTurn,
 ): void {
-  const history = selectModelHistory(_ctx.messages, userMsg.id);
-  _ctx.messages.push({
-    id: streamId,
-    role: 'assistant',
-    content: '',
-    streaming: true,
-    timestamp: Date.now(),
-    runtime: 'managed-cloud',
-  });
+  const history = selectModelHistory(
+    _ctx.messages.filter((message) => message.id !== streamId),
+    userMsg.id,
+  );
+  if (!_ctx.messages.some((message) => message.id === streamId)) {
+    _ctx.messages.push({
+      id: streamId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+    });
+  }
   lastStreamPersistAtMs = Date.now();
-  saveMessages();
-
-  void (
-    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined)
-  ).then((browserToolTier) => {
+  void Promise.all([
+    saveMessagesNow(),
+    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined),
+  ]).then(([, browserToolTier]) => {
     if (_ctx.currentStreamId !== streamId) return;
     sendChatTurn(streamId, owner, payload, history, quickMode, memoryCommand, browserToolTier);
   });
@@ -7604,6 +7886,7 @@ function sendChatTurn(
       ...(payload.agiWorkPlan ? { agiWorkPlan: payload.agiWorkPlan } : {}),
       ...(capabilityAllowed(capabilityDocument, 'canUseWebSearch') ? {} : { webSearch: false }),
       ...(memoryCommand ? { memoryCommand } : {}),
+      ...(payload.skillName ? { skillName: payload.skillName } : {}),
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
       ...(_ctx.temporaryChat ? {} : { historyConversationId: _ctx.conversationId }),
@@ -8439,6 +8722,36 @@ function renderVideoModeChip(bar: HTMLElement): void {
   bar.appendChild(chip);
 }
 
+function renderSkillChip(bar: HTMLElement): void {
+  if (!composerSkill) return;
+  const skill = composerSkill;
+  const chip = el('div', { class: 'sp-attachment-chip sp-attachment-doc' });
+  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+  icon.appendChild(renderIcon(Sparkles, 16));
+  chip.appendChild(icon);
+  const copy = el('div', { class: 'sp-attachment-doc-copy' });
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-name' }, skill));
+  copy.appendChild(el('span', { class: 'sp-attachment-doc-status' }, t('spSkillChipHint')));
+  chip.appendChild(copy);
+  const removeBtn = el(
+    'button',
+    {
+      class: 'sp-attachment-remove',
+      type: 'button',
+      title: t('spSkillRemove', [skill]),
+      'aria-label': t('spSkillRemove', [skill]),
+    },
+    '×',
+  );
+  removeBtn.addEventListener('click', () => {
+    composerSkill = null;
+    updateAttachmentPreview();
+    document.getElementById('sp-input')?.focus();
+  });
+  chip.appendChild(removeBtn);
+  bar.appendChild(chip);
+}
+
 let pendingSelectionText: string | null = null;
 let offeredSelectionKey: string | null = null;
 
@@ -8549,6 +8862,7 @@ function updateAttachmentPreview(): void {
     !composerContextNotice &&
     !pageAttached &&
     !composerVideoMode &&
+    !composerSkill &&
     composerAttachmentIntakes.size === 0
   ) {
     bar.style.display = 'none';
@@ -8557,6 +8871,7 @@ function updateAttachmentPreview(): void {
   }
   bar.style.display = 'flex';
   renderVideoModeChip(bar);
+  renderSkillChip(bar);
   renderPendingPageChip(bar);
   pendingAttachments.forEach((image, index) => {
     const chip = el('div', { class: 'sp-attachment-chip', title: image.name });
@@ -9628,10 +9943,125 @@ function buildUI(): void {
     { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
     t('spHistoryOpenInWeb'),
   );
+  const memorySheet = buildMemorySheet({
+    send: (message) => chrome.runtime.sendMessage(message),
+    openWeb: (path) => void chrome.tabs.create({ url: agiWebUrl(path) }),
+  });
+  document.body.appendChild(memorySheet.element);
+  const tasksSheet = buildTasksSheet({
+    listRuns: (limit) => listChromeManagedRuns(limit),
+    cancelRun: (run) => cancelChromeManagedRun(run),
+    openWeb: (path) => void chrome.tabs.create({ url: agiWebUrl(path) }),
+    formatTime: (iso) => formatHistoryDate(Date.parse(iso)),
+  });
+  document.body.appendChild(tasksSheet.element);
+  const phoneSheet = buildPhoneSheet({ copy: (text) => navigator.clipboard.writeText(text) });
+  document.body.appendChild(phoneSheet.element);
+  const accountBlock = el('div', { class: 'sp-more-account', role: 'none' });
+  moreMenu.appendChild(accountBlock);
   const moreHandle = wirePopupMenu(menuBtn, moreMenu);
+  const openWebFromMenu = (path: string): void => {
+    moreHandle.close();
+    void chrome.tabs.create({ url: agiWebUrl(path) });
+  };
+  const accountMenuItem = (label: string, run: () => void, danger = false): HTMLElement => {
+    const row = el(
+      'button',
+      {
+        type: 'button',
+        role: 'menuitem',
+        class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+      },
+      label,
+    );
+    row.addEventListener('click', run);
+    return row;
+  };
+  function renderAccountBlock(): void {
+    accountBlock.replaceChildren();
+    const identity = accountIdentity;
+    if (!identity || managedCloudChatState === 'signed_out') {
+      accountBlock.hidden = true;
+      return;
+    }
+    accountBlock.hidden = false;
+    const header = el('div', { class: 'sp-more-account-header', role: 'none' });
+    const nameRow = el('div', { class: 'sp-more-account-name-row' });
+    nameRow.appendChild(
+      el(
+        'span',
+        { class: 'sp-more-account-name' },
+        identity.displayName ?? identity.email ?? t('spAccountSignedIn'),
+      ),
+    );
+    if (identity.planName) {
+      nameRow.appendChild(el('span', { class: 'sp-more-account-plan' }, identity.planName));
+    }
+    header.appendChild(nameRow);
+    if (identity.email && identity.displayName) {
+      header.appendChild(el('span', { class: 'sp-more-account-email' }, identity.email));
+    }
+    accountBlock.appendChild(header);
+    accountBlock.appendChild(
+      accountMenuItem(t('spAccountSettings'), () =>
+        openWebFromMenu('/settings?from=chrome-extension'),
+      ),
+    );
+    const freePlan = isFreeBillingPlanTier(normalizeBillingPlanTier(identity.planTier));
+    if (!freePlan && managedModelAccess) {
+      const percent = Math.round(
+        Math.max(0, ...usageWindowViews(managedModelAccess.usage).map((view) => view.usedPercent)),
+      );
+      const usageRow = accountMenuItem(t('spAccountUsage'), () =>
+        openWebFromMenu('/settings/usage?from=chrome-extension'),
+      );
+      usageRow.classList.add('sp-more-usage');
+      usageRow.setAttribute('aria-label', t('spAccountUsageUsed', [String(percent)]));
+      const meter = el('span', { class: 'sp-more-usage-meter', 'aria-hidden': 'true' });
+      const fill = el('span', { class: 'sp-more-usage-fill' });
+      fill.style.width = `${Math.min(100, percent)}%`;
+      meter.appendChild(fill);
+      usageRow.append(meter, el('span', { class: 'sp-more-usage-percent' }, `${percent}%`));
+      accountBlock.appendChild(usageRow);
+    }
+    accountBlock.appendChild(
+      accountMenuItem(t('spAccountTasks'), () => {
+        moreHandle.close();
+        tasksSheet.open(menuBtn);
+      }),
+    );
+    accountBlock.appendChild(
+      accountMenuItem(t('spAccountMemory'), () => {
+        moreHandle.close();
+        memorySheet.open(menuBtn);
+      }),
+    );
+    if (identity.planTier && getNextUpgradeTier(identity.planTier) !== null) {
+      accountBlock.appendChild(
+        accountMenuItem(t('spAccountUpgrade'), () =>
+          openWebFromMenu('/pricing?from=chrome-extension'),
+        ),
+      );
+    }
+  }
+  const logOutItem = accountMenuItem(
+    t('spAccountLogOut'),
+    () => {
+      moreHandle.close();
+      void signOutOfAccount()
+        .then(({ webSessionEnded }) => {
+          if (!webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
+        })
+        .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
+        .finally(() => void refreshCloudAccountUI(true));
+    },
+    true,
+  );
   menuBtn.addEventListener(
     'click',
     () => {
+      renderAccountBlock();
+      logOutItem.hidden = accountBlock.hidden;
       const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
       if (cloudConversationId && _ctx.messages.length > 0) {
         openChatInWebItem.onclick = () => {
@@ -9659,6 +10089,7 @@ function buildUI(): void {
     });
     moreMenu.appendChild(row);
   }
+  moreMenu.appendChild(logOutItem);
   moreMenu.appendChild(
     el(
       'div',
@@ -9741,32 +10172,6 @@ function buildUI(): void {
     await refreshDrawerHistory();
     closeTitleEditors();
     showHistoryStatus(done);
-  }
-
-  async function changeHistoryStar(entry: ConversationEntry): Promise<void> {
-    const owner = _ctx.managedCloudOwner;
-    if (!owner || !sameManagedCloudOwner(entry.owner, owner)) return;
-    const starred = entry.starred !== true;
-    let saved: ConversationEntry | undefined;
-    try {
-      const context = await getFreshClerkAuthContext();
-      if (!sameManagedCloudOwner(context?.owner, owner)) return;
-      saved = await updateConversationMetadata(owner, entry.id, { starred }, () =>
-        sameManagedCloudOwner(_ctx.managedCloudOwner, owner),
-      );
-    } catch (error) {
-      console.warn('[SidePanel] history change failed:', error);
-      showHistoryStatus(t('spHistoryChangeFailed'));
-      return;
-    }
-    if (!sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) return;
-    if (!saved) {
-      showHistoryStatus(t('spHistoryChangeFailed'));
-      return;
-    }
-    requestCloudConversationSync(entry.id);
-    await refreshDrawerHistory();
-    showHistoryStatus(starred ? t('spHistoryStarred') : t('spHistoryUnstarred'));
   }
 
   function buildHistoryEditor(
@@ -10133,6 +10538,15 @@ function buildUI(): void {
       menu.appendChild(menuItem);
     };
     const cloudConversationId = entry.cloudSync?.conversationId;
+    const addPin = (): void => {
+      addItem(entry.pinned ? t('spHistoryUnpin') : t('spHistoryPin'), () => {
+        void changeHistoryEntry(
+          entry,
+          { pinned: !entry.pinned },
+          entry.pinned ? t('spHistoryUnpinned') : t('spHistoryPinned'),
+        );
+      });
+    };
     const addArchive = (): void => {
       if (!cloudConversationId) return;
       if (entry.archived) {
@@ -10146,11 +10560,14 @@ function buildUI(): void {
     if (options.title) {
       addItem(t('spTitleSchedule'), options.title.onSchedule);
       addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
-      addItem(entry.starred ? t('spHistoryUnstar') : t('spHistoryStar'), () => {
-        void changeHistoryStar(entry);
-      });
+      if (!entry.archived) addPin();
       addItem(t('spTitleAddToProject'), () => startHistoryMove(entry, item, openButton));
       addArchive();
+      if (cloudConversationId) {
+        addItem(t('spTitleContinueOnPhone'), () =>
+          phoneSheet.open(agiWebUrl(productLinkPath('chat', cloudConversationId)), moreBtn),
+        );
+      }
       addItem(t('spHistoryCopySessionId'), () => {
         void navigator.clipboard.writeText(cloudConversationId ?? entry.id).then(
           () => showHistoryStatus(t('spHistorySessionIdCopied')),
@@ -10165,16 +10582,7 @@ function buildUI(): void {
     addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
     addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
     if (!entry.archived) {
-      addItem(entry.pinned ? t('spHistoryUnpin') : t('spHistoryPin'), () => {
-        void changeHistoryEntry(
-          entry,
-          { pinned: !entry.pinned },
-          entry.pinned ? t('spHistoryUnpinned') : t('spHistoryPinned'),
-        );
-      });
-      addItem(entry.starred ? t('spHistoryUnstar') : t('spHistoryStar'), () => {
-        void changeHistoryStar(entry);
-      });
+      addPin();
       addItem(t('spHistoryMove'), () => startHistoryMove(entry, item, openButton));
     }
     addArchive();
@@ -10222,7 +10630,6 @@ function buildUI(): void {
     const filteredEntries = filterConversations(ordered, drawerHistorySearch.value).sort(
       (first, second) =>
         Number(second.pinned === true) - Number(first.pinned === true) ||
-        Number(second.starred === true) - Number(first.starred === true) ||
         historyActivityAt(second) - historyActivityAt(first),
     );
     if (filteredEntries.length === 0) {
@@ -10267,7 +10674,6 @@ function buildUI(): void {
         { class: 'sp-drawer-history-date' },
         [
           entry.pinned ? t('spHistoryPinnedMarker') : '',
-          entry.starred ? t('spHistoryStarredMarker') : '',
           formatHistoryDate(historyActivityAt(entry)),
         ]
           .filter(Boolean)
@@ -10533,7 +10939,6 @@ function buildUI(): void {
     const key = [
       entry?.id ?? '',
       title,
-      entry?.starred === true,
       entry?.archived === true,
       entry?.pinned === true,
       entry?.projectId ?? '',
@@ -10647,6 +11052,8 @@ function buildUI(): void {
     if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
       capabilityDocument = null;
+      accountIdentity = null;
+      renderEmptyGreeting();
       applyCapabilityGates();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
@@ -10724,6 +11131,16 @@ function buildUI(): void {
     const accountSummary = await accountSummaryPromise;
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     capabilityDocument = accountSummary?.capabilityDocument ?? null;
+    accountIdentity = accountSummary
+      ? {
+          displayName: accountSummary.displayName,
+          email: accountSummary.email,
+          planName: accountSummary.planName,
+          planTier: accountSummary.planTier,
+          greetingName: accountSummary.greetingName,
+        }
+      : null;
+    renderEmptyGreeting();
     applyCapabilityGates();
     managedModelAccess = access;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
@@ -10795,6 +11212,7 @@ function buildUI(): void {
     }).catch((error) => {
       console.warn('[SidePanel] Clerk auth listener failed:', error);
     });
+    watchSyncHostSession(() => void refreshCloudAccountUI(true));
   }
 
   initialCloudAccountRefresh = refreshCloudAccountUI();
@@ -10986,6 +11404,7 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
+  emptyState.appendChild(el('h2', { id: 'sp-empty-greeting', hidden: '' }));
   const suggestionGroup = el('div', {
     id: 'sp-empty-suggestions',
     class: 'sp-empty-actions',
@@ -11315,13 +11734,10 @@ function buildUI(): void {
       }
       return;
     }
-    const [allowlist, controlled] = await Promise.all([
-      readUserSiteAllowlist(),
-      hasBrowserControlConsent(origin).catch(() => false),
-    ]);
+    const approved = await originApprovedForBrowserControl(origin);
     if (generation !== computerUseSiteGeneration) return;
     cuPanel.setTaskSite({
-      kind: allowlist.includes(origin) && controlled ? 'ready' : 'needs-approval',
+      kind: approved ? 'ready' : 'needs-approval',
       origin,
     });
   }
@@ -11928,7 +12344,25 @@ function buildUI(): void {
     }
     contextItemLabel.textContent = t('spContextChipCapturing');
     chip.disabled = true;
-    const capture = await capturePageContext();
+    let capture = await capturePageContext();
+    if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
+      const [tab] = await chrome.tabs
+        .query({ active: true, currentWindow: true })
+        .catch((): chrome.tabs.Tab[] => []);
+      const origin = webTabOrigin(tab);
+      if (origin) {
+        const transientId = `site_once_${crypto.randomUUID()}`;
+        await recordTransientHostPermission(transientId, origin).catch(() => undefined);
+        const granted = await requestBrowserControlHostPermission(origin).catch(() => false);
+        try {
+          if (granted) capture = await capturePageContext();
+        } finally {
+          if (granted && !(await originApprovedForBrowserControl(origin)))
+            await removeBrowserControlHostPermission(origin);
+          await forgetTransientHostPermissions([transientId]).catch(() => []);
+        }
+      }
+    }
     chip.disabled = false;
     if (capture.ok) {
       _ctx.pendingPageContext = capture.text;
@@ -12171,6 +12605,101 @@ function buildUI(): void {
     document.getElementById('sp-input')?.focus();
   });
 
+  const skillsItem = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-skills-item',
+    type: 'button',
+    role: 'menuitem',
+    'aria-haspopup': 'menu',
+  }) as HTMLButtonElement;
+  skillsItem.appendChild(renderIcon(Sparkles, 16));
+  skillsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spSkills')));
+  const skillMenu = el('div', {
+    id: 'sp-skill-menu',
+    role: 'menu',
+    'aria-label': t('spSkills'),
+  });
+  wireMenuArrowKeys(skillMenu);
+  let skillMenuGeneration = 0;
+  const closeSkillMenu = (returnFocus: boolean): void => {
+    skillMenuGeneration += 1;
+    skillMenu.classList.remove('open');
+    if (returnFocus) attachBtn.focus();
+  };
+  const skillMenuRow = (label: string, run: () => void, checked?: boolean): HTMLElement => {
+    const row = el(
+      'button',
+      {
+        class: 'sp-attach-menu-item',
+        type: 'button',
+        role: checked === undefined ? 'menuitem' : 'menuitemradio',
+        ...(checked === undefined ? {} : { 'aria-checked': String(checked) }),
+      },
+      label,
+    );
+    row.addEventListener('click', run);
+    return row;
+  };
+  const renderSkillMenu = (skills: readonly AccountSkill[] | null, error: string | null): void => {
+    clearChildren(skillMenu);
+    if (error)
+      skillMenu.appendChild(el('div', { class: 'sp-skill-menu-note', role: 'status' }, error));
+    else if (!skills) {
+      skillMenu.appendChild(
+        el('div', { class: 'sp-skill-menu-note', role: 'status' }, t('spSkillsLoading')),
+      );
+    } else if (skills.length === 0) {
+      skillMenu.appendChild(el('div', { class: 'sp-skill-menu-note' }, t('spSkillsEmpty')));
+    }
+    for (const skill of skills ?? []) {
+      const row = skillMenuRow(
+        skill.name,
+        () => {
+          closeSkillMenu(false);
+          composerSkill = composerSkill === skill.name ? null : skill.name;
+          updateAttachmentPreview();
+          inputEl.focus();
+        },
+        composerSkill === skill.name,
+      );
+      if (skill.description) row.title = skill.description;
+      skillMenu.appendChild(row);
+    }
+    skillMenu.appendChild(
+      skillMenuRow(t('spSkillsManage'), () => {
+        closeSkillMenu(false);
+        void chrome.tabs.create({ url: agiWebUrl('/settings/skills?from=chrome-extension') });
+      }),
+    );
+    skillMenu.querySelector<HTMLElement>('[role^="menuitem"]')?.focus();
+  };
+  skillsItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    const generation = ++skillMenuGeneration;
+    skillMenu.classList.add('open');
+    renderSkillMenu(null, null);
+    void (async () => {
+      const auth = await getManagedCloudAuthContext();
+      if (!auth) throw new Error(t('spSkillsLoadFailed'));
+      return fetchOwnSkills(auth.token);
+    })()
+      .then((skills) => {
+        if (generation === skillMenuGeneration) renderSkillMenu(skills, null);
+      })
+      .catch(() => {
+        if (generation === skillMenuGeneration) renderSkillMenu(null, t('spSkillsLoadFailed'));
+      });
+  });
+  skillMenu.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSkillMenu(true);
+    } else if (event.key === 'Tab') {
+      closeSkillMenu(false);
+    }
+  });
+
   const attachMenuItems = [
     fileItem,
     screenshotItem,
@@ -12178,6 +12707,7 @@ function buildUI(): void {
     tabsItem,
     linkItem,
     videoItem,
+    skillsItem,
     connectorsItem,
     temporaryItem,
   ];
@@ -12186,9 +12716,15 @@ function buildUI(): void {
     micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
     fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
     connectorsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+    skillsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseSkills');
+    if (skillsItem.hidden && composerSkill) {
+      composerSkill = null;
+      updateAttachmentPreview();
+    }
   };
   applyCapabilityGates();
   attachWrapper.appendChild(attachMenu);
+  attachWrapper.appendChild(skillMenu);
   attachWrapper.appendChild(attachBtn);
   attachWrapper.appendChild(fileInput);
 
@@ -12230,6 +12766,7 @@ function buildUI(): void {
     if (!attachWrapper.contains(e.target as Node)) {
       attachMenu.classList.remove('open');
       attachBtn.setAttribute('aria-expanded', 'false');
+      closeSkillMenu(false);
     }
   });
 
@@ -12992,9 +13529,30 @@ chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
 const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+const OPEN_CHAT_REFRESH_ON_RETURN_MS = 10_000;
 let lastAccountRefreshOnReturn = Date.now();
+let lastOpenChatRefreshOnReturn = Date.now();
+function refreshOpenAccountChatOnReturn(): void {
+  if (Date.now() - lastOpenChatRefreshOnReturn < OPEN_CHAT_REFRESH_ON_RETURN_MS) return;
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (
+    managedCloudChatState === 'signed_out' ||
+    _ctx.isStreaming ||
+    _ctx.temporaryChat ||
+    _ctx.messages.length === 0 ||
+    _ctx.pendingPageContext ||
+    composer?.value.trim() ||
+    !activePersistenceEntry?.cloudSync?.conversationId ||
+    activePersistenceEntry.id !== _ctx.conversationId ||
+    document.getElementById('sp-chat-panel')?.classList.contains('sp-tab-hidden')
+  )
+    return;
+  lastOpenChatRefreshOnReturn = Date.now();
+  void openStoredConversation(_ctx.conversationId);
+}
 function refreshAccountOnReturn(): void {
   if (document.visibilityState !== 'visible') return;
+  refreshOpenAccountChatOnReturn();
   if (
     managedCloudChatState !== 'signed_out' &&
     Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS

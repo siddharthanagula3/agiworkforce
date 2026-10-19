@@ -33,6 +33,7 @@ jest.mock('lucide-react-native', () => {
     ScanLine: icon,
     Bell: icon,
     TextCursorInput: icon,
+    LayoutGrid: icon,
   };
 });
 
@@ -76,20 +77,22 @@ describe('Quick Access screen, describes only real integrations', () => {
     expect(getByText(/then open AGI Workforce/)).toBeTruthy();
     expect(queryByText(/not yet available on iOS/)).toBeNull();
 
-    expect(queryByText(/Control Center/)).toBeNull();
+    expect(getByText('Home Screen Widget')).toBeTruthy();
+    expect(getByText(/Open AGI Workforce to Control Center/)).toBeTruthy();
+    expect(queryByText('App Shortcuts')).toBeNull();
     expect(queryByText(/Long-press/)).toBeNull();
-    expect(queryByText(/widget/i)).toBeNull();
   });
 
-  it('Android: describes the share sheet and selected-text flows, no widget or Assistant setup claims', () => {
+  it('Android: describes share, selected text, the home widget and launcher shortcuts, no Assistant claims', () => {
     setPlatform('android');
     const { getByText, queryByText } = render(<WidgetSetupScreen />);
 
     expect(getByText('Share From Any App')).toBeTruthy();
     expect(getByText('Act On Selected Text')).toBeTruthy();
+    expect(getByText('Home Screen Widget')).toBeTruthy();
+    expect(getByText('App Shortcuts')).toBeTruthy();
     expect(getByText('Links Open In The App')).toBeTruthy();
 
-    expect(queryByText(/widget/i)).toBeNull();
     expect(queryByText(/Google Assistant/)).toBeNull();
     expect(queryByText(/Control Center/)).toBeNull();
     expect(queryByText(/Hey Siri/)).toBeNull();

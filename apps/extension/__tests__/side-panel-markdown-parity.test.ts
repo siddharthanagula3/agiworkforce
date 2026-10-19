@@ -168,8 +168,8 @@ describe('code fences', () => {
     'reads %s as the whole language token',
     async (language) => {
       const html = renderMarkdown(`\`\`\`${language}\n$ make\nok\n\`\`\``);
-      expect(html).toContain('<pre><code>$ make\nok</code></pre>');
-      expect(html).not.toContain(language);
+      expect(html).toContain(`<pre data-lang="${language}"><code>$ make\nok</code></pre>`);
+      expect(html.slice(html.indexOf('<code>'))).not.toContain(language);
     },
   );
 });
@@ -383,5 +383,30 @@ describe('code copy', () => {
     expect(root.querySelector('.sp-code-block__status')?.textContent).toBe('Copied');
     vi.advanceTimersByTime(1500);
     expect(root.querySelector('.sp-code-block__status')?.textContent).toBe('');
+  });
+});
+
+describe('code blocks match web', () => {
+  it('labels the language and colours tokens with the shared web highlighter', async () => {
+    const root = await render('```ts\nconst sum = (a: number, b: number) => a + b;\n```');
+    const block = root.querySelector('.sp-code-block')!;
+    expect(block.querySelector('.sp-code-block__lang')?.textContent).toBe('ts');
+    const tokens = block.querySelectorAll<HTMLElement>('pre code .shiki-token');
+    expect(tokens.length).toBeGreaterThan(3);
+    expect(block.querySelector('pre code')?.textContent).toBe(
+      'const sum = (a: number, b: number) => a + b;',
+    );
+    expect(Array.from(tokens).some((token) => token.style.getPropertyValue('--shiki-dark'))).toBe(
+      true,
+    );
+  });
+
+  it('leaves an unlabelled or unknown fence as plain text', async () => {
+    const root = await render('```\nplain\n```\n\n```nosuchlang\nmore\n```');
+    expect(root.querySelectorAll('.shiki-token')).toHaveLength(0);
+    const labels = Array.from(root.querySelectorAll('.sp-code-block__lang')).map(
+      (label) => label.textContent,
+    );
+    expect(labels).toEqual(['', 'nosuchlang']);
   });
 });

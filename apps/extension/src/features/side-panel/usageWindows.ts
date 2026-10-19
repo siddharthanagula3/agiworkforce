@@ -1,4 +1,7 @@
 import {
+  formatUsdAmount,
+  getBillingPlanPricing,
+  getPlanPriceUsd,
   formatCreditWindowUsage,
   formatCredits,
   formatUsageRemaining,
@@ -17,6 +20,7 @@ import type {
   ManagedQuotaWarningScope,
   ManagedQuotaWarningSignal,
 } from '../cloud-bridge/freeTrialClient';
+import { t } from '../../i18n';
 
 export interface UsageWindowView {
   bucket: ManagedUsageBucket;
@@ -197,4 +201,14 @@ export function planQuotaRecovery(planTier: string): ManagedQuotaRecovery {
   }
   if (getNextUpgradeTier(planTier) !== null) return { action: 'upgrade', href: '/pricing' };
   return { action: 'view_usage', href: '/settings/usage' };
+}
+
+export function upgradeToPlanLabel(tier: string): string {
+  const pricing = getBillingPlanPricing(tier);
+  const monthlyUsd = getPlanPriceUsd(tier, 'monthly');
+  if (monthlyUsd === null) return t('spQuotaUpgradeTo', [pricing.label]);
+  const price = formatUsdAmount(monthlyUsd);
+  return pricing.perSeat === true
+    ? t('spQuotaUpgradeToPerSeat', [pricing.label, price])
+    : t('spQuotaUpgradeToMonthly', [pricing.label, price]);
 }

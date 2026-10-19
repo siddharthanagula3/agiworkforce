@@ -11,6 +11,7 @@ import {
   sameManagedCloudOwner,
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
+import { originApprovedForBrowserControl } from '../src/features/computer-use/browserControlConsent';
 import {
   CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
@@ -69,6 +70,7 @@ function harness(
     hostPermission?: boolean;
     pageText?: string;
     deferHostRequest?: boolean;
+    admin?: { version: number; blocklist: { pattern: string }[]; allowlist: { pattern: string }[] };
   } = {},
 ) {
   const assistant: SidePanelChatMessage = {
@@ -148,7 +150,16 @@ function harness(
     hasBrowserControlHostPermission: vi.fn(async () => hostPermission),
     hasBrowserControlConsent: vi.fn(async () => options.approved === true),
     readUserSiteAllowlist: vi.fn(async () => [...allowlist]),
-    loadSitePolicyInput: vi.fn(async () => ({ admin: null, userAllowlist: [...allowlist] })),
+    originApprovedForBrowserControl: (origin: string) =>
+      originApprovedForBrowserControl(
+        origin,
+        async () => [...allowlist],
+        async () => options.approved === true,
+      ),
+    loadSitePolicyInput: vi.fn(async () => ({
+      admin: options.admin ?? null,
+      userAllowlist: [...allowlist],
+    })),
     evaluateSitePolicy,
     sitePolicyDenialMessage,
     SP_SITE_ALLOWLIST_KEY: 'agi_site_allowlist',
@@ -270,7 +281,18 @@ describe('chat turns run browser tools the model chose', () => {
       expect.objectContaining({ type: 'tool-execution-end', isError: false }),
     ]);
     expect(h.assistant.pages).toEqual([{ url: `${ORIGIN}/report`, title: 'Report' }]);
-    expect(h.resolved()!.browserToolTier).toBe('read');
+    expect(h.resolved()!.browserToolTier).toBe('act');
+  });
+
+  it('offers browser actions on an ordinary unapproved site, so the model can ask to act', async () => {
+    expect(await harness().api.activeBrowserToolTier('stream-1')).toBe('act');
+  });
+
+  it('keeps a site the organization blocks to reading only', async () => {
+    const h = harness({
+      admin: { version: 1, blocklist: [{ pattern: ORIGIN }], allowlist: [] },
+    });
+    expect(await h.api.activeBrowserToolTier('stream-1')).toBe('read');
   });
 
   it('asks inline on an unapproved site, and Allow this time leaves no access behind', async () => {

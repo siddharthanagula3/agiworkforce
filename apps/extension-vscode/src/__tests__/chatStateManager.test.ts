@@ -38,8 +38,9 @@ import {
   HOST_CUSTOM_INSTRUCTIONS_KEY,
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
-import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
+import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
 
@@ -2361,6 +2362,43 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('names the model Auto actually served instead of "auto"', async () => {
+    const served = requireCatalogModel();
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this function', model: 'auto' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_model',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      model: served.id,
+      provider: String(served.provider),
+      autoSelection: 'auto',
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({
+        model: served.id,
+        modelLabel: modelDisplayNameById(served.id),
+      }),
+    });
+  });
+
   it('routes a one-turn browse request through the real web-search tool boundary', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
@@ -2742,7 +2780,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('rejects a forged selection of a tier-locked catalog model', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );
@@ -2770,7 +2810,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('rejects a forged send with a tier-locked catalog model', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );
@@ -2790,6 +2832,134 @@ describe('ChatStateManager local turn lifecycle', () => {
         retryable: false,
         action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
       },
+    });
+  });
+
+  it('asks a signed-out user to sign in, not to upgrade, when the cached plan excludes the model', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+    expect(lockedModel).toBeDefined();
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this function', model: lockedModel!.modelId! },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'sign-in',
+        headline: 'Sign in to AGI to run this model on your plan.',
+        retryable: false,
+        action: { kind: 'sign-in-account', label: 'Sign in to AGI' },
+      },
+    });
+  });
+
+  it('continues a web chat in this workspace when the CLI can import it, else opens it on the web', async () => {
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    const harness = makeHarness({
+      resolvedConversation: { thread: threadSummary(), messages: [], transcriptTruncated: false },
+    });
+    const adopt = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    Object.assign(harness.conversationTreeProvider!, { adoptAccountConversation: adopt });
+
+    await harness.manager.handleMessage({
+      type: 'openSessionRow',
+      payload: { id: 'web-conversation-1', source: 'cloud' },
+    });
+    expect(adopt).toHaveBeenCalledWith('web-conversation-1', '/workspace');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.openConversation',
+      'web-conversation-1',
+    );
+    expect(vscode.env.openExternal).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'openSessionRow',
+      payload: { id: 'web-conversation-2', source: 'cloud' },
+    });
+    expect(vscode.env.openExternal).toHaveBeenCalledOnce();
+    expect(String(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0])).toContain(
+      '/chat/web-conversation-2',
+    );
+  });
+
+  it('offers to review and undo the files a reply changed', async () => {
+    const harness = makeHarness();
+    const rewindThread = vi.fn().mockResolvedValue({
+      restoredFiles: ['src/math.ts'],
+      removedFiles: [],
+      skippedFiles: [],
+      conversationRestored: false,
+      prompt: 'Fix the bug',
+    });
+    const listCheckpoints = vi.fn().mockResolvedValue({
+      checkpoints: [
+        {
+          checkpointIndex: 0,
+          prompt: 'Explain',
+          createdAt: '2026-10-18T00:00:00Z',
+          trackedFiles: 1,
+        },
+        {
+          checkpointIndex: 1,
+          prompt: 'Fix the bug',
+          createdAt: '2026-10-18T00:01:00Z',
+          trackedFiles: 1,
+        },
+      ],
+    });
+    Object.assign(harness.runtime, { rewindThread, listCheckpoints });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/math.ts',
+      input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Fixed.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
+    });
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
+    await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
+
+    expect(rewindThread).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      checkpointIndex: 1,
+      restore: 'code',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'turnChangesUndone',
+      payload: { turnId: 'turn-1' },
     });
   });
 
@@ -3763,7 +3933,9 @@ describe('ChatStateManager error classification', () => {
 
   it('gives a plan refusal an upgrade action rather than an unknown dead end', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );

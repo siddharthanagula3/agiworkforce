@@ -722,6 +722,7 @@ export interface ManagedMemoryCommandTurn {
 export interface ManagedChatStreamOptions {
   model?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
+  skillName?: string;
   effort?: Effort;
   extendedThinking?: boolean;
   workMode?: 'chat' | 'agiwork';
@@ -1362,6 +1363,7 @@ export async function* streamFreeChat(
                 }
               : {}),
             ...(options.memoryCommand ? { memory_command: options.memoryCommand } : {}),
+            ...(options.skillName ? { skill_name: options.skillName } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
             ...(options.webFetch ? { web_fetch: true } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),

@@ -1803,14 +1803,17 @@ impl TurnHostAdapter<'_> {
     /// approval channel answers when there is one (the TUI overlay, an
     /// app-server client); a terminal prompt only when a person is at a plain
     /// terminal. Anything else stops the loop.
-    async fn confirm_loop_continues(&self, repeated_action: String, question: &str) -> bool {
+    async fn confirm_loop_continues(
+        approval: Option<crate::tools::ApprovalCallback>,
+        repeated_action: String,
+        question: &str,
+    ) -> bool {
         let request = crate::tui::approval_broker::ApprovalRequest::new(
             crate::tui::approval_broker::ApprovalRequestKind::LoopDetection { repeated_action },
             question,
             Vec::new(),
         );
-        let callback = self.session.recorded_approval_callback();
-        if let Some(decision) = crate::tools::request_approval(callback.as_ref(), request).await {
+        if let Some(decision) = crate::tools::request_approval(approval.as_ref(), request).await {
             return crate::tools::approval_allows(decision);
         }
         if crate::tui::tui_active() || !crate::interactive::can_prompt() {
@@ -3257,9 +3260,12 @@ impl TurnHost for TurnHostAdapter<'_> {
             .first()
             .map(|tc| tc.name.clone())
             .unwrap_or_else(|| "unknown".to_string());
-        let confirmed = self
-            .confirm_loop_continues(repeated_action, "Continue with these tool calls?")
-            .await;
+        let confirmed = Self::confirm_loop_continues(
+            self.session.recorded_approval_callback(),
+            repeated_action,
+            "Continue with these tool calls?",
+        )
+        .await;
 
         if !confirmed {
             narrate!("{}", "  Agentic loop stopped by user.".dimmed());
@@ -3308,12 +3314,12 @@ impl TurnHost for TurnHostAdapter<'_> {
             ))
         );
 
-        let confirmed = self
-            .confirm_loop_continues(
-                "repeated assistant text".to_string(),
-                "Continue the agentic loop?",
-            )
-            .await;
+        let confirmed = Self::confirm_loop_continues(
+            self.session.recorded_approval_callback(),
+            "repeated assistant text".to_string(),
+            "Continue the agentic loop?",
+        )
+        .await;
 
         if !confirmed {
             narrate!("{}", "  Agentic loop stopped by user.".dimmed());

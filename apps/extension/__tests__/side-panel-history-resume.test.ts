@@ -3,11 +3,19 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
+import catalog from '../_locales/en/messages.json';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
 import {
   hydrateStoredChatMessage,
   type StoredSidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
+
+vi.stubGlobal('chrome', {
+  i18n: {
+    getMessage: (key: string) =>
+      (catalog as Record<string, { message?: string } | undefined>)[key]?.message ?? '',
+  },
+});
 
 const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),

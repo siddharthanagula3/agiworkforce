@@ -97,7 +97,9 @@ import {
   accountIdentityForDisplay,
   accountTypeForTier,
   fetchAccountIdentity,
+  forgetSharedCredentialRefusal,
   getAccountAuthState,
+  getAccountToken,
   getCloudWebOrigin,
   type AccountIdentity,
 } from '../../utils/api';
@@ -163,6 +165,7 @@ import {
   type ApprovalAnswer,
 } from '../remote-control/approvalAnswers';
 import { t, tPlural } from '../../l10n';
+import { openTurnChanges, writtenFilePath } from './turnChanges';
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
@@ -222,6 +225,7 @@ const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
 const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
 const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'open-settings' };
 const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
+const SIGN_IN_REFUSAL: ChatErrorHint = { category: 'sign-in', action: 'sign-in-account' };
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
@@ -297,6 +301,8 @@ export type WebviewToExtMessage =
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
   | { type: 'dismissEditorContext'; payload: { id: string } }
   | { type: 'openToolDiff'; payload: { path: string } }
+  | { type: 'reviewTurnChanges'; payload: { turnId: string } }
+  | { type: 'undoTurn'; payload: { turnId: string } }
   | {
       type: 'resolveTurnFailure';
       payload: {
@@ -368,10 +374,13 @@ export type ExtToWebviewMessage =
         providerLabel?: string;
         brandColor?: string;
         stopped?: true;
+        turnId?: string;
+        changedFiles?: number;
       };
     }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
+  | { type: 'turnChangesUndone'; payload: { turnId: string } }
   | {
       type: 'conversationBoundaryChanged';
       payload: { message: string; clientMessageId: string; text: string };
@@ -840,6 +849,10 @@ export class ChatStateManager {
   private _activeModel: string;
   private _accountPresentationSeq = 0;
   private _lastMeterBoundary: string | undefined;
+  private readonly _servedModelByTurn = new Map<string, string>();
+  private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private _lastChangedTurn:
+    { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
@@ -1206,6 +1219,10 @@ export class ChatStateManager {
           await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, msg.payload.id);
           break;
         }
+        if (await this._continueAccountConversationHere(msg.payload.id)) break;
+        void vscode.window.showInformationMessage(
+          'AGI Workforce: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.',
+        );
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
         );
@@ -1324,6 +1341,18 @@ export class ChatStateManager {
 
       case 'openToolDiff': {
         await openWorkspaceFileDiff(msg.payload.path);
+        break;
+      }
+
+      case 'reviewTurnChanges': {
+        const changed = this._lastChangedTurn;
+        if (changed?.turnId !== msg.payload.turnId) break;
+        await openTurnChanges(changed.files);
+        break;
+      }
+
+      case 'undoTurn': {
+        await this._undoTurn(msg.payload.turnId);
         break;
       }
 
@@ -1568,7 +1597,7 @@ export class ChatStateManager {
           !this._localModelProviders.has(normalized) &&
           !isModelReachableForTier(normalized, tier)
         ) {
-          this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+          await this._refuseModelOffPlan();
           break;
         }
         await this.selectModel(normalized);
@@ -2403,6 +2432,98 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
+  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+    const filePath = writtenFilePath(toolName, input);
+    const cwd = this._thread?.cwd;
+    if (filePath === undefined || cwd === undefined) return;
+    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
+    written.add(path.resolve(cwd, filePath));
+    this._writtenFilesByTurn.set(turnId, written);
+  }
+
+  /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
+  private async _undoTurn(turnId: string): Promise<void> {
+    const thread = this._thread;
+    const changed = this._lastChangedTurn;
+    if (thread === undefined || changed?.turnId !== turnId || changed.threadId !== thread.id) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: only the latest reply in this session can be undone here. Use Checkpoints to go back further.',
+      );
+      return;
+    }
+    if (this._activeTurn?.threadId === thread.id) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: stop the current response before undoing a reply.',
+      );
+      return;
+    }
+    const undo = 'Undo changes';
+    const confirmed = await vscode.window.showWarningMessage(
+      'Undo the changes from the latest reply?',
+      {
+        modal: true,
+        detail: `${changed.files.length === 1 ? 'The file it changed goes back to how it was' : `The ${changed.files.length} files it changed go back to how they were`} before that prompt. The conversation stays as it is.`,
+      },
+      undo,
+    );
+    if (confirmed !== undo || this._thread !== thread) return;
+    try {
+      const { checkpoints } = await thread.runtime.listCheckpoints(thread.id);
+      const latest = checkpoints[checkpoints.length - 1];
+      if (latest === undefined) {
+        void vscode.window.showWarningMessage(
+          'AGI Workforce: this session kept no checkpoint for that reply, so its changes cannot be undone here.',
+        );
+        return;
+      }
+      const outcome = await thread.runtime.rewindThread({
+        threadId: thread.id,
+        checkpointIndex: latest.checkpointIndex,
+        restore: 'code',
+      });
+      this._lastChangedTurn = undefined;
+      this._post({ type: 'turnChangesUndone', payload: { turnId } });
+      if (outcome.skippedFiles.length > 0) {
+        void vscode.window.showWarningMessage(
+          tPlural('checkpoints.skippedFiles', outcome.skippedFiles.length, {
+            files: outcome.skippedFiles.map((file) => `${file.path} (${file.reason})`).join(', '),
+          }),
+        );
+        return;
+      }
+      const restored = outcome.restoredFiles.length + outcome.removedFiles.length;
+      void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', restored));
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
+    const workspace = await getActiveWorkspaceFolder();
+    if (workspace === undefined || !vscode.workspace.isTrusted) return false;
+    const provider = this._conversationTreeProvider;
+    if (provider === undefined) return false;
+    if (!(await provider.adoptAccountConversation(conversationId, workspace.uri.fsPath))) {
+      return false;
+    }
+    await vscode.commands.executeCommand('agi-workforce.openConversation', conversationId);
+    return true;
+  }
+
+  /**
+   * The tier check reads a cached plan, which outlives a revoked or expired
+   * session. Without an account the remedy is signing in, never an upgrade.
+   */
+  private async _refuseModelOffPlan(): Promise<void> {
+    if ((await getAccountToken(this._secrets)) === undefined) {
+      this._postError(t('chatError.signInToRun'), SIGN_IN_REFUSAL);
+      return;
+    }
+    this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+  }
+
   async pushUsageMeter(shouldPost: () => boolean = () => true): Promise<void> {
     const modelId = this._activeModel;
     const boundary = this._providerBoundaryForModel(modelId);
@@ -2924,8 +3045,13 @@ export class ChatStateManager {
         this._localModelProviders.set(model.id, model.provider);
       }
       this._localServers = response.localServers ?? [];
+      const wasReady = this._runtimeReady;
       this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
+      if (!wasReady && (await getAccountAuthState(this._secrets)).status !== 'signed-in') {
+        forgetSharedCredentialRefusal();
+        void this.refreshAccountPresentation();
+      }
       return response.models;
     } catch (error) {
       this._runtimeReady = false;
@@ -3365,7 +3491,7 @@ export class ChatStateManager {
       !this._localModelProviders.has(requestedModel) &&
       !isModelReachableForTier(requestedModel, tier)
     ) {
-      this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+      await this._refuseModelOffPlan();
       return false;
     }
     this._setActiveModel(requestedModel);
@@ -4064,6 +4190,10 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'turn_model') {
+      this._servedModelByTurn.set(event.turnId, event.model);
+      return;
+    }
     if (event.type === 'agent_event') {
       this._foldAgentEvent(event.envelope);
       return;
@@ -4097,6 +4227,7 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
+      this._noteWrittenFile(event.turnId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
         this._post({ type: 'planUpdate', payload: plan });
@@ -4189,8 +4320,19 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_completed') {
       this._expirePendingApprovals(event.turnId);
+      const servedModel = this._servedModelByTurn.get(event.turnId);
+      this._servedModelByTurn.delete(event.turnId);
+      const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
+      this._writtenFilesByTurn.delete(event.turnId);
+      if (writtenFiles.length > 0) {
+        this._lastChangedTurn = {
+          threadId: event.threadId,
+          turnId: event.turnId,
+          files: writtenFiles,
+        };
+      }
       const resolvedModel =
-        this._thread?.id === event.threadId ? this._activeModel : Config.model();
+        servedModel ?? (this._thread?.id === event.threadId ? this._activeModel : Config.model());
       const localProvider = this._localModelProviders.get(resolvedModel);
       const { providerLabel, brandColor } = isAutoRoutingModel(resolvedModel)
         ? {
@@ -4212,6 +4354,9 @@ export class ChatStateManager {
           outputTokens: event.outputTokens,
           providerLabel,
           brandColor,
+          ...(writtenFiles.length > 0
+            ? { turnId: event.turnId, changedFiles: writtenFiles.length }
+            : {}),
         },
       });
       const contextWindow = catalogContextWindow(resolvedModel);
@@ -4232,11 +4377,15 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
+      this._servedModelByTurn.delete(event.turnId);
+      this._writtenFilesByTurn.delete(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
+    this._servedModelByTurn.delete(event.turnId);
+    this._writtenFilesByTurn.delete(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

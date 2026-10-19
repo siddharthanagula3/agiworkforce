@@ -937,6 +937,29 @@ describe('LoginScreen', () => {
     }
   });
 
+  it('lets an account whose Cloud check failed log out from the failure screen', () => {
+    mockIsSignedIn = true;
+    mockUserId = 'person-a';
+    const signOut = jest.fn(async () => undefined);
+    const originalSignOut = useAuthStore.getState().signOut;
+    useAuthStore.setState({ signOut });
+    useTermsAcceptanceStore.setState({
+      userId: 'person-a',
+      status: 'error',
+      error: 'AGI Cloud could not verify this device session. Retry, or continue in Local Mode.',
+    });
+
+    try {
+      const screen = render(<LoginScreen />);
+      expect(screen.getByText('AGI Cloud sign-in could not finish')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('mobile-terms-sign-out'));
+      expect(signOut).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/(app)');
+    } finally {
+      useAuthStore.setState({ signOut: originalSignOut });
+    }
+  });
+
   it('lets a signed-in account leave an unresolved Cloud check for Local Mode', () => {
     mockIsSignedIn = true;
     mockUserId = 'person-a';

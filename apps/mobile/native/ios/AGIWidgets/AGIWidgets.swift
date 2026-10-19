@@ -68,7 +68,7 @@ struct AGIQuickActionsView: View {
             HStack(spacing: 10) {
                 AGIActionButton(title: "New chat", symbol: "square.and.pencil", url: AGIWidgetLink.newChat)
                 AGIActionButton(title: "Camera", symbol: "camera", url: AGIWidgetLink.camera)
-                AGIActionButton(title: "Dictate", symbol: "mic", url: AGIWidgetLink.voice)
+                AGIActionButton(title: "Voice", symbol: "mic", url: AGIWidgetLink.voice)
             }
         }
     }
@@ -81,7 +81,7 @@ struct AGIQuickActionsWidget: Widget {
                 .containerBackground(.background, for: .widget)
         }
         .configurationDisplayName("AGI Workforce")
-        .description("Start a new chat, open the camera or dictate.")
+        .description("Start a new chat, open the camera or start voice mode.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

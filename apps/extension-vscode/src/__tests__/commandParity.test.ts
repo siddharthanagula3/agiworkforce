@@ -169,9 +169,9 @@ describe('package.json ↔ runtime command parity', () => {
     expect(setupSource).toContain(
       "Cloud connectors do not replace this workspace's local MCP configuration",
     );
-    expect(setupSource).toContain('https://agiworkforce.com/connectors?from=vscode-extension');
-    expect(setupSource).toContain('https://agiworkforce.com/settings/team?from=vscode-extension');
-    expect(setupSource).toContain('https://agiworkforce.com/teams?from=vscode-extension');
+    expect(setupSource).toContain('`${getCloudWebOrigin()}/connectors?from=vscode-extension`');
+    expect(setupSource).toContain('`${getCloudWebOrigin()}/settings/team?from=vscode-extension`');
+    expect(setupSource).toContain('`${getCloudWebOrigin()}/teams?from=vscode-extension`');
   });
 
   it('parity holds on second activate after reset (module-state isolation)', () => {

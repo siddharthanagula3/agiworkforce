@@ -25,6 +25,7 @@ import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from
 import { useRouter } from 'expo-router';
 import { startGitHubInstallInApp } from '../githubInstall';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
 const GITHUB_CONNECT_FAILED = 'GitHub could not be connected';
@@ -437,10 +438,7 @@ export function NewCloudCodeSessionSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
         <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <Text

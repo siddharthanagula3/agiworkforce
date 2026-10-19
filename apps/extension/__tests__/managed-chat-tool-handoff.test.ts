@@ -210,6 +210,42 @@ describe('streamFreeChat caller-declared browser tools', () => {
 });
 
 describe('executeChromeManagedChat tool continuation', () => {
+  it('continues a long tool leg with a fresh session token, not the one the turn began with', async () => {
+    const streamChat = vi
+      .fn<
+        (
+          messages: FreeTrialMessage[],
+          token: string,
+          options?: ManagedChatStreamOptions,
+        ) => AsyncGenerator<FreeTrialChunk>
+      >()
+      .mockImplementationOnce(() =>
+        stream({ type: 'tool-handoff', calls: [readCall] }, { type: 'done' }),
+      )
+      .mockImplementationOnce(() => stream({ type: 'text', text: 'Done.' }, { type: 'done' }));
+    const tokens = ['token-at-start', 'token-after-tool'];
+    const getAuthToken = vi.fn(async () => tokens.shift() ?? 'token-after-tool');
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-fresh',
+        text: 'What does this page say?',
+        modelSelection: 'auto',
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      dependencies({
+        streamChat,
+        getAuthToken,
+        onToolHandoff: vi.fn(async () => ({
+          status: 'resolved' as const,
+          results: [{ toolCallId: 'call_1', content: 'Page text' }],
+        })),
+      }),
+    );
+    expect(result.status).toBe('success');
+    expect(streamChat.mock.calls[0]![1]).toBe('token-at-start');
+    expect(streamChat.mock.calls[1]![1]).toBe('token-after-tool');
+  });
+
   it('runs the handed-off tool and continues the same turn with its result', async () => {
     const streamChat = vi
       .fn<

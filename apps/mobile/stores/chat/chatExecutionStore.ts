@@ -86,6 +86,7 @@ import {
 import {
   DEFAULT_AUTO_MODE_ID,
   isCloudManagedModelId,
+  isFreeQuotaTurnModelId,
   isSelectableModelId,
 } from '@/src/features/model-picker/service';
 import {
@@ -194,7 +195,7 @@ import { managedCloudChat } from '@/services/managedCloudChat';
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { getProviderOffering } from '@agiworkforce/types';
 import {
-  ensureReadyFreeQuotaChatOffering,
+  ensureReadyFreeQuotaOffering,
   useFreeQuotaCatalogueStore,
 } from '@/src/features/model-picker/freeQuotaCatalogue';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -1372,8 +1373,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
     const promotionalOffering = getProviderOffering(requestedModel);
-    const isFreeQuotaChat =
-      promotionalOffering?.category === 'chat' && promotionalOffering.quotaProbeProtocol === 'chat';
+    const isFreeQuotaChat = isFreeQuotaTurnModelId(requestedModel);
     const isCloudModel = isCloudManagedModelId(requestedModel);
     const isAutoSelection = isAutoModeModelId(requestedModel);
     const executionMode = conversation
@@ -1472,7 +1472,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isTurnAccountCurrent()) return false;
 
       if (isFreeQuotaChat) {
-        const freeOffering = await ensureReadyFreeQuotaChatOffering(requestedModel);
+        const freeOffering = await ensureReadyFreeQuotaOffering(requestedModel);
         if (!isTurnAccountCurrent()) return false;
         if (!freeOffering) {
           set({

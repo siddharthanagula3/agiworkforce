@@ -66,7 +66,7 @@ describe('Get help in the VS Code sidebar', () => {
   it('opens the help centre externally and names the surface it came from', () => {
     expect(chatStateManagerSource).toContain("case 'openHelp':");
     expect(chatStateManagerSource).toContain(
-      "vscode.Uri.parse('https://agiworkforce.com/help?from=vscode-extension')",
+      'vscode.Uri.parse(`${getCloudWebOrigin()}/help?from=vscode-extension`)',
     );
     expect(chatStateManagerSource).toContain("| { type: 'openHelp' }");
   });

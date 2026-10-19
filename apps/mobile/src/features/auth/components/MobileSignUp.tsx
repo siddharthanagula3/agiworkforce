@@ -36,6 +36,7 @@ import {
   POST_AUTH_INTENT_PARAM,
   type PostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -271,7 +272,7 @@ export function MobileSignUp({
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={keyboardAvoidingBehavior('screen')}
       testID="mobile-custom-sign-up"
     >
       <ScrollView

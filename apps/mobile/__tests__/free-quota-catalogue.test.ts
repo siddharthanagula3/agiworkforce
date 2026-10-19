@@ -6,7 +6,9 @@ import {
   __resetCloudAccountSessionForTests,
 } from '../src/features/auth/services/cloudAccountSession';
 import {
+  ensureLimitedFreeMediaModel,
   ensureReadyFreeQuotaChatOffering,
+  ensureReadyFreeQuotaOffering,
   getFreeQuotaChatOffering,
   getReadyFreeQuotaChatOffering,
   useFreeQuotaCatalogueStore,
@@ -201,5 +203,67 @@ describe('mobile provider-funded Free catalogue', () => {
     expect(useFreeQuotaCatalogueStore.getState().error).toBe(
       'Provider-funded Free models are unavailable from AGI Cloud right now.',
     );
+  });
+
+  describe('limited Free media, the same rule as web', () => {
+    const imageKey = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol,
+    )?.[0];
+
+    function mediaCatalogue(withOffer: boolean, remainingToday = 2) {
+      if (!imageKey) throw new Error('Expected an image offering in the generated catalog.');
+      return {
+        ...catalogue('ready'),
+        models: [
+          ...catalogue('ready').models,
+          {
+            key: imageKey,
+            displayName: 'Provider-funded image',
+            providerModelId: null,
+            category: 'image',
+            limit: 50,
+            unit: 'images',
+            consumedApproximate: 0,
+            expiresOn: null,
+            status: 'ready',
+          },
+        ],
+        ...(withOffer
+          ? {
+              limitedOffer: [
+                {
+                  category: 'image',
+                  dailyCap: 3,
+                  remainingToday,
+                  resetsAt: '2026-10-19T00:00:00.000Z',
+                },
+              ],
+            }
+          : {}),
+      };
+    }
+
+    it('names the ready image model when the server runs a limited offer', async () => {
+      activateCloudAccount('account-a');
+      getMock.mockResolvedValue(mediaCatalogue(true));
+
+      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBe(imageKey);
+      await expect(ensureReadyFreeQuotaOffering(imageKey!)).resolves.toMatchObject({
+        key: imageKey,
+      });
+    });
+
+    it('offers no media model when the server lists models but runs no limited offer', async () => {
+      activateCloudAccount('account-a');
+      getMock.mockResolvedValue(mediaCatalogue(false));
+
+      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBeNull();
+      await expect(ensureReadyFreeQuotaOffering(imageKey!)).resolves.toBeNull();
+    });
+
+    it('offers nothing while signed out', async () => {
+      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBeNull();
+      expect(getMock).not.toHaveBeenCalled();
+    });
   });
 });

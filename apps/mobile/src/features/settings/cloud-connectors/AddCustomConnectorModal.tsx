@@ -20,6 +20,7 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export interface AddCustomConnectorModalProps {
   visible: boolean;
@@ -141,7 +142,7 @@ export function AddCustomConnectorModal({
        */}
       <KeyboardAvoidingView
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('modal')}
       >
         <View
           style={{

@@ -157,6 +157,15 @@ describe('handleNotificationResponse, auth gate', () => {
     expect(mockOpenInAppBrowser).not.toHaveBeenCalled();
   });
 
+  it('opens a linked chat through the route that loads it from the account first', () => {
+    setSignedIn(true);
+
+    fireNotification({ type: 'task_completed', target: 'chat', targetId: 'conv-1' });
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/(app)/open/chat/conv-1');
+    expect(mockOpenInAppBrowser).not.toHaveBeenCalled();
+  });
+
   it('ignores a product link naming a target this build does not know', () => {
     setSignedIn(true);
 

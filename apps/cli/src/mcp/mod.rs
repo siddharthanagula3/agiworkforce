@@ -40,7 +40,7 @@ pub mod registry;
 pub mod tui_handler;
 
 pub use oauth_store::McpOAuthStore;
-use oauth_store::McpServerOAuthStore;
+use oauth_store::{McpOAuthToken, McpServerOAuthStore};
 
 // ---------------------------------------------------------------------------
 // Config types (CLI-local: serde back-compat + manifest shapes)

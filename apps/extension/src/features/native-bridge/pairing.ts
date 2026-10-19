@@ -27,6 +27,11 @@ const STORAGE_KEY_PAIR_ACCOUNT = 'agi_pair_account';
 // Owned by the background worker, which reads it to decide whether a worker
 // start should attempt connectNative at all.
 const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
+// The session-scoped token is gone after a browser restart, but the pairing is
+// not: Desktop keeps its record and the native host keeps answering. This
+// record holds only what the settings page shows (fingerprint and account), so
+// the paired state survives a restart without putting a credential on disk.
+const STORAGE_KEY_PAIRED_DESKTOP = 'agi_paired_desktop';
 
 const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
@@ -157,6 +162,47 @@ async function readSignedInAccountId(): Promise<string | null | undefined> {
   }
 }
 
+interface PairedDesktopRecord {
+  fingerprint: string;
+  accountId: string | null;
+}
+
+async function readPairedDesktopRecord(): Promise<PairedDesktopRecord | null> {
+  try {
+    const stored = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      chrome.storage.local.get([STORAGE_KEY_PAIRED_DESKTOP, STORAGE_KEY_DESKTOP_PAIRED], (r) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(r as Record<string, unknown>);
+      });
+    });
+    if (stored[STORAGE_KEY_DESKTOP_PAIRED] !== true) return null;
+    const record = stored[STORAGE_KEY_PAIRED_DESKTOP] as Partial<PairedDesktopRecord> | undefined;
+    const fingerprint = record?.fingerprint;
+    if (typeof fingerprint !== 'string' || !isValidPairingFingerprint(fingerprint)) return null;
+    const accountId =
+      typeof record?.accountId === 'string' && record.accountId !== '' ? record.accountId : null;
+    return { fingerprint, accountId };
+  } catch {
+    return null;
+  }
+}
+
+async function writePairedDesktopRecord(
+  fingerprint: string,
+  accountId: string | undefined | null,
+): Promise<void> {
+  const record: PairedDesktopRecord = {
+    fingerprint,
+    accountId: typeof accountId === 'string' ? accountId : null,
+  };
+  await new Promise<void>((resolve, reject) => {
+    chrome.storage.local.set({ [STORAGE_KEY_PAIRED_DESKTOP]: record }, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
 async function releasePairedCredentials(): Promise<void> {
   try {
     await removeSession([
@@ -168,7 +214,7 @@ async function releasePairedCredentials(): Promise<void> {
     // A storage failure must still leave this worker refusing the pairing.
   }
   try {
-    await chrome.storage.local.remove(STORAGE_KEY_DESKTOP_PAIRED);
+    await chrome.storage.local.remove([STORAGE_KEY_DESKTOP_PAIRED, STORAGE_KEY_PAIRED_DESKTOP]);
   } catch {
     // The background falls back to a failed connect attempt.
   }
@@ -199,6 +245,21 @@ export async function loadPairingState(): Promise<PairingState> {
         await writeSession({ [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId });
       }
       _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fingerprint ?? null };
+      return getPairingState();
+    }
+
+    const durable = await readPairedDesktopRecord();
+    if (durable) {
+      const signedInAccountId = await readSignedInAccountId();
+      if (
+        signedInAccountId !== undefined &&
+        !pairingBelongsTo(durable.accountId, signedInAccountId)
+      ) {
+        await releasePairedCredentials();
+        _state = { ...IDLE_STATE };
+        return getPairingState();
+      }
+      _state = { ...IDLE_STATE, phase: 'paired', fingerprint: durable.fingerprint };
       return getPairingState();
     }
 
@@ -291,6 +352,7 @@ async function storeIssuedPairToken(data: Record<string, unknown>): Promise<Pair
       : {}),
   });
   await removeSession([STORAGE_KEY_PAIR_REQUEST]);
+  await writePairedDesktopRecord(rawFingerprint, signedInAccountId);
 
   _state = { ...IDLE_STATE, phase: 'paired', fingerprint: rawFingerprint };
 
@@ -481,6 +543,7 @@ export async function confirmPairing(token: string, fingerprint?: string): Promi
         ? { [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId }
         : {}),
     });
+    await writePairedDesktopRecord(fp, signedInAccountId);
     _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fp };
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'Failed to store token');

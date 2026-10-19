@@ -404,7 +404,11 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   if (productLink) {
     const nativeRoute = nativeRouteForProductLink(productLink);
     if (nativeRoute) {
-      safeNavigate(nativeRoute as Parameters<typeof router.push>[0]);
+      safeNavigate(
+        (productLink.target === 'chat'
+          ? `/(app)/open/${productLink.target}/${encodeURIComponent(productLink.id)}`
+          : nativeRoute) as Parameters<typeof router.push>[0],
+      );
     } else {
       const fallbackUrl = productLinkWebFallbackUrl(productLink);
       void import('@/lib/safeOpenURL').then(({ openInAppBrowser }) =>
