@@ -2890,6 +2890,79 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  it('offers to review and undo the files a reply changed', async () => {
+    const harness = makeHarness();
+    const rewindThread = vi.fn().mockResolvedValue({
+      restoredFiles: ['src/math.ts'],
+      removedFiles: [],
+      skippedFiles: [],
+      conversationRestored: false,
+      prompt: 'Fix the bug',
+    });
+    const listCheckpoints = vi.fn().mockResolvedValue({
+      checkpoints: [
+        {
+          checkpointIndex: 0,
+          prompt: 'Explain',
+          createdAt: '2026-10-18T00:00:00Z',
+          trackedFiles: 1,
+        },
+        {
+          checkpointIndex: 1,
+          prompt: 'Fix the bug',
+          createdAt: '2026-10-18T00:01:00Z',
+          trackedFiles: 1,
+        },
+      ],
+    });
+    Object.assign(harness.runtime, { rewindThread, listCheckpoints });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/math.ts',
+      input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Fixed.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
+    });
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
+    await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
+
+    expect(rewindThread).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      checkpointIndex: 1,
+      restore: 'code',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'turnChangesUndone',
+      payload: { turnId: 'turn-1' },
+    });
+  });
+
   it('forwards dropped image attachments as image turn input', async () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({

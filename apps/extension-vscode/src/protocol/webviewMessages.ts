@@ -264,6 +264,18 @@ const openToolDiff = z.object({
   payload: z.object({ path: z.string().min(1).max(4096) }),
 });
 
+const turnChangeTarget = z.object({ turnId: z.string().min(1).max(200) });
+
+const reviewTurnChanges = z.object({
+  type: z.literal('reviewTurnChanges'),
+  payload: turnChangeTarget,
+});
+
+const undoTurn = z.object({
+  type: z.literal('undoTurn'),
+  payload: turnChangeTarget,
+});
+
 const dismissEditorContext = z.object({
   type: z.literal('dismissEditorContext'),
   payload: z.object({ id: z.string().min(1).max(2048) }),
@@ -313,6 +325,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   attachContext,
   dismissEditorContext,
   openToolDiff,
+  reviewTurnChanges,
+  undoTurn,
   resolveTurnFailure,
   respondToApproval,
   attachFiles,
