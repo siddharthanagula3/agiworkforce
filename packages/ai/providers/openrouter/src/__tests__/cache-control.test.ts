@@ -7,7 +7,7 @@ import {
   translateChatRequest,
   type OpenAIChatCompletionCreateParams,
 } from '@agiworkforce/providers-openai';
-import type { ChatRequest } from '@agiworkforce/types';
+import { listCanonicalModels, type ChatRequest } from '@agiworkforce/types';
 
 import { applyOpenRouterAnthropicCacheControl } from '../cache-control';
 
@@ -78,6 +78,19 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
     expect(content).toEqual([
       { type: 'text', text: 'You are a helpful assistant.', cache_control: { type: 'ephemeral' } },
     ]);
+  });
+
+  it('sends no cache_control for a catalog model that supports only implicit caching', () => {
+    const implicitOnly = listCanonicalModels().filter(
+      (model) => model.openRouterSlug && model.providerCompatibility?.explicitPromptCache === false,
+    );
+    expect(implicitOnly.length).toBeGreaterThan(0);
+    for (const model of implicitOnly) {
+      const params = buildParams(model.openRouterSlug as string);
+      const before = JSON.stringify(params.messages);
+      applyOpenRouterAnthropicCacheControl(params, 'long');
+      expect(JSON.stringify(params.messages)).toBe(before);
+    }
   });
 
   it('is a no-op when there is no system message', () => {

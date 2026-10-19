@@ -31,36 +31,6 @@
       "speed": "fast",
       "released": "February 2026"
     },
-    "gemini-3.1-pro-preview": {
-      "contextWindow": 1048576,
-      "inputCost": 2,
-      "outputCost": 12,
-      "cached_input": 0.2,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "benchmarks": {
-        "swebench": 74.2,
-        "humaneval": 93.5,
-        "mmlu": 89.5,
-        "gpqa": 91.9,
-        "aime": 95
-      },
-      "speed": "fast",
-      "released": "February 2026"
-    },
     "gemini-3.5-flash-lite": {
       "contextWindow": 1048576,
       "inputCost": 0.3,
