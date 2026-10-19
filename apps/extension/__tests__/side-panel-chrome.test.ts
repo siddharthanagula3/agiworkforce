@@ -152,6 +152,7 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
     email: null,
     planName: 'Pro',
     planTier: 'pro',
+    greetingName: 'Ada Lovelace',
     capabilityDocument: {
       granted: [],
       deniedBy: {},
@@ -303,6 +304,15 @@ describe('More popover', () => {
     expect(labels.length).toBeLessThanOrEqual(4);
     expect(labels).toContain(catalogMessage('spExtensionSettings', []));
     expect(menu.querySelector('.sp-more-footer')?.textContent).toContain('v1.2.0');
+  });
+
+  it('greets the account by first name in the empty state, like web', async () => {
+    await vi.waitFor(() => {
+      const greeting = byId('sp-empty-greeting')!;
+      expect(greeting.hidden).toBe(false);
+      expect(greeting.textContent).toContain('Ada');
+      expect(greeting.textContent).not.toContain('Lovelace');
+    });
   });
 
   it('names the signed-in account and plan like the web account menu', async () => {

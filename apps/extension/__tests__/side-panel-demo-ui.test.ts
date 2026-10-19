@@ -289,11 +289,10 @@ describe('Chrome side-panel composer placeholder never shows a stale literal', (
     const end = source.indexOf('\n}', start);
     const body = source.slice(start, end);
 
-    expect(body).toContain("if (state === 'signed_out')");
-    expect(body).toContain("input.placeholder = t('spComposerPlaceholderSignedOut')");
-    expect(body).toContain("else if (state === 'unavailable')");
-    expect(body).toContain("input.placeholder = t('spComposerPlaceholderNoAccess')");
-    expect(body).toMatch(/else\s+input\.placeholder = t\('spComposerPlaceholder'\)/);
+    expect(body).toMatch(
+      /input\.placeholder =\s*state === 'signed_out' \? t\('spComposerPlaceholderSignedOut'\) : t\('spComposerPlaceholder'\)/,
+    );
+    expect(body).not.toContain('spComposerPlaceholderNoAccess');
   });
 });
 

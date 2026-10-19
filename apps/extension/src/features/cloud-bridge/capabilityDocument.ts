@@ -1,4 +1,7 @@
-import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  parseMeResponse,
+} from '@agiworkforce/cloud-contracts';
 import {
   resolveCapabilityDocumentDecision,
   type CapabilityDocumentWireView,
@@ -18,12 +21,34 @@ export interface AccountSummary {
   email: string | null;
   planName: string | null;
   planTier: string | null;
+  greetingName: string | null;
+}
+
+async function nameOptedOut(token: string, signal?: AbortSignal): Promise<boolean> {
+  try {
+    const response = await fetch(`${FREE_TRIAL_GATEWAY}${MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...platformRequestHeaders(),
+      },
+      ...(signal ? { signal } : {}),
+    });
+    if (!response.ok) return false;
+    const body = (await response.json()) as { settings?: { general?: { preferredName?: unknown } } };
+    const preferredName = body.settings?.general?.preferredName;
+    return typeof preferredName === 'string' && preferredName.trim() === '';
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchAccountSummary(
   token: string,
   signal?: AbortSignal,
 ): Promise<AccountSummary | null> {
+  const optedOut = nameOptedOut(token, signal);
   const response = await fetch(`${FREE_TRIAL_GATEWAY}${CAPABILITY_DOCUMENT_PATH}`, {
     method: 'GET',
     headers: {
@@ -41,6 +66,7 @@ export async function fetchAccountSummary(
     email: me.email,
     planName: me.plan.display_name.trim() || null,
     planTier: me.plan.effective_tier ?? me.plan.tier,
+    greetingName: (await optedOut) ? null : me.profile?.preferred_name?.trim() || me.name || null,
   };
 }
 

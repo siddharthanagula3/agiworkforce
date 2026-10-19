@@ -156,6 +156,7 @@ import {
 } from './features/computer-use/browserTurnActivity';
 import type { AgentLoopStep } from './features/computer-use/agentLoop';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import {
   takePendingResultConversation,
   OPEN_BROWSER_CONVERSATION_MESSAGE,
@@ -646,9 +647,8 @@ function setManagedCloudChatState(
   }
   if (input) {
     input.disabled = state !== 'ready';
-    if (state === 'signed_out') input.placeholder = t('spComposerPlaceholderSignedOut');
-    else if (state === 'unavailable') input.placeholder = t('spComposerPlaceholderNoAccess');
-    else input.placeholder = t('spComposerPlaceholder');
+    input.placeholder =
+      state === 'signed_out' ? t('spComposerPlaceholderSignedOut') : t('spComposerPlaceholder');
   }
   updateSendButton();
   updateEmptyStateActions();
@@ -1542,6 +1542,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   capabilityDocument = null;
   accountIdentity = null;
+  renderEmptyGreeting();
   applyCapabilityGates();
   if (nextOwner) {
     setManagedCloudChatState('loading', { message: t('spGateChecking') });
@@ -4449,6 +4450,16 @@ function injectStyles(): void {
       opacity: 0.55;
     }
     #sp-empty-icon svg { width: 110px; height: 110px; }
+    #sp-empty-icon.sp-empty-icon-hidden { display: none; }
+    #sp-empty-greeting {
+      margin: 0 0 12px;
+      color: var(--agi-ext-text);
+      font-size: var(--type-h1-size);
+      font-weight: 600;
+      line-height: var(--type-h1-height);
+      text-wrap: balance;
+    }
+    #sp-empty-greeting[hidden] { display: none; }
 
     #sp-blocked {
       align-items: center;
@@ -5209,6 +5220,18 @@ const RECENT_PROJECT_LIMIT = 3;
 let recentProjects: ActiveProjectSelection[] = [];
 let recentProjectsGeneration = 0;
 let chooseChatProject: (project: ActiveProjectSelection | null) => void = () => {};
+
+function renderEmptyGreeting(): void {
+  const greeting = document.getElementById('sp-empty-greeting');
+  const icon = document.getElementById('sp-empty-icon');
+  if (!greeting) return;
+  const signedIn = accountIdentity !== null && managedCloudChatState !== 'signed_out';
+  greeting.textContent = signedIn
+    ? resolveGreetingHeadline(new Date(), accountIdentity?.greetingName)
+    : '';
+  greeting.hidden = !signedIn;
+  icon?.classList.toggle('sp-empty-icon-hidden', signedIn);
+}
 
 function updateEmptyStateActions(): void {
   const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
@@ -10800,6 +10823,7 @@ function buildUI(): void {
     if (!token) {
       capabilityDocument = null;
       accountIdentity = null;
+      renderEmptyGreeting();
       applyCapabilityGates();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
@@ -10883,8 +10907,10 @@ function buildUI(): void {
           email: accountSummary.email,
           planName: accountSummary.planName,
           planTier: accountSummary.planTier,
+          greetingName: accountSummary.greetingName,
         }
       : null;
+    renderEmptyGreeting();
     applyCapabilityGates();
     managedModelAccess = access;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
@@ -11148,6 +11174,7 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
+  emptyState.appendChild(el('h2', { id: 'sp-empty-greeting', hidden: '' }));
   const suggestionGroup = el('div', {
     id: 'sp-empty-suggestions',
     class: 'sp-empty-actions',

@@ -189,10 +189,6 @@
     "message": "Sign in to chat",
     "description": "Composer input placeholder while signed out"
   },
-  "spComposerPlaceholderNoAccess": {
-    "message": "AGI Cloud access required",
-    "description": "Composer input placeholder while the account cannot use Chrome chat"
-  },
   "spShortcutSaveFailed": {
     "message": "Failed to save shortcut",
     "description": "Save-shortcut name field placeholder after the save was rejected"
@@ -742,7 +738,7 @@
     "description": "Accessible label of the recent-chats close button"
   },
   "spModelAutoDescription": {
-    "message": "Picks a model for each turn: a quick one for a summary, a stronger one for code",
+    "message": "Picks the best model for each message",
     "description": "One-line description of the automatic model choice"
   },
   "spVoiceMicBlocked": {
