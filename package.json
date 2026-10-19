@@ -390,6 +390,7 @@
     "build:desktop": "turbo run build --filter=@agiworkforce/desktop",
     "build:docs": "pnpm docs:check",
     "dev:desktop": "turbo run dev --filter=@agiworkforce/desktop",
+    "dev:accounts": "tsx --conditions=react-server --tsconfig apps/web/tsconfig.json apps/web/scripts/dev-accounts/cli.ts",
     "docs:check": "pnpm check:doc-status && pnpm check:non-md-artifacts && pnpm check:reference-integrity && pnpm check:capability-preconditions && pnpm check:readme-facts",
     "typecheck:all": "turbo run typecheck",
     "demo:multi-provider": "tsx examples/multi-provider-chat.ts",
