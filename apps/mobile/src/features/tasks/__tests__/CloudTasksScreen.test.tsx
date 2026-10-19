@@ -79,6 +79,8 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
+import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
+import { useTierStore } from '@/src/features/billing/store';
 import { CloudTasksScreen } from '../CloudTasksScreen';
 import { useCloudTaskStore } from '../store';
 
@@ -191,5 +193,53 @@ describe('Cloud tasks screen', () => {
         expect.anything(),
       ),
     );
+  });
+
+  it('saves a finished task as a routine prefilled with its request', async () => {
+    const conversationId = '0190a000-0000-7000-8000-000000000099';
+    const finished = {
+      ...RUN,
+      conversationId,
+      state: 'completed',
+      pendingApproval: null,
+      completedAt: '2026-08-27T12:00:00.000Z',
+    };
+    mockListRuns.mockResolvedValue({ runs: [finished], nextCursor: null });
+    mockFollowRun.mockImplementation(
+      async (_runId: string, options: { onSnapshot?: (page: unknown) => void }) => {
+        await options.onSnapshot?.({ run: finished, events: [], nextAfterSequence: -1 });
+        return { run: finished, lastSequence: -1 };
+      },
+    );
+    useTierStore.setState({ tier: 'basic' });
+    const loadMessages = jest.fn(async (id: string) => {
+      getConversationMessageStore(id).setState((state) => ({
+        messages: {
+          ...state.messages,
+          [id]: [
+            {
+              id: 'm-1',
+              conversationId: id,
+              role: 'user',
+              content: 'Compare the Q4 filings for both vendors',
+              createdAt: '2026-08-27T10:00:00.000Z',
+            },
+          ],
+        },
+      }));
+    });
+    useChatStore.setState({ conversations: [], loadMessages } as never);
+
+    const { findByLabelText } = render(<CloudTasksScreen />);
+    fireEvent.press(await findByLabelText(/^Open Research task/));
+    fireEvent.press(await findByLabelText('Save this task as a routine that runs on a schedule'));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/schedules/create',
+        params: { prompt: 'Compare the Q4 filings for both vendors', model: 'model-1' },
+      }),
+    );
+    expect(loadMessages).toHaveBeenCalledWith(conversationId);
   });
 });
