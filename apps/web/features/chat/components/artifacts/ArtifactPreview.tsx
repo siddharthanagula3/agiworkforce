@@ -39,6 +39,7 @@ import {
   History,
   MousePointerClick,
   Sparkles,
+  TextCursorInput,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
@@ -67,7 +68,14 @@ import {
 import { TypeIcon } from './artifact-labels';
 import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
+import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
+import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { buildArtifactEditRequest } from './artifact-edit-request';
+import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
+import {
+  buildArtifactSelectionRequest,
+  captureSelectionContext,
+} from './artifact-selection-request';
 import { artifactLineage, buildVersionTimeline, type LineageCandidate } from './artifact-lineage';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { ArtifactChangesView } from './ArtifactChangesView';
@@ -423,6 +431,8 @@ export function ArtifactPreview({
   const versionCount = versionHistory?.length ?? 0;
   const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
   const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
+  const renameArtifact = useArtifactsStore((s) => s.renameArtifact);
+  const [renaming, setRenaming] = useState(false);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const editRequested = useArtifactsStore((s) => s.editRequestedArtifactId === artifact.id);
@@ -502,6 +512,7 @@ export function ArtifactPreview({
   const [refreshKey, setRefreshKey] = useState(0);
   const mounted = useMounted();
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
 
   // Leaving native fullscreen through Escape or browser UI fires
   // fullscreenchange without going through the button.
@@ -655,6 +666,7 @@ export function ArtifactPreview({
     );
     setEditRequestMode(false);
     setPickerSelection(null);
+    setRenaming(false);
     setRenderError(null);
     setPdfError(false);
     setImageError(false);
@@ -808,6 +820,15 @@ export function ArtifactPreview({
     }
     endSourceEdit();
   }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
+
+  const savePresentation = useCallback(
+    (next: string) => {
+      const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+      if (!stored || next === stored.content) return;
+      upsertArtifact({ ...stored, content: next, createdAt: new Date() });
+    },
+    [artifact.id, upsertArtifact],
+  );
 
   const handleTaskToggle = useCallback(
     (index: number) => {
@@ -1041,6 +1062,18 @@ export function ArtifactPreview({
   );
 
   const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
+
+  const handleExportDeckPdf = async () => {
+    const title = artifact.title || 'Presentation';
+    const pending = toast.loading('Preparing the PDF…');
+    try {
+      const { downloadDeckPdf } = await import('./presentation/deck-pdf');
+      await downloadDeckPdf(title, activeContent);
+      toast.success('PDF downloaded', { id: pending });
+    } catch (error) {
+      toast.error(toUserMessage(error, 'The PDF could not be made'), { id: pending });
+    }
+  };
 
   const handleExportDocument = async (format: 'docx' | 'pdf') => {
     const title = artifact.title || 'Artifact';
@@ -1277,6 +1310,15 @@ export function ArtifactPreview({
           artifact={sharedArtifactView}
           className="h-full rounded-none border-0"
         />
+      ) : isPresentation && variant === 'panel' ? (
+        <PresentationWorkspace
+          title={artifact.title || 'Presentation'}
+          content={activeContent}
+          editable={canEditSource && sourceDraft === null}
+          handEdited={versionCount > 1}
+          onSave={savePresentation}
+          {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+        />
       ) : isPresentation ? (
         <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
       ) : isChart ? (
@@ -1435,6 +1477,58 @@ export function ArtifactPreview({
     [pickerSelection, onRequestEdits, artifact.title, cancelEditRequest],
   );
 
+  const startDocumentEdit = useCallback(() => {
+    setSourceDraft(activeContent);
+    setDraftOrigin('editor');
+    setEditorFocusRequest((count) => count + 1);
+  }, [activeContent]);
+
+  const canRequestSelectionEdits =
+    variant === 'panel' &&
+    Boolean(onRequestEdits) &&
+    isStoredArtifact &&
+    isLatestVersion &&
+    !showChanges &&
+    !editRequestMode &&
+    !isPdf &&
+    !isDocx &&
+    !isImage &&
+    activeContent.trim().length > 0;
+
+  const requestSelectionEdit = useCallback(
+    (selectedText: string, instruction: string, origin: Node) => {
+      if (!onRequestEdits) return false;
+      const element = origin instanceof Element ? origin : origin.parentElement;
+      const slideIndex = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
+      const current = sourceDraft ?? activeContent;
+      const handEdited = sourceDraft !== null || versionCount > 1;
+      if (sourceDraft !== null) saveSourceEdit();
+      const sent = onRequestEdits(
+        buildArtifactSelectionRequest({
+          title: artifact.title || 'Artifact',
+          selection: captureSelectionContext(current, selectedText),
+          instruction,
+          ...(slideIndex !== null && slideIndex !== undefined
+            ? { scope: `slide ${Number(slideIndex) + 1}` }
+            : {}),
+          ...(handEdited ? { currentContent: current } : {}),
+          ...(artifact.language ? { language: artifact.language } : {}),
+        }),
+      );
+      if (!sent) toast.error('The change request was not sent. Try again.');
+      return sent;
+    },
+    [
+      onRequestEdits,
+      sourceDraft,
+      activeContent,
+      versionCount,
+      saveSourceEdit,
+      artifact.title,
+      artifact.language,
+    ],
+  );
+
   const editRequestPicker = useMemo(
     () => ({
       active: editRequestMode,
@@ -1486,11 +1580,7 @@ export function ArtifactPreview({
         id: 'edit-source',
         label: 'Edit source',
         icon: Pencil,
-        onSelect: () => {
-          setSourceDraft(activeContent);
-          setDraftOrigin('editor');
-          setEditorFocusRequest((count) => count + 1);
-        },
+        onSelect: startDocumentEdit,
         ariaLabel: 'Edit artifact source',
         testId: 'artifact-edit-source',
       });
@@ -1558,6 +1648,13 @@ export function ArtifactPreview({
         },
         { id: 'md', label: 'Download as Markdown', run: () => handleDownload('md') },
       );
+      if (isPresentation) {
+        downloads.push({
+          id: 'deck-pdf',
+          label: 'Download as PDF',
+          run: () => void handleExportDeckPdf(),
+        });
+      }
       if (isTextDocument) {
         downloads.push(
           {
@@ -1587,6 +1684,14 @@ export function ArtifactPreview({
     }
     if (variant === 'panel' && isStoredArtifact) {
       moreMenuItems.push(
+        {
+          id: 'rename',
+          label: RENAME_ARTIFACT_LABEL,
+          icon: TextCursorInput,
+          group: 'Keep',
+          testId: 'artifact-rename',
+          onSelect: () => setRenaming(true),
+        },
         {
           id: 'duplicate',
           label: 'Duplicate',
@@ -1714,9 +1819,17 @@ export function ArtifactPreview({
                 stepper, Claude's arrangement. min-w-0 is what makes `truncate`
                 engage on a flex child. */}
             <div className="flex min-w-0 flex-1 flex-col justify-center">
-              <span className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
-                {artifact.title || 'Artifact'}
-              </span>
+              <ArtifactTitleField
+                title={artifact.title || 'Artifact'}
+                editing={renaming}
+                canRename={isStoredArtifact}
+                onStartEditing={() => setRenaming(true)}
+                onRename={(title) => {
+                  if (!renameArtifact(artifact.id, title))
+                    toast.error('That name could not be saved');
+                }}
+                onDone={() => setRenaming(false)}
+              />
               <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                 <TypeIcon type={artifact.type} className="h-3 w-3 shrink-0" />
                 <span className="truncate">{typeLabel}</span>
@@ -1815,6 +1928,21 @@ export function ArtifactPreview({
                   </Button>
                 </>
               )}
+
+            {canEditSource && isMarkdownDoc && showPreview && sourceDraft === null && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={startDocumentEdit}
+                className="h-7 px-2"
+                aria-label="Edit document"
+                title="Edit"
+                data-testid="artifact-edit-document"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ms-1 hidden text-xs @[30rem]:inline">Edit</span>
+              </Button>
+            )}
 
             {canRequestEdits && (
               <Button
@@ -2033,7 +2161,13 @@ export function ArtifactPreview({
 
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
-        <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
+        <div ref={contentAreaRef} className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
+          {canRequestSelectionEdits && (
+            <ArtifactSelectionToolbar
+              containerRef={contentAreaRef}
+              onRequest={requestSelectionEdit}
+            />
+          )}
           {editRequestMode && (
             <ArtifactEditRequestLayer
               selection={pickerSelection}

@@ -9,6 +9,13 @@ export {
 } from './components/SchedulesPageWithProjects';
 export { scheduleApi, ScheduleApiError } from './services/schedule-api';
 export {
+  ScheduleFromTurnProvider,
+  promptBeforeReply,
+  scheduleFromPromptHref,
+  useScheduleFromTurn,
+  type ScheduleFromTurn,
+} from './components/schedule-from-turn';
+export {
   DAYS_OF_WEEK,
   formatDateTime,
   recurrenceLabel,

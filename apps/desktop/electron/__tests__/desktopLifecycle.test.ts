@@ -309,6 +309,7 @@ function settle(): Promise<void> {
 
 function pageLoaded(): void {
   for (const listener of windowHandlers.get('did-finish-load') ?? []) listener();
+  for (const listener of windowHandlers.get('did-stop-loading') ?? []) listener();
 }
 
 function deepLinksSent(): unknown[] {
@@ -321,6 +322,9 @@ describe('deep links held until the renderer is ready', () => {
   it('replays links held from the last run, then new ones, in order once the page loads', () => {
     appHandlers.get('open-url')?.({ preventDefault: vi.fn() }, 'agiworkforce-cloud://chat/new-1');
     appHandlers.get('open-url')?.({ preventDefault: vi.fn() }, 'agiworkforce-cloud://chat/new-2');
+    expect(deepLinksSent()).toEqual([]);
+
+    for (const listener of windowHandlers.get('did-finish-load') ?? []) listener();
     expect(deepLinksSent()).toEqual([]);
 
     loading = false;
@@ -620,6 +624,65 @@ describe('opening a local session', () => {
 
     open('root-1', 'thread-9');
     expect(loadedUrls).toHaveLength(1);
+  });
+});
+
+describe('keeping the computer awake while an agent works', () => {
+  it('holds off system sleep for a running turn and lets go when it finishes', () => {
+    const blocker = vi.mocked(electron.powerSaveBlocker);
+    blocker.isStarted.mockReturnValue(true);
+    emit({ type: 'runtime-stopped', message: 'reset' });
+    blocker.start.mockClear();
+    blocker.stop.mockClear();
+    try {
+      emit({ type: 'turn-started', threadId: 'thread-keep', turnId: 'turn-keep' });
+      expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension');
+
+      emit({
+        type: 'turn-finished',
+        threadId: 'thread-keep',
+        turnId: 'turn-keep',
+        outcome: 'completed',
+        response: 'Done.',
+      } as DeveloperSessionEvent);
+      expect(blocker.stop).toHaveBeenCalledOnce();
+    } finally {
+      blocker.isStarted.mockReturnValue(false);
+    }
+  });
+});
+
+describe('notifications the page asks for', () => {
+  const caller = { senderFrame: { url: 'https://agiworkforce.com/chat' } } as {
+    senderFrame: { url: string };
+    sender?: unknown;
+  };
+  caller.sender = { mainFrame: caller.senderFrame };
+
+  function windowThat(focused: boolean, visible = true) {
+    return { isDestroyed: () => false, isVisible: () => visible, isFocused: () => focused };
+  }
+
+  async function ask(window: ReturnType<typeof windowThat> | null): Promise<number> {
+    const notify = ipcHandlers.get(ELECTRON_IPC_CHANNELS.notify);
+    if (!notify) throw new Error('the notify channel was never registered');
+    const created = vi.mocked(electron.Notification);
+    created.mockClear();
+    vi.mocked(electron.BrowserWindow.fromWebContents).mockReturnValueOnce(
+      window as unknown as null,
+    );
+    await notify(caller, { title: 'Reply ready', body: 'The sea is wide.' });
+    return created.mock.calls.length;
+  }
+
+  it('shows one when the window that asked is behind another app, hidden or minimized', async () => {
+    expect(await ask(windowThat(false))).toBe(1);
+    expect(await ask(windowThat(false, false))).toBe(1);
+    expect(await ask(null)).toBe(1);
+  });
+
+  it('stays quiet while the user is looking at the window that asked', async () => {
+    expect(await ask(windowThat(true))).toBe(0);
   });
 });
 

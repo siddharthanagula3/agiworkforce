@@ -31,6 +31,9 @@ pub struct SessionSnapshot {
     pub provider: Option<String>,
     pub project_id: Option<String>,
     pub messages: Vec<TurnMessage>,
+    /// The account already holds these rows; pushing them under new ids would
+    /// duplicate the history.
+    pub hosted_message_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -98,6 +101,8 @@ pub struct MessageDelta {
     pub conversation_id: String,
     pub role: String,
     pub content: String,
+    #[serde(default)]
+    pub created_at: Option<String>,
     #[serde(default)]
     pub deleted_at: Option<String>,
     pub server_version: String,
@@ -181,6 +186,16 @@ pub fn message_id_for(conversation_id: &str, index: usize) -> String {
     .to_string()
 }
 
+/// Keyed on the last account message, so ids from separate imports never collide.
+fn continued_message_id_for(conversation_id: &str, last_hosted_id: &str, ordinal: usize) -> String {
+    Uuid::new_v5(
+        &Uuid::NAMESPACE_URL,
+        format!("agiworkforce:cli:message:{conversation_id}:after:{last_hosted_id}:{ordinal}")
+            .as_bytes(),
+    )
+    .to_string()
+}
+
 fn truncate(value: &str, max_chars: usize) -> String {
     if value.chars().count() <= max_chars {
         return value.to_string();
@@ -220,14 +235,20 @@ pub fn build_push(snapshot: &SessionSnapshot, state: &SyncState) -> ChatPushRequ
     }];
 
     let metadata = message_metadata(&snapshot.session_id);
+    let last_hosted_id = snapshot.hosted_message_ids.last();
     let messages = snapshot
         .messages
         .iter()
         .enumerate()
         .filter(|(_, message)| SYNCED_ROLES.contains(&message.role.as_str()))
         .filter(|(_, message)| !message.content.trim().is_empty())
-        .map(|(index, message)| {
-            let id = message_id_for(&conversation_id, index);
+        .enumerate()
+        .map(|(ordinal, (index, message))| {
+            let id = match (snapshot.hosted_message_ids.get(ordinal), last_hosted_id) {
+                (Some(hosted), _) => hosted.clone(),
+                (None, Some(last)) => continued_message_id_for(&conversation_id, last, ordinal),
+                (None, None) => message_id_for(&conversation_id, index),
+            };
             MessagePushItem {
                 base_version: state.messages.base_version(&id),
                 id,
@@ -298,12 +319,40 @@ pub struct HostedConversation {
     pub project_id: Option<String>,
     pub updated_at: String,
     pub archived: bool,
-    pub messages: Vec<TurnMessage>,
+    pub server_version: String,
+    pub messages: Vec<HostedMessage>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HostedMessage {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub server_version: String,
+}
+
+pub fn record_hosted(conversation: &HostedConversation, state: &mut SyncState) {
+    state
+        .conversations
+        .record(&conversation.id, &conversation.server_version);
+    for message in &conversation.messages {
+        state.messages.record(&message.id, &message.server_version);
+    }
+}
+
+/// The server version changes on every edit, so only creation time keeps turn order.
+fn turn_position(message: &MessageDelta) -> (Option<chrono::DateTime<chrono::Utc>>, u128) {
+    (
+        message
+            .created_at
+            .as_deref()
+            .and_then(|created| chrono::DateTime::parse_from_rfc3339(created).ok())
+            .map(|created| created.with_timezone(&chrono::Utc)),
+        message.server_version.parse().unwrap_or(u128::MAX),
+    )
 }
 
 /// Assemble whole conversations out of a delta pull, dropping tombstoned rows.
-/// Message order follows the server version sequence the pull is already sorted
-/// by, which is the order the rows were written.
 pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
     let mut conversations: Vec<HostedConversation> = response
         .conversations
@@ -316,11 +365,14 @@ pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
             project_id: conversation.project_id.clone(),
             updated_at: conversation.updated_at.clone(),
             archived: conversation.archived,
+            server_version: conversation.server_version.clone(),
             messages: Vec::new(),
         })
         .collect();
 
-    for message in &response.messages {
+    let mut messages: Vec<&MessageDelta> = response.messages.iter().collect();
+    messages.sort_by_key(|message| turn_position(message));
+    for message in messages {
         if message.deleted_at.is_some() {
             continue;
         }
@@ -328,9 +380,11 @@ pub fn assemble(response: &ChatPullResponse) -> Vec<HostedConversation> {
             .iter_mut()
             .find(|conversation| conversation.id == message.conversation_id)
         {
-            conversation.messages.push(TurnMessage {
+            conversation.messages.push(HostedMessage {
+                id: message.id.clone(),
                 role: message.role.clone(),
                 content: message.content.clone(),
+                server_version: message.server_version.clone(),
             });
         }
     }
@@ -401,6 +455,7 @@ pub fn section_for_conversations(state: &SyncState) -> &SyncSection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     fn snapshot() -> SessionSnapshot {
         SessionSnapshot {
@@ -427,6 +482,7 @@ mod tests {
                     content: "   ".to_string(),
                 },
             ],
+            hosted_message_ids: Vec::new(),
         }
     }
 
@@ -475,6 +531,89 @@ mod tests {
         let conversation = conversation_id_for(&snapshot().session_id);
         assert_eq!(request.messages[0].id, message_id_for(&conversation, 1));
         assert_eq!(request.messages[1].id, message_id_for(&conversation, 2));
+    }
+
+    fn hosted(id: &str, role: &str, content: &str, version: &str) -> HostedMessage {
+        HostedMessage {
+            id: id.to_string(),
+            role: role.to_string(),
+            content: content.to_string(),
+            server_version: version.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_conversation_from_the_account_updates_its_rows_and_adds_only_new_turns() {
+        let conversation = HostedConversation {
+            id: "797344c5-5eb4-4e1c-a268-4a01d656c16d".to_string(),
+            title: "Started on the web".to_string(),
+            model: None,
+            project_id: None,
+            updated_at: "2026-10-18T00:00:00Z".to_string(),
+            archived: false,
+            server_version: "40".to_string(),
+            messages: vec![
+                hosted(
+                    "2565e84a-ce7b-41f7-a8f3-7ebfb2950af9",
+                    "user",
+                    "web question",
+                    "41",
+                ),
+                hosted(
+                    "afb1caa9-6dec-4825-bdcf-612c216f9a12",
+                    "assistant",
+                    "web answer",
+                    "42",
+                ),
+            ],
+        };
+        let turn = |role: &str, content: &str| TurnMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+        };
+        let continued = SessionSnapshot {
+            session_id: conversation.id.clone(),
+            title: conversation.title.clone(),
+            model: Some("some-model".to_string()),
+            provider: None,
+            project_id: None,
+            messages: vec![
+                turn("system", "prompt"),
+                turn("user", "web question"),
+                turn("assistant", "web answer"),
+                turn("user", "asked in the editor"),
+                turn("assistant", "answered in the editor"),
+            ],
+            hosted_message_ids: conversation
+                .messages
+                .iter()
+                .map(|message| message.id.clone())
+                .collect(),
+        };
+        let mut state = SyncState::default();
+        record_hosted(&conversation, &mut state);
+
+        let request = build_push(&continued, &state);
+        let ids: Vec<&str> = request.messages.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(
+            ids[..2],
+            [
+                conversation.messages[0].id.as_str(),
+                conversation.messages[1].id.as_str()
+            ]
+        );
+        assert_eq!(request.messages[0].base_version, "41");
+        assert_eq!(request.messages[1].base_version, "42");
+        assert_eq!(request.conversations[0].base_version, "40");
+        assert!(request.messages[2..]
+            .iter()
+            .all(|message| message.base_version == INITIAL_CURSOR));
+        let new_ids: HashSet<&str> = ids[2..].iter().copied().collect();
+        assert_eq!(new_ids.len(), 2);
+        for index in 0..continued.messages.len() {
+            assert!(!new_ids.contains(message_id_for(&conversation.id, index).as_str()));
+        }
+        assert_eq!(build_push(&continued, &state).messages[2].id, ids[2]);
     }
 
     #[test]
@@ -609,6 +748,7 @@ mod tests {
                     conversation_id: "c1".to_string(),
                     role: "user".to_string(),
                     content: "one".to_string(),
+                    created_at: None,
                     deleted_at: None,
                     server_version: "4".to_string(),
                 },
@@ -617,6 +757,7 @@ mod tests {
                     conversation_id: "c1".to_string(),
                     role: "assistant".to_string(),
                     content: "two".to_string(),
+                    created_at: None,
                     deleted_at: None,
                     server_version: "5".to_string(),
                 },
@@ -625,6 +766,7 @@ mod tests {
                     conversation_id: "c1".to_string(),
                     role: "user".to_string(),
                     content: "gone".to_string(),
+                    created_at: None,
                     deleted_at: Some("2026-09-13T01:00:00Z".to_string()),
                     server_version: "6".to_string(),
                 },
@@ -633,6 +775,7 @@ mod tests {
                     conversation_id: "c3".to_string(),
                     role: "user".to_string(),
                     content: "orphan".to_string(),
+                    created_at: None,
                     deleted_at: None,
                     server_version: "7".to_string(),
                 },
@@ -656,6 +799,45 @@ mod tests {
     }
 
     #[test]
+    fn an_answer_changed_after_a_later_question_stays_in_its_turn() {
+        let message = |id: &str, role: &str, created: &str, version: &str| MessageDelta {
+            id: id.to_string(),
+            conversation_id: "c1".to_string(),
+            role: role.to_string(),
+            content: id.to_string(),
+            created_at: Some(created.to_string()),
+            deleted_at: None,
+            server_version: version.to_string(),
+        };
+        let response = ChatPullResponse {
+            conversations: vec![ConversationDelta {
+                id: "c1".to_string(),
+                title: "Title".to_string(),
+                model: None,
+                project_id: None,
+                updated_at: "2026-10-18T00:00:03Z".to_string(),
+                deleted_at: None,
+                archived: false,
+                server_version: "20".to_string(),
+            }],
+            messages: vec![
+                message("q1", "user", "2026-10-18T00:00:00.000Z", "11"),
+                message("q2", "user", "2026-10-18T00:00:02.000Z", "13"),
+                message("a2", "assistant", "2026-10-18T00:00:02.001Z", "14"),
+                message("a1", "assistant", "2026-10-18T00:00:00.001Z", "19"),
+            ],
+            cursor: "20".to_string(),
+            has_more: false,
+        };
+        let order: Vec<String> = assemble(&response)[0]
+            .messages
+            .iter()
+            .map(|message| message.id.clone())
+            .collect();
+        assert_eq!(order, ["q1", "a1", "q2", "a2"]);
+    }
+
+    #[test]
     fn a_pull_records_the_versions_it_delivered() {
         let mut state = SyncState::default();
         let response = ChatPullResponse {
@@ -674,6 +856,7 @@ mod tests {
                 conversation_id: "c1".to_string(),
                 role: "user".to_string(),
                 content: "one".to_string(),
+                created_at: None,
                 deleted_at: None,
                 server_version: "9".to_string(),
             }],

@@ -12,19 +12,12 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { HelpSearch } from '@/features/support/components/HelpSearch';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
-import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
-import { BYOK_SURFACES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { supportCollectionIndex } from './collections';
-
-const HERO_FACTS = [
-  `Catalog: ${CATALOG_SCOPES.catalogueEntries.text}, ${CATALOG_SCOPES.providerRecords.text}`,
-  `BYOK: ${BYOK_SURFACES.label}`,
-  `VS Code: ${SURFACE_STATUS.vscode.toLowerCase()}`,
-];
 
 export const metadata = buildMetadata({
   title: 'Help: every collection in the help centre',
@@ -56,18 +49,9 @@ export default async function HelpPage({
           em="fast."
           lede={`Search every help article, or browse the help centre by collection. For anything else, email ${CONTACT_EMAIL}; no response time is promised unless your plan says otherwise.`}
           ctas={[]}
-        />
-
-        <FactLine facts={HERO_FACTS} />
-
-        <Section id="search" labelledBy="agi-help-search-title" rule>
-          <Stack gap="loose">
-            <h2 className="agi-ds-h2" id="agi-help-search-title">
-              Search every help article.
-            </h2>
-            <HelpSearch initialQuery={initialQuery} />
-          </Stack>
-        </Section>
+        >
+          <HelpSearch initialQuery={initialQuery} />
+        </PageHero>
 
         <Section id="collections" labelledBy="agi-help-collections-title" rule>
           <Stack gap="loose">
@@ -82,14 +66,17 @@ export default async function HelpPage({
                 caption="Help collections"
                 rows={collections.map((collection) => ({
                   label: collection.label,
-                  value: collection.articles.map((article, index) => (
-                    <span key={article.docId}>
-                      {index > 0 ? ' · ' : null}
-                      <Link href={article.href} className="agi-ds-link">
-                        {article.title}
-                      </Link>
-                    </span>
-                  )),
+                  value: (
+                    <ul className="agi-ds-linkgrid">
+                      {collection.articles.map((article) => (
+                        <li key={article.docId}>
+                          <Link href={article.href} className="agi-ds-link">
+                            {article.title}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ),
                 }))}
               />
             ) : (

@@ -434,6 +434,61 @@ describe('toPluginSection', () => {
     expect(result.sortOptions).toEqual(['name']);
   });
 
+  it('marks the most-installed verified plugins popular on the unfiltered all tab only', () => {
+    const many = Array.from({ length: 8 }, (_, index) =>
+      directoryEntry({
+        id: `plugin-${index}`,
+        slug: `plugin-${index}`,
+        name: `Plugin ${index}`,
+        installs: (index + 1) * 100,
+      }),
+    );
+    const unverified = directoryEntry({
+      id: 'unverified',
+      slug: 'unverified',
+      name: 'Unverified',
+      verified: false,
+      installs: 1_000_000,
+    });
+    const result = section({
+      marketplace: { entries: [...many, unverified], total: 9, nextCursor: null },
+      installs: installedByKey('plugin-7'),
+    });
+    const popular = result.entries
+      .filter((entry) => entry.popular === true)
+      .map((entry) => entry.id);
+    expect(popular).toEqual([
+      'plugin-1',
+      'plugin-2',
+      'plugin-3',
+      'plugin-4',
+      'plugin-5',
+      'plugin-6',
+    ]);
+
+    const searched = section({
+      query: { ...DEFAULT_PLUGIN_QUERY, search: 'plugin' },
+      marketplace: { entries: many, total: 8, nextCursor: null },
+    });
+    expect(searched.entries.some((entry) => entry.popular === true)).toBe(false);
+    const facet = section({
+      query: { ...DEFAULT_PLUGIN_QUERY, sourceId: 'marketplace' },
+      marketplace: { entries: many, total: 8, nextCursor: null },
+    });
+    expect(facet.entries.some((entry) => entry.popular === true)).toBe(false);
+  });
+
+  it('marks nothing popular when no plugin reports an install count', () => {
+    const result = section({
+      marketplace: {
+        entries: [directoryEntry({ installs: null, installCount: undefined })],
+        total: 1,
+        nextCursor: null,
+      },
+    });
+    expect(result.entries.some((entry) => entry.popular === true)).toBe(false);
+  });
+
   it('narrows the local groups by search and works-with while the marketplace page stays as served', () => {
     const searched = section({ query: { ...DEFAULT_PLUGIN_QUERY, search: 'data' } });
     expect(searched.entries.map((entry) => entry.id)).toEqual(['data-pack', 'frontend-design']);

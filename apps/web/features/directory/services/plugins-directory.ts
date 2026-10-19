@@ -98,6 +98,7 @@ import {
   PLUGIN_PUBLISHED_STATUS,
   PLUGIN_PUBLISHER_GROUP_LABEL,
   PLUGIN_PUBLISHER_KIND_LABELS,
+  PLUGIN_POPULAR_LIMIT,
   PLUGIN_PUBLISHER_MORE_HEADING_PREFIX,
   PLUGIN_PERMISSIONS_NOTICE_PREFIX,
   PLUGIN_PERMISSIONS_NOTICE_SUFFIX,
@@ -1159,6 +1160,36 @@ function facetGroup(facet: PluginSourceFacet): DirectoryGroup {
   return { id: facet, heading: PLUGIN_GROUP_HEADINGS[facet] ?? facet };
 }
 
+const EMPTY_POPULAR_IDS: ReadonlySet<string> = new Set();
+
+function requestIsUnfiltered(request: PluginDirectoryRequest): boolean {
+  return (
+    request.search === '' &&
+    request.worksWith === null &&
+    request.category === null &&
+    request.publisher === null
+  );
+}
+
+export function popularPluginIds(
+  entries: readonly PluginDirectoryEntry[],
+  installs: PluginInstallState,
+): ReadonlySet<string> {
+  const ranked = entries
+    .filter(
+      (entry) =>
+        entry.verified &&
+        (entry.installs ?? 0) > 0 &&
+        isPluginEntryWebInstallable(entry) &&
+        !isPluginInstalled(entry, installs),
+    )
+    .sort(
+      (left, right) =>
+        (right.installs ?? 0) - (left.installs ?? 0) || left.name.localeCompare(right.name),
+    );
+  return new Set(ranked.slice(0, PLUGIN_POPULAR_LIMIT).map((entry) => entry.id));
+}
+
 export function toPluginSection({
   query,
   builtin,
@@ -1255,15 +1286,23 @@ export function toPluginSection({
     }
   }
 
+  const grouped = !userSourceId && request.source === null;
+  const popularIds =
+    grouped && requestIsUnfiltered(request)
+      ? popularPluginIds([...builtin, ...partner, ...(marketplace?.entries ?? [])], installs)
+      : EMPTY_POPULAR_IDS;
   const entries = slices.flatMap((slice) =>
-    slice.entries.map((entry) => ({ ...entry, groupId: slice.group.id })),
+    slice.entries.map((entry) => ({
+      ...entry,
+      groupId: slice.group.id,
+      ...(popularIds.has(entry.id) ? { popular: true } : {}),
+    })),
   );
   const remote = slices.find((slice) => slice.remote);
   const localCount = slices
     .filter((slice) => !slice.remote)
     .reduce((sum, slice) => sum + slice.entries.length, 0);
   const total = remote ? (marketplace?.total ?? 0) + localCount : localCount;
-  const grouped = !userSourceId && request.source === null;
   const facetCount = request.source ? stats?.bySource[request.source] : stats?.totalPlugins;
   const countLabel = userSourceId
     ? pluginCountLabel(entries.length)

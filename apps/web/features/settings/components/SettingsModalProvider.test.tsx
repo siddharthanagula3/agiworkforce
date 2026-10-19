@@ -31,6 +31,10 @@ function Harness() {
   );
 }
 
+// Opening settings writes #settings/<section>; a hash left by one case would
+// open the modal on mount in the next.
+afterEach(() => window.history.replaceState(null, '', window.location.pathname));
+
 describe('SettingsModalProvider', () => {
   it('does not mount the settings modal until it is opened', async () => {
     const user = userEvent.setup();

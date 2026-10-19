@@ -13,6 +13,7 @@ import {
 import type { WorktreeCleanupFailure } from '@agiworkforce/types/protocol';
 import {
   allowDeveloperSessions,
+  isDesktopHost,
   listDeveloperModels,
   listDeveloperSessions,
   onDeveloperSessionEvent,
@@ -42,6 +43,13 @@ export interface LocalSessionsState {
   worktrees: boolean;
   groups: DeveloperSessionGroup[];
   loading: boolean;
+  /**
+   * The first complete answer is in: the list was read (or failed) from the
+   * shell, or there is no shell. Until then an empty `groups` means "not read
+   * yet", not "no such session"; on a cold load the first render is the
+   * server's, with no host and `loading` already false.
+   */
+  settled: boolean;
   adding: boolean;
   error: string | null;
   unavailable: string | null;
@@ -86,6 +94,7 @@ export function useLocalSessions(): LocalSessionsState {
   const worktrees = useDeveloperCapabilities(models).has('worktrees');
   const [groups, setGroups] = useState<DeveloperSessionGroup[]>([]);
   const [loading, setLoading] = useState(supported);
+  const [settled, setSettled] = useState(false);
   const [adding, setAdding] = useState(false);
   const [allowing, setAllowing] = useState<string | null>(null);
   const [allowRefusals, setAllowRefusals] = useState<Record<string, string>>({});
@@ -106,6 +115,7 @@ export function useLocalSessions(): LocalSessionsState {
   useEffect(() => {
     if (!supported) {
       setLoading(false);
+      if (!isDesktopHost()) setSettled(true);
       return;
     }
     let cancelled = false;
@@ -120,7 +130,9 @@ export function useLocalSessions(): LocalSessionsState {
         if (!cancelled) setError(toUserMessage(cause, LOCAL_CODE_COPY.readFailed));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        setLoading(false);
+        setSettled(true);
       });
     return () => {
       cancelled = true;
@@ -323,6 +335,7 @@ export function useLocalSessions(): LocalSessionsState {
     modelsFor,
     modelsStale,
     loading,
+    settled,
     adding,
     error,
     unavailable: sharedUnavailableLine(groups),

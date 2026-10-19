@@ -86,6 +86,9 @@ describe('desktop cloud update contract', () => {
 
     expect(result.available).toBe(false);
     expect(result.currentVersion).toBe('1.2.0');
+    expect(desktopUpdatePrompt(result).detail).toBe(
+      'Installed: 1.2.0\nNo newer version is available.',
+    );
   });
 
   it('sends the complete desktop handshake to the update feed', async () => {
