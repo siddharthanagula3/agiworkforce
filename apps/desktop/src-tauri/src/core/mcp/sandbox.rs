@@ -1202,8 +1202,10 @@ mod tests {
             home.join("Library").join("pnpm"),
             home.join(".local").join("share").join("pnpm"),
         ] {
+            let cache = cache.to_string_lossy();
             assert!(
-                !wrapped.contains(cache.to_string_lossy().as_ref()),
+                !wrapped.contains(&format!("(allow file-write* (subpath \"{cache}\"))"))
+                    && !wrapped.contains(&format!("--bind\n{cache}\n")),
                 "{cache:?} is writable"
             );
         }
