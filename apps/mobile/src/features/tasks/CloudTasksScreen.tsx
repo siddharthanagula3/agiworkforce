@@ -33,6 +33,7 @@ import { startCloudWorkRun, startWorkFailureMessage } from './startWork';
 import {
   cloudRunTitle,
   groupCloudRunsByRecency,
+  routineDraftFromRun,
   isCloudRunSteerable,
   CLOUD_RUN_FILTERS,
 } from './runPresentation';
@@ -351,6 +352,11 @@ export function CloudTasksScreen() {
         detail.run.conversationId ? titles.get(detail.run.conversationId) : undefined,
       )
     : SCREEN_TITLE;
+  const routineDraft = useMemo(() => {
+    const listed = detail ? runs.find((run) => run.id === detail.runId) : undefined;
+    const source = listed ?? detail?.run;
+    return source ? routineDraftFromRun(source) : null;
+  }, [detail, runs]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', setAppState);
@@ -436,6 +442,17 @@ export function CloudTasksScreen() {
     },
     [closeRun, router],
   );
+
+  const handleMakeRoutine = useCallback(() => {
+    if (!routineDraft) return;
+    closeRun();
+    router.push({
+      pathname: '/(app)/schedules/create' as const,
+      params: routineDraft.model
+        ? { prompt: routineDraft.prompt, model: routineDraft.model }
+        : { prompt: routineDraft.prompt },
+    });
+  }, [closeRun, routineDraft, router]);
 
   if (!FEATURES.cloudTasks) return <FeatureUnavailable feature="Cloud tasks" />;
 
@@ -588,6 +605,7 @@ export function CloudTasksScreen() {
         onResolveApproval={(decision) => void resolveApproval(decision)}
         onStop={() => void stopRun()}
         onOpenConversation={handleOpenConversation}
+        onMakeRoutine={routineDraft ? handleMakeRoutine : undefined}
       />
     </SafeAreaView>
   );

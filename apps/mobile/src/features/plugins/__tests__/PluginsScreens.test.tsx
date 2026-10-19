@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
+const mockConnectorsReleased = jest.fn(() => true);
 const mockParams: { id?: string } = {};
 const mockDirectory = jest.fn();
 const mockPlugin = jest.fn();
@@ -25,6 +26,10 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@clerk/expo', () => ({ getClerkInstance: () => null }));
+jest.mock('@agiworkforce/types', () => ({
+  ...jest.requireActual('@agiworkforce/types'),
+  connectorsReleased: () => mockConnectorsReleased(),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -166,6 +171,17 @@ describe('mobile plugins', () => {
 
     fireEvent.press(getByText('Install'));
     await waitFor(() => expect(mockInstall).toHaveBeenCalledWith('mail'));
+  });
+
+  it('does not offer to connect while connectors are not released', async () => {
+    mockConnectorsReleased.mockReturnValue(false);
+    mockParams.id = 'mail';
+    mockPlugin.mockResolvedValue(MAIL);
+    const { findByText, queryByLabelText, getAllByText } = render(<PluginDetailScreen />);
+    expect(await findByText('Security scan')).toBeTruthy();
+    expect(queryByLabelText('Connect slack')).toBeNull();
+    expect(getAllByText('Coming soon').length).toBe(2);
+    mockConnectorsReleased.mockReturnValue(true);
   });
 
   it('asks before removing and offers to remove dependents together', async () => {

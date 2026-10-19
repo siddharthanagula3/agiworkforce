@@ -39,6 +39,8 @@ export interface Schedule {
   timeOfDay: string;
   timezone: string;
   isActive: boolean;
+  agentId?: string | null;
+  connectors?: string[] | null;
   lastRunAt: string | null;
   nextRunAt: string | null;
   lastRunStatus: 'success' | 'failed' | 'pending' | null;

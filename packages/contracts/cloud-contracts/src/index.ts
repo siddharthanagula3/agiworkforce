@@ -84,3 +84,4 @@ export * from './workspaces';
 export * from './agents';
 export * from './agent-drafts';
 export * from './plugin-directory';
+export * from './trigger-sources';

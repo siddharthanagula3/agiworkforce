@@ -75,6 +75,7 @@ export function CloudRunDetailSheet({
   onResolveApproval,
   onStop,
   onOpenConversation,
+  onMakeRoutine,
 }: {
   detail: CloudRunDetail | null;
   title: string;
@@ -82,6 +83,7 @@ export function CloudRunDetailSheet({
   onResolveApproval: (decision: ManagedCloudAgentRunApprovalDecision) => void;
   onStop: () => void;
   onOpenConversation: (conversationId: string) => void;
+  onMakeRoutine?: () => void;
 }) {
   const colors = useThemeColors();
   const answerInput = useCloudTaskStore((state) => state.answerInput);
@@ -436,6 +438,15 @@ export function CloudRunDetailSheet({
                 variant="outline"
                 accessibilityLabel="Open the conversation this task belongs to"
                 onPress={() => onOpenConversation(conversationId)}
+              />
+            ) : null}
+
+            {onMakeRoutine ? (
+              <Button
+                title="Make it a routine"
+                variant="outline"
+                accessibilityHint="Opens a new schedule that runs this task's prompt on a timer"
+                onPress={onMakeRoutine}
               />
             ) : null}
 

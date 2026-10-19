@@ -12,6 +12,8 @@ import {
   type PluginVersionsWire,
 } from '@agiworkforce/cloud-contracts';
 
+import { CONNECTORS_COMING_SOON_LABEL, connectorsReleased } from '@agiworkforce/types';
+
 import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
@@ -410,9 +412,15 @@ export function PluginDetailScreen() {
                       <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
                         {connector}
                       </Text>
-                      <MetaText>{isConnected ? 'Connected' : 'Not connected'}</MetaText>
+                      <MetaText>
+                        {connectorsReleased()
+                          ? isConnected
+                            ? 'Connected'
+                            : 'Not connected'
+                          : CONNECTORS_COMING_SOON_LABEL}
+                      </MetaText>
                     </View>
-                    {!isConnected ? (
+                    {!isConnected && connectorsReleased() ? (
                       <Button
                         title="Connect"
                         size="sm"

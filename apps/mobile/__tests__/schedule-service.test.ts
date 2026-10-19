@@ -112,6 +112,8 @@ describe('mobile schedule service', () => {
         timeOfDay: '09:00',
         timezone: 'America/Chicago',
         isActive: true,
+        agentId: null,
+        connectors: null,
         lastRunAt: '2026-07-17T14:00:00.000Z',
         nextRunAt: '2026-07-18T14:00:00.000Z',
         lastRunStatus: 'success',

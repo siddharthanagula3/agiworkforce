@@ -77,6 +77,8 @@ function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
     timeOfDay: typeof timeOfDay === 'string' ? timeOfDay : '09:00',
     timezone: task.timezone,
     isActive: task.isEnabled,
+    agentId: task.agentId ?? null,
+    connectors: task.connectors ?? null,
     lastRunAt: task.lastExecutedAt,
     nextRunAt: task.nextExecutionAt,
     lastRunStatus:
