@@ -8,13 +8,25 @@ import { act, type ReactElement } from 'react';
 const hoisted = vi.hoisted(() => ({
   readHighlightCache: vi.fn<(code: string, language: string) => unknown>(),
   highlightToLines: vi.fn<(code: string, language: string) => Promise<unknown>>(),
+  codeTheme: 'github',
+  codeThemeListeners: new Set<() => void>(),
 }));
 
 vi.mock('../shikiHighlighter', () => ({
   readHighlightCache: (code: string, language: string) =>
     hoisted.readHighlightCache(code, language),
   highlightToLines: (code: string, language: string) => hoisted.highlightToLines(code, language),
+  getCodeTheme: () => hoisted.codeTheme,
+  subscribeCodeTheme: (listener: () => void) => {
+    hoisted.codeThemeListeners.add(listener);
+    return () => hoisted.codeThemeListeners.delete(listener);
+  },
 }));
+
+function switchCodeTheme(theme: string): void {
+  hoisted.codeTheme = theme;
+  for (const listener of hoisted.codeThemeListeners) listener();
+}
 
 const { HighlightedCode } = await import('../HighlightedCode');
 
@@ -183,6 +195,22 @@ describe('HighlightedCode, one tokenise per distinct block', () => {
     expect(hoisted.highlightToLines).toHaveBeenCalledExactlyOnceWith(CODE, LANGUAGE);
 
     view.unmount();
+  });
+
+  it('tokenises again when the user picks another code theme', async () => {
+    hoisted.highlightToLines.mockResolvedValue(TOKENS);
+
+    const view = mountClient(
+      <HighlightedCode code={CODE} language={LANGUAGE} enabled className={CLASS_NAME} />,
+    );
+    await settle();
+    await act(async () => switchCodeTheme('catppuccin'));
+    await settle();
+
+    expect(hoisted.highlightToLines).toHaveBeenCalledTimes(2);
+
+    view.unmount();
+    switchCodeTheme('github');
   });
 
   it('takes a cache hit without calling the highlighter at all', async () => {
