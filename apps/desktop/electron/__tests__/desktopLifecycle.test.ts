@@ -627,6 +627,40 @@ describe('opening a local session', () => {
   });
 });
 
+describe('notifications the page asks for', () => {
+  const caller = { senderFrame: { url: 'https://agiworkforce.com/chat' } } as {
+    senderFrame: { url: string };
+    sender?: unknown;
+  };
+  caller.sender = { mainFrame: caller.senderFrame };
+
+  function windowThat(focused: boolean, visible = true) {
+    return { isDestroyed: () => false, isVisible: () => visible, isFocused: () => focused };
+  }
+
+  async function ask(window: ReturnType<typeof windowThat> | null): Promise<number> {
+    const notify = ipcHandlers.get(ELECTRON_IPC_CHANNELS.notify);
+    if (!notify) throw new Error('the notify channel was never registered');
+    const created = vi.mocked(electron.Notification);
+    created.mockClear();
+    vi.mocked(electron.BrowserWindow.fromWebContents).mockReturnValueOnce(
+      window as unknown as null,
+    );
+    await notify(caller, { title: 'Reply ready', body: 'The sea is wide.' });
+    return created.mock.calls.length;
+  }
+
+  it('shows one when the window that asked is behind another app, hidden or minimized', async () => {
+    expect(await ask(windowThat(false))).toBe(1);
+    expect(await ask(windowThat(false, false))).toBe(1);
+    expect(await ask(null)).toBe(1);
+  });
+
+  it('stays quiet while the user is looking at the window that asked', async () => {
+    expect(await ask(windowThat(true))).toBe(0);
+  });
+});
+
 describe('the update buttons', () => {
   const trustedCaller = () => {
     const frame = { url: 'https://agiworkforce.com/chat' };

@@ -418,11 +418,17 @@ function registerIpcHandlers(): void {
     }
   });
 
+  // The page cannot tell whether its window is in front: Chromium keeps a
+  // hidden or minimized shell window "visible" to it, so the page asks and the
+  // shell, which knows the window's real state, stays quiet while the user is
+  // looking at the window that asked.
   ipcMain.handle(ELECTRON_IPC_CHANNELS.notify, async (event, request) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     const req = (request ?? {}) as ElectronNotifyRequest;
     if (typeof req.title !== 'string' || req.title === '') return;
     if (!Notification.isSupported()) return;
+    const asking = BrowserWindow.fromWebContents(event.sender);
+    if (asking && !asking.isDestroyed() && asking.isVisible() && asking.isFocused()) return;
     const notification = createNativeNotification({
       title: req.title,
       ...(typeof req.body === 'string' ? { body: req.body } : {}),
