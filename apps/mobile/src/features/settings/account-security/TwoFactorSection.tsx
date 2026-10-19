@@ -28,6 +28,7 @@ import {
   type AccountSecurityStatus,
 } from './service';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 type Stage =
   | { name: 'idle' }
@@ -226,7 +227,7 @@ export function TwoFactorSection({
       >
         <KeyboardAvoidingView
           accessibilityViewIsModal
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={keyboardAvoidingBehavior('modal')}
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         >
           <ScrollView

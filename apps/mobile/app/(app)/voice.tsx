@@ -45,6 +45,7 @@ import {
   voiceCaptureErrorMessage,
   type VoiceConversationPhase as Phase,
 } from '@/src/features/voice/hooks/useVoiceConversation';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
@@ -350,7 +351,7 @@ export default function VoiceScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardContent}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('screen')}
       >
         <View style={styles.content}>
           <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel)}</Text>
