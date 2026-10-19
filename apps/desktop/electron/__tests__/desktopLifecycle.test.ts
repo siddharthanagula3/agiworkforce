@@ -309,6 +309,7 @@ function settle(): Promise<void> {
 
 function pageLoaded(): void {
   for (const listener of windowHandlers.get('did-finish-load') ?? []) listener();
+  for (const listener of windowHandlers.get('did-stop-loading') ?? []) listener();
 }
 
 function deepLinksSent(): unknown[] {
@@ -321,6 +322,9 @@ describe('deep links held until the renderer is ready', () => {
   it('replays links held from the last run, then new ones, in order once the page loads', () => {
     appHandlers.get('open-url')?.({ preventDefault: vi.fn() }, 'agiworkforce-cloud://chat/new-1');
     appHandlers.get('open-url')?.({ preventDefault: vi.fn() }, 'agiworkforce-cloud://chat/new-2');
+    expect(deepLinksSent()).toEqual([]);
+
+    for (const listener of windowHandlers.get('did-finish-load') ?? []) listener();
     expect(deepLinksSent()).toEqual([]);
 
     loading = false;

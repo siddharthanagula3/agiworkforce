@@ -132,7 +132,7 @@ import {
   type GuardPrompt,
   type LiveWork,
 } from './quitGuard';
-import { installAppMenu } from './appMenu';
+import { installAppMenu, installDockMenu } from './appMenu';
 import { readBrowserSignInLink } from './browserSignIn';
 import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
@@ -172,6 +172,7 @@ import {
 } from './garnishCore';
 import {
   configureQuickAskBridge,
+  configureQuickAskHandoff,
   destroyQuickAsk,
   toggleQuickAsk,
   warmUpQuickAsk,
@@ -195,6 +196,7 @@ import {
   accountFingerprint,
   adoptAccount,
   frameWorthRemembering,
+  isRestorableRoute,
   rememberFrame,
   rememberRoute,
   resolveWindowRestore,
@@ -859,8 +861,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     if (!win.isDestroyed()) win.show();
   });
 
+  // Not `did-finish-load`: the app's page still reports loading then, while its
+  // sign-in frames finish, so a link held for the first load waited for a load
+  // that never came and the app opened on its home page instead.
   if (options.primary) {
-    win.webContents.on('did-finish-load', flushDeepLinks);
+    win.webContents.on('did-stop-loading', flushDeepLinks);
   }
 
   // Chromium's zoom is per origin and per session, so it survives a navigation
@@ -1041,7 +1046,19 @@ function copyDiagnostics(): void {
  * survives the click.
  */
 function openLocalSession(rootId: string, threadId: string): void {
-  const route = localSessionPath(rootId, threadId);
+  openRoute(localSessionPath(rootId, threadId));
+}
+
+/**
+ * A sign-in or other one-shot flow the panel was sent to is not replayed in the
+ * main window, which already shows its own sign-in when the account is gone.
+ */
+function openRouteFromQuickAsk(route: string): void {
+  if (isRestorableRoute(route)) openRoute(route);
+  else showMainWindow();
+}
+
+function openRoute(route: string): void {
   const showing = liveWindows().find((entry) => entry.route === route);
   if (showing) {
     focusWindow(showing.win.id);
@@ -1724,6 +1741,11 @@ if (!hasSingleInstanceLock) {
     trayComputerUseState = computerUseTrayState();
     syncTray();
     installMenu();
+    installDockMenu({
+      newChat: garnishHandlers.onNewChat,
+      newWindow: openNewWindow,
+      toggleQuickAsk: garnishHandlers.onQuickAsk,
+    });
     // The Window menu says whether the front window is on a conversation, so it
     // is rebuilt when the front window changes rather than once at launch.
     app.on('browser-window-focus', installMenu);
@@ -1794,6 +1816,7 @@ if (!hasSingleInstanceLock) {
         `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
       ],
     });
+    configureQuickAskHandoff(openRouteFromQuickAsk);
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     if (autoUpdateSupported()) startAutoUpdate(installedMacArchitecture(), announceUpdateReady);
     void startPairingBridge();
