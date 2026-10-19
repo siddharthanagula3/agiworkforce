@@ -67,12 +67,6 @@ function put(body: unknown, headers: Record<string, string> = {}): NextRequest {
   });
 }
 
-function updateCall(): [string, unknown[]] | undefined {
-  return (mocks.query.mock.calls as [string, unknown[]][]).find(([sql]) =>
-    /update web_conversations/.test(sql),
-  );
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
