@@ -5,6 +5,10 @@ import { isTextAttachmentMeta, type ProjectKnowledgeFile } from '@agiworkforce/t
 import { FileTextPreview, MarkdownContent, useFileTextPreview } from '@agiworkforce/unified-chat';
 import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import { toast } from 'sonner';
+import {
+  PptxFilePreview,
+  isPptxFile,
+} from '@features/chat/components/artifacts/presentation/PptxFilePreview';
 
 interface Props {
   file: ProjectKnowledgeFile | null;
@@ -238,10 +242,13 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
 
   const isImage = file.mimeType.startsWith('image/');
   const isPdf = file.mimeType === 'application/pdf';
+  const isPptx = isPptxFile(file.fileName, file.mimeType);
   const ext = fileExt(file.fileName);
-  const isExtracted = file.textPreview === true;
+  const isExtracted = file.textPreview === true && !isPptx;
   const isText =
-    !isExtracted && (isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG);
+    !isExtracted &&
+    !isPptx &&
+    (isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG);
 
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -409,6 +416,14 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             />
           )}
 
+          {isPptx && (
+            <PptxFilePreview
+              source={file.storageUri}
+              fileName={file.fileName}
+              byteCount={file.byteCount}
+            />
+          )}
+
           {isExtracted && <ExtractedTextPreview storageUri={file.storageUri} />}
 
           {isText && (
@@ -419,7 +434,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             />
           )}
 
-          {!isImage && !isPdf && !isText && !isExtracted && (
+          {!isImage && !isPdf && !isPptx && !isText && !isExtracted && (
             <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
               <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
                 Preview is not available for this file type.
