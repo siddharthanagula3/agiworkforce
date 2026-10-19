@@ -204,7 +204,8 @@ describe('DrawerContent', () => {
     const local = renderDrawer();
     expect(local.queryByText('Schedules')).toBeNull();
     expect(local.queryByText('AGI Work')).toBeNull();
-    expect(local.queryByText('Skills')).toBeNull();
+    expect(local.queryByText('Customize')).toBeNull();
+    expect(local.queryByText('Agents')).toBeNull();
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
@@ -218,7 +219,9 @@ describe('DrawerContent', () => {
 
     expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Skills. Cloud')).toBeTruthy();
+    expect(cloud.getByLabelText('Customize. Cloud')).toBeTruthy();
+    expect(cloud.getByLabelText('Agents. Cloud')).toBeTruthy();
+    expect(cloud.getByLabelText('Published sites. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     expect(cloud.queryByText('Launch demo')).toBeNull();
   });

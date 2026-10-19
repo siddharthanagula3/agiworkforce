@@ -53,6 +53,30 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
     keywords: ['integrations', 'apps', 'mcp'],
   },
   { route: '/(app)/skills', title: 'Skills', section: 'Go to', keywords: ['plugins'] },
+  {
+    route: '/(app)/customize',
+    title: 'Customize',
+    section: 'Go to',
+    keywords: ['skills', 'plugins', 'connectors'],
+  },
+  {
+    route: '/(app)/plugins',
+    title: 'Plugins',
+    section: 'Go to',
+    keywords: ['marketplace', 'extensions'],
+  },
+  {
+    route: '/(app)/agents',
+    title: 'Agents',
+    section: 'Go to',
+    keywords: ['gpts', 'assistants', 'custom'],
+  },
+  {
+    route: '/(app)/sites',
+    title: 'Published sites',
+    section: 'Go to',
+    keywords: ['publish', 'artifacts', 'apps'],
+  },
   { route: '/(app)/models', title: 'Models', section: 'Go to', keywords: ['model picker'] },
   {
     route: '/(app)/notifications',

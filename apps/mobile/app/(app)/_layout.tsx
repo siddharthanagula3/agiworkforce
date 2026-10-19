@@ -52,6 +52,15 @@ export default function AppLayout() {
         <Drawer.Screen name="github/installed" options={HIDDEN} />
         <Drawer.Screen name="continuity/index" options={HIDDEN} />
         <Drawer.Screen name="skills/index" options={HIDDEN} />
+        <Drawer.Screen name="skills/[name]" options={HIDDEN} />
+        <Drawer.Screen name="customize/index" options={HIDDEN} />
+        <Drawer.Screen name="plugins/index" options={HIDDEN} />
+        <Drawer.Screen name="plugins/[id]" options={HIDDEN} />
+        <Drawer.Screen name="plugins/sources" options={HIDDEN} />
+        <Drawer.Screen name="sites/index" options={HIDDEN} />
+        <Drawer.Screen name="sites/[token]" options={HIDDEN} />
+        <Drawer.Screen name="projects/notebook/[id]" options={HIDDEN} />
+        <Drawer.Screen name="schedules/triggers/[id]" options={HIDDEN} />
         <Drawer.Screen name="reports/index" options={HIDDEN} />
 
         <Drawer.Screen name="chat/[id]" options={HIDDEN} />

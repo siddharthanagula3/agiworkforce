@@ -4,7 +4,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
-import { ArrowLeft, Menu, Settings2 } from 'lucide-react-native';
+import { ArrowLeft, FileText, Menu, Settings2 } from 'lucide-react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
@@ -291,6 +291,23 @@ export default function ProjectDetailScreen() {
           {screenTitle}
         </Text>
 
+        {isCloudProject && appMode === 'cloud' ? (
+          <PressableBox
+            testID="project-detail-notebook"
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/projects/notebook/[id]',
+                params: { id, name: screenTitle },
+              })
+            }
+            style={{ padding: 8, borderRadius: 8 }}
+            accessibilityLabel="Project notebook"
+            accessibilityHint="Create study guides, briefings, quizzes and more from this project's sources"
+            accessibilityRole="button"
+          >
+            <FileText size={21} color={colors.textSecondary} />
+          </PressableBox>
+        ) : null}
         {isCloudProject && appMode === 'cloud' ? (
           <PressableBox
             testID="project-detail-settings"
