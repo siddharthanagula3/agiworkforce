@@ -24,14 +24,14 @@ use agiworkforce_protocol::developer_session::{
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
     ThreadReconnectResponse, ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
-    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
-    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
-    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
-    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
+    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionParams,
+    ThreadSideQuestionResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
+    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, UserInputResponseParams,
+    WorktreeApplyParams, WorktreeApplyResponse, WorktreeArchive, WorktreeCreateParams,
+    WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse,
+    WorktreeListResponse, WorktreePinParams, WorktreeRemoveParams, WorktreeSetupRunParams,
+    WorktreeSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
@@ -173,6 +173,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: ThreadIdParams,
     ) -> Result<ThreadCheckpointsResponse, DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_CHECKPOINTS))
+    }
+
+    async fn side_question(
+        &self,
+        _params: ThreadSideQuestionParams,
+    ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_SIDE_QUESTION))
     }
 
     async fn rewind_thread(
@@ -797,6 +804,11 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::CHECKPOINT_STAGE, MethodEffect::ChangesState),
     (method::THREAD_REVERT, MethodEffect::ChangesState),
     (method::THREAD_CHECKPOINTS, MethodEffect::ReadOnly),
+    (method::THREAD_SIDE_QUESTION, MethodEffect::ChangesState),
+    (
+        method::THREAD_SIDE_QUESTION_DELTA,
+        MethodEffect::Notification,
+    ),
     (method::THREAD_SEARCH, MethodEffect::ReadOnly),
     (method::WORKTREE_LIST, MethodEffect::ReadOnly),
     (method::GIT_PULL_REQUEST_PLAN, MethodEffect::ReadOnly),
@@ -1314,6 +1326,16 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .list_checkpoints(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_SIDE_QUESTION => {
+                let params = match parse_params::<ThreadSideQuestionParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .side_question(params)
                     .await
                     .map(serde_json::to_value)
             }

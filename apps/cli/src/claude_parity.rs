@@ -1824,6 +1824,17 @@ pub fn render_keybindings() -> String {
     .join("\n")
 }
 
+pub fn init_prompt(arg: &str) -> String {
+    let focus = if arg.trim().is_empty() {
+        String::new()
+    } else {
+        format!(" Pay particular attention to: {}.", arg.trim())
+    };
+    format!(
+        "Write AGENTS.md at the repository root for agents working in this codebase. Read the manifests, build and test configuration, CI workflows, the main source layout and any existing CLAUDE.md, AGENTS.md or contributor docs first. Record the exact commands to build, lint, typecheck and test, the architecture an agent cannot infer from one file, the conventions the code follows, and anything that must never be done. Keep it short and specific to this repository; do not invent commands or describe what you did not find. If AGENTS.md already exists, improve it in place instead of replacing what it says.{focus}"
+    )
+}
+
 pub fn recap_prompt(arg: &str) -> String {
     let focus = if arg.trim().is_empty() {
         "this session"

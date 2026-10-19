@@ -90,4 +90,9 @@ export type AppServerCapabilities = {
    */
   mcpApproval?: boolean;
   managedWorktrees?: boolean;
+  /**
+   * `thread/sideQuestion` answers from a thread's conversation without
+   * adding to it.
+   */
+  sideQuestion?: boolean;
 };
