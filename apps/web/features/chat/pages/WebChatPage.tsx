@@ -1519,7 +1519,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
     next.delete(SETTINGS_DEEP_LINK_QUERY_KEY);
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/chat'), { scroll: false });
+    const base = qs ? `${pathname}?${qs}` : (pathname ?? '/chat');
+    router.replace(`${base}${window.location.hash}`, { scroll: false });
   }, [settingsSectionParam, searchParams, openSettings, router, pathname]);
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
