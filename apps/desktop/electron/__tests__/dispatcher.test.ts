@@ -2957,6 +2957,31 @@ describe('dispatch, developer turns', () => {
     expect(startDeveloperTurn).not.toHaveBeenCalled();
   });
 
+  it('defaults the Bypass permissions question to Cancel, and runs nothing it was not allowed', async () => {
+    for (const [index, response] of [0, -1, 2, 7].entries()) {
+      showMessageBox.mockResolvedValueOnce({ response, checkboxChecked: false });
+      const answered = await dispatch(window, 'developer_turn_start', {
+        rootId: root.id,
+        threadId: `thread-closed-${index}`,
+        text: 'go',
+        agentMode: 'bypass',
+      });
+      expect(answered, `response ${response}`).toMatchObject({
+        ok: false,
+        error: { code: 'cancelled' },
+      });
+    }
+
+    const options = (showMessageBox.mock.calls[0] as unknown[])[1] as {
+      buttons: string[];
+      defaultId: number;
+      cancelId: number;
+    };
+    expect(options.buttons[options.defaultId]).toBe('Cancel');
+    expect(options.buttons[options.cancelId]).toBe('Cancel');
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+
   it('passes an answer or a cancel to a question, and refuses anything else', async () => {
     const ids = { ...turn, turnId: 'turn-1', requestId: 'q-1' };
 
