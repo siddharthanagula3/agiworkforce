@@ -669,24 +669,34 @@ class PdfDocumentRenderer {
   private readonly kit: PdfTextKit;
   private readonly bottom: number;
   private readonly contentWidth: number;
-  private y = PAGE_MARGIN;
+  private readonly margin: number;
+  private readonly textColor: Rgb;
+  private y: number;
   private pendingMarker: PendingMarker | null = null;
 
   constructor(
     private readonly pdf: jsPDF,
     private readonly direction: DocumentDirection,
+    options: { margin?: number; textColor?: Rgb } = {},
   ) {
+    this.margin = options.margin ?? PAGE_MARGIN;
+    this.textColor = options.textColor ?? TEXT_COLOR;
+    this.y = this.margin;
     this.kit = new PdfTextKit(pdf);
-    this.bottom = pdf.internal.pageSize.getHeight() - PAGE_MARGIN;
-    this.contentWidth = pdf.internal.pageSize.getWidth() - PAGE_MARGIN * 2;
+    this.bottom = pdf.internal.pageSize.getHeight() - this.margin;
+    this.contentWidth = pdf.internal.pageSize.getWidth() - this.margin * 2;
+  }
+
+  cursor(): number {
+    return this.y;
   }
 
   private rootContext(): BlockContext {
     return {
-      x: PAGE_MARGIN,
+      x: this.margin,
       width: this.contentWidth,
       bars: [],
-      color: TEXT_COLOR,
+      color: this.textColor,
       listDepth: 0,
       direction: this.direction,
     };
@@ -694,11 +704,11 @@ class PdfDocumentRenderer {
 
   private newPage(): void {
     this.pdf.addPage();
-    this.y = PAGE_MARGIN;
+    this.y = this.margin;
   }
 
   private ensureSpace(height: number): void {
-    if (this.y + height > this.bottom && this.y > PAGE_MARGIN) this.newPage();
+    if (this.y + height > this.bottom && this.y > this.margin) this.newPage();
   }
 
   private fill(color: Rgb, x: number, y: number, width: number, height: number): void {
@@ -945,7 +955,7 @@ class PdfDocumentRenderer {
     );
     const lines = breakLines(this.kit, tokens, context.width, false, size);
     const height = lines.reduce((sum, line) => sum + line.height, 0);
-    if (this.y > PAGE_MARGIN) this.y += HEADING_GAP;
+    if (this.y > this.margin) this.y += HEADING_GAP;
     this.ensureSpace(height + BODY_SIZE * LINE_HEIGHT * 2);
     this.flowLines(lines, context, startAlign(context));
   }
@@ -1084,7 +1094,7 @@ class PdfDocumentRenderer {
     repeatHeader: (() => void) | null,
   ): void {
     const cursors = cells.map(() => 0);
-    const pageContent = this.bottom - PAGE_MARGIN;
+    const pageContent = this.bottom - this.margin;
     const remainingHeight = (cell: readonly Line[], from: number) =>
       cell.slice(from).reduce((sum, line) => sum + line.height, 0);
     let first = true;
@@ -1097,7 +1107,7 @@ class PdfDocumentRenderer {
       if (
         needed > available &&
         !onFreshPage &&
-        this.y > PAGE_MARGIN &&
+        this.y > this.margin &&
         (needed <= pageContent || available < MIN_TABLE_SLICE)
       ) {
         this.newPage();
@@ -1161,5 +1171,71 @@ export function renderPdfDocument(blocks: readonly DocumentBlock[], header: PdfH
   const renderer = new PdfDocumentRenderer(pdf, documentDirection(blocks, header.title));
   renderer.renderHeader(header);
   renderer.renderDocument(blocks);
+  return pdf;
+}
+
+export type PdfRgb = Rgb;
+
+export interface PdfArea {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface PdfSlidePalette {
+  readonly background: Rgb;
+  readonly text: Rgb;
+  readonly muted: Rgb;
+}
+
+export interface PdfSlide {
+  readonly blocks: readonly DocumentBlock[];
+  readonly drawVisuals?: (pdf: jsPDF, area: PdfArea, page: PdfArea) => void;
+}
+
+export const PDF_SLIDE_WIDTH = 640;
+export const PDF_SLIDE_HEIGHT = 360;
+const SLIDE_MARGIN = 36;
+const SLIDE_FOOTER_SIZE = 7.5;
+const SLIDE_FOOTER_GAP = 14;
+
+export function renderPdfSlides(
+  slides: readonly PdfSlide[],
+  options: { title: string; palette: PdfSlidePalette },
+): jsPDF {
+  const format: [number, number] = [PDF_SLIDE_WIDTH, PDF_SLIDE_HEIGHT];
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format });
+  const page: PdfArea = { x: 0, y: 0, width: PDF_SLIDE_WIDTH, height: PDF_SLIDE_HEIGHT };
+  const { background, text, muted } = options.palette;
+  slides.forEach((slide, index) => {
+    if (index > 0) pdf.addPage(format, 'landscape');
+    pdf.setFillColor(background[0], background[1], background[2]);
+    pdf.rect(0, 0, PDF_SLIDE_WIDTH, PDF_SLIDE_HEIGHT, 'F');
+    const renderer = new PdfDocumentRenderer(pdf, documentDirection(slide.blocks, options.title), {
+      margin: SLIDE_MARGIN,
+      textColor: text,
+    });
+    renderer.renderDocument(slide.blocks);
+    const top = slide.blocks.length > 0 ? renderer.cursor() + BLOCK_GAP : SLIDE_MARGIN;
+    slide.drawVisuals?.(
+      pdf,
+      {
+        x: SLIDE_MARGIN,
+        y: top,
+        width: PDF_SLIDE_WIDTH - SLIDE_MARGIN * 2,
+        height: Math.max(0, PDF_SLIDE_HEIGHT - SLIDE_MARGIN - SLIDE_FOOTER_GAP - top),
+      },
+      page,
+    );
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(SLIDE_FOOTER_SIZE);
+    pdf.setTextColor(muted[0], muted[1], muted[2]);
+    const baseline = PDF_SLIDE_HEIGHT - SLIDE_MARGIN / 2;
+    pdf.text(options.title, SLIDE_MARGIN, baseline);
+    pdf.text(`${index + 1} / ${slides.length}`, PDF_SLIDE_WIDTH - SLIDE_MARGIN, baseline, {
+      align: 'right',
+    });
+  });
   return pdf;
 }

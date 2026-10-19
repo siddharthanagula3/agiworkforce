@@ -89,6 +89,10 @@ impl ManagedSessionStore {
         Ok(Self::new(CliConfig::config_dir()?))
     }
 
+    pub fn base_dir(&self) -> &Path {
+        &self.base_dir
+    }
+
     pub fn create(&self, messages: Vec<Message>) -> Result<ResolvedManagedSessionReference> {
         create_managed_session_in(&self.base_dir, messages)
     }
@@ -749,6 +753,7 @@ mod tests {
             routing_authority: None,
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -785,6 +790,7 @@ mod tests {
             routing_authority: None,
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));

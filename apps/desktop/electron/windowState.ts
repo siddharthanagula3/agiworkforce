@@ -92,6 +92,8 @@ function normalizeFrame(raw: unknown): WindowFrameState | null {
  * request that produced it.
  */
 const UNRESTORABLE_ROUTE_PREFIXES = [
+  '/login',
+  '/auth/',
   '/sign-in',
   '/sign-up',
   '/sign-out',

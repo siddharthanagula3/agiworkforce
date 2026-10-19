@@ -21,6 +21,7 @@ use envelope::{DispatchSession, VerifyError};
 use host::{CodeHost, Outgoing};
 
 const PAIR_PATH: &str = "/api/pair/initiate";
+const ACTIVITY_PATH: &str = "/api/code/local-sessions/activity";
 const PAIRING_TIMEOUT: Duration = Duration::from_secs(15);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(25);
 const RECONNECT_BASE: Duration = Duration::from_secs(1);
@@ -556,6 +557,114 @@ impl<H: DeveloperSessionHost> Relay<H> {
     }
 }
 
+fn activity_of(
+    root_id: &str,
+    notification: &agiworkforce_protocol::developer_session::AppServerNotification,
+    title: impl FnOnce(&str) -> Option<String>,
+) -> Option<Value> {
+    let params = &notification.params;
+    let field = |name: &str| params.get(name).and_then(Value::as_str).map(str::to_string);
+    let (event, approval_id) = match notification.method.as_str() {
+        "approval/requested" => ("approval_required", Some(field("requestId")?)),
+        "turn/completed" => ("completed", None),
+        "turn/failed" => ("failed", None),
+        _ => return None,
+    };
+    let thread_id = field("threadId")?;
+    let mut activity = json!({
+        "event": event,
+        "rootId": root_id,
+        "threadId": thread_id,
+        "turnId": field("turnId")?,
+        "sessionTitle": title(&thread_id),
+    });
+    if let Some(approval_id) = approval_id {
+        activity["approvalId"] = Value::String(approval_id);
+    }
+    Some(activity)
+}
+
+fn session_title(thread_id: &str) -> Option<String> {
+    crate::runtime::session_control::ManagedSessionStore::user_config()
+        .ok()?
+        .resolve(
+            crate::runtime::session_control::ManagedSessionReference::SessionId(
+                thread_id.to_string(),
+            ),
+        )
+        .ok()?
+        .summary
+        .title
+}
+
+async fn report_activity(
+    mut notifications: tokio::sync::broadcast::Receiver<
+        agiworkforce_protocol::developer_session::AppServerNotification,
+    >,
+    root_id: String,
+    stop: Stop,
+) {
+    let privacy = crate::config::CliConfig::load_merged()
+        .or_else(|_| crate::config::CliConfig::load_without_project())
+        .unwrap_or_default()
+        .account_privacy_mode();
+    let Ok(client) = crate::cloud::CloudClient::connect(privacy) else {
+        return;
+    };
+    loop {
+        let notification = match or_stopped(&stop, notifications.recv()).await {
+            Step::Stopped | Step::Done(Err(tokio::sync::broadcast::error::RecvError::Closed)) => {
+                return
+            }
+            Step::Done(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
+            Step::Done(Ok(notification)) => notification,
+        };
+        let Some(activity) = activity_of(&root_id, &notification, session_title) else {
+            continue;
+        };
+        if let Err(error) = client.post::<_, Value>(ACTIVITY_PATH, &activity).await {
+            tracing::debug!("[remote-control] session activity was not reported: {error}");
+        }
+    }
+}
+
+/// Without colour the dark modules are left as the background, which only
+/// reads on a dark terminal.
+pub fn pairing_qr(pairing_line: &str) -> Option<String> {
+    render_qr(
+        pairing_line,
+        colored::control::SHOULD_COLORIZE.should_colorize(),
+    )
+}
+
+pub(crate) fn render_qr(text: &str, colour: bool) -> Option<String> {
+    use colored::Colorize;
+    use qrcode::render::unicode::Dense1x2;
+
+    let code = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::L).ok()?;
+    let mut render = code.render::<Dense1x2>();
+    render.quiet_zone(true);
+    if !colour {
+        return Some(
+            render
+                .dark_color(Dense1x2::Light)
+                .light_color(Dense1x2::Dark)
+                .build(),
+        );
+    }
+    let drawn = render
+        .dark_color(Dense1x2::Dark)
+        .light_color(Dense1x2::Light)
+        .build();
+    Some(
+        drawn
+            .lines()
+            .map(|line| line.black().on_white().to_string())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
 fn print_status(status: RemoteControlStatus) {
     match status {
         RemoteControlStatus::Waiting {
@@ -563,11 +672,20 @@ fn print_status(status: RemoteControlStatus) {
             pairing_line,
         } => {
             println!("Remote Control is on for {folder}.");
-            println!("On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:");
+            match pairing_qr(&pairing_line) {
+                Some(qr) => {
+                    println!("On your phone, open AGI Workforce, go to Remote, tap Scan and point it at this code:");
+                    println!();
+                    println!("{qr}");
+                    println!();
+                    println!("Or choose to enter the code on the phone and paste:");
+                }
+                None => println!("On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:"),
+            }
             println!();
             println!("  {pairing_line}");
             println!();
-            println!("Anyone with this line can control sessions in this folder until you stop. Press Ctrl+C to stop.");
+            println!("Anyone with this code can control sessions in this folder until you stop. Press Ctrl+C to stop.");
         }
         RemoteControlStatus::Connected { phone } => {
             println!("Remote Control: connected to {phone}.")
@@ -611,6 +729,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_else(|| workspace.to_string_lossy().to_string());
     let mut notifications = host.subscribe();
+    let activity_notifications = host.subscribe();
     let mut relay = Relay {
         code_host: CodeHost::new(
             host,
@@ -634,6 +753,11 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
 
     crate::device_registry::set_remote_control(true);
     let heartbeat = crate::device_registry::spawn_heartbeat_loop();
+    let activity = tokio::spawn(report_activity(
+        activity_notifications,
+        root_id(workspace),
+        stop.clone(),
+    ));
     let mut attempt: u32 = 0;
     let mut paired_end_sent = false;
     let result = loop {
@@ -669,6 +793,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
         }
     };
     heartbeat.abort();
+    activity.abort();
     crate::device_registry::set_remote_control(false);
     if result.is_ok() && !paired_end_sent {
         end_pairing(&relay.pairing, &base).await;
@@ -687,6 +812,107 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    fn notification(
+        method: &str,
+        params: Value,
+    ) -> agiworkforce_protocol::developer_session::AppServerNotification {
+        agiworkforce_protocol::developer_session::AppServerNotification::new(method, params)
+            .expect("notification")
+    }
+
+    #[test]
+    fn an_approval_this_host_waits_on_is_reported_for_the_phone() {
+        let activity = activity_of(
+            "root-1",
+            &notification(
+                "approval/requested",
+                json!({ "threadId": "t-1", "turnId": "turn-1", "requestId": "approval-1", "summary": "Run cargo test" }),
+            ),
+            |thread| (thread == "t-1").then(|| "Fix the parser".to_string()),
+        )
+        .expect("reported");
+        assert_eq!(
+            activity,
+            json!({
+                "event": "approval_required",
+                "rootId": "root-1",
+                "threadId": "t-1",
+                "turnId": "turn-1",
+                "approvalId": "approval-1",
+                "sessionTitle": "Fix the parser",
+            })
+        );
+    }
+
+    #[test]
+    fn only_finished_or_blocked_turns_are_reported() {
+        let finished = |method: &str| {
+            activity_of(
+                "root-1",
+                &notification(method, json!({ "threadId": "t-1", "turnId": "turn-1" })),
+                |_| None,
+            )
+            .map(|activity| activity["event"].clone())
+        };
+        assert_eq!(finished("turn/completed"), Some(json!("completed")));
+        assert_eq!(finished("turn/failed"), Some(json!("failed")));
+        assert_eq!(finished("turn/interrupted"), None);
+        assert_eq!(finished("turn/started"), None);
+        assert_eq!(finished("approval/requested"), None);
+    }
+
+    /// Read a terminal QR back into modules, `true` for dark, quiet zone
+    /// included. `dark_glyph_is_ink` says whether a drawn block is a dark
+    /// module (black on white) or a light one (blocks on a dark terminal).
+    fn modules_of(rendered: &str, dark_glyph_is_ink: bool) -> Vec<Vec<bool>> {
+        let plain = regex::Regex::new("\x1b\\[[0-9;]*m")
+            .unwrap()
+            .replace_all(rendered, "")
+            .to_string();
+        let mut rows = Vec::new();
+        for line in plain.lines() {
+            let (mut top, mut bottom) = (Vec::new(), Vec::new());
+            for glyph in line.chars() {
+                let (upper_ink, lower_ink) = match glyph {
+                    '\u{2588}' => (true, true),
+                    '\u{2580}' => (true, false),
+                    '\u{2584}' => (false, true),
+                    _ => (false, false),
+                };
+                top.push(upper_ink == dark_glyph_is_ink);
+                bottom.push(lower_ink == dark_glyph_is_ink);
+            }
+            rows.push(top);
+            rows.push(bottom);
+        }
+        rows
+    }
+
+    #[test]
+    fn the_pairing_line_is_drawn_as_the_code_the_phone_scans() {
+        let line = "agiw3:ABCDEF123456:Zm9vYmFyYmF6cXV4cXV1eHF1dXhxdXV4cXV1eA";
+        let code = qrcode::QrCode::with_error_correction_level(line, qrcode::EcLevel::L).unwrap();
+        let width = code.width();
+        let quiet = 4;
+        let expected: Vec<Vec<bool>> = (0..width + 2 * quiet)
+            .map(|y| {
+                (0..width + 2 * quiet)
+                    .map(|x| {
+                        x >= quiet
+                            && y >= quiet
+                            && x < width + quiet
+                            && y < width + quiet
+                            && code[(x - quiet, y - quiet)] == qrcode::Color::Dark
+                    })
+                    .collect()
+            })
+            .collect();
+        for (colour, dark_glyph_is_ink) in [(true, true), (false, false)] {
+            let drawn = modules_of(&render_qr(line, colour).unwrap(), dark_glyph_is_ink);
+            assert_eq!(&drawn[..expected.len()], &expected[..], "colour {colour}");
+        }
+    }
 
     #[test]
     fn relay_url_policy_requires_tls_or_explicit_local_configuration() {

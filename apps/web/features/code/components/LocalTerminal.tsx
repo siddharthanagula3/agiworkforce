@@ -7,6 +7,7 @@ import { Spinner } from '@agiworkforce/ui';
 import { SHELL_TIMEOUT_MAX_MS } from '@agiworkforce/local-runtime-contract';
 import {
   cancelLocalCommand,
+  startBackgroundLocalCommand,
   startLocalCommand,
   type LocalCommandRun,
 } from '@/features/desktop-host';
@@ -31,9 +32,14 @@ interface TerminalEntry {
 export interface LocalTerminalProps {
   rootId: string;
   onCommandFinished: () => void;
+  onBackgroundStarted?: () => void;
 }
 
-export function LocalTerminal({ rootId, onCommandFinished }: LocalTerminalProps) {
+export function LocalTerminal({
+  rootId,
+  onCommandFinished,
+  onBackgroundStarted,
+}: LocalTerminalProps) {
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState('');
   const [entries, setEntries] = useState<TerminalEntry[]>([]);
@@ -116,6 +122,36 @@ export function LocalTerminal({ rootId, onCommandFinished }: LocalTerminalProps)
     }
   };
 
+  const keepRunning = async () => {
+    const line = command.trim();
+    if (!line || running) return;
+    setCommand('');
+    const id = crypto.randomUUID();
+    setEntries((current) => [
+      ...current,
+      { id, command: line, output: '', exitCode: null, failed: false, running: true },
+    ]);
+    try {
+      const started = await startBackgroundLocalCommand({ rootId, command: line });
+      update(id, () => ({
+        output: [started.output, LOCAL_CODE_COPY.startedInBackground]
+          .filter((text) => text !== '')
+          .join('\n')
+          .slice(-MAX_ENTRY_OUTPUT),
+        exitCode: started.running ? null : started.exitCode,
+        failed: !started.running && started.exitCode !== EXIT_CODE_OK,
+        running: false,
+      }));
+      onBackgroundStarted?.();
+    } catch (cause: unknown) {
+      update(id, () => ({
+        output: toUserMessage(cause, LOCAL_CODE_COPY.commandFailed),
+        failed: true,
+        running: false,
+      }));
+    }
+  };
+
   const stop = () => {
     const current = run.current;
     if (current) void cancelLocalCommand(current.runId);
@@ -189,13 +225,24 @@ export function LocalTerminal({ rootId, onCommandFinished }: LocalTerminalProps)
                   <span>{LOCAL_CODE_COPY.stop}</span>
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  className={styles['secondaryButton']}
-                  disabled={!command.trim()}
-                >
-                  {CODE_COPY.commandRun}
-                </button>
+                <>
+                  <button
+                    type="submit"
+                    className={styles['secondaryButton']}
+                    disabled={!command.trim()}
+                  >
+                    {CODE_COPY.commandRun}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles['secondaryButton']}
+                    title={LOCAL_CODE_COPY.keepRunningHint}
+                    disabled={!command.trim()}
+                    onClick={() => void keepRunning()}
+                  >
+                    {LOCAL_CODE_COPY.keepRunning}
+                  </button>
+                </>
               )}
             </div>
           </form>

@@ -6,10 +6,13 @@ import { applyRemoteWindowPolicy } from './windowPolicy';
 const PANEL_WIDTH = 480;
 const PANEL_HEIGHT = 620;
 const ABORTED_LOAD_ERROR = -3;
-const QUICK_ASK_URL = `${CLOUD_APP_ORIGIN}/quick-ask`;
+const QUICK_ASK_PATH = '/quick-ask';
+const QUICK_ASK_URL = `${CLOUD_APP_ORIGIN}${QUICK_ASK_PATH}`;
 
 let panel: BrowserWindow | null = null;
 let panelLoadFailed = false;
+let panelLeftQuickAsk = false;
+let openInMainWindow: (route: string) => void = () => undefined;
 let creating = false;
 let bridge: Pick<WebPreferences, 'preload' | 'additionalArguments'> = {};
 
@@ -17,6 +20,33 @@ export function configureQuickAskBridge(
   preferences: Pick<WebPreferences, 'preload' | 'additionalArguments'>,
 ): void {
   bridge = preferences;
+}
+
+/**
+ * Where the main window should go when the panel is sent somewhere other than
+ * Quick Ask, or null when the destination is Quick Ask or not this app.
+ */
+export function routeLeavingQuickAsk(url: string, appOrigin: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.origin !== new URL(appOrigin).origin) return null;
+  if (parsed.pathname === QUICK_ASK_PATH || parsed.pathname.startsWith(`${QUICK_ASK_PATH}/`)) {
+    return null;
+  }
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+/**
+ * The panel is sized for one exchange, so a conversation opened in full, an
+ * upgrade page or settings belongs in the main window, as in the ChatGPT and
+ * Claude companion windows.
+ */
+export function configureQuickAskHandoff(handler: (route: string) => void): void {
+  openInMainWindow = handler;
 }
 
 function createPanel(): BrowserWindow {
@@ -64,12 +94,33 @@ function createPanel(): BrowserWindow {
     if (isMainFrame && errorCode !== ABORTED_LOAD_ERROR) panelLoadFailed = true;
   });
 
+  const handOff = (url: string): boolean => {
+    const route = routeLeavingQuickAsk(url, CLOUD_APP_ORIGIN);
+    if (route === null) return false;
+    panelLeftQuickAsk = true;
+    if (win.isDestroyed() || !win.isVisible()) return true;
+    win.hide();
+    openInMainWindow(route);
+    return true;
+  };
+  win.webContents.on('will-navigate', (event, url) => {
+    if (handOff(url)) event.preventDefault();
+  });
+  win.webContents.on('did-navigate', (_event, url) => {
+    handOff(url);
+  });
+  win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    if (isMainFrame) handOff(url);
+  });
+
   win.on('closed', () => {
     panel = null;
     panelLoadFailed = false;
+    panelLeftQuickAsk = false;
   });
 
   panelLoadFailed = false;
+  panelLeftQuickAsk = false;
   void win.loadURL(QUICK_ASK_URL);
   return win;
 }
@@ -98,8 +149,9 @@ function reposition(win: BrowserWindow): void {
  */
 export function surfaceQuickAsk(): BrowserWindow {
   const win = ensurePanel();
-  if (panelLoadFailed) {
+  if (panelLoadFailed || panelLeftQuickAsk) {
     panelLoadFailed = false;
+    panelLeftQuickAsk = false;
     void win.loadURL(QUICK_ASK_URL);
   }
   reposition(win);

@@ -235,7 +235,7 @@ const allModelsRow = (dialog: HTMLElement) =>
   within(dialog).getByRole('button', { name: /All models/ });
 
 const planPageLink = (dialog: HTMLElement) =>
-  within(dialog).getByRole('link', { name: 'What each plan includes' });
+  within(dialog).getByRole('button', { name: 'What each plan includes' });
 
 describe('ComposerFooter · picker rows', () => {
   beforeEach(() => {

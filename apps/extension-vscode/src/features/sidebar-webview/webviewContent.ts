@@ -2896,7 +2896,6 @@ export function getWebviewContent(
     const stopBtn = document.getElementById('stopBtn');
     const sendActionLabel = document.getElementById('sendActionLabel');
     const followUpStatus = document.getElementById('followUpStatus');
-    const composerHint = document.getElementById('composerHint');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
@@ -3553,6 +3552,7 @@ export function getWebviewContent(
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = '${followUpBehaviorLiteral}';
+    let enterBehavior = 'enter';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
     // The turn a Retry resends. Cleared by a new conversation so a retry can
@@ -4253,6 +4253,19 @@ export function getWebviewContent(
       if (conversation.plan) upsertPlanCard(conversation.plan);
     }
 
+    function composerKeys() {
+      return enterBehavior === 'modifier'
+        ? { send: MOD_KEY_LABEL + '+Enter', invert: MOD_KEY_LABEL + '+Shift+Enter' }
+        : enterBehavior === 'modifierIfMultiline'
+          ? { send: 'Enter, or ' + MOD_KEY_LABEL + '+Enter with several lines', invert: MOD_KEY_LABEL + '+Enter' }
+          : { send: 'Enter', invert: MOD_KEY_LABEL + '+Enter' };
+    }
+
+    function enterNeedsModifier() {
+      return enterBehavior === 'modifier' ||
+        (enterBehavior === 'modifierIfMultiline' && userInput.value.indexOf('\\n') !== -1);
+    }
+
     function setStreaming(value) {
       streaming = value;
       renderPlanDecision();
@@ -4265,22 +4278,17 @@ export function getWebviewContent(
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
+      var keys = composerKeys();
       if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
       sendBtn.setAttribute('aria-label', value ? actionLabel + ' follow-up' : 'Send');
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
-          : 'Send (Enter)'
+          ? actionLabel + ' follow-up (' + keys.send + ') · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + keys.invert + ')'
+          : 'Send (' + keys.send + ')'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
-      if (composerHint) {
-        composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
-              (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
-          : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
-      }
     }
 
     function showFollowUpStatus(message, kind, sticky) {
@@ -4812,6 +4820,9 @@ export function getWebviewContent(
     window.addEventListener('focus', function() {
       vscode.postMessage({ type: 'viewFocused' });
     });
+    window.addEventListener('blur', function() {
+      vscode.postMessage({ type: 'viewBlurred' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -4878,9 +4889,13 @@ export function getWebviewContent(
           return;
         }
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter') {
+        var modifier = e.metaKey || e.ctrlKey;
+        var needsModifier = enterNeedsModifier();
+        if (needsModifier ? !modifier : e.shiftKey) return;
         e.preventDefault();
-        var oneTurnBehavior = streaming && (e.metaKey || e.ctrlKey)
+        var inverted = needsModifier ? e.shiftKey : modifier;
+        var oneTurnBehavior = streaming && inverted
           ? (followUpBehavior === 'steer' ? 'queue' : 'steer')
           : undefined;
         sendMessage(oneTurnBehavior);
@@ -6435,6 +6450,10 @@ export function getWebviewContent(
 
       else if (msg.type === 'followUpBehavior') {
         followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        enterBehavior =
+          msg.payload.enterBehavior === 'modifier' || msg.payload.enterBehavior === 'modifierIfMultiline'
+            ? msg.payload.enterBehavior
+            : 'enter';
         setStreaming(streaming);
       }
 

@@ -325,20 +325,54 @@ describe('the desktop settings section', () => {
     await userEvent.click(screen.getByLabelText('Finished turns'));
     expect(writePreferences).toHaveBeenLastCalledWith({
       agentNotifications: { when: 'unfocused', muted: ['turn-complete'], sound: true },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
     });
     await waitFor(() => expect(screen.getByLabelText('Finished turns')).not.toBeChecked());
 
     await userEvent.click(screen.getByLabelText('Notification sound'));
     expect(writePreferences).toHaveBeenLastCalledWith({
       agentNotifications: { when: 'unfocused', muted: ['turn-complete'], sound: false },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
     });
 
     await userEvent.selectOptions(screen.getByLabelText('Agent notifications'), 'never');
     expect(writePreferences).toHaveBeenLastCalledWith({
       agentNotifications: { when: 'never', muted: ['turn-complete'], sound: false },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
     });
     await waitFor(() => expect(screen.getByLabelText('Approval requests')).toBeDisabled());
     expect(screen.getByLabelText('Questions')).toBeDisabled();
+  });
+
+  it('shows one set of notification choices, and keeps what the older alert rows saved', async () => {
+    installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        sessionCompletionAlerts: 'never',
+        sessionApprovalAlerts: false,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+
+    await screen.findByLabelText('Agent notifications');
+    expect(screen.queryByLabelText('Task finished alerts')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Approval alerts')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Finished turns')).not.toBeChecked();
+    expect(screen.getByLabelText('Failed turns')).not.toBeChecked();
+    expect(screen.getByLabelText('Approval requests')).not.toBeChecked();
+    expect(screen.getByLabelText('Questions')).toBeChecked();
+  });
+
+  it('keeps the older alert rows for a shell that has no agent notifications', async () => {
+    installHost();
+    render(<DesktopSettingsSection />);
+
+    expect(await screen.findByLabelText('Task finished alerts')).toBeInTheDocument();
+    expect(screen.getByLabelText('Approval alerts')).toBeInTheDocument();
   });
 
   it('shows nothing extra when every shortcut registered', async () => {

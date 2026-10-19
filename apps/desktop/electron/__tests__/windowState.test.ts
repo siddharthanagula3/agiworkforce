@@ -109,6 +109,8 @@ describe('what may be restored as the opening route', () => {
     expect(isRestorableRoute('/sso-callback?code=x')).toBe(false);
     expect(isRestorableRoute('/api/chat')).toBe(false);
     expect(isRestorableRoute('/checkout/success')).toBe(false);
+    expect(isRestorableRoute('/login?redirectTo=%2Fchat')).toBe(false);
+    expect(isRestorableRoute('/auth/desktop/complete')).toBe(false);
   });
 
   it('reads a route off a same-origin url only', () => {

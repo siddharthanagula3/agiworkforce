@@ -3857,6 +3857,218 @@ describe('ChatStateManager context usage reporting', () => {
   });
 });
 
+describe('ChatStateManager session compaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    setContextPanelInstance({ getContextFiles: () => [] } as unknown as ContextPanelProvider);
+  });
+
+  async function startedHarness() {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 90_000,
+      outputTokens: 10_000,
+    });
+    await send;
+    return harness;
+  }
+
+  it('summarizes the open session after the user confirms and reports the freed context', async () => {
+    const harness = await startedHarness();
+    const compactThread = vi.fn().mockResolvedValue({
+      threadId: 'thread-1',
+      compacted: true,
+      messagesSummarized: 12,
+      tokensBefore: 100_000,
+      tokensAfter: 8_000,
+    });
+    Object.assign(harness.runtime, {
+      compactThread,
+      offers: vi.fn(async (capability: string) => capability === 'threadCompact'),
+    });
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Summarize' as never);
+
+    await harness.manager.compactConversation();
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Summarize this session to free context?',
+      expect.objectContaining({
+        modal: true,
+        detail: expect.stringContaining('can no longer rewind or branch'),
+      }),
+      'Summarize',
+    );
+    expect(compactThread).toHaveBeenCalledWith('thread-1');
+    expect(harness.posted).toContainEqual({
+      type: 'contextUsage',
+      payload: { usedTokens: 8_000 },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'sessionNotice',
+      payload: {
+        message: `Summarized 12 earlier messages: context went from ${(100_000).toLocaleString()} to ${(8_000).toLocaleString()} tokens.`,
+      },
+    });
+  });
+
+  it('shows the session, model, mode and measured context in one status view', async () => {
+    const harness = await startedHarness();
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+
+    await harness.manager.showSessionStatus();
+
+    const rows = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1)?.[0] as Array<{
+      label: string;
+      description?: string;
+      detail?: string;
+    }>;
+    const row = (label: string) => rows.find((entry) => entry.label.endsWith(label));
+    expect(row('Session')?.detail).toContain('thread-1');
+    expect(row('Context')?.description).toBe(`${(100_000).toLocaleString()} tokens used`);
+    expect(row('Mode')?.description).toBeTruthy();
+    expect(row('Model')?.description).toBeTruthy();
+  });
+
+  it('changes nothing when the user does not confirm', async () => {
+    const harness = await startedHarness();
+    const compactThread = vi.fn();
+    Object.assign(harness.runtime, { compactThread, offers: vi.fn().mockResolvedValue(true) });
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce(undefined as never);
+
+    await harness.manager.compactConversation();
+
+    expect(compactThread).not.toHaveBeenCalled();
+  });
+
+  it('asks for a newer CLI instead of calling a method the runtime does not offer', async () => {
+    const harness = await startedHarness();
+    const compactThread = vi.fn();
+    Object.assign(harness.runtime, { compactThread });
+
+    await harness.manager.compactConversation();
+
+    expect(compactThread).not.toHaveBeenCalled();
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('cannot summarize a session'),
+    );
+  });
+
+  it('says so when nothing was old enough to summarize', async () => {
+    const harness = await startedHarness();
+    Object.assign(harness.runtime, {
+      compactThread: vi.fn().mockResolvedValue({
+        threadId: 'thread-1',
+        compacted: false,
+        messagesSummarized: 0,
+        tokensBefore: 100_000,
+        tokensAfter: 100_000,
+      }),
+      offers: vi.fn().mockResolvedValue(true),
+    });
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Summarize' as never);
+
+    await harness.manager.compactConversation();
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      'AGI Workforce: nothing in this session is old enough to summarize yet.',
+    );
+    expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
+  });
+});
+
+describe('ChatStateManager slash commands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+  });
+
+  function harnessListing(commands: unknown[]) {
+    const harness = makeHarness();
+    Object.assign(harness.runtime, {
+      listCommands: vi.fn().mockResolvedValue({ commands }),
+      offers: vi.fn().mockResolvedValue(true),
+      initialize: vi.fn().mockResolvedValue({ capabilities: { commands: true } }),
+    });
+    return harness;
+  }
+
+  const command = (
+    name: string,
+    extra: Partial<{ runnable: boolean; prompt: boolean; source: string; aliases: string[] }> = {},
+  ) => ({
+    name,
+    description: `${name} from the CLI`,
+    source: 'builtin',
+    aliases: [],
+    runnable: false,
+    ...extra,
+  });
+
+  it('offers only commands that can run in VS Code', async () => {
+    const harness = harnessListing([
+      command('init'),
+      command('btw'),
+      command('compact'),
+      command('permissions', { aliases: ['perms'] }),
+      command('review', { prompt: true }),
+    ]);
+
+    await harness.manager.handleMessage({ type: 'requestSlashCommands' });
+
+    const listed = harness.posted.find((message) => message.type === 'slashCommands');
+    const names = (listed?.payload as { items: { name: string }[] }).items.map((item) => item.name);
+    expect(names).not.toContain('/init');
+    expect(names).not.toContain('/btw');
+    expect(names).toContain('/compact');
+    expect(names).toContain('/permissions');
+    expect(names).toContain('/review');
+  });
+
+  it('runs a command the extension serves instead of asking the CLI for a terminal', async () => {
+    const harness = harnessListing([command('compact')]);
+    const runCommand = vi.fn();
+    Object.assign(harness.runtime, { runCommand });
+
+    await harness.manager.handleMessage({ type: 'requestSlashCommands' });
+    await harness.manager.handleMessage({ type: 'runSlashCommand', payload: { name: '/compact' } });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.compactConversation',
+    );
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it('turns a prompt command into a draft rather than running it', async () => {
+    const harness = harnessListing([command('review', { prompt: true })]);
+
+    await harness.manager.handleMessage({ type: 'requestSlashCommands' });
+    await harness.manager.handleMessage({ type: 'runSlashCommand', payload: { name: '/review' } });
+
+    expect(harness.posted).toContainEqual({
+      type: 'composerDraft',
+      payload: { text: '/review ', references: [] },
+    });
+  });
+});
+
 describe('ChatStateManager error classification', () => {
   beforeEach(() => {
     vi.clearAllMocks();

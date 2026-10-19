@@ -2003,3 +2003,94 @@ svg + .menuRowLabel {
   border-top: 1px solid var(--chat-border-subtle);
   border-left: 0;
 }
+
+/* ---------- files panel ---------- */
+
+.filesSearch {
+  flex: 0 0 auto;
+  padding: 10px 14px 0;
+}
+
+.filesTree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filesTreeChildren {
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+}
+
+.filesTabs {
+  display: flex;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  gap: 2px;
+  border-bottom: 1px solid var(--chat-border-subtle);
+}
+
+.filesTab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 0 4px 0 10px;
+  border-bottom: 2px solid transparent;
+}
+
+.filesTabActive {
+  border-bottom-color: var(--chat-text-primary);
+}
+
+.filesTabLabel {
+  overflow: hidden;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--chat-text-secondary);
+  font-family: var(--chat-font-mono);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filesTabActive .filesTabLabel {
+  color: var(--chat-text-primary);
+}
+
+.filesSplit {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.filesBrowserWide,
+.filesBrowser {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.filesBrowserWide {
+  flex: 1 1 auto;
+}
+
+.filesBrowser {
+  flex: 0 0 220px;
+  border-right: 1px solid var(--chat-border-subtle);
+}
+
+.filesEditors {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}

@@ -621,7 +621,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
   useEffect(() => {
     const wanted = routeLocalRef.current;
-    if (wanted === null || local.loading) return;
+    if (wanted === null || !local.settled || local.loading) return;
     routeLocalRef.current = null;
     const found = local.groups
       .find((group) => group.rootId === wanted.rootId)
@@ -632,7 +632,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.loading, local.groups]);
+  }, [local.settled, local.loading, local.groups]);
 
   const openLocalSession = useCallback((session: LocalDeveloperSession) => {
     setLocalSession(session);

@@ -298,6 +298,7 @@ export {
   hostKeepsSignInInWindow,
   hostShortcutMayBeOff,
 } from './host-bridge';
+export { agentNotificationsWrite, effectiveAgentNotifications } from './agent-notifications';
 export type {
   DesktopDeepLink,
   DesktopDeepLinkTarget,

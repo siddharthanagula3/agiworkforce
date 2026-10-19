@@ -101,6 +101,7 @@ const KILL_GRACE_MS = 2_000;
 interface RunningCommand {
   child: ChildProcessWithoutNullStreams;
   command: string;
+  rootId: string;
   rootName: string;
   startedAtMs: number;
 }
@@ -136,11 +137,16 @@ export interface ShellInputApprovalRequest {
 
 export function listShellRuns(): BackgroundCommandRun[] {
   const live = [...background.entries()].filter(([, run]) => !run.exited);
-  return [...running.entries(), ...live].map(([runId, run]) => ({
+  return [
+    ...[...running.entries()].map(([runId, run]) => ({ runId, run, background: false })),
+    ...live.map(([runId, run]) => ({ runId, run, background: true })),
+  ].map(({ runId, run, background: kept }) => ({
     runId,
     command: run.command,
+    rootId: run.rootId,
     rootName: run.rootName,
     startedAtMs: run.startedAtMs,
+    background: kept,
   }));
 }
 
@@ -663,7 +669,13 @@ async function runClaimedCommand(
       return;
     }
 
-    running.set(runId, { child, command, rootName: input.root.name, startedAtMs });
+    running.set(runId, {
+      child,
+      command,
+      rootId: input.root.id,
+      rootName: input.root.name,
+      startedAtMs,
+    });
 
     let stdout = '';
     let stderr = '';

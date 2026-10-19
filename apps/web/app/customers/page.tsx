@@ -27,6 +27,7 @@ export const metadata = buildMetadata({
   title: 'Customers',
   description: `We print no customer name without written permission, so this page carries none. It works through three situations instead, each naming the surface it runs on, the mechanics behind it, the plan limit it meets, and the work it leaves to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE}`,
   path: '/customers',
+  robots: { index: false, follow: true },
 });
 
 const BASIC_SCHEDULES = BILLING_PLAN_PRODUCT_LIMITS.basic.maxScheduledTasks;

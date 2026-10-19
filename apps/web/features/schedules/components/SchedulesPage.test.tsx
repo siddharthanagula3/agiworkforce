@@ -193,6 +193,21 @@ describe('SchedulesPage', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
+  it('opens a prefilled create dialog for a prompt handed over from a chat, and creates nothing yet', async () => {
+    const api = createApi();
+    const prompt = 'Summarise the overnight support tickets\nand list the three most urgent.';
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} draftPrompt={prompt} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create Schedule' });
+    expect(within(dialog).getByLabelText('Schedule Name')).toHaveValue(
+      'Summarise the overnight support tickets',
+    );
+    expect(
+      within(dialog).getByDisplayValue(prompt, { normalizer: (value) => value }),
+    ).toBeInTheDocument();
+    expect(api.createSchedule).not.toHaveBeenCalled();
+  });
+
   it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
     const api = createApi();
     const user = userEvent.setup();

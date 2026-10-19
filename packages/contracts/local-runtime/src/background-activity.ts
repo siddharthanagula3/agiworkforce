@@ -11,8 +11,11 @@ export interface BackgroundCodingRuntime {
 export interface BackgroundCommandRun {
   runId: string;
   command: string;
+  rootId: string;
   rootName: string;
   startedAtMs: number;
+  /** Started to keep running, such as a dev server, rather than to finish and report. */
+  background: boolean;
 }
 
 export interface BackgroundActivity {
