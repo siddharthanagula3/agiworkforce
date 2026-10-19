@@ -339,8 +339,16 @@ export default function CloudBillingScreen() {
       !upgradeGateVisible &&
       !nativeIap.loading ? (
         <SettingsInfo
-          title="Plan changes are not available right now"
-          body="Everything you already pay for keeps working here."
+          title={
+            isFreeTier
+              ? 'In-app purchases are not available yet'
+              : 'Plan changes are not available right now'
+          }
+          body={
+            isFreeTier
+              ? 'Your Free plan keeps working. Compare plans to see what each one adds.'
+              : 'Everything you already pay for keeps working here.'
+          }
           icon={ShoppingBag}
         />
       ) : null}
@@ -440,7 +448,7 @@ export default function CloudBillingScreen() {
                       ? 'Adjust plan'
                       : 'Choose plan'
               }
-              icon={upgradeGateVisible ? ShoppingBag : ExternalLink}
+              icon={ShoppingBag}
               value={
                 upgradeGateVisible
                   ? upgradeGateJoined

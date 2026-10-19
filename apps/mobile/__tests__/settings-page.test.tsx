@@ -216,6 +216,22 @@ describe('Settings page', () => {
     expect(getByText('Log Out')).toBeTruthy();
   });
 
+  it('keeps Log Out reachable when Clerk holds a session that AGI Cloud could not verify', () => {
+    useAuthStore.setState({ isClerkSignedIn: false });
+    mockClerkState.user = { primaryEmailAddress: { emailAddress: 'ada@example.com' } };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    const { getByText } = render(<SettingsTabScreen />);
+    fireEvent.press(getByText('Log Out'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Log Out',
+      'Log out of AGI Cloud on this device?',
+      expect.any(Array),
+    );
+    alertSpy.mockRestore();
+  });
+
   it('always offers the workspace screen rather than gating it on a local plan guess', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({
@@ -368,7 +384,9 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Appearance. System'));
     fireEvent.press(getByLabelText('Capabilities'));
     fireEvent.press(getByLabelText('Data Controls'));
+    fireEvent.press(getByLabelText('Quick Access'));
 
+    expect(mockPush).toHaveBeenCalledWith('/(app)/widget-setup');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/appearance');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/capabilities');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');

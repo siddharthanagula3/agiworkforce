@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { markdownToPlainText } from '@/src/features/chat/utils/markdownPlainText';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface SelectTextSheetProps {
   visible: boolean;
@@ -47,10 +48,7 @@ export function SelectTextSheet({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
           <View
             style={{

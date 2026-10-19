@@ -160,8 +160,6 @@ export async function resetLocalInMemoryState(): Promise<void> {
     loading: false,
     error: null,
     searchQuery: '',
-    syncing: false,
-    lastSyncAt: null,
   });
   useArtifactStore.setState({ artifacts: [] });
   useChatAppModeStore.setState({ appMode: 'local' });

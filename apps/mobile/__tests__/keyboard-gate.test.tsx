@@ -36,10 +36,35 @@ describe('the composer keyboard contract', () => {
     expect(keyboardAvoidingBehavior('modal')).toBe('padding');
   });
 
-  it('leaves an Android screen to adjustResize and handles an Android modal itself', () => {
+  it('pads an Android screen, since edge-to-edge stops adjustResize from resizing the window', () => {
     setPlatform('android');
-    expect(keyboardAvoidingBehavior('screen')).toBeUndefined();
+    expect(keyboardAvoidingBehavior('screen')).toBe('padding');
     expect(keyboardAvoidingBehavior('modal')).toBe('height');
+  });
+
+  it('keeps every keyboard-avoiding view on the shared contract', () => {
+    const fs = jest.requireActual<typeof import('fs')>('fs');
+    const path = jest.requireActual<typeof import('path')>('path');
+    const root = path.join(__dirname, '..');
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (
+          entry.name.endsWith('.tsx') &&
+          /behavior=\{Platform\.OS === 'ios' \? 'padding' : undefined\}/.test(
+            fs.readFileSync(full, 'utf8'),
+          )
+        ) {
+          offenders.push(path.relative(root, full));
+        }
+      }
+    };
+    walk(path.join(root, 'app'));
+    walk(path.join(root, 'src'));
+    expect(offenders).toEqual([]);
   });
 
   it('never offsets the avoiding view, which would double-count the header', () => {

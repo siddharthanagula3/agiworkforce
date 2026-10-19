@@ -144,6 +144,7 @@ import {
   getDefaultCloudModelIdForTier,
 } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
   __fireResult: (event: {
@@ -238,6 +239,28 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(reply.props.numberOfLines).toBeUndefined();
     expect(screen.getAllByText('You')).toHaveLength(1);
     expect(screen.getAllByText('AGI')).toHaveLength(1);
+  });
+
+  it('does not claim an on-device model when none is installed', () => {
+    mockSelectedModel = DEFAULT_LOCAL_MODEL_ID;
+    useModelInstallStore.setState({ installedModelIds: [], readySystemModelIds: [] });
+
+    const screen = renderScreen(jest.fn());
+
+    expect(screen.queryByText('ON-DEVICE')).toBeNull();
+    expect(screen.getByTestId('voice-processing-badge').props.children).toBe('NO MODEL INSTALLED');
+  });
+
+  it('names the on-device model once it is installed', () => {
+    mockSelectedModel = DEFAULT_LOCAL_MODEL_ID;
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+    });
+
+    const screen = renderScreen(jest.fn());
+
+    expect(screen.getByTestId('voice-processing-badge').props.children).toBe('ON-DEVICE');
   });
 
   it('uses a Local model when a stale Cloud model is selected before Voice opens', async () => {

@@ -25,6 +25,7 @@ import {
   saveConnectorApiKey,
   type ConnectorCredentialStatusResponse,
 } from '@/services/connectors';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const HEADER_PLACEMENT = 'header';
 
@@ -126,7 +127,7 @@ export function ConnectorApiKeySheet({
     >
       <KeyboardAvoidingView
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('modal')}
       >
         <View
           style={{
