@@ -12,6 +12,10 @@ jest.mock('@/services/api', () => ({
   api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), patch: jest.fn(), delete: jest.fn() },
 }));
 
+jest.mock('@/lib/safeOpenURL', () => ({
+  openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
+}));
+
 jest.mock('@/services/managedCloudProjects', () => ({
   managedCloudProjects: { getProject: jest.fn() },
 }));
@@ -23,6 +27,8 @@ import { api } from '@/services/api';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import { SharedWithYouSection } from '@/src/features/projects/components/SharedWithYouSection';
 import { SharedProjectScreen } from '@/src/features/projects/components/SharedProjectScreen';
+import { SharedWithYouScreen } from '@/src/features/projects/components/SharedWithYouScreen';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import {
   projectsSharedWithMe,
   type ProjectSharingOverview,
@@ -70,6 +76,25 @@ function overview(): ProjectSharingOverview {
         memberGrants: [],
       },
     ],
+    sharedConversations: [
+      {
+        sharedSessionId: 's-1',
+        token: 'tok-chat',
+        title: 'Launch retro',
+        ownerUserId: OWNER,
+      },
+      { sharedSessionId: 's-2', token: 'tok-mine', title: 'My share', ownerUserId: ME },
+    ],
+    sharedArtifacts: [
+      {
+        publishedArtifactId: 'pa-1',
+        token: 'tok-art',
+        title: 'Pricing calculator',
+        kind: 'react',
+        ownerUserId: OWNER,
+      },
+    ],
+    sharedConnectors: [{ connectorRowId: 'cr-1', name: 'Team Notion', ownerUserId: OWNER }],
   };
 }
 
@@ -123,5 +148,28 @@ describe('projects shared with the member', () => {
     );
     expect(screen.getByText('Use the brand voice.')).toBeTruthy();
     expect(screen.getByText('No files in this project.')).toBeTruthy();
+  });
+
+  it('lists chats, artifacts and connectors others shared with me and opens them', async () => {
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(
+      expect.stringMatching(/\/share\/tok-chat$/),
+    );
+    fireEvent.press(screen.getByLabelText('Pricing calculator, react · shared by Dana'));
+    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(
+      expect.stringMatching(/\/shared-artifact\/tok-art$/),
+    );
+    fireEvent.press(screen.getByLabelText('Team Notion, Shared by Dana'));
+    expect(useRouter().push).toHaveBeenCalledWith('/(app)/connectors');
+    expect(screen.queryByText('My share')).toBeNull();
+  });
+
+  it('says when nothing is shared, including on a personal account', async () => {
+    (api.get as jest.Mock).mockRejectedValue(new Error('offline'));
+    render(<SharedWithYouScreen />);
+    expect(await screen.findByTestId('shared-with-you-empty')).toBeTruthy();
   });
 });
