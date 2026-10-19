@@ -268,5 +268,10 @@ describe('VS Code active-turn Queue and Steer composer', () => {
 
     (document.getElementById('sideQuestionClose') as HTMLButtonElement).click();
     expect(card.hidden).toBe(true);
+
+    sendWithEnter(input, '/side and for one item?');
+    expect(card.hidden).toBe(false);
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'conversationCleared' } }));
+    expect(card.hidden).toBe(true);
   });
 });

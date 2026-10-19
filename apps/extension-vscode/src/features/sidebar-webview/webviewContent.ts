@@ -6701,6 +6701,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationLoaded') {
+        closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
@@ -6758,6 +6759,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        closeSideQuestion();
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();

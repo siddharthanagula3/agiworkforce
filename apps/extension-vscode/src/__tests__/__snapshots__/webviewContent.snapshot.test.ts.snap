@@ -6740,6 +6740,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'conversationLoaded') {
+        closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
@@ -6797,6 +6798,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'conversationCleared') {
+        closeSideQuestion();
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
@@ -14589,6 +14591,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'conversationLoaded') {
+        closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
@@ -14646,6 +14649,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'conversationCleared') {
+        closeSideQuestion();
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
@@ -22438,6 +22442,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'conversationLoaded') {
+        closeSideQuestion();
         lastSendPayload = null;
         clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
@@ -22495,6 +22500,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'conversationCleared') {
+        closeSideQuestion();
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
