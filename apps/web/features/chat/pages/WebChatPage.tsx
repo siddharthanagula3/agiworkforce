@@ -1333,6 +1333,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           statuses[status.index] = {
             phase: status.phase,
             ...(status.error ? { error: status.error } : {}),
+            ...(status.retryable === undefined ? {} : { retryable: status.retryable }),
           };
           return { ...attempt, statuses };
         }),

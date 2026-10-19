@@ -109,4 +109,20 @@ describe('AttachmentPreview · upload lifecycle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry upload for notes.txt' }));
     expect(onRetry).toHaveBeenCalledWith(0);
   });
+
+  it('names a refusal and offers no retry that cannot succeed', () => {
+    const refusal = 'This file could not be attached because its contents failed a safety check.';
+    render(
+      <AttachmentPreview
+        previews={[preview]}
+        statuses={[{ phase: 'failed', error: refusal, retryable: false }]}
+        onRetry={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(refusal);
+    expect(screen.queryByRole('button', { name: 'Retry upload for notes.txt' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove notes.txt' })).toBeTruthy();
+  });
 });

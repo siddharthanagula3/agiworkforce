@@ -363,6 +363,29 @@ describe('credential material in an upload', () => {
     expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
   });
 
+  it.each(['secret.txt', 'secrets.json', 'customer-credentials.csv', 'Credentials.txt'])(
+    'accepts an ordinary document named %s when its contents hold no key',
+    async (filename) => {
+      const result = await scanUploadBytes(bytesOf('Internal memo. The launch code is PURPLE-42.'), 'text/plain', {
+        leadsObject: true,
+        filename,
+      });
+
+      expect(result).toEqual({ ok: true, findings: [] });
+    },
+  );
+
+  it('still refuses a document named secrets.json that holds a recognised key', async () => {
+    const result = await scanUploadBytes(
+      bytesOf(`{"stripe": "sk_live_${'EXAMPLE'.repeat(4)}"}`),
+      'application/json',
+      { leadsObject: true, filename: 'secrets.json' },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('credential_material');
+  });
+
   it('rejects terraform state by name, because its contents are provider secrets', async () => {
     const result = await scanUploadBytes(bytesOf('{}'), 'application/json', {
       leadsObject: true,

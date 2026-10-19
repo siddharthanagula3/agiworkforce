@@ -136,6 +136,56 @@ describe('createManagedCloudChatAttachmentsClient', () => {
   });
 });
 
+describe('attachment upload failure status', () => {
+  async function failedStatus(completion: Response) {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          storageKey: 'owned/fixture.txt',
+          uploadUrl: 'http://localhost:3000/api/uploads/chat-attachment/put',
+          uploadMethod: 'PUT',
+          uploadHeaders: {},
+        }),
+      )
+      .mockResolvedValueOnce(completion);
+    const statuses: Array<{ phase: string; retryable?: boolean; error?: string }> = [];
+    const client = createManagedCloudChatAttachmentsClient({
+      baseUrl: 'http://localhost:3000',
+      fetchImpl,
+      uploadFetchImpl: vi.fn(async () => Response.json({ success: true })),
+    });
+    await expect(
+      client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })], {
+        onStatus: (status) => statuses.push(status),
+      }),
+    ).rejects.toThrow();
+    return statuses.find((status) => status.phase === 'failed');
+  }
+
+  it('marks a content refusal as not retryable and keeps the server reason', async () => {
+    const failed = await failedStatus(
+      Response.json(
+        {
+          error: {
+            message: 'This file could not be attached because its contents failed a safety check.',
+          },
+        },
+        { status: 400 },
+      ),
+    );
+
+    expect(failed?.retryable).toBe(false);
+    expect(failed?.error).toMatch(/safety check/);
+  });
+
+  it('marks a server error as retryable', async () => {
+    const failed = await failedStatus(Response.json({ error: 'busy' }, { status: 503 }));
+
+    expect(failed?.retryable).toBe(true);
+  });
+});
+
 describe('chatAttachmentSizeLabel', () => {
   it('names a byte count in mebibytes', () => {
     expect(chatAttachmentSizeLabel(12 * 1024 * 1024)).toBe('12 MiB');
