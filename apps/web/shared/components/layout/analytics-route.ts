@@ -40,6 +40,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'study',
   ],
   '/code': ['computer', 'shared'],
+  '/quick-ask': ['dictate'],
   '/share': ['schedules'],
   '/settings': [
     'account',

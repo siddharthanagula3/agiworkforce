@@ -1349,7 +1349,12 @@ const dictationElsewhere = createDictationElsewhere({
   frontApp: async () => {
     const front = await applicationTakingInput();
     return front && front.pid !== null
-      ? { name: front.name, pid: front.pid, secureInput: front.secureInput }
+      ? {
+          name: front.name,
+          pid: front.pid,
+          bundleId: front.bundleId,
+          secureInput: front.secureInput,
+        }
       : null;
   },
   openBar: () => openDictationBar((contentsId) => dictationElsewhere.cancel(contentsId)),

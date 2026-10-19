@@ -6,7 +6,12 @@ import {
   type DictationApp,
 } from '../dictationElsewhere';
 
-const NOTES: DictationApp = { name: 'Notes', pid: 4242, secureInput: false };
+const NOTES: DictationApp = {
+  name: 'Notes',
+  pid: 4242,
+  bundleId: 'com.apple.Notes',
+  secureInput: false,
+};
 const OWN_PID = 100;
 const BAR_ID = 7;
 
@@ -63,7 +68,7 @@ describe('a press of the dictation shortcut', () => {
 
   it('leaves a press over AGI Cloud itself, or with nothing readable in front, to the app', async () => {
     const dictation = createDictationElsewhere(deps);
-    front = { name: 'AGI Cloud', pid: OWN_PID, secureInput: false };
+    front = { name: 'AGI Cloud', pid: OWN_PID, bundleId: null, secureInput: false };
     expect(await dictation.handlePress()).toBe(false);
     front = null;
     expect(await dictation.handlePress()).toBe(false);
@@ -97,7 +102,7 @@ describe('typing what was dictated', () => {
 
   it('copies instead of typing when another app has come to the front', async () => {
     const dictation = await listening();
-    front = { name: 'Terminal', pid: 9, secureInput: false };
+    front = { name: 'Terminal', pid: 9, bundleId: 'com.apple.Terminal', secureInput: false };
 
     expect(await dictation.finish(BAR_ID, 'hello')).toBe('copied');
     expect(deps.typeText).not.toHaveBeenCalled();
@@ -110,6 +115,23 @@ describe('typing what was dictated', () => {
     front = { ...NOTES, secureInput: true };
 
     expect(await dictation.finish(BAR_ID, 'hunter2')).toBe('copied');
+    expect(deps.typeText).not.toHaveBeenCalled();
+  });
+
+  it('never types into a system password or keychain prompt, even one that was in front', async () => {
+    for (const bundleId of ['com.apple.SecurityAgent', 'com.apple.LocalAuthentication.UIAgent']) {
+      vi.clearAllMocks();
+      front = { name: 'Password prompt', pid: 77, bundleId, secureInput: false };
+      const dictation = await listening();
+      expect(await dictation.finish(BAR_ID, 'hunter2'), bundleId).toBe('copied');
+      expect(deps.typeText).not.toHaveBeenCalled();
+    }
+  });
+
+  it('never types into AGI Cloud itself, even if it came to the front', async () => {
+    const dictation = await listening();
+    front = { name: 'AGI Cloud', pid: OWN_PID, bundleId: null, secureInput: false };
+    expect(await dictation.finish(BAR_ID, 'hello')).toBe('copied');
     expect(deps.typeText).not.toHaveBeenCalled();
   });
 
