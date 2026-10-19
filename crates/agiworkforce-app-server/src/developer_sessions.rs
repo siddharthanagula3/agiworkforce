@@ -271,6 +271,17 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported("account/login"))
     }
 
+    /// `account/login` as the dispatcher calls it, with the connection's
+    /// initialize clientInfo so a host can name the surface that asked (the
+    /// device approval page says "AGI for VS Code" rather than "AGI CLI").
+    async fn account_login_for_client(
+        &self,
+        client: Option<&AppServerClientInfo>,
+    ) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
+        let _ = client;
+        self.account_login().await
+    }
+
     async fn account_login_wait(
         &self,
         _params: AccountLoginWaitParams,
@@ -1429,7 +1440,10 @@ impl DeveloperSessionProcessor {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
                     return *response;
                 }
-                self.host.account_login().await.map(serde_json::to_value)
+                self.host
+                    .account_login_for_client(self.client.as_ref())
+                    .await
+                    .map(serde_json::to_value)
             }
             method::ACCOUNT_LOGIN_WAIT => {
                 let params = match parse_params::<AccountLoginWaitParams>(&request) {
