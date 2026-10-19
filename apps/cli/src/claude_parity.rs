@@ -96,13 +96,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "ios",
         "android",
         "install-github-app",
-        "install-slack-app",
         "tag",
         "vim",
-        "color",
-        "heapdump",
-        "stickers",
-        "thinkback-play",
         "recap",
         "save-skill",
         "save-routine",
@@ -294,21 +289,8 @@ pub fn handle_shared_command(
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }
-        "/install-slack-app" => ParityCommandResult::SystemMessage(render_install_app("Slack")),
         "/tag" => ParityCommandResult::SystemMessage(handle_tag(session, arg)),
         "/vim" => ParityCommandResult::SystemMessage(render_vim(arg)),
-        "/color" => ParityCommandResult::SystemMessage(
-            "Color command recognized. Theme color is controlled by /theme; prompt accent persistence is coming through shared settings.".into(),
-        ),
-        "/heapdump" => ParityCommandResult::SystemMessage(
-            "Heap diagnostics are not enabled in this build. Use /stats for session counters and AGIWORKFORCE_DEBUG=1 for logs.".into(),
-        ),
-        "/stickers" => ParityCommandResult::SystemMessage(
-            "Stickers are a Claude UI affordance. AGI keeps this command for migration compatibility; no local sticker pack is installed.".into(),
-        ),
-        "/thinkback-play" => ParityCommandResult::SystemMessage(
-            "Think Back playback is not installed. Use /think-back to generate a recap prompt for this session.".into(),
-        ),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
         "/pr-comments" | "/autofix-pr" => {
@@ -759,9 +741,6 @@ pub fn render_install_app(app_name: &str) -> String {
             Some("github"),
             Some("https://github.com/apps/agiworkforce/installations/new"),
         ),
-        "Slack" | "slack" | "install-slack-app" => {
-            (Some("slack"), Some("https://api.slack.com/apps?new_app=1"))
-        }
         _ => (None, None),
     };
 
@@ -2854,8 +2833,8 @@ mod tests {
     }
 
     /// Regression guard for the auto-opening browser-tab bug: dispatching ANY
-    /// shared slash command (including `/install-github-app` and
-    /// `/install-slack-app`) must NOT launch an external browser on its own.
+    /// shared slash command (including `/install-github-app`) must NOT launch
+    /// an external browser on its own.
     /// All external opens route through `crate::oauth::open_external_url`, whose
     /// test spy records every launch that passes the user-action gate. A plain
     /// command dispatch is not a user-initiated open, so the count must stay 0.
@@ -2864,17 +2843,15 @@ mod tests {
         let _guard = crate::oauth::external_open_spy::lock();
         crate::oauth::external_open_spy::enable_and_reset();
 
-        // Cover every shared runtime command, plus the two install commands and
-        // their leading-slash forms explicitly (the exact tabs from the bug).
+        // Cover every shared runtime command, plus the install command and its
+        // leading-slash form explicitly (the exact tab from the bug).
         let mut commands: Vec<String> = shared_runtime_command_names()
             .iter()
             .map(|c| (*c).to_string())
             .collect();
         commands.extend([
             "/install-github-app".to_string(),
-            "/install-slack-app".to_string(),
             "install-github-app".to_string(),
-            "install-slack-app".to_string(),
         ]);
 
         for command in &commands {
@@ -2883,7 +2860,7 @@ mod tests {
         }
 
         // Also call the install renderer directly, it must not open either.
-        for app in ["GitHub", "Slack", "github", "slack"] {
+        for app in ["GitHub", "github"] {
             let _ = render_install_app(app);
         }
 
@@ -3526,17 +3503,17 @@ mod connector_contract_tests {
     #[test]
     fn a_blocked_connector_stops_the_cli_install_flow() {
         clear_cached_policy();
-        assert!(render_install_app("Slack").contains("https://api.slack.com"));
+        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
 
-        set_cached_policy(Some(policy()));
-        let rendered = render_install_app("Slack");
+        let mut blocked = policy();
+        blocked.blocked_connectors = vec!["GitHub".to_string()];
+        set_cached_policy(Some(blocked));
+        let rendered = render_install_app("GitHub");
         assert!(
-            !rendered.contains("https://api.slack.com"),
+            !rendered.contains("https://github.com/apps"),
             "the CLI still offered an install URL the workspace blocked: {rendered}"
         );
-        assert!(rendered.contains("has blocked the \"slack\" connector"));
-
-        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
+        assert!(rendered.contains("has blocked the \"github\" connector"));
         clear_cached_policy();
     }
 }

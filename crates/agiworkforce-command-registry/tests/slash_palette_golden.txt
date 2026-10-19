@@ -75,13 +75,10 @@
 /remote-env
 /add-dir
 /remove-dir
-/color
 /desktop [app]
 /effort
 /files
-/heapdump
 /install-github-app
-/install-slack-app
 /mobile [ios, android]
 /passes
 /pr-comments
@@ -94,10 +91,8 @@
 /security-review
 /stats
 /statusline
-/stickers
 /tag
 /think-back
-/thinkback-play
 /ultrareview
 /upgrade
 /vim
