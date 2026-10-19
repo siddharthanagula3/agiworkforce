@@ -83,6 +83,7 @@ const cloudModules = [
   'waitlist',
   'localized-pricing',
   'workspaces',
+  'agents',
 ];
 
 const cloudMovedFiles = [
