@@ -96,7 +96,7 @@ import {
   postAsShellAccount,
   readShellIdentity,
 } from './shellIdentity';
-import { createCodeSessionActivity } from './runtime/codeSessionActivity';
+import { createCodeSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
   noteDeveloperSessionEvent as noteBackgroundSessionEvent,
   spawnTrackedDeveloperRuntime,
