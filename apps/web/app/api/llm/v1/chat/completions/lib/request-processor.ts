@@ -2801,6 +2801,43 @@ async function planLimitContext(input: {
   }
 }
 
+export const BILLING_PERIOD_NOT_RENEWED_CODE = 'billing_period_not_renewed';
+
+/** True when the plan's paid period has ended and no credit account covers now. */
+export function billingPeriodLapsed(
+  subscription: { current_period_end?: string | Date | null } | undefined,
+  balance: { account_id?: string | null } | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (balance?.account_id) return false;
+  const end = subscription?.current_period_end;
+  if (!end) return false;
+  const endMs = new Date(end).getTime();
+  return Number.isFinite(endMs) && endMs <= now.getTime();
+}
+
+export function handleBillingPeriodLapsed(subscription?: SubscriptionInfo): NextResponse {
+  const ended = subscription?.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString('en-US', {
+        dateStyle: 'medium',
+        timeZone: 'UTC',
+      })
+    : null;
+  const error = new ManagedUsageRequestError(
+    `Your plan's billing period ended${ended ? ` on ${ended}` : ''} and has not renewed yet, so there are no credits to use. If you just renewed, try again in a few minutes; otherwise check Settings > Billing.`,
+    402,
+    BILLING_PERIOD_NOT_RENEWED_CODE,
+  );
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      'insufficient_quota',
+      quotaRecoveryFor(error.code, subscription),
+    ),
+    { status: error.status },
+  );
+}
+
 export function handleCreditError(
   _deductResult: {
     code?: string;
@@ -5584,6 +5621,10 @@ async function processAdmittedRequest(
           'Failed to allocate credits - continuing with credit check',
         );
       }
+    }
+
+    if (billingPeriodLapsed(subscription, existingBalance)) {
+      return { ok: false, response: handleBillingPeriodLapsed(subscription) };
     }
 
     const hasCredits = await timePhase(CHAT_TURN_PHASE.creditCheck, async () =>
