@@ -47,7 +47,7 @@ import {
   DESKTOP_RUNTIME_CHANNEL,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   type BrowserPairRequestPrompt,
-  type HostAgentNotificationKind,
+  effectiveAgentNotifications,
   type HostAgentNotificationPreferences,
   localSessionPath,
   type BrowserPairingState,
@@ -1146,27 +1146,8 @@ function nativeNotification(options: NotificationOptionsLike): NotificationLike 
   };
 }
 
-/**
- * One notification is raised per agent event. The Settings choices for
- * finished sessions and approvals narrow the agent notification settings:
- * off mutes those kinds, and Always shows them while a window is in front.
- */
 function agentNotificationPreferences(): HostAgentNotificationPreferences {
-  const { agentNotifications, sessionCompletionAlerts, sessionApprovalAlerts } = getPreferences();
-  const muted = new Set<HostAgentNotificationKind>(agentNotifications.muted);
-  if (sessionCompletionAlerts === 'never') {
-    muted.add('turn-complete');
-    muted.add('turn-failed');
-  }
-  if (!sessionApprovalAlerts) muted.add('approval');
-  return {
-    ...agentNotifications,
-    when:
-      sessionCompletionAlerts === 'always' && agentNotifications.when === 'unfocused'
-        ? 'always'
-        : agentNotifications.when,
-    muted: [...muted],
-  };
+  return effectiveAgentNotifications(getPreferences());
 }
 
 const workKeeper = createWorkKeeper({
