@@ -1,15 +1,14 @@
 import 'server-only';
 
+import {
+  GOOGLE_DRIVE_FILE_CREATE_SCOPE,
+  canonicalConnectorScope,
+} from '@/lib/connectors/oauth-scope-allowlist';
+
 const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const UPLOAD_TIMEOUT_MS = 30_000;
-const WRITE_SCOPES = new Set([
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive',
-  'drive.file',
-  'drive',
-]);
 
 export class GoogleDocsExportError extends Error {
   constructor(
@@ -22,7 +21,9 @@ export class GoogleDocsExportError extends Error {
 }
 
 export function canCreateDriveFiles(grantedScopes: readonly string[]): boolean {
-  return grantedScopes.some((scope) => WRITE_SCOPES.has(scope));
+  return grantedScopes.some(
+    (scope) => canonicalConnectorScope(scope) === GOOGLE_DRIVE_FILE_CREATE_SCOPE,
+  );
 }
 
 export async function createGoogleDocFromDocx(
