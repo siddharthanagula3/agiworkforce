@@ -3849,8 +3849,11 @@ fn start_remote_control(app: &mut TuiApp) -> String {
                 use crate::remote_control::RemoteControlStatus;
                 match &update {
                     RemoteControlStatus::Waiting { folder, pairing_line } => {
+                        let scan = crate::remote_control::render_qr(pairing_line, false)
+                            .map(|qr| format!("On your phone, open AGI Workforce, go to Remote, tap Scan and point it at this code:\n{qr}\nOr enter the code on the phone and paste:\n"))
+                            .unwrap_or_else(|| "On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:\n".to_string());
                         crate::tui::push_tui_notice(format!(
-                            "Remote Control is on for {folder}. Open AGI Workforce on your phone to continue this session there.\n{pairing_line}"
+                            "Remote Control is on for {folder}.\n{scan}{pairing_line}"
                         ))
                     }
                     RemoteControlStatus::Connected { phone } => crate::tui::push_tui_notice(
