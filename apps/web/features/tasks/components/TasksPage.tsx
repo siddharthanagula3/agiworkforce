@@ -7,10 +7,8 @@ import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 import { createWebCloudTasksClient, setWebCloudTaskArchived } from '../services/cloud-tasks-client';
 import { handOffConversationSend } from '@/features/chat/lib/conversation-send-handoff';
-import {
-  routinePromptFromGoal,
-  SCHEDULE_ROUTINE_QUERY_PARAM,
-} from '@/features/schedules/lib/schedule-form';
+import { routinePromptFromGoal } from '@/features/schedules/lib/schedule-form';
+import { scheduleFromPromptHref } from '@/features/schedules/components/schedule-from-turn';
 
 const RUN_QUERY_PARAM = 'run';
 
@@ -72,10 +70,7 @@ export function TasksPage() {
         );
       },
       saveAsRoutine: (goal) => {
-        const params = new URLSearchParams({
-          [SCHEDULE_ROUTINE_QUERY_PARAM]: routinePromptFromGoal(goal),
-        });
-        router.push(`/chat/schedules?${params.toString()}`);
+        router.push(scheduleFromPromptHref(routinePromptFromGoal(goal)));
       },
     }),
     [client, router, titleByConversationId],

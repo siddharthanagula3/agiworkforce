@@ -16,6 +16,7 @@ import {
   Code2,
   GitBranch,
   ListChecks,
+  FolderOpen,
   PanelsTopLeft,
   Square,
   TerminalSquare,
@@ -81,6 +82,7 @@ import {
   LOCAL_FAILURE_ACTION_LABELS,
   LOCAL_REVIEW_COMMAND,
   LOCAL_REVIEW_COPY,
+  isLocalFilesShortcut,
   isLocalReviewShortcut,
   localArchiveSessionConsequence,
   localCleanupFailureRow,
@@ -113,6 +115,7 @@ import { localSessionMemory } from '../local-session-memory';
 import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
+import { LocalFilesPanel } from './LocalFilesPanel';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
 import { LocalModelChip } from './LocalModelChip';
@@ -384,9 +387,29 @@ export function LocalSessionPanel({
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [filesDirty, setFilesDirty] = useState(false);
+  const [filesFocusKey, setFilesFocusKey] = useState(0);
   useEffect(() => {
-    onEditorDirtyChange?.(editorDirty);
-  }, [editorDirty, onEditorDirtyChange]);
+    onEditorDirtyChange?.(editorDirty || filesDirty);
+  }, [editorDirty, filesDirty, onEditorDirtyChange]);
+  const closeFiles = (then?: () => void) => {
+    const close = () => {
+      setFilesDirty(false);
+      setFilesOpen(false);
+      then?.();
+    };
+    if (!filesDirty) {
+      close();
+      return;
+    }
+    confirm({
+      title: LOCAL_CODE_COPY.discardEditsTitle,
+      description: LOCAL_CODE_COPY.discardLocalEditsDescription,
+      confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
+      onConfirm: close,
+    });
+  };
   const closeChanges = (then?: () => void) => {
     const close = () => {
       setEditorDirty(false);
@@ -415,6 +438,7 @@ export function LocalSessionPanel({
       return;
     }
     if (changesOpen) closeChanges(() => setReviewOpen(true));
+    else if (filesOpen) closeFiles(() => setReviewOpen(true));
     else setReviewOpen(true);
   };
   const toggleChanges = () => {
@@ -422,11 +446,34 @@ export function LocalSessionPanel({
       closeChanges();
       return;
     }
-    setReviewOpen(false);
-    setChangesOpen(true);
+    const show = () => {
+      setReviewOpen(false);
+      setChangesOpen(true);
+    };
+    if (filesOpen) closeFiles(show);
+    else show();
+  };
+  const openFiles = (focusSearch: boolean) => {
+    const show = () => {
+      setReviewOpen(false);
+      setFilesOpen(true);
+      if (focusSearch) setFilesFocusKey((key) => key + 1);
+    };
+    if (filesOpen) {
+      if (focusSearch) setFilesFocusKey((key) => key + 1);
+      return;
+    }
+    if (changesOpen) closeChanges(show);
+    else show();
+  };
+  const toggleFiles = () => {
+    if (filesOpen) closeFiles();
+    else openFiles(false);
   };
   const toggleReviewRef = useRef(toggleReview);
   toggleReviewRef.current = toggleReview;
+  const openFilesRef = useRef(openFiles);
+  openFilesRef.current = openFiles;
   const review = useLocalReview(
     session,
     worktree,
@@ -459,6 +506,17 @@ export function LocalSessionPanel({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [canReview]);
+
+  useEffect(() => {
+    if (remoteSsh) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isLocalFilesShortcut(event)) return;
+      event.preventDefault();
+      openFilesRef.current(true);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [remoteSsh]);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const testsRunning = tests.status === 'running';
   const memory = localSessionMemory(session.rootId, session.id);
@@ -663,6 +721,19 @@ export function LocalSessionPanel({
         <div className={styles['headerActions']}>
           <LocalExtensionsControl rootId={session.rootId} />
           {memoryAvailable && <LocalMemoryControl rootId={session.rootId} />}
+          {!remoteSsh && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${filesOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={LOCAL_CODE_COPY.files}
+              aria-pressed={filesOpen}
+              aria-keyshortcuts="Control+P Meta+P"
+              title={LOCAL_CODE_COPY.filesShortcut}
+              onClick={toggleFiles}
+            >
+              <FolderOpen size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
@@ -1355,6 +1426,17 @@ export function LocalSessionPanel({
               setChangesOpen(false);
             }}
             onDirtyChange={setEditorDirty}
+          />
+        )}
+        {filesOpen && (
+          <LocalFilesPanel
+            rootId={session.rootId}
+            searchFocusKey={filesFocusKey}
+            onClose={() => {
+              setFilesDirty(false);
+              setFilesOpen(false);
+            }}
+            onDirtyChange={setFilesDirty}
           />
         )}
         {reviewOpen && (

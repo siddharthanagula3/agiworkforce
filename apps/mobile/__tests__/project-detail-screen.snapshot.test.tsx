@@ -69,6 +69,7 @@ jest.mock('lucide-react-native', () => {
     Lock: factory('lock'),
     LogIn: factory('log-in'),
     Menu: factory('menu'),
+    Settings2: factory('settings-2'),
     MessageSquare: factory('message-square'),
     Plus: factory('plus'),
     SquarePen: factory('square-pen'),

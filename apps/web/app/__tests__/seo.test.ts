@@ -207,11 +207,14 @@ describe('sitemap', () => {
   });
 });
 
-describe('the empty blog', () => {
-  it('stays reachable for people but is marked noindex', () => {
-    const source = readFileSync(join(process.cwd(), 'app/blog/page.tsx'), 'utf8');
-    expect(source).toMatch(/robots:\s*\{\s*index:\s*false,\s*follow:\s*true\s*\}/);
-  });
+describe('pages without published content', () => {
+  it.each(['app/blog/page.tsx', 'app/customers/page.tsx'])(
+    '%s stays reachable for people but is marked noindex',
+    (relativePath) => {
+      const source = readFileSync(join(process.cwd(), relativePath), 'utf8');
+      expect(source).toMatch(/robots:\s*\{\s*index:\s*false,\s*follow:\s*true\s*\}/);
+    },
+  );
 });
 
 describe('homepage description', () => {

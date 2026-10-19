@@ -73,13 +73,28 @@ function hostAccelerator(id: string): string {
 
 const isMac = process.platform === 'darwin';
 
-function appleMenu(): MenuItemConstructorOptions[] {
+function settingsItem(actions: AppMenuActions): MenuItemConstructorOptions {
+  return {
+    label: isMac ? 'Settings…' : 'Settings',
+    accelerator: hostAccelerator('host-settings'),
+    click: actions.openSettings,
+  };
+}
+
+/**
+ * macOS keeps Settings and Check for Updates under the application's own menu,
+ * where every Mac app puts them; elsewhere they stay in File and Help.
+ */
+function appleMenu(actions: AppMenuActions): MenuItemConstructorOptions[] {
   if (!isMac) return [];
   return [
     {
       label: app.name,
       submenu: [
         { role: 'about' },
+        { label: 'Check for Updates…', click: actions.checkForUpdates },
+        { type: 'separator' },
+        settingsItem(actions),
         { type: 'separator' },
         {
           label: 'Launch at Login',
@@ -138,16 +153,12 @@ function fileMenu(
       enabled: computerUse === 'paused',
       click: actions.handBackScreen,
     },
-    { type: 'separator' },
-    {
-      label: 'Settings',
-      accelerator: hostAccelerator('host-settings'),
-      click: actions.openSettings,
-    },
   ];
 
   if (!isMac) {
     items.push(
+      { type: 'separator' },
+      settingsItem(actions),
       { type: 'separator' },
       {
         label: 'Launch at Login',
@@ -270,7 +281,7 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       { type: 'separator' },
       { label: 'Open Logs', click: actions.openLogs },
       { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
-      { label: 'Check for Updates', click: actions.checkForUpdates },
+      ...(isMac ? [] : [{ label: 'Check for Updates', click: actions.checkForUpdates }]),
     ],
   };
 }
@@ -281,7 +292,7 @@ export function appMenuTemplate(
   computerUse: ComputerUsePhase = 'idle',
 ): MenuItemConstructorOptions[] {
   return [
-    ...appleMenu(),
+    ...appleMenu(actions),
     fileMenu(actions, accelerators, computerUse),
     editMenu(),
     viewMenu(actions),
@@ -305,4 +316,22 @@ export function installAppMenu(
   computerUse: ComputerUsePhase = 'idle',
 ): void {
   Menu.setApplicationMenu(buildAppMenu(actions, accelerators, computerUse));
+}
+
+export interface DockMenuActions {
+  newChat: () => void;
+  newWindow: () => void;
+  toggleQuickAsk: () => void;
+}
+
+export function dockMenuTemplate(actions: DockMenuActions): MenuItemConstructorOptions[] {
+  return [
+    { label: 'New Chat', click: actions.newChat },
+    { label: 'New Window', click: actions.newWindow },
+    { label: 'Quick Ask', click: actions.toggleQuickAsk },
+  ];
+}
+
+export function installDockMenu(actions: DockMenuActions): void {
+  app.dock?.setMenu(Menu.buildFromTemplate(dockMenuTemplate(actions)));
 }

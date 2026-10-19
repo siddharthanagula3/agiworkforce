@@ -2935,7 +2935,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const stopBtn = document.getElementById('stopBtn');
     const sendActionLabel = document.getElementById('sendActionLabel');
     const followUpStatus = document.getElementById('followUpStatus');
-    const composerHint = document.getElementById('composerHint');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
@@ -3592,6 +3591,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = 'queue';
+    let enterBehavior = 'enter';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
     // The turn a Retry resends. Cleared by a new conversation so a retry can
@@ -4292,6 +4292,19 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (conversation.plan) upsertPlanCard(conversation.plan);
     }
 
+    function composerKeys() {
+      return enterBehavior === 'modifier'
+        ? { send: MOD_KEY_LABEL + '+Enter', invert: MOD_KEY_LABEL + '+Shift+Enter' }
+        : enterBehavior === 'modifierIfMultiline'
+          ? { send: 'Enter, or ' + MOD_KEY_LABEL + '+Enter with several lines', invert: MOD_KEY_LABEL + '+Enter' }
+          : { send: 'Enter', invert: MOD_KEY_LABEL + '+Enter' };
+    }
+
+    function enterNeedsModifier() {
+      return enterBehavior === 'modifier' ||
+        (enterBehavior === 'modifierIfMultiline' && userInput.value.indexOf('\\n') !== -1);
+    }
+
     function setStreaming(value) {
       streaming = value;
       renderPlanDecision();
@@ -4304,22 +4317,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
+      var keys = composerKeys();
       if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
       sendBtn.setAttribute('aria-label', value ? actionLabel + ' follow-up' : 'Send');
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
-          : 'Send (Enter)'
+          ? actionLabel + ' follow-up (' + keys.send + ') · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + keys.invert + ')'
+          : 'Send (' + keys.send + ')'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
-      if (composerHint) {
-        composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
-              (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
-          : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
-      }
     }
 
     function showFollowUpStatus(message, kind, sticky) {
@@ -4851,6 +4859,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     window.addEventListener('focus', function() {
       vscode.postMessage({ type: 'viewFocused' });
     });
+    window.addEventListener('blur', function() {
+      vscode.postMessage({ type: 'viewBlurred' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -4917,9 +4928,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           return;
         }
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter') {
+        var modifier = e.metaKey || e.ctrlKey;
+        var needsModifier = enterNeedsModifier();
+        if (needsModifier ? !modifier : e.shiftKey) return;
         e.preventDefault();
-        var oneTurnBehavior = streaming && (e.metaKey || e.ctrlKey)
+        var inverted = needsModifier ? e.shiftKey : modifier;
+        var oneTurnBehavior = streaming && inverted
           ? (followUpBehavior === 'steer' ? 'queue' : 'steer')
           : undefined;
         sendMessage(oneTurnBehavior);
@@ -6474,6 +6489,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'followUpBehavior') {
         followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        enterBehavior =
+          msg.payload.enterBehavior === 'modifier' || msg.payload.enterBehavior === 'modifierIfMultiline'
+            ? msg.payload.enterBehavior
+            : 'enter';
         setStreaming(streaming);
       }
 
@@ -10635,7 +10654,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const stopBtn = document.getElementById('stopBtn');
     const sendActionLabel = document.getElementById('sendActionLabel');
     const followUpStatus = document.getElementById('followUpStatus');
-    const composerHint = document.getElementById('composerHint');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
@@ -11292,6 +11310,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = 'queue';
+    let enterBehavior = 'enter';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
     // The turn a Retry resends. Cleared by a new conversation so a retry can
@@ -11992,6 +12011,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (conversation.plan) upsertPlanCard(conversation.plan);
     }
 
+    function composerKeys() {
+      return enterBehavior === 'modifier'
+        ? { send: MOD_KEY_LABEL + '+Enter', invert: MOD_KEY_LABEL + '+Shift+Enter' }
+        : enterBehavior === 'modifierIfMultiline'
+          ? { send: 'Enter, or ' + MOD_KEY_LABEL + '+Enter with several lines', invert: MOD_KEY_LABEL + '+Enter' }
+          : { send: 'Enter', invert: MOD_KEY_LABEL + '+Enter' };
+    }
+
+    function enterNeedsModifier() {
+      return enterBehavior === 'modifier' ||
+        (enterBehavior === 'modifierIfMultiline' && userInput.value.indexOf('\\n') !== -1);
+    }
+
     function setStreaming(value) {
       streaming = value;
       renderPlanDecision();
@@ -12004,22 +12036,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
+      var keys = composerKeys();
       if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
       sendBtn.setAttribute('aria-label', value ? actionLabel + ' follow-up' : 'Send');
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
-          : 'Send (Enter)'
+          ? actionLabel + ' follow-up (' + keys.send + ') · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + keys.invert + ')'
+          : 'Send (' + keys.send + ')'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
-      if (composerHint) {
-        composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
-              (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
-          : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
-      }
     }
 
     function showFollowUpStatus(message, kind, sticky) {
@@ -12551,6 +12578,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     window.addEventListener('focus', function() {
       vscode.postMessage({ type: 'viewFocused' });
     });
+    window.addEventListener('blur', function() {
+      vscode.postMessage({ type: 'viewBlurred' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -12617,9 +12647,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           return;
         }
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter') {
+        var modifier = e.metaKey || e.ctrlKey;
+        var needsModifier = enterNeedsModifier();
+        if (needsModifier ? !modifier : e.shiftKey) return;
         e.preventDefault();
-        var oneTurnBehavior = streaming && (e.metaKey || e.ctrlKey)
+        var inverted = needsModifier ? e.shiftKey : modifier;
+        var oneTurnBehavior = streaming && inverted
           ? (followUpBehavior === 'steer' ? 'queue' : 'steer')
           : undefined;
         sendMessage(oneTurnBehavior);
@@ -14174,6 +14208,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'followUpBehavior') {
         followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        enterBehavior =
+          msg.payload.enterBehavior === 'modifier' || msg.payload.enterBehavior === 'modifierIfMultiline'
+            ? msg.payload.enterBehavior
+            : 'enter';
         setStreaming(streaming);
       }
 
@@ -18335,7 +18373,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const stopBtn = document.getElementById('stopBtn');
     const sendActionLabel = document.getElementById('sendActionLabel');
     const followUpStatus = document.getElementById('followUpStatus');
-    const composerHint = document.getElementById('composerHint');
     const modelSelect = document.getElementById('modelSelect');
     const modelPill = document.getElementById('modelPill');
     const modelPopoverEl = document.getElementById('modelPopover');
@@ -18992,6 +19029,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = 'queue';
+    let enterBehavior = 'enter';
     let followUpStatusTimer = null;
     let clientMessageSeq = 0;
     // The turn a Retry resends. Cleared by a new conversation so a retry can
@@ -19692,6 +19730,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (conversation.plan) upsertPlanCard(conversation.plan);
     }
 
+    function composerKeys() {
+      return enterBehavior === 'modifier'
+        ? { send: MOD_KEY_LABEL + '+Enter', invert: MOD_KEY_LABEL + '+Shift+Enter' }
+        : enterBehavior === 'modifierIfMultiline'
+          ? { send: 'Enter, or ' + MOD_KEY_LABEL + '+Enter with several lines', invert: MOD_KEY_LABEL + '+Enter' }
+          : { send: 'Enter', invert: MOD_KEY_LABEL + '+Enter' };
+    }
+
+    function enterNeedsModifier() {
+      return enterBehavior === 'modifier' ||
+        (enterBehavior === 'modifierIfMultiline' && userInput.value.indexOf('\\n') !== -1);
+    }
+
     function setStreaming(value) {
       streaming = value;
       renderPlanDecision();
@@ -19704,22 +19755,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
+      var keys = composerKeys();
       if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
       sendBtn.setAttribute('aria-label', value ? actionLabel + ' follow-up' : 'Send');
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
-          : 'Send (Enter)'
+          ? actionLabel + ' follow-up (' + keys.send + ') · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + keys.invert + ')'
+          : 'Send (' + keys.send + ')'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
-      if (composerHint) {
-        composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
-              (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
-          : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
-      }
     }
 
     function showFollowUpStatus(message, kind, sticky) {
@@ -20251,6 +20297,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     window.addEventListener('focus', function() {
       vscode.postMessage({ type: 'viewFocused' });
     });
+    window.addEventListener('blur', function() {
+      vscode.postMessage({ type: 'viewBlurred' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -20317,9 +20366,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           return;
         }
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter') {
+        var modifier = e.metaKey || e.ctrlKey;
+        var needsModifier = enterNeedsModifier();
+        if (needsModifier ? !modifier : e.shiftKey) return;
         e.preventDefault();
-        var oneTurnBehavior = streaming && (e.metaKey || e.ctrlKey)
+        var inverted = needsModifier ? e.shiftKey : modifier;
+        var oneTurnBehavior = streaming && inverted
           ? (followUpBehavior === 'steer' ? 'queue' : 'steer')
           : undefined;
         sendMessage(oneTurnBehavior);
@@ -21874,6 +21927,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'followUpBehavior') {
         followUpBehavior = msg.payload.behavior === 'steer' ? 'steer' : 'queue';
+        enterBehavior =
+          msg.payload.enterBehavior === 'modifier' || msg.payload.enterBehavior === 'modifierIfMultiline'
+            ? msg.payload.enterBehavior
+            : 'enter';
         setStreaming(streaming);
       }
 

@@ -24,6 +24,7 @@ import {
   Brain,
   Check,
   BookOpen,
+  CalendarClock,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -82,6 +83,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
 import { useSaveAsSkill } from '@/features/skills/components/save-as-skill';
+import { useScheduleFromTurn } from '@/features/schedules/components/schedule-from-turn';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
   isAutoModeModelId,
@@ -1066,6 +1068,7 @@ const MessageBubbleComponent = function MessageBubble({
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const projectAnswerSave = useProjectAnswerSave();
   const saveAsSkill = useSaveAsSkill();
+  const scheduleFromTurn = useScheduleFromTurn();
   const [savingToProject, setSavingToProject] = useState(false);
   const saveToProject = useCallback(async () => {
     if (!projectAnswerSave || savingToProject) return;
@@ -3580,6 +3583,12 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <FolderOpen className="me-2 h-4 w-4" aria-hidden="true" />
                             {savingToProject ? 'Saving to project…' : 'Save to project'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && hasReadableTurn && !message.isStreaming && scheduleFromTurn && (
+                          <DropdownMenuItem onClick={() => scheduleFromTurn.schedule(message.id)}>
+                            <CalendarClock className="me-2 h-4 w-4" aria-hidden="true" />
+                            Run this on a schedule
                           </DropdownMenuItem>
                         )}
                         {!isUser && hasReadableTurn && !message.isStreaming && saveAsSkill && (

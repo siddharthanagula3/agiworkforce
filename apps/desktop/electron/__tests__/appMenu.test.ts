@@ -11,7 +11,13 @@ vi.mock('../launchAtLogin', () => ({
   setLaunchAtLogin: vi.fn(),
 }));
 
-const { appMenuTemplate } = await import('../appMenu');
+const { appMenuTemplate, dockMenuTemplate } = await import('../appMenu');
+
+const isMac = process.platform === 'darwin';
+const SETTINGS_MENU = isMac ? 'AGI Cloud' : 'File';
+const SETTINGS_LABEL = isMac ? 'Settings…' : 'Settings';
+const UPDATES_MENU = isMac ? 'AGI Cloud' : 'Help';
+const UPDATES_LABEL = isMac ? 'Check for Updates…' : 'Check for Updates';
 
 function actions() {
   return {
@@ -145,11 +151,12 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
     const help = submenu(menu, 'Help');
 
-    for (const label of ['AGI Workforce Support', 'Open Logs', 'Check for Updates']) {
+    for (const label of ['AGI Workforce Support', 'Open Logs']) {
       const entry = help.find((candidate) => candidate.label === label);
       expect(entry, label).toBeDefined();
       (entry?.click as () => void)();
     }
+    (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
 
     expect(spies.openSupport).toHaveBeenCalledTimes(1);
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
@@ -171,7 +178,7 @@ describe('the application menu', () => {
     const { menu } = template();
     const claimed: Array<[string, string, string]> = [
       ['File', 'New Chat', 'host-new-chat'],
-      ['File', 'Settings', 'host-settings'],
+      [SETTINGS_MENU, SETTINGS_LABEL, 'host-settings'],
       ['View', 'Actual Size', 'host-actual-size'],
       ['View', 'Zoom In', 'host-zoom-in'],
       ['View', 'Zoom Out', 'host-zoom-out'],
@@ -256,5 +263,30 @@ describe('the application menu', () => {
       ).click as () => void
     )();
     expect(onConversation.openConversationInNewWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Settings and updates where the platform puts them, once each', () => {
+    const { menu } = template();
+    const labels = menu.flatMap((entry) =>
+      ((entry.submenu as MenuItemConstructorOptions[] | undefined) ?? []).map(
+        (child) => child.label,
+      ),
+    );
+
+    expect(labels.filter((label) => label === SETTINGS_LABEL)).toHaveLength(1);
+    expect(labels.filter((label) => label === UPDATES_LABEL)).toHaveLength(1);
+  });
+});
+
+describe('the dock menu', () => {
+  it('opens a chat, a window or Quick Ask from the dock', () => {
+    const spies = { newChat: vi.fn(), newWindow: vi.fn(), toggleQuickAsk: vi.fn() };
+    const dock = dockMenuTemplate(spies);
+
+    expect(dock.map((entry) => entry.label)).toEqual(['New Chat', 'New Window', 'Quick Ask']);
+    for (const entry of dock) (entry.click as () => void)();
+    expect(spies.newChat).toHaveBeenCalledTimes(1);
+    expect(spies.newWindow).toHaveBeenCalledTimes(1);
+    expect(spies.toggleQuickAsk).toHaveBeenCalledTimes(1);
   });
 });

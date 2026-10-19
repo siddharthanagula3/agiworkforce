@@ -45,7 +45,6 @@ import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templ
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
   createInitialScheduleDraft,
-  routineDraftFromPrompt,
   scheduleShareToDraft,
   scheduleToDraft,
   validateAndBuildScheduleRequest,
@@ -68,6 +67,7 @@ import {
   type ScheduleRun,
   type ScheduleTask,
 } from '../types';
+import { scheduleNameFromPrompt } from './schedule-from-turn';
 
 /**
  * Kept as prose in the create dialog, where someone is about to rely on an
@@ -133,7 +133,7 @@ export interface ScheduleProjectScope {
 interface SchedulesPageProps {
   focusScheduleId?: string | null;
   sharedScheduleToken?: string | null;
-  routinePrompt?: string | null;
+  draftPrompt?: string | null;
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
@@ -201,7 +201,7 @@ export function SchedulesPage({
   onOpenChat,
   focusScheduleId = null,
   sharedScheduleToken = null,
-  routinePrompt = null,
+  draftPrompt = null,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -720,20 +720,25 @@ export function SchedulesPage({
       });
   }, [api, canCreateSchedules, listStatus, scope?.projectId, sharedScheduleToken]);
 
-  const routinePromptRef = useRef<string | null>(null);
+  const draftPromptRef = useRef<string | null>(null);
   useEffect(() => {
-    const prompt = routinePrompt?.trim();
+    const prompt = draftPrompt?.trim();
     if (!prompt || !canCreateSchedules || listStatus !== 'success') return;
-    if (routinePromptRef.current === prompt) return;
-    routinePromptRef.current = prompt;
-    const nextDraft = { ...routineDraftFromPrompt(prompt), projectId: scope?.projectId ?? null };
+    if (draftPromptRef.current === prompt) return;
+    draftPromptRef.current = prompt;
+    const nextDraft = {
+      ...createInitialScheduleDraft(),
+      name: scheduleNameFromPrompt(prompt),
+      prompt,
+      projectId: scope?.projectId ?? null,
+    };
     setEditing(null);
     setDraft(nextDraft);
     initialDraftRef.current = JSON.stringify(nextDraft);
     setFormErrors({});
     setSubmitError(null);
     setDialogOpen(true);
-  }, [canCreateSchedules, listStatus, routinePrompt, scope?.projectId]);
+  }, [canCreateSchedules, draftPrompt, listStatus, scope?.projectId]);
 
   const openNotificationSettings = (schedule: ScheduleTask) => {
     openEdit(schedule);

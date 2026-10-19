@@ -286,6 +286,15 @@
   gap: var(--agi-space-1) var(--agi-space-4);
 }
 
+[data-design='agi'] .agi-ds-linkgrid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--agi-space-1) var(--agi-space-4);
+}
+
 [data-design='agi'] .agi-ds-btn-row {
   display: flex;
   flex-wrap: wrap;
@@ -346,13 +355,13 @@
 [data-design='agi'] .agi-ds-input {
   width: 100%;
   min-height: 44px;
-  padding: var(--agi-space-2) var(--agi-space-3);
+  padding: var(--space-3) var(--space-4);
   font-family: inherit;
-  font-size: var(--agi-text-sm);
+  font-size: var(--agi-text-md);
   color: var(--agi-ink);
   background: var(--agi-ground);
   border: 1px solid var(--agi-rule-strong);
-  border-radius: var(--agi-radius-control);
+  border-radius: var(--corner-surface);
   outline: none;
   transition: border-color var(--agi-dur-fast) var(--agi-ease-out);
 }

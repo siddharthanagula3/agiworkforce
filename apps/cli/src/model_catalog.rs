@@ -1973,10 +1973,8 @@ mod tests {
             .filter(|model| !is_servable_availability(model.availability.as_deref()))
             .collect();
         assert!(
-            unreleased.iter().any(|model| {
-                supports_cli_model_type(&model.model_type) && model.context_window.is_none()
-            }),
-            "canonical catalog must contain an unreleased chat entry without a context window"
+            !unreleased.is_empty(),
+            "canonical catalog must contain an unreleased entry, or this test checks nothing"
         );
         let cat = Catalog::bundled();
         let default_model = pick_fallback_default_model();

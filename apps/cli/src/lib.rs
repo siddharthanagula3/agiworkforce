@@ -2430,15 +2430,10 @@ fn print_structured(value: &serde_json::Value, mode: StructuredOutput) -> Result
 /// The project's own `.agiworkforce/config.toml` is merged in, because a
 /// directory a user marked Local must not reach the account from inside it.
 fn account_privacy_mode() -> platform::runtime::session::PrivacyMode {
-    let config = config::CliConfig::load_merged()
+    config::CliConfig::load_merged()
         .or_else(|_| config::CliConfig::load_without_project())
-        .unwrap_or_default();
-    config
-        .ui
-        .privacy_mode
-        .as_deref()
-        .and_then(platform::runtime::session::PrivacyMode::from_arg)
-        .unwrap_or(platform::runtime::session::PrivacyMode::Managed)
+        .unwrap_or_default()
+        .account_privacy_mode()
 }
 
 /// Pull one conversation out of the account and write it into the managed
@@ -2546,25 +2541,39 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
             anyhow::anyhow!("No conversation '{conversation_id}' in your AGI Workforce account")
         })?;
 
-    let messages = conversation
-        .messages
-        .iter()
-        .map(|message| models::Message::text(&message.role, &message.content))
-        .collect::<Vec<_>>();
+    let default_model = config::CliConfig::load_merged()
+        .or_else(|_| config::CliConfig::load_without_project())
+        .unwrap_or_default()
+        .default
+        .model;
+    let model = conversation
+        .model
+        .clone()
+        .filter(|model| model_catalog::find(model).is_some())
+        .unwrap_or(default_model);
     let conn = sessions::open_db()?;
-    sessions::import_hosted_session(
+    let adoption = sessions::adopt_hosted_conversation(
         &conn,
-        &conversation.id,
-        &conversation.title,
-        conversation.model.as_deref(),
-        messages,
-        "your AGI Workforce account",
+        &conversation,
+        sessions::HostedCopy {
+            model,
+            auto_routing: None,
+            preamble: Vec::new(),
+            workspace_root: None,
+        },
     )?;
-    eprintln!(
-        "Resuming '{}' from your account ({} messages).",
-        conversation.title,
-        conversation.messages.len()
-    );
+    if adoption == sessions::HostedAdoption::Kept {
+        eprintln!(
+            "Resuming '{}'. This device already has everything your account holds for it.",
+            conversation.title
+        );
+    } else {
+        eprintln!(
+            "Resuming '{}' from your account ({} messages).",
+            conversation.title,
+            conversation.messages.len()
+        );
+    }
     Ok(conversation.id)
 }
 

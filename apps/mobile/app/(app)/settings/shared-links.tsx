@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Share, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Link2, Trash2, AlertCircle } from 'lucide-react-native';
@@ -312,6 +313,7 @@ export default function SharedLinksScreen() {
               </View>
             </Card>
           ))}
+        <HelpArticleLink docId="sharing-conversations" label="How shared links work" />
       </ScrollView>
     </SafeAreaView>
   );

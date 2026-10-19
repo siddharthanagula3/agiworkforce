@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SCHEDULE_PROMPT_QUERY_PARAM } from '@/features/schedules/components/schedule-from-turn';
 
 const push = vi.fn();
 const listRuns = vi.fn();
@@ -118,7 +119,7 @@ describe('web TasksPage empty state', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Save as routine/ }));
     const target = new URL(String(push.mock.calls.at(-1)?.[0]), 'https://agi.invalid');
     expect(target.pathname).toBe('/chat/schedules');
-    expect(target.searchParams.get('routine')).toBe(
+    expect(target.searchParams.get(SCHEDULE_PROMPT_QUERY_PARAM)).toBe(
       'Watch competitor prices\n\nConstraints: public sources only\n\nDeliverable: a CSV',
     );
   });

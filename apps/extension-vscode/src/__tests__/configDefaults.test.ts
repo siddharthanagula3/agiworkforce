@@ -48,6 +48,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   inlineCompletionsMaxLength: 'agiWorkforce.inlineCompletions.maxLength',
   model: 'agiWorkforce.model',
   composerFollowUpBehavior: 'agiWorkforce.composer.followUpBehavior',
+  composerEnterBehavior: 'agiWorkforce.composer.enterBehavior',
   contextLines: 'agiWorkforce.contextLines',
   respectGitIgnore: 'agiWorkforce.respectGitIgnore',
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',

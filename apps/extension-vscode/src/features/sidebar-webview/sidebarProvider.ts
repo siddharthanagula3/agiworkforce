@@ -22,6 +22,10 @@ export type {
   UsageMeterWebviewPayload,
 } from './ChatStateManager';
 
+function setChatFocused(focused: boolean): void {
+  void vscode.commands.executeCommand('setContext', 'agi-workforce.chatFocused', focused);
+}
+
 export class SidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'agi-workforce.sidebar';
 
@@ -101,6 +105,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         );
         return;
       }
+      if (parsed.type === 'viewFocused' || parsed.type === 'viewBlurred') {
+        setChatFocused(parsed.type === 'viewFocused');
+      }
       await this._stateManager.handleMessage(
         parsed as unknown as Parameters<typeof this._stateManager.handleMessage>[0],
       );
@@ -119,9 +126,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this._visibilityListener = webviewView.onDidChangeVisibility?.(() => {
       this._refreshBadge();
       if (webviewView.visible) void this._stateManager.syncStoredTranscript();
+      else setChatFocused(false);
     });
 
     webviewView.onDidDispose(() => {
+      setChatFocused(false);
       this._messageListener?.dispose();
       delete this._messageListener;
       this._conversationTreeListener?.dispose();
@@ -295,6 +304,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public showCheckpoints(): Promise<void> {
     return this._stateManager.showCheckpoints();
+  }
+
+  public compactConversation(): Promise<void> {
+    return this._stateManager.compactConversation();
+  }
+
+  public showSessionStatus(): Promise<void> {
+    return this._stateManager.showSessionStatus();
+  }
+
+  public pickSlashCommand(): Promise<void> {
+    return this._stateManager.pickSlashCommand();
+  }
+
+  public runSlashCommand(name: string): Promise<void> {
+    return this._stateManager.runSlashCommand(name);
   }
 
   public refreshRuntimeStatus(): void {

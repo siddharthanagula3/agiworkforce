@@ -405,6 +405,10 @@ pub(crate) fn remove_skill(project_root: &Path, name: &str) -> Result<PathBuf> {
         .find(|entry| entry.skill.name.eq_ignore_ascii_case(name))
         .with_context(|| format!("no skill named '{name}' is installed"))?;
     anyhow::ensure!(
+        !matches!(entry.origin, crate::skills::SkillOrigin::Account),
+        "'{name}' comes from your AGI Workforce account: remove it there, or turn it off on this device"
+    );
+    anyhow::ensure!(
         matches!(entry.origin, crate::skills::SkillOrigin::User),
         "'{name}' is not one of your own skills: a project skill lives in the repository and a plugin skill goes with its plugin"
     );

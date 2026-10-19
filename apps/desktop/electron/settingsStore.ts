@@ -35,6 +35,7 @@ export function getShortcuts(): GarnishShortcuts {
   const settings = getSettings();
   return {
     quickAskShortcut: settings.quickAskShortcut,
+    newChatShortcut: settings.newChatShortcut,
     screenshotShortcut: settings.screenshotShortcut,
     windowShotShortcut: settings.windowShotShortcut,
     voiceShortcut: settings.voiceShortcut,

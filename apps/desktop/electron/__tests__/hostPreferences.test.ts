@@ -95,6 +95,7 @@ vi.mock('../settingsStore', () => ({
   getSettings: () => storedSettings,
   getShortcuts: () => ({
     quickAskShortcut: storedSettings['quickAskShortcut'] ?? HOST_SHORTCUT_CHOICES.quickAsk[0],
+    newChatShortcut: storedSettings['newChatShortcut'] ?? HOST_SHORTCUT_CHOICES.newChat[0],
     screenshotShortcut: storedSettings['screenshotShortcut'] ?? HOST_SHORTCUT_CHOICES.screenshot[0],
     windowShotShortcut: storedSettings['windowShotShortcut'] ?? HOST_SHORTCUT_CHOICES.windowShot[0],
     voiceShortcut: storedSettings['voiceShortcut'] ?? HOST_SHORTCUT_CHOICES.voice[0],
@@ -285,6 +286,7 @@ describe('the host preferences channel', () => {
     expect(state.preferences['showInMenuBar']).toBe(true);
     expect(state.preferences['quickAskShortcut']).toBe(HOST_SHORTCUT_CHOICES.quickAsk[0]);
     expect(Object.keys(state.shortcutStatus).sort()).toEqual([
+      'newChat',
       'quickAsk',
       'screenshot',
       'stop',

@@ -222,7 +222,10 @@ export default function DataControlsScreen() {
   const bulkBusy = bulkAction !== null;
 
   return (
-    <SettingsScreenShell title="Data Controls">
+    <SettingsScreenShell
+      title="Data Controls"
+      help={{ docId: 'privacy-controls', label: 'How privacy controls work' }}
+    >
       <SettingsInfo
         title="Model training"
         body="AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings."

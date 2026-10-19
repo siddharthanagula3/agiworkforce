@@ -341,11 +341,8 @@
 }
 
 [data-design='agi'].agi-ds-page.agi-co main .agi-ds-input {
-  padding: var(--space-3) var(--space-4);
   border-color: var(--chat-border-strong);
-  border-radius: var(--corner-surface);
   background: var(--chat-input-bg);
-  font-size: var(--agi-text-md);
   line-height: var(--co-leading-body);
   color: var(--chat-text-primary);
 }

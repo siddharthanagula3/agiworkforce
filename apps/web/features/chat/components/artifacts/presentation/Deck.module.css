@@ -1,0 +1,210 @@
+.slide {
+  --deck-background: #ffffff;
+  --deck-surface: #f4f4f5;
+  --deck-text: #18181b;
+  --deck-muted: #52525b;
+  --deck-accent: #1d4ed8;
+  --deck-heading-font: ui-sans-serif, system-ui, sans-serif;
+  --deck-body-font: ui-sans-serif, system-ui, sans-serif;
+  container-type: inline-size;
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  background: var(--deck-background);
+  color: var(--deck-text);
+  font-family: var(--deck-body-font);
+}
+
+.body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.6cqw;
+  padding: 5.5cqw 7cqw;
+  overflow: hidden;
+  font-size: 2.1cqw;
+  line-height: 1.45;
+}
+
+.body h1,
+.body h2,
+.body h3,
+.body h4 {
+  margin: 0;
+  font-family: var(--deck-heading-font);
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--deck-text);
+}
+
+.body h1 {
+  font-size: 4.6cqw;
+}
+
+.body h2 {
+  font-size: 3.6cqw;
+}
+
+.body h3 {
+  font-size: 2.8cqw;
+}
+
+.body h4 {
+  font-size: 2.4cqw;
+}
+
+.body h1::after,
+.body h2:first-child::after {
+  display: block;
+  width: 6cqw;
+  height: 0.35cqw;
+  margin-top: 1.2cqw;
+  background: var(--deck-accent);
+  content: '';
+}
+
+.body p {
+  margin: 0;
+}
+
+.body ul,
+.body ol {
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
+
+.body li + li {
+  margin-top: 0.5cqw;
+}
+
+.body li::marker {
+  color: var(--deck-accent);
+}
+
+.body a {
+  color: var(--deck-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.body strong {
+  font-weight: 650;
+}
+
+.body blockquote {
+  margin: 0;
+  padding-inline-start: 1.4cqw;
+  border-inline-start: 0.4cqw solid var(--deck-accent);
+  color: var(--deck-muted);
+}
+
+.body code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.3em;
+  background: var(--deck-surface);
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.body pre {
+  margin: 0;
+  padding: 1.2cqw 1.6cqw;
+  border-radius: 0.8cqw;
+  background: var(--deck-surface);
+  overflow: hidden;
+  font-size: 1.6cqw;
+}
+
+.body pre code {
+  padding: 0;
+  background: none;
+}
+
+.body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.7cqw;
+}
+
+.body th,
+.body td {
+  padding: 0.7cqw 1cqw;
+  border-bottom: 0.12cqw solid color-mix(in srgb, var(--deck-text) 22%, transparent);
+  text-align: start;
+}
+
+.body th {
+  color: var(--deck-text);
+  font-weight: 650;
+}
+
+.body img {
+  display: block;
+  max-width: 100%;
+  max-height: 34cqw;
+  margin: 0 auto;
+  border-radius: 0.8cqw;
+  object-fit: contain;
+}
+
+.visual {
+  min-height: 0;
+  border-radius: 0.8cqw;
+  overflow: hidden;
+}
+
+.visualPlaceholder {
+  flex: 1;
+  min-height: 8cqw;
+  border-radius: 0.8cqw;
+  background: var(--deck-surface);
+}
+
+.footer {
+  position: absolute;
+  inset-inline: 7cqw;
+  bottom: 2cqw;
+  display: flex;
+  justify-content: space-between;
+  color: var(--deck-muted);
+  font-size: 1.2cqw;
+}
+
+.shapes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.shape {
+  pointer-events: auto;
+}
+
+.shapeEditable {
+  cursor: grab;
+}
+
+.shapeSelected {
+  outline: none;
+}
+
+.remoteImage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6cqw;
+  padding: 0.6cqw 1cqw;
+  border: 0.12cqw dashed var(--deck-muted);
+  border-radius: 0.6cqw;
+  color: var(--deck-muted);
+  font-size: 1.4cqw;
+}
+
+.remoteImage button {
+  color: var(--deck-accent);
+  text-decoration: underline;
+}
