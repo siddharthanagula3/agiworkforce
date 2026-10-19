@@ -4,9 +4,19 @@ import { createRequire } from 'node:module';
 import { agiChatCssVars } from '@agiworkforce/design-tokens';
 import { describe, expect, it } from 'vitest';
 
-import { LANGUAGE_LOADERS, THEME_LOADERS } from './shikiHighlighter';
+import { CODE_THEMES, LANGUAGE_LOADERS, LIGHT_THEME_LOADER } from './shikiHighlighter';
 
-type ThemeName = keyof typeof THEME_LOADERS;
+type ThemeName = 'light' | 'dark';
+
+const THEMES_DRAWN: readonly { name: string; slot: ThemeName; load: typeof LIGHT_THEME_LOADER }[] =
+  [
+    { name: 'light', slot: 'light', load: LIGHT_THEME_LOADER },
+    ...Object.entries(CODE_THEMES).map(([id, theme]) => ({
+      name: `dark (${id})`,
+      slot: 'dark' as const,
+      load: theme.dark as typeof LIGHT_THEME_LOADER,
+    })),
+  ];
 
 interface ThemeRule {
   readonly scope?: string | readonly string[];
@@ -122,9 +132,9 @@ describe('Shiki theme colours on the code surface', () => {
     dark: [...declared.dark, scriptGround('dark')],
   };
 
-  for (const themeName of Object.keys(THEME_LOADERS) as ThemeName[]) {
-    it(`${themeName}: every token colour clears 4.5:1 on every ${CODE_GROUND_TOKEN}`, async () => {
-      const theme = (await THEME_LOADERS[themeName]()).default;
+  for (const { name, slot: themeName, load } of THEMES_DRAWN) {
+    it(`${name}: every token colour clears 4.5:1 on every ${CODE_GROUND_TOKEN}`, async () => {
+      const theme = (await load()).default;
       const colours = drawnColours(theme);
 
       expect(theme.type).toBe(themeName);

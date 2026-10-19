@@ -239,6 +239,10 @@ import {
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { useSoftKeyboardInset } from './soft-keyboard-inset';
+import {
+  USAGE_RESET_REMINDER_COPY,
+  type UsageResetReminderOutcome,
+} from '@/features/chat/lib/usage-reset-reminder';
 
 /**
  * The operations a composer offers for an attached image. `outpaint` is not
@@ -523,6 +527,7 @@ interface ChatComposerProps {
     resetAt?: string;
     actionLabel?: string;
     onRecover?: () => void;
+    onRemindAtReset?: () => Promise<UsageResetReminderOutcome>;
   };
   onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
   /**
@@ -4299,6 +4304,18 @@ const ChatComposerNewComponent = ({
   const usageBlockResetLabel = usageBlockResetAt
     ? formatUsageResetIn(usageBlockResetAt, usageBlockNowMs)
     : null;
+  const [usageResetReminder, setUsageResetReminder] = useState<
+    UsageResetReminderOutcome | 'pending' | null
+  >(null);
+  useEffect(() => {
+    setUsageResetReminder(null);
+  }, [usageBlockResetAt]);
+  const onRemindAtReset = usageBlockResetAt ? usageBlock?.onRemindAtReset : undefined;
+  const handleRemindAtReset = useCallback(() => {
+    if (!onRemindAtReset) return;
+    setUsageResetReminder('pending');
+    void onRemindAtReset().then(setUsageResetReminder);
+  }, [onRemindAtReset]);
 
   const composerDisabled = disabled || trialExhausted || Boolean(usageBlock);
   const selectedMediaModelUnavailable =
@@ -4634,15 +4651,34 @@ const ChatComposerNewComponent = ({
               <span className="opacity-80"> {usageBlockResetLabel}.</span>
             ) : null}
           </span>
-          {usageBlock.onRecover && usageBlock.actionLabel && (
-            <button
-              type="button"
-              onClick={usageBlock.onRecover}
-              className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
-            >
-              {usageBlock.actionLabel}
-            </button>
-          )}
+          <span className="flex shrink-0 items-center gap-3">
+            {onRemindAtReset &&
+              (usageResetReminder && usageResetReminder !== 'pending' ? (
+                <span role="status" data-testid="composer-usage-reminder-status">
+                  {USAGE_RESET_REMINDER_COPY[usageResetReminder]}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRemindAtReset}
+                  disabled={usageResetReminder === 'pending'}
+                  aria-busy={usageResetReminder === 'pending'}
+                  className="inline-flex min-h-6 items-center gap-1.5 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill disabled:cursor-wait"
+                >
+                  {usageResetReminder === 'pending' ? <Spinner size="sm" aria-hidden /> : null}
+                  Notify me when it resets
+                </button>
+              ))}
+            {usageBlock.onRecover && usageBlock.actionLabel && (
+              <button
+                type="button"
+                onClick={usageBlock.onRecover}
+                className="shrink-0 rounded-sm font-semibold text-warning-text underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-fill"
+              >
+                {usageBlock.actionLabel}
+              </button>
+            )}
+          </span>
         </div>
       )}
 
