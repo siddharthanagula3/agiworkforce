@@ -92,6 +92,8 @@ import {
   planBrowserCommand,
   type BrowserCommandPlan,
 } from '../browser/commandGate';
+import { gateApplication } from './applicationControl';
+import { findInstalledApplication, launchApplication } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
@@ -922,6 +924,7 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_type: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  computer_open_app: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   remote_control_start: {
     capability: 'host.remote',
     reason:
@@ -2023,6 +2026,15 @@ async function execute(
     }
     case 'computer_wait':
       return waitFor(optionalNumberOr(args, 'ms', 500));
+    case 'computer_open_app': {
+      const target = await findInstalledApplication(requireString(args, 'application'));
+      await gateApplication(window, command, {
+        name: target.name,
+        bundleId: target.bundleId,
+        pid: null,
+      });
+      return runScreenAction(window, command, args, () => launchApplication(target));
+    }
     case 'computer_stop':
       return stopScreenControl();
     case 'computer_take_over':

@@ -267,7 +267,7 @@ export function computerUseAvailability(prompt = false): ComputerUseAvailability
  * runs only after the user granted computer.use, so the System Settings pane it
  * opens is the answer to something they just asked for.
  */
-function requireAvailable(): void {
+export function requireAvailable(): void {
   const availability = computerUseAvailability(true);
   if (!availability.supported) {
     throw new ComputerUseRefused(

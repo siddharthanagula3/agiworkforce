@@ -450,6 +450,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  device_open_app: {
+    actionClass: 'write',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   device_click: {
     actionClass: 'external_send',
     reversible: false,

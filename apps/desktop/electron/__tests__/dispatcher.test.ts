@@ -192,6 +192,14 @@ vi.mock('../runtime/shellService', () => ({
   terminalText: vi.fn((raw: string) => raw),
 }));
 vi.mock('../runtime/shellPolicyStore', () => ({ readShellPolicy, writeShellPolicy }));
+const NOTES = {
+  name: 'Notes',
+  bundleId: 'com.apple.Notes',
+  path: '/System/Applications/Notes.app',
+};
+const findInstalledApplication = vi.fn(async () => NOTES);
+const launchApplication = vi.fn(async () => true as const);
+vi.mock('../runtime/applicationLaunch', () => ({ findInstalledApplication, launchApplication }));
 vi.mock('../runtime/appsService', () => ({
   editorFileUrl: vi.fn(),
   openInEditor,
@@ -2177,6 +2185,7 @@ describe('the screen steps a user can stop', () => {
     computer_type: { text: 'hello' },
     computer_key: { key: 'enter' },
     computer_wait: { ms: 1 },
+    computer_open_app: { application: 'Notes' },
   };
 
   beforeEach(() => {
@@ -2250,6 +2259,78 @@ describe('the screen steps a user can stop', () => {
       const response = await screenStep('computer_click', { x: attempt * 40, y: 20 });
       expect(response, `click ${attempt}`).toMatchObject({ ok: true });
     }
+  });
+});
+
+describe('opening an app', () => {
+  beforeEach(() => {
+    allowComputerRun(RUN, Date.now());
+  });
+
+  it('opens nothing and looks nothing up when computer use is not granted', async () => {
+    getPermissionState.mockReturnValue('denied');
+
+    const response = await screenStep('computer_open_app', { application: 'Notes' });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect(findInstalledApplication).not.toHaveBeenCalled();
+    expect(launchApplication).not.toHaveBeenCalled();
+  });
+
+  it('asks about the app it resolved and opens nothing when the user refuses', async () => {
+    getPermissionState.mockImplementation(((capability: string) =>
+      capability === 'application.control' ? 'prompt' : 'granted') as never);
+    requestPermission.mockResolvedValue('denied');
+
+    const response = await screenStep('computer_open_app', { application: 'notes' });
+
+    expect(findInstalledApplication).toHaveBeenCalledWith('notes');
+    const asked = requestPermission.mock.calls.find((call) => call[1] === 'application.control');
+    expect(asked).toBeDefined();
+    expect(scopeOf(asked as unknown[])).toEqual({
+      kind: 'application',
+      target: 'com.apple.Notes',
+    });
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect((response as { error: { message: string } }).error.message).toContain(
+      'has not allowed AGI to control Notes',
+    );
+    expect(launchApplication).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing when the app was refused for good earlier', async () => {
+    getPermissionState.mockImplementation(((capability: string) =>
+      capability === 'application.control' ? 'denied' : 'granted') as never);
+
+    const response = await screenStep('computer_open_app', { application: 'Notes' });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(launchApplication).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing when the app is not installed', async () => {
+    const { ComputerUseRefused } = await import('../runtime/computerUseService');
+    findInstalledApplication.mockRejectedValueOnce(
+      new ComputerUseRefused('failed', 'No app called "Nope" is installed on this computer.'),
+    );
+
+    const response = await screenStep('computer_open_app', { application: 'Nope' });
+
+    expect(response).toMatchObject({ ok: false });
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(launchApplication).not.toHaveBeenCalled();
+  });
+
+  it('opens the app it asked about once the user allows it', async () => {
+    getPermissionState.mockImplementation(((capability: string) =>
+      capability === 'application.control' ? 'prompt' : 'granted') as never);
+    requestPermission.mockResolvedValue('granted');
+
+    const response = await screenStep('computer_open_app', { application: 'Notes' });
+
+    expect(response).toMatchObject({ ok: true });
+    expect(launchApplication).toHaveBeenCalledWith(NOTES);
   });
 });
 
