@@ -74,6 +74,11 @@
       "table": "object_backup_replicas",
       "rule": "filename",
       "why": "The row is the record that one storage object was replicated, so the object key is the thing being identified rather than a name the object happens to carry. A replica is never renamed; a new key is a new object and a new row."
+    },
+    {
+      "table": "published_artifact_viewers",
+      "rule": "email",
+      "why": "The row is a grant to an address, not to an account: the site owner invites an address that may belong to nobody yet, and access is decided by comparing it with the signed-in profile's address. Nothing references the row, so a changed address is a new grant the owner makes, and an erased owner's grants go with the site through the cascade from published_artifacts."
     }
   ],
   "mintedElsewhereKeys": [

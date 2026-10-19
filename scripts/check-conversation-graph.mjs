@@ -38,6 +38,8 @@ const SERVER_ONLY_COLUMNS = Object.freeze({
     origin_surface: 'provenance is an audit field, not a transcript field',
     google_user_data_at:
       'sticky Google source provenance enforces no-training routing on the server and is never client-controlled transcript data',
+    agent_id:
+      "the agent a chat was started as is applied by the server to every turn, and the agent's own activity read lists its chats",
   }),
   message: Object.freeze({
     conversation_id: 'the reader already addressed the conversation to get here',

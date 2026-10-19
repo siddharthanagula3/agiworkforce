@@ -298,6 +298,9 @@
     "team_members": {
       "createdAt": "joined_at"
     },
+    "user_agent_versions": {
+      "createdAt": "published_at"
+    },
     "user_connectors": {
       "createdAt": "connected_at"
     },
@@ -768,6 +771,10 @@
     }
   },
   "notOperations": [
+    {
+      "table": "developer_eval_runs",
+      "why": "the header of an evaluation the developer console drives: the console sends each case through the account's own gateway calls and records each outcome in developer_eval_results, so nothing runs on the server and nothing waits on this row"
+    },
     {
       "table": "slack_link_requests",
       "why": "the single-use link a Slack user who is not linked yet is sent; nothing runs and nobody waits on it, it is used once or it expires"

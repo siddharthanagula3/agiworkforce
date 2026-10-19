@@ -27,6 +27,7 @@ const CONVERSATION_SERVER_COLUMNS = [
   'updated_by text',
   'origin_surface text',
   'google_user_data_at timestamptz',
+  'agent_id uuid',
 ];
 
 const MESSAGE_SERVER_COLUMNS = [
