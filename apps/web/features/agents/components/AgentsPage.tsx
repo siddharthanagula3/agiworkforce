@@ -155,7 +155,7 @@ export function AgentsPage({ api = agentsApi }: { api?: AgentsApi }) {
   const shared = state.status === 'ready' ? state.agents.filter((agent) => !agent.isOwner) : [];
 
   return (
-    <main className="min-h-full bg-background text-foreground">
+    <div className="min-h-full bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10 sm:px-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
@@ -233,6 +233,6 @@ export function AgentsPage({ api = agentsApi }: { api?: AgentsApi }) {
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

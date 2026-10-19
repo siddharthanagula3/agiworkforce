@@ -1,5 +1,6 @@
 export const DYNAMIC_PAGE_ROUTES = [
   '/chat/[sessionId]',
+  '/chat/agents/[id]',
   '/chat/from-share/[token]',
   '/chat/projects/[id]',
   '/chat/sites/[token]',
@@ -26,6 +27,7 @@ export const DYNAMIC_PAGE_ROUTES = [
 
 export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly string[]>> = {
   '/chat': [
+    'agents',
     'artifacts',
     'code',
     'customize',
@@ -39,6 +41,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'sites',
     'study',
   ],
+  '/chat/agents': ['new'],
   '/code': ['computer', 'shared'],
   '/share': ['schedules'],
   '/settings': [
