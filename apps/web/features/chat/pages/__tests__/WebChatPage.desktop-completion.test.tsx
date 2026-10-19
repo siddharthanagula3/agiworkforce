@@ -386,7 +386,7 @@ describe('the desktop notification for a finished reply', () => {
     await waitFor(() => expect(mocks.notifyJobComplete).toHaveBeenCalledTimes(1));
     expect(mocks.notifyJobComplete).toHaveBeenCalledWith({
       title: 'Your reply is ready',
-      body: QUESTION,
+      body: 'Saturn.',
       conversationId: created,
     });
   });
