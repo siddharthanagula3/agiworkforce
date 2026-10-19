@@ -262,6 +262,12 @@ const config = {
           targetSdkVersion: 36,
           buildToolsVersion: '36.0.0',
         },
+        ios: {
+          // An app built with the iOS 27 SDK traps in UIKit at launch unless it
+          // adopts the scene lifecycle. SDK 58's template does this natively;
+          // remove this flag on that upgrade.
+          enableSceneSupport: true,
+        },
       },
     ],
     [
