@@ -639,6 +639,8 @@ export function CloudTasksScreen() {
         onMakeRoutine={routineDraft ? handleMakeRoutine : undefined}
         onRerun={rerunGoal ? handleRerun : undefined}
         rerunning={rerunning}
+        onPause={() => void useCloudTaskStore.getState().pauseRun()}
+        onResume={() => void useCloudTaskStore.getState().resumeRun()}
         onShare={
           (listedRun ?? detail?.run)?.conversationId && rerunGoal !== null
             ? handleShareRun

@@ -16,6 +16,8 @@ export const CLOUD_RUN_LIST_ERROR = 'Cloud tasks could not be loaded';
 export const CLOUD_RUN_FOLLOW_ERROR = 'This task could not be opened';
 export const CLOUD_RUN_DECISION_ERROR = 'Your decision could not be sent';
 export const CLOUD_RUN_CANCEL_ERROR = 'This task could not be stopped';
+export const CLOUD_RUN_PAUSE_ERROR = 'This task could not be paused';
+export const CLOUD_RUN_RESUME_ERROR = 'This task could not be resumed';
 
 const ALREADY_RESUMING_MESSAGE = 'Another device already answered this one';
 const APPROVAL_EXPIRED_MESSAGE = 'This approval expired, so the task cannot continue from it';
@@ -57,6 +59,14 @@ export function resolveCloudRunApproval(
 
 export function cancelCloudRun(runId: string, signal?: AbortSignal): Promise<CloudAgentRun> {
   return createMobileCloudAgentRunClient().cancelRun(runId, { signal });
+}
+
+export function pauseCloudRun(runId: string, signal?: AbortSignal): Promise<CloudAgentRun> {
+  return createMobileCloudAgentRunClient().pauseRun(runId, { signal });
+}
+
+export function resumePausedCloudRun(runId: string, signal?: AbortSignal): Promise<void> {
+  return createMobileCloudAgentRunClient().resumePausedRun(runId, { signal });
 }
 
 export function describeCloudRunError(error: unknown, fallback: string): string {
