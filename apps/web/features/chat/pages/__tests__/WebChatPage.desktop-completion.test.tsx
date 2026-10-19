@@ -1,5 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { composeFreeModelProviderNotice } from '@agiworkforce/compliance';
 import { getProviderOfferings } from '@agiworkforce/types';
@@ -273,14 +272,9 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
-import { getBestAutoModeForTier } from '@shared/config/llm';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import {
-  announceNamedProviderConsentRequired,
-  saveNamedProviderConsent,
-} from '@/features/models/lib/named-provider-consent-client';
 
 const [FREE_MODEL] = Object.entries(getProviderOfferings()).find(
   ([, offering]) =>
@@ -289,20 +283,6 @@ const [FREE_MODEL] = Object.entries(getProviderOfferings()).find(
     offering.identityStatus === 'exact' &&
     offering.quotaChatImageInput !== true,
 )!;
-const [FREE_VISION_MODEL] = Object.entries(getProviderOfferings()).find(
-  ([, offering]) =>
-    offering.provider === 'qwen' &&
-    offering.quotaProbeProtocol === 'chat' &&
-    offering.identityStatus === 'exact' &&
-    offering.quotaChatImageInput === true,
-)!;
-const [FREE_IMAGE_MODEL] = Object.entries(getProviderOfferings()).find(
-  ([, offering]) =>
-    offering.provider === 'qwen' &&
-    offering.quotaProbeProtocol === 'image-sync' &&
-    offering.identityStatus === 'exact',
-)!;
-const FREE_AUTO = getBestAutoModeForTier('free');
 const notice = composeFreeModelProviderNotice('qwen');
 const AGREED = {
   qwen: {
