@@ -620,6 +620,8 @@ export interface Conversation {
   isStarred?: boolean;
   /** Archived (hidden from default list). Client-side only (no DB column in v1). */
   isArchived?: boolean;
+  /** Standing instructions for this conversation only. */
+  instructions?: string | null;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';
