@@ -191,9 +191,13 @@ describe('device-code sign-ins', () => {
     );
 
     expect(response.status).toBe(200);
-    const ownership = txQuery.mock.calls.find(([sql]) => String(sql).includes('from desktop_devices where id'));
+    const ownership = txQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('from desktop_devices where id'),
+    );
     expect(String(ownership?.[0])).toContain('from device_refresh_tokens t');
-    const revoke = txQuery.mock.calls.find(([sql]) => String(sql).includes('update device_refresh_tokens'));
+    const revoke = txQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('update device_refresh_tokens'),
+    );
     expect(revoke?.[1]).toEqual([GRANT_ID, 'user-1', null]);
   });
 });

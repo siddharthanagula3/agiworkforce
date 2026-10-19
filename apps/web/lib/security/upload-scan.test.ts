@@ -366,10 +366,14 @@ describe('credential material in an upload', () => {
   it.each(['secret.txt', 'secrets.json', 'customer-credentials.csv', 'Credentials.txt'])(
     'accepts an ordinary document named %s when its contents hold no key',
     async (filename) => {
-      const result = await scanUploadBytes(bytesOf('Internal memo. The launch code is PURPLE-42.'), 'text/plain', {
-        leadsObject: true,
-        filename,
-      });
+      const result = await scanUploadBytes(
+        bytesOf('Internal memo. The launch code is PURPLE-42.'),
+        'text/plain',
+        {
+          leadsObject: true,
+          filename,
+        },
+      );
 
       expect(result).toEqual({ ok: true, findings: [] });
     },

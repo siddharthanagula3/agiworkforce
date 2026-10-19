@@ -65,7 +65,9 @@ describe('LinkedDevicesPanel', () => {
     render(<LinkedDevicesPanel />);
 
     expect(await screen.findByText(/Work laptop/)).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Unlink the Desktop app on Work laptop' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Unlink the Desktop app on Work laptop' }),
+    ).toBeVisible();
   });
 
   it('says so plainly when no app is linked instead of rendering an empty table', async () => {
@@ -83,7 +85,9 @@ describe('LinkedDevicesPanel', () => {
       .mockResolvedValueOnce(jsonResponse({ message: 'Device unlinked', revokedCredentials: 2 }));
 
     render(<LinkedDevicesPanel />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Unlink the Desktop app on Work laptop' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Unlink the Desktop app on Work laptop' }),
+    );
     // Unlinking revokes credentials, so it asks before sending anything.
     await userEvent.click(await screen.findByRole('button', { name: 'Unlink device' }));
 
@@ -103,7 +107,9 @@ describe('LinkedDevicesPanel', () => {
       .mockResolvedValueOnce(jsonResponse({ error: 'Device not found' }, false, 404));
 
     render(<LinkedDevicesPanel />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Unlink the Desktop app on Work laptop' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Unlink the Desktop app on Work laptop' }),
+    );
     // Unlinking revokes credentials, so it asks before sending anything.
     await userEvent.click(await screen.findByRole('button', { name: 'Unlink device' }));
 
@@ -192,7 +198,9 @@ describe('LinkedDevicesPanel', () => {
       .mockResolvedValueOnce(jsonResponse({ id: DESKTOP.id, name: 'Studio Mac' }));
 
     render(<LinkedDevicesPanel />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Rename the Desktop app on Work laptop' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Rename the Desktop app on Work laptop' }),
+    );
     const input = screen.getByRole('textbox', { name: 'New name for Work laptop' });
     await userEvent.clear(input);
     await userEvent.type(input, 'Studio Mac');
@@ -214,7 +222,9 @@ describe('LinkedDevicesPanel', () => {
       .mockResolvedValueOnce(jsonResponse({ error: 'Device not found' }, false, 404));
 
     render(<LinkedDevicesPanel />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Rename the Desktop app on Work laptop' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Rename the Desktop app on Work laptop' }),
+    );
     await userEvent.type(screen.getByRole('textbox', { name: 'New name for Work laptop' }), ' 2');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 

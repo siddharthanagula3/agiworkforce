@@ -39,14 +39,28 @@ describe('POST /api/chat/sync, message order', () => {
         protocolVersion: 2,
         conversations: [],
         messages: [
-          { id: '0190a000-0000-7000-8000-0000000000d1', conversationId, role: 'user', content: 'Question', baseVersion: '0' },
-          { id: '0190a000-0000-7000-8000-0000000000d2', conversationId, role: 'assistant', content: 'Answer', baseVersion: '0' },
+          {
+            id: '0190a000-0000-7000-8000-0000000000d1',
+            conversationId,
+            role: 'user',
+            content: 'Question',
+            baseVersion: '0',
+          },
+          {
+            id: '0190a000-0000-7000-8000-0000000000d2',
+            conversationId,
+            role: 'assistant',
+            content: 'Answer',
+            baseVersion: '0',
+          },
         ],
       }),
     );
     expect(res.status).toBe(200);
 
-    const insert = queryMock.mock.calls.find((c) => String(c[0]).includes('insert into web_messages'));
+    const insert = queryMock.mock.calls.find((c) =>
+      String(c[0]).includes('insert into web_messages'),
+    );
     expect(insert).toBeDefined();
     const sql = String(insert![0]);
     expect(sql).toContain('with ordinality as source(item, position)');

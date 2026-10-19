@@ -255,13 +255,17 @@ describe('a cancel reaches the provider call, not only the failover plan', () =>
     vi.useFakeTimers();
     try {
       let signal: AbortSignal | undefined;
-      mocks.runToolLoop.mockImplementation((_processed: unknown, options: { signal?: AbortSignal }) => {
-        signal = options.signal;
-        return (async function* () {
-          await new Promise<void>((resolve) => options.signal?.addEventListener('abort', () => resolve()));
-          yield* [];
-        })();
-      });
+      mocks.runToolLoop.mockImplementation(
+        (_processed: unknown, options: { signal?: AbortSignal }) => {
+          signal = options.signal;
+          return (async function* () {
+            await new Promise<void>((resolve) =>
+              options.signal?.addEventListener('abort', () => resolve()),
+            );
+            yield* [];
+          })();
+        },
+      );
       mocks.isCancellationRequested.mockResolvedValue(false);
 
       const invocation = executeCloudAgentWorkflowInvocation(makeInput());

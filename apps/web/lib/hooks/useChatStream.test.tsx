@@ -273,7 +273,9 @@ describe('useChatStream', () => {
       await result.current.sendMessage('Hello', { conversationId: TEMP_CONVERSATION.id });
     });
 
-    expect(useChatStore.getState().accountUsageBlock).toMatchObject({ feature: 'rolling_capacity' });
+    expect(useChatStore.getState().accountUsageBlock).toMatchObject({
+      feature: 'rolling_capacity',
+    });
     expect(useChatStore.getState().error).toBeNull();
   });
 
