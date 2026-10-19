@@ -10,11 +10,13 @@ import {
   type DesktopRuntimeResponse,
   type HostBridge,
   type HostCommand,
+  type HostDictationOutcome,
   type HostPreferences,
   type HostPreferencesState,
   type HostRestartOutcome,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  DICTATION_BAR_ARGUMENT,
   ELECTRON_HOST_SHELL,
   ELECTRON_IPC_CHANNELS,
   type ElectronNotifyRequest,
@@ -129,6 +131,20 @@ const hostBridge: HostBridge = {
   async restartToUpdate(): Promise<HostRestartOutcome> {
     return (await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.restartToUpdate)) as HostRestartOutcome;
   },
+
+  ...(process.argv.includes(DICTATION_BAR_ARGUMENT)
+    ? {
+        async finishDictation(text: string): Promise<HostDictationOutcome> {
+          return (await ipcRenderer.invoke(
+            ELECTRON_IPC_CHANNELS.dictationFinish,
+            text,
+          )) as HostDictationOutcome;
+        },
+        async cancelDictation(): Promise<void> {
+          await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.dictationCancel);
+        },
+      }
+    : {}),
 };
 
 /**
