@@ -1,4 +1,5 @@
 import 'server-only';
+import { agentAllowsConnector } from '@/lib/agents/agent-turn-config';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -820,7 +821,9 @@ async function dispatchChatCompletions(
             }),
           )
         : { tools: [], dropped: [], limit: null };
-    const connectorTools = connectorCatalog.tools;
+    const connectorTools = connectorCatalog.tools.filter((tool) =>
+      agentAllowsConnector(processed.agentTurn?.config ?? null, tool.serverId),
+    );
     const mcpTools = [...operatorTools, ...connectorTools];
 
     // Shadow only: the lexical shortlist below still builds the turn, and a

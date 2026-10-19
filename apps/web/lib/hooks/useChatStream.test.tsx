@@ -277,6 +277,11 @@ describe('useChatStream', () => {
       feature: 'rolling_capacity',
     });
     expect(useChatStore.getState().error).toBeNull();
+    expect(
+      useChatStore
+        .getState()
+        .messagesByConversation[TEMP_CONVERSATION.id]?.some((entry) => entry.role === 'assistant'),
+    ).toBe(false);
   });
 
   it('saves a reached free limit with its card, so a reload keeps the reply and the resend guard', async () => {
@@ -661,7 +666,7 @@ describe('useChatStream', () => {
     });
   });
 
-  it('carries the reset time a usage refusal names onto its card', async () => {
+  it('carries the reset time a usage refusal names onto the composer block', async () => {
     const resetsAt = '2099-01-01T00:00:00.000Z';
     vi.mocked(fetch).mockResolvedValue(
       new Response(
@@ -679,10 +684,7 @@ describe('useChatStream', () => {
     await act(async () => {
       await result.current.sendMessage('Hello', { conversationId: TEMP_CONVERSATION.id });
     });
-    const assistant = useChatStore
-      .getState()
-      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
-    expect(assistant?.metadata?.paywall?.resetAt).toBe(resetsAt);
+    expect(useChatStore.getState().accountUsageBlock?.resetAt).toBe(resetsAt);
   });
 
   it('keeps artifact formatting instructions out of the visible and persisted user turn', async () => {

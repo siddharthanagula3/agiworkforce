@@ -55,6 +55,12 @@ const admitManagedTurnSlot = () => ({
   active: 0,
   slot: { release: async () => {} },
 });
+const agentTurnMocks = vi.hoisted(() => ({ loadAgentTurnConfig: vi.fn() }));
+vi.mock('@/lib/agents/agent-turn-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/agents/agent-turn-config')>()),
+  loadAgentTurnConfig: agentTurnMocks.loadAgentTurnConfig,
+}));
+
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
@@ -496,6 +502,54 @@ describe('Managed Web conversation ownership', () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(/web_conversations[\s\S]*user_id\s*=\s*\$2/i),
       ['0190a000-0000-7000-8000-0000000000cc', 'attacker-user'],
+    );
+    expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+  });
+});
+
+describe('Managed Web conversation run as a custom agent', () => {
+  it("refuses a paused agent's chat with 409 before reserving credits", async () => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({
+      userId: 'user-1',
+      email: 'u@example.com',
+      boundSurface: 'web',
+    });
+    mockGetSubscription.mockResolvedValue(makeSubscription());
+    const conversationId = '0190a000-0000-7000-8000-0000000000dd';
+    const query = vi.fn(async (sql: string) =>
+      /from web_conversations c/.test(sql)
+        ? [
+            {
+              id: conversationId,
+              project_id: null,
+              is_temporary: false,
+              selected_route_id: null,
+              instructions: null,
+              agent_id: 'agent-1',
+            },
+          ]
+        : [],
+    );
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'user-1' });
+    mockGetProviderFromModel.mockReturnValue('zhipu');
+    agentTurnMocks.loadAgentTurnConfig.mockResolvedValue({
+      ok: false,
+      code: 'agent_paused',
+      message: 'Support bot is paused. Its owner can resume it from Agents.',
+    });
+
+    const response = await POST(makeRequest(ZHIPU_MODEL_ID, conversationId));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'agent_paused' },
+    });
+    expect(agentTurnMocks.loadAgentTurnConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'agent-1',
     );
     expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
     expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
