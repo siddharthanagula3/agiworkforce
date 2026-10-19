@@ -315,8 +315,16 @@ export default function VoiceScreen() {
     if (router.canGoBack()) router.back();
   }, [hapticsEnabled, endConversation, params.returnTo, router]);
 
-  const modelLabel = modelForSend ? getDisplayName(modelForSend) : 'Unavailable';
   const isCloudModel = appMode === 'cloud';
+  const localModelReady =
+    modelForSend !== undefined &&
+    (installedModelIds.includes(modelForSend) || readySystemModelIds.includes(modelForSend));
+  const modelLabel = modelForSend ? getDisplayName(modelForSend) : 'Unavailable';
+  const processingBadge = isCloudModel
+    ? 'REPLIES FROM AGI CLOUD'
+    : localModelReady
+      ? 'ON-DEVICE'
+      : 'NO MODEL INSTALLED';
 
   if (!voiceAllowed) {
     return (
@@ -376,9 +384,11 @@ export default function VoiceScreen() {
           ) : null}
 
           <Animated.View entering={FadeIn.duration(motion.moved)} style={styles.modelBadge}>
-            <Text style={styles.modelLabel}>{modelLabel.toUpperCase()}</Text>
+            {isCloudModel || localModelReady ? (
+              <Text style={styles.modelLabel}>{modelLabel.toUpperCase()}</Text>
+            ) : null}
             <Text testID="voice-processing-badge" style={styles.onDeviceBadge}>
-              {isCloudModel ? 'REPLIES FROM AGI CLOUD' : 'ON-DEVICE'}
+              {processingBadge}
             </Text>
           </Animated.View>
 
