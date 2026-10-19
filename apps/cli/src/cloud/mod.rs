@@ -31,6 +31,7 @@ pub mod product_analytics;
 pub mod projects;
 pub mod referrals;
 pub mod shares;
+pub mod skills;
 pub mod state;
 pub mod workspace_policy;
 
@@ -548,6 +549,41 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     session.persist();
     Ok(cache)
 }
+
+/// Bring the account's skills down to this device, at most once per
+/// `ACCOUNT_SKILLS_REFRESH` unless `force`. A plan without skills leaves the
+/// folder as it was, and so does any failure: the skills already here stand.
+pub async fn refresh_account_skills(
+    privacy: PrivacyMode,
+    force: bool,
+) -> Result<usize, CloudError> {
+    if crate::tier_cache::capability_refusal(crate::tier_cache::SKILLS_CAPABILITY, "Skills")
+        .is_some()
+    {
+        return Ok(0);
+    }
+    let session = CloudSession::open(privacy)?;
+    let dir = skills::account_skills_dir(&session.config_dir);
+    let stamp = dir.join(ACCOUNT_SKILLS_STAMP);
+    let fresh = std::fs::metadata(&stamp)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age < ACCOUNT_SKILLS_REFRESH);
+    if fresh && !force {
+        return Ok(0);
+    }
+    let synced = skills::fetch_account_skills(&session.client).await?;
+    skills::write_account_skills(&dir, &synced)
+        .and_then(|()| std::fs::write(&stamp, b""))
+        .map_err(|error| {
+            CloudError::Transport(format!("could not save the account's skills: {error}"))
+        })?;
+    Ok(synced.len())
+}
+
+const ACCOUNT_SKILLS_STAMP: &str = ".synced";
+const ACCOUNT_SKILLS_REFRESH: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Record a memory in the account. Returns the reasons the server gave for
 /// anything it refused, so a caller never reports a memory as saved twice.

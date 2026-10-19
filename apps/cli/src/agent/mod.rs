@@ -553,10 +553,18 @@ impl AgentSession {
                 }
             }
         }
-        let (memory, policy) = tokio::join!(
+        let (memory, policy, skills) = tokio::join!(
             crate::cloud::refresh_memory(PrivacyMode::Managed),
             crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
+            crate::cloud::refresh_account_skills(PrivacyMode::Managed, false),
         );
+        if let Err(error) = skills {
+            if !error.is_boundary() {
+                crate::output::print_warn(&format!(
+                    "using the account skills this device already had: {error}"
+                ));
+            }
+        }
         match memory {
             Ok(_) => {}
             Err(error) if error.is_boundary() => crate::cloud::report_boundary_once(&error),

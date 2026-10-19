@@ -4,6 +4,7 @@
 //! They are discovered from:
 //! 1. .agiworkforce/skills/ in the current project
 //! 2. ~/.agiworkforce/skills/ (global skills)
+//! 3. ~/.agiworkforce/account-skills/ (the account's skills, synced down)
 //!
 //! The base system prompt receives only consented skill metadata. The model
 //! must call the read-only `skill` tool to load a body by exact skill name.
@@ -174,6 +175,7 @@ pub fn discover_skills_all() -> Vec<Skill> {
         skills.extend(sources.project);
     }
     skills.extend(sources.user);
+    skills.extend(sources.account);
     skills.extend(sources.plugin);
     if consented {
         skills.extend(sources.project_plugin);
@@ -187,6 +189,8 @@ struct SkillSources {
     project: Vec<Skill>,
     /// From the user's skills folder.
     user: Vec<Skill>,
+    /// The account's skills, synced down from the web.
+    account: Vec<Skill>,
     /// From plugins the user installed.
     plugin: Vec<Skill>,
     /// From plugins the project carries under `.agiworkforce/plugins`.
@@ -206,6 +210,7 @@ fn load_skill_sources(project_root: Option<&Path>) -> SkillSources {
     let mut sources = SkillSources {
         project: Vec::new(),
         user: Vec::new(),
+        account: Vec::new(),
         plugin: Vec::new(),
         project_plugin: Vec::new(),
     };
@@ -221,6 +226,10 @@ fn load_skill_sources(project_root: Option<&Path>) -> SkillSources {
         let global_dir = config_dir.join("skills");
         if global_dir.exists() {
             load_skills_from_dir(&global_dir, &mut sources.user);
+        }
+        let account_dir = crate::cloud::skills::account_skills_dir(&config_dir);
+        if account_dir.exists() {
+            load_skills_from_dir(&account_dir, &mut sources.account);
         }
     }
 
@@ -493,6 +502,8 @@ pub fn revoke_project_skills_consent(project_root: &Path) -> std::io::Result<()>
 pub enum SkillOrigin {
     Project,
     User,
+    /// Synced down from the account; the web is where it is added or removed.
+    Account,
     Plugin,
 }
 
@@ -535,6 +546,12 @@ pub fn skill_catalog_with_digest(project_root: &Path) -> (Vec<SkillCatalogEntry>
     .chain(catalog_entries(
         sources.user,
         SkillOrigin::User,
+        true,
+        &disabled,
+    ))
+    .chain(catalog_entries(
+        sources.account,
+        SkillOrigin::Account,
         true,
         &disabled,
     ))
@@ -665,7 +682,7 @@ fn load_skills_from_plugin_dir(dir: &Path, plugin_root: &Path, skills: &mut Vec<
 }
 
 /// Load and parse a single skill file.
-fn load_skill(path: &Path) -> Result<Skill> {
+pub(crate) fn load_skill(path: &Path) -> Result<Skill> {
     load_skill_in_package(path, None)
 }
 

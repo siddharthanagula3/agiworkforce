@@ -98,7 +98,7 @@ pub fn context_instructions(cwd: &Path) -> ContextInstructionsResponse {
 fn skill_scope(origin: SkillOrigin) -> SkillCatalogScope {
     match origin {
         SkillOrigin::Project => SkillCatalogScope::Project,
-        SkillOrigin::User => SkillCatalogScope::User,
+        SkillOrigin::User | SkillOrigin::Account => SkillCatalogScope::User,
         SkillOrigin::Plugin => SkillCatalogScope::Plugin,
     }
 }

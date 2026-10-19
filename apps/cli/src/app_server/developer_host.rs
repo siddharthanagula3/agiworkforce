@@ -139,13 +139,21 @@ const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
 
-/// Read the account's memory setting and memories before a session starts, so
-/// a user who turned memory off on the web is not remembered or read here.
+/// Read the account's memory setting, memories and skills before a session
+/// starts, so a user who turned memory off on the web is not remembered or
+/// read here, and the skills the account has on are offered here too.
 /// Only the terminal CLI refreshed this before, so a desktop session kept the
 /// last cached answer. Signed out or offline, the cached answer stands.
 async fn refresh_account_memory_setting() {
-    if let Err(error) = crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed).await {
+    let (memory, skills) = tokio::join!(
+        crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed),
+        crate::cloud::refresh_account_skills(crate::agent::PrivacyMode::Managed, false),
+    );
+    if let Err(error) = memory {
         tracing::debug!(%error, "account memory setting not refreshed");
+    }
+    if let Err(error) = skills {
+        tracing::debug!(%error, "account skills not refreshed");
     }
 }
 
