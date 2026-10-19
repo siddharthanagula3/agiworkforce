@@ -23,7 +23,13 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
+import {
+  ACCOUNT_SUSPENDED_MESSAGE,
+  authErrorMessage,
+  isNativeAppleCancellation,
+  suspensionAppealUrl,
+} from './authErrorMessage';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import {
   POST_AUTH_INTENT_PARAM,
   type PostAuthIntent,
@@ -548,6 +554,24 @@ export function MobileSignIn({
             >
               {error}
             </Text>
+          ) : null}
+          {error === ACCOUNT_SUSPENDED_MESSAGE ? (
+            <Pressable
+              testID="mobile-sign-in-appeal"
+              accessibilityRole="button"
+              accessibilityLabel="Appeal this suspension"
+              onPress={() => void openUntrustedUrlInAppBrowser(suspensionAppealUrl())}
+              style={{
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 6,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
+                Appeal this suspension
+              </Text>
+            </Pressable>
           ) : null}
           {accountMissing && step === 'email' ? (
             <Pressable
