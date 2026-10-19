@@ -1,4 +1,145 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "migration": 370,
+      "reason": "Reads or writes the web_conversations.agent_id column that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/duplicate/route.ts",
+      "migration": 375,
+      "reason": "Reads or writes the user_projects.chat_defaults column that 0375 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0375 is applied."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/route.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/projects/[id]/route.ts",
+      "migration": 375,
+      "reason": "Reads or writes the user_projects.chat_defaults column that 0375 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0375 is applied."
+    },
+    {
+      "file": "apps/web/app/api/projects/route.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/projects/route.ts",
+      "migration": 375,
+      "reason": "Reads or writes the user_projects.chat_defaults column that 0375 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0375 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 370,
+      "reason": "Reads or writes the scheduled_tasks.agent_id, web_conversations.agent_id columns that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/app/api/voice/live/sessions/lib/live-voice-context.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 369,
+      "reason": "Reads or writes the artifact_comments table that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 373,
+      "reason": "Reads or writes the studio_library_items table that 0373 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0373 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/free-quota-turn.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/neon-chat.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/artifact-comment-service.ts",
+      "migration": 369,
+      "reason": "Reads or writes the artifact_comments table that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/custom-agent-service.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/custom-agent-service.ts",
+      "migration": 370,
+      "reason": "Reads or writes the user_agent_access, user_agent_files, user_agent_versions, user_agents tables and the scheduled_tasks.agent_id, web_conversations.agent_id columns that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/custom-agent-service.ts",
+      "migration": 374,
+      "reason": "Reads or writes the user_agents.monthly_credit_limit column that 0374 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0374 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/developer-prompt-service.ts",
+      "migration": 371,
+      "reason": "Reads or writes the developer_eval_cases, developer_eval_results, developer_eval_runs, developer_prompt_versions, developer_prompts tables that 0371 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0371 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/past-chat-context-service.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/project-context-service.ts",
+      "migration": 368,
+      "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/published-site-viewer-service.ts",
+      "migration": 372,
+      "reason": "Reads or writes the published_artifact_viewers table that 0372 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0372 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-service.ts",
+      "migration": 370,
+      "reason": "Reads or writes the scheduled_tasks.agent_id column that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/studio-library-service.ts",
+      "migration": 373,
+      "reason": "Reads or writes the studio_library_items table that 0373 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0373 is applied."
+    },
+    {
+      "file": "apps/web/lib/slack/slack-channel-policies.ts",
+      "migration": 374,
+      "reason": "Reads or writes the slack_channel_policies table that 0374 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0374 is applied."
+    }
+  ]
 }
