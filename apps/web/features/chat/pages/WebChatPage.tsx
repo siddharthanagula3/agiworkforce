@@ -5695,6 +5695,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               steps: completedResearchSteps(research.steps),
               approvedSteps: approved,
               ...(options?.deliverable ? { deliverable: options.deliverable } : {}),
+              ...(options?.answers ? { guidance: options.answers } : {}),
             },
             ...(options &&
             (options.files ||

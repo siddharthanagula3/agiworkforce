@@ -177,6 +177,8 @@ export interface MessageResearchState {
    */
   sourcesForRetry?: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
   runConfig?: ResearchRunConfig;
+  /** Clarifying questions the plan asked; answered before the run searches. */
+  questions?: string[];
 }
 
 // Types

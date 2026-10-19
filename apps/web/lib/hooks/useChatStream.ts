@@ -177,6 +177,7 @@ import type {
 } from '@agiworkforce/types';
 import {
   parseResearchPlanEvent,
+  parseResearchPlanQuestions,
   parseResearchRunConfig,
   rendersResearchPlan,
   researchTurnHistoryContent,
@@ -3178,6 +3179,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (researchPlan) {
             const planSteps = parseResearchPlanEvent(researchPlan);
             const runConfig = parseResearchRunConfig(researchPlan);
+            const planQuestions = parseResearchPlanQuestions(researchPlan);
             if (planSteps) {
               if (!currentResearch) {
                 applyLocalAgentEvent({
@@ -3194,6 +3196,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 }),
                 steps: planSteps,
                 ...(runConfig ? { runConfig } : {}),
+                ...(planQuestions.length > 0 ? { questions: planQuestions } : {}),
               };
               setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }

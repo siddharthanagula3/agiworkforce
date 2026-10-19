@@ -48,6 +48,7 @@ import {
   researchStatusEvent,
   researchPlanEvent,
   parsePlanQueries,
+  parsePlanQuestions,
   extractReportOutline,
   extractUserQuery,
   SourceAggregator,
@@ -909,6 +910,39 @@ describe('researchPlanEvent', () => {
       { id: 'plan-2', type: 'search', description: 'query two', status: 'pending' },
     ]);
     expect(parsed['model']).toBe('test-model');
+  });
+});
+
+describe('clarifying questions in the planning turn', () => {
+  it('reads queries and questions from the plan object', () => {
+    const text =
+      '{"queries": ["ev battery degradation", "cold climate range loss", "fast charging wear"], "questions": ["Which country are you buying in?", "  New or used?  ", "which country are you buying in?", "Budget?", "Fifth?"]}';
+    expect(parsePlanQueries(text)).toEqual([
+      'ev battery degradation',
+      'cold climate range loss',
+      'fast charging wear',
+    ]);
+    expect(parsePlanQuestions(text)).toEqual([
+      'Which country are you buying in?',
+      'New or used?',
+      'Budget?',
+    ]);
+  });
+
+  it('asks nothing when the plan carries no questions or is a bare list', () => {
+    expect(parsePlanQuestions('{"queries": ["a", "b", "c"], "questions": []}')).toEqual([]);
+    expect(parsePlanQuestions('["a", "b", "c"]')).toEqual([]);
+    expect(parsePlanQuestions('not json')).toEqual([]);
+  });
+
+  it('sends the questions with the plan only when there are some', () => {
+    const steps: ResearchStep[] = [
+      { id: 'plan-1', type: 'search', description: 'a', status: 'pending' },
+    ];
+    expect(researchPlanEvent(steps, 'model', undefined, ['Which country?'])).toContain(
+      '"questions":["Which country?"]',
+    );
+    expect(researchPlanEvent(steps, 'model')).not.toContain('questions');
   });
 });
 
