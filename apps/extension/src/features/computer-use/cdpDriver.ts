@@ -124,7 +124,6 @@ interface IsolatedWorld {
   session: symbol;
   frameId: string;
   loaderId: string;
-  url: string;
   contextId?: number;
   uniqueContextId?: string;
   ready: Promise<string>;
@@ -205,14 +204,12 @@ async function isolatedWorldContext(tabId: number, signal?: AbortSignal): Promis
     !world ||
     world.session !== session ||
     world.frameId !== frame.id ||
-    world.loaderId !== frame.loaderId ||
-    world.url !== frame.url
+    world.loaderId !== frame.loaderId
   ) {
     const captured: IsolatedWorld = {
       session,
       frameId: frame.id,
       loaderId: frame.loaderId,
-      url: frame.url,
       ready: Promise.resolve(''),
     };
     isolatedWorlds.set(tabId, captured);
@@ -232,6 +229,15 @@ async function isolatedWorldContext(tabId: number, signal?: AbortSignal): Promis
           signal,
         );
         assertCurrent();
+        if (captured.contextId !== created.executionContextId) {
+          // Chrome returns a world this document already has without reporting
+          // it again, and a repeat Runtime.enable in the same session is silent.
+          // Re-enabling the runtime is what makes Chrome report it.
+          await sendCommand(tabId, 'Runtime.disable', {}, signal);
+          assertCurrent();
+          await sendCommand(tabId, 'Runtime.enable', {}, signal);
+          assertCurrent();
+        }
         const current = (await sendCommand<RootFrameResult>(tabId, 'Page.getFrameTree', {}, signal))
           .frameTree?.frame;
         assertCurrent();
@@ -239,7 +245,6 @@ async function isolatedWorldContext(tabId: number, signal?: AbortSignal): Promis
           !current ||
           current.id !== frame.id ||
           current.loaderId !== frame.loaderId ||
-          current.url !== frame.url ||
           !Number.isSafeInteger(created.executionContextId) ||
           created.executionContextId <= 0 ||
           captured.contextId !== created.executionContextId ||
