@@ -24,6 +24,7 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
         if (!mocks.permissions.has(permission)) throw createError.forbidden(message);
       },
     ),
+    resolveOrganizationPermissions: vi.fn(async () => new Set(mocks.permissions)),
   };
 });
 vi.mock('@/lib/logger', () => ({

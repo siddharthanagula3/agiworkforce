@@ -57,7 +57,7 @@ const admitManagedTurnSlot = () => ({
 });
 const agentTurnMocks = vi.hoisted(() => ({ loadAgentTurnConfig: vi.fn() }));
 vi.mock('@/lib/agents/agent-turn-config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/agents/agent-turn-config')>()),
+  ...(await importOriginal<AgentTurnConfigModule>()),
   loadAgentTurnConfig: agentTurnMocks.loadAgentTurnConfig,
 }));
 
@@ -348,6 +348,8 @@ import {
 } from '@/lib/workflows/durable-stream-liveness';
 import { logger } from '@/lib/logger';
 import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from '@/app/api/llm/v1/chat/completions/lib/turn-phases';
+
+type AgentTurnConfigModule = typeof import('@/lib/agents/agent-turn-config');
 
 type TypesModule = typeof import('@agiworkforce/types');
 

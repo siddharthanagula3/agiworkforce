@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ChildProcessModule = typeof import('node:child_process');
+type FsPromisesModule = typeof import('node:fs/promises');
+
 type Reply = { error: Error | null; stdout: string };
 const replies = new Map<string, Reply>();
 const calls: Array<{ file: string; args: string[] }> = [];
@@ -21,7 +24,7 @@ const execFile = vi.fn(
   },
 );
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>();
+  const actual = await importOriginal<ChildProcessModule>();
   return { ...actual, default: { ...actual, execFile }, execFile };
 });
 
@@ -31,7 +34,7 @@ const readdir = vi.fn(async (folder: string) => {
   return entries;
 });
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const actual = await importOriginal<FsPromisesModule>();
   return { ...actual, default: { ...actual, readdir }, readdir };
 });
 
