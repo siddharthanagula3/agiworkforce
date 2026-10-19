@@ -19,6 +19,7 @@ import {
   Film,
   Check,
   Sparkles,
+  BookOpen,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -405,6 +406,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     closeSheet();
     onOpenSkills();
   }, [closeSheet, haptic, onOpenSkills]);
+
+  const handleStudy = useCallback(() => {
+    haptic();
+    closeSheet();
+    router.push('/(app)/study');
+  }, [haptic, closeSheet, router]);
 
   const handleConnectors = useCallback(() => {
     haptic();
@@ -1085,6 +1092,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
               onPress={handleOpenSkills}
+            />
+          ) : null}
+          {appMode === 'cloud' ? (
+            <ConfigLink
+              icon={<BookOpen size={18} color={themeColors.textMuted} />}
+              label="Study and learn"
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+              onPress={handleStudy}
             />
           ) : null}
           {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (

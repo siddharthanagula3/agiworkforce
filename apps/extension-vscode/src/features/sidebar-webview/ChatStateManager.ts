@@ -125,6 +125,7 @@ import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
 import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
+import { conversationMarkdown, exportFileName } from './conversationExport';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
   OPEN_CLOUD_CODE_SESSION_COMMAND,
@@ -192,6 +193,8 @@ import {
 } from '../chat-participant/promptReferences';
 import {
   parsePlanVisualization,
+  planDocumentMarkdown,
+  planDocumentNotes,
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
@@ -243,6 +246,7 @@ const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch
 const MANAGE_TRUST_LABEL = 'Manage Trust';
 const REWIND = 'Rewind';
 const COMPACT = 'Summarize';
+const PLAN_FEEDBACK_LIMIT = 4_000;
 
 const REWIND_CHOICES = [
   {
@@ -284,6 +288,8 @@ export type WebviewToExtMessage =
   | { type: 'ready' }
   | { type: 'viewFocused' }
   | { type: 'viewBlurred' }
+  | { type: 'openPlanDocument' }
+  | { type: 'sideQuestion'; payload: { question: string; requestId: string } }
   | { type: 'setUpWebSearch' }
   | { type: 'reconnectMcpServer'; payload: { server: string } }
   | { type: 'openSettings' }
@@ -394,6 +400,11 @@ export type ExtToWebviewMessage =
     }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
+  | { type: 'sideQuestionDelta'; payload: { requestId: string; delta: string } }
+  | {
+      type: 'sideQuestionAnswer';
+      payload: { requestId: string; answer: string } | { requestId: string; error: string };
+    }
   | { type: 'turnChangesUndone'; payload: { turnId: string } }
   | {
       type: 'conversationBoundaryChanged';
@@ -875,6 +886,9 @@ export class ChatStateManager {
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private _slashEntries: ReadonlyMap<string, SlashMenuEntry> | undefined;
+  private _latestPlan: { threadId: string; plan: PlanVisualization } | undefined;
+  private _planDocument: { uri: string; threadId: string; original: string } | undefined;
+  private _planDocumentListener: vscode.Disposable | undefined;
   private _contextUsage:
     { threadId: string; usedTokens: number; contextWindow: number | undefined } | undefined;
   private _webSearchLogins: readonly string[] = [];
@@ -1228,6 +1242,16 @@ export class ChatStateManager {
         break;
       }
 
+      case 'openPlanDocument': {
+        await this.openPlanDocument();
+        break;
+      }
+
+      case 'sideQuestion': {
+        await this._askSideQuestion(msg.payload.question, msg.payload.requestId);
+        break;
+      }
+
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
           await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
@@ -1381,16 +1405,7 @@ export class ChatStateManager {
       }
 
       case 'attachContext': {
-        const attachment = await buildContextAttachment(msg.payload.kind);
-        if (attachment === undefined) {
-          this._post({
-            type: 'contextMenuState',
-            payload: { items: await resolveContextMenuState() },
-          });
-          break;
-        }
-        const id = this._pushTextAttachment(attachment.name, attachment.text, attachment.source);
-        this._post({ type: 'contextAttached', payload: { id, name: attachment.name } });
+        await this.attachContext(msg.payload.kind);
         break;
       }
 
@@ -2114,12 +2129,6 @@ export class ChatStateManager {
       case 'prompt':
         this._post({ type: 'composerDraft', payload: { text: `/${bare} `, references: [] } });
         return;
-      case 'skill':
-        this._post({
-          type: 'composerDraft',
-          payload: { text: `Use the ${bare} skill to `, references: [] },
-        });
-        return;
       case 'cli': {
         const result = await this._cliCapabilities.call<SlashCommandRunResponse>(
           'runCommand',
@@ -2742,6 +2751,7 @@ export class ChatStateManager {
   dispose(): void {
     for (const listener of this._editorContextListeners) listener.dispose();
     this._editorContextListeners.length = 0;
+    this._planDocumentListener?.dispose();
     this._activeModelChanged.dispose();
   }
 
@@ -2982,6 +2992,109 @@ export class ChatStateManager {
         },
       });
     }
+  }
+
+  private async _askSideQuestion(question: string, requestId: string): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      this._post({
+        type: 'sideQuestionAnswer',
+        payload: {
+          requestId,
+          error:
+            'A side question is answered from this session, so send a first message before asking one.',
+        },
+      });
+      return;
+    }
+    try {
+      const { answer } = await thread.runtime.askSideQuestion(
+        { threadId: thread.id, question, requestId },
+        (delta) => this._post({ type: 'sideQuestionDelta', payload: { requestId, delta } }),
+      );
+      this._post({ type: 'sideQuestionAnswer', payload: { requestId, answer } });
+    } catch (error) {
+      this._post({
+        type: 'sideQuestionAnswer',
+        payload: { requestId, error: error instanceof Error ? error.message : String(error) },
+      });
+    }
+  }
+
+  async attachContext(kind: ContextAttachmentKind): Promise<boolean> {
+    const attachment = await buildContextAttachment(kind);
+    if (attachment === undefined) {
+      this._post({
+        type: 'contextMenuState',
+        payload: { items: await resolveContextMenuState() },
+      });
+      return false;
+    }
+    const id = this._pushTextAttachment(attachment.name, attachment.text, attachment.source);
+    this._post({ type: 'contextAttached', payload: { id, name: attachment.name } });
+    return true;
+  }
+
+  async exportConversation(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: open a developer session to export it.',
+      );
+      return;
+    }
+    let markdown: string;
+    let title: string;
+    try {
+      const response = await thread.runtime.readThread(thread.id);
+      const conversation = this._conversationPayload(response.thread, thread.trustMode, response);
+      markdown = conversationMarkdown(conversation);
+      title = conversation.title;
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      [
+        { label: '$(copy) Copy as Markdown', action: 'copy' as const },
+        { label: '$(save) Save as a Markdown file…', action: 'save' as const },
+      ],
+      { title: 'AGI Workforce, Export Conversation' },
+    );
+    if (picked === undefined) return;
+    if (picked.action === 'copy') {
+      await vscode.env.clipboard.writeText(markdown);
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: copied the conversation as Markdown.',
+      );
+      return;
+    }
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.joinPath(vscode.Uri.file(thread.cwd), exportFileName(title)),
+      filters: { Markdown: ['md'] },
+      title: 'Export Conversation',
+    });
+    if (target === undefined) return;
+    try {
+      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(markdown));
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    const open = 'Open';
+    const choice = await vscode.window.showInformationMessage(
+      `AGI Workforce: saved the conversation to ${vscode.workspace.asRelativePath(target)}.`,
+      open,
+    );
+    if (choice === open) await vscode.window.showTextDocument(target);
   }
 
   async showSessionStatus(): Promise<void> {
@@ -4075,19 +4188,19 @@ export class ChatStateManager {
 
   private async _decidePlan(
     decision: { decision: 'approve' } | { decision: 'reject'; feedback: string },
-  ): Promise<void> {
+  ): Promise<boolean> {
     const thread = this._thread;
     if (thread === undefined) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
-      return;
+      return false;
     }
     if (this.turnInFlight()) {
       void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
-      return;
+      return false;
     }
     if (!(await thread.runtime.offers('planDecisions'))) {
       void vscode.window.showWarningMessage(t('plan.needsUpdate'));
-      return;
+      return false;
     }
     try {
       if (decision.decision === 'approve') {
@@ -4101,7 +4214,7 @@ export class ChatStateManager {
           reason: error instanceof Error ? error.message : String(error),
         }),
       );
-      return;
+      return false;
     }
     const text =
       decision.decision === 'approve'
@@ -4109,6 +4222,72 @@ export class ChatStateManager {
         : t('plan.revisedMessage', { feedback: decision.feedback });
     this._post({ type: 'addUserMessage', payload: { text } });
     await this._handleSendMessage(text);
+    return true;
+  }
+
+  private _currentPlan(): PlanVisualization | undefined {
+    const threadId = this._thread?.id;
+    if (threadId === undefined) return undefined;
+    if (this._latestPlan?.threadId === threadId) return this._latestPlan.plan;
+    return this._loadedConversation?.threadId === threadId
+      ? this._loadedConversation.plan
+      : undefined;
+  }
+
+  async openPlanDocument(): Promise<void> {
+    const thread = this._thread;
+    const plan = this._currentPlan();
+    if (thread === undefined || plan === undefined) {
+      void vscode.window.showInformationMessage('AGI Workforce: this session has no plan yet.');
+      return;
+    }
+    const content = planDocumentMarkdown(plan);
+    const document = await vscode.workspace.openTextDocument({ language: 'markdown', content });
+    this._planDocument = { uri: document.uri.toString(), threadId: thread.id, original: content };
+    this._planDocumentListener ??= vscode.workspace.onDidCloseTextDocument((closed) => {
+      if (closed.uri.toString() !== this._planDocument?.uri) return;
+      this._planDocument = undefined;
+      void vscode.commands.executeCommand('setContext', 'agi-workforce.planDocumentOpen', false);
+    });
+    void vscode.commands.executeCommand('setContext', 'agi-workforce.planDocumentOpen', true);
+    await vscode.window.showTextDocument(document, {
+      viewColumn: vscode.ViewColumn.Beside,
+      preview: false,
+    });
+  }
+
+  async revisePlanFromDocument(): Promise<void> {
+    const tracked = this._planDocument;
+    const document = vscode.window.activeTextEditor?.document;
+    if (tracked === undefined || document?.uri.toString() !== tracked.uri) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: open the plan as a document, add your notes to it, then revise from there.',
+      );
+      return;
+    }
+    if (this._thread?.id !== tracked.threadId) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: this plan belongs to a session that is no longer open here.',
+      );
+      return;
+    }
+    const edited = document.getText();
+    const notes = planDocumentNotes(tracked.original, edited);
+    if (notes === '') {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: add your notes to the plan document first.',
+      );
+      return;
+    }
+    if (notes.length > PLAN_FEEDBACK_LIMIT) {
+      void vscode.window.showWarningMessage(
+        `AGI Workforce: your notes are longer than the ${PLAN_FEEDBACK_LIMIT.toLocaleString()} characters a plan revision takes. Shorten them and try again.`,
+      );
+      return;
+    }
+    if (await this._decidePlan({ decision: 'reject', feedback: notes })) {
+      this._planDocument = { ...tracked, original: edited };
+    }
   }
 
   private async _messageAction(action: {
@@ -4441,6 +4620,7 @@ export class ChatStateManager {
       this._noteWrittenFile(event.turnId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
+        this._latestPlan = { threadId: event.threadId, plan };
         this._post({ type: 'planUpdate', payload: plan });
         return;
       }

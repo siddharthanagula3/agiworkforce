@@ -269,6 +269,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 conversation operations per minute
     failClosed: false,
   },
+  'memory-summary': {
+    limit: 10,
+    window: '1 h',
+    failClosed: false,
+  },
   'chat-conversation-read': {
     limit: 120,
     window: '1 m',

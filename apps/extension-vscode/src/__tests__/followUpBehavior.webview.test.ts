@@ -237,4 +237,36 @@ describe('VS Code active-turn Queue and Steer composer', () => {
     sendWithEnter(input, 'One line');
     expect(sends()).toHaveLength(2);
   });
+
+  it('answers /btw beside the chat and keeps it out of the transcript', () => {
+    const postMessage = boot('queue');
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    const messagesBefore = document.querySelectorAll('#messages .message').length;
+
+    sendWithEnter(input, '/btw what does average() return for an empty list?');
+
+    const asked = postMessage.mock.calls.find(([message]) => message.type === 'sideQuestion')?.[0];
+    expect(asked?.payload.question).toBe('what does average() return for an empty list?');
+    expect(postMessage.mock.calls.some(([message]) => message.type === 'sendMessage')).toBe(false);
+    expect(document.querySelectorAll('#messages .message')).toHaveLength(messagesBefore);
+    const card = document.getElementById('sideQuestion') as HTMLElement;
+    expect(card.hidden).toBe(false);
+    expect(input.value).toBe('');
+
+    const requestId = asked?.payload.requestId as string;
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'sideQuestionDelta', payload: { requestId, delta: 'It returns ' } },
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'sideQuestionAnswer', payload: { requestId, answer: 'It returns NaN.' } },
+      }),
+    );
+    expect(document.getElementById('sideQuestionAnswer')?.textContent).toContain('It returns NaN.');
+
+    (document.getElementById('sideQuestionClose') as HTMLButtonElement).click();
+    expect(card.hidden).toBe(true);
+  });
 });

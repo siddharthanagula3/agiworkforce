@@ -162,4 +162,36 @@ describe('SkillEditorDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it('shares the saved skill with the workspace only after confirming', async () => {
+    const onShare = vi.fn();
+    const skill = { name: 'release-notes', description: 'Draft release notes.', body: 'Do it.' };
+    const { rerender } = render(
+      <SkillEditorDialog
+        open
+        mode="edit"
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        initialSkill={skill}
+        workspaceShare={{ sharing: false, shared: false, error: null, onShare }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Share with workspace' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm.textContent).toContain('Everyone in the workspace');
+    expect(onShare).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Share with workspace' }).at(-1)!);
+    await waitFor(() => expect(onShare).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <SkillEditorDialog
+        open
+        mode="edit"
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        initialSkill={skill}
+      />,
+    );
+    expect(screen.queryByRole('region', { name: 'Share with your workspace' })).toBeNull();
+  });
 });

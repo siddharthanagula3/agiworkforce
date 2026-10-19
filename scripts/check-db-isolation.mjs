@@ -433,6 +433,16 @@ const ALLOWLIST = [
       'gate. That regression was green before this entry was narrowed.',
   },
   {
+    match: /lib\/services\/custom-agent-service\.ts$/,
+    tables: ['user_agents', 'user_agent_versions'],
+    functions: ['readAgentRow'],
+    reason:
+      'an agent is read by its owner and by the workspace members it is shared with, so the ' +
+      'reader is not always the row owner. readAgentRow runs only on getUserScopedDb, where ' +
+      'the 0376 owner and shared-read policies decide visibility; every write in the file ' +
+      'carries user_id and stays policed.',
+  },
+  {
     match: /api\/shared\/route\.ts$/,
     tables: ['shared_conversations'],
     functions: ['handleGet'],

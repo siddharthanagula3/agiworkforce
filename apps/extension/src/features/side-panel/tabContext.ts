@@ -1,5 +1,6 @@
 import { MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH } from '@agiworkforce/cloud-contracts';
 import type { BrowserContextTabReference } from '../../types';
+import { pageWindowQuery } from '../surface/assistantPanel';
 import { sanitizePageText } from '../../background/policy';
 import { boundPageText } from '../content/in-page-panel/pageActions';
 
@@ -40,6 +41,7 @@ function ordinaryTab(tab: chrome.tabs.Tab): BrowserContextTabReference | null {
 export async function chooseBrowserContextTabs(
   isCurrent: () => boolean,
   maxTabs: number,
+  requestAccess: (urls: readonly string[]) => Promise<boolean>,
   signal?: AbortSignal,
 ): Promise<readonly BrowserContextTabReference[] | null> {
   if (signal?.aborted || !isCurrent() || !Number.isSafeInteger(maxTabs) || maxTabs <= 0)
@@ -129,9 +131,8 @@ export async function chooseBrowserContextTabs(
         return;
       }
       attach.disabled = true;
-      const origins = [...new Set(tabs.map((tab) => `${new URL(tab.url).origin}/*`))];
       try {
-        const granted = await chrome.permissions.request({ origins });
+        const granted = await requestAccess(tabs.map((tab) => tab.url));
         if (closed) return;
         if (!isCurrent()) {
           finish(null);
@@ -151,7 +152,7 @@ export async function chooseBrowserContextTabs(
   });
   const load = async (): Promise<void> => {
     try {
-      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const tabs = await chrome.tabs.query(await pageWindowQuery());
       if (closed) return;
       if (!isCurrent()) {
         cancel.click();

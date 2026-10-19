@@ -250,7 +250,7 @@ pub fn resolve_registry_url(
 
 /// Path of the global config file the registry URL is read from.
 pub fn registry_config_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".agiworkforce").join("config.toml"))
+    crate::config::CliConfig::config_path().ok()
 }
 
 /// Read the configured registry URL from the environment and global config.

@@ -210,6 +210,9 @@ const PLAN_MAX_STEPS = 6;
 export const DEFAULT_RESEARCH_MAX_QUERY_REWRITES = 4;
 /** One planned query description is capped so a runaway plan cannot bloat SSE. */
 const MAX_PLAN_QUERY_CHARS = 300;
+/** Clarifying questions shown with the plan, answered before any search runs. */
+const PLAN_MAX_QUESTIONS = 3;
+const MAX_PLAN_QUESTION_CHARS = 200;
 /**
  * A dedicated planning turn only runs when the iteration budget can afford it
  * (plan + at least one gathering round + synthesis). Below that the loop keeps
@@ -499,12 +502,14 @@ export function researchPlanEvent(
   steps: ResearchStep[],
   responseModel: string,
   run?: ResearchRunConfig,
+  questions: readonly string[] = [],
 ): string {
   return sseData({
     choices: [
       {
         delta: {
           x_research_plan: {
+            ...(questions.length > 0 ? { questions: [...questions] } : {}),
             ...(run
               ? {
                   run: {
@@ -629,6 +634,40 @@ export function hasDiminishingReturns(newSourcesPerRound: readonly number[]): bo
  * plan, the loop then shows the round it really runs instead of inventing
  * queries the model never committed to.
  */
+function parsePlanObject(text: string): Record<string, unknown> | null {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The clarifying questions a planning turn asked, if any. Never invented. */
+export function parsePlanQuestions(text: string): string[] {
+  const raw = parsePlanObject(text)?.['questions'];
+  if (!Array.isArray(raw)) return [];
+  const questions: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'string') continue;
+    const question = entry.trim().replace(/\s+/g, ' ').slice(0, MAX_PLAN_QUESTION_CHARS);
+    if (
+      !question ||
+      questions.some((existing) => existing.toLowerCase() === question.toLowerCase())
+    ) {
+      continue;
+    }
+    questions.push(question);
+    if (questions.length >= PLAN_MAX_QUESTIONS) break;
+  }
+  return questions;
+}
+
 export function parsePlanQueries(text: string): string[] {
   const queries: string[] = [];
   const push = (value: unknown): void => {
@@ -638,6 +677,12 @@ export function parsePlanQueries(text: string): string[] {
     if (queries.some((existing) => existing.toLowerCase() === query.toLowerCase())) return;
     queries.push(query.slice(0, MAX_PLAN_QUERY_CHARS));
   };
+
+  const planObject = parsePlanObject(text);
+  if (planObject && Array.isArray(planObject['queries'])) {
+    for (const entry of planObject['queries']) push(entry);
+    if (queries.length > 0) return queries;
+  }
 
   const start = text.indexOf('[');
   const end = text.lastIndexOf(']');
@@ -1197,8 +1242,12 @@ function planningDirective(carriedQueries: string[]): string {
       : '';
   return (
     'Planning phase: before searching, list the web searches you will run to answer the request.' +
-    ` Reply with ONLY a JSON array of ${PLAN_MIN_STEPS}-${PLAN_MAX_STEPS} short search query strings` +
-    ' covering distinct angles of the question, e.g. ["query one", "query two", "query three"].' +
+    ` Reply with ONLY a JSON object: "queries" holds ${PLAN_MIN_STEPS}-${PLAN_MAX_STEPS} short search` +
+    ' query strings covering distinct angles of the question, and "questions" holds up to' +
+    ` ${PLAN_MAX_QUESTIONS} short clarifying questions for the person, asked only when the request` +
+    ' leaves out something that would change which searches you run (scope, time period, region,' +
+    ' audience, purpose); leave "questions" empty when the request is clear. Example:' +
+    ' {"queries": ["query one", "query two", "query three"], "questions": []}.' +
     ' No prose, no markdown fences, no explanation. Do not search yet.' +
     carried
   );
@@ -1776,6 +1825,7 @@ export async function* runResearchLoop(
     }
     return events;
   };
+  let planQuestions: string[] = [];
   const planEvent = (): Uint8Array =>
     encoder.encode(
       researchPlanEvent(plan, responseModel, { sources: sourceSelection, deliverable }) +
@@ -2778,6 +2828,7 @@ export async function* runResearchLoop(
             { withoutTools: true },
           );
           if (yield* flushCancellationIfRequested()) return;
+          planQuestions = parsePlanQuestions(planTurn.canonicalText);
           const queries = parsePlanQueries(planTurn.canonicalText).filter(
             (query) =>
               !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
@@ -2831,7 +2882,14 @@ export async function* runResearchLoop(
           });
         }
         awaitingApproval = true;
-        yield planEvent();
+        yield encoder.encode(
+          researchPlanEvent(
+            plan,
+            responseModel,
+            { sources: sourceSelection, deliverable },
+            planQuestions,
+          ) + planProgress(),
+        );
         yield status('awaiting_approval', 'Review the plan to start searching');
         yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
         yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));

@@ -17,6 +17,7 @@ import {
   type LiveVoiceToolCallRequest,
   type LiveVoiceToolCallResponse,
   type LiveVoiceToolDecision,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
@@ -77,6 +78,7 @@ export interface LiveVoiceToolOutcome {
   label: string;
   output: string;
   isError: boolean;
+  files: readonly LiveVoiceToolFile[];
 }
 
 export interface LiveVoiceSessionCallbacks {
@@ -242,6 +244,7 @@ export class LiveVoiceSession {
           label: this.describeTool(result.name).label,
           output: result.output,
           isError: result.isError,
+          files: result.files,
         }),
     });
   }

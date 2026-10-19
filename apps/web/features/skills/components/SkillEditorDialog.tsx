@@ -19,7 +19,9 @@ import {
   DialogTitle,
   Input,
   Label,
+  Spinner,
   Textarea,
+  useConfirmAction,
   useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import {
@@ -47,6 +49,14 @@ export interface SkillEditorDialogProps {
   submitting?: boolean;
   submitError?: string | null;
   onSubmit: (draft: SkillDraft) => Promise<void> | void;
+  workspaceShare?: SkillWorkspaceShare | null;
+}
+
+export interface SkillWorkspaceShare {
+  sharing: boolean;
+  shared: boolean;
+  error: string | null;
+  onShare: () => Promise<void> | void;
 }
 
 const EMPTY_DRAFT: SkillDraft = { name: '', description: '', body: '' };
@@ -65,7 +75,9 @@ export function SkillEditorDialog({
   submitting = false,
   submitError = null,
   onSubmit,
+  workspaceShare = null,
 }: SkillEditorDialogProps) {
+  const { confirm: confirmShare, dialog: shareDialog } = useConfirmAction();
   const [draft, setDraft] = useState<SkillDraft>(EMPTY_DRAFT);
   const [touched, setTouched] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -245,6 +257,50 @@ export function SkillEditorDialog({
                 {submitError}
               </p>
             ) : null}
+            {mode === 'edit' && workspaceShare ? (
+              <section
+                aria-label="Share with your workspace"
+                className="flex flex-col gap-2 rounded-lg border border-border p-3"
+              >
+                <p className="text-sm font-medium text-foreground">Share with your workspace</p>
+                <p className="text-xs text-muted-foreground">
+                  Publishes the saved version of this skill to the workspace, where every member can
+                  add it from Skills. Publish again after you change it.
+                </p>
+                {workspaceShare.error ? (
+                  <p role="alert" className="text-xs text-danger">
+                    {workspaceShare.error}
+                  </p>
+                ) : null}
+                {workspaceShare.shared ? (
+                  <p role="status" className="text-xs text-foreground">
+                    Shared. Members can add it from Skills now.
+                  </p>
+                ) : null}
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={workspaceShare.sharing || dirty}
+                    aria-busy={workspaceShare.sharing}
+                    onClick={() =>
+                      confirmShare({
+                        title: `Share ${baseline.name} with your workspace?`,
+                        description:
+                          'Everyone in the workspace can see its instructions and files and add it to their own chats. A workspace admin can retire it later from the workspace console, but anyone who already copied its contents keeps them.',
+                        confirmLabel: 'Share with workspace',
+                        onConfirm: () => workspaceShare.onShare(),
+                      })
+                    }
+                  >
+                    {workspaceShare.sharing ? (
+                      <Spinner size="sm" className="me-2" aria-hidden="true" />
+                    ) : null}
+                    Share with workspace
+                  </Button>
+                </div>
+              </section>
+            ) : null}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => requestClose(false)}>
                 Cancel
@@ -257,6 +313,7 @@ export function SkillEditorDialog({
         </DialogContent>
       </Dialog>
       {discardDialog}
+      {shareDialog}
     </>
   );
 }

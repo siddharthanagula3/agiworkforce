@@ -17,6 +17,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { VoiceOrb } from './VoiceOrb';
 import { AudioRoutePicker } from './AudioRoutePicker';
+import { VoiceToolFiles } from './VoiceToolFiles';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
 import type {
   LiveTranscriptTurn,
@@ -268,6 +269,7 @@ export function LiveVoiceBar({
               >
                 {outcome.output}
               </Text>
+              <VoiceToolFiles files={outcome.files} />
             </View>
           ))}
         </View>

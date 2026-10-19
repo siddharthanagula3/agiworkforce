@@ -19,6 +19,7 @@ import {
   LibraryBig,
   MessageSquare,
   ShieldCheck,
+  Sparkles,
 } from '@agiworkforce/icons';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
 import type { WorkspaceFeature } from '@agiworkforce/types';
@@ -37,6 +38,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/finance',
   '/chat/health',
   '/chat/schedules',
+  '/chat/agents',
   '/chat/customize',
   '/chat/study',
 ] as const;
@@ -153,6 +155,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
     hideable: true,
     feature: 'schedules',
+  },
+  {
+    id: 'agents',
+    label: 'Agents',
+    labelKey: 'navAgents',
+    icon: Sparkles,
+    href: '/chat/agents',
+    isActive: (pathname) => isUnder(pathname, '/chat/agents'),
+    hideable: true,
   },
   // Admin, directory sync is the org-scoped page an admin or owner can
   // actually use. The console at `/admin` itself is platform-operator only

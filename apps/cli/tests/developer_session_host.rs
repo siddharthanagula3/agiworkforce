@@ -8,8 +8,22 @@ use agiworkforce_protocol::developer_session::{
 };
 use tempfile::tempdir;
 
+/// The host runs in this process and reads the account and config from
+/// AGIWORKFORCE_HOME; without one it reads the developer's own, and a signed-in
+/// developer changes how threads route.
+fn isolated_home() {
+    static HOME: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| {
+        let home = tempdir().expect("home").keep();
+        std::env::set_var("AGIWORKFORCE_HOME", &home);
+        std::env::set_var("AGIWORKFORCE_NO_KEYRING", "1");
+        home
+    });
+}
+
 #[tokio::test]
 async fn cli_and_vscode_share_one_persisted_thread_store() {
+    isolated_home();
     let temp = tempdir().expect("temp store");
     let workspace = std::env::current_dir().expect("workspace");
     let store = ManagedSessionStore::new(temp.path().to_path_buf());
@@ -122,6 +136,7 @@ async fn cli_and_vscode_share_one_persisted_thread_store() {
 
 #[tokio::test]
 async fn auto_model_selection_is_resolved_before_a_thread_is_persisted() {
+    isolated_home();
     const REQUESTED_MODEL: &str = "auto-balanced";
 
     let temp = tempdir().expect("temp store");
@@ -177,6 +192,7 @@ async fn auto_model_selection_is_resolved_before_a_thread_is_persisted() {
 
 #[tokio::test]
 async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread() {
+    isolated_home();
     let temp = tempdir().expect("temp store");
     let workspace_a = tempdir().expect("workspace A");
     let workspace_b = tempdir().expect("workspace B");
@@ -263,6 +279,7 @@ async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread
 
 #[tokio::test]
 async fn a_workspace_scoped_host_reads_only_from_its_own_folder() {
+    isolated_home();
     const SCOPED: &str = "This app-server is scoped to";
 
     let session_store = tempdir().expect("session store");
@@ -384,6 +401,7 @@ async fn a_workspace_scoped_host_reads_only_from_its_own_folder() {
 
 #[tokio::test]
 async fn a_turn_rejects_context_files_outside_its_workspace() {
+    isolated_home();
     let session_store = tempdir().expect("session store");
     let workspace = tempdir().expect("workspace");
     let outside = tempfile::NamedTempFile::new().expect("outside context file");

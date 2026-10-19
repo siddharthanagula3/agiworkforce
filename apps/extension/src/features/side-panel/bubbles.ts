@@ -1291,6 +1291,47 @@ export function buildSiteGrantCard(options: {
   return card;
 }
 
+export function buildHistorySearchCard(options: {
+  query: string;
+  days: number;
+  onDecide: (allow: boolean) => void;
+}): HTMLElement {
+  const titleId = `sp-history-search-${crypto.randomUUID()}`;
+  const card = document.createElement('div');
+  card.className = 'sp-agent-approval sp-browser-grant';
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-labelledby', titleId);
+  const title = document.createElement('div');
+  title.className = 'sp-agent-approval__summary';
+  title.id = titleId;
+  title.textContent = t('spHistorySearchTitle');
+  const scope = document.createElement('div');
+  scope.className = 'sp-browser-grant__goal';
+  scope.textContent = tPlural('spHistorySearchScope', options.days, [options.query]);
+  const body = document.createElement('div');
+  body.className = 'sp-browser-grant__body';
+  body.textContent = t('spHistorySearchBody');
+  const actions = document.createElement('div');
+  actions.className = 'sp-agent-approval__actions';
+  const choices: Array<[boolean, string]> = [
+    [true, t('spHistorySearchAllow')],
+    [false, t('spBrowserAccessDecline')],
+  ];
+  for (const [allow, label] of choices) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sp-agent-approval__button${allow ? ' sp-agent-approval__button--approve' : ''}`;
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      for (const peer of actions.querySelectorAll('button')) peer.disabled = true;
+      options.onDecide(allow);
+    });
+    actions.appendChild(button);
+  }
+  card.append(title, scope, body, actions);
+  return card;
+}
+
 export function buildBrowserTaskStartCard(options: {
   goal: string;
   onDecide: (start: boolean) => void;

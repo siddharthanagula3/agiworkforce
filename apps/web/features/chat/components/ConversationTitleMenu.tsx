@@ -12,6 +12,7 @@ import {
   Share2,
   Trash2,
   FolderInput,
+  ScrollText,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -56,6 +57,8 @@ export interface ConversationTitleMenuProps {
   onExport?: () => void;
   onShare?: () => void;
   onFork?: () => void;
+  onEditInstructions?: () => void;
+  hasInstructions?: boolean;
 }
 
 export function ConversationTitleMenu({
@@ -71,6 +74,8 @@ export function ConversationTitleMenu({
   onPrint,
   onExport,
   onShare,
+  onEditInstructions,
+  hasInstructions = false,
 }: ConversationTitleMenuProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -147,6 +152,12 @@ export function ConversationTitleMenu({
               <Pencil className="me-2 h-4 w-4" />
               Rename
             </DropdownMenuItem>
+            {onEditInstructions && (
+              <DropdownMenuItem onSelect={() => onEditInstructions()}>
+                <ScrollText className="me-2 h-4 w-4" />
+                {hasInstructions ? 'Edit chat instructions' : 'Add chat instructions'}
+              </DropdownMenuItem>
+            )}
             {onMoveToProject && projects.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

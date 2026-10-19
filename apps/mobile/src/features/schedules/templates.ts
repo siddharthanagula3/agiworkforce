@@ -78,3 +78,24 @@ export function getScheduleTemplate(
   if (typeof id !== 'string') return undefined;
   return SCHEDULE_TEMPLATES.find((template) => template.id === id);
 }
+
+const DRAFT_NAME_CHARS = 60;
+
+export function scheduleDraftFromPrompt(
+  prompt: string,
+  model: string | undefined,
+): Pick<Schedule, 'name' | 'prompt' | 'model' | 'recurrence' | 'timeOfDay'> {
+  const text = prompt.trim();
+  const firstLine = text.split('\n', 1)[0]?.trim() ?? '';
+  const name =
+    firstLine.length > DRAFT_NAME_CHARS
+      ? `${firstLine.slice(0, DRAFT_NAME_CHARS - 1).trimEnd()}…`
+      : firstLine;
+  return {
+    name,
+    prompt: text,
+    model: model ?? DEFAULT_AUTO_MODE_ID,
+    recurrence: 'daily',
+    timeOfDay: '09:00',
+  };
+}

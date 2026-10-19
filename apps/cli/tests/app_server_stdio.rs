@@ -16,6 +16,11 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
         .arg("init")
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .output()
         .await
         .expect("initialize trusted test project");
@@ -43,6 +48,11 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
         .arg("app-server")
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -197,6 +207,11 @@ async fn every_line_the_stdio_transport_writes_is_json() {
         .arg("init")
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .output()
         .await
         .expect("initialize trusted test project");
@@ -212,6 +227,11 @@ async fn every_line_the_stdio_transport_writes_is_json() {
         .arg("app-server")
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

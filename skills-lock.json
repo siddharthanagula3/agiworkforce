@@ -124,6 +124,14 @@
       "declaredVersion": "1be8e34187e34647bb83adc3a1323b26ae6f6abe",
       "computedHash": "sha256-tree-v1:bbd5ff01b478431e12b2bfa677d6cc80d75d2d1be5f81961ff19b0fa105f4031"
     },
+    "appointment-prep": {
+      "path": ".agents/skills/appointment-prep",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:16105ef76344592c70b8d35b882739874ee6a1238e9f5eb6f42e6fd7377f46c4"
+    },
     "artifact-design": {
       "path": ".agents/skills/artifact-design",
       "source": "AGI Workforce repository",
@@ -443,6 +451,14 @@
       "audience": "product",
       "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
       "computedHash": "sha256-tree-v1:24fb0c0ea31901d11d2ab2c9196108941603be551b835b5d54ff0953b4f62ce0"
+    },
+    "lab-results": {
+      "path": ".agents/skills/lab-results",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "product",
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:fdedf92346521531f3ef8852f537c2965bc428facab516f1918f92c0f358acbd"
     },
     "launch": {
       "path": ".agents/skills/launch",

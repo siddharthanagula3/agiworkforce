@@ -63,6 +63,8 @@ import { FileExportButton } from './FileExportButton';
 import { CitationChip } from './CitationChip';
 import { StreamingArtifactCard } from './StreamingArtifactCard';
 import { CollapsibleSources } from './CollapsibleSources';
+import { MemoryUsedChip } from './MemoryUsedChip';
+import { messageMemoryCitations } from '@/src/features/memory/services/memoryCitations';
 import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
 import { AgiWorkPlanReview } from './AgiWorkPlanReview';
 import {
@@ -456,6 +458,7 @@ interface MessageBubbleProps {
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
+  onScheduleMessage?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
   onDeleteImageConversation?: () => void;
   variant?: VariantInfo;
@@ -509,6 +512,7 @@ export const MessageBubble = memo(function MessageBubble({
   onDeleteImageConversation,
   onRetryWithModel,
   onBranch,
+  onScheduleMessage,
   variant,
   onSelectVariant,
   onSwitchModel,
@@ -566,6 +570,10 @@ export const MessageBubble = memo(function MessageBubble({
     }
     return sources;
   }, [message.citations, research]);
+  const memoryCitations = useMemo(
+    () => (isAssistant ? messageMemoryCitations(message.metadata) : null),
+    [isAssistant, message.metadata],
+  );
   const canonicalActivity = isAssistant
     ? readAgentActivityState(message.metadata?.agentActivity)
     : undefined;
@@ -927,6 +935,13 @@ export const MessageBubble = memo(function MessageBubble({
         run: () => onBranch(message.id),
       });
     }
+    if (isUser && onScheduleMessage && message.content.trim()) {
+      actions.push({
+        key: 'schedule',
+        label: 'Schedule as Task\u2026',
+        run: () => onScheduleMessage(message.id),
+      });
+    }
     actions.push({
       key: 'copy',
       label: 'Copy Message',
@@ -963,6 +978,7 @@ export const MessageBubble = memo(function MessageBubble({
     onRetryMessage,
     onRetryWithModel,
     onBranch,
+    onScheduleMessage,
     onDeleteMessage,
     handleOpenEditModal,
     handleShowExport,
@@ -1008,6 +1024,9 @@ export const MessageBubble = memo(function MessageBubble({
     if (onBranch && !message.isStreaming) {
       actions.push({ name: 'branch', label: 'Branch conversation from here' });
     }
+    if (isUser && onScheduleMessage && message.content.trim()) {
+      actions.push({ name: 'schedule', label: 'Schedule as task' });
+    }
     actions.push({ name: 'copy', label: 'Copy message' });
     if (displayContent.trim()) actions.push({ name: 'select-text', label: 'Select text' });
     if (isAssistant && message.content.trim()) {
@@ -1030,6 +1049,7 @@ export const MessageBubble = memo(function MessageBubble({
     onRetryMessage,
     onRetryWithModel,
     onBranch,
+    onScheduleMessage,
     onDeleteMessage,
     message.content,
     message.isStreaming,
@@ -1066,6 +1086,9 @@ export const MessageBubble = memo(function MessageBubble({
         case 'branch':
           onBranch?.(message.id);
           break;
+        case 'schedule':
+          onScheduleMessage?.(message.id);
+          break;
         case 'edit':
           handleOpenEditModal();
           break;
@@ -1088,6 +1111,7 @@ export const MessageBubble = memo(function MessageBubble({
       onRetryMessage,
       onRetryWithModel,
       onBranch,
+      onScheduleMessage,
       confirmDeleteMessage,
       handleOpenEditModal,
       handleShowExport,
@@ -1583,6 +1607,10 @@ export const MessageBubble = memo(function MessageBubble({
               ) : (
                 <CollapsibleSources sources={message.citations} />
               )
+            ) : null}
+
+            {memoryCitations && !message.isStreaming ? (
+              <MemoryUsedChip citations={memoryCitations} />
             ) : null}
 
             {isAssistant && inlineArtifacts.length > 0 ? (

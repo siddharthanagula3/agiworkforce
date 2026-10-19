@@ -1,3 +1,4 @@
+import { openAssistantPanel } from './features/surface/assistantPanel';
 import { buildWelcomePage } from './features/onboarding/welcome-page';
 import { welcomeStyles } from './features/onboarding/welcome-styles';
 import { getAuthToken } from './features/cloud-bridge/freeTrialClient';
@@ -15,7 +16,7 @@ const page = buildWelcomePage({
   openSidePanel: async () => {
     const tab = await chrome.tabs.getCurrent();
     if (tab?.id === undefined) throw new Error('No current tab');
-    await chrome.sidePanel.open({ tabId: tab.id });
+    await openAssistantPanel({ tabId: tab.id, windowId: tab.windowId });
   },
   openSettings: () => {
     void chrome.runtime.openOptionsPage();

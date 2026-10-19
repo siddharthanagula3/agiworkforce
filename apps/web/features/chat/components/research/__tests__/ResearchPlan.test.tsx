@@ -15,6 +15,31 @@ const PLAN: ResearchStep[] = [
 ];
 
 describe('ResearchPlan', () => {
+  it("asks the plan's clarifying questions and starts with the answers given", async () => {
+    const onStart = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ResearchPlan
+        steps={PLAN}
+        questions={['Which country are you buying in?', 'New or used?']}
+        editable
+        onStart={onStart}
+      />,
+    );
+
+    expect(screen.getByRole('group', { name: 'Before I search' })).toBeVisible();
+    await user.type(screen.getByLabelText('Which country are you buying in?'), 'Norway');
+    await user.click(screen.getByRole('button', { name: 'Start research' }));
+
+    expect(onStart.mock.calls[0]?.[0].answers).toEqual(['Norway', '']);
+  });
+
+  it('shows no question block when the plan asked none', () => {
+    render(<ResearchPlan steps={PLAN} editable onStart={vi.fn()} />);
+    expect(screen.queryByRole('group', { name: 'Before I search' })).toBeNull();
+  });
+
   it('starts the run with the edited step, not the one the model proposed', async () => {
     const onStart = vi.fn();
     const user = userEvent.setup();
