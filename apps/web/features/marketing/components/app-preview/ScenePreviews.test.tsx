@@ -664,10 +664,9 @@ describe('tool approval in chat', () => {
       container.querySelector('.agi-scene-tool-actions .agi-scene-btn[data-ink] svg'),
     ).not.toBeNull();
     expect(text(container, '.agi-scene-tool-label')).toBe('Request');
-    expect(JSON.parse(text(container, '.agi-scene-tool-request') ?? '')).toEqual({
-      path: 'report.txt',
-      content: 'Notes for the project report.',
-    });
+    expect(JSON.parse(text(container, '.agi-scene-tool-request') ?? '')).toEqual(
+      APPROVAL_SCENE_REQUEST,
+    );
   });
 
   it('the tool card still ships what the scene shows', () => {

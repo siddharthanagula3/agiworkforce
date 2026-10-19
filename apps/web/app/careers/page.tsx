@@ -31,7 +31,7 @@ export default function CareersPage() {
           eyebrow="Careers"
           title="Founder-led, no open roles."
           em="no open roles."
-          lede="AGI Automation LLC is small and intentional. We do not have open roles right now. If that changes, we will list them here, no ghost listings."
+          lede="AGI Automation LLC is small and intentional. We do not have open roles right now. If that changes, we will list them here."
           ctas={[
             { href: contactMailto(CAREERS_SUBJECT), label: 'Email us about working here' },
             { href: '/release-notes', label: 'Follow the release notes', variant: 'secondary' },

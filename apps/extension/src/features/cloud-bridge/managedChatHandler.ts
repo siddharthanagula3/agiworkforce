@@ -47,6 +47,7 @@ import {
 } from './freeTrialClient';
 import { ROUTING_TASK_TYPES, resolveChromeManagedChatRoute } from './managedChatRouting';
 import { MEMORY_COMMAND_KINDS, MEMORY_COMMAND_STATUSES } from './memoryClient';
+import { isSkillName } from './skillsClient';
 import { imageLimitMessage, managedModelImageLimit } from './managedModelLimits';
 import { normalizeAnsweredModel } from './answeredModel';
 import { UUID_PATTERN } from '../../lib/uuid';
@@ -117,6 +118,7 @@ export interface ChromeManagedChatRequest {
   conversationId?: string;
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
+  skillName?: string;
   tools?: readonly ToolDefinition[];
   signal?: AbortSignal;
 }
@@ -273,6 +275,9 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
       !MEMORY_COMMAND_STATUSES.has(request.memoryCommand.status))
   ) {
     return 'Invalid memory command.';
+  }
+  if (request.skillName !== undefined && !isSkillName(request.skillName)) {
+    return 'Invalid skill.';
   }
   if (request.effort !== undefined && !isWorkspaceReasoningEffort(request.effort)) {
     return 'Invalid reasoning effort.';
@@ -564,7 +569,7 @@ export async function executeChromeManagedChat(
     };
   }
 
-  const token = await dependencies.getAuthToken();
+  let token = await dependencies.getAuthToken();
   if (!token) {
     return {
       status: 'error',
@@ -732,6 +737,7 @@ export async function executeChromeManagedChat(
     ...(request.conversationId ? { conversationId: request.conversationId } : {}),
     ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
     ...(request.memoryCommand ? { memoryCommand: request.memoryCommand } : {}),
+    ...(request.skillName ? { skillName: request.skillName } : {}),
     signal: request.signal,
   };
   let latestTaskState: AgentTaskState | undefined;
@@ -740,6 +746,18 @@ export async function executeChromeManagedChat(
       ? (request.tools ?? [])
       : [];
   for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
+    if (leg > 0) {
+      // A tool leg can wait on the user and a browser task for minutes, longer
+      // than a session token lives, so each continuation asks for a fresh one.
+      token = await dependencies.getAuthToken();
+      if (!token) {
+        return {
+          status: 'error',
+          code: 'auth_required',
+          message: 'Sign in to use AGI Cloud chat.',
+        };
+      }
+    }
     const legTools = leg === MAX_MANAGED_TOOL_LEGS - 1 ? [] : tools;
     const legOptions: ManagedChatStreamOptions = {
       ...streamOptions,

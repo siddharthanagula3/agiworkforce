@@ -63,6 +63,7 @@ export function useConversationDraftSync(): DraftConflictControls {
   const conflictsRef = useRef<Record<string, OpenDraftConflict>>({});
   const replacementNonceRef = useRef(0);
   const lastSavedRef = useRef<Record<string, string>>({});
+  const notOnServerRef = useRef<Set<string>>(new Set());
   const saveQueueRef = useRef<Record<string, Promise<void>>>({});
   const retryAttemptsRef = useRef<Record<string, { draft: string; count: number }>>({});
   const retryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -108,6 +109,10 @@ export function useConversationDraftSync(): DraftConflictControls {
           (candidate) => candidate.id === conversationId,
         );
         if (conversation?.isTemporary) continue;
+        if (notOnServerRef.current.has(conversationId)) {
+          if (!conversation) continue;
+          notOnServerRef.current.delete(conversationId);
+        }
         if (
           draft !== '' &&
           (localModelSelected ||
@@ -128,6 +133,12 @@ export function useConversationDraftSync(): DraftConflictControls {
             return { Authorization: `Bearer ${token}` };
           });
           if (!mountedRef.current) return;
+          if (result === 'not_saved_yet') {
+            delete retryAttemptsRef.current[conversationId];
+            delete lastSavedRef.current[conversationId];
+            notOnServerRef.current.add(conversationId);
+            return;
+          }
           if (result === 'failed' && lastSavedRef.current[conversationId] === draft) {
             delete lastSavedRef.current[conversationId];
             if (attempt < MAX_AUTOMATIC_DRAFT_SAVE_ATTEMPTS) {

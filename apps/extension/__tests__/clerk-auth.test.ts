@@ -465,4 +465,52 @@ describe('Clerk Chrome Extension auth', () => {
 
     await expect(auth.revokeSyncedWebSession()).rejects.toThrow(/403/);
   });
+
+  it('refreshes once per real sign-in change, not on same-value cookie rewrites', async () => {
+    vi.useFakeTimers();
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_example';
+    process.env['CLERK_SYNC_HOST'] = 'https://agiworkforce.com';
+    let listener: ((change: chrome.cookies.CookieChangeInfo) => void) | null = null;
+    const chromeStub = globalThis.chrome as unknown as Record<string, unknown>;
+    chromeStub['cookies'] = {
+      getAll: vi
+        .fn()
+        .mockResolvedValue([
+          { name: '__client_uat', value: '1792370668', domain: '.agiworkforce.com' },
+        ]),
+      onChanged: {
+        addListener: vi.fn((fn: typeof listener) => {
+          listener = fn;
+        }),
+        removeListener: vi.fn(),
+      },
+    };
+    const auth = await importClerkAuth();
+    const onChange = vi.fn();
+    auth.watchSyncHostSession(onChange);
+    await vi.waitFor(() => expect(listener).not.toBeNull());
+    await Promise.resolve();
+    const fire = (value: string, removed: boolean, cause: string, name = '__client_uat') =>
+      listener!({
+        cookie: { name, value, domain: '.agiworkforce.com' } as chrome.cookies.Cookie,
+        removed,
+        cause: cause as chrome.cookies.OnChangedCause,
+      });
+
+    fire('1792370668', true, 'expired_overwrite');
+    fire('1792370668', false, 'explicit');
+    vi.advanceTimersByTime(1000);
+    expect(onChange).not.toHaveBeenCalled();
+
+    fire('0', false, 'explicit');
+    fire('0', false, 'explicit', '__client_uat_suffix');
+    vi.advanceTimersByTime(1000);
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    fire('1792370999', false, 'explicit', 'session_cookie_elsewhere');
+    fire('1792370999', false, 'explicit');
+    vi.advanceTimersByTime(1000);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });

@@ -86,6 +86,11 @@ async function handleUnlink(
           `select 'desktop' as kind, name from desktop_devices where id = $1 and user_id = $2
            union all
            select 'mobile' as kind, name from mobile_devices where id = $1 and user_id = $2
+           union all
+           select coalesce(c.device_type, 'cli') as kind, t.device_name as name
+             from device_refresh_tokens t
+             left join device_authorization_codes c on c.device_id = t.device_id
+            where t.device_id = $1::text and t.user_id = $2 and t.revoked_at is null
            limit 1`,
           [deviceId, userId],
         );

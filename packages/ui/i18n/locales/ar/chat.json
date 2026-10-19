@@ -805,5 +805,9 @@
     "searchedWeb": "بحث في الويب",
     "thinking": "التفكير",
     "usedTools": "الأدوات المستخدمة"
+  },
+  "quickAsk": {
+    "openFullChat": "فتح المحادثة كاملة",
+    "newChat": "محادثة جديدة"
   }
 }

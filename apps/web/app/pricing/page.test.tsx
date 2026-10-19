@@ -1282,7 +1282,11 @@ describe('PricingPage', () => {
     );
     const connectorNote = connectorFeatureNote() ?? '';
     expect(connectorNote).not.toBe('');
-    expect(comparisonRow(CAPABILITY.skills_connectors).note).toBe(connectorNote);
+    expect(comparisonRow(CAPABILITY.skills_connectors).label).toBe(
+      planCapabilityLabel('skills_connectors'),
+    );
+    expect(comparisonRow(CAPABILITY.skills_connectors).label).not.toMatch(/connector/i);
+    expect(comparisonRow(CAPABILITY.skills_connectors).note).toBe('');
     expect(comparisonRow('compareRowCustomMcp').note).toBe(connectorNote);
   });
 

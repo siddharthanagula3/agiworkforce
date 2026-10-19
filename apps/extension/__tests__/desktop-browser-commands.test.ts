@@ -171,7 +171,7 @@ describe('desktop-issued browser commands', () => {
 
   it('captures the tab through the debugger rather than an activeTab click', async () => {
     approveSite();
-    const capture = vi.fn(() => Promise.resolve('iVBORw0KGgo='));
+    const capture = vi.fn(() => Promise.resolve('/9j/4AAQ'));
     const result = await runDesktopBrowserCommand(request('browser_screenshot'), {
       resolveTabId: () => Promise.resolve(TAB_ID),
       send: vi.fn(),
@@ -181,9 +181,7 @@ describe('desktop-issued browser commands', () => {
       capture,
     });
     expect(capture).toHaveBeenCalledWith(TAB_ID);
-    expect((result.value as { dataUrl: string }).dataUrl).toBe(
-      'data:image/png;base64,iVBORw0KGgo=',
-    );
+    expect((result.value as { dataUrl: string }).dataUrl).toBe('data:image/jpeg;base64,/9j/4AAQ');
   });
 
   it('never falls back to a visible-tab capture when the debugger is refused', async () => {

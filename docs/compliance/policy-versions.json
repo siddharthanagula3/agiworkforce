@@ -935,6 +935,11 @@
           "date": "2026-10-15",
           "digest": "eecee151f7d4de94",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The section titled Why this page cannot drift addressed the page’s editors and said the page names no retention window and no recipient, while its answers name Alibaba Cloud Model Studio, OpenAI, Singapore and the 24-hour deletion schedule; it now says each answer is a summary, that the privacy policy governs, and keeps the same four links. The questions heading, the lede and seven answers drop rhetoric about honesty and what people get wrong; the GDPR and DPDP answer no longer says those are not badges anyone issues, which overlooked the certification schemes GDPR Article 42 provides for, and says compliance with either is not a single yes or no. Every provider named, the Free plan routing sentence, the 24-hour deletion window, the absence of EU, UK and India residency, the absence of a shutdown commitment and of a SOC 2 report or ISO 27001 certificate are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "c8600ec9f51b382d",
+          "note": "Editorial clarification made on 2026-10-18 after the external public-site review (finding COPY-02): the answer to where data is physically held began with the United States while an earlier answer names Alibaba Cloud Model Studio's international endpoint in Singapore. It now says AGI stores data in the United States and that a chat is also processed where the model provider that answers it runs that model, naming the same Singapore endpoint the page and section 02 of the privacy policy already name. No provider, recipient, location, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },

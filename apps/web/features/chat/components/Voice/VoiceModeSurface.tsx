@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { CircleAlert, X } from '@agiworkforce/icons';
 import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
@@ -64,7 +65,6 @@ function isGeneratedFilePath(uri: string): boolean {
 }
 
 const ESCAPE = 'Escape';
-const PLANS_PATH = '/pricing';
 const LIMIT_ACTION_CLASS =
   'min-h-6 shrink-0 rounded-full px-2 py-1 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]';
 
@@ -252,9 +252,14 @@ export function VoiceModeSurface({
     >
       <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0">{error}</span>
-      <a href={PLANS_PATH} className={LIMIT_ACTION_CLASS} data-testid="voice-usage-upgrade">
+      <button
+        type="button"
+        onClick={() => openUpgrade((href) => window.location.assign(href))}
+        className={LIMIT_ACTION_CLASS}
+        data-testid="voice-usage-upgrade"
+      >
         {LABEL.upgrade}
-      </a>
+      </button>
       <button type="button" onClick={exit} className={LIMIT_ACTION_CLASS}>
         {LABEL.continueInText}
       </button>

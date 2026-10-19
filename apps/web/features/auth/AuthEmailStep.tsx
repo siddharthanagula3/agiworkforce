@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { evaluateAccountAge } from '@agiworkforce/types';
 import { Spinner } from '@agiworkforce/ui';
 
@@ -65,6 +65,7 @@ function typedInto(form: HTMLFormElement | null, name: string): string {
 export function AuthEmailStep({
   mode,
   providers,
+  hostWayIn,
   switchUrl,
   ready,
   phase,
@@ -86,6 +87,7 @@ export function AuthEmailStep({
 }: {
   mode: AuthMode;
   providers: readonly AuthProvider[];
+  hostWayIn?: ReactNode;
   switchUrl: string;
   ready: boolean;
   phase: AuthPhase;
@@ -189,6 +191,7 @@ export function AuthEmailStep({
 
   const otherWaysIn = (
     <>
+      {hostWayIn}
       <AuthProviderButtons
         providers={providers}
         pending={providerPending}

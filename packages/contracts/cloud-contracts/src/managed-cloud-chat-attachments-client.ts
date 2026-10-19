@@ -15,6 +15,7 @@ import {
 } from './chat-attachments';
 import { sha256HexOfBlob } from './file-digest';
 import {
+  ManagedCloudResumableUploadError,
   createManagedCloudResumableUploadClient,
   isResumableUploadUnavailable,
 } from './managed-cloud-resumable-upload-client';
@@ -45,6 +46,8 @@ export interface ManagedCloudChatAttachmentUploadStatus {
   fileName: string;
   phase: ManagedCloudChatAttachmentUploadPhase;
   error?: string;
+  /** False when sending the same file again cannot succeed, such as a refused type or content. */
+  retryable?: boolean;
 }
 
 export interface ManagedCloudChatAttachmentsClient {
@@ -91,6 +94,18 @@ function isConfiguredLoopbackUpload(uploadUrl: URL, baseUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+const TRANSIENT_HTTP_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
+
+export function isRetryableAttachmentUploadError(error: unknown): boolean {
+  if (
+    error instanceof ManagedCloudChatAttachmentHttpError ||
+    error instanceof ManagedCloudResumableUploadError
+  ) {
+    return error.status >= 500 || TRANSIENT_HTTP_STATUSES.has(error.status);
+  }
+  return error instanceof TypeError;
 }
 
 function reportStatus(
@@ -296,6 +311,7 @@ export function createManagedCloudChatAttachmentsClient(
             fileName: file.name,
             phase: 'failed',
             error: error instanceof Error ? error.message : `Could not upload ${file.name}.`,
+            retryable: isRetryableAttachmentUploadError(error),
           });
           throw error;
         }

@@ -6,6 +6,8 @@ import { WaitlistModalProvider } from '@/features/marketing/components/WaitlistM
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { SonnerToaster } from '@agiworkforce/ui/sonner';
 
+const TOASTS_CLEAR_OF_APP_HEADER = { top: 56 } as const;
+
 export default function Providers({
   children,
   nonce,
@@ -18,7 +20,13 @@ export default function Providers({
       <I18nextProvider i18n={i18n}>
         <WaitlistModalProvider>
           {children}
-          <SonnerToaster position="top-center" richColors closeButton />
+          <SonnerToaster
+            position="top-center"
+            offset={TOASTS_CLEAR_OF_APP_HEADER}
+            mobileOffset={TOASTS_CLEAR_OF_APP_HEADER}
+            richColors
+            closeButton
+          />
         </WaitlistModalProvider>
       </I18nextProvider>
     </ThemeProvider>

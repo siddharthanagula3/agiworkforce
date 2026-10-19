@@ -60,8 +60,8 @@ export default async function LoginPage({
           switchUrl: buildSignupUrl(context),
           ssoCallbackUrl: buildSsoCallbackUrl(context),
         }}
+        hostWayIn={<DesktopBrowserSignIn />}
       />
-      <DesktopBrowserSignIn />
     </AuthLayout>
   );
 }

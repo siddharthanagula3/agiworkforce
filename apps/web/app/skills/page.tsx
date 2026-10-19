@@ -5,6 +5,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { getManagedSkillCatalog } from '@/lib/services/skill-catalog-service';
 import { reportUnreadableIdentity } from '@/lib/server/unreadable-identity';
+import { publicSkillSummary } from './public-skill-summary';
 import { SignedOutSkills, type PublicSkill } from './SignedOutSkills';
 
 export const metadata = buildMetadata({
@@ -29,7 +30,7 @@ async function loadPublicSkills(): Promise<PublicSkill[] | null> {
   try {
     const catalog = await getManagedSkillCatalog();
     return catalog
-      .map((skill) => ({ name: skill.name, description: skill.description }))
+      .map((skill) => ({ name: skill.name, description: publicSkillSummary(skill.description) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return null;

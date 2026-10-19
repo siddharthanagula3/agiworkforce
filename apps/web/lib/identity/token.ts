@@ -1,6 +1,6 @@
 type IdentityBrowserClient = {
   loaded?: boolean;
-  session: { getToken: () => Promise<string | null> } | null;
+  session: { getToken: (options?: { skipCache?: boolean }) => Promise<string | null> } | null;
 } | null;
 
 export const IDENTITY_CLIENT_READY_TIMEOUT_MS = 2_000;
@@ -57,4 +57,33 @@ export async function getIdentityToken(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Whether the browser identity client loaded at all, as opposed to loading signed out. */
+export async function identityClientReady(): Promise<boolean> {
+  return (await waitForBrowserClient().catch(() => null)) !== null;
+}
+
+/**
+ * Mints a fresh session token, which also rewrites the session cookie. A page
+ * whose first request lands just after the short-lived cookie expired, before
+ * the client refreshed it, is still signed in.
+ */
+export async function refreshIdentitySession(): Promise<boolean> {
+  try {
+    const client = await waitForBrowserClient();
+    return Boolean(await client?.session?.getToken({ skipCache: true }));
+  } catch {
+    return false;
+  }
+}
+
+/** A cookie-authenticated fetch that refreshes the session once on a 401 before giving up. */
+export async function fetchRefreshingSession(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status !== 401 || !(await refreshIdentitySession())) return response;
+  return fetch(input, init);
 }

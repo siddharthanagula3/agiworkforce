@@ -467,9 +467,13 @@ describe('computer-use agent loop, one round-trip', () => {
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 42 },
       'Page.captureScreenshot',
-      expect.objectContaining({ format: 'png' }),
+      expect.objectContaining({ format: 'jpeg', quality: 80 }),
       expect.any(Function),
     );
+    const firstMessages = (firstBody as unknown as { messages: Array<{ content: unknown }> })
+      .messages;
+    expect(JSON.stringify(firstMessages)).toContain('data:image/jpeg;base64,FAKE_BASE64_PNG');
+    expect(JSON.stringify(firstMessages)).not.toContain('data:image/png');
 
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 42 },

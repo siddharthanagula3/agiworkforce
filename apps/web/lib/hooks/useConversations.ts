@@ -213,6 +213,11 @@ interface UseConversationsReturn {
     options?: { isTemporary?: boolean; selectedRouteId?: string | null },
   ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
+  /**
+   * Re-reads the open conversation without a loading state or an error, so a
+   * turn added on another surface appears here; a turn in flight here wins.
+   */
+  refreshOpenConversation: (id: string) => Promise<boolean>;
   updateConversation: (
     id: string,
     updates: {
@@ -507,14 +512,19 @@ export function useConversations(): UseConversationsReturn {
     [getAuthHeaders, addConversation, setActiveConversation, setMessages, setError],
   );
 
-  const loadConversation = useCallback(
-    async (id: string): Promise<boolean> => {
-      currentLoadConversationIdRef.current = id;
-      const cancelled = () => currentLoadConversationIdRef.current !== id;
+  const readConversation = useCallback(
+    async (id: string, quiet: boolean): Promise<boolean> => {
+      const loadAtStart = quiet ? currentLoadConversationIdRef.current : id;
+      if (!quiet) currentLoadConversationIdRef.current = id;
+      const cancelled = () =>
+        currentLoadConversationIdRef.current !== loadAtStart ||
+        (quiet && useChatStore.getState().activeConversationId !== id);
 
-      setIsOpeningConversation(true);
-      setError(null);
-      conversationLoadErrorRef.current = null;
+      if (!quiet) {
+        setIsOpeningConversation(true);
+        setError(null);
+        conversationLoadErrorRef.current = null;
+      }
 
       try {
         const headers = await getAuthHeaders();
@@ -616,7 +626,7 @@ export function useConversations(): UseConversationsReturn {
             state.loadingConversationIds.includes(id);
           const extended = turnInFlight ? null : extendedCachedTranscript(cachedMessages, messages);
           if (!extended) {
-            setActiveConversation(id);
+            if (!quiet) setActiveConversation(id);
             return true;
           }
           setActiveConversationWithMessages(
@@ -635,11 +645,12 @@ export function useConversations(): UseConversationsReturn {
         return true;
       } catch (err) {
         if (cancelled()) return true;
+        if (quiet) return false;
         conversationLoadErrorRef.current = conversationLoadErrorMessage(err);
         setError(toUserMessage(err, 'Failed to load conversation'), id);
         return false;
       } finally {
-        if (!cancelled()) setIsOpeningConversation(false);
+        if (!quiet && !cancelled()) setIsOpeningConversation(false);
       }
     },
     [
@@ -649,6 +660,26 @@ export function useConversations(): UseConversationsReturn {
       setActiveConversationWithMessages,
       setError,
     ],
+  );
+
+  const loadConversation = useCallback(
+    (id: string): Promise<boolean> => readConversation(id, false),
+    [readConversation],
+  );
+
+  const refreshOpenConversation = useCallback(
+    async (id: string): Promise<boolean> => {
+      const state = useChatStore.getState();
+      if (
+        state.activeConversationId !== id ||
+        state.streamingConversationIds.includes(id) ||
+        state.loadingConversationIds.includes(id)
+      ) {
+        return false;
+      }
+      return readConversation(id, true);
+    },
+    [readConversation],
   );
 
   const updateConversation = useCallback(
@@ -770,6 +801,7 @@ export function useConversations(): UseConversationsReturn {
     loadMoreConversations,
     createConversation,
     loadConversation,
+    refreshOpenConversation,
     updateConversation,
     deleteConversation,
     setActiveConversation,

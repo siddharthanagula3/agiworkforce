@@ -51,10 +51,10 @@ export const INSPIRATION: readonly InspirationCard[] = [
   },
   {
     id: 'svg-logo-placeholder',
-    title: 'SVG logo placeholder',
+    title: 'SVG wordmark',
     language: 'svg',
     type: 'svg',
-    description: 'A clean SVG wordmark built without any assets.',
+    description: 'A two-tone wordmark drawn entirely in SVG, with no image files.',
     content: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
   <rect width="200" height="60" rx="8" fill="#1a1b17"/>
   <text x="20" y="38" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#b9985c">AGI</text>
@@ -66,7 +66,8 @@ export const INSPIRATION: readonly InspirationCard[] = [
     title: 'Python data pipeline',
     language: 'python',
     type: 'code',
-    description: 'Skeleton for an async data ingestion pipeline.',
+    description:
+      'An async pipeline that streams records, tags them and reports the count. The source is simulated.',
     content: `import asyncio
 from dataclasses import dataclass, field
 from typing import AsyncIterator
@@ -78,7 +79,7 @@ class Record:
     tags: list[str] = field(default_factory=list)
 
 async def fetch_records(source: str) -> AsyncIterator[Record]:
-    """Yield records from source -- replace with real I/O."""
+    """Yield records from a source. This example simulates one."""
     for i in range(5):
         await asyncio.sleep(0.1)
         yield Record(id=f"{source}-{i}", payload={"index": i})
@@ -118,7 +119,7 @@ asyncio.run(main())`,
   .card p  { margin: 0; color: #c8c0b2; line-height: 1.5; }
 </style>
 <div class="grid">
-  <div class="card"><h3>Speed</h3><p>Sub-100 ms first token on most models.</p></div>
+  <div class="card"><h3>Speed</h3><p>Answers stream in as they are written.</p></div>
   <div class="card"><h3>Routing</h3><p>Auto-selects the best provider per task.</p></div>
   <div class="card"><h3>Privacy</h3><p>Local mode keeps data on your device.</p></div>
   <div class="card"><h3>Open</h3><p>BYOK or use your own Ollama instance.</p></div>

@@ -247,6 +247,45 @@ export async function revokeSyncedWebSession(): Promise<void> {
   }
 }
 
+function isSyncHostSessionCookie(cookie: chrome.cookies.Cookie, host: string): boolean {
+  if (!cookie.name.startsWith('__client_uat')) return false;
+  const domain = cookie.domain.replace(/^\./u, '');
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+export function watchSyncHostSession(onChange: () => void): () => void {
+  if (!syncHost.origin || !chrome.cookies?.onChanged) return () => undefined;
+  const origin = syncHost.origin;
+  const host = new URL(origin).hostname;
+  const seen = new Map<string, string>();
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  void chrome.cookies
+    .getAll({ url: origin })
+    .then((cookies) => {
+      for (const cookie of cookies)
+        if (isSyncHostSessionCookie(cookie, host) && !seen.has(cookie.name))
+          seen.set(cookie.name, cookie.value);
+    })
+    .catch(() => undefined);
+  const listener = ({ cookie, removed, cause }: chrome.cookies.CookieChangeInfo): void => {
+    if (!isSyncHostSessionCookie(cookie, host)) return;
+    if (removed && cause !== 'explicit' && cause !== 'expired') return;
+    const value = removed ? '0' : cookie.value;
+    if ((seen.get(cookie.name) ?? '0') === value) return;
+    seen.set(cookie.name, value);
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      onChange();
+    }, 300);
+  };
+  chrome.cookies.onChanged.addListener(listener);
+  return () => {
+    if (pending) clearTimeout(pending);
+    chrome.cookies.onChanged.removeListener(listener);
+  };
+}
+
 export async function observeClerkAuth(onChange: () => void): Promise<() => void> {
   const clerk = await getNativeClient();
   return clerk.addListener(onChange);

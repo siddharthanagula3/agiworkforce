@@ -96,8 +96,9 @@ describe('page context is never silently missing', () => {
     expect(sidePanel).toMatch(
       /function describePageContextFailure[\s\S]*cannot access[\s\S]*host permission[\s\S]*PAGE_CONTEXT_DENIED_REASON/,
     );
-    expect(sidePanel).toContain('Approve this site under Settings, Site');
+    expect(sidePanel).toContain('AGI does not have access to this site yet');
     expect(sidePanel).not.toContain('Add this site under Approved sites');
+    expect(sidePanel).not.toContain('Site Allowlist in this panel');
   });
 
   it('sends a page Chrome blocks outright to different copy than a page awaiting site approval', () => {
@@ -123,9 +124,21 @@ describe('page context is never silently missing', () => {
     expect(slashSend).toContain('PAGE_CONTEXT_CHANGED_REASON');
   });
 
+  it('asks for this site in the chat before refusing a page command for missing access', () => {
+    const helper = sidePanel.slice(
+      sidePanel.indexOf('async function capturePageContextWithSiteAccess('),
+      sidePanel.indexOf('function readTabText('),
+    );
+    expect(helper).toContain('capture.reason !== PAGE_CONTEXT_DENIED_REASON');
+    expect(helper).toContain("requestBrowserSiteAccess(streamId, 'read')");
+    expect(helper).toContain('await access.release?.()');
+  });
+
   it('refuses a context-requiring slash command rather than answering about nothing', () => {
     const slashSend = sidePanel.slice(
-      sidePanel.indexOf('capturePageContext()\n    .then((capture)'),
+      sidePanel.indexOf(
+        'capturePageContextWithSiteAccess(streamId, quickMode)\n    .then((capture)',
+      ),
       sidePanel.indexOf('function postTurn('),
     );
     expect(slashSend).toContain('if (!pageText)');
@@ -136,7 +149,7 @@ describe('page context is never silently missing', () => {
 
   it('shows the reason on the composer when the context chip fails', () => {
     const chipHandler = sidePanel.slice(
-      sidePanel.indexOf('const capture = await capturePageContext();'),
+      sidePanel.indexOf('let capture = await capturePageContext();'),
       sidePanel.indexOf('composerBarStart.appendChild(contextBtn)'),
     );
     expect(chipHandler).toContain('composerContextNotice = capture.reason');

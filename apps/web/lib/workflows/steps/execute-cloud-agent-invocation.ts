@@ -57,6 +57,7 @@ import {
   CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
   CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
   CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+  CLOUD_AGENT_CANCELLATION_POLL_MS,
 } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -826,6 +827,18 @@ export async function executeCloudAgentWorkflowInvocation(
   const stream = createBoundedDurableWriter(writer, {
     onUnreadable: reportUnreadableStream(input.runId, 'projection'),
   });
+  // The loop reads the cancel request only between steps, so a Stop during a
+  // long provider stream waited for the whole answer. This poll aborts the
+  // signal the stream reads.
+  const cancellationPoll = setInterval(() => {
+    void isCloudAgentRunCancellationRequested(db, { userId: input.userId, runId: input.runId })
+      .then((requested) => {
+        if (requested) cancellation.abort();
+      })
+      .catch((error: unknown) => {
+        logger.warn({ error, runId: input.runId }, 'Could not read the run cancellation request');
+      });
+  }, CLOUD_AGENT_CANCELLATION_POLL_MS);
   try {
     for await (const chunk of generator) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
@@ -851,6 +864,7 @@ export async function executeCloudAgentWorkflowInvocation(
     }
     await journal.flush();
   } finally {
+    clearInterval(cancellationPoll);
     await journal.flush().catch((error: unknown) => {
       logger.warn(
         { error, runId: input.runId },

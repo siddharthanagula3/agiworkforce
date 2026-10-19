@@ -91,14 +91,14 @@ export default function EnterprisePage() {
             <div>
               <Eyebrow>What an enterprise contract covers</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-enterprise-contract-title">
-                Scoped on a contract, stated without inflation.
+                Enterprise capabilities and contract scope
               </h2>
               <Prose>
-                Reviewed {STATUS_AS_OF}. Everything below is implemented and live, gated on the
-                enterprise_controls entitlement that ships with the Enterprise plan. Once that
-                entitlement is on the account, the workspace owner configures single sign-on and
-                directory provisioning directly, an admin can read and filter the audit trail, and
-                the owner can set a retention window and decide whether it is enforced.
+                Reviewed {STATUS_AS_OF}. Everything below is implemented and live, and comes with
+                the Enterprise plan. Once the plan is on the account, the workspace owner configures
+                single sign-on and directory provisioning directly, an admin can read and filter the
+                audit trail, and the owner can set a retention window and decide whether it is
+                enforced.
               </Prose>
             </div>
             <SplitFeature

@@ -79,6 +79,10 @@ const SHORTCUT_ROWS: Record<HostShortcutKey, { label: string; hint: string }> = 
     label: 'Quick Ask shortcut',
     hint: 'Message AGI from anywhere on your desktop.',
   },
+  newChat: {
+    label: 'New chat shortcut',
+    hint: 'Open the main window on a new chat from anywhere on your desktop.',
+  },
   screenshot: {
     label: 'Screenshot to chat shortcut',
     hint: 'Capture the whole display your pointer is on and attach it to the conversation.',

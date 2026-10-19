@@ -187,8 +187,9 @@ const PUSH_MESSAGES_SQL = `
                    coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
                    item ? 'metadata' as has_metadata,
                    (item ->> 'baseVersion')::bigint as base_version,
-                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
-              from jsonb_array_elements($2::jsonb) as source(item)
+                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete,
+                   source.position
+              from jsonb_array_elements($2::jsonb) with ordinality as source(item, position)
           ), thread as (
             select (item ->> 'id')::uuid as id,
                    (item ->> 'parentId')::uuid as parent_id
@@ -228,7 +229,11 @@ const PUSH_MESSAGES_SQL = `
             select incoming.id, incoming.conversation_id, incoming.role, incoming.content,
                    incoming.model, incoming.provider, incoming.input_tokens,
                    incoming.output_tokens, incoming.metadata,
-                   now(), now(), case when incoming.should_delete then now() else null end,
+                   -- One now() for every row of a batch tied a question and its
+                   -- answer, and readers order by created_at at millisecond precision.
+                   now() + (incoming.position - 1) * interval '1 millisecond',
+                   now() + (incoming.position - 1) * interval '1 millisecond',
+                   case when incoming.should_delete then now() else null end,
                    thread.parent_id
               from input as incoming
               left join thread on thread.id = incoming.id

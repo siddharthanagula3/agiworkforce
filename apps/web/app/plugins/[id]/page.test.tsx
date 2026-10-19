@@ -154,7 +154,8 @@ describe('PluginDetailPage', () => {
     expect(screen.getByText(`Published. ${pluginCliInstallNote()}`)).toBeVisible();
     expect(screen.queryByText(/Install it with the AGI CLI \(see below\)/)).not.toBeInTheDocument();
     expect(screen.queryByText('Installable')).not.toBeInTheDocument();
-    expect(screen.getAllByText(pluginStatusLabel(published)).length).toBe(2);
+    expect(screen.getByText(pluginStatusLabel(published))).toBeVisible();
+    expect(screen.getByRole('list', { name: `What ${published.name} contains` })).toBeVisible();
     if (CLI_AVAILABILITY_NOTE) {
       expect(screen.getByText(CLI_AVAILABILITY_NOTE)).toBeVisible();
       expect(pluginCliInstallNote()).toContain(CLI_AVAILABILITY_NOTE);
