@@ -26,6 +26,7 @@ export type GarnishShortcuts = Required<
   Pick<
     HostPreferences,
     | 'quickAskShortcut'
+    | 'newChatShortcut'
     | 'screenshotShortcut'
     | 'windowShotShortcut'
     | 'voiceShortcut'
@@ -35,6 +36,7 @@ export type GarnishShortcuts = Required<
 
 export const DEFAULT_SHORTCUTS: GarnishShortcuts = {
   quickAskShortcut: defaultHostShortcut('quickAsk'),
+  newChatShortcut: defaultHostShortcut('newChat'),
   screenshotShortcut: defaultHostShortcut('screenshot'),
   windowShotShortcut: defaultHostShortcut('windowShot'),
   voiceShortcut: defaultHostShortcut('voice'),
@@ -50,6 +52,7 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
     raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   return {
     quickAskShortcut: readAccelerator(source, 'quickAskShortcut'),
+    newChatShortcut: readAccelerator(source, 'newChatShortcut'),
     screenshotShortcut: readAccelerator(source, 'screenshotShortcut'),
     windowShotShortcut: readAccelerator(source, 'windowShotShortcut'),
     voiceShortcut: readAccelerator(source, 'voiceShortcut'),
@@ -73,6 +76,7 @@ export function hostShortcutKeyFor(key: ShortcutKey): HostShortcutKey {
 
 export const SHORTCUT_LABELS: Record<ShortcutKey, string> = {
   quickAskShortcut: 'Quick Ask',
+  newChatShortcut: 'New Chat Window',
   screenshotShortcut: 'Screenshot to Chat',
   windowShotShortcut: 'Window to Chat',
   voiceShortcut: 'Dictation',
@@ -107,6 +111,7 @@ function readAccelerator(source: Record<string, unknown>, key: ShortcutKey): str
 
 export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
   quickAskShortcut: HOST_SHORTCUT_CHOICES.quickAsk,
+  newChatShortcut: HOST_SHORTCUT_CHOICES.newChat,
   screenshotShortcut: HOST_SHORTCUT_CHOICES.screenshot,
   windowShotShortcut: HOST_SHORTCUT_CHOICES.windowShot,
   voiceShortcut: HOST_SHORTCUT_CHOICES.voice,

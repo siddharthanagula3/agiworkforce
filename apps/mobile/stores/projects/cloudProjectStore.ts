@@ -21,7 +21,16 @@ export interface CloudProject {
 
 export type CloudProjectDetails = Pick<
   ManagedCloudProject,
-  'iconEmoji' | 'accentColor' | 'defaultModelId' | 'conversationCount' | 'knowledgeFileCount'
+  | 'iconEmoji'
+  | 'accentColor'
+  | 'defaultModelId'
+  | 'conversationCount'
+  | 'knowledgeFileCount'
+  | 'usesGlobalMemory'
+  | 'usesAccountInstructions'
+  | 'usesAccountStyle'
+  | 'isOrgShared'
+  | 'sharedAccess'
 >;
 
 const pendingProjectFetches = new Map<string, { generation: number; count: number }>();
@@ -143,6 +152,11 @@ export const useCloudProjectStore = create<CloudProjectState>()(
               defaultModelId: project.defaultModelId ?? null,
               conversationCount: project.conversationCount ?? null,
               knowledgeFileCount: project.knowledgeFileCount ?? null,
+              usesGlobalMemory: project.usesGlobalMemory !== false,
+              usesAccountInstructions: project.usesAccountInstructions !== false,
+              usesAccountStyle: project.usesAccountStyle !== false,
+              isOrgShared: project.isOrgShared === true,
+              sharedAccess: project.sharedAccess ?? null,
             };
           }
           return { details };

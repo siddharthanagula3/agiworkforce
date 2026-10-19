@@ -522,7 +522,11 @@ export default function CloudConnectorsScreen({
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
-      <SettingsScreenShell title="Connectors" backHref={backHref}>
+      <SettingsScreenShell
+        title="Connectors"
+        backHref={backHref}
+        help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
+      >
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
       </SettingsScreenShell>
     );
@@ -530,7 +534,11 @@ export default function CloudConnectorsScreen({
 
   if (!connectorsSwitchedOn) {
     return (
-      <SettingsScreenShell title="Connectors" backHref={backHref}>
+      <SettingsScreenShell
+        title="Connectors"
+        backHref={backHref}
+        help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
+      >
         <CapabilityUnavailable label="Connectors" />
       </SettingsScreenShell>
     );
@@ -538,7 +546,11 @@ export default function CloudConnectorsScreen({
 
   return (
     <View style={{ flex: 1 }}>
-      <SettingsScreenShell title="Connectors" backHref={backHref}>
+      <SettingsScreenShell
+        title="Connectors"
+        backHref={backHref}
+        help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
+      >
         <SettingsInfo
           title="Connect your tools to AGI Cloud"
           body="Open a connector to see what it can do before you connect it. Custom MCP tokens are encrypted and never shown again."

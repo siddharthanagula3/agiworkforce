@@ -25,6 +25,7 @@ import {
   providerDisplayLabel,
   routingProfileForModel,
   isAutoPickerModelId,
+  modelDisplayLabel,
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
@@ -34,6 +35,8 @@ import {
   capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
+  AGENT_MODE_LABEL,
+  EFFORT_LABEL,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
   getBillingPlanPricing,
@@ -60,7 +63,11 @@ import {
   type ChatErrorHint,
   type ChatErrorPresentation,
 } from './errorPresentation';
-import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
+import {
+  Config,
+  type ComposerEnterBehavior,
+  type ComposerFollowUpBehavior,
+} from '../../platform/config';
 import {
   CLI_NOT_EXECUTABLE_MARKER,
   cliAcquisitionHint,
@@ -104,7 +111,6 @@ import {
   type AccountIdentity,
 } from '../../utils/api';
 import {
-  BUILT_IN_SLASH_COMMANDS,
   CliCapabilityAdapter,
   commandForSurface,
   mergeSessionRows,
@@ -112,6 +118,8 @@ import {
   type SessionRow,
   type SessionRowInput,
   type SessionSource,
+  type SlashMenuEntry,
+  slashMenuEntries,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
@@ -172,7 +180,11 @@ import { clearActiveCloudProject, getActiveCloudProject } from '../projects/acti
 import { OPEN_PROJECT_COMMAND } from '../projects/projectsTree';
 import { resolveStartSuggestions, type StartSuggestions } from './startSuggestions';
 import type { SessionReceipt } from './sessionReceipt';
-import type { SlashCommandListResponse } from '@agiworkforce/types/protocol';
+import type {
+  SlashCommandListResponse,
+  SlashCommandRunResponse,
+  ThreadCompactResponse,
+} from '@agiworkforce/types/protocol';
 import {
   buildWorkspaceReferenceInputs,
   isWorkspaceFileReference,
@@ -230,6 +242,7 @@ const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
 const REWIND = 'Rewind';
+const COMPACT = 'Summarize';
 
 const REWIND_CHOICES = [
   {
@@ -270,6 +283,7 @@ export type WebviewToExtMessage =
     }
   | { type: 'ready' }
   | { type: 'viewFocused' }
+  | { type: 'viewBlurred' }
   | { type: 'setUpWebSearch' }
   | { type: 'reconnectMcpServer'; payload: { server: string } }
   | { type: 'openSettings' }
@@ -473,7 +487,7 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'followUpBehavior';
-      payload: { behavior: ComposerFollowUpBehavior };
+      payload: { behavior: ComposerFollowUpBehavior; enterBehavior: ComposerEnterBehavior };
     }
   | {
       type: 'sessionBoundary';
@@ -860,8 +874,9 @@ export class ChatStateManager {
   private _localServers: NonNullable<LocalModelListResponse['localServers']> = [];
   private _runtimeReady = false;
   private readonly _cliCapabilities: CliCapabilityAdapter;
-  private _skillCommands: ReadonlySet<string> = new Set();
-  private _promptCommands: ReadonlySet<string> = new Set();
+  private _slashEntries: ReadonlyMap<string, SlashMenuEntry> | undefined;
+  private _contextUsage:
+    { threadId: string; usedTokens: number; contextWindow: number | undefined } | undefined;
   private _webSearchLogins: readonly string[] = [];
   private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
@@ -1032,6 +1047,9 @@ export class ChatStateManager {
         await this.pushWebSearchSetup();
         break;
       }
+
+      case 'viewBlurred':
+        break;
 
       case 'setUpWebSearch': {
         await this._setUpWebSearch();
@@ -1260,7 +1278,7 @@ export class ChatStateManager {
       }
 
       case 'runSlashCommand': {
-        await this._runSlashCommand(msg.payload.name);
+        await this.runSlashCommand(msg.payload.name);
         break;
       }
 
@@ -2053,56 +2071,80 @@ export class ChatStateManager {
     });
   }
 
-  private async _pushSlashCommands(): Promise<void> {
+  private async _loadSlashEntries(): Promise<ReadonlyMap<string, SlashMenuEntry>> {
     const listed = await this._cliCapabilities.call<SlashCommandListResponse>('commands');
-    const commands = listed.status === 'ok' ? listed.value.commands : [];
-    this._skillCommands = new Set(
-      commands
-        .filter((command) => command.source === 'skill' && !command.runnable)
-        .map((command) => command.name),
-    );
-    this._promptCommands = new Set(
-      commands.filter((command) => command.prompt === true).map((command) => command.name),
-    );
-    const items =
-      commands.length > 0
-        ? commands.map((command) => ({
-            name: `/${command.name.replace(/^\//u, '')}`,
-            description: command.description,
-          }))
-        : BUILT_IN_SLASH_COMMANDS.map((entry) => ({
-            name: entry.name,
-            description: entry.description,
-          }));
+    const entries = slashMenuEntries(listed.status === 'ok' ? listed.value.commands : []);
+    this._slashEntries = new Map(entries.map((entry) => [entry.name, entry]));
+    return this._slashEntries;
+  }
+
+  private async _pushSlashCommands(): Promise<void> {
+    const entries = await this._loadSlashEntries();
+    const items = [...entries.values()].map((entry) => ({
+      name: entry.name,
+      description: entry.description,
+    }));
     this._post({ type: 'slashCommands', payload: { items } });
   }
 
-  private async _runSlashCommand(name: string): Promise<void> {
-    const normalized = name.startsWith('/') ? name : `/${name}`;
-    const builtIn = BUILT_IN_SLASH_COMMANDS.find((entry) => entry.name === normalized);
-    if (builtIn !== undefined) {
-      await vscode.commands.executeCommand(builtIn.command);
+  async pickSlashCommand(): Promise<void> {
+    const entries = await this._loadSlashEntries();
+    const picked = await vscode.window.showQuickPick(
+      [...entries.values()].map((entry) => ({ label: entry.name, description: entry.description })),
+      { title: 'AGI Workforce, Commands', placeHolder: 'Run a command', matchOnDescription: true },
+    );
+    if (picked !== undefined) await this.runSlashCommand(picked.label);
+  }
+
+  async runSlashCommand(name: string): Promise<void> {
+    const normalized = `/${name.trim().replace(/^\//u, '').toLowerCase()}`;
+    const entries = this._slashEntries ?? (await this._loadSlashEntries());
+    const entry = entries.get(normalized);
+    if (entry === undefined) {
+      void vscode.window.showWarningMessage(
+        `AGI Workforce: ${normalized} runs only in the agi terminal. Use Continue This Session in the Terminal to run it there.`,
+      );
       return;
     }
     const bare = normalized.slice(1);
-    if (this._promptCommands.has(bare)) {
-      this._post({ type: 'composerDraft', payload: { text: `/${bare} `, references: [] } });
-      return;
+    switch (entry.action.kind) {
+      case 'command':
+        await vscode.commands.executeCommand(entry.action.command);
+        return;
+      case 'prompt':
+        this._post({ type: 'composerDraft', payload: { text: `/${bare} `, references: [] } });
+        return;
+      case 'skill':
+        this._post({
+          type: 'composerDraft',
+          payload: { text: `Use the ${bare} skill to `, references: [] },
+        });
+        return;
+      case 'cli': {
+        const result = await this._cliCapabilities.call<SlashCommandRunResponse>(
+          'runCommand',
+          bare,
+        );
+        if (result.status !== 'ok') {
+          void vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
+          return;
+        }
+        const text = result.value.text.trim();
+        void vscode.window.showInformationMessage(
+          text === '' ? `AGI Workforce: ${normalized} finished.` : `AGI Workforce: ${text}`,
+        );
+        return;
+      }
     }
-    if (this._skillCommands.has(bare)) {
-      this._post({
-        type: 'composerDraft',
-        payload: { text: `Use the ${bare} skill to `, references: [] },
-      });
-      return;
-    }
-    await vscode.commands.executeCommand('agi-workforce.runCliCommand', bare);
   }
 
   public pushFollowUpBehavior(): void {
     this._post({
       type: 'followUpBehavior',
-      payload: { behavior: Config.composerFollowUpBehavior() },
+      payload: {
+        behavior: Config.composerFollowUpBehavior(),
+        enterBehavior: Config.composerEnterBehavior(),
+      },
     });
   }
 
@@ -2862,6 +2904,175 @@ export class ChatStateManager {
 
   turnInFlight(): boolean {
     return this._turnLifecycleActive || this._activeTurn !== undefined;
+  }
+
+  private _postContextUsage(
+    threadId: string,
+    usedTokens: number,
+    contextWindow: number | undefined,
+  ): void {
+    this._contextUsage = { threadId, usedTokens, contextWindow };
+    this._post({
+      type: 'contextUsage',
+      payload: { usedTokens, ...(contextWindow === undefined ? {} : { contextWindow }) },
+    });
+  }
+
+  async compactConversation(): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: open a developer session to summarize it.',
+      );
+      return;
+    }
+    if (this.turnInFlight()) {
+      void vscode.window.showWarningMessage(t('messageActions.stopFirst'));
+      return;
+    }
+    if (!(await thread.runtime.offers('threadCompact'))) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: the installed AGI CLI cannot summarize a session. Update the AGI CLI to compact it.',
+      );
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      'Summarize this session to free context?',
+      {
+        modal: true,
+        detail:
+          'The older part of the conversation is replaced by a summary the model reads from now on. The chat you see stays, but you can no longer rewind or branch to the summarized prompts. Files are not changed.',
+      },
+      COMPACT,
+    );
+    if (confirmed !== COMPACT || this._thread !== thread || this.turnInFlight()) return;
+    let outcome: ThreadCompactResponse;
+    try {
+      outcome = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'AGI Workforce: summarizing this session…',
+        },
+        () => thread.runtime.compactThread(thread.id),
+      );
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        t('messageActions.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return;
+    }
+    if (!outcome.compacted) {
+      void vscode.window.showInformationMessage(
+        'AGI Workforce: nothing in this session is old enough to summarize yet.',
+      );
+      return;
+    }
+    if (this._thread?.id === outcome.threadId) {
+      this._postContextUsage(
+        outcome.threadId,
+        outcome.tokensAfter,
+        catalogContextWindow(this._activeModel),
+      );
+      this._post({
+        type: 'sessionNotice',
+        payload: {
+          message: `Summarized ${outcome.messagesSummarized} earlier ${outcome.messagesSummarized === 1 ? 'message' : 'messages'}: context went from ${outcome.tokensBefore.toLocaleString()} to ${outcome.tokensAfter.toLocaleString()} tokens.`,
+        },
+      });
+    }
+  }
+
+  async showSessionStatus(): Promise<void> {
+    type StatusRow = vscode.QuickPickItem & { run?: () => Thenable<unknown> };
+    const thread = this._thread;
+    const model = this._activeModel;
+    const usage =
+      thread !== undefined && this._contextUsage?.threadId === thread.id
+        ? this._contextUsage
+        : undefined;
+    const contextWindow = usage?.contextWindow ?? catalogContextWindow(model);
+    const account = await this._cliCapabilities.accountStatus();
+    const workspace = await getActiveWorkspaceFolder();
+    const runtime =
+      thread?.runtime ??
+      (workspace === undefined
+        ? undefined
+        : this._localRuntimes?.forWorkspace(workspace.uri.fsPath));
+    let cliVersion: string | undefined;
+    try {
+      cliVersion = (await runtime?.initialize())?.serverInfo.version;
+    } catch {
+      cliVersion = undefined;
+    }
+    const rows: StatusRow[] = [
+      thread === undefined
+        ? {
+            label: '$(comment-discussion) Session',
+            description: 'No session yet: send a prompt to start one',
+          }
+        : {
+            label: '$(comment-discussion) Session',
+            description: this._loadedConversation?.title ?? thread.id,
+            detail: `ID ${thread.id} · select to copy`,
+            run: () => vscode.env.clipboard.writeText(thread.id),
+          },
+      {
+        label: '$(sparkle) Model',
+        description: modelDisplayLabel(model),
+        run: () => vscode.commands.executeCommand('agi-workforce.selectModel'),
+      },
+      {
+        label: '$(shield) Mode',
+        description: AGENT_MODE_LABEL[enforceAgentModeConsent(this._mode ?? Config.agentMode())],
+        run: () => vscode.commands.executeCommand('agi-workforce.setAgentMode'),
+      },
+      ...(this.modelSupportsEffort(model)
+        ? [
+            {
+              label: '$(dashboard) Reasoning effort',
+              description: EFFORT_LABEL[this._effort ?? Config.agentEffort()],
+              run: () => vscode.commands.executeCommand('agi-workforce.setAgentEffort'),
+            },
+          ]
+        : []),
+      {
+        label: '$(pie-chart) Context',
+        description:
+          usage === undefined
+            ? 'Not measured yet in this window'
+            : contextWindow === undefined
+              ? `${usage.usedTokens.toLocaleString()} tokens used`
+              : `${usage.usedTokens.toLocaleString()} of ${contextWindow.toLocaleString()} tokens (${Math.round((usage.usedTokens / contextWindow) * 100)}%)`,
+        ...(thread === undefined
+          ? {}
+          : {
+              detail: 'Select to summarize this session and free context',
+              run: () => vscode.commands.executeCommand('agi-workforce.compactConversation'),
+            }),
+      },
+      {
+        label: '$(account) Account',
+        description:
+          account.status === 'ok' && account.value.signedIn
+            ? (account.value.email ?? 'Signed in')
+            : 'Not signed in',
+        detail: 'Select for plan limits and usage',
+        run: () => vscode.commands.executeCommand('agi-workforce.showAccountUsage'),
+      },
+      {
+        label: '$(terminal) AGI CLI',
+        description:
+          cliVersion === undefined ? 'Not reachable from this window' : `Version ${cliVersion}`,
+        run: () => vscode.commands.executeCommand('agi-workforce.checkCli'),
+      },
+    ];
+    const picked = await vscode.window.showQuickPick(rows, {
+      title: 'AGI Workforce, Status',
+      placeHolder: 'Select a row to change it or see more',
+    });
+    await picked?.run?.();
   }
 
   resetConversation(): void {
@@ -4359,14 +4570,11 @@ export class ChatStateManager {
             : {}),
         },
       });
-      const contextWindow = catalogContextWindow(resolvedModel);
-      this._post({
-        type: 'contextUsage',
-        payload: {
-          usedTokens: event.inputTokens + event.outputTokens,
-          ...(contextWindow === undefined ? {} : { contextWindow }),
-        },
-      });
+      this._postContextUsage(
+        event.threadId,
+        event.inputTokens + event.outputTokens,
+        catalogContextWindow(resolvedModel),
+      );
       getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
       if (event.managedRequestIds !== undefined && event.managedRequestIds.length > 0) {
         void this._reportBilledTurn(event.managedRequestIds);

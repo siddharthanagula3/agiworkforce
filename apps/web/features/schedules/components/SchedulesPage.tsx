@@ -67,6 +67,7 @@ import {
   type ScheduleRun,
   type ScheduleTask,
 } from '../types';
+import { scheduleNameFromPrompt } from './schedule-from-turn';
 
 /**
  * Kept as prose in the create dialog, where someone is about to rely on an
@@ -132,6 +133,7 @@ export interface ScheduleProjectScope {
 interface SchedulesPageProps {
   focusScheduleId?: string | null;
   sharedScheduleToken?: string | null;
+  draftPrompt?: string | null;
   api?: ScheduleApi;
   now?: () => Date;
   createIdempotencyKey?: () => string;
@@ -199,6 +201,7 @@ export function SchedulesPage({
   onOpenChat,
   focusScheduleId = null,
   sharedScheduleToken = null,
+  draftPrompt = null,
 }: SchedulesPageProps) {
   const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -716,6 +719,26 @@ export function SchedulesPage({
         toast.error(errorMessage(error, 'That shared schedule is no longer available.'));
       });
   }, [api, canCreateSchedules, listStatus, scope?.projectId, sharedScheduleToken]);
+
+  const draftPromptRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prompt = draftPrompt?.trim();
+    if (!prompt || !canCreateSchedules || listStatus !== 'success') return;
+    if (draftPromptRef.current === prompt) return;
+    draftPromptRef.current = prompt;
+    const nextDraft = {
+      ...createInitialScheduleDraft(),
+      name: scheduleNameFromPrompt(prompt),
+      prompt,
+      projectId: scope?.projectId ?? null,
+    };
+    setEditing(null);
+    setDraft(nextDraft);
+    initialDraftRef.current = JSON.stringify(nextDraft);
+    setFormErrors({});
+    setSubmitError(null);
+    setDialogOpen(true);
+  }, [canCreateSchedules, draftPrompt, listStatus, scope?.projectId]);
 
   const openNotificationSettings = (schedule: ScheduleTask) => {
     openEdit(schedule);

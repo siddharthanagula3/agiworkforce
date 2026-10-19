@@ -16,11 +16,11 @@ import { UploadFileDialog } from './UploadFileDialog';
 import {
   ADD_MARKETPLACE_ACTION_ID,
   ADD_MARKETPLACE_LABEL,
-  CONNECTOR_POPULAR_HEADING,
   CUSTOM_BADGE,
   DIRECTORY_CATALOG_HEADINGS,
   DIRECTORY_CUSTOM_HEADING,
   DIRECTORY_INSTALLED_HEADINGS,
+  DIRECTORY_POPULAR_HEADINGS,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_LOADING_MORE_LABEL,
   DIRECTORY_PUBLISHER_FILTER_ID,
@@ -872,7 +872,7 @@ function DirectorySectionPanel({
           {popular.length > 0 ? (
             <section className="flex flex-col gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {CONNECTOR_POPULAR_HEADING}
+                {DIRECTORY_POPULAR_HEADINGS[section]}
               </h3>
               <DirectoryGrid section={section} entries={popular} {...gridActions} />
             </section>

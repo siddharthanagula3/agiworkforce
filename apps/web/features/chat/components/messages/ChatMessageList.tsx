@@ -22,7 +22,17 @@ import {
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { settledActivityStatus } from '@agiworkforce/unified-chat';
 import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/client-runtime';
-import { formatUsageResetIn, isFreeBillingPlanTier } from '@agiworkforce/types';
+import {
+  formatUsageResetIn,
+  getPlanMaxScheduledTasks,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
+import { useBillingStore } from '@shared/stores/web-auth-store';
+import {
+  ScheduleFromTurnProvider,
+  promptBeforeReply,
+  type ScheduleFromTurn,
+} from '@/features/schedules/components/schedule-from-turn';
 import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
@@ -221,6 +231,8 @@ export interface ChatMessageListProps {
    */
   onSubmitPrompt?: (prompt: string) => void;
   temporaryChat?: boolean;
+  /** Opens the schedule dialog prefilled with the request that produced a reply. */
+  onScheduleTurn?: (prompt: string) => void;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
   /**
@@ -1191,6 +1203,7 @@ const ChatMessageListComponent = ({
   onPaywallDismiss,
   enableFollowUpSuggestions = FOLLOW_UP_SUGGESTIONS_ENABLED_DEFAULT,
   temporaryChat = false,
+  onScheduleTurn,
   onRegenerateWithModel,
   regenerateModelOptions,
   turnErrorActive = false,
@@ -1407,6 +1420,22 @@ const ChatMessageListComponent = ({
         ? { save: () => onSubmitPrompt(SAVE_AS_SKILL_PROMPT) }
         : null,
     [skillAuthoring, onSubmitPrompt, isLoading],
+  );
+
+  const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
+  const canSchedule =
+    Boolean(onScheduleTurn) && !temporaryChat && getPlanMaxScheduledTasks(subscriptionTier) !== 0;
+  const scheduleFromTurn = useMemo<ScheduleFromTurn | null>(
+    () =>
+      canSchedule && onScheduleTurn
+        ? {
+            schedule: (assistantMessageId) => {
+              const prompt = promptBeforeReply(messages, assistantMessageId);
+              if (prompt) onScheduleTurn(prompt);
+            },
+          }
+        : null,
+    [canSchedule, messages, onScheduleTurn],
   );
 
   const followUpSuggestionsEnabled = useSettingsStore((state) => state.followUpSuggestionsEnabled);
@@ -2017,81 +2046,83 @@ const ChatMessageListComponent = ({
 
   return (
     <SaveAsSkillProvider value={saveAsSkill}>
-      <div
-        className={cn('relative flex h-full flex-col', className)}
-        data-testid="chat-message-list"
-        data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
-        style={{
-          height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
-        }}
-      >
-        {/* The only live region on this surface: one short phrase per
+      <ScheduleFromTurnProvider value={scheduleFromTurn}>
+        <div
+          className={cn('relative flex h-full flex-col', className)}
+          data-testid="chat-message-list"
+          data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
+          style={{
+            height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
+          }}
+        >
+          {/* The only live region on this surface: one short phrase per
           generation state change. The answer itself is read once, by the
           streaming announcer in the bubble. */}
-        <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {streamAnnouncement}
-        </p>
-        {searchOpen && (
-          <MessageSearch
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            totalMatches={searchMatches.length}
-            currentMatchIndex={currentMatchIndex}
-            onNext={handleSearchNext}
-            onPrev={handleSearchPrev}
-            onClose={closeSearch}
+          <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {streamAnnouncement}
+          </p>
+          {searchOpen && (
+            <MessageSearch
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              totalMatches={searchMatches.length}
+              currentMatchIndex={currentMatchIndex}
+              onNext={handleSearchNext}
+              onPrev={handleSearchPrev}
+              onClose={closeSearch}
+            />
+          )}
+          <List
+            listRef={listApiRef}
+            rowComponent={VirtualizedTranscriptRow as unknown as TranscriptRowComponent}
+            rowCount={virtualRowCount}
+            rowHeight={dynamicRowHeight}
+            rowProps={rowProps}
+            defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
+            overscanCount={printingTranscript ? virtualRowCount : 6}
+            onResize={({ height }) => setViewportHeight(height)}
+            role="log"
+            aria-live="off"
+            aria-busy={isGenerating}
+            aria-label="Chat messages"
+            onScroll={handleScroll}
+            onWheel={markUserScrollIntent}
+            onTouchMove={markUserScrollIntent}
+            onKeyDown={handleTranscriptKeyDown}
+            className="h-full [scrollbar-width:thin]"
+            // react-window's List bounds only the y axis, unlike its Grid sibling.
+            // Horizontal scroll belongs to the code block or table that needs it.
+            // `contain` keeps a transcript fling from chaining into the shell scroll
+            // container behind it, and kills the rubber band that showed the page
+            // background under the transcript on touch.
+            style={{
+              height: '100%',
+              overflowX: 'hidden',
+              overscrollBehaviorY: 'contain',
+            }}
           />
-        )}
-        <List
-          listRef={listApiRef}
-          rowComponent={VirtualizedTranscriptRow as unknown as TranscriptRowComponent}
-          rowCount={virtualRowCount}
-          rowHeight={dynamicRowHeight}
-          rowProps={rowProps}
-          defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
-          overscanCount={printingTranscript ? virtualRowCount : 6}
-          onResize={({ height }) => setViewportHeight(height)}
-          role="log"
-          aria-live="off"
-          aria-busy={isGenerating}
-          aria-label="Chat messages"
-          onScroll={handleScroll}
-          onWheel={markUserScrollIntent}
-          onTouchMove={markUserScrollIntent}
-          onKeyDown={handleTranscriptKeyDown}
-          className="h-full [scrollbar-width:thin]"
-          // react-window's List bounds only the y axis, unlike its Grid sibling.
-          // Horizontal scroll belongs to the code block or table that needs it.
-          // `contain` keeps a transcript fling from chaining into the shell scroll
-          // container behind it, and kills the rubber band that showed the page
-          // background under the transcript on touch.
-          style={{
-            height: '100%',
-            overflowX: 'hidden',
-            overscrollBehaviorY: 'contain',
-          }}
-        />
 
-        {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
+          {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
           position is fixed regardless of scroll offset, so the fade behind it
           is load-bearing: without it the circle sits directly on top of
           whatever transcript line happens to be there. */}
-        <AnimatePresence>
-          {userScrolledUp && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center">
-              <div
-                className="absolute inset-0 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/85 to-transparent"
-                aria-hidden="true"
-              />
-              <div className="pointer-events-auto relative mb-3">
-                <ScrollToBottomButton
-                  onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+          <AnimatePresence>
+            {userScrolledUp && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center">
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/85 to-transparent"
+                  aria-hidden="true"
                 />
+                <div className="pointer-events-auto relative mb-3">
+                  <ScrollToBottomButton
+                    onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </AnimatePresence>
-      </div>
+            )}
+          </AnimatePresence>
+        </div>
+      </ScheduleFromTurnProvider>
     </SaveAsSkillProvider>
   );
 };

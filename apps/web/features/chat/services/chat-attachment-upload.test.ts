@@ -102,6 +102,7 @@ describe('uploadChatAttachments', () => {
       fileName: 'notes.txt',
       phase: 'failed',
       error: 'Could not upload notes.txt to storage.',
+      retryable: true,
     });
     expect(onStatus.mock.calls.flat()).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ percent: expect.any(Number) })]),

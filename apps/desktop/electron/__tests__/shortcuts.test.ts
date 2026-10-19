@@ -39,6 +39,7 @@ const { registerGarnishShortcuts, shortcutRegistrations, unregisterGarnishShortc
 function handlers() {
   return {
     onQuickAsk: vi.fn(),
+    onNewChat: vi.fn(),
     onScreenshot: vi.fn(),
     onWindowShot: vi.fn(),
     onVoice: vi.fn(),
@@ -78,7 +79,18 @@ describe('global shortcut registration', () => {
       'registered',
       'registered',
       'registered',
+      'registered',
     ]);
+  });
+
+  it('opens a new chat window on its own chord, not Quick Ask', () => {
+    const spies = handlers();
+    registerGarnishShortcuts(spies);
+
+    expect(statusOf('newChatShortcut')).toBe('registered');
+    registered.get(DEFAULT_SHORTCUTS.newChatShortcut)?.();
+    expect(spies.onNewChat).toHaveBeenCalledTimes(1);
+    expect(spies.onQuickAsk).not.toHaveBeenCalled();
   });
 
   it('claims the stop chord and runs the stop handler on it', () => {

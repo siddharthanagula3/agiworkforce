@@ -91,6 +91,7 @@ let _cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error' = 'idle';
 let _cloudSyncError: string | null = null;
 let _inFlightPushById = new Map<string, CloudArtifact>();
 let _rejectedPushContentById: Record<string, string> = {};
+let _renamedHereIds = new Set<string>();
 
 function getSideEntry(id: string): WebSideEntry {
   return _sideMap[id] ?? {};
@@ -115,7 +116,8 @@ function mergedArtifacts(): SharedArtifact[] {
     const local = shared.artifacts.find((artifact) => artifact.id === visible.id);
     const cloud = cloudCopyOf(visible.id);
     if (!local || !cloud || cloud.deletedAt) return visible;
-    const editedHere = shared.getArtifactVersions(local.id).length > 1;
+    const editedHere =
+      shared.getArtifactVersions(local.id).length > 1 || _renamedHereIds.has(local.id);
     return editedHere && supersedesCloudCopy(local, cloud) ? local : visible;
   });
 }
@@ -168,6 +170,12 @@ function normalizeInput(
     language: artifact.language || artifact.type,
     createdAt: artifact.createdAt ?? new Date(),
   };
+}
+
+export const ARTIFACT_TITLE_MAX_CHARS = 200;
+
+export function normalizeArtifactTitle(title: string): string {
+  return title.replace(/\s+/g, ' ').trim().slice(0, ARTIFACT_TITLE_MAX_CHARS);
 }
 
 const FORK_TITLE_SUFFIX = ' (copy)';
@@ -484,6 +492,7 @@ type ArtifactsStoreReturn = {
   getArtifactVersions: (id: string) => SharedArtifact[];
   resolveArtifactConflict: (id: string, keep: 'mine' | 'theirs') => boolean;
   restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
+  renameArtifact: (id: string, title: string) => boolean;
   forkArtifact: (id: string, content?: string) => string | null;
   applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
   collectArtifactPushBatch: () => ArtifactSyncPushItem[];
@@ -616,6 +625,7 @@ const actions = {
     _cloudSyncError = null;
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
+    _renamedHereIds = new Set();
     _conflictsById = {};
   },
 
@@ -729,6 +739,27 @@ const actions = {
     _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
     _sharedArtifactStore.getState().selectArtifact(forkId);
     return forkId;
+  },
+
+  renameArtifact(id: string, title: string): boolean {
+    const nextTitle = normalizeArtifactTitle(title);
+    if (!nextTitle) return false;
+    const current = _sharedArtifactStore.getState().artifacts.find((a) => a.id === id);
+    if (!current || current.title === nextTitle) return false;
+    const updatedAt = new Date().toISOString();
+    _renamedHereIds.add(id);
+    _sharedArtifactStore.setState((s) => ({
+      artifacts: s.artifacts.map((a) => (a.id === id ? { ...a, title: nextTitle, updatedAt } : a)),
+      versionsById: {
+        ...s.versionsById,
+        [id]: (s.versionsById[id] ?? [current]).map((version) =>
+          version.version === current.version
+            ? { ...version, title: nextTitle, updatedAt }
+            : version,
+        ),
+      },
+    }));
+    return true;
   },
 
   restoreArtifactVersion(id: string, versionIndex: number): boolean {
@@ -852,6 +883,7 @@ const actions = {
         metadata: { ...pushed.metadata, serverVersion: row.server_version },
       });
       delete _rejectedPushContentById[row.id];
+      _renamedHereIds.delete(row.id);
     }
 
     for (const conflict of result.conflicts.artifacts) {
@@ -909,6 +941,7 @@ const actions = {
     _cloudSyncError = null;
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
+    _renamedHereIds = new Set();
     _conflictsById = {};
   },
 };

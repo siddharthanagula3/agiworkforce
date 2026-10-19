@@ -19,6 +19,7 @@ import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pr
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
+import { sseDataFrames } from './sse-frames';
 
 export function buildServingRouteId(provider: string, model: string): string {
   return `${normalizeProviderId(provider) ?? provider}/${normalizeModelId(model) ?? model}`;
@@ -244,8 +245,7 @@ export function chunksToOpenAiSse(
           const wireEvents = assembler.sseChunks(chunk);
           providerTrace.wireEvents += wireEvents.length;
           if (wireEvents.length === 0) continue;
-          const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
-          controller.enqueue(encoder.encode(lines + '\n\n'));
+          controller.enqueue(encoder.encode(sseDataFrames(wireEvents)));
         }
         if (sink) {
           sink.thinkingBlocks = assembler.canonicalThinkingBlocks();

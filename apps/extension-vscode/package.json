@@ -209,6 +209,14 @@
         "icon": "$(debug-step-back)"
       },
       {
+        "command": "agi-workforce.compactConversation",
+        "title": "AGI Workforce: Summarize Session to Free Context"
+      },
+      {
+        "command": "agi-workforce.showSessionStatus",
+        "title": "AGI Workforce: Session Status"
+      },
+      {
         "command": "agi-workforce.showSavedApprovals",
         "title": "AGI Workforce: Permissions",
         "icon": "$(shield)"
@@ -1153,7 +1161,22 @@
             "Steer the active turn with messages sent while it is running; conflicts visibly fall back to the next-turn queue."
           ],
           "default": "queue",
-          "description": "Default behavior when sending from the composer during an active developer turn. Cmd/Ctrl+Enter uses the other behavior for one message."
+          "description": "Default behavior when sending from the composer during an active developer turn. The key that sends with the other behavior once is Cmd/Ctrl+Enter, or Cmd/Ctrl+Shift+Enter when Cmd/Ctrl+Enter is the send key."
+        },
+        "agiWorkforce.composer.enterBehavior": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "modifierIfMultiline",
+            "modifier"
+          ],
+          "enumDescriptions": [
+            "Enter sends. Shift+Enter adds a line.",
+            "Enter sends a one-line prompt. Once the prompt has several lines, Enter adds a line and Cmd/Ctrl+Enter sends.",
+            "Cmd/Ctrl+Enter sends. Enter adds a line."
+          ],
+          "default": "enter",
+          "description": "Which key sends a prompt from the composer."
         },
         "agiWorkforce.contextLines": {
           "type": "number",
@@ -1312,6 +1335,12 @@
         "command": "agi-workforce.newConversation",
         "key": "ctrl+shift+alt+n",
         "mac": "cmd+shift+alt+n"
+      },
+      {
+        "command": "agi-workforce.newConversation",
+        "key": "ctrl+n",
+        "mac": "cmd+n",
+        "when": "agi-workforce.chatFocused"
       },
       {
         "command": "agi-workforce.acceptCurrentDiff",

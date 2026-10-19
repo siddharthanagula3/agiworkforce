@@ -11,8 +11,10 @@ import {
   NO_HOST_SHORTCUT,
   SESSION_COMPLETION_ALERT_LABELS,
   SESSION_COMPLETION_ALERTS,
+  agentNotificationsWrite,
   describeAccelerator,
   describeHostPlatform,
+  effectiveAgentNotifications,
   hostShortcutMayBeOff,
   type HostAgentNotificationKind,
   type HostAgentNotificationMode,
@@ -303,37 +305,39 @@ export function DesktopSettingsSection() {
             />
           </Row>
 
-          <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
-            <select
-              value={preferences?.sessionCompletionAlerts ?? DEFAULT_SESSION_COMPLETION_ALERTS}
-              disabled={!preferences}
-              aria-label={COMPLETION_ALERTS_LABEL}
-              onChange={(event) =>
-                write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
-              }
-              className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
-            >
-              {SESSION_COMPLETION_ALERTS.map((mode) => (
-                <option key={mode} value={mode}>
-                  {SESSION_COMPLETION_ALERT_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </Row>
+          {preferences?.agentNotifications === undefined ? (
+            <>
+              <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
+                <select
+                  value={preferences?.sessionCompletionAlerts ?? DEFAULT_SESSION_COMPLETION_ALERTS}
+                  disabled={!preferences}
+                  aria-label={COMPLETION_ALERTS_LABEL}
+                  onChange={(event) =>
+                    write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
+                  }
+                  className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                >
+                  {SESSION_COMPLETION_ALERTS.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {SESSION_COMPLETION_ALERT_LABELS[mode]}
+                    </option>
+                  ))}
+                </select>
+              </Row>
 
-          <Row label={APPROVAL_ALERTS_LABEL} hint={APPROVAL_ALERTS_HINT}>
-            <Switch
-              checked={preferences?.sessionApprovalAlerts ?? false}
-              disabled={!preferences}
-              onCheckedChange={(checked) => write({ sessionApprovalAlerts: checked })}
-              aria-label={APPROVAL_ALERTS_LABEL}
-            />
-          </Row>
-
-          {preferences?.agentNotifications !== undefined && (
+              <Row label={APPROVAL_ALERTS_LABEL} hint={APPROVAL_ALERTS_HINT}>
+                <Switch
+                  checked={preferences?.sessionApprovalAlerts ?? false}
+                  disabled={!preferences}
+                  onCheckedChange={(checked) => write({ sessionApprovalAlerts: checked })}
+                  aria-label={APPROVAL_ALERTS_LABEL}
+                />
+              </Row>
+            </>
+          ) : (
             <AgentNotificationRows
-              value={preferences.agentNotifications}
-              onChange={(agentNotifications) => write({ agentNotifications })}
+              value={effectiveAgentNotifications(preferences)}
+              onChange={(next) => write(agentNotificationsWrite(next))}
             />
           )}
 

@@ -1199,12 +1199,16 @@ async fn websocket_transport_carries_typed_approval_round_trips() {
 
 struct SurfaceHost {
     notifications: broadcast::Sender<AppServerNotification>,
+    login_clients: Mutex<Vec<Option<String>>>,
 }
 
 impl SurfaceHost {
     fn new() -> Self {
         let (notifications, _) = broadcast::channel(4);
-        Self { notifications }
+        Self {
+            notifications,
+            login_clients: Mutex::new(Vec::new()),
+        }
     }
 }
 
@@ -1330,6 +1334,17 @@ impl DeveloperSessionHost for SurfaceHost {
             user_code: Some("ABCD-EFGH".to_string()),
             expires_at: Some("2026-09-14T12:15:00Z".to_string()),
         })
+    }
+
+    async fn account_login_for_client(
+        &self,
+        client: Option<&AppServerClientInfo>,
+    ) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
+        self.login_clients
+            .lock()
+            .await
+            .push(client.map(|client| client.name.clone()));
+        self.account_login().await
     }
 
     async fn account_login_wait(
@@ -1531,6 +1546,25 @@ fn result_of(response: agiworkforce_protocol::developer_session::AppServerRespon
     response
         .result
         .unwrap_or_else(|| panic!("method must succeed, got {:?}", response.error))
+}
+
+#[tokio::test]
+async fn account_login_names_the_client_that_initialized_the_connection() {
+    let host = Arc::new(SurfaceHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+
+    let login = result_of(
+        processor
+            .process(request(2, method::ACCOUNT_LOGIN, serde_json::json!({})))
+            .await,
+    );
+
+    assert_eq!(login["userCode"], serde_json::json!("ABCD-EFGH"));
+    assert_eq!(
+        *host.login_clients.lock().await,
+        vec![Some("agi_vscode".to_string())]
+    );
 }
 
 #[tokio::test]

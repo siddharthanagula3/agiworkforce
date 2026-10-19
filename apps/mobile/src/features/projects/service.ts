@@ -63,9 +63,14 @@ export async function refreshCloudProjectDetails(signal?: AbortSignal): Promise<
     .setCloudProjectDetails(projects.filter((project) => project.ownerUserId === account.ownerId));
 }
 
-export async function updateCloudProjectAppearance(
+export type CloudProjectDetailsPatch = Pick<
+  ManagedCloudProjectUpdateRequest,
+  'iconEmoji' | 'accentColor' | 'usesGlobalMemory' | 'usesAccountInstructions' | 'usesAccountStyle'
+>;
+
+export async function updateCloudProjectDetails(
   projectId: string,
-  patch: Pick<ManagedCloudProjectUpdateRequest, 'iconEmoji' | 'accentColor'>,
+  patch: CloudProjectDetailsPatch,
 ): Promise<void> {
   const account = captureCloudAccountEpoch();
   if (!account) throw new Error('Cloud account is unavailable');

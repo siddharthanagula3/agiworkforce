@@ -115,6 +115,8 @@ export function workspaceGroupHeading(workspaceName: string | null): string {
   return workspaceName ? `From ${workspaceName}` : PLUGIN_WORKSPACE_GROUP_HEADING;
 }
 
+export const PLUGIN_POPULAR_LIMIT = 6;
+
 export const PLUGIN_COMMUNITY_GROUP_ID = 'community-plugins';
 export const PLUGIN_COMMUNITY_GROUP_HEADING = 'Community';
 export const PLUGIN_COMMUNITY_INSTALL_NOTICE =

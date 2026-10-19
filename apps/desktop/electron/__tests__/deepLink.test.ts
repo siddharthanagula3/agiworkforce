@@ -93,7 +93,11 @@ vi.mock('electron', () => {
     ClipboardItem: class {},
     contextBridge: { exposeInMainWorld: vi.fn() },
     desktopCapturer: { getSources: vi.fn(async () => []) },
-    dialog: { showMessageBox: vi.fn(), showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
+    dialog: {
+      showMessageBox: vi.fn(async () => ({ response: 0, checkboxChecked: false })),
+      showOpenDialog: vi.fn(),
+      showSaveDialog: vi.fn(),
+    },
     globalShortcut: { register: vi.fn(() => true), unregister: vi.fn(), unregisterAll: vi.fn() },
     ipcMain: { handle: vi.fn() },
     nativeImage: {
@@ -234,5 +238,18 @@ describe('deep-link delivery', () => {
     openUrl('https://evil.example/sso-callback');
 
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('opens a CLI session hand-off itself instead of handing it to the page', async () => {
+    await bootMain();
+    const link = 'agiworkforce-cloud://code/local/thread-1?folder=%2Fnowhere%2Fadded';
+
+    openUrl(link);
+
+    expect(webContentsSend).not.toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, link);
+    const loads = shell.windows.flatMap(
+      (win) => (win.loadURL as ReturnType<typeof vi.fn>).mock.calls,
+    );
+    expect(loads.flat()).toContainEqual(expect.stringMatching(/\/code$/));
   });
 });

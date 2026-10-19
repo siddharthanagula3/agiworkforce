@@ -197,6 +197,7 @@ export interface TasksTransport {
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
+  saveAsRoutine?(goal: AgiWorkRerunGoal): void;
   shareConversation?(conversationId: string): void;
   /**
    * Shelve a finished run, or bring one back. Optional because a surface that
@@ -663,6 +664,11 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   ? (goal) => transport.rerunWork?.(goal)
                   : undefined
               }
+              onSaveAsRoutine={
+                transport.saveAsRoutine && selectedRun?.workMode === 'agiwork'
+                  ? (goal) => transport.saveAsRoutine?.(goal)
+                  : undefined
+              }
               onSteer={(message) => handleSteer(selectedRun.id, message)}
               onSendSteerAsMessage={sendSteerAsMessage(selectedRun)}
             />
@@ -951,6 +957,11 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
             onRerun={
               transport.rerunWork && selectedRun?.workMode === 'agiwork'
                 ? (goal) => transport.rerunWork?.(goal)
+                : undefined
+            }
+            onSaveAsRoutine={
+              transport.saveAsRoutine && selectedRun?.workMode === 'agiwork'
+                ? (goal) => transport.saveAsRoutine?.(goal)
                 : undefined
             }
             onSteer={selectedRun ? (message) => handleSteer(selectedRun.id, message) : undefined}

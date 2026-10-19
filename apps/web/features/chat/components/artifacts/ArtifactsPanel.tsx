@@ -104,6 +104,29 @@ function SlotTabs({ onShowTaskDock }: { onShowTaskDock: () => void }) {
   );
 }
 
+export async function publishableArtifact(
+  artifact: Artifact,
+  content: string,
+): Promise<{ id: string; title: string; content: string; type: string; language?: string }> {
+  if (artifact.type === 'presentation') {
+    const { buildDeckHtml } = await import('./presentation/deck-html');
+    return {
+      id: artifact.id,
+      title: artifact.title,
+      content: await buildDeckHtml(artifact.title || 'Presentation', content),
+      type: 'html',
+      language: 'html',
+    };
+  }
+  return {
+    id: artifact.id,
+    title: artifact.title,
+    content,
+    type: artifact.type,
+    ...(artifact.language ? { language: artifact.language } : {}),
+  };
+}
+
 function ArtifactsEmptyState() {
   return (
     <EmptyState
@@ -292,15 +315,9 @@ export function ArtifactsPanel({
     [projects],
   );
   const makePublishHandler = useCallback(
-    (artifact: Artifact) => (selection: ArtifactPublishSelection) =>
+    (artifact: Artifact) => async (selection: ArtifactPublishSelection) =>
       publishArtifactService({
-        artifact: {
-          id: artifact.id,
-          title: artifact.title,
-          content: selection.content,
-          type: artifact.type,
-          ...(artifact.language ? { language: artifact.language } : {}),
-        },
+        artifact: await publishableArtifact(artifact, selection.content),
         // The requested sink is always the managed cloud (web injects no local
         // file writer); `originPrivacyMode` decides whether this artifact is
         // allowed to reach it, and an unknown origin is refused there.

@@ -70,6 +70,27 @@ describe('LinkedDevicesPanel', () => {
     ).toBeVisible();
   });
 
+  it('folds signed-out devices into a collapsed group below the signed-in ones', async () => {
+    const signedOut = {
+      ...DESKTOP,
+      id: '22222222-2222-4333-8444-555555555555',
+      kind: 'cli' as const,
+      name: 'Old laptop',
+      hasLiveCredential: false,
+    };
+    fetchMock.mockResolvedValue(jsonResponse({ devices: [signedOut, DESKTOP], totalCount: 2 }));
+    const user = userEvent.setup();
+
+    render(<LinkedDevicesPanel />);
+
+    expect(await screen.findByText(/Work laptop/)).toBeVisible();
+    const group = screen.getByText('Signed out (1)');
+    expect(screen.getByText(/Old laptop/)).not.toBeVisible();
+    await user.click(group);
+    expect(screen.getByText(/Old laptop/)).toBeVisible();
+    expect(screen.getByRole('button', { name: /Unlink .*Old laptop/ })).toBeVisible();
+  });
+
   it('says so plainly when no app is linked instead of rendering an empty table', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ devices: [], totalCount: 0 }));
 

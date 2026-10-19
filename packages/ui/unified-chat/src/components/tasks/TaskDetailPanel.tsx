@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   BookOpen,
   Brain,
+  CalendarClock,
   Download,
   ExternalLink,
   Share2,
@@ -395,6 +396,7 @@ export interface TaskDetailPanelProps {
   onClose(): void;
   onOpenConversation(conversationId: string): void;
   onRerun?(goal: AgiWorkRerunGoal): void;
+  onSaveAsRoutine?(goal: AgiWorkRerunGoal): void;
   onShare?(conversationId: string): void;
   onSteer?(message: string): Promise<void>;
   onSendSteerAsMessage?(steer: CloudAgentRunSteer): Promise<void>;
@@ -411,6 +413,7 @@ export function TaskDetailPanel({
   onClose,
   onOpenConversation,
   onRerun,
+  onSaveAsRoutine,
   onShare,
   onSteer,
   onSendSteerAsMessage,
@@ -562,18 +565,38 @@ export function TaskDetailPanel({
               {goalEntry.detail}
             </p>
           ) : null}
-          {onRerun && !isLiveTaskState(runWorkState(run)) ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-3 h-7 text-xs"
-              onClick={() =>
-                onRerun({ goal: goalEntry.summary, ...parseGoalDetail(goalEntry.detail) })
-              }
-            >
-              <RotateCcw className="me-1.5 h-3 w-3" />
-              Re-run this task
-            </Button>
+          {(onRerun || onSaveAsRoutine) && !isLiveTaskState(runWorkState(run)) ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {onRerun ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    onRerun({ goal: goalEntry.summary, ...parseGoalDetail(goalEntry.detail) })
+                  }
+                >
+                  <RotateCcw className="me-1.5 h-3 w-3" />
+                  Re-run this task
+                </Button>
+              ) : null}
+              {onSaveAsRoutine ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    onSaveAsRoutine({
+                      goal: goalEntry.summary,
+                      ...parseGoalDetail(goalEntry.detail),
+                    })
+                  }
+                >
+                  <CalendarClock className="me-1.5 h-3 w-3" />
+                  Save as routine
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </section>
       ) : null}

@@ -31,6 +31,7 @@ pub mod product_analytics;
 pub mod projects;
 pub mod referrals;
 pub mod shares;
+pub mod skills;
 pub mod state;
 pub mod workspace_policy;
 
@@ -160,6 +161,16 @@ pub(crate) fn bound_conversation() -> Option<String> {
     BOUND_CONVERSATION.try_with(Clone::clone).ok()
 }
 
+pub fn account_holds_conversation(privacy: PrivacyMode, conversation_id: &str) -> bool {
+    CloudSession::open(privacy).is_ok_and(|session| {
+        session
+            .state
+            .conversations
+            .versions
+            .contains_key(&chat::conversation_id_for(conversation_id))
+    })
+}
+
 pub async fn ensure_hosted_conversation(
     privacy: PrivacyMode,
     snapshot: &chat::SessionSnapshot,
@@ -176,21 +187,21 @@ pub async fn ensure_hosted_conversation(
     Ok(conversation_id)
 }
 
-pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> String {
+fn account_conversation(session: &crate::agent::AgentSession) -> Result<(String, String), String> {
     if session.privacy_mode != PrivacyMode::Managed {
-        return format!(
+        return Err(format!(
             "This conversation runs in {} mode, so it stays on this device. Switch it to your account with /continue-with-cloud, then continue it on another device.",
             session.privacy_mode.label()
-        );
+        ));
     }
     let Some(snapshot) = session.cloud_snapshot() else {
-        return "This conversation is not being saved, so it cannot continue on another device."
-            .to_string();
+        return Err(
+            "This conversation is not being saved, so it cannot continue on another device."
+                .to_string(),
+        );
     };
-    let cloud = match CloudSession::open(session.privacy_mode) {
-        Ok(cloud) => cloud,
-        Err(error) => return format!("Could not reach your account: {error}"),
-    };
+    let cloud = CloudSession::open(session.privacy_mode)
+        .map_err(|error| format!("Could not reach your account: {error}"))?;
     let conversation_id = chat::conversation_id_for(&snapshot.session_id);
     if !cloud
         .state
@@ -198,13 +209,20 @@ pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> St
         .versions
         .contains_key(&conversation_id)
     {
-        return "This conversation reaches your account after its next reply. Send a message, then run /continue-elsewhere again.".to_string();
+        return Err("This conversation reaches your account after its next reply. Send a message, then run this again.".to_string());
     }
-    let url = format!(
-        "{}/chat/{}",
-        cloud.client.base().trim_end_matches('/'),
-        conversation_id
-    );
+    Ok((
+        conversation_id,
+        cloud.client.base().trim_end_matches('/').to_string(),
+    ))
+}
+
+pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> String {
+    let (conversation_id, base) = match account_conversation(session) {
+        Ok(found) => found,
+        Err(reason) => return reason,
+    };
+    let url = format!("{base}/chat/{conversation_id}");
     let opened = arg.trim() == "open"
         && crate::oauth::open_external_url(&url, crate::oauth::UserActionContext::user_initiated());
     format!(
@@ -212,6 +230,28 @@ pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> St
         if opened { " (opened in your browser)" } else { "" },
         if opened { "" } else { " /continue-elsewhere open opens it in your browser." }
     )
+}
+
+/// The desktop app's link scheme. The app registers it from
+/// `DESKTOP_DEEP_LINK_SCHEME` in packages/contracts/local-runtime, which owns it.
+const DESKTOP_LINK_SCHEME: &str = "agiworkforce-cloud";
+
+/// Opens the app without asking: only a typed command reaches this.
+pub fn open_in_desktop(session: &crate::agent::AgentSession) -> String {
+    let (conversation_id, base) = match account_conversation(session) {
+        Ok(found) => found,
+        Err(reason) => return reason,
+    };
+    let link = format!("{DESKTOP_LINK_SCHEME}://chat/{conversation_id}");
+    if crate::oauth::open_external_url(&link, crate::oauth::UserActionContext::user_initiated()) {
+        format!(
+            "Opened this conversation in AGI Workforce for desktop. Turns you add there are saved to your account; `agi resume --cloud {conversation_id}` brings them back here."
+        )
+    } else {
+        format!(
+            "The desktop app did not open. Get it at {base}/download, or continue on the web at {base}/chat/{conversation_id}."
+        )
+    }
 }
 
 pub(crate) fn forget_hosted_conversation(conversation_id: &str) {
@@ -291,16 +331,24 @@ pub async fn hosted_conversations(
 }
 
 /// One hosted conversation by id, or `None` when the account has no such
-/// conversation.
+/// conversation. Its versions are recorded, or the next push would insert the
+/// history again.
 pub async fn hosted_conversation(
     privacy: PrivacyMode,
     conversation_id: &str,
 ) -> Result<Option<chat::HostedConversation>, CloudError> {
+    let mut session = CloudSession::open(privacy)?;
+    let sync = chat::ChatSync::new(&session.client);
+    let response = sync.pull_all(state::INITIAL_CURSOR).await?;
     let wanted = chat::conversation_id_for(conversation_id);
-    Ok(hosted_conversations(privacy)
-        .await?
+    let found = chat::assemble(&response)
         .into_iter()
-        .find(|conversation| conversation.id == wanted || conversation.id == conversation_id))
+        .find(|conversation| conversation.id == wanted || conversation.id == conversation_id);
+    if let Some(conversation) = &found {
+        chat::record_hosted(conversation, &mut session.state);
+        session.persist();
+    }
+    Ok(found)
 }
 
 /// Refresh the local project cache from the account and return it.
@@ -527,6 +575,39 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     session.persist();
     Ok(cache)
 }
+
+/// Any failure keeps the skills already on this device.
+pub async fn refresh_account_skills(
+    privacy: PrivacyMode,
+    force: bool,
+) -> Result<usize, CloudError> {
+    if crate::tier_cache::capability_refusal(crate::tier_cache::SKILLS_CAPABILITY, "Skills")
+        .is_some()
+    {
+        return Ok(0);
+    }
+    let session = CloudSession::open(privacy)?;
+    let dir = skills::account_skills_dir(&session.config_dir);
+    let stamp = dir.join(ACCOUNT_SKILLS_STAMP);
+    let fresh = std::fs::metadata(&stamp)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age < ACCOUNT_SKILLS_REFRESH);
+    if fresh && !force {
+        return Ok(0);
+    }
+    let synced = skills::fetch_account_skills(&session.client).await?;
+    skills::write_account_skills(&dir, &synced)
+        .and_then(|()| std::fs::write(&stamp, b""))
+        .map_err(|error| {
+            CloudError::Transport(format!("could not save the account's skills: {error}"))
+        })?;
+    Ok(synced.len())
+}
+
+const ACCOUNT_SKILLS_STAMP: &str = ".synced";
+const ACCOUNT_SKILLS_REFRESH: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Record a memory in the account. Returns the reasons the server gave for
 /// anything it refused, so a caller never reports a memory as saved twice.
