@@ -5,6 +5,9 @@ import type { ManagedCloudScheduleRunApprovalToolCall } from '@agiworkforce/clou
 
 import { SLACK_LINK_TTL_SECONDS } from './slack-config';
 
+export const SLACK_APPROVE_ACTION_ID = 'slack_approve_run';
+export const SLACK_DENY_ACTION_ID = 'slack_deny_run';
+
 const SECTION_TEXT_LIMIT = 2_900;
 const SECTIONS_PER_MESSAGE = 4;
 const FALLBACK_PREVIEW_CHARS = 280;
@@ -217,18 +220,44 @@ export function approvalMessage(
   toolCalls: readonly ManagedCloudScheduleRunApprovalToolCall[],
   settingsUrl: string,
   subject: 'answer' | 'task',
+  runId?: string,
 ): SlackOutgoingMessage {
   const shown = toolCalls.slice(0, APPROVAL_SUMMARY_LIMIT);
   const lines = shown.map((call) => `• ${escapeMrkdwn(call.summary || call.name)}`);
   if (toolCalls.length > shown.length) lines.push(`• and ${toolCalls.length - shown.length} more`);
-  const text =
-    `This ${subject} needs your approval before it can continue. Review it in AGI Workforce on ` +
-    'the web or desktop app; nothing runs until you decide.';
+  const text = runId
+    ? `This ${subject} needs your approval before it can continue. Approve or deny it here, or ` +
+      'review it in AGI Workforce; nothing runs until you decide.'
+    : `This ${subject} needs your approval before it can continue. Review it in AGI Workforce on ` +
+      'the web or desktop app; nothing runs until you decide.';
   return {
     text,
     blocks: [
       section(text),
       section(lines.join('\n')),
+      ...(runId
+        ? [
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  style: 'primary',
+                  action_id: SLACK_APPROVE_ACTION_ID,
+                  value: runId,
+                  text: { type: 'plain_text', text: 'Approve' },
+                },
+                {
+                  type: 'button',
+                  style: 'danger',
+                  action_id: SLACK_DENY_ACTION_ID,
+                  value: runId,
+                  text: { type: 'plain_text', text: 'Deny' },
+                },
+              ],
+            },
+          ]
+        : []),
       linkButton('Review in AGI Workforce', settingsUrl, 'slack_review_approval'),
     ],
   };

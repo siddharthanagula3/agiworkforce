@@ -90,6 +90,34 @@ async function createTaskConversation(
   return row.id;
 }
 
+export async function findSlackThreadConversation(
+  db: DatabaseAdapter,
+  run: SlackRun,
+): Promise<string | null> {
+  if (!run.threadTs) return null;
+  const [row] = await db.query<{ conversation_id: string }>(
+    `select agent.conversation_id
+       from slack_assistant_runs earlier
+       join cloud_agent_runs agent
+         on agent.id = earlier.agent_run_id
+        and agent.user_id = earlier.user_id
+       join web_conversations conversation
+         on conversation.id = agent.conversation_id
+        and conversation.user_id = earlier.user_id
+        and conversation.deleted_at is null
+      where earlier.user_id = $1
+        and earlier.organization_id is not distinct from $2::uuid
+        and earlier.installation_id = $3
+        and earlier.channel_id = $4
+        and (earlier.thread_ts = $5 or earlier.message_ts = $5)
+        and earlier.id <> $6
+      order by earlier.created_at asc
+      limit 1`,
+    [run.userId, run.organizationId, run.installationId, run.channelId, run.threadTs, run.id],
+  );
+  return row?.conversation_id ?? null;
+}
+
 async function attachAgentRun(db: DatabaseAdapter, run: SlackRun, agentRunId: string) {
   await db.execute(
     `update slack_assistant_runs
@@ -138,10 +166,12 @@ export function slackTask(input: {
     observer: {
       async routed(route) {
         if (opened) return;
-        const conversationId = await createTaskConversation(db, run, {
-          title: taskTitle(input.instruction),
-          model: route.modelKey,
-        });
+        const conversationId =
+          (await findSlackThreadConversation(db, run)) ??
+          (await createTaskConversation(db, run, {
+            title: taskTitle(input.instruction),
+            model: route.modelKey,
+          }));
         await persistConversationMessage({
           db,
           scope: scope(conversationId),
