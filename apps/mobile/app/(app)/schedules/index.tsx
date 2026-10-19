@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, FlatList, RefreshControl, Alert, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -364,7 +365,10 @@ export default function SchedulesScreen() {
           )}
           keyExtractor={(item) => item.id}
           ListFooterComponent={
-            canCreateSchedule ? <TemplateGallery onUseTemplate={handleUseTemplate} /> : null
+            <>
+              {canCreateSchedule ? <TemplateGallery onUseTemplate={handleUseTemplate} /> : null}
+              <HelpArticleLink docId="schedules-and-triggers" label="How schedules work" />
+            </>
           }
         />
       )}

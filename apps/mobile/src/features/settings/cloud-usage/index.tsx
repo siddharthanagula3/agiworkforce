@@ -691,7 +691,10 @@ export default function CloudUsageScreen() {
   }
 
   return (
-    <SettingsScreenShell title="Usage">
+    <SettingsScreenShell
+      title="Usage"
+      help={{ docId: 'usage-and-credits', label: 'How usage and credits work' }}
+    >
       <SettingsInfo
         title="Plan usage"
         body="See how much of your plan's included usage you've used this period."
