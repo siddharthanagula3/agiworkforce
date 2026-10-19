@@ -10,6 +10,7 @@ const TRANSACTIONAL_SENDERS = [
   'app/api/cron/evaluate-model-rollout/route.ts',
   'app/api/cron/reconcile-billed-plans/route.ts',
   'app/api/cron/reconcile-credits/route.ts',
+  'app/api/partners/apply/route.ts',
   'app/api/privacy/requests/route.ts',
   'app/api/settings/team/invitations/invitation-email.ts',
   'lib/server/free-quota-renewal.ts',
