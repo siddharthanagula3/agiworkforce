@@ -4,6 +4,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockConnectorsReleased = jest.fn(() => true);
 const mockParams: { name?: string } = {};
 const mockCatalog = jest.fn();
 const mockInstalled = jest.fn();
@@ -27,6 +28,10 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@clerk/expo', () => ({ getClerkInstance: () => null }));
+jest.mock('@agiworkforce/types', () => ({
+  ...jest.requireActual('@agiworkforce/types'),
+  connectorsReleased: () => mockConnectorsReleased(),
+}));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));

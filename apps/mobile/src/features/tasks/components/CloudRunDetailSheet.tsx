@@ -75,6 +75,12 @@ export function CloudRunDetailSheet({
   onResolveApproval,
   onStop,
   onOpenConversation,
+  onMakeRoutine,
+  onRerun,
+  onShare,
+  rerunning = false,
+  onPause,
+  onResume,
 }: {
   detail: CloudRunDetail | null;
   title: string;
@@ -82,6 +88,12 @@ export function CloudRunDetailSheet({
   onResolveApproval: (decision: ManagedCloudAgentRunApprovalDecision) => void;
   onStop: () => void;
   onOpenConversation: (conversationId: string) => void;
+  onMakeRoutine?: () => void;
+  onRerun?: () => void;
+  onShare?: () => void;
+  rerunning?: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
 }) {
   const colors = useThemeColors();
   const answerInput = useCloudTaskStore((state) => state.answerInput);
@@ -436,6 +448,54 @@ export function CloudRunDetailSheet({
                 variant="outline"
                 accessibilityLabel="Open the conversation this task belongs to"
                 onPress={() => onOpenConversation(conversationId)}
+              />
+            ) : null}
+
+            {run && onResume && run.state === 'paused' ? (
+              <Button
+                title="Resume this task"
+                loading={detail?.pendingAction === 'resume'}
+                disabled={busy}
+                onPress={onResume}
+              />
+            ) : null}
+
+            {run && onPause && run.state === 'running' ? (
+              <Button
+                title="Pause this task"
+                variant="outline"
+                accessibilityHint="Stops work after the current step. You can resume it later."
+                loading={detail?.pendingAction === 'pause'}
+                disabled={busy}
+                onPress={onPause}
+              />
+            ) : null}
+
+            {onRerun ? (
+              <Button
+                title="Run again"
+                variant="outline"
+                loading={rerunning}
+                accessibilityHint="Starts a new task with the same goal"
+                onPress={onRerun}
+              />
+            ) : null}
+
+            {onShare ? (
+              <Button
+                title="Share task"
+                variant="outline"
+                accessibilityHint="Creates a link anyone can open to read this task's chat"
+                onPress={onShare}
+              />
+            ) : null}
+
+            {onMakeRoutine ? (
+              <Button
+                title="Make it a routine"
+                variant="outline"
+                accessibilityHint="Opens a new schedule that runs this task's prompt on a timer"
+                onPress={onMakeRoutine}
               />
             ) : null}
 

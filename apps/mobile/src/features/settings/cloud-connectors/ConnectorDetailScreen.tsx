@@ -28,6 +28,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { Text } from '@/components/ui/text';
+import { ConnectorConsentNotes, ConnectorHealthCard } from './ConnectorTrustSections';
 import { ConnectorCallLog } from './ConnectorCallLog';
 import { LinkedBanks } from './LinkedBanks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -1126,6 +1127,14 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
 
           {permissionConnectorId ? <ConnectorCallLog connectorId={permissionConnectorId} /> : null}
 
+          <ConnectorHealthCard
+            connectorIds={[connection.connectorId, permissionConnectorId].filter(
+              (value): value is string => typeof value === 'string',
+            )}
+          />
+
+          <ConnectorConsentNotes />
+
           {linksGroup}
 
           <Pressable
@@ -1270,6 +1279,8 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               ))}
             </SettingsGroup>
           ) : null}
+
+          <ConnectorConsentNotes />
 
           {linksGroup}
         </>

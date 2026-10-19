@@ -27,12 +27,16 @@ import {
 } from './runPresentation';
 import {
   cancelCloudRun,
+  pauseCloudRun,
+  resumePausedCloudRun,
   describeCloudRunError,
   followCloudRun,
   isAbortedCloudRunError,
   listCloudRuns,
   resolveCloudRunApproval,
   CLOUD_RUN_CANCEL_ERROR,
+  CLOUD_RUN_PAUSE_ERROR,
+  CLOUD_RUN_RESUME_ERROR,
   CLOUD_RUN_DECISION_ERROR,
   CLOUD_RUN_FOLLOW_ERROR,
   CLOUD_RUN_LIST_ERROR,
@@ -46,7 +50,7 @@ export type CloudRunLoadReason = 'initial' | 'refresh' | 'background';
 
 export type CloudRunDetailStatus = 'loading' | 'live' | 'settled' | 'error';
 
-export type CloudRunPendingAction = 'approve' | 'reject' | 'cancel' | 'answer';
+export type CloudRunPendingAction = 'approve' | 'reject' | 'cancel' | 'answer' | 'pause' | 'resume';
 
 export interface CloudRunDetail {
   runId: string;
@@ -78,6 +82,8 @@ export interface CloudTaskState {
   resolveApproval: (decision: ManagedCloudAgentRunApprovalDecision) => Promise<void>;
   answerInput: (answers: ManagedCloudAgentRunInputAnswer[]) => Promise<void>;
   stopRun: () => Promise<void>;
+  pauseRun: () => Promise<void>;
+  resumeRun: () => Promise<void>;
   reset: () => void;
 }
 
@@ -340,6 +346,66 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
                 ...state.detail,
                 pendingAction: null,
                 error: describeCloudRunError(error, CLOUD_RUN_CANCEL_ERROR),
+              },
+            }
+          : {},
+      );
+    } finally {
+      if (isCloudAccountEpochCurrent(account)) void get().load('background');
+    }
+  },
+
+  pauseRun: async () => {
+    const detail = get().detail;
+    if (!detail || detail.pendingAction) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    set({ detail: { ...detail, pendingAction: 'pause', error: null } });
+    try {
+      const run = await pauseCloudRun(detail.runId);
+      if (!isCloudAccountEpochCurrent(account)) return;
+      set((state) =>
+        state.detail?.runId === detail.runId
+          ? { detail: { ...state.detail, run, pendingAction: null } }
+          : {},
+      );
+    } catch (error) {
+      if (!isCloudAccountEpochCurrent(account)) return;
+      set((state) =>
+        state.detail?.runId === detail.runId
+          ? {
+              detail: {
+                ...state.detail,
+                pendingAction: null,
+                error: describeCloudRunError(error, CLOUD_RUN_PAUSE_ERROR),
+              },
+            }
+          : {},
+      );
+    } finally {
+      if (isCloudAccountEpochCurrent(account)) void get().load('background');
+    }
+  },
+
+  resumeRun: async () => {
+    const detail = get().detail;
+    if (!detail || detail.pendingAction) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    set({ detail: { ...detail, pendingAction: 'resume', error: null } });
+    try {
+      await resumePausedCloudRun(detail.runId);
+      if (!isCloudAccountEpochCurrent(account)) return;
+      if (get().detail?.runId === detail.runId) await get().openRun(detail.runId);
+    } catch (error) {
+      if (!isCloudAccountEpochCurrent(account)) return;
+      set((state) =>
+        state.detail?.runId === detail.runId
+          ? {
+              detail: {
+                ...state.detail,
+                pendingAction: null,
+                error: describeCloudRunError(error, CLOUD_RUN_RESUME_ERROR),
               },
             }
           : {},

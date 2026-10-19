@@ -8,6 +8,7 @@ import { type DrawerContentComponentProps } from 'expo-router/drawer';
 import {
   BookImage,
   BookOpen,
+  Globe,
   Bot,
   Bell,
   Building2,
@@ -71,7 +72,9 @@ type RoutePath =
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
   | '/(app)/library'
-  | '/(app)/skills'
+  | '/(app)/customize'
+  | '/(app)/agents'
+  | '/(app)/sites'
   | '/(app)/reports'
   | '/(app)/schedules'
   | '/(app)/companion'
@@ -92,7 +95,9 @@ interface PrimaryItem {
     | 'projects'
     | 'library'
     | 'reports'
-    | 'skills'
+    | 'customize'
+    | 'agents'
+    | 'sites'
     | 'schedules'
     | 'code'
     | 'remote'
@@ -130,10 +135,24 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     cloud: true,
   },
   {
-    key: 'skills',
-    label: 'Skills',
+    key: 'agents',
+    label: 'Agents',
+    icon: Bot,
+    route: '/(app)/agents',
+    cloud: true,
+  },
+  {
+    key: 'customize',
+    label: 'Customize',
     icon: BookOpen,
-    route: '/(app)/skills',
+    route: '/(app)/customize',
+    cloud: true,
+  },
+  {
+    key: 'sites',
+    label: 'Published sites',
+    icon: Globe,
+    route: '/(app)/sites',
     cloud: true,
   },
   {
@@ -479,7 +498,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     () =>
       PRIMARY_ITEMS.filter((item) => {
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
-        if (item.key === 'skills' && !FEATURES.skills) return false;
+        if (item.key === 'customize' && !FEATURES.skills) return false;
         if (item.key === 'reports' && !FEATURES.research) return false;
         if (item.key === 'remote' && !FEATURES.companion) return false;
         if (item.key === 'tasks') return FEATURES.cloudTasks && showAgiWork;
@@ -495,7 +514,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'projects') return p.includes('/projects');
       if (key === 'chats') return p.includes('/chats');
       if (key === 'library') return p.includes('/library');
-      if (key === 'skills') return p.includes('/skills');
+      if (key === 'customize') {
+        return ['/customize', '/skills', '/plugins'].some((segment) => p.includes(segment));
+      }
+      if (key === 'agents') return p.includes('/agents');
+      if (key === 'sites') return p.includes('/sites');
       if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'code') return p.includes('/cloud-code');

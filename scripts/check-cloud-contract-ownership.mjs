@@ -91,6 +91,10 @@ const cloudModules = [
   'agent-drafts',
   'plugin-directory',
   'slack-channel-policies',
+  'trigger-sources',
+  'project-studio',
+  'artifact-library',
+  'connector-trust-copy',
 ];
 
 const cloudMovedFiles = [

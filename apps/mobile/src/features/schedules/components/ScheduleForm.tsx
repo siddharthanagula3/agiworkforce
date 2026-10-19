@@ -17,6 +17,7 @@ import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { TimezonePickerField } from './TimezonePickerField';
+import { ScheduleAccessSection } from './ScheduleAccessSection';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
@@ -59,6 +60,8 @@ export function ScheduleForm({
     isoToZonedDateInput(initialData?.scheduledAt, initialTimezone),
   );
   const [timezone, setTimezone] = useState(initialTimezone);
+  const [agentId, setAgentId] = useState<string | null>(initialData?.agentId ?? null);
+  const [connectors, setConnectors] = useState<string[] | null>(initialData?.connectors ?? null);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -72,6 +75,8 @@ export function ScheduleForm({
     timeOfDay,
     scheduledDate,
     timezone,
+    agentId,
+    connectors,
   ]);
   const [initialDraft] = useState(draft);
   const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
@@ -160,6 +165,8 @@ export function ScheduleForm({
       intervalMs: undefined,
       timezone,
       isActive: initialData?.isActive ?? true,
+      agentId,
+      connectors,
     });
   }, [
     validate,
@@ -174,6 +181,8 @@ export function ScheduleForm({
     timeOfDay,
     timezone,
     initialData?.isActive,
+    agentId,
+    connectors,
   ]);
 
   return (
@@ -270,6 +279,17 @@ export function ScheduleForm({
           {errors.scheduledAt ? (
             <Text className="text-xs text-red-400 mt-1">{errors.scheduledAt}</Text>
           ) : null}
+        </View>
+
+        <Separator className="my-2" />
+
+        <View className="mb-4 mt-2">
+          <ScheduleAccessSection
+            agentId={agentId}
+            connectors={connectors}
+            onAgentChange={setAgentId}
+            onConnectorsChange={setConnectors}
+          />
         </View>
 
         <Separator className="my-2" />

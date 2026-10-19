@@ -25,6 +25,7 @@ import {
   type PluginVersionsWire,
 } from '@agiworkforce/cloud-contracts';
 import { ApiHttpError, api, apiFetch } from '@/services/api';
+import { cloudActionError } from '@/src/shared/utils/cloudActionError';
 
 export interface PluginDirectoryQuery {
   search?: string;
@@ -177,8 +178,5 @@ export async function updatePluginSettings(
 
 export function pluginActionError(error: unknown, fallback: string): string {
   if (error instanceof PluginDependentsError) return error.message;
-  if (error instanceof ApiHttpError && error.status < 500 && error.message.trim()) {
-    return error.message;
-  }
-  return fallback;
+  return cloudActionError(error, fallback);
 }

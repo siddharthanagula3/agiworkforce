@@ -30,6 +30,7 @@ export default function CreateScheduleScreen() {
     template?: string;
     prompt?: string;
     model?: string;
+    agentId?: string;
     projectId?: string;
   }>();
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -65,6 +66,11 @@ export default function CreateScheduleScreen() {
         : scheduleDraftFromPrompt(params.prompt, params.model),
     [params.id, params.prompt, params.model],
   );
+
+  const newScheduleData = useMemo(() => {
+    const base = fromConversation ?? selectedTemplate?.initialData;
+    return params.agentId ? { ...base, agentId: params.agentId } : base;
+  }, [fromConversation, params.agentId, selectedTemplate]);
 
   const isEditing = Boolean(existingSchedule);
   const attemptedScheduleFetch = useRef(false);
@@ -254,13 +260,28 @@ export default function CreateScheduleScreen() {
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </PressableBox>
-        <Text variant="subheading" className="ml-2">
+        <Text variant="subheading" className="ml-2 flex-1">
           {isEditing ? 'Edit Schedule' : 'New Schedule'}
         </Text>
+        {existingSchedule ? (
+          <PressableBox
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/schedules/triggers/[id]' as const,
+                params: { id: existingSchedule.id, name: existingSchedule.name },
+              })
+            }
+            className="min-h-[44px] justify-center px-2"
+            accessibilityRole="button"
+            accessibilityLabel="Event triggers for this schedule"
+          >
+            <Text className="text-sm font-semibold">Triggers</Text>
+          </PressableBox>
+        ) : null}
       </View>
 
       <ScheduleForm
-        initialData={existingSchedule ?? fromConversation ?? selectedTemplate?.initialData}
+        initialData={existingSchedule ?? newScheduleData}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
         onDelete={isEditing ? handleDelete : undefined}
