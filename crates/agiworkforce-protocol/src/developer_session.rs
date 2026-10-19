@@ -145,6 +145,8 @@ pub mod method {
     pub const CHECKPOINT_STAGE: &str = "checkpoint/stage";
     pub const THREAD_REVERT: &str = "thread/revert";
     pub const THREAD_SIDE_QUESTION: &str = "thread/sideQuestion";
+    pub const THREAD_RENAME: &str = "thread/rename";
+    pub const THREAD_RENAMED: &str = "thread/renamed";
     pub const THREAD_SIDE_QUESTION_DELTA: &str = "thread/sideQuestion/delta";
 }
 
@@ -472,6 +474,8 @@ pub struct AppServerCapabilities {
     /// adding to it.
     #[serde(default, skip_serializing_if = "is_false")]
     pub side_question: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_rename: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1142,6 +1146,21 @@ pub struct ThreadListResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRenameParams {
+    pub thread_id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadRenameResponse {
+    pub thread: ThreadSummary,
 }
 
 /// A question about a thread that is answered and then forgotten: neither the

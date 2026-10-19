@@ -430,6 +430,7 @@ fn capabilities() -> AppServerCapabilities {
         mcp_approval: false,
         managed_worktrees: true,
         side_question: true,
+        thread_rename: true,
     }
 }
 
