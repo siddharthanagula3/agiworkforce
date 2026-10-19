@@ -155,6 +155,7 @@ function harness() {
     getModelMetadataById,
     activeBrowserToolTier: vi.fn(async () => 'read'),
     hasHistoryPermission: vi.fn(async () => false),
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     activePageSource: { tabId: 7, url: 'https://example.com/form' },
     sameManagedCloudOwner,
     pageContextStillDescribes,

@@ -40,7 +40,8 @@ describe('right-click Ask AGI Workforce about this page', () => {
       slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked'),
       'handleContextMenuClick',
       {
-        chrome: { storage: { session: { set } }, sidePanel: { open } },
+        chrome: { storage: { session: { set } } },
+        openAssistantPanel: open,
         logger: { warn: vi.fn() },
         createSelectionContextHandoff: vi.fn(),
         CONTEXT_HANDOFF_STORAGE_KEY: 'handoff',
@@ -48,7 +49,7 @@ describe('right-click Ask AGI Workforce about this page', () => {
         ensureTabGroup: vi.fn(),
       },
     );
-    handle({ menuItemId: 'ask-page', pageUrl: 'https://example.com/a' }, { id: 4 });
+    handle({ menuItemId: 'ask-page', pageUrl: 'https://example.com/a' }, { id: 4, windowId: 2 });
     expect(set).toHaveBeenCalledWith({
       agi_pending_chat: expect.objectContaining({
         type: 'ask-page',
@@ -56,7 +57,7 @@ describe('right-click Ask AGI Workforce about this page', () => {
         url: 'https://example.com/a',
       }),
     });
-    expect(open).toHaveBeenCalledWith({ tabId: 4 });
+    expect(open).toHaveBeenCalledWith({ tabId: 4, windowId: 2 });
   });
 
   it('attaches the page to the composer and waits for the question instead of sending', async () => {
@@ -86,6 +87,7 @@ describe('right-click Ask AGI Workforce about this page', () => {
       '{ check: checkPendingChat, context: () => _ctx }',
       {
         _ctx: ctx,
+        activePageQuery: async () => ({ active: true, currentWindow: true }),
         chrome: {
           runtime: {},
           storage: {
