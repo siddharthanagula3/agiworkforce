@@ -629,6 +629,12 @@ const COMPOSER_RESTING_HEIGHT_EMPTY_PX = 40;
 /** M11: the mobile step of the same box the `sm:` utilities carry. */
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
+/**
+ * Below this card width the model and effort chips leave the textbox a few
+ * characters ("Messa" in a 480 px Quick Ask window), so the field takes its own
+ * row above the controls.
+ */
+const COMPOSER_STACK_BELOW_PX = 560;
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
@@ -1142,6 +1148,12 @@ const ChatComposerNewComponent = ({
       setWorkMode('agiwork');
     }
   }, [billingPolicyReady, canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
+
+  const defaultWorkMode = useSettingsStore((s) => s.defaultWorkMode);
+  useEffect(() => {
+    if (!emptyState || storedComposerToggles !== undefined || !canUseAgiWork) return;
+    if (defaultWorkMode !== 'chat') setWorkMode(defaultWorkMode);
+  }, [emptyState, storedComposerToggles, canUseAgiWork, defaultWorkMode, setWorkMode]);
 
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
 
@@ -1660,6 +1672,7 @@ const ChatComposerNewComponent = ({
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const dictationEnabled = useSettingsStore((s) => s.dictationEnabled);
   const followUpBehavior = useSettingsStore((s) => s.followUpBehavior);
+  const sendWithEnter = useSettingsStore((s) => s.sendWithEnter);
   const dictationSwitchedOff = useBillingStore((s) =>
     dictationSwitchedOffReason(s.disabledFeatures),
   );
@@ -1768,6 +1781,7 @@ const ChatComposerNewComponent = ({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [composerExpandable, setComposerExpandable] = useState(false);
   const [composerWrapsLines, setComposerWrapsLines] = useState(false);
+  const [composerNarrow, setComposerNarrow] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is not a DOM
@@ -2267,6 +2281,16 @@ const ChatComposerNewComponent = ({
     if (!field) return;
     setComposerExpandable(field.scrollHeight > COMPOSER_EXPANDABLE_HEIGHT_PX);
   }, [message, emptyState, composerExpanded]);
+
+  useEffect(() => {
+    const card = composerCardRef.current;
+    if (!card || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setComposerNarrow(entry.contentRect.width < COMPOSER_STACK_BELOW_PX);
+    });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
 
   // The widened field would hold on one line what wrapped in the narrow one, so
   // the stacked layout is left only when the draft is cleared, never re-measured.
@@ -4169,10 +4193,17 @@ const ChatComposerNewComponent = ({
         return;
       }
 
-      // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
-      // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
-      // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
-      if (e.key === 'Enter' && !e.shiftKey && !composing && !showSlashMenu) {
+      // Plain Enter sends and Shift+Enter inserts a newline (the ChatGPT/Claude
+      // convention); with Send with Enter off, Enter inserts a newline and only
+      // Cmd/Ctrl+Enter sends. Never submit while a picker owns Enter (slash) or
+      // mid-IME-composition (e.g. CJK candidates).
+      if (
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        !composing &&
+        !showSlashMenu &&
+        (sendWithEnter || e.metaKey || e.ctrlKey)
+      ) {
         e.preventDefault();
         handleSubmit();
       }
@@ -4196,6 +4227,7 @@ const ChatComposerNewComponent = ({
     },
     [
       handleSubmit,
+      sendWithEnter,
       handleSubmitInverted,
       handleStop,
       isTurnActive,
@@ -4229,7 +4261,8 @@ const ChatComposerNewComponent = ({
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const showExpandControl = composerExpanded || composerExpandable;
-  const composerStacked = Boolean(emptyState) || composerExpanded || composerWrapsLines;
+  const composerStacked =
+    Boolean(emptyState) || composerExpanded || composerWrapsLines || composerNarrow;
   const mediaControlsWrap = imageMode || videoMode;
   const expandControlLabel = composerExpanded
     ? tChat('composer.collapseInput', { defaultValue: 'Collapse message input' })

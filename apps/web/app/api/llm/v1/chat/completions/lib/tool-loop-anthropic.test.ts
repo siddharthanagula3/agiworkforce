@@ -58,6 +58,7 @@ import { createObservedProviderUsage } from '@/lib/services/managed-usage-accoun
 import { setRouteRegistryPricingLookup } from '@/lib/services/llm-cost-calculator';
 import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { ServerSentEventDecoder, SSE_DONE_DATA } from '@agiworkforce/client-runtime';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
 
@@ -660,4 +661,39 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(output).toContain('Final answer.');
     expect(output).toContain('data: [DONE]');
   });
+});
+
+describe('SSE framing', () => {
+  function decodeWithSpecParser(text: string): unknown[] {
+    const decoder = new ServerSentEventDecoder();
+    const events = [...decoder.push(text), ...decoder.finish().events];
+    return events
+      .filter((event) => event.data !== SSE_DONE_DATA)
+      .map((event) => JSON.parse(event.data) as unknown);
+  }
+
+  it.each(['legacy-web', 'openai-passthrough'] as const)(
+    'ends every %s wire event with its own blank line, so the first tool call after thinking survives',
+    async (wireMode) => {
+      const chunks = fakeAdapterStream([
+        { type: 'thinking-delta', delta: 'deciding where to click' },
+        { type: 'tool-use-start', toolUseId: 'toolu_click', name: 'click', vendorIndex: 1 },
+        { type: 'tool-use-delta', toolUseId: 'toolu_click', deltaJson: '{"x":1}' },
+        { type: 'tool-use-end', toolUseId: 'toolu_click' },
+        { type: 'stop', reason: 'tool_use' },
+      ])() as AsyncIterable<StreamChunk>;
+
+      const text = await new Response(chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, wireMode)).text();
+      const events = decodeWithSpecParser(text);
+      const dataLines = text.split('\n').filter((line) => line.startsWith('data: '));
+
+      expect(events.length).toBe(
+        dataLines.filter((line) => line !== `data: ${SSE_DONE_DATA}`).length,
+      );
+      const toolStart = events.find((event) =>
+        JSON.stringify(event).includes('"id":"toolu_click"'),
+      );
+      expect(JSON.stringify(toolStart)).toContain('"name":"click"');
+    },
+  );
 });

@@ -21,6 +21,10 @@ const standaloneEnabled = process.env[STANDALONE_ENV_VAR]?.trim() === STANDALONE
 
 const standaloneOutput = standaloneEnabled ? ({ output: STANDALONE_OUTPUT } as const) : {};
 
+const DIST_DIR_ENV_VAR = 'AGI_NEXT_DIST_DIR';
+const distDirOverride = process.env[DIST_DIR_ENV_VAR]?.trim();
+const distDir = distDirOverride ? { distDir: distDirOverride } : {};
+
 const TRACED_ROUTE_GLOB = '/**';
 
 const TRACED_RUNTIME_FILES = [
@@ -51,6 +55,7 @@ const botProtectionEnabled =
 
 const nextConfig: NextConfig = {
   ...standaloneOutput,
+  ...distDir,
   devIndicators: false,
   poweredByHeader: false,
   outputFileTracingRoot: workspaceRoot,

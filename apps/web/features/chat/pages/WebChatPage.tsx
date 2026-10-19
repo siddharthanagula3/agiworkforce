@@ -17,6 +17,7 @@ import {
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { completionNotificationTitle } from '../lib/completion-notification';
+import { scheduleFromPromptHref } from '@/features/schedules/components/schedule-from-turn';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import {
   freeModelAttachmentKind,
@@ -2107,6 +2108,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     };
   }, [activeConversationId, authLoaded, refreshOpenConversation]);
 
+  const handleScheduleTurn = useCallback(
+    (prompt: string) => router.push(scheduleFromPromptHref(prompt)),
+    [router],
+  );
+
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
   const routeInitializedRef = useRef(false);
@@ -2451,16 +2457,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           });
 
         const announceDesktopCompletion = () => {
+          // A new chat's turn ran under the client placeholder, which
+          // `ensureConversationId` renamed to the server's id.
+          const finishedIn = resolvedFreshConvId ?? convId;
           const state = useChatStore.getState();
           const heading = completionNotificationTitle({
             workMode: options.meta?.workMode,
             research: options.meta?.researchEnabled,
-            reply: (state.messagesByConversation[convId] ?? []).at(-1),
-            conversationTitle: state.conversations.find((c) => c.id === convId)?.title,
+            reply: (state.messagesByConversation[finishedIn] ?? []).at(-1),
+            conversationTitle: state.conversations.find((c) => c.id === finishedIn)?.title,
             untitled: NEW_CHAT_TITLE,
           });
           if (!heading) return;
-          void notifyJobComplete({ title: heading, body: content, conversationId: convId });
+          void notifyJobComplete({ title: heading, body: content, conversationId: finishedIn });
         };
 
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
@@ -6921,6 +6930,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 isLoading={isLoading && !isStreaming}
                                 isUserTyping={isUserTyping}
                                 onRegenerate={handleRegenerateMessage}
+                                onScheduleTurn={handleScheduleTurn}
                                 onRetryResearch={handleRetryResearch}
                                 onResearchPlanDecision={handleResearchPlanDecision}
                                 onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
