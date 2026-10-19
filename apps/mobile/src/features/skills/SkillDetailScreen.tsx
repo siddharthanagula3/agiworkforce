@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FileText } from 'lucide-react-native';
 
+import { CONNECTORS_COMING_SOON_LABEL, connectorsReleased } from '@agiworkforce/types';
+
 import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
@@ -268,9 +270,15 @@ export function SkillDetailScreen() {
                       <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
                         {connector}
                       </Text>
-                      <MetaText>{connected ? 'Connected' : 'Not connected'}</MetaText>
+                      <MetaText>
+                        {connectorsReleased()
+                          ? connected
+                            ? 'Connected'
+                            : 'Not connected'
+                          : CONNECTORS_COMING_SOON_LABEL}
+                      </MetaText>
                     </View>
-                    {!connected ? (
+                    {!connected && connectorsReleased() ? (
                       <Button
                         title="Connect"
                         size="sm"

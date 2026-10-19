@@ -13,6 +13,8 @@ const mockListRuns = jest.fn();
 const mockFollowRun = jest.fn();
 const mockResumeRun = jest.fn();
 const mockCancelRun = jest.fn();
+const mockPauseRun = jest.fn();
+const mockResumePausedRun = jest.fn();
 
 jest.mock('@/services/streaming', () => ({
   createMobileCloudAgentRunClient: () => ({
@@ -20,6 +22,8 @@ jest.mock('@/services/streaming', () => ({
     followRun: mockFollowRun,
     resumeRun: mockResumeRun,
     cancelRun: mockCancelRun,
+    pauseRun: mockPauseRun,
+    resumePausedRun: mockResumePausedRun,
   }),
 }));
 
@@ -293,5 +297,45 @@ describe('stopping a cloud run', () => {
     expect(mockCancelRun).toHaveBeenCalledWith(RUN_ID, expect.anything());
     expect(useCloudTaskStore.getState().detail?.run?.state).toBe('cancelled');
     expect(useCloudTaskStore.getState().detail?.status).toBe('settled');
+  });
+});
+
+describe('pausing and resuming a cloud run', () => {
+  it('pauses the open run and shows it paused', async () => {
+    activateCloudAccount('user_1');
+    followsWith(snapshot(cloudRun({ state: 'running' })));
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    mockPauseRun.mockResolvedValueOnce(cloudRun({ state: 'paused' }));
+    await useCloudTaskStore.getState().pauseRun();
+
+    expect(mockPauseRun).toHaveBeenCalledWith(RUN_ID, expect.anything());
+    expect(useCloudTaskStore.getState().detail?.run?.state).toBe('paused');
+    expect(useCloudTaskStore.getState().detail?.pendingAction).toBeNull();
+  });
+
+  it('resumes a paused run and follows it again', async () => {
+    activateCloudAccount('user_1');
+    followsWith(snapshot(cloudRun({ state: 'paused' })));
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    mockResumePausedRun.mockResolvedValueOnce(undefined);
+    followsWith(snapshot(cloudRun({ state: 'running' })));
+    await useCloudTaskStore.getState().resumeRun();
+
+    expect(mockResumePausedRun).toHaveBeenCalledWith(RUN_ID, expect.anything());
+    expect(useCloudTaskStore.getState().detail?.run?.state).toBe('running');
+  });
+
+  it('says so when a resume is refused', async () => {
+    activateCloudAccount('user_1');
+    followsWith(snapshot(cloudRun({ state: 'paused' })));
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    mockResumePausedRun.mockRejectedValueOnce(new Error('HTTP 500'));
+    await useCloudTaskStore.getState().resumeRun();
+
+    expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be resumed');
+    expect(useCloudTaskStore.getState().detail?.pendingAction).toBeNull();
   });
 });

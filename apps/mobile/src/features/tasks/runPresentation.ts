@@ -362,3 +362,21 @@ export function applyCloudRunPlanEvent(
     ? plan.map((step) => (step.ordinal === ordinal ? { ...step, status } : step))
     : [...plan, { ordinal, description, status }].sort((a, b) => a.ordinal - b.ordinal);
 }
+
+const ROUTINE_SOURCE_STATES: ReadonlySet<AgentTaskState> = new Set([
+  'completed',
+  'ready_for_review',
+  'partial',
+]);
+
+export interface CloudRunRoutineDraft {
+  prompt: string;
+  model: string | undefined;
+}
+
+export function routineDraftFromRun(run: CloudAgentRun): CloudRunRoutineDraft | null {
+  if (!ROUTINE_SOURCE_STATES.has(run.state)) return null;
+  const prompt = run.conversationPreview?.trim();
+  if (!prompt) return null;
+  return { prompt, model: run.model ?? undefined };
+}

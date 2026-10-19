@@ -127,11 +127,13 @@ export async function getManagedUsageSummary(
   );
   const credits: AccountUsageCredits | null = planAllowance
     ? {
-        monthly: creditWindow(
-          planAllowance.monthly,
-          creditsFromMicrousd(freeUsage?.monthlyUsedMicrousd ?? creditsUsed),
-          usageResetAt,
-        ),
+        monthly: isUnallocated
+          ? { ...creditWindow(planAllowance.monthly, 0, usageResetAt), remaining: 0 }
+          : creditWindow(
+              planAllowance.monthly,
+              creditsFromMicrousd(freeUsage?.monthlyUsedMicrousd ?? creditsUsed),
+              usageResetAt,
+            ),
         weekly: creditWindow(
           planAllowance.weekly,
           creditsFromMicrousd(freeUsage?.weeklyUsedMicrousd ?? weekly.usedMicrousd),

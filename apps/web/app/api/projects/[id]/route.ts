@@ -196,6 +196,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     );
   }
   if (body.defaultModelId !== undefined) addBase('default_model_id', body.defaultModelId);
+  if (body.chatDefaults !== undefined) addBase('chat_defaults', JSON.stringify(body.chatDefaults));
   if (body.importedFrom !== undefined) addBase('imported_from', body.importedFrom);
 
   const executeUpdate = async (targetDb: DatabaseAdapter) => {

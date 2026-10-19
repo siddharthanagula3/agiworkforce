@@ -199,18 +199,18 @@ export function AgentEditorPage({
 
   if (load.status === 'loading') {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10 sm:px-6">
         <div role="status" aria-label="Loading agent" className="flex flex-col gap-3">
           <Skeleton className="h-12 w-64" />
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
-      </main>
+      </div>
     );
   }
 
   if (load.status === 'error') {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-10 sm:px-6">
         <p role="alert" className="text-sm text-danger">
           {load.message}
         </p>
@@ -222,12 +222,12 @@ export function AgentEditorPage({
             <Link href={AGENTS_HREF}>Back to Agents</Link>
           </Button>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-full bg-background text-foreground">
+    <div className="min-h-full bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
         <Link
           href={AGENTS_HREF}
@@ -320,6 +320,6 @@ export function AgentEditorPage({
           </>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

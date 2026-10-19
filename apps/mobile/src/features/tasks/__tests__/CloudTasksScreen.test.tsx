@@ -9,6 +9,7 @@ const mockListRuns = jest.fn();
 const mockFollowRun = jest.fn();
 const mockResumeRun = jest.fn();
 const mockCancelRun = jest.fn();
+const mockStartCloudWorkRun = jest.fn();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -55,6 +56,11 @@ jest.mock('@/services/streaming', () => ({
   }),
 }));
 
+jest.mock('../startWork', () => ({
+  ...jest.requireActual('../startWork'),
+  startCloudWorkRun: (...args: unknown[]) => mockStartCloudWorkRun(...args),
+}));
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((callback: () => void) => callback()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -79,8 +85,6 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
-import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
-import { useTierStore } from '@/src/features/billing/store';
 import { CloudTasksScreen } from '../CloudTasksScreen';
 import { useCloudTaskStore } from '../store';
 
@@ -195,51 +199,37 @@ describe('Cloud tasks screen', () => {
     );
   });
 
-  it('saves a finished task as a routine prefilled with its request', async () => {
-    const conversationId = '0190a000-0000-7000-8000-000000000099';
-    const finished = {
+  it('runs a finished task again and offers it as a routine', async () => {
+    const FINISHED = {
       ...RUN,
-      conversationId,
       state: 'completed',
       pendingApproval: null,
-      completedAt: '2026-08-27T12:00:00.000Z',
+      conversationId: '22222222-2222-4222-8222-222222222222',
+      conversationPreview: 'Summarise overnight support tickets',
     };
-    mockListRuns.mockResolvedValue({ runs: [finished], nextCursor: null });
+    mockListRuns.mockResolvedValue({ runs: [FINISHED], nextCursor: null });
     mockFollowRun.mockImplementation(
       async (_runId: string, options: { onSnapshot?: (page: unknown) => void }) => {
-        await options.onSnapshot?.({ run: finished, events: [], nextAfterSequence: -1 });
-        return { run: finished, lastSequence: -1 };
+        await options.onSnapshot?.({ run: FINISHED, events: [], nextAfterSequence: -1 });
+        return { run: FINISHED, lastSequence: -1 };
       },
     );
-    useTierStore.setState({ tier: 'basic' });
-    const loadMessages = jest.fn(async (id: string) => {
-      getConversationMessageStore(id).setState((state) => ({
-        messages: {
-          ...state.messages,
-          [id]: [
-            {
-              id: 'm-1',
-              conversationId: id,
-              role: 'user',
-              content: 'Compare the Q4 filings for both vendors',
-              createdAt: '2026-08-27T10:00:00.000Z',
-            },
-          ],
-        },
-      }));
-    });
-    useChatStore.setState({ conversations: [], loadMessages } as never);
+    mockStartCloudWorkRun.mockResolvedValue({ conversationId: 'conv-new', goal: {} });
+    const { findByText, getByText } = render(<CloudTasksScreen />);
 
-    const { findByLabelText } = render(<CloudTasksScreen />);
-    fireEvent.press(await findByLabelText(/^Open Research task/));
-    fireEvent.press(await findByLabelText('Save this task as a routine that runs on a schedule'));
-
+    fireEvent.press(await findByText('Summarise overnight support tickets'));
+    expect(await findByText('Make it a routine')).toBeTruthy();
+    fireEvent.press(getByText('Run again'));
     await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith({
-        pathname: '/(app)/schedules/create',
-        params: { prompt: 'Compare the Q4 filings for both vendors', model: 'model-1' },
+      expect(mockStartCloudWorkRun).toHaveBeenCalledWith({
+        goal: 'Summarise overnight support tickets',
       }),
     );
-    expect(loadMessages).toHaveBeenCalledWith(conversationId);
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'conv-new' },
+      }),
+    );
   });
 });

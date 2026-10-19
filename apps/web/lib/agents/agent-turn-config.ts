@@ -1,10 +1,11 @@
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import type { AgentConfig } from '@agiworkforce/cloud-contracts';
-import { isAutoModeModelId } from '@agiworkforce/types';
+import { isAutoModeModelId, microusdFromCredits } from '@agiworkforce/types';
 
 import {
   countAgentTurnsToday,
+  readAgentMonthSpendMicrousd,
   effectiveAgentConfig,
   readAgentFileTexts,
   readAgentRow,
@@ -14,7 +15,11 @@ import {
 export const AGENT_CONTEXT_FILE_CHARS = 120_000;
 
 export type AgentTurnRefusalCode =
-  'agent_unavailable' | 'agent_paused' | 'agent_retired' | 'agent_turn_limit';
+  | 'agent_unavailable'
+  | 'agent_paused'
+  | 'agent_retired'
+  | 'agent_turn_limit'
+  | 'agent_credit_limit';
 
 export interface AgentTurnConfig {
   agentId: string;
@@ -80,6 +85,16 @@ export async function loadAgentTurnConfig(
         ok: false,
         code: 'agent_turn_limit',
         message: `${config.name} has reached its limit of ${config.dailyTurnLimit} messages a day set by its owner. It resets at midnight UTC.`,
+      };
+    }
+  }
+  if (config.monthlyCreditLimit !== null) {
+    const spent = await readAgentMonthSpendMicrousd(db, agentId);
+    if (spent >= microusdFromCredits(config.monthlyCreditLimit)) {
+      return {
+        ok: false,
+        code: 'agent_credit_limit',
+        message: `${config.name} has used the ${config.monthlyCreditLimit.toLocaleString()} credits its owner allows each month. It runs again on the 1st (UTC).`,
       };
     }
   }

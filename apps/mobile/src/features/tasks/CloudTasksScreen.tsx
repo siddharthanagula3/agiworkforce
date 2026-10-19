@@ -13,7 +13,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
-import { MOBILE_REMOTE_SCREEN_LABEL, getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -23,7 +23,6 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
-import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
@@ -35,11 +34,13 @@ import { startCloudWorkRun, startWorkFailureMessage } from './startWork';
 import {
   cloudRunTitle,
   groupCloudRunsByRecency,
+  routineDraftFromRun,
   isCloudRunSteerable,
   CLOUD_RUN_FILTERS,
 } from './runPresentation';
 import { useCloudTaskStore } from './store';
 import { useCloudRunApprovalSignal } from './useApprovalSignal';
+import { rerunGoalFromRun, shareCloudRun } from './taskActions';
 
 export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
 
@@ -314,10 +315,6 @@ export function CloudTasksScreen() {
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const conversations = useChatStore((state) => state.conversations);
-  const loadMessages = useChatStore((state) => state.loadMessages);
-  const tier = useTierStore((state) => state.tier);
-  const scheduledTaskLimit = getPlanMaxScheduledTasks(tier);
-  const canCreateSchedule = scheduledTaskLimit === null || scheduledTaskLimit > 0;
   const backgroundFetchEnabled = useSettingsStore((state) => state.backgroundFetchEnabled);
 
   const filter = useCloudTaskStore((state) => state.filter);
@@ -357,6 +354,19 @@ export function CloudTasksScreen() {
         detail.run.conversationId ? titles.get(detail.run.conversationId) : undefined,
       )
     : SCREEN_TITLE;
+  const listedRun = useMemo(
+    () => (detail ? runs.find((run) => run.id === detail.runId) : undefined),
+    [detail, runs],
+  );
+  const rerunGoal = useMemo(() => {
+    const source = listedRun ?? detail?.run;
+    return source ? rerunGoalFromRun(source) : null;
+  }, [detail, listedRun]);
+  const [rerunning, setRerunning] = useState(false);
+  const routineDraft = useMemo(() => {
+    const source = listedRun ?? detail?.run;
+    return source ? routineDraftFromRun(source) : null;
+  }, [detail, listedRun]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', setAppState);
@@ -435,29 +445,6 @@ export function CloudTasksScreen() {
     [load, openRun],
   );
 
-  const handleSaveAsRoutine = useCallback(
-    (conversationId: string) => {
-      void (async () => {
-        await loadMessages(conversationId);
-        const goal = getConversationMessageStore(conversationId)
-          .getState()
-          .messages[conversationId]?.find((message) => message.role === 'user')
-          ?.content.trim();
-        if (!goal) {
-          Alert.alert('Could not read this task', 'Open its conversation and try again.');
-          return;
-        }
-        const model = detail?.run?.model;
-        closeRun();
-        router.push({
-          pathname: '/(app)/schedules/create',
-          params: { prompt: goal, ...(model ? { model } : {}) },
-        });
-      })();
-    },
-    [closeRun, detail?.run?.model, loadMessages, router],
-  );
-
   const handleOpenConversation = useCallback(
     (conversationId: string) => {
       closeRun();
@@ -465,6 +452,38 @@ export function CloudTasksScreen() {
     },
     [closeRun, router],
   );
+
+  const handleRerun = useCallback(() => {
+    if (!rerunGoal || rerunning) return;
+    setRerunning(true);
+    void startCloudWorkRun({ goal: rerunGoal })
+      .then(({ conversationId }) => {
+        closeRun();
+        router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
+      })
+      .catch((error: unknown) => {
+        Alert.alert('Could not run it again', startWorkFailureMessage(error));
+      })
+      .finally(() => setRerunning(false));
+  }, [closeRun, rerunGoal, rerunning, router]);
+
+  const handleShareRun = useCallback(() => {
+    const run = listedRun ?? detail?.run;
+    if (!run?.conversationId) return;
+    const runId = run.id;
+    shareCloudRun(run, detailTitle, () => useCloudTaskStore.getState().detail?.runId === runId);
+  }, [detail, detailTitle, listedRun]);
+
+  const handleMakeRoutine = useCallback(() => {
+    if (!routineDraft) return;
+    closeRun();
+    router.push({
+      pathname: '/(app)/schedules/create' as const,
+      params: routineDraft.model
+        ? { prompt: routineDraft.prompt, model: routineDraft.model }
+        : { prompt: routineDraft.prompt },
+    });
+  }, [closeRun, routineDraft, router]);
 
   if (!FEATURES.cloudTasks) return <FeatureUnavailable feature="Cloud tasks" />;
 
@@ -617,7 +636,16 @@ export function CloudTasksScreen() {
         onResolveApproval={(decision) => void resolveApproval(decision)}
         onStop={() => void stopRun()}
         onOpenConversation={handleOpenConversation}
-        onSaveAsRoutine={canCreateSchedule ? handleSaveAsRoutine : undefined}
+        onMakeRoutine={routineDraft ? handleMakeRoutine : undefined}
+        onRerun={rerunGoal ? handleRerun : undefined}
+        rerunning={rerunning}
+        onPause={() => void useCloudTaskStore.getState().pauseRun()}
+        onResume={() => void useCloudTaskStore.getState().resumeRun()}
+        onShare={
+          (listedRun ?? detail?.run)?.conversationId && rerunGoal !== null
+            ? handleShareRun
+            : undefined
+        }
       />
     </SafeAreaView>
   );

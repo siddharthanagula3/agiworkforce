@@ -152,6 +152,7 @@ export interface Project {
   defaultProviderMode?: ProviderMode;
   allowedSurfaces?: SourceSurface[];
   defaultModelId?: string | null;
+  chatDefaults?: { codeExecution?: boolean; research?: boolean; skillName?: string | null };
   knowledgeFileCount?: number | null;
   memberCount?: number | null;
   lastUsedAt?: string | null;

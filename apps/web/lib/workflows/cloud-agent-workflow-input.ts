@@ -198,6 +198,7 @@ const ManagedBillingSchema = z
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
     routeId: z.string().min(1).nullable().optional(),
+    fundedByUsageCredits: z.boolean().optional(),
     attribution: z
       .object({
         workload: z.enum(USAGE_WORKLOADS).nullable().optional(),

@@ -486,7 +486,12 @@ function AgentActivitySection({ agent }: { agent: ManagedCloudAgent }) {
         size="sm"
         variant="outline"
         accessibilityHint="Opens Schedules to run this agent on a timer"
-        onPress={() => router.push('/(app)/schedules/create' as Parameters<typeof router.push>[0])}
+        onPress={() =>
+          router.push({
+            pathname: '/(app)/schedules/create' as const,
+            params: { agentId: agent.id },
+          })
+        }
       />
     </SectionCard>
   );

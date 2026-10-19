@@ -21,6 +21,8 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import { ProjectMemoryPanel } from './ProjectMemoryPanel';
 import { ProjectDefaultModelField } from './ProjectDefaultModelField';
+import { ProjectChatDefaultsField } from './ProjectChatDefaultsField';
+import { sameProjectChatDefaults } from '@/features/projects/lib/project-chat-defaults';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -59,6 +61,7 @@ export function ProjectSettingsDialog({
   );
   const [usesAccountStyle, setUsesAccountStyle] = useState(project.usesAccountStyle !== false);
   const [defaultModelId, setDefaultModelId] = useState(project.defaultModelId ?? null);
+  const [chatDefaults, setChatDefaults] = useState(project.chatDefaults ?? {});
   const [isSaving, setIsSaving] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
@@ -70,6 +73,7 @@ export function ProjectSettingsDialog({
     setUsesAccountInstructions(project.usesAccountInstructions !== false);
     setUsesAccountStyle(project.usesAccountStyle !== false);
     setDefaultModelId(project.defaultModelId ?? null);
+    setChatDefaults(project.chatDefaults ?? {});
   }, [
     project.name,
     project.description,
@@ -78,6 +82,7 @@ export function ProjectSettingsDialog({
     project.usesAccountInstructions,
     project.usesAccountStyle,
     project.defaultModelId,
+    project.chatDefaults,
   ]);
 
   useEffect(() => {
@@ -92,7 +97,8 @@ export function ProjectSettingsDialog({
       usesGlobalMemory !== (project.usesGlobalMemory !== false) ||
       usesAccountInstructions !== (project.usesAccountInstructions !== false) ||
       usesAccountStyle !== (project.usesAccountStyle !== false) ||
-      defaultModelId !== (project.defaultModelId ?? null));
+      defaultModelId !== (project.defaultModelId ?? null) ||
+      !sameProjectChatDefaults(chatDefaults, project.chatDefaults));
   const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
     dirty,
     description:
@@ -156,6 +162,7 @@ export function ProjectSettingsDialog({
       usesAccountInstructions,
       usesAccountStyle,
       defaultModelId,
+      ...(sameProjectChatDefaults(chatDefaults, project.chatDefaults) ? {} : { chatDefaults }),
     };
     setIsSaving(true);
     try {
@@ -301,6 +308,8 @@ export function ProjectSettingsDialog({
             </div>
 
             <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />
+
+            <ProjectChatDefaultsField value={chatDefaults} onChange={setChatDefaults} />
 
             <div className="space-y-1.5">
               <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">

@@ -33,6 +33,7 @@ import {
   findSlackInstallationById,
   type SlackInstallationWithToken,
 } from './slack-installations';
+import { readSlackChannelMode, slackRunModeFor } from './slack-channel-policies';
 import { issueSlackLinkRequest, resolveSlackAccountLink } from './slack-links';
 import {
   answerMessages,
@@ -52,6 +53,8 @@ import {
 import { findSlackTask, slackTask, slackTaskAvailable, type SlackTask } from './slack-tasks';
 
 const FAILED_ANSWER = 'I could not finish that answer. Please try again.';
+const CHANNEL_OFF =
+  'AGI Workforce is turned off in this channel by the person who added it to Slack. You can still message it directly.';
 const TASK_STOPPED = 'You stopped this task in AGI Workforce, so it has no answer to post.';
 const RATE_LIMITED =
   'You are sending messages faster than AGI Workforce can answer them. Wait a minute, then try again.';
@@ -335,14 +338,23 @@ async function answerMessage(
     userId: link.userId,
     organizationId: link.organizationId,
   });
-  const mode =
+  const channelPolicy =
+    event.surface === 'channel'
+      ? await readSlackChannelMode(db, installation.id, event.channelId)
+      : null;
+  const mode = slackRunModeFor(
+    channelPolicy,
     event.surface === 'channel' &&
-    (await slackTaskAvailable(scopedDb, {
-      userId: link.userId,
-      organizationId: link.organizationId,
-    }))
-      ? 'task'
-      : 'answer';
+      channelPolicy !== 'answer' &&
+      (await slackTaskAvailable(scopedDb, {
+        userId: link.userId,
+        organizationId: link.organizationId,
+      })),
+  );
+  if (mode === null) {
+    if (!options.retrying) await sendPrivately(privately, noticeMessage(CHANNEL_OFF));
+    return;
+  }
   const run = await startSlackRun(scopedDb, {
     userId: link.userId,
     organizationId: link.organizationId,

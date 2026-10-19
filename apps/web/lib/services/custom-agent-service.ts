@@ -42,6 +42,7 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfig, 'name'> = {
   connectorIds: null,
   skillNames: null,
   dailyTurnLimit: null,
+  monthlyCreditLimit: null,
 };
 
 export interface AgentRow {
@@ -62,6 +63,7 @@ export interface AgentRow {
   connector_ids: string[] | null;
   skill_names: string[] | null;
   daily_turn_limit: number | null;
+  monthly_credit_limit: number | null;
   status: AgentStatus;
   visibility: AgentVisibility;
   published_version: number | null;
@@ -75,7 +77,7 @@ export interface AgentRow {
 const AGENT_COLUMNS = `a.id, a.user_id, a.organization_id, a.name, a.description, a.icon,
   a.accent_color, a.instructions, a.output_examples, a.conversation_starters, a.model,
   a.web_search, a.code_execution, a.image_generation, a.connector_ids, a.skill_names,
-  a.daily_turn_limit, a.status, a.visibility, a.published_version, a.paused_at,
+  a.daily_turn_limit, a.monthly_credit_limit, a.status, a.visibility, a.published_version, a.paused_at,
   a.retired_at, a.created_at, a.updated_at`;
 
 function iso(value: string | Date | null): string | null {
@@ -104,6 +106,7 @@ export function agentConfigOf(row: AgentRow): AgentConfig {
     connectorIds: row.connector_ids ? [...row.connector_ids] : null,
     skillNames: row.skill_names ? [...row.skill_names] : null,
     dailyTurnLimit: row.daily_turn_limit,
+    monthlyCreditLimit: row.monthly_credit_limit,
   };
 }
 
@@ -193,6 +196,7 @@ const COLUMN_FOR: Record<keyof AgentConfig, string> = {
   connectorIds: 'connector_ids',
   skillNames: 'skill_names',
   dailyTurnLimit: 'daily_turn_limit',
+  monthlyCreditLimit: 'monthly_credit_limit',
 };
 
 function isUniqueViolation(error: unknown): boolean {
@@ -294,9 +298,9 @@ export async function createAgent(
     `insert into public.user_agents (
        user_id, organization_id, name, description, icon, accent_color, instructions,
        output_examples, conversation_starters, model, web_search, code_execution,
-       image_generation, connector_ids, skill_names, daily_turn_limit
+       image_generation, connector_ids, skill_names, daily_turn_limit, monthly_credit_limit
      ) values ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9::text[], $10, $11, $12, $13,
-       $14::text[], $15::text[], $16)
+       $14::text[], $15::text[], $16, $17)
      returning id`,
     [
       userId,
@@ -315,6 +319,7 @@ export async function createAgent(
       config.connectorIds,
       config.skillNames,
       config.dailyTurnLimit,
+      config.monthlyCreditLimit,
     ],
   );
   if (!row) throw createError.internal('The agent could not be saved.');
@@ -619,6 +624,17 @@ export async function readAgentActivity(
       nextExecutionAt: iso(row.next_execution_at),
     })),
   };
+}
+
+export async function readAgentMonthSpendMicrousd(
+  db: DatabaseAdapter,
+  agentId: string,
+): Promise<number> {
+  const [row] = await db.query<{ spent: string | number | null }>(
+    `select public.app_user_agent_month_spend($1::uuid) as spent`,
+    [agentId],
+  );
+  return Number(row?.spent ?? 0);
 }
 
 export async function countAgentTurnsToday(

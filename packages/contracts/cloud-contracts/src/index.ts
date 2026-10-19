@@ -86,3 +86,8 @@ export * from './agents';
 export * from './developer-console';
 export * from './agent-drafts';
 export * from './plugin-directory';
+export * from './slack-channel-policies';
+export * from './trigger-sources';
+export * from './project-studio';
+export * from './artifact-library';
+export * from './connector-trust-copy';

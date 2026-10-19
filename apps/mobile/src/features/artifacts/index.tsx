@@ -12,6 +12,7 @@ import {
   Copy,
   FileText,
   ImageIcon,
+  LibraryBig,
   Menu,
   Share2,
   Sparkles,
@@ -26,6 +27,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
+import { canSaveArtifactToLibrary, saveArtifactToLibrary } from './libraryService';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
@@ -435,6 +437,19 @@ function ArtifactPreviewModal({
     });
   }, [artifact]);
 
+  const [librarySave, setLibrarySave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+
+  const handleSaveToLibrary = useCallback(async () => {
+    if (!artifact || librarySave === 'saving') return;
+    setLibrarySave('saving');
+    try {
+      await saveArtifactToLibrary(artifact);
+      setLibrarySave('saved');
+    } catch {
+      setLibrarySave('failed');
+    }
+  }, [artifact, librarySave]);
+
   if (!artifact) return null;
 
   return (
@@ -490,6 +505,33 @@ function ArtifactPreviewModal({
               <Copy size={19} color={c.textSecondary} />
             )}
           </Pressable>
+
+          {canSaveArtifactToLibrary(artifact) ? (
+            <Pressable
+              testID="artifact-save-library"
+              onPress={() => void handleSaveToLibrary()}
+              disabled={librarySave === 'saving' || librarySave === 'saved'}
+              className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
+              style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+              accessibilityLabel={
+                librarySave === 'saved'
+                  ? 'Saved to Library'
+                  : librarySave === 'failed'
+                    ? 'Could not save to Library. Try again'
+                    : 'Save to Library'
+              }
+              accessibilityRole="button"
+              accessibilityState={{ busy: librarySave === 'saving' }}
+            >
+              {librarySave === 'saved' ? (
+                <Check size={19} color={c.agentSuccess} />
+              ) : librarySave === 'failed' ? (
+                <TriangleAlert size={19} color={c.agentError} />
+              ) : (
+                <LibraryBig size={19} color={c.textSecondary} />
+              )}
+            </Pressable>
+          ) : null}
 
           <Pressable
             testID="artifact-share"

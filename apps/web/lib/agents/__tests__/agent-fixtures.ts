@@ -22,6 +22,7 @@ export function agentConfig(patch: Partial<AgentConfig> = {}): AgentConfig {
     connectorIds: null,
     skillNames: null,
     dailyTurnLimit: null,
+    monthlyCreditLimit: null,
     ...patch,
   };
 }
@@ -49,6 +50,7 @@ export function agentRow(
     connector_ids: c.connectorIds,
     skill_names: c.skillNames,
     daily_turn_limit: c.dailyTurnLimit,
+    monthly_credit_limit: c.monthlyCreditLimit,
     status: 'active',
     visibility: 'private',
     published_version: null,

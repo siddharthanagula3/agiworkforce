@@ -186,9 +186,4 @@ function errorMessage(body: string, status: number): string {
   return `The request failed (${status}).`;
 }
 
-export function agentActionError(error: unknown, fallback: string): string {
-  if (error instanceof ApiHttpError && error.status < 500 && error.message.trim()) {
-    return error.message;
-  }
-  return fallback;
-}
+export { cloudActionError as agentActionError } from '@/src/shared/utils/cloudActionError';

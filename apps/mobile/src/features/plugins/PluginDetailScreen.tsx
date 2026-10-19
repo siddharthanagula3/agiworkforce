@@ -12,11 +12,14 @@ import {
   type PluginVersionsWire,
 } from '@agiworkforce/cloud-contracts';
 
+import { CONNECTORS_COMING_SOON_LABEL, connectorsReleased } from '@agiworkforce/types';
+
 import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { fetchConnectorDirectory } from '@/services/connectors';
+import { fetchManagedSkills } from '@/src/features/skills/service';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -40,6 +43,8 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { PLUGINS_ROUTE } from './PluginsScreen';
 import {
   PLUGIN_COMMUNITY_NOTE,
+  PLUGIN_REPAIR_MISSING_SKILLS_COPY,
+  missingPluginSkills,
   PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE,
   PLUGIN_PERMISSIONS_COPY,
   PLUGIN_SCAN_NONE_COPY,
@@ -76,6 +81,7 @@ interface PluginDetailState {
   settings: PluginSettingsWire | null;
   connected: ReadonlySet<string>;
   moreFromPublisher: PluginDirectoryEntryWire[];
+  loadedSkillNames: ReadonlySet<string> | null;
 }
 
 async function loadPluginDetail(pluginId: string, signal: AbortSignal): Promise<PluginDetailState> {
@@ -87,10 +93,11 @@ async function loadPluginDetail(pluginId: string, signal: AbortSignal): Promise<
     fetchConnectorDirectory().catch(() => null),
   ]);
   const installation = installations.find((candidate) => candidate.pluginId === pluginId);
-  const [versions, settings, publisherPage] = await Promise.all([
+  const [versions, settings, publisherPage, loadedSkills] = await Promise.all([
     installation ? fetchPluginVersions(pluginId).catch(() => null) : Promise.resolve(null),
     installation ? fetchPluginSettings(pluginId).catch(() => null) : Promise.resolve(null),
     fetchPluginDirectory({ publisher: entry.publisher.name, limit: 7 }, signal).catch(() => null),
+    installation ? fetchManagedSkills(signal).catch(() => null) : Promise.resolve(null),
   ]);
   return {
     entry,
@@ -107,6 +114,7 @@ async function loadPluginDetail(pluginId: string, signal: AbortSignal): Promise<
       ),
     ),
     moreFromPublisher: (publisherPage?.entries ?? []).filter((other) => other.id !== pluginId),
+    loadedSkillNames: loadedSkills ? new Set(loadedSkills.map((skill) => skill.name)) : null,
   };
 }
 
@@ -186,6 +194,13 @@ export function PluginDetailScreen() {
   const installation = state?.installation;
   const compatibility = useMemo(() => (entry ? pluginCompatibility(entry) : null), [entry]);
   const includes = useMemo(() => (entry ? pluginIncludes(entry) : null), [entry]);
+  const missingSkills = useMemo(
+    () =>
+      state?.settings
+        ? missingPluginSkills(state.settings.enabledSkills, state.loadedSkillNames)
+        : [],
+    [state?.loadedSkillNames, state?.settings],
+  );
 
   const install = useCallback(() => {
     if (!entry) return;
@@ -410,9 +425,15 @@ export function PluginDetailScreen() {
                       <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
                         {connector}
                       </Text>
-                      <MetaText>{isConnected ? 'Connected' : 'Not connected'}</MetaText>
+                      <MetaText>
+                        {connectorsReleased()
+                          ? isConnected
+                            ? 'Connected'
+                            : 'Not connected'
+                          : CONNECTORS_COMING_SOON_LABEL}
+                      </MetaText>
                     </View>
-                    {!isConnected ? (
+                    {!isConnected && connectorsReleased() ? (
                       <Button
                         title="Connect"
                         size="sm"
@@ -510,6 +531,20 @@ export function PluginDetailScreen() {
                   />
                 </View>
               ) : null}
+            </SectionCard>
+          ) : null}
+
+          {installation && state.settings && missingSkills.length > 0 ? (
+            <SectionCard title="Needs attention">
+              <MetaText>{`${PLUGIN_REPAIR_MISSING_SKILLS_COPY} ${missingSkills.join(', ')}`}</MetaText>
+              <Button
+                title="Reinstall"
+                variant="outline"
+                loading={busy === 'install'}
+                disabled={busy !== null}
+                accessibilityLabel={`Reinstall ${entry.name}`}
+                onPress={install}
+              />
             </SectionCard>
           ) : null}
 
