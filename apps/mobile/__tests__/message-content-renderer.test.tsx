@@ -5,6 +5,15 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
   MathBlock: () => null,
 }));
 
+jest.mock('../src/features/chat/components/GeneratedImage', () => {
+  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    GeneratedImage: ({ imageUrl, revisedPrompt }: { imageUrl: string; revisedPrompt?: string }) => (
+      <Text testID="generated-image">{`${imageUrl}|${revisedPrompt ?? ''}`}</Text>
+    ),
+  };
+});
+
 const mockOpenBrowserAsync = jest.fn();
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
@@ -22,6 +31,32 @@ describe('MessageContentRenderer', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('shows an image the free-media route returns as a markdown image, not as raw text', () => {
+    const { getByTestId, queryByText } = render(
+      <View>
+        {renderMarkdownContent(
+          '![Generated image](</api/files/1b4e28ba-2fa1-11d2-883f-0016d3cca427>)',
+          lightColors,
+        )}
+      </View>,
+    );
+
+    expect(getByTestId('generated-image').props.children).toBe(
+      '/api/files/1b4e28ba-2fa1-11d2-883f-0016d3cca427|Generated image',
+    );
+    expect(queryByText(/!\[Generated image\]/)).toBeNull();
+  });
+
+  it('keeps a markdown image from an outside host as text instead of loading it', () => {
+    const { queryByTestId } = render(
+      <View>
+        {renderMarkdownContent('![tracker](https://example.com/pixel.png)', lightColors)}
+      </View>,
+    );
+
+    expect(queryByTestId('generated-image')).toBeNull();
   });
 
   it('renders inline bold text with the active text color in light mode', () => {

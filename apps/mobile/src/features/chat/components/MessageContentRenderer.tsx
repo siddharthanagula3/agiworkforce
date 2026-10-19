@@ -26,6 +26,8 @@ import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { Download } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
+import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
+import { GeneratedImage } from './GeneratedImage';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -242,6 +244,7 @@ export function renderInlineMarkdown(
 }
 
 const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
+const accountImagePattern = /^!\[([^\]]*)\]\(<?([^()<>\s]+)>?\)$/;
 const nestedBullets = ['•', '◦', '▪'];
 
 type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
@@ -468,6 +471,17 @@ function renderTextSegment(
 
   while (idx < lines.length) {
     const line = lines[idx]!;
+
+    const imageMatch = accountImagePattern.exec(restoreEscapes(line).trim());
+    if (imageMatch && resolveGeneratedImageUri(imageMatch[2]!)) {
+      nodes.push(
+        <View key={`${keyBase}-img-${idx}`} style={{ marginVertical: 6 }}>
+          <GeneratedImage imageUrl={imageMatch[2]!} revisedPrompt={imageMatch[1] || undefined} />
+        </View>,
+      );
+      idx++;
+      continue;
+    }
 
     const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headerMatch) {
