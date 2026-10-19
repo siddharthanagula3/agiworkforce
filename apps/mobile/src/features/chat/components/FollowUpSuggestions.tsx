@@ -3,22 +3,11 @@ import { View } from 'react-native';
 import { CornerDownRight } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
-import { api } from '@/services/api';
+import { fetchFollowUpSuggestions } from '@/src/features/chat/services/followUps';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const MAX_SHOWN = 3;
-
-export function followUpsPath(conversationId: string, messageId: string): string {
-  return `/api/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/follow-ups`;
-}
-
-function readSuggestions(body: unknown): string[] {
-  const raw = (body as { suggestions?: unknown } | null)?.suggestions;
-  return Array.isArray(raw)
-    ? raw.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
-    : [];
-}
 
 export function FollowUpSuggestions({
   conversationId,
@@ -35,12 +24,9 @@ export function FollowUpSuggestions({
   useEffect(() => {
     const controller = new AbortController();
     setSuggestions([]);
-    void api
-      .post<unknown>(followUpsPath(conversationId, messageId), undefined, {
-        signal: controller.signal,
-      })
-      .then((body) => {
-        if (!controller.signal.aborted) setSuggestions(readSuggestions(body).slice(0, MAX_SHOWN));
+    void fetchFollowUpSuggestions(conversationId, messageId, controller.signal)
+      .then((found) => {
+        if (!controller.signal.aborted) setSuggestions(found.slice(0, MAX_SHOWN));
       })
       .catch(() => undefined);
     return () => controller.abort();
