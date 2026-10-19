@@ -44,6 +44,7 @@ import { RecentScheduleResults } from './RecentScheduleResults';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
+  deriveScheduleName,
   createInitialScheduleDraft,
   scheduleShareToDraft,
   scheduleToDraft,
@@ -67,7 +68,6 @@ import {
   type ScheduleRun,
   type ScheduleTask,
 } from '../types';
-import { scheduleNameFromPrompt } from './schedule-from-turn';
 
 /**
  * Kept as prose in the create dialog, where someone is about to rely on an
@@ -736,7 +736,7 @@ export function SchedulesPage({
     draftPromptRef.current = seedKey;
     const nextDraft = {
       ...createInitialScheduleDraft(),
-      name: prompt ? scheduleNameFromPrompt(prompt) : (seedAgent?.name ?? ''),
+      name: prompt ? deriveScheduleName(prompt) : (seedAgent?.name ?? ''),
       prompt,
       projectId: scope?.projectId ?? null,
       agentId: seedAgent?.id ?? null,
