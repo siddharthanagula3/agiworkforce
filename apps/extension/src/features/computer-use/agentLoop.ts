@@ -16,6 +16,7 @@ import {
   type ToolDefinition,
 } from './cloudAgentClient';
 import { DOM_SUMMARY_HEADING, pruneObservationHistory } from './historyBudget';
+import { SCREENSHOT_MIME_TYPE } from './screenshotEncoding';
 import {
   formatConsoleEntries,
   readConsoleEntries,
@@ -131,8 +132,8 @@ export interface AgentLoopStep {
 
 const SCREENSHOT_PREVIEW_WIDTH = 640;
 
-async function screenshotPreview(base64Png: string): Promise<string> {
-  const original = `data:image/png;base64,${base64Png}`;
+async function screenshotPreview(base64Image: string): Promise<string> {
+  const original = `data:${SCREENSHOT_MIME_TYPE};base64,${base64Image}`;
   if (typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') {
     return original;
   }
@@ -160,10 +161,10 @@ async function screenshotPreview(base64Png: string): Promise<string> {
 async function reportScreenshot(
   options: AgentLoopOptions,
   stepNumber: number,
-  base64Png: string,
+  base64Image: string,
 ): Promise<void> {
-  if (!options.onProgress || !base64Png) return;
-  const screenshotDataUrl = await screenshotPreview(base64Png);
+  if (!options.onProgress || !base64Image) return;
+  const screenshotDataUrl = await screenshotPreview(base64Image);
   await assertRunOwnership(options);
   options.onProgress({ kind: 'screenshot', stepNumber, screenshotDataUrl });
 }
@@ -1071,7 +1072,7 @@ export async function runAgentLoop(
         {
           type: 'image_url',
           image_url: {
-            url: `data:image/png;base64,${initialScreenshot}`,
+            url: `data:${SCREENSHOT_MIME_TYPE};base64,${initialScreenshot}`,
             detail: 'high',
           },
         },
@@ -1161,7 +1162,7 @@ export async function runAgentLoop(
                 {
                   type: 'image_url',
                   image_url: {
-                    url: `data:image/png;base64,${resultContent.base64}`,
+                    url: `data:${SCREENSHOT_MIME_TYPE};base64,${resultContent.base64}`,
                     detail: 'high',
                   },
                 },

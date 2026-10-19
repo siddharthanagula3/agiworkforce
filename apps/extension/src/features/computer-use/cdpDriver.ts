@@ -8,6 +8,11 @@ import {
 import type { ResolvedBrowserUserFile } from './userFileUpload';
 import { toScriptLiteral } from './scriptLiteral';
 import {
+  fitScreenshotToViewport,
+  SCREENSHOT_JPEG_QUALITY,
+  type CssViewportSize,
+} from './screenshotEncoding';
+import {
   authorizeBrowserToolCapability,
   authorizeBrowserToolUrl,
 } from '../browser-tools/tabAuthority';
@@ -79,6 +84,10 @@ function staleIndexMessage(tool: string, index: number): string {
 
 interface CdpScreenshotResult {
   data: string;
+}
+
+interface CdpLayoutMetrics {
+  cssVisualViewport?: CssViewportSize;
 }
 
 interface CdpBoxModel {
@@ -1277,13 +1286,19 @@ export async function screenshot(tabId: number, signal?: AbortSignal): Promise<s
   return withDebugger(
     tabId,
     async () => {
+      const metrics = await sendCommand<CdpLayoutMetrics>(
+        tabId,
+        'Page.getLayoutMetrics',
+        {},
+        signal,
+      );
       const result = await sendCommand<CdpScreenshotResult>(
         tabId,
         'Page.captureScreenshot',
-        { format: 'png' },
+        { format: 'jpeg', quality: SCREENSHOT_JPEG_QUALITY },
         signal,
       );
-      return result.data;
+      return fitScreenshotToViewport(result.data, metrics?.cssVisualViewport);
     },
     signal,
   );

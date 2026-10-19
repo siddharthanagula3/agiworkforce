@@ -10,6 +10,7 @@ import { sanitizePageText } from '../../background/policy';
 import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import { watchDownloadsStartedBy } from '../browser-tools/downloads';
 import type { NativeTypingReceipt } from '../computer-use/cdpDriver';
+import { SCREENSHOT_MIME_TYPE } from '../computer-use/screenshotEncoding';
 
 export const MAX_DESKTOP_PAGE_TEXT_CHARS = 20_000;
 export const MAX_DESKTOP_FILL_FIELDS = 50;
@@ -155,7 +156,7 @@ async function execute(
       return { url };
     }
     case 'browser_screenshot':
-      return { dataUrl: `data:image/png;base64,${await context.capture(tabId)}` };
+      return { dataUrl: `data:${SCREENSHOT_MIME_TYPE};base64,${await context.capture(tabId)}` };
     case 'browser_console': {
       const response = requireSuccess(
         await context.send(tabId, { type: 'READ_PAGE_CONSOLE', ...args }),
