@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { FilePlus2, FileText, PenTool, Presentation } from 'lucide-react';
+import { FilePlus2, FileText, FolderCog, PenTool, Presentation } from 'lucide-react';
+import { LibraryManagerDialog } from '../library/LibraryDialogs';
+import { useStudioLibrary, type StudioLibraryItem } from '../library/studio-library-client';
 import { toast } from 'sonner';
 import { DesignBriefDialog } from '../design/DesignBriefDialog';
 import { buildDesignFromBriefRequest } from '../design/design-brief';
@@ -30,17 +32,32 @@ export function useCreateFromTemplate(conversationId: string | null) {
   };
 }
 
+function savedTemplate(item: StudioLibraryItem): ArtifactTemplate | null {
+  if (item.kind === 'brand') return null;
+  return {
+    id: `saved-${item.id}`,
+    kind: item.kind === 'deck_template' ? 'presentation' : 'document',
+    name: item.name,
+    description: '',
+    title: item.payload.title,
+    content: item.payload.content,
+  };
+}
+
 export function NewArtifactMenu({
   conversationId,
-  savedTemplates = [],
   onRequestEdits,
 }: {
   conversationId: string | null;
-  savedTemplates?: readonly ArtifactTemplate[];
   onRequestEdits?: (prompt: string) => boolean;
 }) {
   const create = useCreateFromTemplate(conversationId);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const library = useStudioLibrary();
+  const savedTemplates = library.items
+    .map(savedTemplate)
+    .filter((template): template is ArtifactTemplate => template !== null);
   if (!conversationId) return null;
   const toItem =
     (group: string) =>
@@ -57,6 +74,13 @@ export function NewArtifactMenu({
     ...templatesOfKind('document').map(toItem('Documents')),
     ...templatesOfKind('presentation').map(toItem('Presentations')),
     ...savedTemplates.map(toItem('Your templates')),
+    {
+      id: 'manage-library',
+      label: 'Templates and brands',
+      group: 'Saved',
+      icon: FolderCog,
+      onSelect: () => setManagerOpen(true),
+    },
     ...(onRequestEdits
       ? [
           {
@@ -78,7 +102,11 @@ export function NewArtifactMenu({
         testId="artifact-new-menu"
         align="end"
         compact
+        onOpenChange={(open) => {
+          if (open) void library.load();
+        }}
       />
+      <LibraryManagerDialog open={managerOpen} onOpenChange={setManagerOpen} />
       {onRequestEdits ? (
         <DesignBriefDialog
           open={briefOpen}

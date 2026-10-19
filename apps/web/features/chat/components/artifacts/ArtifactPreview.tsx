@@ -38,8 +38,10 @@ import {
   GitFork,
   History,
   MousePointerClick,
+  LayoutTemplate,
   ListChecks,
   MessageSquare,
+  Palette,
   PenTool,
   Sparkles,
   TextCursorInput,
@@ -76,6 +78,10 @@ import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
 import { ArtifactChangesReview } from './review/ArtifactChangesReview';
+import { BrandKitDialog, SaveTemplateDialog } from './library/LibraryDialogs';
+import { useStudioLibrary, type BrandPayload } from './library/studio-library-client';
+import { buildApplyBrandRequest } from './library/brand-request';
+import { brandThemeMeta } from './presentation/deck-themes';
 import { DesignBriefDialog } from './design/DesignBriefDialog';
 import { buildBriefRevisionRequest, readDesignBrief } from './design/design-brief';
 import {
@@ -458,6 +464,33 @@ export function ArtifactPreview({
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
   const [reviewingKey, setReviewingKey] = useState<string | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [brandApply, setBrandApply] = useState<((meta: Record<string, string>) => void) | null>(
+    null,
+  );
+  const studioLibrary = useStudioLibrary();
+  const savedBrands = useMemo(
+    () =>
+      studioLibrary.items.flatMap((item) =>
+        item.kind === 'brand' ? [{ id: item.id, name: item.name, brand: item.payload }] : [],
+      ),
+    [studioLibrary.items],
+  );
+  const brandThemes = useMemo(
+    () =>
+      savedBrands.map(({ id, name, brand }) => ({
+        id,
+        name,
+        meta: brandThemeMeta({ name, ...brand }),
+      })),
+    [savedBrands],
+  );
+  const loadStudioLibrary = studioLibrary.load;
+  const wantsLibrary =
+    variant === 'panel' && (artifact.type === 'presentation' || artifact.type === 'document');
+  useEffect(() => {
+    if (wantsLibrary) void loadStudioLibrary();
+  }, [wantsLibrary, loadStudioLibrary]);
   const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
   const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
@@ -1357,6 +1390,13 @@ export function ArtifactPreview({
           handEdited={versionCount > 1}
           onSave={saveArtifactContent}
           {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+          brandThemes={brandThemes}
+          {...(canEditSource
+            ? {
+                onCreateBrand: (apply: (meta: Record<string, string>) => void) =>
+                  setBrandApply(() => apply),
+              }
+            : {})}
           {...(canComment
             ? {
                 onCommentSlide: (slide: number) => {
@@ -1806,6 +1846,34 @@ export function ArtifactPreview({
         testId: 'artifact-design-brief',
         onSelect: () => setBriefOpen(true),
       });
+    }
+    if (variant === 'panel' && isStoredArtifact && (isMarkdownDoc || isPresentation)) {
+      moreMenuItems.push({
+        id: 'save-template',
+        label: 'Save as template',
+        icon: LayoutTemplate,
+        group: 'Keep',
+        testId: 'artifact-save-template',
+        onSelect: () => setTemplateDialogOpen(true),
+      });
+    }
+    if (isTextDocument && onRequestEdits && isLatestVersion) {
+      savedBrands.forEach(({ id, name, brand }) =>
+        moreMenuItems.push({
+          id: `apply-brand-${id}`,
+          label: name,
+          icon: Palette,
+          group: 'Apply brand voice',
+          testId: 'artifact-apply-brand',
+          onSelect: () => {
+            if (
+              !onRequestEdits(buildApplyBrandRequest(artifact.title || 'Document', name, brand))
+            ) {
+              toast.error('The change request was not sent. Try again.');
+            }
+          },
+        }),
+      );
     }
     if (variant === 'panel' && isStoredArtifact) {
       moreMenuItems.push(
@@ -2545,6 +2613,24 @@ export function ArtifactPreview({
               </ScrollArea>
             ))}
         </div>
+        <SaveTemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          kind={isPresentation ? 'deck_template' : 'document_template'}
+          defaultName={artifact.title || 'Template'}
+          title={artifact.title || 'Untitled'}
+          content={activeContent}
+        />
+        <BrandKitDialog
+          open={brandApply !== null}
+          onOpenChange={(open) => {
+            if (!open) setBrandApply(null);
+          }}
+          onSaved={(item) => {
+            if (item.kind === 'brand')
+              brandApply?.(brandThemeMeta({ name: item.name, ...(item.payload as BrandPayload) }));
+          }}
+        />
         {designBrief && onRequestEdits ? (
           <DesignBriefDialog
             open={briefOpen}
