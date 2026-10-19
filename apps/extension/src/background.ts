@@ -95,7 +95,9 @@ import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agent
 import {
   ASK_BEFORE_ACTING_KEY,
   actionNeedsApproval,
+  readBrowserPermissionMode,
 } from './features/computer-use/askBeforeActing';
+import { isCrucialAction } from './features/computer-use/crucialActions';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -5032,7 +5034,7 @@ async function handleMessageAsync(
       } catch {
         return failStart('AGI_START_COMPUTER_USE: approval preference could not be loaded');
       }
-      const askBeforeActing = askPref[ASK_BEFORE_ACTING_KEY] !== false;
+      const permissionMode = readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY]);
       if (startWasCancelled()) {
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
@@ -5130,7 +5132,8 @@ async function handleMessageAsync(
         const siteTool = siteTools.find((tool) => tool.name === toolName);
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
-          askBeforeActing,
+          crucial: isCrucialAction(requirement),
+          mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
           readsOnly: readsWithoutActing(toolName, siteTool?.effect),
           siteApproved: async () => {

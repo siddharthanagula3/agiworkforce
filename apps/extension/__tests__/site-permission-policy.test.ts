@@ -36,14 +36,15 @@ describe('options default site permission', () => {
     const section = createSitePermissionPolicySection(storage);
     expect(section.element.textContent).toContain(UNAPPROVED_SITE_DEFAULT_HINT);
     expect(UNAPPROVED_SITE_DEFAULT_HINT).toMatch(/have not approved are blocked/);
+    expect(UNAPPROVED_SITE_DEFAULT_HINT).toMatch(/^Auto is the default/);
   });
 
-  it('offers ask and run as the two default permissions and starts on ask', async () => {
+  it('offers Auto, Ask and Full access and starts on Auto', async () => {
     const storage = fakeStorage();
     const section = createSitePermissionPolicySection(storage);
     await section.loaded;
-    expect([...section.select.options].map((o) => o.value)).toEqual(['ask', 'run']);
-    expect(section.select.value).toBe('ask');
+    expect([...section.select.options].map((o) => o.value)).toEqual(['auto', 'ask', 'full']);
+    expect(section.select.value).toBe('auto');
     expect(section.select.disabled).toBe(false);
   });
 
@@ -52,7 +53,7 @@ describe('options default site permission', () => {
       fakeStorage({ [ASK_BEFORE_ACTING_KEY]: false }),
     );
     await section.loaded;
-    expect(section.select.value).toBe('run');
+    expect(section.select.value).toBe('full');
     expect(section.status.textContent).toBe('Approved sites run without asking.');
   });
 
@@ -61,7 +62,7 @@ describe('options default site permission', () => {
     const section = createSitePermissionPolicySection(storage);
     await section.loaded;
 
-    section.select.value = 'run';
+    section.select.value = 'full';
     section.select.dispatchEvent(new Event('change'));
     await Promise.resolve();
     await Promise.resolve();
@@ -72,6 +73,12 @@ describe('options default site permission', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(storage.values[ASK_BEFORE_ACTING_KEY]).toBe(true);
+
+    section.select.value = 'auto';
+    section.select.dispatchEvent(new Event('change'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(storage.values[ASK_BEFORE_ACTING_KEY]).toBe('auto');
   });
 
   it('restores the previous choice when the write fails', async () => {
@@ -80,20 +87,22 @@ describe('options default site permission', () => {
     await section.loaded;
     storage.failNextSet = true;
 
-    section.select.value = 'run';
+    section.select.value = 'full';
     section.select.dispatchEvent(new Event('change'));
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(section.select.value).toBe('ask');
+    expect(section.select.value).toBe('auto');
     expect(storage.writes).toHaveLength(0);
     expect(section.status.textContent).toMatch(/Could not save/);
   });
 
   it('drives the same key the background reads before every action', () => {
     expect(ASK_BEFORE_ACTING_KEY).toBe('agi_cu_ask_before_acting');
-    expect(read('src/background.ts')).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
+    expect(read('src/background.ts')).toContain(
+      'readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY])',
+    );
   });
 
   it('renders in the options permissions section above the approved-sites list', () => {

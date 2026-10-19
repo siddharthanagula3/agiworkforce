@@ -1295,7 +1295,7 @@ function buildPage(): void {
     el(
       'div',
       { class: 'opt-row-hint' },
-      'Choose which sites AGI can read and control. Ask before acting is on by default, and you can stop a task at any time.',
+      'Choose which sites AGI can read and control. Auto is on by default: AGI acts on the sites a task needs and asks before crucial actions, and you can stop a task at any time.',
     ),
   );
   browserControlBoundary.appendChild(browserControlBoundaryText);

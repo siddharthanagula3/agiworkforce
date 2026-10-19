@@ -100,7 +100,13 @@ import {
 } from './features/background/conversation-history';
 import { pullCloudConversationFlags } from './features/cloud-bridge/conversationSync';
 import { ROUTING_TASK_TYPES } from './features/cloud-bridge/managedChatRouting';
-import { ASK_BEFORE_ACTING_KEY } from './features/computer-use/askBeforeActing';
+import {
+  ASK_BEFORE_ACTING_KEY,
+  browserPermissionModeToStored,
+  DEFAULT_BROWSER_PERMISSION_MODE,
+  readBrowserPermissionMode,
+  type BrowserPermissionMode,
+} from './features/computer-use/askBeforeActing';
 import { UUID_PATTERN } from './lib/uuid';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import { fetchOwnSkills, type AccountSkill } from './features/cloud-bridge/skillsClient';
@@ -6968,6 +6974,15 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
     });
 }
 
+async function currentPermissionMode(): Promise<BrowserPermissionMode> {
+  try {
+    const stored = await chrome.storage.local.get(ASK_BEFORE_ACTING_KEY);
+    return readBrowserPermissionMode(stored[ASK_BEFORE_ACTING_KEY]);
+  } catch {
+    return 'ask';
+  }
+}
+
 interface BrowserSiteAccess {
   status: 'granted' | 'declined' | 'unavailable';
   origin?: string;
@@ -7360,7 +7375,8 @@ async function runHistorySearchTool(
 }
 
 async function runBrowserTaskTool(streamId: string, goal: string): Promise<string> {
-  if (!(await confirmBrowserTaskStart(streamId, goal))) return t('spBrowserTaskStartDeclined');
+  if ((await currentPermissionMode()) === 'ask' && !(await confirmBrowserTaskStart(streamId, goal)))
+    return t('spBrowserTaskStartDeclined');
   const access = await requestBrowserSiteAccess(streamId, 'act');
   if (access.status !== 'granted') return siteAccessRefusal(access);
   try {
@@ -13006,6 +13022,18 @@ function buildUI(): void {
   askFirstOption.appendChild(askFirstCopy);
   const askFirstCheck = el('span', { class: 'sp-autonomy-option-check' });
   askFirstOption.appendChild(askFirstCheck);
+  const autoOption = el('button', {
+    class: 'sp-autonomy-option',
+    type: 'button',
+    role: 'menuitemradio',
+  }) as HTMLButtonElement;
+  autoOption.appendChild(renderIcon(Sparkles, 15));
+  const autoCopy = el('span', { class: 'sp-autonomy-option-copy' });
+  autoCopy.appendChild(el('strong', {}, t('spAutonomyAuto')));
+  autoCopy.appendChild(el('small', {}, t('spAutonomyAutoDescription')));
+  autoOption.appendChild(autoCopy);
+  const autoCheck = el('span', { class: 'sp-autonomy-option-check' });
+  autoOption.appendChild(autoCheck);
   const fullAccessOption = el('button', {
     class: 'sp-autonomy-option sp-autonomy-option-warning',
     type: 'button',
@@ -13019,6 +13047,7 @@ function buildUI(): void {
   const fullAccessCheck = el('span', { class: 'sp-autonomy-option-check' });
   fullAccessOption.appendChild(fullAccessCheck);
   autonomyPopover.appendChild(askFirstOption);
+  autonomyPopover.appendChild(autoOption);
   autonomyPopover.appendChild(fullAccessOption);
   const autonomyLearnMore = buildHelpArticleLink('tool-approvals', t('spAutonomyLearnMore'));
   autonomyLearnMore.classList.add('sp-autonomy-learn-more');
@@ -13037,29 +13066,70 @@ function buildUI(): void {
     if (returnFocus) autonomyChip.focus();
   }
 
-  function renderAutonomyChip(askFirst: boolean): void {
-    autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
-    clearChildren(askFirstCheck);
-    clearChildren(fullAccessCheck);
-    (askFirst ? askFirstCheck : fullAccessCheck).appendChild(renderIcon(Check, 12));
-    autonomyChip.title = askFirst
-      ? t('spAutonomyAskFirstTooltip')
-      : t('spAutonomyFullAccessTooltip');
-    autonomyChip.setAttribute('aria-pressed', String(!askFirst));
-    autonomyChip.setAttribute(
-      'aria-label',
-      askFirst ? t('spAutonomyAskFirstAria') : t('spAutonomyFullAccessAria'),
-    );
-    askFirstOption.setAttribute('aria-checked', String(askFirst));
-    fullAccessOption.setAttribute('aria-checked', String(!askFirst));
-    askFirstOption.classList.toggle('selected', askFirst);
-    fullAccessOption.classList.toggle('selected', !askFirst);
+  const autonomyModes: ReadonlyArray<{
+    mode: BrowserPermissionMode;
+    option: HTMLButtonElement;
+    check: HTMLElement;
+    icon: typeof Shield;
+    tooltip: string;
+    aria: string;
+  }> = [
+    {
+      mode: 'ask',
+      option: askFirstOption,
+      check: askFirstCheck,
+      icon: Shield,
+      tooltip: t('spAutonomyAskFirstTooltip'),
+      aria: t('spAutonomyAskFirstAria'),
+    },
+    {
+      mode: 'auto',
+      option: autoOption,
+      check: autoCheck,
+      icon: Sparkles,
+      tooltip: t('spAutonomyAutoTooltip'),
+      aria: t('spAutonomyAutoAria'),
+    },
+    {
+      mode: 'full',
+      option: fullAccessOption,
+      check: fullAccessCheck,
+      icon: Zap,
+      tooltip: t('spAutonomyFullAccessTooltip'),
+      aria: t('spAutonomyFullAccessAria'),
+    },
+  ];
+
+  function renderAutonomyChip(mode: BrowserPermissionMode): void {
+    autonomyChip.setAttribute('data-mode', mode);
+    for (const entry of autonomyModes) {
+      const selected = entry.mode === mode;
+      clearChildren(entry.check);
+      if (selected) {
+        entry.check.appendChild(renderIcon(Check, 12));
+        clearChildren(autonomyIcon);
+        autonomyIcon.appendChild(renderIcon(entry.icon, 15));
+        autonomyChip.title = entry.tooltip;
+        autonomyChip.setAttribute('aria-label', entry.aria);
+      }
+      entry.option.setAttribute('aria-checked', String(selected));
+      entry.option.classList.toggle('selected', selected);
+    }
+    autonomyChip.setAttribute('aria-pressed', String(mode !== 'ask'));
   }
 
-  renderAutonomyChip(true);
+  function chooseAutonomyMode(mode: BrowserPermissionMode): void {
+    renderAutonomyChip(mode);
+    if (mode !== 'full') fullAccessNotice.classList.remove('visible');
+    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(mode) });
+    closeAutonomyPopover(true);
+    if (mode === 'full') void discloseFullAccess();
+  }
+
+  renderAutonomyChip(DEFAULT_BROWSER_PERMISSION_MODE);
   chrome.storage.local.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime.lastError) return;
-    renderAutonomyChip(items[ASK_BEFORE_ACTING_KEY] !== false);
+    renderAutonomyChip(readBrowserPermissionMode(items[ASK_BEFORE_ACTING_KEY]));
   });
 
   autonomyChip.addEventListener('click', (event) => {
@@ -13077,8 +13147,8 @@ function buildUI(): void {
             ? window.innerWidth - viewportPadding - bounds.right
             : 0;
       if (shift !== 0) autonomyPopover.style.transform = `translateX(${shift}px)`;
-      const askFirst = autonomyChip.getAttribute('data-mode') === 'ask';
-      (askFirst ? askFirstOption : fullAccessOption).focus();
+      const current = autonomyChip.getAttribute('data-mode');
+      (autonomyModes.find((entry) => entry.mode === current)?.option ?? autoOption).focus();
     }
   });
 
@@ -13114,18 +13184,9 @@ function buildUI(): void {
     fullAccessNotice.classList.toggle('visible', !dismissed);
   }
 
-  askFirstOption.addEventListener('click', () => {
-    renderAutonomyChip(true);
-    fullAccessNotice.classList.remove('visible');
-    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: true });
-    closeAutonomyPopover(true);
-  });
-  fullAccessOption.addEventListener('click', () => {
-    renderAutonomyChip(false);
-    void chrome.storage.local.set({ [ASK_BEFORE_ACTING_KEY]: false });
-    closeAutonomyPopover(true);
-    void discloseFullAccess();
-  });
+  for (const entry of autonomyModes) {
+    entry.option.addEventListener('click', () => chooseAutonomyMode(entry.mode));
+  }
   autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -13143,8 +13204,9 @@ function buildUI(): void {
     if (area !== 'local') return;
     const change = changes[ASK_BEFORE_ACTING_KEY];
     if (!change) return;
-    renderAutonomyChip(change.newValue !== false);
-    if (change.newValue !== false) fullAccessNotice.classList.remove('visible');
+    const mode = readBrowserPermissionMode(change.newValue);
+    renderAutonomyChip(mode);
+    if (mode !== 'full') fullAccessNotice.classList.remove('visible');
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -13415,7 +13477,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       if (existing) existing.cloudAgentRun = { ...chunk.cloudRun };
     }
     quotaWarnedStreamIds.delete(chunk.id);
-    if (chunk.errorCode === 'quota_exceeded' || chunk.errorCode === 'account_suspended') {
+    if (
+      chunk.errorCode === 'quota_exceeded' ||
+      chunk.errorCode === 'account_suspended' ||
+      chunk.errorCode === 'plan_required'
+    ) {
       void refreshCloudAccountUI();
     }
     if (chunk.error === '__AUTH_REQUIRED__') {
@@ -13656,6 +13722,7 @@ chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
 const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+const ACCOUNT_REFRESH_WHILE_OPEN_MS = 3 * 60_000;
 const OPEN_CHAT_REFRESH_ON_RETURN_MS = 10_000;
 let lastAccountRefreshOnReturn = Date.now();
 let lastOpenChatRefreshOnReturn = Date.now();
@@ -13681,13 +13748,19 @@ function refreshAccountOnReturn(): void {
   if (document.visibilityState !== 'visible') return;
   refreshOpenAccountChatOnReturn();
   if (
-    managedCloudChatState !== 'signed_out' &&
+    managedCloudChatState === 'ready' &&
     Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS
   )
     return;
   lastAccountRefreshOnReturn = Date.now();
   void refreshCloudAccountUI();
 }
+function refreshAccountWhileOpen(): void {
+  if (document.visibilityState !== 'visible' || _ctx.isStreaming) return;
+  lastAccountRefreshOnReturn = Date.now();
+  void refreshCloudAccountUI();
+}
+setInterval(refreshAccountWhileOpen, ACCOUNT_REFRESH_WHILE_OPEN_MS);
 document.addEventListener('visibilitychange', refreshAccountOnReturn);
 window.addEventListener('pagehide', () => void flushProductEvents());
 window.addEventListener('focus', refreshAccountOnReturn);
