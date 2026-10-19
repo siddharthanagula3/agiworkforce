@@ -45,12 +45,18 @@ function mentionsSelfIdPredicate(sql, tables) {
   );
 }
 
-// A referral row names two accounts, so either column is its owner, and a Slack installation
-// belongs to the person who installed it. Restricted to these tables:
+// A referral row names two accounts, so either column is its owner, a Slack installation
+// belongs to the person who installed it, and a site viewer grant belongs to the site owner
+// who invited the address, which an insert writes (0372 lets only that owner insert it).
+// Restricted to these tables:
 // a column spelled like an owner elsewhere proves nothing about who owns the row.
 const TABLE_OWNER_COLUMNS = new Map([
   ['referrals', /\b(?:referrer_id|referred_user_id)\s*=/i],
   ['slack_installations', /\binstalled_by_user_id\s*=/i],
+  [
+    'published_artifact_viewers',
+    /\binvited_by_user_id\s*=|\binsert\s+into\s+(?:public\.)?published_artifact_viewers\s*\([^)]*\binvited_by_user_id\b/i,
+  ],
 ]);
 
 function mentionsTableOwnerColumn(sql, tables) {
@@ -79,6 +85,12 @@ const WORKSPACE_SCOPED_TABLES = new Set([
 ]);
 
 const ORGANIZATION_SCOPE_TOKEN_RE = /\b(?:organization_id|org_id|current_app_org_id)\b/;
+
+// workspaceMemoryPredicate() in apps/web/lib/services/managed-memory-context-service.ts
+// renders `organization_id is not distinct from $n::uuid`, so a statement that
+// interpolates it carries the predicate even though the text sits behind `${}`.
+// The test suite reads the helper and fails if it stops rendering that predicate.
+const WORKSPACE_PREDICATE_HELPER_RE = /\$\{\s*workspaceMemoryPredicate\(/;
 
 // Each entry names statements that read a workspace-scoped table WITHOUT the
 // workspace predicate, and why reading every workspace at once is correct there.
@@ -159,7 +171,6 @@ const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/services/conversation-branch-service.ts', 6],
   ['apps/web/lib/connectors/mcp-custom-connections.ts', 5],
   ['apps/web/lib/user-connector-tools.ts', 4],
-  ['apps/web/lib/services/product-link-resolver.ts', 3],
   ['apps/web/lib/server/video-generation-transcript.ts', 3],
   ['apps/web/lib/server/video-generation-jobs.ts', 2],
   ['apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts', 2],
@@ -972,6 +983,16 @@ const ALLOWLIST = [
       '(api/settings/organization/audit) is additionally gated by isOrgAdminRole',
   },
   {
+    match: /lib\/services\/published-artifact-service\.ts$/,
+    tables: ['published_artifacts'],
+    functions: ['isInviteOnlyPublication'],
+    reason:
+      'answers only whether an unguessable site token names an invite-only site, so the page ' +
+      'can tell a visitor the RLS-scoped read refused to sign in with the invited address ' +
+      'instead of calling the link dead. It selects the token back and no content, and the ' +
+      'visitor is by definition not the owner, so there is no owner to constrain by',
+  },
+  {
     match: /lib\/services\/schedule-share-service\.ts$/,
     tables: ['scheduled_task_shares'],
     reason:
@@ -1346,6 +1367,7 @@ for (const file of files) {
     if (
       workspaceTables.length > 0 &&
       !ORGANIZATION_SCOPE_TOKEN_RE.test(lower) &&
+      !WORKSPACE_PREDICATE_HELPER_RE.test(sql) &&
       !workspaceScopeExempt(rel)
     ) {
       workspaceScoped += 1;
