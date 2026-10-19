@@ -174,7 +174,7 @@ describe('device-code sign-ins', () => {
   });
 
   it('revokes such a sign-in by its device id', async () => {
-    const txQuery = vi.fn(async (sql: string) => {
+    const txQuery = vi.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('device_registrations')) return [];
       if (sql.includes('from desktop_devices where id')) return [{ kind: 'cli', name: 'AGI CLI' }];
       if (sql.includes('update device_refresh_tokens')) return [{ id: 'row-1' }];
