@@ -69,7 +69,7 @@
       "surface": "mobile",
       "roots": ["apps/mobile/services", "apps/mobile/lib", "apps/mobile/app"],
       "builder": {
-        "file": "apps/mobile/lib/platformHeaders.ts",
+        "file": "apps/mobile/src/platform/platformHeaders.ts",
         "symbol": "platformRequestHeaders",
         "sets": ["surface", "clientVersion", "apiVersion"]
       },

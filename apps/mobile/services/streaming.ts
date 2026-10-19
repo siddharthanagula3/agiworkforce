@@ -53,7 +53,7 @@ import {
   type ManagedCloudAgentRunReference,
   type FreeQuotaMessageContent,
 } from '@agiworkforce/cloud-contracts';
-import { platformRequestHeaders } from '../lib/platformHeaders';
+import { platformRequestHeaders } from '../src/platform/platformHeaders';
 import { phoneDeviceHostHeaders } from '@/src/features/integrations/services/phoneDeviceHost';
 
 export interface ChatWireMessage {
