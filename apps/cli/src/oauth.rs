@@ -14,6 +14,9 @@ struct DeviceCodeResponse {
     device_code: String,
     user_code: String,
     verification_uri: Option<String>,
+    /// The approval page with the code already in it, so the person signing in
+    /// confirms it instead of typing it.
+    verification_uri_complete: Option<String>,
     #[serde(default = "default_interval")]
     interval: u64,
     #[serde(default = "default_expires")]
@@ -85,14 +88,20 @@ pub async fn start_device_code_login(api_base: &str) -> Result<DeviceCodeStart> 
         .context("Failed to parse device code response")?;
 
     Ok(DeviceCodeStart {
+        verification_url: verification_url(&device),
         device_code: device.device_code,
         user_code: device.user_code,
-        verification_url: device
-            .verification_uri
-            .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string()),
         interval_secs: device.interval.max(3),
         expires_in_secs: device.expires_in,
     })
+}
+
+fn verification_url(device: &DeviceCodeResponse) -> String {
+    device
+        .verification_uri_complete
+        .clone()
+        .or_else(|| device.verification_uri.clone())
+        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string())
 }
 
 /// Poll the device-token endpoint once.
@@ -226,6 +235,42 @@ fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> Dev
 }
 
 #[cfg(test)]
+mod verification_url_tests {
+    use super::{verification_url, DeviceCodeResponse};
+
+    fn device(body: serde_json::Value) -> DeviceCodeResponse {
+        serde_json::from_value(body).expect("device code response")
+    }
+
+    #[test]
+    fn the_link_carries_the_code_so_nobody_types_it() {
+        let started = device(serde_json::json!({
+            "device_code": "d",
+            "user_code": "ZED3-E49H",
+            "verification_uri": "https://agiworkforce.com/auth/device",
+            "verification_uri_complete": "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli",
+        }));
+        assert_eq!(
+            verification_url(&started),
+            "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli"
+        );
+    }
+
+    #[test]
+    fn a_server_without_the_complete_link_still_gets_its_page() {
+        let started = device(serde_json::json!({
+            "device_code": "d",
+            "user_code": "ZED3-E49H",
+            "verification_uri": "http://localhost:3000/auth/device",
+        }));
+        assert_eq!(
+            verification_url(&started),
+            "http://localhost:3000/auth/device"
+        );
+    }
+}
+
+#[cfg(test)]
 mod renewal_refusal_tests {
     use super::{renewal_refusal, DeviceSessionRenewal};
     use reqwest::StatusCode;
@@ -292,7 +337,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     eprintln!("  1. Open this link in your browser:");
     eprintln!("     {}", ts::link(&device.verification_url));
     eprintln!();
-    eprintln!("  2. Enter this code:");
+    eprintln!("  2. Check that the page shows this code, then approve:");
     eprintln!("     {}", ts::success_header(&device.user_code));
     eprintln!();
     eprintln!("  {}", ts::muted("━".repeat(50)));
