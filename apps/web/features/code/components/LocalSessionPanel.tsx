@@ -1444,6 +1444,11 @@ export function LocalSessionPanel({
             review={review}
             worktree={worktree}
             onClose={() => setReviewOpen(false)}
+            onSendComments={(text) => {
+              const message: LocalMessage = { text, images: [], contextFiles: [] };
+              if (running) state.enqueue(message);
+              else void sendOrRestore(message);
+            }}
           />
         )}
       </div>

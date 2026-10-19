@@ -116,7 +116,8 @@ export const LOCAL_CODE_COPY = {
   stopCommand: (command: string): string => `Stop ${command}`,
   stopAllCommands: 'Stop all',
   keepRunning: 'Keep running',
-  keepRunningHint: 'Start it to keep running, such as a dev server, and stop it from the list above.',
+  keepRunningHint:
+    'Start it to keep running, such as a dev server, and stop it from the list above.',
   startedInBackground: 'Running in the background. Stop it from Running in this folder.',
   files: 'Files',
   filesShortcut: 'Files (⌘P)',
@@ -1117,6 +1118,23 @@ export const LOCAL_REVIEW_COPY = {
   revertFile: 'Revert file',
   stageHunk: 'Stage',
   revertHunk: 'Revert',
+  commentOnLine: (path: string, line: number, side: LocalReviewCommentSide): string =>
+    side === 'old'
+      ? `Comment on removed line ${line} of ${path}`
+      : `Comment on line ${line} of ${path}`,
+  commentPlaceholder: 'What should change here?',
+  addComment: 'Add comment',
+  cancelComment: 'Cancel',
+  removeComment: 'Remove comment',
+  comments: (count: number): string => (count === 1 ? '1 comment' : `${count} comments`),
+  sendComments: 'Send to the agent',
+  clearComments: 'Discard comments',
+  clearCommentsTitle: 'Discard these comments?',
+  clearCommentsDescription: (count: number): string =>
+    count === 1
+      ? 'The comment you wrote is removed and is not sent to the agent. It cannot be brought back.'
+      : `The ${count} comments you wrote are removed and are not sent to the agent. They cannot be brought back.`,
+  commentsIntro: 'Address these review comments on your changes:',
   rewind: 'Rewind to before this turn',
   rewindTitle: (index: number): string => `Rewind to before turn ${index}?`,
   rewindConfirm: 'Rewind',
@@ -1425,3 +1443,77 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
   readFailed: 'The worktree count could not be read.',
   range: (max: number): string => `Choose a whole number from 1 to ${max}.`,
 } as const;
+
+export type LocalReviewCommentSide = 'new' | 'old';
+
+export interface LocalReviewComment {
+  path: string;
+  line: number;
+  side: LocalReviewCommentSide;
+  excerpt: string;
+  text: string;
+}
+
+export interface LocalReviewLine {
+  text: string;
+  kind: 'added' | 'removed' | 'context' | 'meta';
+  line: number | null;
+  side: LocalReviewCommentSide;
+}
+
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/u;
+
+/**
+ * A hunk's lines with the number each has in its file: an added or unchanged
+ * line by its place in the new file, a removed one by its place in the old.
+ */
+export function localReviewLines(hunk: string): LocalReviewLine[] {
+  let oldLine = 0;
+  let newLine = 0;
+  return hunk.split('\n').map((text): LocalReviewLine => {
+    const header = HUNK_HEADER.exec(text);
+    if (header) {
+      oldLine = Number(header[1]);
+      newLine = Number(header[2]);
+      return { text, kind: 'meta', line: null, side: 'new' };
+    }
+    if (text.startsWith('+')) return { text, kind: 'added', line: newLine++, side: 'new' };
+    if (text.startsWith('-')) return { text, kind: 'removed', line: oldLine++, side: 'old' };
+    if (text.startsWith('\\')) return { text, kind: 'meta', line: null, side: 'new' };
+    oldLine += 1;
+    return { text, kind: 'context', line: newLine++, side: 'new' };
+  });
+}
+
+const EXCERPT_LENGTH = 80;
+
+function excerptOf(text: string): string {
+  const code = text.slice(1).trim();
+  return code.length > EXCERPT_LENGTH ? `${code.slice(0, EXCERPT_LENGTH)}…` : code;
+}
+
+export function localReviewComment(
+  path: string,
+  line: LocalReviewLine,
+  text: string,
+): LocalReviewComment | null {
+  const body = text.trim();
+  if (line.line === null || body === '') return null;
+  return { path, line: line.line, side: line.side, excerpt: excerptOf(line.text), text: body };
+}
+
+/** The turn the comments become, one numbered item per comment, in file order. */
+export function localReviewCommentsMessage(comments: readonly LocalReviewComment[]): string {
+  const ordered = [...comments].sort(
+    (a, b) => a.path.localeCompare(b.path) || a.line - b.line || a.side.localeCompare(b.side),
+  );
+  const items = ordered.map((comment, index) => {
+    const where =
+      comment.side === 'old'
+        ? `${comment.path}, removed line ${comment.line}`
+        : `${comment.path}, line ${comment.line}`;
+    const quoted = comment.excerpt === '' ? '' : ` (\`${comment.excerpt.replace(/`/gu, "'")}\`)`;
+    return `${index + 1}. ${where}${quoted}: ${comment.text}`;
+  });
+  return [LOCAL_REVIEW_COPY.commentsIntro, '', ...items].join('\n');
+}

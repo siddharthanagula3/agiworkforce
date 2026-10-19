@@ -1917,6 +1917,91 @@ svg + .menuRowLabel {
   gap: 4px;
 }
 
+.reviewLine {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.reviewLineText {
+  flex: 1 1 auto;
+  padding-right: 32px;
+}
+
+.reviewLineComment {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--chat-code-border);
+  border-radius: var(--chat-radius-sm);
+  background: var(--chat-code-bg);
+  color: var(--chat-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.reviewLine:hover > .reviewLineComment,
+.reviewLineComment:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .reviewLineComment {
+    opacity: 1;
+  }
+}
+
+.reviewComment,
+.reviewCommentDraft {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 4px 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--chat-code-border);
+  border-radius: var(--chat-radius-sm);
+  background: var(--chat-surface-elevated);
+  color: var(--chat-text-primary);
+  font-family: var(--chat-font-sans);
+  font-size: 13px;
+  white-space: normal;
+}
+
+.reviewComment > span {
+  flex: 1 1 auto;
+}
+
+.reviewCommentDraft {
+  flex-direction: column;
+}
+
+.reviewCommentInput {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius-sm);
+  background: var(--chat-input-bg);
+  color: var(--chat-text-primary);
+  font: inherit;
+  padding: 6px 8px;
+}
+
+.reviewCommentBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
 @media (max-width: 900px) {
   .railDocked {
     display: none;
