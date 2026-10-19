@@ -19,7 +19,13 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...original, spawn, execFile, default: { ...original, spawn, execFile } };
 });
 
-const { listShellRuns, pinnedRootPath, runShellCommand } = await import('../runtime/shellService');
+const {
+  listShellRuns,
+  pinnedRootPath,
+  runShellCommand,
+  startBackgroundCommand,
+  stopBackgroundCommand,
+} = await import('../runtime/shellService');
 const { SEATBELT_EXECUTABLE } = await import('../runtime/shellSandbox');
 
 function fakeChild() {
@@ -338,5 +344,46 @@ describe('listing the commands that are running', () => {
     finish();
     await done;
     expect(listShellRuns()).toEqual([]);
+  });
+});
+
+describe('the address a kept-running command prints', () => {
+  it('is listed with the run so the preview can open it, colour codes and all', async () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      stdin: Object.assign(new EventEmitter(), { end: vi.fn(), write: vi.fn() }),
+      kill: vi.fn(() => setImmediate(() => child.emit('close', null, 'SIGTERM'))),
+      pid: undefined,
+    });
+    spawn.mockImplementation(() => {
+      setImmediate(() => {
+        child.stdout.emit(
+          'data',
+          Buffer.from('  VITE ready\n  Local:   \u001b[36mhttp://localhost:'),
+        );
+        child.stdout.emit('data', Buffer.from('\u001b[1m5173\u001b[22m/\u001b[39m\n'));
+      });
+      return child;
+    });
+
+    await startBackgroundCommand({
+      runId: 'dev-server',
+      root,
+      relativePath: '',
+      command: 'node -e "1"',
+      policy: { allow: ['node'], deny: [] },
+      sandbox: { backend: 'none' },
+      approve: vi.fn().mockResolvedValue({ approved: true, allowNetwork: true }),
+      emit: vi.fn(),
+    });
+
+    await vi.waitFor(() =>
+      expect(listShellRuns().find((listed) => listed.runId === 'dev-server')).toMatchObject({
+        background: true,
+        previewUrl: 'http://localhost:5173/',
+      }),
+    );
+    await stopBackgroundCommand('dev-server', 'r').catch(() => undefined);
   });
 });

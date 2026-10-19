@@ -190,6 +190,7 @@ import {
 } from './runtime/computerUseService';
 import { configureDictationBarBridge, openDictationBar } from './dictationBar';
 import { createDictationElsewhere } from './dictationElsewhere';
+import { closeLocalPreview } from './previewWindow';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
@@ -1349,7 +1350,12 @@ const dictationElsewhere = createDictationElsewhere({
   frontApp: async () => {
     const front = await applicationTakingInput();
     return front && front.pid !== null
-      ? { name: front.name, pid: front.pid, secureInput: front.secureInput }
+      ? {
+          name: front.name,
+          pid: front.pid,
+          bundleId: front.bundleId,
+          secureInput: front.secureInput,
+        }
       : null;
   },
   openBar: () => openDictationBar((contentsId) => dictationElsewhere.cancel(contentsId)),
@@ -2000,6 +2006,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    closeLocalPreview();
     dictationElsewhere.closeAll();
     workKeeper.release();
     stopLocalRoutines();

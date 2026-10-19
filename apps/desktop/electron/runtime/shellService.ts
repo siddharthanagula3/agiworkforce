@@ -15,6 +15,7 @@ import {
   ShellCommandRefused,
   evaluateShellPolicy,
   findControlCharacter,
+  findLocalPreviewUrl,
   parseCommandLine,
   type ShellPolicy,
   type ShellPolicyVerdict,
@@ -122,9 +123,13 @@ interface BackgroundCommand {
   exited: boolean;
   exitCode: number | null;
   scratchDirectory: string | null;
+  previewTail: string;
+  previewUrl: string | null;
 }
 
 const background = new Map<string, BackgroundCommand>();
+
+const PREVIEW_TAIL_CHARS = 4_096;
 
 const TERMINAL_SIZE = `stty rows ${BACKGROUND_SHELL_ROWS} cols ${BACKGROUND_SHELL_COLUMNS} 2>/dev/null; exec "$@"`;
 const TERMINAL_FEED =
@@ -137,17 +142,24 @@ export interface ShellInputApprovalRequest {
 
 export function listShellRuns(): BackgroundCommandRun[] {
   const live = [...background.entries()].filter(([, run]) => !run.exited);
-  return [
-    ...[...running.entries()].map(([runId, run]) => ({ runId, run, background: false })),
-    ...live.map(([runId, run]) => ({ runId, run, background: true })),
-  ].map(({ runId, run, background: kept }) => ({
+  const listed = (
+    runId: string,
+    run: RunningCommand | BackgroundCommand,
+    kept: boolean,
+    previewUrl: string | null,
+  ): BackgroundCommandRun => ({
     runId,
     command: run.command,
     rootId: run.rootId,
     rootName: run.rootName,
     startedAtMs: run.startedAtMs,
     background: kept,
-  }));
+    ...(previewUrl ? { previewUrl } : {}),
+  });
+  return [
+    ...[...running.entries()].map(([runId, run]) => listed(runId, run, false, null)),
+    ...live.map(([runId, run]) => listed(runId, run, true, run.previewUrl)),
+  ];
 }
 
 /**
@@ -786,6 +798,8 @@ function collectBackground(
 ) {
   return (stream: 'stdout' | 'stderr') => (data: Buffer) => {
     const text = data.toString('utf8');
+    run.previewTail = `${run.previewTail}${text}`.slice(-PREVIEW_TAIL_CHARS);
+    run.previewUrl = findLocalPreviewUrl(run.previewTail) ?? run.previewUrl;
     run.unread.push(text);
     run.unreadBytes += data.byteLength;
     while (run.unreadBytes > MAX_SHELL_OUTPUT_BYTES && run.unread.length > 1) {
@@ -950,6 +964,8 @@ async function startClaimedBackgroundCommand(
     exited: false,
     exitCode: null,
     scratchDirectory: prepared.scratchDirectory,
+    previewTail: '',
+    previewUrl: null,
   };
   background.set(input.runId, run);
 

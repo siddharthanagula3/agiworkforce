@@ -40,6 +40,9 @@ import {
   newSessionLabel,
   preferredLocalRootId,
   sharedUnavailableLine,
+  localReviewComment,
+  localReviewCommentsMessage,
+  localReviewLines,
 } from './local-code';
 
 const session: LocalDeveloperSession = {
@@ -883,5 +886,37 @@ describe('local session markers', () => {
     expect(localSessionMarker({ ...session, status: 'running' }, null)).toBeNull();
     expect(localSessionMarker(session, 'failed')).toBe('failed');
     expect(localSessionMarker(session, undefined)).toBeNull();
+  });
+});
+
+describe('review comments on a change', () => {
+  it('numbers each line of a hunk by its place in the new or the old file', () => {
+    const lines = localReviewLines('@@ -10,3 +12,4 @@ fn\n keep\n-gone\n+added\n+more\n tail');
+    expect(lines.map((line) => [line.kind, line.line, line.side])).toEqual([
+      ['meta', null, 'new'],
+      ['context', 12, 'new'],
+      ['removed', 11, 'old'],
+      ['added', 13, 'new'],
+      ['added', 14, 'new'],
+      ['context', 15, 'new'],
+    ]);
+  });
+
+  it('writes the comments as one turn in file and line order, quoting each line', () => {
+    const [header, keep, gone] = localReviewLines('@@ -1,2 +1,1 @@\n keep `this`\n-gone');
+    expect(header).toBeDefined();
+    const later = localReviewComment('b.ts', keep!, ' Rename it ');
+    const first = localReviewComment('a.ts', gone!, 'Why?');
+    expect(localReviewComment('a.ts', header!, 'on a header')).toBeNull();
+    expect(localReviewComment('a.ts', keep!, '   ')).toBeNull();
+
+    expect(localReviewCommentsMessage([later!, first!])).toBe(
+      [
+        'Address these review comments on your changes:',
+        '',
+        '1. a.ts, removed line 2 (`gone`): Why?',
+        "2. b.ts, line 1 (`keep 'this'`): Rename it",
+      ].join('\n'),
+    );
   });
 });

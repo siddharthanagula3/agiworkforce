@@ -128,12 +128,14 @@ function Harness({
   canChooseRestore = false,
   canSummarize = false,
   onSummarized = vi.fn(),
+  onSendComments,
 }: {
   withWorktree?: boolean;
   onRewound?: (restore: string, turnId: string) => void;
   canChooseRestore?: boolean;
   canSummarize?: boolean;
   onSummarized?: () => void;
+  onSendComments?: (message: string) => void;
 }) {
   const review = useLocalReview(
     session,
@@ -143,7 +145,12 @@ function Harness({
     { canChooseRestore, canSummarize },
   );
   return (
-    <LocalReviewPane review={review} worktree={withWorktree ? worktree : null} onClose={vi.fn()} />
+    <LocalReviewPane
+      review={review}
+      worktree={withWorktree ? worktree : null}
+      onClose={vi.fn()}
+      {...(onSendComments ? { onSendComments } : {})}
+    />
   );
 }
 
@@ -166,6 +173,62 @@ describe('LocalReviewPane', () => {
     expect(screen.getByRole('button', { name: /Turn 2/u })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.setup().click(await screen.findByRole('button', { name: /README\.md/u }));
     expect(screen.getByText('+new')).toBeInTheDocument();
+  });
+
+  it('sends comments left on lines of the change to the agent as one turn', async () => {
+    const user = userEvent.setup();
+    const onSendComments = vi.fn();
+    render(<Harness onSendComments={onSendComments} />);
+
+    await user.click(await screen.findByRole('button', { name: /README\.md/u }));
+    await user.click(screen.getByRole('button', { name: 'Comment on line 1 of README.md' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Comment on line 1 of README.md' }),
+      'Keep the old wording here',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add comment' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Comment on removed line 1 of README.md' }),
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'Comment on removed line 1 of README.md' }),
+      'Why was this removed?',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+    expect(screen.getByText('2 comments')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Send to the agent' }));
+
+    expect(onSendComments).toHaveBeenCalledWith(
+      [
+        'Address these review comments on your changes:',
+        '',
+        '1. README.md, line 1 (`new`): Keep the old wording here',
+        '2. README.md, removed line 1 (`old`): Why was this removed?',
+      ].join('\n'),
+    );
+    expect(screen.queryByText('2 comments')).not.toBeInTheDocument();
+  });
+
+  it('asks before discarding written comments, and offers none where nothing can take them', async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<Harness onSendComments={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: /README\.md/u }));
+    await user.click(screen.getByRole('button', { name: 'Comment on line 1 of README.md' }));
+    await user.type(screen.getByRole('textbox', { name: /Comment on line 1/u }), 'Rename this');
+    await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+    await user.click(screen.getByRole('button', { name: 'Discard comments' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('cannot be brought back');
+    expect(screen.getByText('1 comment')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Discard comments' }));
+    await waitFor(() => expect(screen.queryByText('1 comment')).not.toBeInTheDocument());
+    unmount();
+
+    render(<Harness />);
+    await user.click(await screen.findByRole('button', { name: /README\.md/u }));
+    expect(screen.queryByRole('button', { name: /Comment on line/u })).not.toBeInTheDocument();
   });
 
   it('asks before reverting a hunk and names the file whose change is lost', async () => {

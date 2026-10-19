@@ -17,6 +17,7 @@ import {
   GitBranch,
   ListChecks,
   FolderOpen,
+  PanelLeft,
   PanelsTopLeft,
   Square,
   TerminalSquare,
@@ -83,6 +84,9 @@ import {
   LOCAL_REVIEW_COMMAND,
   LOCAL_REVIEW_COPY,
   isLocalFilesShortcut,
+  isLocalPanelDock,
+  LOCAL_PANEL_DOCKS,
+  LOCAL_PANEL_DOCK_LABELS,
   isLocalReviewShortcut,
   localArchiveSessionConsequence,
   localCleanupFailureRow,
@@ -111,6 +115,7 @@ import {
 import { useLocalReview } from '../hooks/use-local-review';
 import { useLocalTests } from '../hooks/use-local-tests';
 import { useLocalTurnOptions } from '../hooks/use-local-turn-options';
+import { useLocalPanelDock } from '../hooks/use-local-panel-dock';
 import { localSessionMemory } from '../local-session-memory';
 import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
@@ -370,6 +375,7 @@ export function LocalSessionPanel({
   const boundedTurns = runtimeModels?.features?.maxTurns === true;
   const memoryAvailable = !remoteSsh && runtimeModels?.features?.memory === true;
   const options = useLocalTurnOptions(session.id, runtimeModels);
+  const [panelDock, setPanelDock] = useLocalPanelDock();
   const state = useLocalSession(session, {
     ...(model === '' || model === session.model ? {} : { model }),
     ...(canChooseMode ? { agentMode: options.agentMode } : {}),
@@ -744,6 +750,35 @@ export function LocalSessionPanel({
           >
             <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
           </button>
+          {(filesOpen || changesOpen || reviewOpen) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={styles['headerButton']}
+                  aria-label={`${LOCAL_CODE_COPY.panelPosition}: ${LOCAL_PANEL_DOCK_LABELS[panelDock]}`}
+                  title={LOCAL_CODE_COPY.panelPosition}
+                >
+                  <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>{LOCAL_CODE_COPY.panelPosition}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={panelDock}
+                  onValueChange={(value) => {
+                    if (isLocalPanelDock(value)) setPanelDock(value);
+                  }}
+                >
+                  {LOCAL_PANEL_DOCKS.map((dock) => (
+                    <DropdownMenuRadioItem key={dock} value={dock}>
+                      {LOCAL_PANEL_DOCK_LABELS[dock]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {canReview && (
             <button
               type="button"
@@ -920,7 +955,10 @@ export function LocalSessionPanel({
         </div>
       </header>
 
-      <div className={styles['body']}>
+      <div
+        className={`${styles['body']} ${panelDock === 'right' ? '' : styles[`bodyDock-${panelDock}`]}`}
+        data-panel-dock={panelDock}
+      >
         <div className={styles['column']}>
           <div className={styles['scroll']} data-testid="local-code-scroll">
             <div className={styles['center']}>
@@ -1444,6 +1482,11 @@ export function LocalSessionPanel({
             review={review}
             worktree={worktree}
             onClose={() => setReviewOpen(false)}
+            onSendComments={(text) => {
+              const message: LocalMessage = { text, images: [], contextFiles: [] };
+              if (running) state.enqueue(message);
+              else void sendOrRestore(message);
+            }}
           />
         )}
       </div>

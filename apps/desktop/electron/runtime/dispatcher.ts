@@ -34,6 +34,7 @@ import {
   isDeveloperWorktreeStart,
   isPermissionScope,
   isSystemPermissionKind,
+  localPreviewUrl,
   isWorkspaceRootKind,
   normalizeShellPolicy,
   permissionScopeKey,
@@ -95,6 +96,7 @@ import {
 import { gateApplication } from './applicationControl';
 import { findInstalledApplication, launchApplication } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
+import { openLocalPreview } from '../previewWindow';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
@@ -1984,6 +1986,11 @@ async function execute(
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
+    case 'app_open_preview': {
+      const url = localPreviewUrl(args['url']);
+      if (!url) throw new InvalidArguments('Only a page served on this computer can be previewed.');
+      return openLocalPreview(url);
+    }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2532,6 +2539,7 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  * read. A command is here because someone decided that, never by omission.
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
+  'app_open_preview',
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,

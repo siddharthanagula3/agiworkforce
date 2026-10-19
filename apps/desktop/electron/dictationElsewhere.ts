@@ -6,7 +6,24 @@ import {
 export interface DictationApp {
   name: string;
   pid: number;
+  bundleId: string | null;
   secureInput: boolean;
+}
+
+/**
+ * Where macOS asks for a password, a passkey or the keychain. Text is never
+ * typed into these even when a field there is not flagged as secure input.
+ */
+const GUARDED_APPS: ReadonlySet<string> = new Set([
+  'com.apple.SecurityAgent',
+  'com.apple.LocalAuthentication.UIAgent',
+  'com.apple.loginwindow',
+  'com.apple.keychainaccess',
+  'com.apple.Passwords',
+]);
+
+function guarded(app: DictationApp, ownPid: number): boolean {
+  return app.pid === ownPid || (app.bundleId !== null && GUARDED_APPS.has(app.bundleId));
 }
 
 export interface DictationBar {
@@ -124,7 +141,7 @@ export function createDictationElsewhere(deps: DictationElsewhereDeps) {
       if (!front || front.pid !== ended.target.pid) {
         return copied(text, `${ended.target.name} is no longer in front, so nothing was typed.`);
       }
-      if (front.secureInput) {
+      if (front.secureInput || guarded(front, deps.ownPid)) {
         return copied(text, `${front.name} is asking for a password, so nothing was typed.`);
       }
       try {
