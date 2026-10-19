@@ -183,6 +183,12 @@ pub struct DefaultConfig {
     /// MCP tool call timeout in seconds (default: 120).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_call_tool_timeout: Option<u64>,
+
+    /// Whether a config file, the environment or a settings change named the
+    /// model. Comparing `model` with the catalog default cannot tell a user who
+    /// chose that model from one who never chose.
+    #[serde(skip)]
+    pub model_chosen: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,8 +246,17 @@ impl DefaultConfig {
             cloud_model: None,
             mcp_initialize_timeout: None,
             mcp_call_tool_timeout: None,
+            model_chosen: false,
         }
     }
+}
+
+fn names_default_model(contents: &str) -> bool {
+    toml::from_str::<toml::Table>(contents).is_ok_and(|root| {
+        root.get("default")
+            .and_then(toml::Value::as_table)
+            .is_some_and(|default| default.contains_key("model"))
+    })
 }
 
 impl Default for CliConfig {
@@ -366,8 +381,6 @@ impl Default for CliConfig {
 }
 
 impl CliConfig {
-    /// The boundary account reads and writes run under: the configured
-    /// privacy mode, Managed when none is set.
     pub fn account_privacy_mode(&self) -> crate::platform::runtime::session::PrivacyMode {
         self.ui
             .privacy_mode
@@ -407,7 +420,9 @@ impl CliConfig {
         }
 
         let contents = std::fs::read_to_string(path).context("Failed to read config file")?;
-        let loaded: CliConfig = toml::from_str(&contents).context("Failed to parse config.toml")?;
+        let mut loaded: CliConfig =
+            toml::from_str(&contents).context("Failed to parse config.toml")?;
+        loaded.default.model_chosen = names_default_model(&contents);
         let mut config = Self::with_builtin_defaults(loaded);
         config.source.global_path = Some(path.to_path_buf());
         Ok(config)
@@ -432,6 +447,7 @@ impl CliConfig {
         }
         let contents = std::fs::read_to_string(&project_config).ok()?;
         let mut config: CliConfig = toml::from_str(&contents).ok()?;
+        config.default.model_chosen = names_default_model(&contents);
         config.source.project_path = Some(project_config);
         Some(config)
     }
@@ -687,9 +703,9 @@ impl CliConfig {
     /// Merge values from another config, using `other`'s non-default values as overrides.
     #[allow(dead_code)]
     pub fn merge_from(&mut self, other: &CliConfig) {
-        // If other has a non-default model, use it
-        if other.default.model != default_model() {
+        if other.default.model_chosen || other.default.model != default_model() {
             self.default.model = other.default.model.clone();
+            self.default.model_chosen |= other.default.model_chosen;
         }
         // If other has a non-default provider, use it
         if other.default.provider != default_provider() {
@@ -774,14 +790,26 @@ impl CliConfig {
         }
     }
 
+    fn written_toml(&self) -> Result<String> {
+        let mut written = toml::Value::try_from(self).context("Failed to serialize config")?;
+        if !self.default.model_chosen {
+            if let Some(default) = written
+                .get_mut("default")
+                .and_then(toml::Value::as_table_mut)
+            {
+                default.remove("model");
+            }
+        }
+        toml::to_string_pretty(&written).context("Failed to serialize config")
+    }
+
     /// Write the current config to disk, creating the directory if needed.
     pub fn save(&self) -> Result<()> {
         let dir = Self::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
 
         let path = Self::config_path()?;
-        let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        std::fs::write(&path, contents).context("Failed to write config file")?;
+        std::fs::write(&path, self.written_toml()?).context("Failed to write config file")?;
 
         // SEV-CLI-12 fix: config.toml may carry provider configuration that the
         // user expects to remain private (custom base_urls, env-var key names,
@@ -1112,6 +1140,7 @@ impl CliConfig {
         match key {
             "model" | "default-model" => {
                 self.default.model = value.to_string();
+                self.default.model_chosen = true;
             }
             "provider" | "default-provider" => {
                 self.default.provider = value.to_string();
@@ -1251,6 +1280,7 @@ impl CliConfig {
         if let Ok(model) = std::env::var("AGIWORKFORCE_MODEL") {
             if !model.is_empty() {
                 self.default.model = model;
+                self.default.model_chosen = true;
                 self.source
                     .env_overrides
                     .push("AGIWORKFORCE_MODEL".to_string());
@@ -1349,6 +1379,34 @@ fn is_valid_privacy_mode(mode: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_model_is_a_choice_only_when_something_names_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        std::fs::write(&path, "[default]\nstream = true\n").unwrap();
+        let unnamed = CliConfig::load_from(&path).unwrap();
+        assert!(!unnamed.default.model_chosen);
+        assert!(!unnamed.written_toml().unwrap().contains("model ="));
+
+        std::fs::write(
+            &path,
+            format!(
+                "[default]\nmodel = \"{}\"\n",
+                crate::model_catalog::default_model()
+            ),
+        )
+        .unwrap();
+        let named = CliConfig::load_from(&path).unwrap();
+        assert!(named.default.model_chosen);
+        assert!(named.written_toml().unwrap().contains("model ="));
+
+        let mut set = CliConfig::default();
+        set.set_value("model", crate::model_catalog::default_model())
+            .unwrap();
+        assert!(set.default.model_chosen);
+    }
     use std::sync::Mutex;
 
     /// Tests that mutate process environment variables must hold this mutex.

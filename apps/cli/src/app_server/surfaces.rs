@@ -497,6 +497,7 @@ pub fn write_settings(
             )));
         }
         config.default.model = model.to_string();
+        config.default.model_chosen = true;
         config_changed = true;
     }
 

@@ -105,8 +105,6 @@ const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // own timeout and discovery still resolves to `mcp/ready`. Equal values race
 // the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
-/// How long opening a thread waits for the account's copy before showing the
-/// one this device has.
 const ACCOUNT_CONVERSATION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
@@ -139,9 +137,8 @@ const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
 
-/// Read the account's memory setting, memories and skills before a session
-/// starts, so a user who turned memory off on the web is not remembered or
-/// read here, and the skills the account has on are offered here too.
+/// Read the account's memory setting and memories before a session starts, so
+/// a user who turned memory off on the web is not remembered or read here.
 /// Only the terminal CLI refreshed this before, so a desktop session kept the
 /// last cached answer. Signed out or offline, the cached answer stands.
 async fn refresh_account_memory_setting() {
@@ -1732,10 +1729,9 @@ impl CliDeveloperSessionHost {
         )
     }
 
-    /// The model and system prompt a first local copy of an account
-    /// conversation starts with. The account's own model is kept when this
-    /// CLI can run it; otherwise the copy runs on Managed Auto, because the
-    /// conversation already lives in the account and must stay there.
+    /// The account's model is often a web-only routing mode this CLI cannot
+    /// run; the copy then runs Managed Auto, never a provider key, because the
+    /// conversation already lives in the account.
     async fn account_conversation_copy(
         &self,
         hosted_model: Option<&str>,
@@ -1781,13 +1777,8 @@ impl CliDeveloperSessionHost {
         })
     }
 
-    /// Open a conversation the account holds, by its id, as a thread of this
-    /// workspace: the web chat a user picks in the editor's history. The first
-    /// time, the account's copy becomes a thread here; after that, turns the
-    /// account gained on another surface are added. Only a UUID can name an
-    /// account conversation, and a local thread is looked up in the account
-    /// only when it came from there or was synced to it. Any failure, signed
-    /// out, Local mode or offline, leaves the thread as this device has it.
+    /// Must never block a local thread on the account: any failure leaves the
+    /// thread as this device has it.
     async fn adopt_account_conversation(&self, thread_id: &str) {
         if Uuid::parse_str(thread_id).is_err() {
             return;
@@ -5521,14 +5512,10 @@ fn writer_summary(identity: &WriterIdentity, lease: WriterLease) -> DeveloperSes
     }
 }
 
-/// The model a thread starts on when the client names none. Signed in to the
-/// account, with the model still the catalog's default rather than one the user
-/// chose, that is Auto on the account, as on the web; the catalog default is a
-/// provider's model and would ask for that provider's key. Otherwise it is the
-/// configured model, whose route is decided as for any named model.
+/// The catalog default is one provider's model and would ask a signed-in user
+/// for that provider's key.
 fn default_thread_model(config: &CliConfig, account: &models::AccountRoute) -> String {
-    let untouched = config.default.model == crate::model_catalog::default_model();
-    if account.signed_in() && untouched {
+    if account.signed_in() && !config.default.model_chosen {
         crate::routing::profile::auto_selection(DeveloperRoutingProfile::Auto).to_string()
     } else {
         config.default.model.clone()
@@ -5684,6 +5671,7 @@ fn file_uri(path: &Path) -> String {
 fn turn_config_pinned_to_session_route(base: &CliConfig, agent: &AgentSession) -> CliConfig {
     let mut config = base.clone();
     config.default.model = agent.model.clone();
+    config.default.model_chosen = true;
     config.default.provider = agent.current_routing_authority().provider;
     config
 }
@@ -6782,8 +6770,6 @@ fn source_from_stored(source: Option<&str>) -> DeveloperSessionSource {
     }
 }
 
-/// The surface the device approval page names: the client that opened this
-/// connection, so a VS Code sign-in says "AGI for VS Code", not "AGI CLI".
 fn device_surface(client: Option<&AppServerClientInfo>) -> &'static str {
     match client.map(source_from_client) {
         Some(DeveloperSessionSource::Vscode) => "vscode",
@@ -6891,9 +6877,17 @@ mod tests {
         );
 
         config.default.model = "a-model-the-user-chose".to_string();
+        config.default.model_chosen = true;
         assert_eq!(
             default_thread_model(&config, &signed_in),
             "a-model-the-user-chose"
+        );
+
+        let mut chose_the_default = CliConfig::default();
+        chose_the_default.default.model_chosen = true;
+        assert_eq!(
+            default_thread_model(&chose_the_default, &signed_in),
+            crate::model_catalog::default_model()
         );
     }
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
