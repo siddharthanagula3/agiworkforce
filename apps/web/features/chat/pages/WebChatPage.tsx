@@ -1640,17 +1640,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [managedUsageSummary, promotedModelActive],
   );
   const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
-  const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
+  const liveUsageWarning = usageWarningDismissed || composerUsageBlock ? null : usageWarning;
   const usageBanner = (
     <UsageWarningBanner
       warning={liveUsageWarning}
       {...(isFreeBillingPlanTier(managedUsageSummary?.plan_tier)
         ? { upgradeLabel: 'Upgrade' }
         : {})}
-      // `/settings/usage` renders a SettingsModalRedirect that replaces back to
-      // /chat, so pushing it would unmount and remount this page one tick after
-      // leaving it. The modal opens in place instead.
-      onUpgrade={() => openSettings('usage')}
+      onUpgrade={() => handleOpenUpgradeDialog()}
       onDismiss={() => setUsageWarningDismissed(true)}
     />
   );
