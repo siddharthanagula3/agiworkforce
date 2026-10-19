@@ -278,6 +278,18 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });
 
+  it('keeps cards that clip their content at full height in a long chat', () => {
+    const doc = new DOMParser().parseFromString(render(), 'text/html');
+    const styles = Array.from(doc.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+
+    for (const card of ['plan-card', 'activity-group', 'approval-card']) {
+      const block = new RegExp(`\\n\\s*\\.${card} \\{([^}]*)\\}`).exec(styles)?.[1] ?? '';
+      expect(block, card).toContain('flex-shrink: 0;');
+    }
+  });
+
   it('keeps the primary composer controls on-screen in a narrow VS Code sidebar', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
