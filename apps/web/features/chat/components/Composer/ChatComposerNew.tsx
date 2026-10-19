@@ -629,6 +629,12 @@ const COMPOSER_RESTING_HEIGHT_EMPTY_PX = 40;
 /** M11: the mobile step of the same box the `sm:` utilities carry. */
 const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
 const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
+/**
+ * Below this card width the model and effort chips leave the textbox a few
+ * characters ("Messa" in a 480 px Quick Ask window), so the field takes its own
+ * row above the controls.
+ */
+const COMPOSER_STACK_BELOW_PX = 560;
 const COMPOSER_AUTOFOCUS_MEDIA_QUERY = '(min-width: 768px) and (pointer: fine)';
 const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
@@ -1768,6 +1774,7 @@ const ChatComposerNewComponent = ({
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [composerExpandable, setComposerExpandable] = useState(false);
   const [composerWrapsLines, setComposerWrapsLines] = useState(false);
+  const [composerNarrow, setComposerNarrow] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is not a DOM
@@ -2267,6 +2274,16 @@ const ChatComposerNewComponent = ({
     if (!field) return;
     setComposerExpandable(field.scrollHeight > COMPOSER_EXPANDABLE_HEIGHT_PX);
   }, [message, emptyState, composerExpanded]);
+
+  useEffect(() => {
+    const card = composerCardRef.current;
+    if (!card || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setComposerNarrow(entry.contentRect.width < COMPOSER_STACK_BELOW_PX);
+    });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
 
   // The widened field would hold on one line what wrapped in the narrow one, so
   // the stacked layout is left only when the draft is cleared, never re-measured.
@@ -4229,7 +4246,8 @@ const ChatComposerNewComponent = ({
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const showExpandControl = composerExpanded || composerExpandable;
-  const composerStacked = Boolean(emptyState) || composerExpanded || composerWrapsLines;
+  const composerStacked =
+    Boolean(emptyState) || composerExpanded || composerWrapsLines || composerNarrow;
   const mediaControlsWrap = imageMode || videoMode;
   const expandControlLabel = composerExpanded
     ? tChat('composer.collapseInput', { defaultValue: 'Collapse message input' })

@@ -2402,6 +2402,37 @@ describe('ChatComposerNew', () => {
     });
   });
 
+  describe('narrow composer', () => {
+    it('gives the textbox its own row when the card is narrower than the chips need', () => {
+      let report: ResizeObserverCallback = () => undefined;
+      const original = globalThis.ResizeObserver;
+      globalThis.ResizeObserver = class {
+        constructor(callback: ResizeObserverCallback) {
+          report = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver;
+      const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+      const row = container.querySelector('.chat-composer-row') as HTMLElement;
+      const field = container.querySelector('.chat-composer-field') as HTMLElement;
+      expect(row).toHaveClass('flex-nowrap');
+
+      act(() => {
+        report([{ contentRect: { width: 450 } } as ResizeObserverEntry], {} as ResizeObserver);
+      });
+      expect(row).toHaveClass('flex-wrap');
+      expect(field).toHaveClass('basis-full');
+
+      act(() => {
+        report([{ contentRect: { width: 760 } } as ResizeObserverEntry], {} as ResizeObserver);
+      });
+      expect(row).toHaveClass('flex-nowrap');
+      globalThis.ResizeObserver = original;
+    });
+  });
+
   describe('Create image model and aspect honesty', () => {
     it('renders media actions only when the host owns their generation callbacks', () => {
       const onSend = vi.fn();
