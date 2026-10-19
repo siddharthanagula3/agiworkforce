@@ -246,7 +246,7 @@ describe('production background browser upload approval', () => {
     const args = { index: 1 };
     const { decision, response } = await test.approve(args);
     const listener = [...test.listeners][0]!;
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS);
     await expect(decision).resolves.toBe(false);
     listener(response, {
       id: extensionId,

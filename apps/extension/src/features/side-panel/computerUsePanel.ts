@@ -849,7 +849,7 @@ export function buildBrowserApprovalCard(options: BrowserApprovalCardOptions): B
     cardTitle.textContent = `Skipped (no response): ${toolName}`;
     cardDesc.textContent = upload
       ? `This approval expired. No file was sent to the website.${inspectionStarted ? ' Files may already have reached AGI Cloud for inspection.' : ''}`
-      : `This action timed out after ${APPROVAL_TIMEOUT_MS / 1_000} seconds and was skipped automatically.`;
+      : `No answer came within ${APPROVAL_TIMEOUT_MS / 60_000} minutes, so this action was skipped.`;
     if (shouldRestoreFocus) {
       card.tabIndex = -1;
       card.focus();

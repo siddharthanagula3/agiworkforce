@@ -338,6 +338,7 @@ import {
   releaseDebugger,
 } from '../src/features/computer-use/debuggerSession';
 import {
+  APPROVAL_TIMEOUT_MS,
   runAgentLoop,
   InjectionDetectedError,
   type AgentLoopUsage,
@@ -1017,7 +1018,7 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       onBeforeAction: neverResolves,
     });
 
-    await vi.advanceTimersByTimeAsync(31_000);
+    await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS + 1_000);
     vi.useRealTimers();
 
     const result = await runPromise;

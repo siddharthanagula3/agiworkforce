@@ -1197,12 +1197,13 @@ export async function runAgentLoop(
 
 /**
  * How long the ask-before-acting gate waits for a decision before failing CLOSED
- * (deny). Exported because the side panel's approval card must expire on the
+ * (deny). Long enough for a person who looked away, as ChatGPT and Claude wait
+ * for an answer; still bounded, because an unanswered gate is a denial. Exported because the side panel's approval card must expire on the
  * SAME deadline: the loop settling its promise does not remove the card, so a
  * card outliving this timeout leaves Allow/Skip buttons that look live but
  * resolve an already-settled promise. Import it rather than restating 30s.
  */
-export const APPROVAL_TIMEOUT_MS = 30_000;
+export const APPROVAL_TIMEOUT_MS = 5 * 60_000;
 
 /**
  * A `type` without an index lands on whatever holds focus, so the signature the
