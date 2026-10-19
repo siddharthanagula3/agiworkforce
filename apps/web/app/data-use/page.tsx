@@ -136,10 +136,12 @@ const QUESTIONS = [
     title: 'Where is my data physically?',
     body: (
       <>
-        <strong>The United States.</strong> We do not offer data residency in the EU, the UK or
-        India, so using Managed Cloud means your data is transferred there. If you require data
-        residency, we do not currently meet that requirement. The transfer mechanisms are section 08
-        of the{' '}
+        <strong>AGI stores it in the United States.</strong> We do not offer data residency in the
+        EU, the UK or India, so using Managed Cloud means your data is transferred there. If you
+        require data residency, we do not currently meet that requirement. A chat is also processed
+        where the model provider that answers it runs that model: on the Free plan&rsquo;s default
+        model that can be Alibaba Cloud Model Studio&rsquo;s international endpoint in Singapore,
+        as described above. The transfer mechanisms are section 08 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
