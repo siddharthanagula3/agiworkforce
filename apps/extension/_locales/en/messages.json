@@ -4107,5 +4107,33 @@
   "spReadAloudStop": {
     "message": "Stop reading aloud",
     "description": "Answer action that stops speaking"
+  },
+  "spAccountSignedIn": {
+    "message": "Signed in",
+    "description": "Account header in the More menu when the account has no name or email"
+  },
+  "spAccountSettings": {
+    "message": "Settings",
+    "description": "More menu entry that opens account settings on the web"
+  },
+  "spAccountUsage": {
+    "message": "Usage",
+    "description": "More menu entry that opens plan usage on the web"
+  },
+  "spAccountUpgrade": {
+    "message": "Upgrade plan",
+    "description": "More menu entry that opens the plans page on the web"
+  },
+  "spAccountLogOut": {
+    "message": "Log out",
+    "description": "More menu entry that signs this browser out of the AGI account"
+  },
+  "spAccountLogOutWebKept": {
+    "message": "Signed out here. The web session could not be ended.",
+    "description": "Status after signing out when the web session could not be ended"
+  },
+  "spAccountLogOutFailed": {
+    "message": "Log out did not finish. Try again.",
+    "description": "Status after signing out failed"
   }
 }

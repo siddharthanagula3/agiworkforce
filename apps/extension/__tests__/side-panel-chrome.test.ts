@@ -150,6 +150,8 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
   fetchAccountSummary: async () => ({
     displayName: account.owner.authIncarnation,
     email: null,
+    planName: 'Pro',
+    planTier: 'pro',
     capabilityDocument: {
       granted: [],
       deniedBy: {},
@@ -201,6 +203,17 @@ function menuLabels(menu: HTMLElement): string[] {
   return Array.from(menu.querySelectorAll('[role="menuitem"]')).map(
     (item) => item.textContent?.trim() ?? '',
   );
+}
+
+function accountMenuLabels(): string[] {
+  return ['spAccountSettings', 'spAccountUsage', 'spAccountUpgrade', 'spAccountLogOut'].map((key) =>
+    catalogMessage(key, []),
+  );
+}
+
+function panelMenuLabels(menu: HTMLElement): string[] {
+  const account = accountMenuLabels();
+  return menuLabels(menu).filter((label) => !account.includes(label));
 }
 
 async function openSavedConversation(content: string): Promise<string> {
@@ -279,17 +292,34 @@ describe('side panel presence', () => {
 });
 
 describe('More popover', () => {
-  it('is a small role=menu with three or four rows and the version footer', () => {
+  it('is a small role=menu with three or four panel rows and the version footer', () => {
     byId('sp-menu-btn')!.click();
     const menu = moreMenu();
     expect(menu.hidden).toBe(false);
     expect(menu.getAttribute('role')).toBe('menu');
     expect(byId('sp-menu-btn')!.getAttribute('aria-expanded')).toBe('true');
-    const labels = menuLabels(menu);
+    const labels = panelMenuLabels(menu);
     expect(labels.length).toBeGreaterThanOrEqual(3);
     expect(labels.length).toBeLessThanOrEqual(4);
     expect(labels).toContain(catalogMessage('spExtensionSettings', []));
     expect(menu.querySelector('.sp-more-footer')?.textContent).toContain('v1.2.0');
+  });
+
+  it('names the signed-in account and plan like the web account menu', async () => {
+    await vi.waitFor(() => {
+      byId('sp-menu-btn')!.click();
+      const header = moreMenu().querySelector('.sp-more-account-header');
+      expect(header?.textContent).toContain('Pro');
+      expect(header?.textContent).toContain(account.owner.authIncarnation);
+    });
+    expect(menuLabels(moreMenu())).toEqual(expect.arrayContaining(accountMenuLabels()));
+    chromeMock.tabs.create.mockClear();
+    Array.from(moreMenu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((item) => item.textContent?.trim() === catalogMessage('spAccountUsage', []))!
+      .click();
+    expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
+      '/settings/usage?from=chrome-extension',
+    );
   });
 
   it('moves focus with arrow keys, closes on Escape and returns focus to the trigger', () => {
@@ -366,7 +396,7 @@ describe('More popover Open in web', () => {
         moreMenu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
       ).find((item) => item.textContent?.trim() === catalogMessage('spHistoryOpenInWeb', []))!;
       expect(open).toBeDefined();
-      expect(menuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
+      expect(panelMenuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
       open.click();
       expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
         `/chat/${cloudId}`,

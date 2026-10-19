@@ -16,6 +16,8 @@ export interface AccountSummary {
   capabilityDocument: CapabilityDocument | null;
   displayName: string | null;
   email: string | null;
+  planName: string | null;
+  planTier: string | null;
 }
 
 export async function fetchAccountSummary(
@@ -37,6 +39,8 @@ export async function fetchAccountSummary(
     capabilityDocument: me.capability_handshake ?? null,
     displayName: me.profile?.display_name?.trim() || null,
     email: me.email,
+    planName: me.plan.display_name.trim() || null,
+    planTier: me.plan.effective_tier ?? me.plan.tier,
   };
 }
 

@@ -62,6 +62,7 @@ import {
   TERMINAL_AGENT_TASK_STATES,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
+  getNextUpgradeTier,
   normalizeModelId,
   getProviderDisplayLabel,
   messageKindForAgentEvent,
@@ -304,6 +305,7 @@ import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimi
 import {
   capabilityAllowed,
   fetchAccountSummary,
+  type AccountSummary,
   type CapabilityDocument,
 } from './features/cloud-bridge/capabilityDocument';
 import {
@@ -326,6 +328,7 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
+  signOutOfAccount,
   type ManagedChatSourcesDelta,
   type ManagedCodeExecution,
   type ManagedMemoryCommandTurn,
@@ -350,6 +353,7 @@ import {
   getFreshClerkAuthContext,
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
+  watchSyncHostSession,
   openClerkSignIn,
 } from './features/cloud-bridge/clerkAuth';
 import {
@@ -386,6 +390,7 @@ const extensionSendQueue = getExtensionSendQueue();
 const SP_SITE_ALLOWLIST_KEY = SITE_ALLOWLIST_STORAGE_KEY;
 
 let capabilityDocument: CapabilityDocument | null = null;
+let accountIdentity: Omit<AccountSummary, 'capabilityDocument'> | null = null;
 let applyCapabilityGates: () => void = () => undefined;
 
 let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
@@ -1536,6 +1541,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
   capabilityDocument = null;
+  accountIdentity = null;
   applyCapabilityGates();
   if (nextOwner) {
     setManagedCloudChatState('loading', { message: t('spGateChecking') });
@@ -4758,7 +4764,50 @@ function injectStyles(): void {
     /* ── Panel chrome: More popover and conversation title row ── */
     :where(#sp-recents-title, #sp-title-text) { margin: 0; }
     #sp-more-wrap { position: relative; }
-    .sp-more-menu { min-width: 208px; }
+    .sp-more-menu { min-width: 240px; }
+    .sp-more-account {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 4px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--agi-ext-border);
+    }
+    .sp-more-account[hidden] { display: none; }
+    .sp-more-account-header {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 10px 8px;
+      min-width: 0;
+    }
+    .sp-more-account-name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sp-more-account-name {
+      overflow: hidden;
+      color: var(--agi-ext-text);
+      font-size: var(--type-body-size);
+      font-weight: 600;
+      line-height: var(--type-body-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-more-account-plan {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-transform: uppercase;
+    }
+    .sp-more-account-email {
+      overflow: hidden;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .sp-more-footer {
       margin-top: 4px;
       padding: 8px 10px 4px;
@@ -5621,8 +5670,8 @@ function updateStreamingBubble(id: string, fullText: string): void {
 }
 
 const PAGE_CONTEXT_DENIED_REASON =
-  'Chrome would not let the extension read this page. Approve this site under Settings, Site ' +
-  'Allowlist in this panel, reload the page, and try again.';
+  'AGI does not have access to this site yet. Allow it when AGI asks, or approve it under ' +
+  'Extension settings, Permissions, and try again.';
 
 const PAGE_CONTEXT_BLOCKED_REASON =
   "Chrome does not let extensions read this page at all. That covers Chrome's own pages, the " +
@@ -5696,6 +5745,26 @@ async function capturePageContext(
         error instanceof Error ? error.message : 'Page access is unavailable.',
       ),
     };
+  }
+}
+
+async function capturePageContextWithSiteAccess(
+  streamId: string,
+  quickMode: boolean,
+): Promise<PageContextCapture> {
+  const capture = await capturePageContext();
+  if (capture.ok || capture.reason !== PAGE_CONTEXT_DENIED_REASON) return capture;
+  if (_ctx.currentStreamId !== streamId) return capture;
+  ensureStreamingAssistant(streamId, quickMode);
+  renderMessages();
+  const access = await requestBrowserSiteAccess(streamId, 'read');
+  if (access.status !== 'granted') {
+    return { ok: false, reason: access.reason ?? PAGE_CONTEXT_DENIED_REASON };
+  }
+  try {
+    return await capturePageContext();
+  } finally {
+    await access.release?.();
   }
 }
 
@@ -7510,7 +7579,7 @@ function continueTurn(
   }
   const pageAtAdmission = activePageSource;
   setThinkingLabel(t('spThinkingReadingPage'));
-  capturePageContext()
+  capturePageContextWithSiteAccess(streamId, quickMode)
     .then((capture) => {
       if (_ctx.currentStreamId !== streamId) return;
       if (
@@ -7553,15 +7622,20 @@ function postTurn(
   quickMode: boolean,
   memoryCommand?: ManagedMemoryCommandTurn,
 ): void {
-  const history = selectModelHistory(_ctx.messages, userMsg.id);
-  _ctx.messages.push({
-    id: streamId,
-    role: 'assistant',
-    content: '',
-    streaming: true,
-    timestamp: Date.now(),
-    runtime: 'managed-cloud',
-  });
+  const history = selectModelHistory(
+    _ctx.messages.filter((message) => message.id !== streamId),
+    userMsg.id,
+  );
+  if (!_ctx.messages.some((message) => message.id === streamId)) {
+    _ctx.messages.push({
+      id: streamId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+    });
+  }
   lastStreamPersistAtMs = Date.now();
   saveMessages();
 
@@ -9628,10 +9702,87 @@ function buildUI(): void {
     { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
     t('spHistoryOpenInWeb'),
   );
+  const accountBlock = el('div', { class: 'sp-more-account', role: 'none' });
+  moreMenu.appendChild(accountBlock);
   const moreHandle = wirePopupMenu(menuBtn, moreMenu);
+  const openWebFromMenu = (path: string): void => {
+    moreHandle.close();
+    void chrome.tabs.create({ url: agiWebUrl(path) });
+  };
+  const accountMenuItem = (label: string, run: () => void, danger = false): HTMLElement => {
+    const row = el(
+      'button',
+      {
+        type: 'button',
+        role: 'menuitem',
+        class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+      },
+      label,
+    );
+    row.addEventListener('click', run);
+    return row;
+  };
+  function renderAccountBlock(): void {
+    accountBlock.replaceChildren();
+    const identity = accountIdentity;
+    if (!identity || managedCloudChatState === 'signed_out') {
+      accountBlock.hidden = true;
+      return;
+    }
+    accountBlock.hidden = false;
+    const header = el('div', { class: 'sp-more-account-header', role: 'none' });
+    const nameRow = el('div', { class: 'sp-more-account-name-row' });
+    nameRow.appendChild(
+      el(
+        'span',
+        { class: 'sp-more-account-name' },
+        identity.displayName ?? identity.email ?? t('spAccountSignedIn'),
+      ),
+    );
+    if (identity.planName) {
+      nameRow.appendChild(el('span', { class: 'sp-more-account-plan' }, identity.planName));
+    }
+    header.appendChild(nameRow);
+    if (identity.email && identity.displayName) {
+      header.appendChild(el('span', { class: 'sp-more-account-email' }, identity.email));
+    }
+    accountBlock.appendChild(header);
+    accountBlock.appendChild(
+      accountMenuItem(t('spAccountSettings'), () =>
+        openWebFromMenu('/settings?from=chrome-extension'),
+      ),
+    );
+    accountBlock.appendChild(
+      accountMenuItem(t('spAccountUsage'), () =>
+        openWebFromMenu('/settings/usage?from=chrome-extension'),
+      ),
+    );
+    if (identity.planTier && getNextUpgradeTier(identity.planTier) !== null) {
+      accountBlock.appendChild(
+        accountMenuItem(t('spAccountUpgrade'), () =>
+          openWebFromMenu('/pricing?from=chrome-extension'),
+        ),
+      );
+    }
+  }
+  const logOutItem = accountMenuItem(
+    t('spAccountLogOut'),
+    () => {
+      moreHandle.close();
+      void signOutOfAccount()
+        .then(({ webSessionEnded }) => {
+          if (!webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
+        })
+        .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
+        .finally(() => void refreshCloudAccountUI(true));
+    },
+    true,
+  );
   menuBtn.addEventListener(
     'click',
     () => {
+      renderAccountBlock();
+      logOutItem.hidden = accountBlock.hidden;
       const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
       if (cloudConversationId && _ctx.messages.length > 0) {
         openChatInWebItem.onclick = () => {
@@ -9659,6 +9810,7 @@ function buildUI(): void {
     });
     moreMenu.appendChild(row);
   }
+  moreMenu.appendChild(logOutItem);
   moreMenu.appendChild(
     el(
       'div',
@@ -10647,6 +10799,7 @@ function buildUI(): void {
     if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
       capabilityDocument = null;
+      accountIdentity = null;
       applyCapabilityGates();
       managedModelAccess = null;
       _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
@@ -10724,6 +10877,14 @@ function buildUI(): void {
     const accountSummary = await accountSummaryPromise;
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     capabilityDocument = accountSummary?.capabilityDocument ?? null;
+    accountIdentity = accountSummary
+      ? {
+          displayName: accountSummary.displayName,
+          email: accountSummary.email,
+          planName: accountSummary.planName,
+          planTier: accountSummary.planTier,
+        }
+      : null;
     applyCapabilityGates();
     managedModelAccess = access;
     if (!canUseBillingPlanCapability(access.subscriptionTier, 'agi_work')) _ctx.workMode = 'chat';
@@ -10795,6 +10956,7 @@ function buildUI(): void {
     }).catch((error) => {
       console.warn('[SidePanel] Clerk auth listener failed:', error);
     });
+    watchSyncHostSession(() => void refreshCloudAccountUI(true));
   }
 
   initialCloudAccountRefresh = refreshCloudAccountUI();
@@ -11928,7 +12090,25 @@ function buildUI(): void {
     }
     contextItemLabel.textContent = t('spContextChipCapturing');
     chip.disabled = true;
-    const capture = await capturePageContext();
+    let capture = await capturePageContext();
+    if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
+      const [tab] = await chrome.tabs
+        .query({ active: true, currentWindow: true })
+        .catch((): chrome.tabs.Tab[] => []);
+      const origin = webTabOrigin(tab);
+      if (origin) {
+        const transientId = `site_once_${crypto.randomUUID()}`;
+        await recordTransientHostPermission(transientId, origin).catch(() => undefined);
+        const granted = await requestBrowserControlHostPermission(origin).catch(() => false);
+        try {
+          if (granted) capture = await capturePageContext();
+        } finally {
+          if (granted && !(await originApprovedForBrowserControl(origin)))
+            await removeBrowserControlHostPermission(origin);
+          await forgetTransientHostPermissions([transientId]).catch(() => []);
+        }
+      }
+    }
     chip.disabled = false;
     if (capture.ok) {
       _ctx.pendingPageContext = capture.text;
@@ -12992,9 +13172,30 @@ chrome.tabs.onActivated?.addListener(() => {
   refreshPageHostname();
 });
 const ACCOUNT_REFRESH_ON_RETURN_MS = 60_000;
+const OPEN_CHAT_REFRESH_ON_RETURN_MS = 10_000;
 let lastAccountRefreshOnReturn = Date.now();
+let lastOpenChatRefreshOnReturn = Date.now();
+function refreshOpenAccountChatOnReturn(): void {
+  if (Date.now() - lastOpenChatRefreshOnReturn < OPEN_CHAT_REFRESH_ON_RETURN_MS) return;
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (
+    managedCloudChatState === 'signed_out' ||
+    _ctx.isStreaming ||
+    _ctx.temporaryChat ||
+    _ctx.messages.length === 0 ||
+    _ctx.pendingPageContext ||
+    composer?.value.trim() ||
+    !activePersistenceEntry?.cloudSync?.conversationId ||
+    activePersistenceEntry.id !== _ctx.conversationId ||
+    document.getElementById('sp-chat-panel')?.classList.contains('sp-tab-hidden')
+  )
+    return;
+  lastOpenChatRefreshOnReturn = Date.now();
+  void openStoredConversation(_ctx.conversationId);
+}
 function refreshAccountOnReturn(): void {
   if (document.visibilityState !== 'visible') return;
+  refreshOpenAccountChatOnReturn();
   if (
     managedCloudChatState !== 'signed_out' &&
     Date.now() - lastAccountRefreshOnReturn < ACCOUNT_REFRESH_ON_RETURN_MS

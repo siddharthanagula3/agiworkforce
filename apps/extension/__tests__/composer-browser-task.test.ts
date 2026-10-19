@@ -210,6 +210,7 @@ function harness() {
       prompt.startsWith('/')
         ? { display: prompt, prompt: 'Summarize the page', captureContext: true }
         : null,
+    capturePageContextWithSiteAccess: vi.fn(() => dependencies.capturePageContext()),
     capturePageContext: vi.fn(
       async (): Promise<
         | { ok: true; text: string; source: { tabId: number; url: string } }
