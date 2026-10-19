@@ -118,6 +118,7 @@ describe('mobile schedule service', () => {
         nextRunAt: '2026-07-18T14:00:00.000Z',
         lastRunStatus: 'success',
         pausedReason: null,
+        projectId: null,
         createdAt: '2026-07-01T12:00:00.000Z',
         updatedAt: '2026-07-17T14:00:01.000Z',
       },

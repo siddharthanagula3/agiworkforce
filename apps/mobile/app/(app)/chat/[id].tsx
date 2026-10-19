@@ -47,6 +47,9 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
+import { StudyModeBanner } from '@/src/features/study/StudyModeBanner';
+import { FollowUpSuggestions } from '@/src/features/chat/components/FollowUpSuggestions';
+import { retiredModelNotice } from '@/src/features/model-picker/retirement';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
@@ -950,6 +953,19 @@ export default function ChatScreen() {
     },
     [forkConversation, id, router, title],
   );
+
+  const retiredNotice = retiredModelNotice(conversation?.model);
+  const lastMessage = conversationMessages[conversationMessages.length - 1];
+  const followUpTarget =
+    conversationExecutionMode === 'cloud' &&
+    !conversation?.temporary &&
+    !isStreaming &&
+    lastMessage?.role === 'assistant' &&
+    !lastMessage.isStreaming &&
+    lastMessage.content.trim().length > 0 &&
+    !lastMessage.metadata?.research
+      ? lastMessage.id
+      : null;
 
   const handleScheduleMessage = useCallback(
     (messageId: string) => {
@@ -1879,6 +1895,22 @@ export default function ChatScreen() {
 
         <TemporaryChatBanner />
 
+        {retiredNotice ? (
+          <View
+            testID="retired-model-notice"
+            accessibilityRole="alert"
+            style={{ paddingHorizontal: 16, paddingVertical: 6 }}
+          >
+            <Text style={{ color: colors.agentWarning, fontSize: typeScale.footnote }}>
+              {retiredNotice}
+            </Text>
+          </View>
+        ) : null}
+
+        {id && conversationExecutionMode === 'cloud' && !conversation?.temporary ? (
+          <StudyModeBanner conversationId={id} />
+        ) : null}
+
         <SendErrorBanner
           error={messageLoadFailed ? MESSAGE_LOAD_FAILED : null}
           onRetry={() => {
@@ -1901,6 +1933,15 @@ export default function ChatScreen() {
               conversationExecutionMode === 'cloud' && !conversation?.temporary
                 ? handleScheduleMessage
                 : undefined
+            }
+            footer={
+              followUpTarget && id ? (
+                <FollowUpSuggestions
+                  conversationId={id}
+                  messageId={followUpTarget}
+                  onSelect={(prompt) => void handleSend(prompt)}
+                />
+              ) : null
             }
             onEditImageArea={canEditImages ? handleEditImageArea : undefined}
             onDeleteImageConversation={handleDeleteImageConversation}

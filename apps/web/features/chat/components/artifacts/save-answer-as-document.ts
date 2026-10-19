@@ -25,7 +25,11 @@ export function useSaveAnswerAsDocument() {
   const setPanelOpen = useArtifactsStore((s) => s.setPanelOpen);
 
   return useCallback(
-    (answer: { messageId: string; conversationId?: string; content: string }): string | null => {
+    (answer: {
+      messageId: string;
+      conversationId?: string | null;
+      content: string;
+    }): string | null => {
       const content = answer.content.trim();
       if (!content) return null;
       const id = addArtifact({

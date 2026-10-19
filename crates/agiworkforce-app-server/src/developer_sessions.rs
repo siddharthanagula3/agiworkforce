@@ -23,15 +23,16 @@ use agiworkforce_protocol::developer_session::{
     ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams,
-    ThreadRewindResponse, ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionParams,
-    ThreadSideQuestionResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary, UserInputResponseParams,
-    WorktreeApplyParams, WorktreeApplyResponse, WorktreeArchive, WorktreeCreateParams,
-    WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse,
-    WorktreeListResponse, WorktreePinParams, WorktreeRemoveParams, WorktreeSetupRunParams,
-    WorktreeSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
+    ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams,
+    ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
+    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
+    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
+    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
+    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
@@ -180,6 +181,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: ThreadSideQuestionParams,
     ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_SIDE_QUESTION))
+    }
+
+    async fn rename_thread(
+        &self,
+        _params: ThreadRenameParams,
+    ) -> Result<ThreadRenameResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_RENAME))
     }
 
     async fn rewind_thread(
@@ -809,6 +817,8 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
         method::THREAD_SIDE_QUESTION_DELTA,
         MethodEffect::Notification,
     ),
+    (method::THREAD_RENAME, MethodEffect::ChangesState),
+    (method::THREAD_RENAMED, MethodEffect::Notification),
     (method::THREAD_SEARCH, MethodEffect::ReadOnly),
     (method::WORKTREE_LIST, MethodEffect::ReadOnly),
     (method::GIT_PULL_REQUEST_PLAN, MethodEffect::ReadOnly),
@@ -1326,6 +1336,16 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .list_checkpoints(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_RENAME => {
+                let params = match parse_params::<ThreadRenameParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .rename_thread(params)
                     .await
                     .map(serde_json::to_value)
             }

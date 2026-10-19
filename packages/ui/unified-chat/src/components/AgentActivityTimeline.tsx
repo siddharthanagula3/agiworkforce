@@ -527,6 +527,10 @@ const SCREEN_STEP_ACTIONS: Readonly<Record<string, (input: Record<string, unknow
     typeof input['key'] === 'string' ? `Pressed ${String(input['key'])}` : 'Pressed a key',
   device_wait: (input) =>
     typeof input['ms'] === 'number' ? `Waited ${String(input['ms'])}ms` : 'Waited',
+  device_open_app: (input) =>
+    typeof input['application'] === 'string'
+      ? `Opened ${String(input['application'])}`
+      : 'Opened an app',
 };
 
 const MAX_TYPED_ACTION_CHARS = 60;

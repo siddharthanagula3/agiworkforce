@@ -289,6 +289,7 @@ export type WebviewToExtMessage =
   | { type: 'viewFocused' }
   | { type: 'viewBlurred' }
   | { type: 'openPlanDocument' }
+  | { type: 'sideQuestion'; payload: { question: string; requestId: string } }
   | { type: 'setUpWebSearch' }
   | { type: 'reconnectMcpServer'; payload: { server: string } }
   | { type: 'openSettings' }
@@ -399,6 +400,11 @@ export type ExtToWebviewMessage =
     }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
+  | { type: 'sideQuestionDelta'; payload: { requestId: string; delta: string } }
+  | {
+      type: 'sideQuestionAnswer';
+      payload: { requestId: string; answer: string } | { requestId: string; error: string };
+    }
   | { type: 'turnChangesUndone'; payload: { turnId: string } }
   | {
       type: 'conversationBoundaryChanged';
@@ -1238,6 +1244,11 @@ export class ChatStateManager {
 
       case 'openPlanDocument': {
         await this.openPlanDocument();
+        break;
+      }
+
+      case 'sideQuestion': {
+        await this._askSideQuestion(msg.payload.question, msg.payload.requestId);
         break;
       }
 
@@ -2118,12 +2129,6 @@ export class ChatStateManager {
       case 'prompt':
         this._post({ type: 'composerDraft', payload: { text: `/${bare} `, references: [] } });
         return;
-      case 'skill':
-        this._post({
-          type: 'composerDraft',
-          payload: { text: `Use the ${bare} skill to `, references: [] },
-        });
-        return;
       case 'cli': {
         const result = await this._cliCapabilities.call<SlashCommandRunResponse>(
           'runCommand',
@@ -2985,6 +2990,33 @@ export class ChatStateManager {
         payload: {
           message: `Summarized ${outcome.messagesSummarized} earlier ${outcome.messagesSummarized === 1 ? 'message' : 'messages'}: context went from ${outcome.tokensBefore.toLocaleString()} to ${outcome.tokensAfter.toLocaleString()} tokens.`,
         },
+      });
+    }
+  }
+
+  private async _askSideQuestion(question: string, requestId: string): Promise<void> {
+    const thread = this._thread;
+    if (thread === undefined) {
+      this._post({
+        type: 'sideQuestionAnswer',
+        payload: {
+          requestId,
+          error:
+            'A side question is answered from this session, so send a first message before asking one.',
+        },
+      });
+      return;
+    }
+    try {
+      const { answer } = await thread.runtime.askSideQuestion(
+        { threadId: thread.id, question, requestId },
+        (delta) => this._post({ type: 'sideQuestionDelta', payload: { requestId, delta } }),
+      );
+      this._post({ type: 'sideQuestionAnswer', payload: { requestId, answer } });
+    } catch (error) {
+      this._post({
+        type: 'sideQuestionAnswer',
+        payload: { requestId, error: error instanceof Error ? error.message : String(error) },
       });
     }
   }

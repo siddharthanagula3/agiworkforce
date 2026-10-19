@@ -14,6 +14,8 @@ vi.mock('mermaid', () => ({
 vi.mock('../markdown/shikiHighlighter', () => ({
   readHighlightCache: () => null,
   highlightToLines: (...args: unknown[]) => highlightToLines(...args),
+  getCodeTheme: () => 'github',
+  subscribeCodeTheme: () => () => {},
 }));
 
 import { ActionBar } from '../ActionBar';

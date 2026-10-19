@@ -1,3 +1,8 @@
+const mockFetchConnectorDirectory = jest.fn();
+jest.mock('@/services/connectors', () => ({
+  fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
+}));
+
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { StreamDelta } from '@/services/streaming';
@@ -122,7 +127,61 @@ function replay(deltas: StreamDelta[], seed?: ResearchRunState): ResearchRunStat
   return state;
 }
 
+beforeEach(() => {
+  mockFetchConnectorDirectory.mockResolvedValue({
+    connectors: [],
+    available: [],
+    entries: [],
+    policy: null,
+  });
+});
+
 describe('ResearchRunCard over a recorded run', () => {
+  it('lets the run read a connected app the user picks', async () => {
+    mockFetchConnectorDirectory.mockResolvedValue({
+      connectors: [
+        {
+          id: 'conn-1',
+          connectorId: 'gmail',
+          toolConnectorId: 'gmail',
+          authType: 'oauth',
+          connectedAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          source: 'oauth',
+        },
+        {
+          id: 'conn-2',
+          connectorId: 'slack',
+          authType: 'oauth',
+          connectedAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          source: 'oauth',
+          needsReauthorization: true,
+        },
+      ],
+      available: [],
+      entries: [],
+      policy: null,
+    });
+    const onPlanDecision = jest.fn();
+    render(
+      <ResearchRunCard
+        research={replay(RUN)}
+        isStreaming={false}
+        onPlanDecision={onPlanDecision}
+      />,
+    );
+
+    fireEvent.press(await screen.findByLabelText('Gmail'));
+    expect(screen.queryByLabelText('Slack')).toBeNull();
+    fireEvent.press(screen.getByTestId('research-plan-approve'));
+    expect(onPlanDecision).toHaveBeenCalledWith({
+      choices: expect.objectContaining({
+        sources: expect.objectContaining({ connectors: ['gmail'] }),
+      }),
+    });
+  });
+
   it('starts the run with the deliverable and sources chosen on the plan', () => {
     const onPlanDecision = jest.fn();
     render(

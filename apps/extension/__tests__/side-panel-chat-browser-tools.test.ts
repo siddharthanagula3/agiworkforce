@@ -80,6 +80,7 @@ function harness(
     history?: boolean;
     historyItems?: chrome.history.HistoryItem[];
     blocked?: string[];
+    mode?: 'ask' | 'auto' | 'full';
   } = {},
 ) {
   const assistant: SidePanelChatMessage = {
@@ -194,6 +195,8 @@ function harness(
     ),
     readUserSiteBlocklist: vi.fn(async () => [...(options.blocked ?? [])]),
     hostLabel: (origin: string) => new URL(origin).host,
+    currentPermissionMode: async () => options.mode ?? 'ask',
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     searchBrowsingHistory,
     describeHistoryResults,
     CHAT_SEARCH_HISTORY_TOOL,
@@ -667,5 +670,29 @@ describe('a site the user blocked', () => {
     const content = h.resolved()!.results[0]!.content;
     expect(content).toContain('Open page');
     expect(content).not.toContain('Blocked report');
+  });
+});
+
+describe('a browser task the model starts in Auto', () => {
+  beforeEach(() => {
+    vi.stubGlobal('chrome', { i18n: { getMessage, getUILanguage: () => 'en' } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('starts on an approved site without a start card, as ChatGPT agent does', async () => {
+    const h = harness({ approved: true, mode: 'auto' });
+    await h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Click Update' }));
+    expect(h.controls.cards.textContent).not.toContain('AGI wants to start a browser task');
+    expect(h.startComposerBrowserTask).toHaveBeenCalledOnce();
+  });
+
+  it('still asks for site access on a site the task has not been given', async () => {
+    const h = harness({ mode: 'auto' });
+    const done = h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Click Update' }));
+    await flush();
+    expect(h.controls.cards.textContent).toContain('AGI needs access to example.com');
+    grantButton(h.controls, 'Decline').click();
+    await done;
+    expect(h.startComposerBrowserTask).not.toHaveBeenCalled();
   });
 });

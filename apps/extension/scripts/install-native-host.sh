@@ -26,17 +26,37 @@ if [ ! -f "$TEMPLATE" ]; then
   exit 1
 fi
 
+# Every Chromium browser reads host manifests from <its user data dir>/NativeMessagingHosts.
+# Chrome, Chromium and Edge are always written; the others only when the browser's
+# user data directory exists, so no folder is created for a browser that is not installed.
 case "$(uname -s)" in
   Darwin)
-    HOST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
-    CHROMIUM_HOST_DIR="$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
-    EDGE_HOST_DIR="$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
+    SUPPORT="$HOME/Library/Application Support"
+    ALWAYS_DIRS=(
+      "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
+      "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
+    )
+    IF_INSTALLED_DATA_DIRS=(
+      "$SUPPORT/BraveSoftware/Brave-Browser"
+      "$SUPPORT/Vivaldi"
+      "$SUPPORT/Arc/User Data"
+      "$SUPPORT/com.operasoftware.Opera"
+      "$SUPPORT/Comet"
+    )
     DEFAULT_HOST="$HOME/Library/Application Support/com.agiworkforce.desktop/native_messaging_host"
     ;;
   Linux)
-    HOST_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
-    CHROMIUM_HOST_DIR="$HOME/.config/chromium/NativeMessagingHosts"
-    EDGE_HOST_DIR="$HOME/.config/microsoft-edge/NativeMessagingHosts"
+    ALWAYS_DIRS=(
+      "$HOME/.config/google-chrome/NativeMessagingHosts"
+      "$HOME/.config/chromium/NativeMessagingHosts"
+      "$HOME/.config/microsoft-edge/NativeMessagingHosts"
+    )
+    IF_INSTALLED_DATA_DIRS=(
+      "$HOME/.config/BraveSoftware/Brave-Browser"
+      "$HOME/.config/vivaldi"
+      "$HOME/.config/opera"
+    )
     DEFAULT_HOST="/opt/agiworkforce/native_messaging_host"
     ;;
   *)
@@ -51,22 +71,23 @@ if [ ! -x "$HOST_PATH" ]; then
   echo "Launch AGI Desktop once so it can prepare the external native host helper." >&2
   exit 1
 fi
-OUT="$HOST_DIR/com.agiworkforce.browser.json"
-CHROMIUM_OUT="$CHROMIUM_HOST_DIR/com.agiworkforce.browser.json"
-EDGE_OUT="$EDGE_HOST_DIR/com.agiworkforce.browser.json"
 
-mkdir -p "$HOST_DIR"
-mkdir -p "$CHROMIUM_HOST_DIR"
-mkdir -p "$EDGE_HOST_DIR"
+TARGET_DIRS=("${ALWAYS_DIRS[@]}")
+for DATA_DIR in "${IF_INSTALLED_DATA_DIRS[@]}"; do
+  if [ -d "$DATA_DIR" ]; then
+    TARGET_DIRS+=("$DATA_DIR/NativeMessagingHosts")
+  fi
+done
 
-sed \
+MANIFEST="$(sed \
   -e "s|<EXTENSION_ID_PLACEHOLDER>|$EXT_ID|g" \
   -e "s|<NATIVE_HOST_PATH_PLACEHOLDER>|$HOST_PATH|g" \
-  "$TEMPLATE" > "$OUT"
-cp "$OUT" "$CHROMIUM_OUT"
-cp "$OUT" "$EDGE_OUT"
+  "$TEMPLATE")"
 
-echo "Installed: $OUT"
-echo "Installed: $CHROMIUM_OUT"
-echo "Installed: $EDGE_OUT"
-echo "Reload the extension in chrome://extensions to apply."
+for DIR in "${TARGET_DIRS[@]}"; do
+  mkdir -p "$DIR"
+  printf '%s\n' "$MANIFEST" > "$DIR/com.agiworkforce.browser.json"
+  echo "Installed: $DIR/com.agiworkforce.browser.json"
+done
+
+echo "Reload the extension in each browser's extensions page to apply."

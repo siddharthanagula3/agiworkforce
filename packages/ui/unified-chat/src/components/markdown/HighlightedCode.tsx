@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { reportClientFailure } from '../../lib/client-failures';
-import { highlightToLines, readHighlightCache, type HighlightedLine } from './shikiHighlighter';
+import {
+  getCodeTheme,
+  highlightToLines,
+  readHighlightCache,
+  subscribeCodeTheme,
+  type HighlightedLine,
+} from './shikiHighlighter';
 import './codeBlock.css';
 
 const LINE_BREAK = '\n';
@@ -19,6 +25,7 @@ export const HighlightedCode: React.FC<HighlightedCodeProps> = ({
   enabled,
   className,
 }) => {
+  const codeTheme = useSyncExternalStore(subscribeCodeTheme, getCodeTheme, getCodeTheme);
   const [lines, setLines] = useState<readonly HighlightedLine[] | null>(() =>
     enabled ? readHighlightCache(code, language) : null,
   );
@@ -45,7 +52,7 @@ export const HighlightedCode: React.FC<HighlightedCodeProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [code, enabled, language]);
+  }, [code, codeTheme, enabled, language]);
 
   if (!lines) return <code className={className}>{code}</code>;
 

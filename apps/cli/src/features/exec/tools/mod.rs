@@ -450,7 +450,14 @@ impl registry::Tool for SkillTool {
                 .map(|definition| definition.name)
                 .collect();
         let skills = crate::skills::discover_skills();
-        match crate::skills::invoke_skill_tool(&skills, action, name, &available_tools) {
+        let connected = crate::skills::connected_services(&skills).await;
+        match crate::skills::invoke_skill_tool(
+            &skills,
+            action,
+            name,
+            &available_tools,
+            Some(&connected),
+        ) {
             Ok(output) => Ok(ToolResult {
                 tool_name: "skill".to_string(),
                 success: true,

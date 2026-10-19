@@ -5,7 +5,7 @@ import { PublishedArtifactView } from './PublishedArtifactView';
 
 const routerPush = vi.hoisted(() => vi.fn());
 const copySharedArtifactToChat = vi.hoisted(() => vi.fn());
-const runtimeState = vi.hoisted(() => ({ signInNeeded: false }));
+const runtimeState = vi.hoisted(() => ({ signInNeeded: false, granted: [] as string[][] }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
 
@@ -17,7 +17,7 @@ vi.mock('./usePublishedArtifactRuntime', () => ({
     signInNeeded: runtimeState.signInNeeded,
     askingForAi: null,
     answerAiRequest: vi.fn(),
-    grantedConnectorSets: [],
+    grantedConnectorSets: runtimeState.granted,
     reviewConnectors: vi.fn(),
   }),
 }));
@@ -37,10 +37,12 @@ vi.mock('@/features/chat/components/SandboxedIframe', () => ({
     fallbackSrcDoc: string;
     title: string;
     onRenderError?: (error: string) => void;
+    refreshKey?: number;
   }) => (
     <>
       <div
         data-testid="sandboxed-frame"
+        data-refresh={props.refreshKey ?? 0}
         data-kind={props.payload.kind}
         data-fallback={props.fallbackSrcDoc}
       />
@@ -98,6 +100,7 @@ describe('PublishedArtifactView', () => {
     routerPush.mockReset();
     copySharedArtifactToChat.mockReset();
     runtimeState.signInNeeded = false;
+    runtimeState.granted = [];
   });
 
   it('starts a signed-out visitor who saves a copy on sign-up and brings them back', async () => {
@@ -213,5 +216,22 @@ describe('PublishedArtifactView', () => {
   it('falls back to a readable heading when the artifact has no title', () => {
     render(<PublishedArtifactView {...BASE} title="" kind="code" content="x" />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Published artifact');
+  });
+
+  it('re-runs an app with connected data to refresh it without regenerating', () => {
+    runtimeState.granted = [['google-drive']];
+    render(
+      <PublishedArtifactView {...BASE} kind="html" content="<main>Report</main>" token={TOKEN} />,
+    );
+    expect(screen.getByTestId('sandboxed-frame')).toHaveAttribute('data-refresh', '0');
+    fireEvent.click(screen.getByTestId('artifact-runtime-refresh-data'));
+    expect(screen.getByTestId('sandboxed-frame')).toHaveAttribute('data-refresh', '1');
+  });
+
+  it('offers no data refresh to an app without connected data', () => {
+    render(
+      <PublishedArtifactView {...BASE} kind="html" content="<main>Plain</main>" token={TOKEN} />,
+    );
+    expect(screen.queryByTestId('artifact-runtime-refresh-data')).toBeNull();
   });
 });

@@ -202,6 +202,7 @@ export async function getManagedModelAccess(
   if (!token.trim()) throw new Error('Authentication is required');
   const requestOptions: RequestInit = {
     method: 'GET',
+    cache: 'no-store',
     headers: {
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',

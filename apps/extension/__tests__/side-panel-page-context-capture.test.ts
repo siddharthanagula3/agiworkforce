@@ -64,6 +64,7 @@ function captureHarness(blocked: string[] = []) {
     PAGE_CONTEXT_BLOCKED_REASON: 'This page cannot be read.',
     PAGE_CONTEXT_CHANGED_REASON: 'The page changed while it was being read.',
     describePageContextFailure: (message: string) => message,
+    activePageQuery: async () => ({ active: true, currentWindow: true }),
     isUserBlockedSite: async (url: string) => blocked.includes(new URL(url).origin),
     t: (key: string, substitutions: string[] = []) => `${key}:${substitutions.join(',')}`,
   };

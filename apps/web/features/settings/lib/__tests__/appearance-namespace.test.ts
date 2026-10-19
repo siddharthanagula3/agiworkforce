@@ -16,6 +16,7 @@ const WEB_DEFAULTS: AppearanceSettings = {
   motion: 'system',
   highContrast: false,
   codeBlockWrap: false,
+  codeTheme: 'github',
   sendWithEnter: true,
   defaultWorkMode: 'chat',
   followUpSuggestionsEnabled: true,
@@ -57,6 +58,7 @@ describe('the appearance namespace web and mobile share', () => {
       motion: 'reduced',
       highContrast: true,
       codeBlockWrap: true,
+      codeTheme: 'catppuccin',
       sendWithEnter: false,
       defaultWorkMode: 'agiwork',
       followUpSuggestionsEnabled: false,
@@ -79,6 +81,7 @@ describe('the appearance namespace web and mobile share', () => {
         highContrast: 'yes',
         hiddenNavIds: [1, 2],
         font: 'comic',
+        codeTheme: 'solarized-light',
       }),
     ).toEqual({});
   });

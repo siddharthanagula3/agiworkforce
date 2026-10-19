@@ -149,6 +149,40 @@ describe('LocalSessionPanel review pane', () => {
     expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
   });
 
+  it('moves the side panel below or left of the conversation and remembers where', async () => {
+    const user = userEvent.setup();
+    window.localStorage.removeItem('agi.code.local.panelDock');
+    const panel = () => (
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />
+    );
+    const { container, unmount } = render(panel());
+    expect(screen.queryByRole('button', { name: /^Panel position/u })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Files' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Panel position: Right of the conversation' }),
+    );
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Below the conversation' }));
+
+    expect(container.querySelector('[data-panel-dock]')).toHaveAttribute(
+      'data-panel-dock',
+      'bottom',
+    );
+    unmount();
+
+    const again = render(panel());
+    expect(again.container.querySelector('[data-panel-dock]')).toHaveAttribute(
+      'data-panel-dock',
+      'bottom',
+    );
+  });
+
   it('keeps the folder controls in a worktree, which its folder grant covers', () => {
     render(
       <LocalSessionPanel

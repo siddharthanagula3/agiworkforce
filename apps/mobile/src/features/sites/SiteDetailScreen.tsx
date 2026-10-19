@@ -195,7 +195,9 @@ export function SiteDetailScreen() {
 
   const { site, data } = state;
   const visibilities = MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES.filter(
-    (visibility) => visibility !== 'organization' || state.hasWorkspace,
+    (visibility) =>
+      (visibility !== 'organization' || state.hasWorkspace) &&
+      (visibility !== 'invited' || site.visibility === 'invited'),
   );
 
   return (

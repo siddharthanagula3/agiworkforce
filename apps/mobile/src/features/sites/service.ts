@@ -100,7 +100,7 @@ export function siteName(site: Pick<ManagedCloudPublishedArtifact, 'title'>): st
 export const SITE_VISIBILITY_LABELS: Record<ManagedCloudPublishedArtifact['visibility'], string> = {
   public: 'Anyone with the link',
   organization: 'Only your workspace',
-  private: 'Only you',
+  invited: 'Invited people',
 };
 
 export function siteSizeLabel(bytes: number): string {

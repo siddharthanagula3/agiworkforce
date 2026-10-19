@@ -502,6 +502,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "create-skill",
+            "Describe a skill or paste examples, and the agent writes it",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "save-skill",
             "Save the task you just finished as a reusable skill",
             false,

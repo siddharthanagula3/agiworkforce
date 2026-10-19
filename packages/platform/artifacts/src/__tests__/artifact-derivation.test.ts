@@ -410,3 +410,53 @@ describe('the explicit marker for each renderable type', () => {
     },
   );
 });
+
+describe('marked markdown documents and decks', () => {
+  const DOC = '```markdown\n<!-- @artifact -->\n# Launch plan\n\nShip in March.\n```';
+  const DECK =
+    '```md\n<!-- @artifact -->\n<!-- deck theme=midnight -->\n\n# Pitch\n\n---\n\n## Ask\n\nFunding\n```';
+  const UNMARKED = '```markdown\n# Just an example\n\nNot an artifact.\n```';
+  const MARKER_LATER = '```markdown\n# Example\n<!-- @artifact -->\ntext\n```';
+
+  for (const include of ['renderable', 'explicit-renderable'] as const) {
+    it(`derives a marked markdown block as a document without its marker (${include})`, () => {
+      const [doc] = deriveArtifacts(DOC, { conversationId: 'c', messageId: 'm', include });
+      expect(doc).toMatchObject({ type: 'document', language: 'markdown', title: 'Launch plan' });
+      expect(doc!.content).toBe('# Launch plan\n\nShip in March.');
+    });
+
+    it(`derives a marked block with a deck line as a presentation (${include})`, () => {
+      const [deck] = deriveArtifacts(DECK, { conversationId: 'c', messageId: 'm', include });
+      expect(deck).toMatchObject({ type: 'presentation', language: 'markdown', title: 'Pitch' });
+      expect(deck!.content.startsWith('<!-- deck theme=midnight -->')).toBe(true);
+    });
+
+    it(`never derives an unmarked markdown block (${include})`, () => {
+      expect(deriveArtifacts(UNMARKED, { include })).toHaveLength(0);
+      expect(hasArtifacts(UNMARKED, { include })).toBe(false);
+    });
+
+    it(`does not treat a marker below the first line as a document (${include})`, () => {
+      const derived = deriveArtifacts(MARKER_LATER, { include });
+      expect(derived.every((artifact) => artifact.type !== 'document')).toBe(true);
+    });
+  }
+
+  it('leaves every existing type unchanged', () => {
+    expect(detectArtifactType('html', '<!-- @artifact -->\n<main/>')).toBe('html');
+    expect(detectArtifactType('svg', '<svg></svg>')).toBe('svg');
+    expect(detectArtifactType('tsx', '// @artifact\nexport default 1')).toBe('react');
+    expect(detectArtifactType('mermaid', '%% @artifact\ngraph TD')).toBe('mermaid');
+    expect(detectArtifactType('python', 'print(1)')).toBe('code');
+    expect(detectArtifactType('markdown', '# heading only')).toBe('code');
+    expect(EXPLICIT_ARTIFACT_MARKER_FOR.markdown).toBe('<!-- @artifact -->');
+  });
+
+  it('removes the marked block from the prose around it', () => {
+    const message = `Here is the plan.\n\n${DOC}\n\nTell me what to change.`;
+    const artifacts = deriveArtifacts(message, { include: 'explicit-renderable' });
+    expect(removeArtifactBlocks(message, artifacts, { include: 'explicit-renderable' })).toBe(
+      'Here is the plan.\n\n\n\nTell me what to change.',
+    );
+  });
+});

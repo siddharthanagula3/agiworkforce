@@ -288,7 +288,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 101);
+        assert_eq!(commands.len(), 102);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
@@ -311,6 +311,7 @@ mod tests {
             category: Some("review".to_string()),
             required_env_vars: vec![],
             required_tools: vec![],
+            required_connections: vec![],
             version: None,
             content_hash: crate::skills::hash_skill_content(b""),
             tree_hash: None,
@@ -389,6 +390,7 @@ mod tests {
             category: None,
             required_env_vars: vec![],
             required_tools: vec![],
+            required_connections: vec![],
             version: None,
             content_hash: crate::skills::hash_skill_content(b""),
             tree_hash: None,
@@ -439,6 +441,7 @@ mod tests {
             category: None,
             required_env_vars: vec![],
             required_tools: vec![],
+            required_connections: vec![],
             version: None,
             content_hash: crate::skills::hash_skill_content(b""),
             tree_hash: None,

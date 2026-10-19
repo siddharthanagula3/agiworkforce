@@ -45,6 +45,7 @@ export interface Schedule {
   nextRunAt: string | null;
   lastRunStatus: 'success' | 'failed' | 'pending' | null;
   pausedReason?: ManagedCloudScheduleTask['pausedReason'];
+  projectId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

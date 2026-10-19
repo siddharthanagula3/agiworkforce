@@ -1,9 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Square } from '@agiworkforce/icons';
+import { ExternalLink, Square } from '@agiworkforce/icons';
 import type { BackgroundCommandRun } from '@agiworkforce/local-runtime-contract';
-import { cancelLocalCommand, readBackgroundActivity } from '@/features/desktop-host';
+import {
+  cancelLocalCommand,
+  openLocalPreview,
+  readBackgroundActivity,
+} from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { LOCAL_CODE_COPY } from '../local-code';
 import styles from '../CloudCodePage.module.css';
@@ -42,6 +46,15 @@ export function LocalRunningCommands({
     const timer = setInterval(() => void load(), POLL_MS);
     return () => clearInterval(timer);
   }, [load, refreshKey]);
+
+  const preview = async (url: string) => {
+    try {
+      await openLocalPreview(url);
+      setError(null);
+    } catch (cause: unknown) {
+      setError(toUserMessage(cause, LOCAL_CODE_COPY.previewFailed));
+    }
+  };
 
   const stop = async (runIds: string[]) => {
     setStopping((current) => new Set([...current, ...runIds]));
@@ -89,6 +102,18 @@ export function LocalRunningCommands({
                 {LOCAL_CODE_COPY.runningSince(Math.floor((now() - run.startedAtMs) / MINUTE_MS))}
               </span>
             </span>
+            {run.previewUrl && (
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                aria-label={LOCAL_CODE_COPY.openPreviewOf(run.previewUrl)}
+                title={run.previewUrl}
+                onClick={() => run.previewUrl && void preview(run.previewUrl)}
+              >
+                <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
+                {LOCAL_CODE_COPY.openPreview}
+              </button>
+            )}
             <button
               type="button"
               className={styles['headerButton']}

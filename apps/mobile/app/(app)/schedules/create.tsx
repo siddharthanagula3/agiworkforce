@@ -31,6 +31,7 @@ export default function CreateScheduleScreen() {
     prompt?: string;
     model?: string;
     agentId?: string;
+    projectId?: string;
   }>();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -101,7 +102,10 @@ export default function CreateScheduleScreen() {
         if (isEditing && existingSchedule) {
           await updateSchedule(existingSchedule.id, data);
         } else {
-          const created = await createSchedule(data as Parameters<typeof createSchedule>[0]);
+          const created = await createSchedule({
+            ...data,
+            ...(params.projectId ? { projectId: params.projectId } : {}),
+          } as Parameters<typeof createSchedule>[0]);
           if (!created) return;
         }
         router.back();
@@ -109,7 +113,15 @@ export default function CreateScheduleScreen() {
         // Error is handled in the store and shown via the error banner on the list screen
       }
     },
-    [canCreateSchedule, isEditing, existingSchedule, createSchedule, updateSchedule, router],
+    [
+      canCreateSchedule,
+      isEditing,
+      existingSchedule,
+      createSchedule,
+      updateSchedule,
+      router,
+      params.projectId,
+    ],
   );
 
   const handleCancel = useCallback(() => {

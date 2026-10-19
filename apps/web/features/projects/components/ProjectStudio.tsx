@@ -4,7 +4,11 @@ import {
   BookOpen,
   CalendarClock,
   FileText,
+  GraduationCap,
+  Layers,
   LayoutList,
+  ListChecks,
+  PanelsTopLeft,
   Presentation,
   Table,
   Waypoints,
@@ -26,6 +30,9 @@ interface StudioOutput {
 
 const GROUNDING =
   "Use only this project's sources. Cite the source each point comes from, and say plainly where the sources do not cover something.";
+
+const MARKED_DOCUMENT =
+  'Reply with one ```markdown fenced block whose first line is <!-- @artifact -->, so it opens as a document.';
 
 const STUDIO_OUTPUTS: readonly StudioOutput[] = [
   {
@@ -68,6 +75,34 @@ const STUDIO_OUTPUTS: readonly StudioOutput[] = [
     label: 'Data table',
     icon: Table,
     prompt: `Pull the structured facts in this project's sources into a data table, one row per item with a column for each attribute the sources give, as a markdown table. ${GROUNDING}`,
+    officeCreationEnabled: false,
+  },
+  {
+    id: 'quiz',
+    label: 'Quiz',
+    icon: ListChecks,
+    prompt: `Make an interactive quiz from this project's sources: ten questions mixing multiple choice and short answer, each with an explanation that names the source it comes from and up to two hints. Write it as a ~~~quiz block of JSON {"title", "questions": [{"type": "multiple_choice", "question", "options", "answer": <index of the right option>, "explanation", "hints"}, {"type": "short_answer", "question", "answer", "accept", "explanation", "hints"}]} under a one-line introduction. ${MARKED_DOCUMENT} ${GROUNDING}`,
+    officeCreationEnabled: false,
+  },
+  {
+    id: 'flashcards',
+    label: 'Flashcards',
+    icon: Layers,
+    prompt: `Make a set of twenty flashcards from this project's sources, one key term, fact or idea per card, with the source on the back. Write it as a ~~~flashcards block of JSON {"title", "cards": [{"front", "back"}]} under a one-line introduction. ${MARKED_DOCUMENT} ${GROUNDING}`,
+    officeCreationEnabled: false,
+  },
+  {
+    id: 'learning-overview',
+    label: 'Learning overview',
+    icon: GraduationCap,
+    prompt: `Make an interactive learning overview of this project's sources: a short outline of what to learn in order, then one section per key concept with a plain explanation and one worked example, and finish with a five-question check written as a ~~~quiz block of JSON {"title", "questions": [{"type": "multiple_choice", "question", "options", "answer": <index>, "explanation"}]}. ${MARKED_DOCUMENT} ${GROUNDING}`,
+    officeCreationEnabled: false,
+  },
+  {
+    id: 'infographic',
+    label: 'Infographic',
+    icon: PanelsTopLeft,
+    prompt: `Make a one-page infographic of this project's sources as a single self-contained HTML artifact: a headline, the five to seven most important numbers or facts as large labelled figures, one simple chart drawn in inline SVG where the sources give data, and short sections with icons drawn in CSS or inline SVG. No external images, fonts or scripts. List the sources in a small footer. Reply with one \`\`\`html fenced block whose first line is <!-- @artifact -->. ${GROUNDING}`,
     officeCreationEnabled: false,
   },
   {

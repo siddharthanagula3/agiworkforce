@@ -282,7 +282,20 @@ export interface HostPreferences {
   stopShortcut?: string;
   newChatShortcut?: string;
   agentNotifications?: HostAgentNotificationPreferences;
+  /**
+   * Whether the dictation shortcut, pressed while another app is in front,
+   * types what was said into that app rather than into AGI Cloud.
+   */
+  dictateIntoFocusedApp?: boolean;
 }
+
+/**
+ * Where a dictation started over another app ended up: typed into that app,
+ * or put on the clipboard because the app could no longer take it.
+ */
+export type HostDictationOutcome = 'typed' | 'copied';
+
+export const MAX_DICTATION_TEXT_LENGTH = 10_000;
 
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {
   quickAsk: 'quickAskShortcut',
@@ -419,6 +432,13 @@ export interface HostBridge {
    * Shells that predate the outcome resolve with nothing.
    */
   restartToUpdate?(): Promise<HostRestartOutcome | void>;
+  /**
+   * Present only in the dictation bar the shell opens over another app. The
+   * shell types the text into the app that was in front when the shortcut was
+   * pressed, and accepts it once per press.
+   */
+  finishDictation?(text: string): Promise<HostDictationOutcome>;
+  cancelDictation?(): Promise<void>;
 }
 
 declare global {

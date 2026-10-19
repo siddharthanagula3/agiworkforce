@@ -104,6 +104,13 @@ pub fn format_task_detail(
                     result.files_modified.join(", ")
                 ));
             }
+            if !result.transcript.is_empty() {
+                lines.push(String::new());
+                lines.push(format!(
+                    "Its whole conversation ({} steps): /tasks transcript {id}",
+                    result.transcript.len()
+                ));
+            }
         }
         None if matches!(status, SubagentStatus::Running) => {
             lines.push("Still running. Its output appears here when it finishes.".to_string());
@@ -146,6 +153,61 @@ pub struct SubagentResult {
     pub output: String,
     pub files_modified: Vec<String>,
     pub usage: SubagentUsage,
+    #[serde(default)]
+    pub transcript: Vec<String>,
+}
+
+const TRANSCRIPT_LINE_CHARS: usize = 400;
+
+fn clipped(text: &str) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= TRANSCRIPT_LINE_CHARS {
+        return flat;
+    }
+    let mut kept: String = flat.chars().take(TRANSCRIPT_LINE_CHARS).collect();
+    kept.push_str(" ...");
+    kept
+}
+
+/// A subagent's own conversation, one line per message or tool step, as
+/// Claude Code lets a user attach to each agent's transcript.
+pub(crate) fn transcript_lines(messages: &[crate::models::Message]) -> Vec<String> {
+    use crate::models::{ContentBlock, MessageContent};
+    let mut lines = Vec::new();
+    for message in messages.iter().filter(|message| message.role != "system") {
+        let blocks = match &message.content {
+            MessageContent::Text(text) => {
+                if !text.trim().is_empty() {
+                    lines.push(format!("{}: {}", message.role, clipped(text)));
+                }
+                continue;
+            }
+            MessageContent::Blocks(blocks) => blocks,
+        };
+        for block in blocks {
+            match block {
+                ContentBlock::Text { text } if !text.trim().is_empty() => {
+                    lines.push(format!("{}: {}", message.role, clipped(text)))
+                }
+                ContentBlock::ToolUse { name, input, .. } => {
+                    lines.push(format!("tool {name}: {}", clipped(&input.to_string())))
+                }
+                ContentBlock::ToolResult {
+                    content, is_error, ..
+                } => lines.push(format!(
+                    "{}: {}",
+                    if *is_error {
+                        "tool error"
+                    } else {
+                        "tool result"
+                    },
+                    clipped(content)
+                )),
+                _ => {}
+            }
+        }
+    }
+    lines
 }
 
 /// Internal handle tracking a spawned subagent thread.
@@ -499,7 +561,7 @@ impl SubagentManager {
                     }
 
                     match outcome {
-                        Ok((model, turn)) => {
+                        Ok((model, turn, transcript)) => {
                             let files = extract_modified_files(&turn.response);
                             let usage = SubagentUsage::from_turn(&model, &turn);
 
@@ -508,6 +570,7 @@ impl SubagentManager {
                                 output: turn.response,
                                 files_modified: files,
                                 usage,
+                                transcript,
                             };
 
                             audit(&SubagentStatus::Completed, Some(&subagent_result));
@@ -776,7 +839,7 @@ async fn run_subagent(
     run_config: &SubagentRunConfig,
     prompt: &str,
     cancelled: &std::sync::atomic::AtomicBool,
-) -> Result<(String, crate::agent::TurnResult)> {
+) -> Result<(String, crate::agent::TurnResult, Vec<String>)> {
     let mut session = crate::agent::AgentSession::new_checked(
         &run_config.model,
         &run_config.sys_context,
@@ -817,30 +880,32 @@ async fn run_subagent(
     }
 
     let model = session.model.clone();
-    let send_fut = session.send(
-        &run_config.config,
-        prompt,
-        Box::new(|_chunk| {
-            // Subagent output is collected silently -- not streamed to terminal.
-            // The parent agent receives the full result.
-        }),
-    );
-    tokio::pin!(send_fut);
+    let result = {
+        let send_fut = session.send(
+            &run_config.config,
+            prompt,
+            Box::new(|_chunk| {
+                // Subagent output is collected silently -- not streamed to terminal.
+                // The parent agent receives the full result.
+            }),
+        );
+        tokio::pin!(send_fut);
 
-    // Race the turn against cancellation. If `cancel()` (or the parent's
-    // timeout) sets the flag, the cancel branch wins and `send_fut` is dropped
-    // on return, which aborts the in-flight provider request, so a cancelled
-    // subagent actually stops generating instead of running its turn (and any
-    // in-flight tool side effects) to completion.
-    let result = tokio::select! {
-        biased;
-        () = wait_until_cancelled(cancelled) => {
-            anyhow::bail!("subagent cancelled");
+        // Race the turn against cancellation. If `cancel()` (or the parent's
+        // timeout) sets the flag, the cancel branch wins and `send_fut` is dropped
+        // on return, which aborts the in-flight provider request, so a cancelled
+        // subagent actually stops generating instead of running its turn (and any
+        // in-flight tool side effects) to completion.
+        tokio::select! {
+            biased;
+            () = wait_until_cancelled(cancelled) => {
+                anyhow::bail!("subagent cancelled");
+            }
+            r = &mut send_fut => r?,
         }
-        r = &mut send_fut => r?,
     };
 
-    Ok((model, result))
+    Ok((model, result, transcript_lines(&session.messages)))
 }
 
 /// Resolve once the cancellation flag is set, polling cooperatively (every
@@ -907,6 +972,47 @@ fn extract_modified_files(output: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_subagent_transcript_shows_its_messages_and_tool_steps() {
+        use crate::models::{ContentBlock, Message};
+        let messages = vec![
+            Message::text("system", "internal"),
+            Message::text("user", "Find the flaky test"),
+            Message::blocks(
+                "assistant",
+                vec![
+                    ContentBlock::Text {
+                        text: "Looking at the CI log.".to_string(),
+                    },
+                    ContentBlock::ToolUse {
+                        id: "t1".to_string(),
+                        name: "read_file".to_string(),
+                        input: serde_json::json!({ "path": "ci.log" }),
+                    },
+                ],
+            ),
+            Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: "t1".to_string(),
+                    content: "timeout in parser_test".to_string(),
+                    is_error: false,
+                }],
+            ),
+            Message::text("assistant", "parser_test times out."),
+        ];
+        assert_eq!(
+            transcript_lines(&messages),
+            vec![
+                "user: Find the flaky test",
+                "assistant: Looking at the CI log.",
+                "tool read_file: {\"path\":\"ci.log\"}",
+                "tool result: timeout in parser_test",
+                "assistant: parser_test times out.",
+            ]
+        );
+    }
 
     #[test]
     fn test_subagent_status_display() {

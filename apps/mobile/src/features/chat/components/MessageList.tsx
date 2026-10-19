@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, type ReactElement } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { AccessibilityInfo, View, RefreshControl, StyleSheet } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -31,6 +31,7 @@ interface MessageListProps {
   onRetryWithModel?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
+  footer?: ReactElement | null;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
   onDeleteImageConversation?: () => void;
   variantInfoByMessageId?: VariantInfoByMessageId;
@@ -73,6 +74,7 @@ export function MessageList({
   onRetryWithModel,
   onBranch,
   onScheduleMessage,
+  footer,
   onEditImageArea,
   onDeleteImageConversation,
   variantInfoByMessageId,
@@ -204,6 +206,7 @@ export function MessageList({
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={{ paddingVertical: 8 }}
+        ListFooterComponent={footer ?? null}
         showsVerticalScrollIndicator={false}
         maintainVisibleContentPosition={{
           autoscrollToBottomThreshold: NEAR_BOTTOM_THRESHOLD,

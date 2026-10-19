@@ -58,6 +58,7 @@
 /voice [v]
 /image [imagine]
 /search
+/create-skill
 /save-skill
 /save-routine
 /schedule [routines]

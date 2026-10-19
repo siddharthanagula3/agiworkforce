@@ -53,6 +53,17 @@ describe('AgentActivityTimeline · computer-use steps', () => {
     );
   });
 
+  it('names the app a step opened', () => {
+    render(
+      <AgentActivityTimeline
+        defaultExpanded
+        activity={screenActivity('device_open_app', { application: 'Notes' })}
+      />,
+    );
+
+    expect(screen.getByTestId('computer-use-step').textContent).toContain('Opened Notes');
+  });
+
   it('quotes what was typed, shortened rather than dumped', () => {
     render(
       <AgentActivityTimeline

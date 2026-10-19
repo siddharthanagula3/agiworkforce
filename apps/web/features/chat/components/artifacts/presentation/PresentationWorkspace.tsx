@@ -107,6 +107,7 @@ export interface PresentationWorkspaceProps {
   onSave: (content: string) => void;
   onRequestEdits?: (prompt: string) => boolean;
   onCommentSlide?: (slideIndex: number) => void;
+  onCreateBrand?: (apply: (meta: Record<string, string>) => void) => void;
   brandThemes?: readonly { id: string; name: string; meta: Record<string, string> }[];
 }
 
@@ -130,6 +131,7 @@ export function PresentationWorkspace({
   onSave,
   onRequestEdits,
   onCommentSlide,
+  onCreateBrand,
   brandThemes = [],
 }: PresentationWorkspaceProps) {
   const deck = useMemo(() => parseDeck(content), [content]);
@@ -297,6 +299,20 @@ export function PresentationWorkspace({
           commit({ ...deck, meta: { ...themeMeta(deck.meta, 'custom'), ...brand.meta } }),
       };
     }),
+    ...(onCreateBrand
+      ? [
+          {
+            id: 'brand-new',
+            label: 'New brand',
+            group: 'Your brands',
+            icon: Plus,
+            onSelect: () =>
+              onCreateBrand((meta) =>
+                commit({ ...deck, meta: { ...themeMeta(deck.meta, 'custom'), ...meta } }),
+              ),
+          },
+        ]
+      : []),
   ];
 
   const insertItems: DeckMenuItem[] = [

@@ -100,6 +100,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "vim",
         "recap",
         "save-skill",
+        "create-skill",
         "save-routine",
         "schedule",
         "routines",
@@ -310,6 +311,7 @@ pub fn handle_shared_command(
         "/tui" => ParityCommandResult::SystemMessage(handle_tui(session, arg)),
         "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
         "/save-skill" => ParityCommandResult::Prompt(save_skill_prompt(arg)),
+        "/create-skill" => ParityCommandResult::Prompt(create_skill_prompt(arg)),
         "/save-routine" => ParityCommandResult::Prompt(save_routine_prompt(arg)),
         "/schedule" | "/routines" => {
             if session.privacy_mode == PrivacyMode::Local {
@@ -815,6 +817,16 @@ pub fn review_prompt(arg: &str) -> String {
     };
     format!(
         "Please review {review_scope}. Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks. Return high-confidence findings with file/line evidence and proposed fixes."
+    )
+}
+
+pub fn create_skill_prompt(arg: &str) -> String {
+    let brief = match arg.trim() {
+        "" => "Ask me what the skill should do and for one or two examples of the input it gets and the result I want, then".to_string(),
+        brief => format!("The skill: {brief}. Using that and any examples in it,"),
+    };
+    format!(
+        "Create a reusable skill. {brief} write it to .agiworkforce/skills/<name>/SKILL.md: YAML frontmatter with a short kebab-case name, a one-line description of when to use it, `tools:` for any tools it needs and `connectors:` for any MCP server or account connector it works through, then the steps, the checks that prove it worked, and the examples as worked cases. Keep it specific to the task, leave out secrets and personal data, and read back the file when it is written."
     )
 }
 
@@ -2763,6 +2775,22 @@ mod tests {
             handle_shared_command("/rc", "", &mut session),
             ParityCommandResult::NotHandled
         );
+    }
+
+    #[test]
+    fn create_skill_asks_the_agent_to_write_one_from_a_description_or_examples() {
+        let mut session = test_session();
+        let ParityCommandResult::Prompt(prompt) = handle_shared_command(
+            "/create-skill",
+            "triage new GitHub issues; example: 'login fails on Safari' -> label bug, area auth",
+            &mut session,
+        ) else {
+            panic!("create-skill is a prompt");
+        };
+        assert!(prompt.contains(".agiworkforce/skills/<name>/SKILL.md"));
+        assert!(prompt.contains("login fails on Safari"));
+        assert!(prompt.contains("connectors:"));
+        assert!(create_skill_prompt("").contains("Ask me what the skill should do"));
     }
 
     #[test]

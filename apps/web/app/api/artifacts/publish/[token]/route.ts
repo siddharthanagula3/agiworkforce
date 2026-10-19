@@ -11,6 +11,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
@@ -64,7 +65,8 @@ async function handleUnpublish(request: NextRequest, context: RouteContext): Pro
  * Move a published artifact between audiences.
  *
  * `organization` mints the grant row and closes the anonymous token page;
- * `public` drops the grant row and reopens it. Both writes run through the
+ * `public` drops any grant row and reopens it; `invited` drops any grant row and
+ * leaves the page to the people on the viewer list (0372). Every write runs through the
  * RLS-scoped adapter, so 0184's policies, not this handler, decide whether the
  * caller may touch the row at all.
  */
@@ -72,28 +74,34 @@ async function moveToAudience(
   db: DatabaseAdapter,
   input: { userId: string; token: string; visibility: ManagedCloudPublishedArtifactVisibility },
 ): Promise<{ updated: PublishedArtifact | null; organizationId: string | null }> {
-  const target = await resolveArtifactShareTarget(db, { userId: input.userId, token: input.token });
-
-  if (input.visibility === 'organization') {
-    await requireOrganizationPermission(
-      input.userId,
-      target.organizationId,
-      'content.share',
-      SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
-    );
-    await shareArtifactWithOrganization(db, {
-      organizationId: target.organizationId,
-      publishedArtifactId: target.publishedArtifactId,
-      actorUserId: input.userId,
-    });
-  } else {
-    await unshareArtifactFromOrganization(db, target.organizationId, target.publishedArtifactId);
+  if (input.visibility !== 'organization') {
+    const membership = await resolveOrgMembership(db, input.userId);
+    if (membership) {
+      const target = await resolveArtifactShareTarget(db, {
+        userId: input.userId,
+        token: input.token,
+      });
+      await unshareArtifactFromOrganization(db, target.organizationId, target.publishedArtifactId);
+    }
+    return { updated: await setPublishedArtifactVisibility(db, input), organizationId: null };
   }
 
-  const updated = await setPublishedArtifactVisibility(db, input);
+  const target = await resolveArtifactShareTarget(db, { userId: input.userId, token: input.token });
+  await requireOrganizationPermission(
+    input.userId,
+    target.organizationId,
+    'content.share',
+    SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+  );
+  await shareArtifactWithOrganization(db, {
+    organizationId: target.organizationId,
+    publishedArtifactId: target.publishedArtifactId,
+    actorUserId: input.userId,
+  });
+
   return {
-    updated,
-    organizationId: input.visibility === 'organization' ? target.organizationId : null,
+    updated: await setPublishedArtifactVisibility(db, input),
+    organizationId: target.organizationId,
   };
 }
 

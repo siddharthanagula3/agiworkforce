@@ -64,3 +64,44 @@ The publish job requests only the `chromewebstore` OAuth scope, refuses a taken-
 - If another version is under review, resolve or cancel it in the Developer Dashboard before retrying; the script will not overwrite it.
 - If upload succeeds but submission fails, inspect the draft in the dashboard and rerun only after confirming its version and warnings.
 - Chrome Web Store releases are forward-fixed with a higher manifest version. For a critical incident, take the item down in the Developer Dashboard, preserve the item identity, remediate, and submit a new version.
+
+## Microsoft Edge Add-ons
+
+The same verified `extension.zip` is published to Edge Add-ons; there is no
+Edge-specific build. Edge reads the manifest as Chrome does, and the side panel,
+debugger, tab groups and native messaging all run unchanged.
+
+One-time setup, by the owner in Partner Center:
+
+1. Create the product once by uploading `extension.zip` under Microsoft Edge >
+   Overview > Create new extension, and copy the listing and privacy answers
+   from `docs/chrome-web-store-listing.md`. The REST API cannot create a product.
+2. Under Microsoft Edge > Publish API, enable the API-key experience and create
+   API credentials. Store the Client ID as `EDGE_CLIENT_ID`, the API key as
+   `EDGE_API_KEY` (it expires; renew it there) and the product ID from the
+   extension overview page as `EDGE_PRODUCT_ID`.
+
+Each release, after the Chrome Web Store submission:
+
+```sh
+EDGE_API_KEY=… EDGE_CLIENT_ID=… EDGE_PRODUCT_ID=… \
+  node apps/extension/scripts/publish-edge-addons.mjs apps/extension/extension.zip
+```
+
+The script uploads the package to the draft submission, waits for the upload
+operation, submits the draft for certification with the notes in
+`EDGE_CERTIFICATION_NOTES` (default: the version), and waits for the publish
+operation (v1.1 Update REST API, learn.microsoft.com/microsoft-edge/extensions/update/api/using-addons-api,
+read 2026-10-19). A refusal such as `InProgressSubmission` stops the run with
+the store's reason. The Edge extension ID differs from the Chrome one, so add
+`chrome-extension://<edge id>` to the Clerk allowed origins and to the native
+host manifest's `allowed_origins` before the first Edge release.
+
+## Other Chromium browsers
+
+Brave, Vivaldi, Arc and Comet install from the Chrome Web Store listing;
+Opera does too once the user adds Opera's "Install Chrome Extensions" add-on.
+Where a browser has no `chrome.sidePanel` (reported for Opera and Arc), the toolbar
+button opens the same panel as a window beside the browser window, and every
+page tool works on the last focused browser window. `scripts/install-native-host.sh`
+registers the desktop host for each of these browsers that is installed.

@@ -3,11 +3,13 @@ import type { PublishedSite, SiteVisibility } from '../services/sites-service';
 export const SITE_VISIBILITY_LABELS: Record<SiteVisibility, string> = {
   public: 'Public',
   organization: 'Organization',
+  invited: 'Invited people',
 };
 
 export const SITE_VISIBILITY_DESCRIPTIONS: Record<SiteVisibility, string> = {
   public: 'Anyone with the link can open it.',
   organization: 'Only signed-in members of your workspace can open it.',
+  invited: 'Only the people you add below can open it, after signing in with that email.',
 };
 
 export function siteName(site: Pick<PublishedSite, 'title'>): string {

@@ -54,6 +54,7 @@ function formatDate(value: string): string {
 const AUDIENCE_LABELS: Record<PublishedArtifactSummary['visibility'], string> = {
   public: 'Anyone with the link',
   organization: 'Everyone in this workspace',
+  invited: 'Only people you invite',
 };
 
 function formatSize(characters: number): string {

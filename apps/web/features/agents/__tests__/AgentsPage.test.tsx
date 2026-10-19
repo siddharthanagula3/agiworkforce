@@ -9,7 +9,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 import { AgentsPage } from '../components/AgentsPage';
 import { fakeApi, managedAgent } from './agent-test-api';
 
-beforeEach(() => push.mockReset());
+beforeEach(() => {
+  push.mockReset();
+});
 
 describe('AgentsPage', () => {
   it('lists the person’s own agents apart from the ones shared with them', async () => {

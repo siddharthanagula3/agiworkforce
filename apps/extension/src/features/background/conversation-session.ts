@@ -1,3 +1,4 @@
+import { assistantHostWindowId } from '../surface/assistantPanel';
 import { createBrowserConversationId } from './conversation-history';
 import {
   normalizeManagedCloudOwner,
@@ -156,13 +157,9 @@ function pruneClosedWindowOwners(
 export async function resolveBrowserConversationScope(panelInstanceId: string): Promise<string> {
   if (!isSafeIdentifier(panelInstanceId)) throw new Error('Invalid side-panel instance id');
   try {
-    const currentWindow = await chrome.windows.getCurrent();
-    if (
-      typeof currentWindow.id === 'number' &&
-      Number.isSafeInteger(currentWindow.id) &&
-      currentWindow.id >= 0
-    ) {
-      return `window:${currentWindow.id}`;
+    const windowId = await assistantHostWindowId();
+    if (typeof windowId === 'number' && Number.isSafeInteger(windowId) && windowId >= 0) {
+      return `window:${windowId}`;
     }
   } catch {
     // A detached extension page may not have a current Chrome window.

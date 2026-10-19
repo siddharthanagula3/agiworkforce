@@ -11,6 +11,7 @@ import type {
 import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
+import { openAssistantPanel, sidePanelAvailable } from './features/surface/assistantPanel';
 import {
   describeApprovalReason,
   readsWithoutActing,
@@ -94,7 +95,9 @@ import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agent
 import {
   ASK_BEFORE_ACTING_KEY,
   actionNeedsApproval,
+  readBrowserPermissionMode,
 } from './features/computer-use/askBeforeActing';
+import { isCrucialAction } from './features/computer-use/crucialActions';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -1142,9 +1145,11 @@ function initialize(): void {
       });
     }
   });
-  chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
-    logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
-  });
+  if (sidePanelAvailable()) {
+    chrome.sidePanel.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
+      logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
+    });
+  }
   void shouldAutoConnectToDesktop().then((autoConnect) => {
     if (!autoConnect) return;
     connectToNativeHost();
@@ -1775,9 +1780,7 @@ chrome.notifications?.onClicked?.addListener((notifId: string) => {
   });
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
-    if (tab?.id && chrome.sidePanel) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-    }
+    if (tab?.id) openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
   });
   chrome.notifications.clear(notifId, () => {});
 });
@@ -3510,8 +3513,8 @@ function dispatchAuthorizedMessage(
     }
   }
 
-  if (msg.type === 'OPEN_SIDE_PANEL' && sender.tab?.id != null && chrome.sidePanel?.open) {
-    chrome.sidePanel.open({ tabId: sender.tab.id }).catch((err) => {
+  if (msg.type === 'OPEN_SIDE_PANEL' && sender.tab?.id != null) {
+    openAssistantPanel({ tabId: sender.tab.id, windowId: sender.tab.windowId }).catch((err) => {
       logger.warn('OPEN_SIDE_PANEL synchronous open failed', err);
     });
     sendResponse({ success: true } as ExtensionResponse);
@@ -4327,13 +4330,13 @@ async function handleMessageAsync(
 
     case 'OPEN_SIDE_PANEL': {
       let resolvedTabId = tabId;
-      if (chrome.sidePanel && !resolvedTabId) {
+      if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = activeTab?.id;
       }
-      if (chrome.sidePanel && resolvedTabId) {
-        chrome.sidePanel.open({ tabId: resolvedTabId }).catch(() => {});
-      } else if (!resolvedTabId) {
+      if (resolvedTabId) {
+        openAssistantPanel({ tabId: resolvedTabId }).catch(() => {});
+      } else {
         logger.warn('OPEN_SIDE_PANEL: no active tab');
       }
       return { success: true } as ExtensionResponse;
@@ -5031,7 +5034,7 @@ async function handleMessageAsync(
       } catch {
         return failStart('AGI_START_COMPUTER_USE: approval preference could not be loaded');
       }
-      const askBeforeActing = askPref[ASK_BEFORE_ACTING_KEY] !== false;
+      const permissionMode = readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY]);
       if (startWasCancelled()) {
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
@@ -5129,7 +5132,8 @@ async function handleMessageAsync(
         const siteTool = siteTools.find((tool) => tool.name === toolName);
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
-          askBeforeActing,
+          crucial: isCrucialAction(requirement),
+          mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
           readsOnly: readsWithoutActing(toolName, siteTool?.effect),
           siteApproved: async () => {
@@ -5880,13 +5884,15 @@ function handleContextMenuClick(
             'The selected context was not sent. Open the side panel and try again.',
           );
         });
-      void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
-        logger.warn('Failed to open selected-context preview', error);
-        showNotification(
-          'Context preview ready',
-          'Open the AGI side panel to review and approve the selected context.',
-        );
-      });
+      void openAssistantPanel({ tabId: pending.tabId, windowId: tab.windowId }).catch(
+        (error: unknown) => {
+          logger.warn('Failed to open selected-context preview', error);
+          showNotification(
+            'Context preview ready',
+            'Open the AGI side panel to review and approve the selected context.',
+          );
+        },
+      );
     } catch (error) {
       logger.warn('Rejected selected-context handoff', error);
       showNotification(
@@ -5907,9 +5913,7 @@ function handleContextMenuClick(
       .catch((err) => {
         logger.warn('Failed to store pending chat (explain)', err);
       });
-    if (chrome.sidePanel) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-    }
+    openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
   } else if (info.menuItemId === 'translate-selection' && info.selectionText && tab.id) {
     chrome.storage.session
       .set({
@@ -5923,9 +5927,7 @@ function handleContextMenuClick(
       .catch((err) => {
         logger.warn('Failed to store pending chat (translate)', err);
       });
-    if (chrome.sidePanel) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-    }
+    openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
   } else if (info.menuItemId === 'ask-page' && tab.id) {
     chrome.storage.session
       .set({
@@ -5939,9 +5941,7 @@ function handleContextMenuClick(
       .catch((err) => {
         logger.warn('Failed to store pending chat (ask about page)', err);
       });
-    if (chrome.sidePanel) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-    }
+    openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
   } else if (info.menuItemId === 'summarize-page' && tab.id) {
     chrome.storage.session
       .set({
@@ -5955,15 +5955,20 @@ function handleContextMenuClick(
       .catch((err) => {
         logger.warn('Failed to store pending chat (summarize)', err);
       });
-    if (chrome.sidePanel) {
-      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
-    }
+    openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
   } else if (info.menuItemId === 'add-to-tab-group' && tab.id) {
     void ensureTabGroup(tab.id);
   }
 }
 
 chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);
+
+chrome.action?.onClicked?.addListener((tab) => {
+  if (sidePanelAvailable()) return;
+  void openAssistantPanel({ windowId: tab.windowId }).catch((error: unknown) => {
+    logger.warn('Opening the assistant window failed', error);
+  });
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   void rebuildContextMenus();

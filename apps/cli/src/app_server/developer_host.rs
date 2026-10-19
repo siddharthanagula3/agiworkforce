@@ -39,18 +39,18 @@ use agiworkforce_protocol::developer_session::{
     ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
     ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
     ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
-    ThreadSideQuestionDelta, ThreadSideQuestionParams, ThreadSideQuestionResponse,
-    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
-    ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
-    TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
-    TurnStatus, TurnSteerParams, TurnSummary, UserInputRequestedParams, UserInputResponseParams,
-    WorktreeApplyParams, WorktreeApplyResponse, WorktreeArchive, WorktreeCleanupFailure,
-    WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams,
-    WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams, WorktreeRefusedFile,
-    WorktreeRemoveParams, WorktreeSetupFinishedNotification, WorktreeSetupRunParams,
-    WorktreeSummary,
+    ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams, ThreadRevertResponse,
+    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
+    ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionDelta, ThreadSideQuestionParams,
+    ThreadSideQuestionResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
+    ThreadWriterChangedNotification, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    UserInputRequestedParams, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
+    WorktreeArchive, WorktreeCleanupFailure, WorktreeCreateParams, WorktreeCreateResponse,
+    WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse,
+    WorktreePinParams, WorktreeRefusedFile, WorktreeRemoveParams,
+    WorktreeSetupFinishedNotification, WorktreeSetupRunParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{
     ExecPolicyAmendment, NetworkPolicyRuleAction, ReviewDecision,
@@ -106,6 +106,7 @@ const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // own timeout and discovery still resolves to `mcp/ready`. Equal values race
 // the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
+const THREAD_TITLE_MAX_CHARS: usize = 200;
 const ACCOUNT_CONVERSATION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
@@ -952,6 +953,7 @@ impl CliDeveloperSessionHost {
             mcp_approval: true,
             managed_worktrees: true,
             side_question: true,
+            thread_rename: true,
         }
     }
 
@@ -1262,17 +1264,25 @@ impl CliDeveloperSessionHost {
         self.validate_session_workspace(&session)
     }
 
+    async fn needs_input(&self, thread_id: &str) -> bool {
+        self.pending_approvals
+            .lock()
+            .await
+            .values()
+            .any(|approval| approval.thread_id == thread_id)
+            || self
+                .pending_user_inputs
+                .lock()
+                .await
+                .values()
+                .any(|question| question.thread_id == thread_id)
+    }
+
     async fn status_for(&self, summary: &ManagedSessionSummary) -> ThreadStatus {
         if summary.archived_at.is_some() {
             return ThreadStatus::Archived;
         }
-        if self
-            .pending_approvals
-            .lock()
-            .await
-            .values()
-            .any(|approval| approval.thread_id == summary.session_id)
-        {
+        if self.needs_input(&summary.session_id).await {
             return ThreadStatus::AwaitingApproval;
         }
         if self
@@ -2252,6 +2262,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 summary.workspace_root.as_deref() == Some(self.workspace_root.as_path());
             (params.include_archived || summary.archived_at.is_none()) && workspace_matches
         });
+        let mut waiting = HashSet::new();
+        for summary in &summaries {
+            if self.needs_input(&summary.session_id).await {
+                waiting.insert(summary.session_id.clone());
+            }
+        }
+        summaries.sort_by_key(|summary| !waiting.contains(&summary.session_id));
 
         let start = params
             .cursor
@@ -2363,7 +2380,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let context_index = context_indices.get(*shown_index).copied().flatten();
             let projected = DeveloperMessage {
                 role: message.role.clone(),
-                text: message.text_content(),
+                text: crate::agent::user_words(&message.text_content()).to_string(),
                 index: context_index
                     .and_then(|context_index| transcript_indices.get(context_index).copied())
                     .flatten(),
@@ -2662,6 +2679,75 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             })?;
         taken.push(params.handoff.receipt());
         Ok(admission)
+    }
+
+    async fn rename_thread(
+        &self,
+        params: ThreadRenameParams,
+    ) -> Result<ThreadRenameResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let title = params.title.trim().to_string();
+        if title.is_empty() || title.chars().count() > THREAD_TITLE_MAX_CHARS {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "A session title is 1 to {THREAD_TITLE_MAX_CHARS} characters"
+            )));
+        }
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                "Stop the running turn before renaming this session",
+            ));
+        }
+        let store = self.store.clone();
+        let thread_id = params.thread_id.clone();
+        let path = tokio::task::spawn_blocking(move || {
+            store
+                .resolve(ManagedSessionReference::SessionId(thread_id))
+                .map(|resolved| resolved.path)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        self.refuse_foreign_writer(&params.thread_id, &path, "renamed")?;
+
+        let base_dir = self.store.base_dir().to_path_buf();
+        let thread_id = params.thread_id.clone();
+        let new_title = title.clone();
+        tokio::task::spawn_blocking(move || {
+            let conn = crate::sessions::open_db_in(base_dir)?;
+            crate::sessions::rename_session(&conn, &thread_id, &new_title)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(invalid_request)?;
+        if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
+            let mut agent = session.lock().await;
+            if let Some(managed) = agent.managed_session.as_mut() {
+                managed.title = Some(title.clone());
+            }
+            agent.loaded_fingerprint = crate::runtime::session::session_fingerprint(&path);
+        }
+
+        let store = self.store.clone();
+        let thread_id = params.thread_id.clone();
+        let resolved = tokio::task::spawn_blocking(move || {
+            store.resolve(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+        let thread = self.resolved_summary(resolved).await;
+        self.emit(
+            agiworkforce_protocol::developer_session::method::THREAD_RENAMED,
+            serde_json::json!({ "threadId": params.thread_id, "title": title }),
+        );
+        Ok(ThreadRenameResponse { thread })
     }
 
     async fn archive_thread(
@@ -10200,6 +10286,107 @@ mod tests {
             false,
         )
         .expect("host")
+    }
+
+    #[tokio::test]
+    async fn a_thread_waiting_on_the_user_is_listed_first() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let client = AppServerClientInfo {
+            name: "agi_vscode".to_string(),
+            title: String::new(),
+            version: String::new(),
+        };
+        let mut started = Vec::new();
+        for title in ["Older, waiting", "Newer, idle"] {
+            started.push(
+                host.start_thread(
+                    ThreadStartParams {
+                        model: None,
+                        provider: None,
+                        cwd: None,
+                        title: Some(title.to_string()),
+                    },
+                    client.clone(),
+                )
+                .await
+                .expect("thread"),
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let before = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert_eq!(before.threads[0].title, "Newer, idle");
+
+        let (responder, _answer) = oneshot::channel();
+        host.pending_user_inputs.lock().await.insert(
+            "question-1".to_string(),
+            PendingUserInput {
+                thread_id: started[0].id.clone(),
+                turn_id: "turn-1".to_string(),
+                snapshot: PendingUserInputSnapshot {
+                    request_id: "question-1".to_string(),
+                    question: "Which branch?".to_string(),
+                },
+                responder,
+            },
+        );
+        let after = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert_eq!(after.threads[0].title, "Older, waiting");
+        assert_eq!(after.threads[0].status, ThreadStatus::AwaitingApproval);
+    }
+
+    #[tokio::test]
+    async fn a_rename_reaches_every_client_that_lists_the_thread() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let started = host
+            .start_thread(
+                ThreadStartParams {
+                    model: None,
+                    provider: None,
+                    cwd: None,
+                    title: Some("First name".to_string()),
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode".to_string(),
+                    title: String::new(),
+                    version: String::new(),
+                },
+            )
+            .await
+            .expect("thread");
+
+        let renamed = host
+            .rename_thread(ThreadRenameParams {
+                thread_id: started.id.clone(),
+                title: "  Better name  ".to_string(),
+            })
+            .await
+            .expect("renamed");
+        assert_eq!(renamed.thread.title, "Better name");
+        let listed = host
+            .list_threads(ThreadListParams::default())
+            .await
+            .expect("list");
+        assert_eq!(listed.threads[0].title, "Better name");
+
+        for title in ["   ", &"x".repeat(THREAD_TITLE_MAX_CHARS + 1)] {
+            assert!(host
+                .rename_thread(ThreadRenameParams {
+                    thread_id: started.id.clone(),
+                    title: title.to_string(),
+                })
+                .await
+                .is_err());
+        }
     }
 
     #[tokio::test]

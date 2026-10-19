@@ -4,8 +4,11 @@ import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 import {
   PUBLISHED_TOKEN_REGEX,
   getPublishedArtifactByToken,
+  isInviteOnlyPublication,
   type PublishedArtifact,
 } from '@/lib/services/published-artifact-service';
+import { getInvitedReadableArtifactByToken } from '@/lib/services/published-site-viewer-service';
+import { InviteOnlyArtifact } from './InviteOnlyArtifact';
 import { getOrgReadableArtifactByToken } from '@/lib/services/org-shared-artifact-service';
 import { PublishedArtifactView } from './PublishedArtifactView';
 import { UnavailableArtifact } from './UnavailableArtifact';
@@ -18,14 +21,19 @@ interface Props {
 
 export const runtime = 'nodejs';
 
-/** Public rows first; workspace-only rows are left to the RLS-scoped read. */
-async function readArtifactForViewer(token: string): Promise<PublishedArtifact | null> {
+/** Public rows first; workspace and invited rows are left to the RLS-scoped read. */
+async function readArtifactForViewer(
+  token: string,
+): Promise<{ artifact: PublishedArtifact | null; signedIn: boolean }> {
   const publiclyVisible = await getPublishedArtifactByToken(getNeonDb(), token).catch(() => null);
-  if (publiclyVisible) return publiclyVisible;
+  if (publiclyVisible) return { artifact: publiclyVisible, signedIn: false };
 
   const scoped = await getCurrentUserRlsDb().catch(() => null);
-  if (!scoped) return null;
-  return getOrgReadableArtifactByToken(scoped.db, token).catch(() => null);
+  if (!scoped) return { artifact: null, signedIn: false };
+  const shared =
+    (await getOrgReadableArtifactByToken(scoped.db, token).catch(() => null)) ??
+    (await getInvitedReadableArtifactByToken(scoped.db, token).catch(() => null));
+  return { artifact: shared, signedIn: true };
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -54,10 +62,15 @@ export default async function PublishedArtifactPage({ params }: Props) {
     return <UnavailableArtifact />;
   }
 
-  const artifact = await readArtifactForViewer(token);
+  const { artifact, signedIn } = await readArtifactForViewer(token);
 
   if (!artifact) {
-    return <UnavailableArtifact />;
+    const inviteOnly = await isInviteOnlyPublication(getNeonDb(), token).catch(() => false);
+    return inviteOnly ? (
+      <InviteOnlyArtifact token={token} signedIn={signedIn} />
+    ) : (
+      <UnavailableArtifact />
+    );
   }
 
   return (

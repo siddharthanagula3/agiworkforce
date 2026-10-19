@@ -33,6 +33,7 @@ import { ProjectWorkPanel } from '@/features/projects/components/ProjectWorkPane
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { ProjectShareDialog } from '@/features/projects/components/ProjectShareDialog';
 import { ProjectStudio } from '@/features/projects/components/ProjectStudio';
+import { ProjectNotes } from '@/features/projects/components/ProjectNotes';
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import {
@@ -129,6 +130,7 @@ export default function ProjectDetailPage() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleStar = useProjectStore((s) => s.toggleStar);
 
+  const [sourcesRevision, setSourcesRevision] = useState(0);
   // A citation chip in a chat deep-links to the file it cited, which lives on
   // the sources tab; landing on chats would hide the thing the link promised.
   const [tab, setTab] = useState<Tab>(() =>
@@ -1317,7 +1319,16 @@ export default function ProjectDetailPage() {
                     })
                   }
                 />
-                <SourcesPanel projectId={project.id} readOnly={!canEditProject} />
+                <ProjectNotes
+                  projectId={project.id}
+                  readOnly={!canEditProject}
+                  onSaved={() => setSourcesRevision((revision) => revision + 1)}
+                />
+                <SourcesPanel
+                  key={sourcesRevision}
+                  projectId={project.id}
+                  readOnly={!canEditProject}
+                />
               </>
             ) : billingIsLoading || !billingInitialized ? (
               <SchedulesEntitlementLoading />

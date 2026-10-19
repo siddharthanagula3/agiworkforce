@@ -21,6 +21,7 @@ import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
+import { upcomingRetirementLabel } from '@/src/features/model-picker/retirement';
 
 const INPUT_MODALITY_LABEL = {
   image: 'Images',
@@ -74,6 +75,7 @@ export function ModelRow({
   const outage = useProviderOutage(model.provider, !isLocal && !isLocked);
   const disabled = isDownloading || isUnavailable || outage !== null;
   const metadata = isLocal ? undefined : getModelMetadataById(model.id);
+  const retirementLabel = upcomingRetirementLabel(metadata);
   const inputModalities: readonly string[] =
     metadata?.inputModalities ?? (metadata?.capabilities.vision ? ['image'] : []);
   const inputBadges = inputModalities.flatMap((modality) =>
@@ -199,6 +201,15 @@ export function ModelRow({
           >
             {model.detailLabel}
           </Text>
+          {retirementLabel ? (
+            <Text
+              testID="model-row-retirement"
+              numberOfLines={1}
+              style={{ color: colors.agentWarning, fontSize: typeScale.caption, marginTop: 2 }}
+            >
+              {retirementLabel}
+            </Text>
+          ) : null}
           {!isLocal && model.contextWindow > 0 ? (
             <Text
               numberOfLines={1}

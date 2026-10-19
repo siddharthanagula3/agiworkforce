@@ -1,6 +1,7 @@
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getCodeTheme } from '@agiworkforce/unified-chat/shiki-highlighter';
 import { AppearancePreferences } from './AppearancePreferences';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
@@ -10,6 +11,7 @@ beforeEach(() => {
   useSettingsStore.setState({
     chatTextSize: 'default',
     codeBlockWrap: false,
+    codeTheme: 'github',
     accentColor: 'default',
     highContrast: false,
   });
@@ -20,6 +22,18 @@ afterEach(() => {
   root().removeAttribute('data-code-block-wrap');
   root().removeAttribute('data-accent');
   root().removeAttribute('data-contrast');
+});
+
+describe('AppearancePreferences, code theme', () => {
+  it('hands the chosen theme to the highlighter and follows a later change', () => {
+    useSettingsStore.setState({ codeTheme: 'everforest' });
+    render(<AppearancePreferences />);
+
+    expect(getCodeTheme()).toBe('everforest');
+
+    act(() => useSettingsStore.setState({ codeTheme: 'github' }));
+    expect(getCodeTheme()).toBe('github');
+  });
 });
 
 describe('AppearancePreferences, text size', () => {

@@ -15,6 +15,7 @@ import {
   screen,
   session,
   shell,
+  systemPreferences,
 } from 'electron';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
@@ -182,7 +183,14 @@ import {
 import { deliverBrowserHandoff } from './browserHandoff';
 import { focusComposerWhenReady } from './composerFocus';
 import { captureToChat, captureWindowToChat } from './screenshot';
-import { frontWindowIdOutside } from './runtime/computerUseService';
+import {
+  applicationTakingInput,
+  frontWindowIdOutside,
+  typeForUser,
+} from './runtime/computerUseService';
+import { configureDictationBarBridge, openDictationBar } from './dictationBar';
+import { createDictationElsewhere } from './dictationElsewhere';
+import { closeLocalPreview } from './previewWindow';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
@@ -445,6 +453,16 @@ function registerIpcHandlers(): void {
       if (target) deliverDeepLink(target);
     });
     notification.show();
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.dictationFinish, async (event, text) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    return dictationElsewhere.finish(event.sender.id, text);
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.dictationCancel, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    dictationElsewhere.cancel(event.sender.id);
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.workspaceDrop, async (event, paths) => {
@@ -1161,8 +1179,7 @@ const workKeeper = createWorkKeeper({
 
 function syncWorkKeeper(): void {
   workKeeper.update(
-    agentNotifier.activity().runningTurns.length > 0 ||
-      remoteControlState().status === 'connected',
+    agentNotifier.activity().runningTurns.length > 0 || remoteControlState().status === 'connected',
   );
 }
 
@@ -1329,6 +1346,42 @@ function takeOverScreen(): void {
   refreshTrayMenu(garnishHandlers);
 }
 
+const dictationElsewhere = createDictationElsewhere({
+  frontApp: async () => {
+    const front = await applicationTakingInput();
+    return front && front.pid !== null
+      ? {
+          name: front.name,
+          pid: front.pid,
+          bundleId: front.bundleId,
+          secureInput: front.secureInput,
+        }
+      : null;
+  },
+  openBar: () => openDictationBar((contentsId) => dictationElsewhere.cancel(contentsId)),
+  typeText: typeForUser,
+  copyText: (text) => clipboard.writeText(text),
+  notify: (title, body) => createNativeNotification({ title, body }).show(),
+  ownPid: process.pid,
+  now: Date.now,
+});
+
+/**
+ * With dictation into other apps on, a press over another app opens the bar
+ * there; over AGI Cloud, or when the app in front cannot be read, it dictates
+ * into this app as it always has.
+ */
+async function dictateFromShortcut(): Promise<void> {
+  if (dictationElsewhere.isListening() || getPreferences().dictateIntoFocusedApp) {
+    const taken = await dictationElsewhere.handlePress().catch((error: unknown) => {
+      console.warn('[dictation] the app in front could not be read:', error);
+      return false;
+    });
+    if (taken) return;
+  }
+  await toggleGlobalDictation(mainWindow, showMainWindow);
+}
+
 const garnishHandlers = {
   onOpen: showMainWindow,
   onNewChat: openNewChat,
@@ -1336,7 +1389,7 @@ const garnishHandlers = {
   onQuickAsk: () => toggleQuickAsk(),
   onScreenshot: () => void captureToChat(mainWindow),
   onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
-  onVoice: () => void toggleGlobalDictation(mainWindow, showMainWindow),
+  onVoice: () => void dictateFromShortcut(),
   onStopAgents: stopAgentsFromShortcut,
   onStopAll: () => void confirmStopAll(),
   onHandBackScreen: handBackScreen,
@@ -1384,6 +1437,9 @@ function hostPreferencesState(): HostPreferencesState {
       voiceShortcut: shortcuts.voiceShortcut,
       stopShortcut: shortcuts.stopShortcut,
       agentNotifications: preferences.agentNotifications,
+      ...(process.platform === 'darwin'
+        ? { dictateIntoFocusedApp: preferences.dictateIntoFocusedApp }
+        : {}),
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1458,6 +1514,24 @@ async function confirmLaunchAtLogin(window: BrowserWindow | null): Promise<boole
     message: 'Open AGI Cloud each time you log in to this computer?',
     detail:
       "It starts when you log in and keeps running until you quit it. You can turn this off in Settings, or in your system's login items.",
+    noLink: true,
+  });
+}
+
+/**
+ * Turning this on lets a press of the dictation shortcut type into whatever
+ * app is in front, so it is asked here, where a page cannot answer.
+ */
+async function confirmDictateIntoApps(window: BrowserWindow | null): Promise<boolean> {
+  return confirmPreference(window, 'dictate-into-apps', {
+    type: 'question',
+    buttons: ['Cancel', 'Type into other apps'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Dictate into other apps?',
+    message: 'Type what you dictate into the app you are using?',
+    detail:
+      'When another app is in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again. Line breaks become spaces and nothing is typed into a password field. macOS asks you to allow Accessibility for AGI Cloud.',
     noLink: true,
   });
 }
@@ -1585,6 +1659,16 @@ async function writeHostPreferences(
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
     saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+  }
+
+  if (
+    typeof patch.dictateIntoFocusedApp === 'boolean' &&
+    patch.dictateIntoFocusedApp !== before.dictateIntoFocusedApp &&
+    (!patch.dictateIntoFocusedApp || (await confirmDictateIntoApps(window)))
+  ) {
+    saveSettings({ dictateIntoFocusedApp: patch.dictateIntoFocusedApp });
+    if (patch.dictateIntoFocusedApp) systemPreferences.isTrustedAccessibilityClient(true);
+    else dictationElsewhere.closeAll();
   }
 
   return hostPreferencesState();
@@ -1881,6 +1965,13 @@ if (!hasSingleInstanceLock) {
       ],
     });
     configureQuickAskHandoff(openRouteFromQuickAsk);
+    configureDictationBarBridge({
+      preload: path.join(__dirname, 'preload.cjs'),
+      additionalArguments: [
+        `--agi-app-version=${app.getVersion()}`,
+        `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
+      ],
+    });
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     if (autoUpdateSupported()) startAutoUpdate(installedMacArchitecture(), announceUpdateReady);
     void startPairingBridge();
@@ -1915,6 +2006,8 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    closeLocalPreview();
+    dictationElsewhere.closeAll();
     workKeeper.release();
     stopLocalRoutines();
     unregisterGarnishShortcuts();

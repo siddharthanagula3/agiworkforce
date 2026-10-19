@@ -518,7 +518,10 @@ export function ArtifactsPanel({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <NewArtifactMenu conversationId={activeConversationId ?? null} />
+            <NewArtifactMenu
+              conversationId={activeConversationId ?? null}
+              {...(onRequestEdits ? { onRequestEdits: requestEdits } : {})}
+            />
             {artifacts.length > 1 && (
               <Button
                 variant="ghost"

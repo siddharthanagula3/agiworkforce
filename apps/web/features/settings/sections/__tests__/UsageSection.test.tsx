@@ -194,6 +194,29 @@ describe('UsageSection', () => {
     expect(requested).not.toContain('/api/usage/limits');
   });
 
+  it('says the billing period lapsed instead of showing a full allowance it will not honour', async () => {
+    stubUsageApi({
+      summary: () =>
+        answer({
+          ...proSummary({ monthly: creditWindow(2_000, 0) }),
+          usage_percentage: 0,
+          usage_allocation: 'pending',
+          has_usage_remaining: false,
+          period_end: inDays(-0.1),
+          usage_reset_at: inDays(-0.1),
+        }),
+      limits: () => answer(monthlyLimits()),
+    });
+    renderSection();
+
+    expect(
+      await screen.findByText(
+        'Your billing period ended and has not renewed yet, so there are no credits to use. Check Billing.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/2,000 left|0 of 2,000/)).toBeNull();
+  });
+
   it('reports a reading that never loaded instead of inventing one', async () => {
     stubUsageApi({ summary: () => FAILED });
     renderSection();

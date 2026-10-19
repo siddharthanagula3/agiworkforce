@@ -10,6 +10,8 @@ import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
 import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSourcesTab';
 import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
+import { ProjectArtifactsTab } from '@/src/features/projects/components/ProjectArtifactsTab';
+import { ProjectRoutinesTab } from '@/src/features/projects/components/ProjectRoutinesTab';
 import { Text } from '@/components/ui/text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
@@ -22,7 +24,7 @@ import {
 } from '@/src/features/projects/service';
 import { CloudProjectOverview } from '@/src/features/projects/components/CloudProjectOverview';
 
-type TabId = 'chats' | 'work' | 'sources';
+type TabId = 'chats' | 'work' | 'sources' | 'artifacts' | 'routines';
 
 function LocalOnlyFallback({
   projectId,
@@ -116,6 +118,12 @@ function TabBar({
     { id: 'chats', label: 'Chats' },
     ...(showWork ? [{ id: 'work' as const, label: 'Work' }] : []),
     { id: 'sources', label: 'Sources' },
+    ...(showWork
+      ? [
+          { id: 'artifacts' as const, label: 'Artifacts' },
+          { id: 'routines' as const, label: 'Routines' },
+        ]
+      : []),
   ];
 
   return (
@@ -379,6 +387,10 @@ export default function ProjectDetailScreen() {
               <ProjectChatsTab projectId={id} />
             ) : activeTab === 'work' && isCloudProject ? (
               <ProjectWorkTab projectId={id} projectName={screenTitle} />
+            ) : activeTab === 'artifacts' && isCloudProject ? (
+              <ProjectArtifactsTab projectId={id} />
+            ) : activeTab === 'routines' && isCloudProject ? (
+              <ProjectRoutinesTab projectId={id} />
             ) : (
               <ProjectSourcesTab projectId={id} />
             )}

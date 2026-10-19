@@ -17,12 +17,13 @@ describe('computer-use options trust boundary', () => {
   it('discloses CDP, approved-site scope, default approval, and the bounded driver', () => {
     expect(options).toContain('Chrome DevTools Protocol (CDP)');
     expect(options).toContain('only after you start a run on an approved site');
-    expect(options).toContain('Ask before acting is on by default');
+    expect(options).toContain('Auto is on by default');
+    expect(options).toContain('asks before crucial actions');
     expect(options).toContain('does not expose an unrestricted CDP developer mode');
   });
 
   it('keeps the disclosure tied to the enforced default and approved-run detach lifecycle', async () => {
-    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
+    expect(background).toContain('readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY])');
     expect(session).toMatch(
       /await fn\(\);[\s\S]*finally \{[\s\S]*await releaseDebugger\(tabId, session\)/,
     );

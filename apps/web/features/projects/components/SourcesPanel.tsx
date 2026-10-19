@@ -6,7 +6,7 @@ import {
   connectorsReleased,
   type ProjectKnowledgeFile,
 } from '@agiworkforce/types';
-import { HardDrive, Upload, Trash2 } from 'lucide-react';
+import { HardDrive, RefreshCw, Search, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { FilePreviewModal } from './FilePreviewModal';
@@ -16,6 +16,7 @@ import {
   removeProjectKnowledgeFile,
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
+import { listRefreshableSources, refreshProjectSource } from '../services/project-source-origins';
 import { toUserMessage } from '@/lib/user-error-message';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
@@ -77,6 +78,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [retryToken, setRetryToken] = useState(0);
+  const [query, setQuery] = useState('');
+  const [refreshable, setRefreshable] = useState<ReadonlySet<string>>(() => new Set());
+  const [refreshing, setRefreshing] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +94,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
         if (cancelled) return;
         setFiles(loadedFiles);
         setLoadState('loaded');
+        void listRefreshableSources(projectId).then((ids) => {
+          if (!cancelled) setRefreshable(ids);
+        });
       })
       .catch(() => {
         if (!cancelled) setLoadState('error');
@@ -118,6 +125,23 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
     setPreviewFile(cited);
     setPreviewPage(Number.isFinite(citedPage) && citedPage > 0 ? citedPage : undefined);
   }, [files, loadState]);
+
+  async function handleRefresh(file: ProjectKnowledgeFile) {
+    setRefreshing(file.id);
+    try {
+      const result = await refreshProjectSource(projectId, file.id);
+      if (result.status === 'unchanged') {
+        toast.message(`${file.fileName} is already up to date`);
+      } else {
+        toast.success(`${file.fileName} was updated from Google Drive`);
+        setRetryToken((token) => token + 1);
+      }
+    } catch (error) {
+      toast.error(toUserMessage(error, `${file.fileName} could not be refreshed`));
+    } finally {
+      setRefreshing(null);
+    }
+  }
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
@@ -218,6 +242,15 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const displayedFiles = useMemo(() => {
     let result = [...files];
 
+    const needle = query.trim().toLowerCase();
+    if (needle) {
+      result = result.filter(
+        (f) =>
+          f.fileName.toLowerCase().includes(needle) ||
+          (f.summary ?? '').toLowerCase().includes(needle),
+      );
+    }
+
     if (typeFilter !== 'all') {
       result = result.filter((f) => {
         if (typeFilter === 'image') return f.mimeType.startsWith('image/');
@@ -236,7 +269,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
     });
 
     return result;
-  }, [files, sortOrder, typeFilter]);
+  }, [files, sortOrder, typeFilter, query]);
 
   const isUploading = uploadState.status === 'uploading';
   const uploadingFileName = uploadState.status === 'uploading' ? uploadState.fileName : null;
@@ -524,6 +557,39 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             </div>
           </div>
 
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              marginBottom: 'var(--space-3)',
+              padding: '0 var(--space-3)',
+              minHeight: 36,
+              borderRadius: 'var(--corner-field)',
+              border: '1px solid var(--agi-rule-strong)',
+              background: 'var(--agi-bg-2)',
+            }}
+          >
+            <Search size={14} aria-hidden style={{ color: 'var(--agi-ink-2)' }} />
+            <span className="sr-only">Search sources</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search sources by name or summary"
+              data-testid="sources-search"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: 0,
+                background: 'transparent',
+                color: 'var(--agi-ink)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          </label>
+
           {/* File list */}
           {displayedFiles.length === 0 ? (
             <p
@@ -534,7 +600,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                 padding: 'var(--space-5) 0',
               }}
             >
-              No sources match the current filter.
+              {query.trim()
+                ? `No sources match “${query.trim()}”.`
+                : 'No sources match the current filter.'}
             </p>
           ) : (
             <ul
@@ -595,6 +663,31 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                   <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                     {(file.byteCount / 1024).toFixed(1)} KB
                   </span>
+                  {!readOnly && refreshable.has(file.id) ? (
+                    <button
+                      type="button"
+                      data-testid="sources-refresh"
+                      aria-label={`Refresh ${file.fileName} from Google Drive`}
+                      title="Refresh from Google Drive"
+                      disabled={refreshing !== null}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRefresh(file);
+                      }}
+                      style={{
+                        flexShrink: 0,
+                        background: 'none',
+                        border: 'none',
+                        cursor: refreshing ? 'progress' : 'pointer',
+                        color: 'var(--agi-ink-2)',
+                        padding: 'var(--space-1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <RefreshCw size={14} aria-hidden />
+                    </button>
+                  ) : null}
                   {readOnly ? null : (
                     <button
                       type="button"
