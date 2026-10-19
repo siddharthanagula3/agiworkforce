@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ProductLink, ProductLinkUnavailableState } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { WorkspaceScope } from '@/lib/server/workspace-scope';
 
 export type ProductLinkResolution =
   { status: 'ready'; href: string } | { status: ProductLinkUnavailableState };
@@ -48,15 +49,16 @@ function tasksHref(runId: string): string {
 
 async function resolveRun(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   link: ProductLink,
 ): Promise<ProductLinkResolution> {
   const [run] = await db.query<{ id: string; origin_surface: string }>(
     `select id, origin_surface
        from public.cloud_agent_runs
       where id = $1::uuid and user_id = $2
+        and organization_id is not distinct from $3::uuid
       limit 1`,
-    [link.id, userId],
+    [link.id, scope.userId, scope.organizationId],
   );
   if (!run) return missing(link);
   if (link.target === 'browser-task' && run.origin_surface !== CHROME_ORIGIN_SURFACE) {
@@ -67,7 +69,7 @@ async function resolveRun(
 
 async function resolveChat(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   link: ProductLink,
 ): Promise<ProductLinkResolution> {
   const [conversation] = await db.query<{
@@ -78,8 +80,9 @@ async function resolveChat(
     `select id, is_temporary, deleted_at
        from public.web_conversations
       where id = $1::uuid and user_id = $2
+        and organization_id is not distinct from $3::uuid
       limit 1`,
-    [link.id, userId],
+    [link.id, scope.userId, scope.organizationId],
   );
   if (!conversation) return missing(link);
   if (conversation.is_temporary) return { status: 'not_found' };
@@ -89,7 +92,7 @@ async function resolveChat(
 
 async function resolveResearch(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   link: ProductLink,
 ): Promise<ProductLinkResolution> {
   const [report] = await db.query<{
@@ -103,9 +106,10 @@ async function resolveResearch(
        from public.research_reports r
        left join public.web_conversations c
          on c.id = r.conversation_id and c.user_id = r.user_id
+        and c.organization_id is not distinct from $3::uuid
       where r.id = $1::uuid and r.user_id = $2
       limit 1`,
-    [link.id, userId],
+    [link.id, scope.userId, scope.organizationId],
   );
   if (!report) return missing(link);
   if (!report.conversation_id || !report.conversation_exists) return { status: 'not_found' };
@@ -115,7 +119,7 @@ async function resolveResearch(
 
 async function resolveSchedule(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   link: ProductLink,
   now: Date,
 ): Promise<ProductLinkResolution> {
@@ -127,8 +131,9 @@ async function resolveSchedule(
     `select id, status, expires_at
        from public.scheduled_tasks
       where id = $1::uuid and user_id = $2
+        and organization_id is not distinct from $3::uuid
       limit 1`,
-    [link.id, userId],
+    [link.id, scope.userId, scope.organizationId],
   );
   if (!schedule) return missing(link);
   const expiresAt = schedule.expires_at ? new Date(schedule.expires_at) : null;
@@ -182,23 +187,23 @@ async function resolveMedia(
 
 export async function resolveProductLink(
   db: DatabaseAdapter,
-  userId: string,
+  scope: WorkspaceScope,
   link: ProductLink,
   now: Date = new Date(),
 ): Promise<ProductLinkResolution> {
   if (!UUID_RE.test(link.id)) return { status: 'not_found' };
   switch (link.target) {
     case 'chat':
-      return resolveChat(db, userId, link);
+      return resolveChat(db, scope, link);
     case 'work':
     case 'browser-task':
-      return resolveRun(db, userId, link);
+      return resolveRun(db, scope, link);
     case 'research':
-      return resolveResearch(db, userId, link);
+      return resolveResearch(db, scope, link);
     case 'schedule':
-      return resolveSchedule(db, userId, link, now);
+      return resolveSchedule(db, scope, link, now);
     case 'file':
     case 'artifact':
-      return resolveMedia(db, userId, link);
+      return resolveMedia(db, scope.userId, link);
   }
 }
