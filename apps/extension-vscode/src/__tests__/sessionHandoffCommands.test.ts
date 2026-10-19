@@ -76,7 +76,6 @@ describe('taking a session somewhere else', () => {
       memoryTreeProvider: tree(),
       diffDecorationProvider: {} as never,
       diagnosticsProvider: {} as never,
-      nativeChatAvailable: false,
     });
   });
 
@@ -199,7 +198,6 @@ describe('reviewing the open file', () => {
       memoryTreeProvider: tree(),
       diffDecorationProvider: {} as never,
       diagnosticsProvider: { reviewCode } as never,
-      nativeChatAvailable: false,
     });
   });
 

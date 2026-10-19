@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
@@ -83,42 +82,15 @@ describe('agi-workforce.mentionFileInChat', () => {
     expect(handlers.has('agi-workforce.mentionFileInChat')).toBe(true);
   });
 
-  it('opens chat panel with @agi #file: query when uri provided', async () => {
+  it('mentions a file in the AGI chat, never the editor built-in chat', async () => {
     const handler = handlers.get('agi-workforce.mentionFileInChat')!;
-    const uri = vscode.Uri.file('/mock/workspace/src/foo.ts');
-    await handler(uri);
+    await handler(vscode.Uri.file('/mock/workspace/src/foo.ts'));
+    await handler(new ContextItem('/mock/workspace/src/context-item.ts', true, 128, 'typescript'));
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'workbench.action.chat.open',
-      expect.objectContaining({ query: expect.stringContaining('@agi #file:') }),
+      expect.anything(),
     );
-  });
-
-  it('query contains the relative file path', async () => {
-    const handler = handlers.get('agi-workforce.mentionFileInChat')!;
-    const uri = vscode.Uri.file('/mock/workspace/src/bar.ts');
-
-    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/bar.ts');
-
-    await handler(uri);
-
-    const calls = vi.mocked(vscode.commands.executeCommand).mock.calls;
-    const chatCall = calls.find((c) => c[0] === 'workbench.action.chat.open');
-    expect(chatCall).toBeDefined();
-    const opts = chatCall![1] as { query: string };
-    expect(opts.query).toBe('@agi #file:src/bar.ts ');
-  });
-
-  it('accepts the ContextItem passed by the context-tree menu', async () => {
-    const handler = handlers.get('agi-workforce.mentionFileInChat')!;
-    const item = new ContextItem('/mock/workspace/src/context-item.ts', true, 128, 'typescript');
-    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/context-item.ts');
-
-    await handler(item);
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open', {
-      query: '@agi #file:src/context-item.ts ',
-    });
   });
 
   it('removes the ContextItem file rather than treating the tree item as a Uri', async () => {
@@ -130,25 +102,6 @@ describe('agi-workforce.mentionFileInChat', () => {
 
     expect(removeFile).toHaveBeenCalledOnce();
     expect(removeFile.mock.calls[0]?.[0].fsPath).toBe('/mock/workspace/src/pinned.ts');
-  });
-
-  it('uses the native #selection reference for a selected range in the target editor', async () => {
-    const handler = handlers.get('agi-workforce.mentionFileInChat')!;
-    const uri = vscode.Uri.file('/mock/workspace/src/selected.ts');
-    Object.defineProperty(vscode.window, 'activeTextEditor', {
-      value: {
-        document: { uri },
-        selection: new vscode.Selection(4, 0, 7, 3),
-      },
-      configurable: true,
-      writable: true,
-    });
-
-    await handler(uri);
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open', {
-      query: '@agi #selection ',
-    });
   });
 
   it('shows warning and does not call executeCommand when no uri and no active editor', async () => {

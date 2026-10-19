@@ -38,8 +38,9 @@ import {
   HOST_CUSTOM_INSTRUCTIONS_KEY,
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
-import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
+import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
 
@@ -2359,6 +2360,43 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('names the model Auto actually served instead of "auto"', async () => {
+    const served = requireCatalogModel();
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this function', model: 'auto' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_model',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      model: served.id,
+      provider: String(served.provider),
+      autoSelection: 'auto',
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({
+        model: served.id,
+        modelLabel: modelDisplayNameById(served.id),
+      }),
+    });
   });
 
   it('routes a one-turn browse request through the real web-search tool boundary', async () => {

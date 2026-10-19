@@ -97,6 +97,7 @@ import {
   accountIdentityForDisplay,
   accountTypeForTier,
   fetchAccountIdentity,
+  forgetSharedCredentialRefusal,
   getAccountAuthState,
   getCloudWebOrigin,
   type AccountIdentity,
@@ -840,6 +841,7 @@ export class ChatStateManager {
   private _activeModel: string;
   private _accountPresentationSeq = 0;
   private _lastMeterBoundary: string | undefined;
+  private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _pendingAttachments: PendingAttachment[] = [];
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
@@ -2924,8 +2926,13 @@ export class ChatStateManager {
         this._localModelProviders.set(model.id, model.provider);
       }
       this._localServers = response.localServers ?? [];
+      const wasReady = this._runtimeReady;
       this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
+      if (!wasReady && (await getAccountAuthState(this._secrets)).status !== 'signed-in') {
+        forgetSharedCredentialRefusal();
+        void this.refreshAccountPresentation();
+      }
       return response.models;
     } catch (error) {
       this._runtimeReady = false;
@@ -4064,6 +4071,10 @@ export class ChatStateManager {
       this._post({ type: 'token', payload: { text: event.delta } });
       return;
     }
+    if (event.type === 'turn_model') {
+      this._servedModelByTurn.set(event.turnId, event.model);
+      return;
+    }
     if (event.type === 'agent_event') {
       this._foldAgentEvent(event.envelope);
       return;
@@ -4189,8 +4200,10 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_completed') {
       this._expirePendingApprovals(event.turnId);
+      const servedModel = this._servedModelByTurn.get(event.turnId);
+      this._servedModelByTurn.delete(event.turnId);
       const resolvedModel =
-        this._thread?.id === event.threadId ? this._activeModel : Config.model();
+        servedModel ?? (this._thread?.id === event.threadId ? this._activeModel : Config.model());
       const localProvider = this._localModelProviders.get(resolvedModel);
       const { providerLabel, brandColor } = isAutoRoutingModel(resolvedModel)
         ? {
@@ -4232,11 +4245,13 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
+      this._servedModelByTurn.delete(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
+    this._servedModelByTurn.delete(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

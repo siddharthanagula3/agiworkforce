@@ -18,7 +18,8 @@ import {
   resolveCloudCodeApi,
   showCloudCodeSession,
 } from './features/cloud-tasks';
-import { getCloudWebOrigin } from './utils/api';
+import { getCloudWebOrigin, shareAccountCredentialFrom } from './utils/api';
+import { getActiveWorkspaceFolder } from './platform/workspaceFolders';
 import { SHOW_HELP_COMMAND, showHelpMenu } from './features/help/helpMenu';
 import {
   SHOW_APPROVAL_HISTORY_COMMAND,
@@ -68,6 +69,7 @@ import {
   reconcileAgentControlConsent,
 } from './features/permissions/agentModeConsent';
 import { registerProposedChangeReview } from './features/permissions/proposedChangeReview';
+import { WorkspaceConsentStore } from './features/permissions/workspaceConsent';
 import { registerRemoteControl } from './features/remote-control';
 
 let activeLocalRuntimes: LocalRuntimePool | undefined;
@@ -117,12 +119,17 @@ export function activate(context: vscode.ExtensionContext): void {
   const syncInlineCompletionProvider = providerState?.syncInlineCompletionProvider;
 
   const remoteEnvironment = describeRemoteEnvironment(vscode.env.remoteName);
+  const workspaceConsent = new WorkspaceConsentStore(
+    context.globalState,
+    () => vscode.workspace.isTrusted,
+  );
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
         cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
         memoryEnabled: () => Config.memoryEnabled(),
         bypassPermissionsAvailable: () => Config.agentMode() === 'bypass',
+        workspaceConsentAtMs: () => workspaceConsent.consentAtMs(cwd),
         cwd,
         clientVersion: getExtensionVersion(),
         ...(remoteEnvironment.kind === 'local'
@@ -131,6 +138,18 @@ export function activate(context: vscode.ExtensionContext): void {
       }),
   );
   activeLocalRuntimes = localRuntimes;
+  shareAccountCredentialFrom(async () => {
+    const workspace = await getActiveWorkspaceFolder();
+    const runtime =
+      workspace === undefined ? undefined : localRuntimes.peekWorkspace(workspace.uri.fsPath);
+    if (runtime === undefined) return undefined;
+    const credential = await runtime.accountToken();
+    const expiresAtMs = Date.parse(credential.expiresAt ?? '');
+    return {
+      token: credential.token,
+      ...(Number.isFinite(expiresAtMs) ? { expiresAtMs } : {}),
+    };
+  });
   context.subscriptions.push(localRuntimes, registerProposedChangeReview());
   runBoot('remote-control', () => {
     context.subscriptions.push(registerRemoteControl(context, localRuntimes));
@@ -315,7 +334,12 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   context.subscriptions.push(
-    vscode.workspace.onDidGrantWorkspaceTrust(refreshRuntimeSurfaces),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      void workspaceConsent.recordGrant(
+        (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+      );
+      refreshRuntimeSurfaces();
+    }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void localRuntimes.retainWorkspaces(
         (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
@@ -355,7 +379,6 @@ export function activate(context: vscode.ExtensionContext): void {
         memoryTreeProvider: chat.memoryTreeProvider,
         diffDecorationProvider: providers.diffDecorationProvider,
         diagnosticsProvider: providers.diagnosticsProvider,
-        nativeChatAvailable: chat.nativeChatAvailable,
       });
       void resumePendingDeveloperSession(context.globalState);
     } catch (err) {

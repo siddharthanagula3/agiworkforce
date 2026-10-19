@@ -191,7 +191,7 @@ import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
-import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
+import { isEntitledSubscriptionStatus, isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
@@ -240,18 +240,6 @@ function contextCommandTarget(
 ): vscode.Uri | undefined {
   if (target instanceof ContextItem) return vscode.Uri.file(target.filePath);
   return target;
-}
-
-function buildChatReferenceQuery(target: vscode.Uri): string {
-  const editor = vscode.window.activeTextEditor;
-  if (
-    editor !== undefined &&
-    editor.document.uri.toString() === target.toString() &&
-    !editor.selection.isEmpty
-  ) {
-    return '@agi #selection ';
-  }
-  return `@agi #file:${vscode.workspace.asRelativePath(target)} `;
 }
 
 function buildSidebarReferenceDraft(target: vscode.Uri): {
@@ -576,7 +564,6 @@ export interface CommandDeps {
   memoryTreeProvider: MemoryTreeProvider;
   diffDecorationProvider: DiffDecorationProvider;
   diagnosticsProvider: AgiDiagnosticsProvider;
-  nativeChatAvailable: boolean;
 }
 
 export function setupCommands(context: vscode.ExtensionContext, deps: CommandDeps): void {
@@ -594,7 +581,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     memoryTreeProvider,
     diffDecorationProvider,
     diagnosticsProvider,
-    nativeChatAvailable,
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
@@ -925,20 +911,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
         return;
       }
-      if (!nativeChatAvailable) {
-        await prefillFirstPartyReference(target);
-        return;
-      }
-      const query = buildChatReferenceQuery(target);
-      try {
-        await vscode.commands.executeCommand('workbench.action.chat.open', { query });
-      } catch {
-        try {
-          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        } catch {
-          sidebarProvider.reveal();
-        }
-      }
+      await prefillFirstPartyReference(target);
     }),
 
     register('agi-workforce.acceptDiff', async (sessionId?: string) => {
@@ -1019,19 +992,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       vscode.window.showInformationMessage(describeDiffScope(restored, 'restored'));
     }),
     register('agi-workforce.chat', async () => {
-      if (!nativeChatAvailable) {
-        await revealFirstPartyChat();
-        return;
-      }
-      try {
-        await vscode.commands.executeCommand('workbench.action.chat.open');
-      } catch {
-        try {
-          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        } catch {
-          await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
-        }
-      }
+      await revealFirstPartyChat();
     }),
 
     register('agi-workforce.openChatInEditor', () => {
@@ -2016,12 +1977,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   );
 
   context.subscriptions.push(
-    register('agi-workforce.openInviteCodeModal', async () => {
-      await vscode.commands.executeCommand('agi-workforce.signIn');
-    }),
-  );
-
-  context.subscriptions.push(
     register('agi-workforce.cycleAgentMode', async () => {
       const modes: ReadonlyArray<'ask' | 'auto' | 'plan' | 'bypass'> = [
         'ask',
@@ -2094,6 +2049,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const subscriptionNeedsAttention = Boolean(
         tierInfo?.accountPlanTier && !isEntitledSubscriptionStatus(tierInfo.subscriptionStatus),
       );
+      // Free shows one way forward and no meters, the same as Settings > Usage on the web.
+      const freePlan =
+        accountToken !== undefined && isFreeBillingPlanTier(tierInfo?.accountPlanTier);
 
       type AccountAction =
         | 'sign-in'
@@ -2104,6 +2062,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'compare-plans'
         | 'manage-billing'
         | 'add-credits'
+        | 'upgrade'
         | 'connectors'
         | 'teams'
         | 'permission-docs'
@@ -2115,35 +2074,46 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         accountIdentity ?? undefined,
       );
       items.push(...buildTrustReviewItems(Config.agentMode(), accountIdentity ?? undefined));
-      items.push(
-        { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
-        {
-          label: `$(request-changes) Requests this session`,
-          description: `${counter.requestCount}`,
-        },
-        {
-          label: `$(arrow-up) Input tokens`,
-          description: formatK(counter.promptTokens),
-        },
-        {
-          label: `$(arrow-down) Output tokens`,
-          description: formatK(counter.completionTokens),
-        },
-        {
-          label: `$(graph) Total tokens`,
-          description: formatK(counter.totalTokens),
-        },
-        {
-          label: `$(calculator) Rough session estimate`,
-          description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
-        },
-        {
-          label: `$(credit-card) Billed this session`,
-          description: formatBilledCredits(counter),
-        },
-      );
+      if (freePlan) {
+        items.push(
+          { label: 'Usage', kind: vscode.QuickPickItemKind.Separator },
+          {
+            label: '$(rocket) Upgrade for higher capacity',
+            description: 'See plans on Web',
+            action: 'upgrade',
+          },
+        );
+      }
+      if (!freePlan)
+        items.push(
+          { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
+          {
+            label: `$(request-changes) Requests this session`,
+            description: `${counter.requestCount}`,
+          },
+          {
+            label: `$(arrow-up) Input tokens`,
+            description: formatK(counter.promptTokens),
+          },
+          {
+            label: `$(arrow-down) Output tokens`,
+            description: formatK(counter.completionTokens),
+          },
+          {
+            label: `$(graph) Total tokens`,
+            description: formatK(counter.totalTokens),
+          },
+          {
+            label: `$(calculator) Rough session estimate`,
+            description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
+          },
+          {
+            label: `$(credit-card) Billed this session`,
+            description: formatBilledCredits(counter),
+          },
+        );
 
-      if (tierInfo?.credits !== undefined) {
+      if (!freePlan && tierInfo?.credits !== undefined) {
         items.push(
           { label: `${planLabel} plan usage`, kind: vscode.QuickPickItemKind.Separator },
           ...creditWindowRows(tierInfo.credits).map((row) => ({
@@ -2151,7 +2121,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             description: row.reset ?? 'No reset pending',
           })),
         );
-      } else if (tierInfo?.usagePercentage !== undefined) {
+      } else if (!freePlan && tierInfo?.usagePercentage !== undefined) {
         const pct = Math.round(tierInfo.usagePercentage);
         items.push(
           { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
@@ -2160,7 +2130,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             description: `Plan: ${planLabel}`,
           },
         );
-      } else {
+      } else if (!freePlan) {
         const meter = await resolveUsageMeter(context.secrets);
         if (meter.source !== 'managed-plan') {
           items.push(
@@ -2176,7 +2146,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
       }
 
-      if (tierInfo?.creditBalanceCents !== undefined) {
+      if (!freePlan && tierInfo?.creditBalanceCents !== undefined) {
         items.push({
           label: `$(credit-card) ${CREDIT_BALANCE_LABEL}: ${formatCreditBalance(tierInfo.creditBalanceCents)}`,
           description: formatCreditSpendability(
@@ -2193,7 +2163,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         });
       }
 
-      if (tierInfo) {
+      if (tierInfo && !freePlan) {
         if (usageHistory.kind === 'ready') {
           const summary = summarizeUsageHistory(usageHistory.history);
           items.push(
@@ -2244,34 +2214,37 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Remove this editor session',
           action: 'sign-out',
         });
-        items.push({
-          label: '$(graph) Manage Cloud usage on Web',
-          description: 'Plan usage, reset windows, and billing details',
-          action: 'manage-usage',
-        });
-        items.push({
-          label: '$(list-unordered) Compare plans',
-          description: 'Credits per window and what each plan adds',
-          action: 'compare-plans',
-        });
-        if (tierInfo?.creditBalanceCents !== undefined) {
+        if (!freePlan) {
+          items.push({
+            label: '$(graph) Manage Cloud usage on Web',
+            description: 'Plan usage, reset windows, and billing details',
+            action: 'manage-usage',
+          });
+          items.push({
+            label: '$(list-unordered) Compare plans',
+            description: 'Credits per window and what each plan adds',
+            action: 'compare-plans',
+          });
+        }
+        if (!freePlan && tierInfo?.creditBalanceCents !== undefined) {
           items.push({
             label: '$(add) Add credits',
             description: 'Buy credits in Settings > Billing on Web',
             action: 'add-credits',
           });
         }
-        items.push({
-          label: '$(credit-card) Manage billing & subscription',
-          description: subscriptionNeedsAttention
-            ? 'Restore paid Cloud access on Web'
-            : cancellationDate !== undefined
-              ? `Access ends ${cancellationDate}; review or resume the plan on Web`
-              : accountIdentity?.cancelAtPeriodEnd === true
-                ? 'Review the scheduled cancellation on Web'
-                : 'Invoices, payment method, and subscription controls',
-          action: 'manage-billing',
-        });
+        if (!freePlan)
+          items.push({
+            label: '$(credit-card) Manage billing & subscription',
+            description: subscriptionNeedsAttention
+              ? 'Restore paid Cloud access on Web'
+              : cancellationDate !== undefined
+                ? `Access ends ${cancellationDate}; review or resume the plan on Web`
+                : accountIdentity?.cancelAtPeriodEnd === true
+                  ? 'Review the scheduled cancellation on Web'
+                  : 'Invoices, payment method, and subscription controls',
+            action: 'manage-billing',
+          });
         items.push({
           label: '$(plug) Manage Cloud connectors on Web',
           description: "Cloud connectors do not replace this workspace's local MCP configuration",
@@ -2353,6 +2326,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/settings/billing?from=vscode-extension`),
         );
+      } else if (pick?.action === 'upgrade') {
+        await vscode.commands.executeCommand('agi-workforce.openUpgrade');
       } else if (pick?.action === 'add-credits') {
         await vscode.env.openExternal(
           vscode.Uri.parse(
@@ -2589,20 +2564,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
         return;
       }
-      if (!nativeChatAvailable) {
-        await prefillFirstPartyReference(result.uri);
-        return;
-      }
-      const query = buildChatReferenceQuery(result.uri);
-      try {
-        await vscode.commands.executeCommand('workbench.action.chat.open', { query });
-      } catch {
-        try {
-          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-        } catch {
-          sidebarProvider.reveal();
-        }
-      }
+      await prefillFirstPartyReference(result.uri);
     }),
   );
 

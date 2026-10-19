@@ -38,6 +38,11 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     return client;
   }
 
+  /** The client already serving `cwd`, without starting one. */
+  peekWorkspace(cwd: string): T | undefined {
+    return this.clients.get(this.keyFor(cwd))?.client;
+  }
+
   requiresPermissionRestart(): boolean {
     return [...this.clients.values()].some(({ client }) => client.requiresPermissionRestart());
   }

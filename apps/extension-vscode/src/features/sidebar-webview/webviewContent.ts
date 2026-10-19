@@ -3610,7 +3610,7 @@ export function getWebviewContent(
           ? 'Choose a folder to establish the developer-session scope.'
           : workspaceUntrusted
             ? 'Project context and tools stay disabled until you trust this workspace.'
-            : 'No workspace prompt will be sent until the protocol-7 runtime connects.';
+            : 'AGI starts the AGI CLI in this folder to read files and run commands. Chat is ready once it connects.';
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
         if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
