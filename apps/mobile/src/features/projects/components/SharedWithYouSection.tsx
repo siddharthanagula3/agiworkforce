@@ -97,7 +97,7 @@ export function SharedWithYouSection() {
       ))}
       <Pressable
         testID="projects-shared-see-all"
-        onPress={() => router.push('/(app)/shared')}
+        onPress={() => router.push('/(app)/shared' as Parameters<typeof router.push>[0])}
         accessibilityRole="button"
         accessibilityLabel="See everything shared with you"
         style={{ minHeight: 44, justifyContent: 'center' }}
