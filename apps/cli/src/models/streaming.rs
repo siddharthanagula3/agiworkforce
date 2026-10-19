@@ -163,6 +163,8 @@ fn notify_tools_dropped(model: &str, reason: &str) {
 }
 
 const QUOTA_WARNING_EVENT: &str = "quota_warning";
+const USAGE_CREDITS_SCOPE: &str = "usage_credits";
+const USAGE_CREDITS_NOTICE: &str = "Now using usage credits. Your plan limit is reached, so messages are billed to your credits. Run `agi usage` to see your balance.";
 
 static LAST_QUOTA_WARNING: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
 
@@ -190,6 +192,13 @@ fn quota_warning(data: &serde_json::Value) -> Option<QuotaWarning> {
         .collect();
     let level = fields.get("level").copied()?;
     let scope = fields.get("scope").copied()?;
+    if scope == USAGE_CREDITS_SCOPE {
+        return Some(QuotaWarning {
+            scope: scope.to_string(),
+            level: level.to_string(),
+            notice: USAGE_CREDITS_NOTICE.to_string(),
+        });
+    }
     let used = fields
         .get("used_percent")
         .and_then(|value| value.parse::<u32>().ok())?;
@@ -1689,6 +1698,21 @@ mod tests {
                 "You have used 100% of your monthly allowance. Run `agi usage` to see what is left."
                     .to_string()
             )
+        );
+    }
+
+    #[test]
+    fn a_reply_billed_to_usage_credits_says_so() {
+        let warning =
+            quota_warning(&serde_json::json!({ "value": "level=info; scope=usage_credits" }))
+                .map(|warning| (warning.scope, warning.notice));
+        assert_eq!(
+            warning,
+            Some((
+                "usage_credits".to_string(),
+                "Now using usage credits. Your plan limit is reached, so messages are billed to your credits. Run `agi usage` to see your balance."
+                    .to_string()
+            ))
         );
     }
 
