@@ -26,7 +26,7 @@ type CaptureResult =
   | { ok: true; text: string; source: { tabId: number; url: string }; truncated?: boolean }
   | { ok: false; reason: string };
 
-function captureHarness() {
+function captureHarness(blocked: string[] = []) {
   const capturedResults: Array<{ text: string; truncated: boolean }> = [];
   const executeScript = vi.fn(
     (
@@ -64,6 +64,8 @@ function captureHarness() {
     PAGE_CONTEXT_BLOCKED_REASON: 'This page cannot be read.',
     PAGE_CONTEXT_CHANGED_REASON: 'The page changed while it was being read.',
     describePageContextFailure: (message: string) => message,
+    isUserBlockedSite: async (url: string) => blocked.includes(new URL(url).origin),
+    t: (key: string, substitutions: string[] = []) => `${key}:${substitutions.join(',')}`,
   };
   const compiled = ts.transpileModule(
     `${captureHelpers.map((node) => node.getText(program)).join('\n')}\nreturn capturePageContext;`,
@@ -163,5 +165,15 @@ describe('production side panel page context capture', () => {
       ok: false,
       reason: 'This page had no readable text to attach.',
     });
+  });
+
+  it('refuses a site the user blocked before running any script in it', async () => {
+    document.querySelector('main')!.textContent = 'Statement balance';
+    const capture = captureHarness(['https://approved.example']);
+    expect(await capture.run()).toEqual({
+      ok: false,
+      reason: 'spSiteBlockedByYou:approved.example',
+    });
+    expect(capture.executeScript).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,9 @@
 import type { ToolDefinition } from './browserToolDefinitions';
+import {
+  CHAT_SEARCH_HISTORY_TOOL,
+  HISTORY_SEARCH_DEFINITION,
+  parseHistorySearchArguments,
+} from './historySearch';
 
 export const CHAT_READ_PAGE_TOOL = 'browser_read_page';
 export const CHAT_BROWSER_TASK_TOOL = 'browser_task';
@@ -40,8 +45,17 @@ const BROWSER_TASK_DEFINITION: ToolDefinition = {
   },
 };
 
-export function chatBrowserToolDefinitions(tier: ChatBrowserToolTier): readonly ToolDefinition[] {
-  return tier === 'act' ? [READ_PAGE_DEFINITION, BROWSER_TASK_DEFINITION] : [READ_PAGE_DEFINITION];
+export function chatBrowserToolDefinitions(
+  tier: ChatBrowserToolTier | undefined,
+  browserHistory = false,
+): readonly ToolDefinition[] {
+  const pageTools =
+    tier === 'act'
+      ? [READ_PAGE_DEFINITION, BROWSER_TASK_DEFINITION]
+      : tier === 'read'
+        ? [READ_PAGE_DEFINITION]
+        : [];
+  return browserHistory ? [...pageTools, HISTORY_SEARCH_DEFINITION] : pageTools;
 }
 
 export function isChatBrowserToolTier(value: unknown): value is ChatBrowserToolTier {
@@ -50,7 +64,8 @@ export function isChatBrowserToolTier(value: unknown): value is ChatBrowserToolT
 
 export type ChatBrowserToolCall =
   | { kind: 'read_page'; toolCallId: string }
-  | { kind: 'browser_task'; toolCallId: string; goal: string };
+  | { kind: 'browser_task'; toolCallId: string; goal: string }
+  | { kind: 'search_history'; toolCallId: string; query: string; days: number };
 
 export function parseChatBrowserToolCall(call: {
   id: string;
@@ -77,6 +92,10 @@ export function parseChatBrowserToolCall(call: {
     )
       return null;
     return { kind: 'browser_task', toolCallId: call.id, goal: goal.trim() };
+  }
+  if (call.function.name === CHAT_SEARCH_HISTORY_TOOL) {
+    const request = parseHistorySearchArguments(record);
+    return request ? { kind: 'search_history', toolCallId: call.id, ...request } : null;
   }
   return null;
 }

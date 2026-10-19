@@ -64,6 +64,12 @@ describe('Chrome manifest trust contract', () => {
     }
   });
 
+  it('asks for browsing history only as an optional grant the user turns on', () => {
+    expect(manifest['optional_permissions']).toEqual(['history']);
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+    expect(listing).toContain('`optional_permissions`: `history`');
+  });
+
   it('exposes no extension resource to web pages', () => {
     expect(manifest['web_accessible_resources']).toBeUndefined();
   });

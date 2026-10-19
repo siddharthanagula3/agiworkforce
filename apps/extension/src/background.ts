@@ -451,18 +451,21 @@ function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessa
         typeof result.content !== 'string' ||
         result.content.length > MAX_CHAT_TOOL_RESULT_CHARS,
     ) ||
-    (message.browserToolTier !== undefined && !isChatBrowserToolTier(message.browserToolTier))
+    (message.browserToolTier !== undefined && !isChatBrowserToolTier(message.browserToolTier)) ||
+    (message.browserHistory !== undefined && message.browserHistory !== true)
   )
     return false;
+  const tools = chatBrowserToolDefinitions(
+    message.browserToolTier,
+    message.browserHistory === true,
+  );
   pending.finish({
     status: 'resolved',
     results: results.map((result) => ({
       toolCallId: result.toolCallId,
       content: result.content,
     })),
-    ...(message.browserToolTier
-      ? { tools: chatBrowserToolDefinitions(message.browserToolTier) }
-      : {}),
+    ...(tools.length ? { tools } : {}),
   });
   return true;
 }
@@ -5820,6 +5823,7 @@ const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = 
   { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
   { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
   { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
+  { id: 'ask-page', title: t('menuAskAboutPage'), contexts: ['page'] },
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
   { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
 ];
@@ -5918,6 +5922,22 @@ function handleContextMenuClick(
       })
       .catch((err) => {
         logger.warn('Failed to store pending chat (translate)', err);
+      });
+    if (chrome.sidePanel) {
+      chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+    }
+  } else if (info.menuItemId === 'ask-page' && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'ask-page',
+          text: '',
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (ask about page)', err);
       });
     if (chrome.sidePanel) {
       chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
@@ -6256,6 +6276,10 @@ async function handleChatMessage(
       }
     }
 
+    const chatTools = chatBrowserToolDefinitions(
+      isChatBrowserToolTier(message.browserToolTier) ? message.browserToolTier : undefined,
+      message.browserHistory === true,
+    );
     const result = await executeChromeManagedChat(
       {
         id,
@@ -6281,9 +6305,7 @@ async function handleChatMessage(
         assistantMessageId: message.assistantMessageId,
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         ...(message.skillName !== undefined ? { skillName: message.skillName } : {}),
-        ...(!delivery && isChatBrowserToolTier(message.browserToolTier)
-          ? { tools: chatBrowserToolDefinitions(message.browserToolTier) }
-          : {}),
+        ...(!delivery && chatTools.length ? { tools: chatTools } : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,

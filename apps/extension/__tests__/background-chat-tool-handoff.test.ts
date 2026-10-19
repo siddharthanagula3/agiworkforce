@@ -16,6 +16,7 @@ import {
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
 } from '../src/features/computer-use/chatBrowserTools';
+import { CHAT_SEARCH_HISTORY_TOOL } from '../src/features/computer-use/historySearch';
 import type { ChromeManagedToolHandoffOutcome } from '../src/features/cloud-bridge/managedChatHandler';
 import type { ToolCall } from '../src/features/computer-use/toolHandoff';
 
@@ -110,6 +111,7 @@ describe('background chat tool handoff bridge', () => {
       { results: [{ toolCallId: 'call_1', content: 'x'.repeat(MAX_CHAT_TOOL_RESULT_CHARS + 1) }] },
     ],
     ['an unknown tool tier', { browserToolTier: 'everything' }],
+    ['a history flag that is not true', { browserHistory: 'yes' }],
   ])('refuses an answer from %s', async (_label, override) => {
     const b = bridge();
     void b.requestChatToolHandoff(activeStream(), 'stream-1', CALLS);
@@ -125,6 +127,24 @@ describe('background chat tool handoff bridge', () => {
       }),
     ).toBe(false);
     expect(b.pending.size).toBe(1);
+  });
+
+  it('keeps offering history search after the step only while the panel says it is on', async () => {
+    const b = bridge();
+    const outcome = b.requestChatToolHandoff(activeStream(), 'stream-1', CALLS);
+    const handoffId = (b.sendMessage.mock.calls[0]![0] as Record<string, unknown>)['handoffId'];
+    b.resolveChatToolHandoff({
+      owner: OWNER,
+      clientInstanceId: 'panel-a',
+      id: 'stream-1',
+      handoffId,
+      results: [{ toolCallId: 'call_1', content: 'Page text' }],
+      browserHistory: true,
+    });
+    const resolved = await outcome;
+    expect(
+      resolved.status === 'resolved' && resolved.tools?.map((tool) => tool.function.name),
+    ).toEqual([CHAT_SEARCH_HISTORY_TOOL]);
   });
 
   it('ends the tool step when the user stops the turn', async () => {

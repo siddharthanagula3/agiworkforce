@@ -32,6 +32,12 @@ import {
   selectApprovedSiteOrigin,
 } from './features/options/site-allowlist';
 import { createSitePermissionPolicySection } from './features/options/site-permission-policy';
+import { createHistoryAccessRow } from './features/options/history-access-row';
+import { createBlockedSitesSection } from './features/options/blocked-sites-section';
+import {
+  readUserSiteBlocklist,
+  USER_SITE_BLOCKLIST_STORAGE_KEY,
+} from './features/site-policy/userBlocklist';
 import { createDataHandlingSection } from './features/options/data-handling-section';
 import { createAppearanceSection } from './features/options/appearance-section';
 import { exportExtensionDiagnostics } from './features/diagnostics';
@@ -751,6 +757,10 @@ function injectStyles(): void {
       outline: none;
     }
 
+    .opt-blocked-sites-body { flex: 1; min-width: 0; }
+    .opt-blocked-sites-form { display: flex; gap: 8px; align-items: center; margin: 10px 0 6px; }
+    .opt-blocked-sites-input { font-family: inherit; font-size: 12px; }
+
     .opt-bearer-input:focus {
       border-color: var(--agi-ext-accent);
     }
@@ -1149,8 +1159,11 @@ async function loadAllowlist(): Promise<string[]> {
 }
 
 async function saveAllowlist(list: string[]): Promise<void> {
+  const approved = sanitizeApprovedSiteOrigins(list);
+  const blocked = await readUserSiteBlocklist();
   await chrome.storage.local.set({
-    [SITE_ALLOWLIST_STORAGE_KEY]: sanitizeApprovedSiteOrigins(list),
+    [SITE_ALLOWLIST_STORAGE_KEY]: approved,
+    [USER_SITE_BLOCKLIST_STORAGE_KEY]: blocked.filter((origin) => !approved.includes(origin)),
   });
 }
 
@@ -1304,6 +1317,9 @@ function buildPage(): void {
     set: (items) => chrome.storage.local.set(items),
   });
   permSection.appendChild(sitePolicySection.element);
+  permSection.appendChild(createHistoryAccessRow().element);
+  const blockedSites = createBlockedSitesSection();
+  permSection.appendChild(blockedSites.element);
 
   const allowlistBody = el('div', { class: 'opt-allowlist-body' });
   allowlistBody.appendChild(
@@ -1480,6 +1496,12 @@ function buildPage(): void {
         true,
       );
     });
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes[USER_SITE_BLOCKLIST_STORAGE_KEY]) void blockedSites.refresh();
+    if (changes[SITE_ALLOWLIST_STORAGE_KEY]) void refreshAllowlist().catch(() => undefined);
   });
 
   function closeConsentPrompt(): void {
