@@ -201,10 +201,18 @@ describe('a routine that runs as an agent', () => {
     });
 
     await expect(run(makeTask())).rejects.toBeInstanceOf(ScheduledAgentUnavailableError);
-    expect(mocks.loadAgentTurnConfig).toHaveBeenCalledWith(expect.anything(), OWNER, AGENT, {
-      countTurns: false,
-    });
+    expect(mocks.loadAgentTurnConfig).toHaveBeenCalledWith(expect.anything(), OWNER, AGENT);
     expect(mocks.reserveManagedUsageRequest).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('does not run once the agent has used its daily budget', async () => {
+    mocks.loadAgentTurnConfig.mockResolvedValue({
+      ok: false,
+      code: 'agent_turn_limit',
+      message: 'Release notes writer has reached its limit of 3 messages a day set by its owner.',
+    });
+    await expect(run(makeTask())).rejects.toBeInstanceOf(ScheduledAgentUnavailableError);
     expect(stream).not.toHaveBeenCalled();
   });
 

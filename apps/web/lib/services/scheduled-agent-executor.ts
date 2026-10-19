@@ -873,7 +873,7 @@ async function runScheduledAgent(
   }
 
   const agentLoad = task.agentId
-    ? await loadAgentTurnConfig(scope.db, scope.userId, task.agentId, { countTurns: false })
+    ? await loadAgentTurnConfig(scope.db, scope.userId, task.agentId)
     : null;
   if (agentLoad && !agentLoad.ok) throw new ScheduledAgentUnavailableError(agentLoad.message);
   const agentTurn = agentLoad?.ok ? agentLoad.turn : null;

@@ -123,14 +123,14 @@ export function AgentActivityPanel({ api, agent }: { api: AgentsApi; agent: Mana
             <h3 className="text-xs font-medium text-muted-foreground">Routines it runs</h3>
             {activity.routines.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No routines yet. Create one from{' '}
+                No routines yet.{' '}
                 <Link
-                  href="/chat/schedules"
+                  href={`/chat/schedules?agent=${encodeURIComponent(agent.id)}`}
                   className="font-medium text-foreground underline underline-offset-2"
                 >
-                  Schedules
-                </Link>{' '}
-                and pick this agent.
+                  Give it a schedule
+                </Link>
+                .
               </p>
             ) : (
               <ul className="flex flex-col gap-1">
