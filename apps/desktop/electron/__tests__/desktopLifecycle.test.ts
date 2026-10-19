@@ -627,6 +627,31 @@ describe('opening a local session', () => {
   });
 });
 
+describe('keeping the computer awake while an agent works', () => {
+  it('holds off system sleep for a running turn and lets go when it finishes', () => {
+    const blocker = vi.mocked(electron.powerSaveBlocker);
+    blocker.isStarted.mockReturnValue(true);
+    emit({ type: 'runtime-stopped', message: 'reset' });
+    blocker.start.mockClear();
+    blocker.stop.mockClear();
+    try {
+      emit({ type: 'turn-started', threadId: 'thread-keep', turnId: 'turn-keep' });
+      expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension');
+
+      emit({
+        type: 'turn-finished',
+        threadId: 'thread-keep',
+        turnId: 'turn-keep',
+        outcome: 'completed',
+        response: 'Done.',
+      } as DeveloperSessionEvent);
+      expect(blocker.stop).toHaveBeenCalledOnce();
+    } finally {
+      blocker.isStarted.mockReturnValue(false);
+    }
+  });
+});
+
 describe('notifications the page asks for', () => {
   const caller = { senderFrame: { url: 'https://agiworkforce.com/chat' } } as {
     senderFrame: { url: string };

@@ -11,6 +11,7 @@ import {
   desktopCapturer,
   ipcMain,
   nativeTheme,
+  powerSaveBlocker,
   screen,
   session,
   shell,
@@ -217,6 +218,7 @@ import {
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
+import { createWorkKeeper } from './workKeeper';
 import {
   isTrustedCloudRendererOrigin,
   isTrustedPageUrl,
@@ -1167,6 +1169,22 @@ function agentNotificationPreferences(): HostAgentNotificationPreferences {
   };
 }
 
+const workKeeper = createWorkKeeper({
+  hold: () => {
+    const id = powerSaveBlocker.start('prevent-app-suspension');
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) powerSaveBlocker.stop(id);
+    };
+  },
+});
+
+function syncWorkKeeper(): void {
+  workKeeper.update(
+    agentNotifier.activity().runningTurns.length > 0 ||
+      remoteControlState().status === 'connected',
+  );
+}
+
 const agentNotifier = createAgentNotifier({
   preferences: agentNotificationPreferences,
   appFocused: () => BrowserWindow.getFocusedWindow() !== null,
@@ -1180,6 +1198,7 @@ const agentNotifier = createAgentNotifier({
   onActivityChanged: (activity: AgentActivity) => {
     app.setBadgeCount(activity.pendingApprovals.length);
     syncTray();
+    syncWorkKeeper();
   },
   onAnswerFailed: (error) => {
     console.warn('[agent-notifications] the approval answer did not reach the agent:', error);
@@ -1815,7 +1834,10 @@ if (!hasSingleInstanceLock) {
     applyGarnishShortcuts();
 
     configureRemoteControl(
-      (state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }),
+      (state) => {
+        sendRuntimeEvent({ kind: 'remote-control-changed', state });
+        syncWorkKeeper();
+      },
       () => {
         showMainWindow();
         return mainWindow;
@@ -1912,6 +1934,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    workKeeper.release();
     stopLocalRoutines();
     unregisterGarnishShortcuts();
     cancelAllShellRuns();
