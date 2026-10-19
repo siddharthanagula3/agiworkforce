@@ -1,39 +1,28 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
+import {
+  artifactCommentPath,
+  artifactCommentsPath,
+  canCommentOnArtifact,
+  type ArtifactComment,
+  type ArtifactCommentAnchor,
+  type ArtifactCommentCreateRequest,
+  type ArtifactCommentListResponse,
+  type ArtifactCommentResponse,
+  type ArtifactCommentUpdateRequest,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-export type ArtifactCommentAnchor =
-  | { kind: 'text'; quote: string; prefix?: string; suffix?: string; slide?: number }
-  | { kind: 'slide'; slide: number }
-  | { kind: 'element'; selector: string; text?: string; x: number; y: number }
-  | { kind: 'artifact' };
-
-export interface ArtifactComment {
-  id: string;
-  artifactId: string;
-  parentId: string | null;
-  anchor: ArtifactCommentAnchor;
-  body: string;
-  author: 'user' | 'assistant';
-  resolvedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { ArtifactComment, ArtifactCommentAnchor };
 
 export interface ArtifactCommentThread {
   root: ArtifactComment;
   replies: ArtifactComment[];
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function canCommentOn(artifactId: string): boolean {
-  return UUID.test(artifactId);
-}
-
-function commentsPath(artifactId: string): string {
-  return `/api/artifacts/${encodeURIComponent(artifactId)}/comments`;
+  return canCommentOnArtifact(artifactId);
 }
 
 async function readError(response: Response, fallback: string): Promise<Error> {
@@ -90,9 +79,9 @@ export async function loadArtifactComments(artifactId: string): Promise<void> {
   if (!canCommentOn(artifactId) || readState(artifactId).status === 'loading') return;
   writeState(artifactId, { status: 'loading' });
   try {
-    const response = await fetch(commentsPath(artifactId), { credentials: 'include' });
+    const response = await fetch(artifactCommentsPath(artifactId), { credentials: 'include' });
     if (!response.ok) throw await readError(response, 'Comments could not be loaded');
-    const body = (await response.json()) as { comments?: ArtifactComment[] };
+    const body = (await response.json()) as Partial<ArtifactCommentListResponse>;
     writeState(artifactId, {
       status: 'ready',
       comments: Array.isArray(body.comments) ? body.comments : [],
@@ -109,13 +98,8 @@ export function resetArtifactCommentsCache(): void {
   states.clear();
 }
 
-async function mutate(
-  artifactId: string,
-  path: string,
-  init: RequestInit,
-  fallback: string,
-): Promise<Response> {
-  const response = await fetch(`${commentsPath(artifactId)}${path}`, {
+async function mutate(path: string, init: RequestInit, fallback: string): Promise<Response> {
+  const response = await fetch(path, {
     credentials: 'include',
     ...init,
     headers: await addCsrfHeaders(init.body ? { 'Content-Type': 'application/json' } : {}),
@@ -141,37 +125,32 @@ export function useArtifactComments(artifactId: string) {
     });
   };
 
-  const create = async (input: {
-    body: string;
-    anchor?: ArtifactCommentAnchor;
-    parentId?: string;
-  }): Promise<ArtifactComment> => {
+  const create = async (
+    input: Pick<ArtifactCommentCreateRequest, 'body' | 'anchor'> & { parentId?: string },
+  ): Promise<ArtifactComment> => {
     const response = await mutate(
-      artifactId,
-      '',
+      artifactCommentsPath(artifactId),
       { method: 'POST', body: JSON.stringify(input) },
       'The comment was not saved',
     );
-    const comment = ((await response.json()) as { comment: ArtifactComment }).comment;
+    const comment = ((await response.json()) as ArtifactCommentResponse).comment;
     upsert(comment);
     return comment;
   };
 
-  const update = async (input: { id: string; body?: string; resolved?: boolean }) => {
+  const update = async (input: { id: string } & ArtifactCommentUpdateRequest) => {
     const { id, ...change } = input;
     const response = await mutate(
-      artifactId,
-      `/${encodeURIComponent(id)}`,
+      artifactCommentPath(artifactId, id),
       { method: 'PATCH', body: JSON.stringify(change) },
       'The comment was not changed',
     );
-    upsert(((await response.json()) as { comment: ArtifactComment }).comment);
+    upsert(((await response.json()) as ArtifactCommentResponse).comment);
   };
 
   const remove = async (id: string) => {
     await mutate(
-      artifactId,
-      `/${encodeURIComponent(id)}`,
+      artifactCommentPath(artifactId, id),
       { method: 'DELETE' },
       'The comment was not deleted',
     );

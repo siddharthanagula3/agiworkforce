@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedCloudProjectKnowledgeFileIdSchema,
+  type ManagedCloudProjectKnowledgeRefreshResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -29,7 +32,9 @@ async function handleRefresh(request: NextRequest, context: RouteContext): Promi
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
   const { id: projectId, fileId } = await context.params;
-  if (!z.string().uuid().safeParse(fileId).success) throw createError.notFound('Source not found');
+  if (!ManagedCloudProjectKnowledgeFileIdSchema.safeParse(fileId).success) {
+    throw createError.notFound('Source not found');
+  }
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -67,12 +72,16 @@ async function handleRefresh(request: NextRequest, context: RouteContext): Promi
       source.external_id,
       { skipIfVersion: source.version },
     );
-    if (outcome.status === 'unchanged') return NextResponse.json({ status: 'unchanged' });
+    if (outcome.status === 'unchanged') {
+      return NextResponse.json({
+        status: 'unchanged',
+      } satisfies ManagedCloudProjectKnowledgeRefreshResponse);
+    }
     return NextResponse.json({
       status: 'refreshed',
       file: outcome.registration.file,
       ...(outcome.registration.notice ? { notice: outcome.registration.notice } : {}),
-    });
+    } satisfies ManagedCloudProjectKnowledgeRefreshResponse);
   } catch (error) {
     if (error instanceof GoogleDriveFileError) throw createError.conflict(error.message);
     if (!isAppError(error)) {

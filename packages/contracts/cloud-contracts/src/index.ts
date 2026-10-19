@@ -91,3 +91,6 @@ export * from './trigger-sources';
 export * from './project-studio';
 export * from './artifact-library';
 export * from './connector-trust-copy';
+export * from './artifact-comments';
+export * from './studio-library';
+export * from './google-docs-export';

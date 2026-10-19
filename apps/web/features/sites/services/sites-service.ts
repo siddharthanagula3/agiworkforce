@@ -13,11 +13,15 @@ import {
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionPath,
   managedCloudPublishedArtifactVersionsPath,
+  managedCloudPublishedArtifactViewersPath,
   type ManagedCloudPublishedArtifactDataResponse,
   type ManagedCloudPublishedArtifactUpdateRequest,
   type ManagedCloudPublishedArtifactUpdateResponse,
   type ManagedCloudPublishedArtifactVersion,
   type ManagedCloudPublishedArtifactVersionDetail,
+  type ManagedCloudPublishedArtifactViewer,
+  type ManagedCloudPublishedArtifactViewerRequest,
+  type ManagedCloudPublishedArtifactViewersResponse,
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -192,23 +196,16 @@ export async function clearPublishedSiteSharedData(token: string): Promise<numbe
   return ManagedCloudPublishedArtifactDataClearResponseSchema.parse(await response.json()).cleared;
 }
 
-export interface SiteViewer {
-  email: string;
-  invitedAt: string;
-}
-
-function siteViewersPath(token: string): string {
-  return `${managedCloudPublishedArtifactPath(token)}/viewers`;
-}
+export type SiteViewer = ManagedCloudPublishedArtifactViewer;
 
 async function readViewers(response: Response, fallback: string): Promise<SiteViewer[]> {
   if (!response.ok) throw await responseError(response, fallback);
-  const body = (await response.json()) as { viewers?: SiteViewer[] };
+  const body = (await response.json()) as Partial<ManagedCloudPublishedArtifactViewersResponse>;
   return Array.isArray(body.viewers) ? body.viewers : [];
 }
 
 export async function listSiteViewers(token: string, signal?: AbortSignal): Promise<SiteViewer[]> {
-  const response = await fetch(siteViewersPath(token), {
+  const response = await fetch(managedCloudPublishedArtifactViewersPath(token), {
     credentials: 'include',
     ...(signal ? { signal } : {}),
   });
@@ -220,11 +217,11 @@ export async function changeSiteViewer(
   email: string,
   action: 'add' | 'remove',
 ): Promise<SiteViewer[]> {
-  const response = await fetch(siteViewersPath(token), {
+  const response = await fetch(managedCloudPublishedArtifactViewersPath(token), {
     method: action === 'add' ? 'POST' : 'DELETE',
     credentials: 'include',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email } satisfies ManagedCloudPublishedArtifactViewerRequest),
   });
   return readViewers(
     response,

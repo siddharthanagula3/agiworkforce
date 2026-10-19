@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH = '/api/uploads/presign';
 
@@ -9,6 +10,32 @@ export function managedCloudProjectKnowledgePath(projectId: string): string {
 export function managedCloudProjectKnowledgeFilePath(projectId: string, fileId: string): string {
   return `${managedCloudProjectKnowledgePath(projectId)}/${encodeURIComponent(fileId)}`;
 }
+
+export function managedCloudProjectKnowledgeOriginsPath(projectId: string): string {
+  return `${managedCloudProjectKnowledgePath(projectId)}/origins`;
+}
+
+export function managedCloudProjectKnowledgeRefreshPath(projectId: string, fileId: string): string {
+  return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/refresh`;
+}
+
+export const ManagedCloudProjectKnowledgeFileIdSchema = z.string().uuid();
+
+/** Where a source added from a connected service came from, and whether it can be pulled again. */
+export interface ManagedCloudProjectKnowledgeOrigin {
+  fileId: string;
+  provider: string;
+  uri: string;
+  refreshable: boolean;
+  checkedAt: string;
+}
+
+export interface ManagedCloudProjectKnowledgeOriginsResponse {
+  origins: ManagedCloudProjectKnowledgeOrigin[];
+}
+
+export type ManagedCloudProjectKnowledgeRefreshResponse =
+  { status: 'unchanged' } | { status: 'refreshed'; file: ProjectKnowledgeFile; notice?: string };
 
 export const PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION = 2;
 

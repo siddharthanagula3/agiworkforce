@@ -1,24 +1,18 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
+import {
+  STUDIO_LIBRARY_PATH,
+  studioLibraryItemPath,
+  type StudioLibraryBrandPayload,
+  type StudioLibraryKind,
+  type StudioLibraryTemplatePayload,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import type { DeckFont } from '../presentation/deck-themes';
 
-export type StudioLibraryKind = 'document_template' | 'deck_template' | 'brand';
-
-export interface TemplatePayload {
-  title: string;
-  content: string;
-}
-
-export interface BrandPayload {
-  background: string;
-  text: string;
-  accent: string;
-  headingFont: DeckFont;
-  bodyFont: DeckFont;
-  voice: string;
-}
+export type { StudioLibraryKind };
+export type TemplatePayload = StudioLibraryTemplatePayload;
+export type BrandPayload = StudioLibraryBrandPayload;
 
 export type StudioLibraryItem =
   | {
@@ -36,7 +30,6 @@ type LibraryState =
   | { status: 'ready'; items: StudioLibraryItem[] }
   | { status: 'failed' };
 
-const PATH = '/api/artifacts/library';
 const IDLE: LibraryState = { status: 'idle' };
 let state: LibraryState = IDLE;
 const listeners = new Set<() => void>();
@@ -62,7 +55,7 @@ export async function loadStudioLibrary(force = false): Promise<void> {
   if (state.status === 'loading' || (state.status === 'ready' && !force)) return;
   write({ status: 'loading' });
   try {
-    const response = await fetch(PATH, { credentials: 'include' });
+    const response = await fetch(STUDIO_LIBRARY_PATH, { credentials: 'include' });
     if (!response.ok) throw await failure(response, 'Your templates could not be loaded');
     const body = (await response.json()) as { items?: StudioLibraryItem[] };
     write({ status: 'ready', items: Array.isArray(body.items) ? body.items : [] });
@@ -74,7 +67,7 @@ export async function loadStudioLibrary(force = false): Promise<void> {
 export async function saveStudioLibraryItem(
   input: Omit<StudioLibraryItem, 'id' | 'createdAt'>,
 ): Promise<StudioLibraryItem> {
-  const response = await fetch(PATH, {
+  const response = await fetch(STUDIO_LIBRARY_PATH, {
     method: 'POST',
     credentials: 'include',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
@@ -87,7 +80,7 @@ export async function saveStudioLibraryItem(
 }
 
 export async function deleteStudioLibraryItem(id: string): Promise<void> {
-  const response = await fetch(`${PATH}/${encodeURIComponent(id)}`, {
+  const response = await fetch(studioLibraryItemPath(id), {
     method: 'DELETE',
     credentials: 'include',
     headers: await addCsrfHeaders(),

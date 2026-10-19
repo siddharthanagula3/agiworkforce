@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
+import { StudioLibraryItemIdSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -17,7 +17,8 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
   const { itemId } = await context.params;
-  if (!z.string().uuid().safeParse(itemId).success) throw createError.notFound('Item not found');
+  if (!StudioLibraryItemIdSchema.safeParse(itemId).success)
+    throw createError.notFound('Item not found');
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
   const { db, userId } = await getUserScopedDb(request);

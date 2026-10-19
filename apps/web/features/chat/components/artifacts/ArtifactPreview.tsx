@@ -47,7 +47,14 @@ import {
   TextCursorInput,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
-import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
+import {
+  GOOGLE_DOCS_EXPORT_PATH,
+  GOOGLE_DOCS_EXPORT_REFUSALS,
+  isGoogleDocsExportRefusalCode,
+  isSupportedChatAttachment,
+  type GoogleDocsExportRequest,
+  type GoogleDocsExportResponse,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 import { extractMarkdownHeadings } from '@features/chat/components/research/ResearchReportView';
@@ -430,12 +437,6 @@ function resolveArtifactImageSource(raw: string): string | null {
 const pendingVersionIndexByArtifactId = new Map<string, number>();
 
 const REQUEST_EDITS_LABEL = 'Request edits';
-const GOOGLE_DOCS_CONNECTION_COPY: Readonly<Record<string, string>> = {
-  google_drive_not_connected: 'Connect Google Drive to save documents to it.',
-  google_drive_reconnect_required: 'Reconnect Google Drive to save documents to it.',
-  google_drive_write_not_granted:
-    'Google Drive is connected for reading only. Reconnect it and allow it to create files.',
-};
 const NARROW_ONLY_ITEM_CLASS = '@[26rem]:hidden';
 
 export function ArtifactPreview({
@@ -1137,21 +1138,28 @@ export function ArtifactPreview({
     if (savingToGoogleDocs) return;
     setSavingToGoogleDocs(true);
     try {
-      const response = await fetch('/api/artifacts/export/google-docs', {
+      const request: GoogleDocsExportRequest = {
+        title: artifact.title || 'Document',
+        content: activeContent,
+      };
+      const response = await fetch(GOOGLE_DOCS_EXPORT_PATH, {
         method: 'POST',
         credentials: 'include',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ title: artifact.title || 'Document', content: activeContent }),
+        body: JSON.stringify(request),
       });
-      const body = (await response.json().catch(() => ({}))) as {
-        url?: string;
+      const body = (await response
+        .json()
+        .catch(() => ({}))) as Partial<GoogleDocsExportResponse> & {
         error?: { code?: string; message?: string };
       };
       if (!response.ok || !body.url) {
         const code = body.error?.code ?? '';
-        const needsConnection = code in GOOGLE_DOCS_CONNECTION_COPY;
+        const needsConnection = isGoogleDocsExportRefusalCode(code);
         toast.error(
-          GOOGLE_DOCS_CONNECTION_COPY[code] ?? 'The document was not saved to Google Docs.',
+          needsConnection
+            ? GOOGLE_DOCS_EXPORT_REFUSALS[code]
+            : 'The document was not saved to Google Docs.',
           {
             ...(needsConnection
               ? {
